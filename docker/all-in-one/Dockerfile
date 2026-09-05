@@ -4,6 +4,7 @@ WORKDIR /src
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY client/package.json ./client/package.json
+COPY .husky/install.mjs ./.husky/install.mjs
 RUN corepack install && pnpm install --filter pz-server-manager-client --frozen-lockfile
 COPY client/ ./client/
 # Same reasoning as the root Dockerfile: the frontend and the backend must be given the SAME
@@ -28,7 +29,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+ENV NODE_ENV=production
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY .husky/install.mjs ./.husky/install.mjs
 RUN corepack enable && corepack install && pnpm install --filter pz-server-manager --prod --frozen-lockfile
 
 COPY server/ ./server/
@@ -40,8 +43,7 @@ COPY docker/all-in-one/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh \
     && mkdir -p /pz-server /zomboid /app/data /app/logs
 
-ENV NODE_ENV=production \
-    PZ_SERVER_PATH=/pz-server \
+ENV PZ_SERVER_PATH=/pz-server \
     PZ_SAVE_PATH=/zomboid \
     PZ_SERVER_BAT=start-server.sh \
     RCON_HOST=127.0.0.1 \

@@ -40,7 +40,7 @@
     "check:bridge-routes": "node scripts/audit-bridge-routes.mjs .",
     "check:rcon-commands": "node scripts/audit-rcon-commands.mjs .",
     "check:i18n": "node scripts/i18n-check.mjs --all",
-    "prepare": "husky"
+    "prepare": "node .husky/install.mjs"
   },
   "lint-staged": {
     "*.{json,yml,yaml}": "prettier --ignore-unknown --write"
