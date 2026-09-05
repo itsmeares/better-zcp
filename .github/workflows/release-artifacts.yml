@@ -46,7 +46,7 @@ jobs:
       # npm ci is fragile on the ubuntu-22.04 leg of this matrix: the
       # lockfile's linux gnu/musl split optional deps (rollup/lightningcss,
       # pulled in via vite) don't reliably carry libc metadata (verified
-      # 2026-08-22, see docs/build/verification.md), same reasoning as the
+      # 2026-08-22), same reasoning as the
       # Dockerfile's own install steps. npm install re-resolves optional
       # deps against the runner instead of trusting the lockfile's entry.
       - name: Install dependencies
@@ -185,7 +185,7 @@ jobs:
             if [ ! -s release-notes.md ]; then
               # Do not fail the release HERE for a missing changelog entry -- the
               # artifacts still need to ship, and this branch only runs at all for
-              # a release that bypassed release.ps1 (its own pre-flight blocks a
+              # a release that bypassed the release pre-flight (which blocks a
               # missing heading before anything is built). A bypass is usually an
               # emergency, which is the worst moment to withhold an upload. The
               # "Fail if CHANGELOG entry was missing" step at the end of this job
@@ -235,14 +235,14 @@ jobs:
           exit 1
 
       # Runs last, deliberately: assets are already uploaded above by the time
-      # this can fail, so a bypass release (one that skipped release.ps1's own
+      # this can fail, so a bypass release (one that skipped the normal
       # pre-flight block) still ships its binaries even though this makes the
-      # job -- and the workflow run -- red. release.ps1 itself refuses to reach
+      # job -- and the workflow run -- red. The normal pre-flight refuses to reach
       # this workflow at all when CHANGELOG.md has no matching heading; this is
       # only reachable by pushing a v* tag some other way. Loud, not silent,
       # without withholding the artifacts a real emergency release needs.
       - name: Fail if the release shipped without a CHANGELOG entry
         if: steps.create-release.outputs.changelog_missing == 'true'
         run: |
-          echo "::error title=No changelog entry::Release ${GITHUB_REF_NAME} shipped with assets uploaded, but CHANGELOG.md had no '## [${GITHUB_REF_NAME#v}]' section, so its release notes are a placeholder. Add the section, update the release notes (gh release edit ${GITHUB_REF_NAME} --notes-file <file>), and find out how this tag was pushed without going through release.ps1's pre-flight check."
+          echo "::error title=No changelog entry::Release ${GITHUB_REF_NAME} shipped with assets uploaded, but CHANGELOG.md had no '## [${GITHUB_REF_NAME#v}]' section, so its release notes are a placeholder. Add the section, update the release notes (gh release edit ${GITHUB_REF_NAME} --notes-file <file>), and find out how this tag was pushed without going through the release pre-flight check."
           exit 1

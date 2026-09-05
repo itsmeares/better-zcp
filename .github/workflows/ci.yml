@@ -37,7 +37,7 @@ jobs:
       # npm ci requires the lockfile to already carry a platform-correct entry
       # for every optional dependency; ours doesn't reliably carry libc
       # metadata for the linux gnu/musl split packages (verified 2026-08-22,
-      # see docs/build/verification.md), which is exactly the reasoning the
+      # which is exactly the reasoning the
       # Dockerfile already uses for the same install (see its own comments).
       # npm install re-resolves optional deps against the runner instead.
       - name: Install

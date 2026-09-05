@@ -81,7 +81,7 @@ const SCHEDULABLE_BRIDGE_ACTIONS = new Set([
 // the same power routes/rcon.js gates behind rcon.execute. executeTask()'s
 // dispatch and routes/scheduler.js's write-time/run-time permission checks
 // both call this so the two can never silently drift apart on what counts
-// as "safe" -- see docs/qa/kevin-adversarial-findings.md Finding 1.
+// as "safe".
 export function classifyScheduledCommand(command) {
   const commandLower = String(command ?? "").toLowerCase();
   if (commandLower === "restart") return "restart";
@@ -106,11 +106,8 @@ function parseBridgeActionName(rawCommand) {
 // The single source of truth for which panel capability a scheduled command
 // requires -- the SAME capability its direct/interactive equivalent route
 // requires, because scheduling an action must not cost less than performing
-// it (docs/qa/kevin-adversarial-findings.md Finding 1 established this for
-// raw/rcon.execute specifically; this generalises it to the other three
-// curated classifications, closing the gap Finding 1's own fix never
-// checked -- automation.manage was verified against rcon.execute, never
-// against server.world_events or server.control).
+// it. The same rule applies to every curated classification: automation.manage
+// must never grant a cheaper path to a capability that its direct route gates.
 // routes/scheduler.js's write-time (POST/PUT /tasks) and run-time
 // (POST /tasks/:id/run) permission checks all call this, so they can never
 // silently drift on what a given command needs -- same reasoning as
@@ -1138,8 +1135,7 @@ export class Scheduler {
       serverManager = this.serverManager,
       // Schedule History's task-name column for this run. Every call site
       // left this at the default "Auto Restart" before this label existed,
-      // even a human clicking Restart Now -- see
-      // docs/qa/kevin-adversarial-findings.md Finding 3. Callers that ARE a
+      // even a human clicking Restart Now. Callers that ARE a
       // live, request-bound manual trigger should pass "Manual restart";
       // genuinely unattended triggers (the AUTO_RESTART_CRON job, a
       // mod-update restart, a scheduled task's cron fire) keep the default.

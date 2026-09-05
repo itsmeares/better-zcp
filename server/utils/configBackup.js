@@ -99,7 +99,7 @@ async function listBackupsFor(backupDir, filename) {
 // null/truthy check: a caller that can't tell "nothing to back up" apart
 // from "the backup failed" ends up treating both the same way, which is
 // exactly how a response ended up asserting a backup existed when it
-// didn't (see docs/qa/kevin-route-hunt.md Finding 2). Same defect shape as
+// didn't. Same defect shape as
 // `if (!req.user) return next()` from earlier tonight -- one value quietly
 // carrying two meanings, one benign and one dangerous.
 //   { backedUp: true, name }               -- a real backup now exists on disk

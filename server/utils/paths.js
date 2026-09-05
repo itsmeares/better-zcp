@@ -19,8 +19,8 @@ const defaultDataDir = path.join(baseDir, 'data');
 const defaultLogsDir = path.join(baseDir, 'logs');
 
 // Config file stores custom path overrides. PANEL_PATHS_CONFIG_PATH lets a
-// caller point at a different config file entirely -- used by
-// server/tests/vitest.globalSetup.mjs so each concurrent test run gets its
+// caller point at a different config file entirely -- used by the test setup
+// so each concurrent test run gets its
 // own file instead of every process on the machine (every agent's test
 // runs AND the real panel) racing on one shared path at the repo root.
 // Unset (the normal case for the real panel) falls back to today's

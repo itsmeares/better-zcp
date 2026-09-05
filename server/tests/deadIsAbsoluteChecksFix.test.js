@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 // Regression coverage for three identical dead-check fixes found during
-// tonight's route hunt (docs/qa/kevin-route-hunt.md, cross-referencing
-// docs/qa/creed-findings.md Finding 1/2): `path.isAbsolute(path.resolve(x))`
+// tonight's route hunt: `path.isAbsolute(path.resolve(x))`
 // is structurally always true (resolve() always returns an absolute path,
 // resolved against cwd when given a relative input), so the check must run
 // on the RAW input before resolving. None of these three call sites had a

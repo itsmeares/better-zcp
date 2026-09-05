@@ -72,8 +72,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes('@radix-ui')) return 'radix-vendor'
             // Icons - separate chunk for tree-shaken icon set
             if (id.includes('lucide-react')) return 'icons'
-            // Form validation - only needed on pages with forms
-            if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('zod')) return 'forms'
             // React Router - needed on first load but separate from core React
             if (id.includes('react-router')) return 'router'
 

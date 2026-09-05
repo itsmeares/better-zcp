@@ -6,8 +6,7 @@
 //
 // The token is generated once per install, persisted, and printed to the
 // startup log only while it's actually needed. Whoever completes first-run
-// setup (via POST /api/auth/setup, or an OIDC bootstrap callback -- see
-// docs/modernization or ask Jim/Dwight for the current integration point)
+// setup (via POST /api/auth/setup, or an OIDC bootstrap callback)
 // must present it. It is NOT a route guard: it gates the *condition* "no
 // admin account exists yet", wherever that condition is reachable from, so
 // a second bootstrap entry point (e.g. OIDC) is covered by calling

@@ -32,7 +32,7 @@ jobs:
 
       # npm ci is fragile here: the lockfile's linux gnu/musl split optional
       # deps (rollup/lightningcss, pulled in via vite) don't reliably carry
-      # libc metadata (verified 2026-08-22, see docs/build/verification.md),
+      # libc metadata (verified 2026-08-22),
       # same reasoning as the Dockerfile's client stage. npm install
       # re-resolves optional deps against the runner instead.
       - name: Install client dependencies

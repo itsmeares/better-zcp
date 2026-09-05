@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression coverage for the createBackup() fix (docs/qa/kevin-route-hunt.md
+// Regression coverage for the createBackup() fix
 // Finding 2, authorised and ruled on by god): createBackup() used to return
 // null for two completely different situations -- "nothing to back up"
 // (benign) and "the backup failed" (dangerous) -- and every one of its 11

@@ -215,7 +215,7 @@ describe("DELETE /roles/:id", () => {
     expect(res.getBody().params).toEqual({ count: expect.any(Number) });
   });
 
-  // docs/qa/kevin-access-control-french-usability.md Finding 1: a seeded
+  // Regression coverage for a seeded
   // role used to be deletable via this exact route (no isSeeded check
   // anywhere in the stack) as long as it had zero members. Confirms the
   // service-level refusal actually reaches an HTTP caller as a 403 with

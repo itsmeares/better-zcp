@@ -695,7 +695,7 @@ rem ============================================================
   rem binary was ever hashed) -- confirmed while researching this: the
   rem journal.hashes.clientFiles map that looked like a ready-made answer is
   rem a *different* artifact (release-manifest.json, for GitHub releases,
-  rem read by release.ps1), never written into this runtime journal.
+  rem read by the release pipeline), never written into this runtime journal.
   rem journal.hashes.clientSha256 is a single combined hash over every staged
   rem client file (relative path + per-file sha256, ordinal-sorted, then
   rem hashed together) computed by stageUpdateBundle() (updateBundle.js) and
@@ -1210,7 +1210,7 @@ async function main() {
   // README.txt's own "Where To Go Next" section names these paths -- on a
   // LAN-only box with no outbound internet, a github.com link is dead
   // weight, so the files themselves have to be sitting right here for that
-  // section to be true. release.ps1 zips release/* as-is, so anything
+  // section to be true. The release pipeline zips release/* as-is, so anything
   // copied into release/ ships automatically with no workflow change.
   const installDocsSrc = "./docs/install";
   const installDocsDest = "./release/docs/install";
@@ -1326,7 +1326,7 @@ Recommended safe-upgrade commands:
 
     // Best-effort standalone zip for the GitHub release asset. Skipped on
     // platforms without PowerShell (Linux build hosts), which is fine —
-    // release.ps1 also builds it as part of step 4.
+    // the Windows release job also builds it as part of packaging.
     if (process.platform === "win32") {
       try {
         execSync(

@@ -7,8 +7,7 @@ instead of the wiki (which lags patches) or this repo's own comments (which
 have already been wrong twice in the same night these scripts were built).
 
 Built during the 1.2.0 B42 command audit and the PanelBridge Lua audit
-(2026-08-23). Read `docs/qa/kevin-b42-jar-audits.md` for what those two
-passes actually found using this tooling, as a worked example.
+(2026-08-23). These are verification tools, not a runtime dependency.
 
 ## What you need
 
@@ -27,7 +26,7 @@ directly; nothing shells out to an external `unzip`/`jar` binary.
 
 ### `classfile-parser.mjs`
 
-Not a CLI -- the shared module the other two import. Parses a single Java
+Not a CLI -- the shared module the command scanners import. Parses a single Java
 `.class` file's bytes into `{thisClass, superClass, interfaces, fields,
 methods, classAnnotations, constantPool}`, plus a `listMethodRefs()` helper
 that resolves every method the class's bytecode calls OUT to (as opposed to
@@ -70,8 +69,8 @@ acknowledgement, using ONLY the presence of `java.util.Iterator`/
 **Read the "What this cannot tell you" section below before trusting this
 one's output.** It correctly flagged the 3 commands already known to be
 informative (`players`, `showoptions`, `stats`) and nothing else with
-confidence -- see `docs/qa/kevin-b42-jar-audits.md` for why a 4th flagged
-command (`reloadlua`) turned out on manual inspection to be a plausible
+confidence. It also flagged one extra command (`reloadlua`), which turned out
+on manual inspection to be a plausible
 false positive (the loop is list housekeeping, not reply-building), and why
 that one counter-example is reason enough not to trust this signal at
 scale without hand-checking each hit.
@@ -89,7 +88,7 @@ currently have a generic Lua-static-analysis pass that could rebuild it
 automatically. If this needs to run again, rebuild the receiver map by hand
 against the Lua file at that time using `classfile-parser.mjs` as the
 verification half -- the pattern is documented in
-`docs/qa/kevin-b42-jar-audits.md`, not shipped as a ready-to-run script,
+  the audit notes, not shipped as a ready-to-run script,
 because a stale receiver map that still runs without error is worse than
 no script at all.
 

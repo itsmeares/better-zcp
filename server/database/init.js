@@ -251,8 +251,8 @@ const MIGRATION_V2_ADMIN_CAPABILITIES = [
  * bumping the version failed.
  * Exported for direct testing against a plain object (see
  * server/tests/rolesMigration.test.js) -- getDb()'s dataDir is resolved
- * once from paths.config.json and memoized process-wide (see
- * vitest.globalSetup.mjs), so exercising a specific pre-migration db.json
+ * once from paths.config.json and memoized process-wide, so exercising a
+ * specific pre-migration db.json
  * through the real getDb() singleton isn't practical from an individual
  * test file; this function has no I/O of its own and needs none of that.
  */

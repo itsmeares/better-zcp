@@ -433,7 +433,7 @@ export const PERKS = PERK_CATALOG.map((perk) => perk.id);
 // the real setupRole() id literals found in zombie/characters/Roles.class,
 // buildid 24909800 (this could NOT be mapped to a human-readable 42.x.y
 // version string -- whether this build actually IS 42.17.0 is genuinely
-// unknown). Re-derive with scripts/jar-audit's classfile-parser.mjs
+// unknown). Re-derive with the jar-audit classfile parser
 // (parseClass + listMethodRefs against SetAccessLevelCommand.class,
 // GameServer.class, and Roles.class) against a newer jar to re-verify
 // rather than re-trusting a wiki.

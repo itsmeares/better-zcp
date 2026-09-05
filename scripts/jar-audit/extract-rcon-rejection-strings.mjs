@@ -12,9 +12,8 @@
 // perfect, it just silently never fires again. This fixture is what makes
 // that state visible: this file's own extraction on 2026-08-27 (build
 // 24909800) already found exactly this happening to the
-// "can be executed only from the game" pattern, which Kevin's 2026-08-23
-// audit (docs/qa/kevin-b42-jar-audits.md) had verbatim-confirmed just three
-// days earlier -- see that file's provenance block for the full story.
+// "can be executed only from the game" pattern, which an earlier B42 audit
+// had verbatim-confirmed just three days earlier.
 //
 // Reuses this directory's own parseClass() (real constant-pool parsing per
 // the JVM class file format, not a flat strings grep) rather than inventing
@@ -60,8 +59,8 @@ const d = await unzipper.Open.file(jarPath);
 // in any per-command class this scope already covered. Added here rather
 // than in a separate script/fixture, per the standing rule this file's own
 // header states: don't invent a second extraction technique for the same
-// jar. See docs/qa/kevin-b42-jar-audits.md's "Pass 4" for what this scope
-// widening found.
+// jar. This scope widening found the same class of drift the fixture is meant
+// to catch.
 const targets = d.files.filter(
   (f) =>
     (f.path.startsWith("zombie/commands/serverCommands/") ||

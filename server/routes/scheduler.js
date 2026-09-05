@@ -90,7 +90,7 @@ router.use(requirePermission('automation.manage'));
 // drift on what a given command needs.
 //
 // This closes two related but DIFFERENT gaps found the same night:
-// docs/qa/kevin-adversarial-findings.md Finding 1 (raw commands reaching
+// Finding 1 (raw commands reaching
 // RCON with only automation.manage, fixed 4a7dc86) verified automation.manage
 // against rcon.execute ONLY — a role built with only automation.manage (a
 // real, supported thing to do via Roles & Permissions) could create a task
@@ -625,8 +625,7 @@ router.post('/restart-now', async (req, res) => {
     // Run restart in background, passing warningMinutes directly. Labeled
     // "Manual restart" in Schedule History rather than performRestart()'s
     // "Auto Restart" default -- this IS a human clicking Restart Now, and
-    // the history record should say so if it later fails. See
-    // docs/qa/kevin-adversarial-findings.md Finding 3.
+    // the history record should say so if it later fails.
     //
     // The HTTP response below only confirms the restart was ACCEPTED --
     // performRestart() runs in the background (the countdown + graceful

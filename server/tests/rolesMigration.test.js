@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 // pure function of `data` -- no I/O -- exercised directly against a plain
 // object shaped like a real pre-migration (schema v1) db.json, rather than
 // through getDb()'s dataDir, which is resolved once from paths.config.json
-// and memoized process-wide for the whole suite (see
-// vitest.globalSetup.mjs) and isn't practical to redirect per test file.
+// and memoized process-wide for the whole suite, so it isn't practical to
+// redirect through getDb() from an individual test file.
 
 const { runMigrations } = await import("../database/init.js");
 

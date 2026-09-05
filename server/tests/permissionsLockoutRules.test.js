@@ -176,7 +176,7 @@ describe("updateRole -- lockout rule 2 (soft block: acting user losing their own
   });
 });
 
-// docs/qa/kevin-access-control-french-usability.md Finding 1: deleteRole()
+// Regression coverage for deleteRole()'s seeded-role guard:
 // used to have no isSeeded check at all -- a seeded role with zero current
 // members could be deleted outright via a direct call/API request, even
 // though RolesPermissions.tsx's delete button is disabled for isSeeded

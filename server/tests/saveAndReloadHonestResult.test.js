@@ -3,7 +3,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 // POST /server-files/save-and-reload hardcoded `success: true` regardless of
 // what the RCON reloadoptions call actually returned -- diagnosed in
-// docs/qa/kevin-route-hunt.md Finding 3, confirmed still present in current
+// the route hunt's Finding 3, confirmed still present in current
 // code before this fix. reloadOptions() is a thin wrapper over
 // RconService.execute(), which DOES distinguish success from failure
 // (`{success:false, error}` on a failed/unknown-command reply, timeout, or

@@ -58,7 +58,7 @@ lh-*.json
 _artifacts/
 
 # Per-machine data/log root override (absolute paths, never committed).
-# Also written by server/tests/vitest.globalSetup.mjs for the duration of a test run.
+# Also written by the server test setup for the duration of a test run.
 paths.config.json
 data/*.lock
 

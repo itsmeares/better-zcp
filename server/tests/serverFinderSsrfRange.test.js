@@ -8,7 +8,7 @@ import {
 } from "../routes/serverFinder.js";
 import dgram from "dgram";
 
-// Regression coverage for docs/qa/kevin-route-hunt.md Finding 5: isPrivateIp()
+// Regression coverage for the isPrivateIp() boundary
 // (the SSRF deny-list backing GET /query and GET /ping) blocked every usual
 // private/reserved range but missed 100.64.0.0/10 (RFC 6598, Carrier-Grade
 // NAT / shared address space) entirely -- increasingly used as an internal

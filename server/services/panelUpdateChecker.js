@@ -671,7 +671,7 @@ export class PanelUpdateChecker {
           // Fail CLOSED, not open: a release with no checksums.txt (or no
           // entry for this asset) could be a tampered/mis-published release,
           // and integrity would otherwise rest entirely on the GitHub
-          // account + TLS. release.ps1 always publishes checksums.txt, so a
+          // account + TLS. The release pipeline always publishes checksums.txt, so a
           // release missing it is unexpected and should not be auto-applied.
           throw new Error(
             `Release v${this.latestRelease.version} does not publish a checksums.txt entry for ${asset.name} — refusing to apply an unverified update`,

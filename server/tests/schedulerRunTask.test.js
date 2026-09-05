@@ -340,7 +340,7 @@ describe("PUT /api/scheduler/tasks/:id", () => {
   });
 });
 
-// Finding 1 (docs/qa/kevin-adversarial-findings.md): a role holding only
+// Finding 1: a role holding only
 // automation.manage must NOT be able to reach raw RCON execution through a
 // scheduled task -- creating one, editing one's command, or running one now
 // all require rcon.execute too when the command isn't one of the curated
@@ -762,7 +762,7 @@ describe("server.world_events / server.control gate on curated scheduled command
   });
 });
 
-// Finding 3 (docs/qa/kevin-adversarial-findings.md): performRestart() used
+// Finding 3: performRestart() used
 // to hardcode "Auto Restart" as the Schedule History task name for every
 // caller, including a human clicking Restart Now. It now takes an optional
 // label, defaulting to "Auto Restart" for genuinely unattended triggers.
