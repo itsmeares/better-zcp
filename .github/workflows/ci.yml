@@ -29,23 +29,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.24.0
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
-      # npm ci requires the lockfile to already carry a platform-correct entry
-      # for every optional dependency; ours doesn't reliably carry libc
-      # metadata for the linux gnu/musl split packages (verified 2026-08-22,
-      # which is exactly the reasoning the
-      # Dockerfile already uses for the same install (see its own comments).
-      # npm install re-resolves optional deps against the runner instead.
+      - name: Enable pnpm
+        run: corepack enable && corepack install
+
+      # The workspace lockfile is the single dependency source for both
+      # packages, including platform-specific optional binaries.
       - name: Install
-        run: npm install --no-audit --prefer-offline --include=optional
+        run: pnpm install --frozen-lockfile
 
       # Warning ceiling is a ratchet: it must only ever be lowered.
       - name: Lint
-        run: npm run lint:server
+        run: pnpm run lint:server
 
       # vitest-worker-teardown-flake-exits-1: vitest 4.1.11 has a known,
       # currently-open upstream race in its birpc worker-teardown path
@@ -65,13 +68,13 @@ jobs:
       - name: Tests
         shell: bash
         run: |
-          if npm run test:server 2>&1 | tee /tmp/server-test-output.log; then
+          if pnpm run test:server 2>&1 | tee /tmp/server-test-output.log; then
             exit 0
           fi
           if grep -q 'EnvironmentTeardownError' /tmp/server-test-output.log && \
              ! grep -q 'Failed Tests' /tmp/server-test-output.log; then
             echo "::warning::vitest-worker-teardown-flake-exits-1 (known upstream race, 0 real test failures) -- retrying once"
-            npm run test:server
+            pnpm run test:server
           else
             exit 1
           fi
@@ -80,7 +83,7 @@ jobs:
   # able to red-gate lint/tests/tsc, and a job boundary is the only thing GitHub Actions actually
   # enforces that with -- steps within one job all report under that job's single status, so a
   # crash/timeout/wrong-verdict here could otherwise read as "Server (lint + tests)" failing. This
-  # job's only dependency is the repo checkout; it does not run npm install for the full
+  # job's only dependency is the repo checkout; it does not install dependencies for the full
   # client+server tree.
   #
   # No JDK here, and none needed: validates PanelBridge.lua's engine calls against the COMMITTED
@@ -105,12 +108,12 @@ jobs:
         run: node scripts/check-engine-signatures.mjs
 
   # wire-up-the-unrun-checkers (2026-08-31 bug hunt): these three had NO
-  # caller anywhere in the repo before this job -- not an npm script, not
+  # caller anywhere in the repo before this job -- not a package script, not
   # CI, not docs. A checker nobody runs can rot indefinitely because
   # nothing ever contradicts it: this is very likely why coverage collapsed
   # silently in exactly these scripts and not in engine-signatures (the one
   # already wired). Same job-isolation reasoning as engine-signatures above
-  # -- pure fs.readFileSync + regex, no npm install, no dependency on the
+  # -- pure fs.readFileSync + regex, no package install, no dependency on the
   # server/client jobs' heavier setup, and its own job so a failure here
   # reads unambiguously as one of these checks, not "Server" or "Client".
   #
@@ -168,31 +171,32 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.24.0
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: client/package-lock.json
+          cache: pnpm
 
-      # Same reasoning as the server job above and the Dockerfile's client
-      # stage: npm ci is fragile here because of missing libc metadata on
-      # the linux gnu/musl split optional deps (esbuild/vite's rollup and
-      # lightningcss). npm install re-resolves against the runner instead.
+      - name: Enable pnpm
+        run: corepack enable && corepack install
+
       - name: Install
-        working-directory: client
-        run: npm install --no-audit --prefer-offline --include=optional
+        run: pnpm install --filter pz-server-manager-client --frozen-lockfile
 
       - name: Lint
         working-directory: client
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Typecheck
         working-directory: client
-        run: npx tsc -b
+        run: pnpm run typecheck
 
       - name: Tests
         working-directory: client
-        run: npx vitest run
+        run: pnpm run test
 
   windows-packaged-updater:
     name: Windows packaged updater
@@ -202,17 +206,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.24.0
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
+
+      - name: Enable pnpm
+        run: corepack enable && corepack install
 
       - name: Install server dependencies
-        run: npm install --no-audit --prefer-offline --include=optional
-
-      - name: Install client dependencies
-        working-directory: client
-        run: npm install --no-audit --prefer-offline --include=optional
+        run: pnpm install --frozen-lockfile
 
       # serverManagerSpacedPathCmdQuoting.test.js and
       # serverManagerWindowsSpawnFixes.test.js both gate on
@@ -244,7 +251,7 @@ jobs:
       # assumed. The rest of the file's tests are platform-independent and
       # unaffected by running here too.
       - name: Exercise bundle transaction and generated supervisor
-        run: npx vitest run server/tests/panelUpdateBundle.test.js server/tests/supervisor-restart.test.js server/tests/serverManagerSpacedPathCmdQuoting.test.js server/tests/serverManagerWindowsSpawnFixes.test.js server/tests/serverManagerCustomStartCommandQuoting.test.js server/tests/serverManagerCommandLineRoundTrip.test.js server/tests/serverManagerEmptyScanWindows.test.js server/tests/serverManager-stopTimeout.test.js server/tests/setDataPaths.test.js
+        run: pnpm exec vitest run server/tests/panelUpdateBundle.test.js server/tests/supervisor-restart.test.js server/tests/serverManagerSpacedPathCmdQuoting.test.js server/tests/serverManagerWindowsSpawnFixes.test.js server/tests/serverManagerCustomStartCommandQuoting.test.js server/tests/serverManagerCommandLineRoundTrip.test.js server/tests/serverManagerEmptyScanWindows.test.js server/tests/serverManager-stopTimeout.test.js server/tests/setDataPaths.test.js
 
       - name: Build packaged Windows executable
         run: node build.js --windows

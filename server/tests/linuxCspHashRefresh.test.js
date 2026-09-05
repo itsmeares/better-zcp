@@ -8,7 +8,7 @@ import { applyUpdateBundle, stageUpdateBundle } from "../services/updateBundle.j
 
 // Linux bug hunt 2026-08-29, CSP inline-script hash card. The card's literal
 // claim -- "the hash mismatches on every single page load" -- does NOT
-// reproduce: a real `npm run build` + real server + real headless Chromium
+// reproduce: a real `pnpm run build` + real server + real headless Chromium
 // (verified manually, see outbox report) shows zero CSP violations for the
 // shipped dist/index.html at current main. That was case (b) as the card
 // itself distinguished it, and it's clean.

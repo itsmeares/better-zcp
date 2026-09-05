@@ -21,7 +21,6 @@ server.cjs
 # Build & deploy scripts (internal tooling)
 bundle-server.js
 deploy*.ps1
-release.ps1
 nodemon.json
 
 # Logs

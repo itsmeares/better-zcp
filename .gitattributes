@@ -15,7 +15,7 @@ Start.bat text eol=crlf
 # checkout (core.autocrlf=true) puts a trailing \r on every directive line;
 # confirmed on this exact file in this exact repo, not assumed: `xxd` showed
 # real 0d0a bytes on a Windows checkout before this rule existed. Only bites
-# a LOCALLY-run `npm run build:exe:linux`/`node build.js --linux` on
+# a LOCALLY-run `pnpm run build:exe:linux`/`node build.js --linux` on
 # Windows -- release-artifacts.yml builds the Linux leg on ubuntu-22.04, so
 # CI-published releases were never affected.
 zomboid-panel.service text eol=lf

@@ -1899,7 +1899,7 @@ function buildLegacyClientRecoveryPage() {
 <p>Executable: ${escapeHtml(`${_buildMetadata.panelVersion} / ${_buildMetadata.buildSha.slice(0, 12)}`)}</p>
 <p>Frontend: ${escapeHtml(typeof frontendMetadata === "string" ? frontendMetadata : `${frontendMetadata.panelVersion} / ${frontendMetadata.buildSha.slice(0, 12)}`)}</p>
 <p>Download the latest full package, extract it over this installation without replacing the <code>data</code> folder, then start the panel again.</p>
-<p><a href="https://github.com/fpsacha/zomboid-control-panel/releases/latest">Download the latest release</a></p>
+<p><a href="https://github.com/itsmeares/better-zcp/releases/latest">Download the latest release</a></p>
 </main></body>
 </html>`;
 }
@@ -3453,7 +3453,7 @@ async function start() {
 // considered instead, since it asks the question we actually mean rather
 // than inferring it from a test-runner env var. It's deliberately NOT used
 // here: this app also ships as a pkg-bundled executable (see build.js /
-// `npm run build:exe`, and utils/paths.js's own isPkg check above), where
+// `pnpm run build:exe`, and utils/paths.js's own isPkg check above), where
 // process.argv[1] and import.meta.url don't behave like a normal on-disk
 // module — pkg snapshots the filesystem and rewrites module resolution, and
 // that comparison is a known trouble spot in bundled builds. Getting it

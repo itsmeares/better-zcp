@@ -28,7 +28,6 @@ import {
   AlertCircle,
   RefreshCw,
   Github,
-  Coffee,
   PanelLeftClose,
   PanelLeft,
   LogOut
@@ -1143,17 +1142,7 @@ export default function Layout({ children }: LayoutProps) {
                   </span>
                   <span className="h-3 w-px bg-border/40" aria-hidden />
                   <a
-                    href="https://ko-fi.com/fpsacha"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground/70 hover:text-[#FF5E5B] transition-colors"
-                    aria-label={t('footer.supportKofi')}
-                    title={t('footer.buyMeCoffee')}
-                  >
-                    <Coffee className="h-3.5 w-3.5" />
-                  </a>
-                  <a
-                    href="https://github.com/fpsacha/zomboid-control-panel"
+                    href="https://github.com/itsmeares/better-zcp"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-muted-foreground/70 hover:text-foreground transition-colors"

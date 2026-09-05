@@ -5,9 +5,8 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_PACKAGE_JSON = path.join(__dirname, "..", "..", "package.json");
-const ROOT_LOCKFILE = path.join(__dirname, "..", "..", "package-lock.json");
 const CLIENT_PACKAGE_JSON = path.join(__dirname, "..", "..", "client", "package.json");
-const CLIENT_LOCKFILE = path.join(__dirname, "..", "..", "client", "package-lock.json");
+const WORKSPACE_LOCKFILE = path.join(__dirname, "..", "..", "pnpm-lock.yaml");
 
 // client/package.json sat at 1.2.2 for four releases while root advanced to
 // 1.2.6, because nothing ever compared them -- the release process only bumped
@@ -33,15 +32,10 @@ describe("client version stays in sync with root", () => {
     expect(clientVersion).toBe(rootVersion);
   });
 
-  it("client/package-lock.json matches root in both places npm writes the version", () => {
-    const lock = JSON.parse(fs.readFileSync(CLIENT_LOCKFILE, "utf8"));
-    expect(lock.version).toBe(rootVersion);
-    expect(lock.packages?.[""]?.version).toBe(rootVersion);
-  });
-
-  it("root package-lock.json matches root package.json in both places npm writes the version", () => {
-    const lock = JSON.parse(fs.readFileSync(ROOT_LOCKFILE, "utf8"));
-    expect(lock.version).toBe(rootVersion);
-    expect(lock.packages?.[""]?.version).toBe(rootVersion);
+  it("pnpm workspace lockfile contains both package importers", () => {
+    const lock = fs.readFileSync(WORKSPACE_LOCKFILE, "utf8");
+    expect(lock).toContain("lockfileVersion:");
+    expect(lock).toContain("\n  .:\n");
+    expect(lock).toContain("\n  client:\n");
   });
 });

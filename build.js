@@ -262,7 +262,7 @@ here in this folder, so they work with no internet — and also live on
 GitHub if you'd rather read them there or check for updates to them:
 
   docs/install/                                    (this folder, offline)
-  https://github.com/fpsacha/zomboid-control-panel  (same guides, online)
+  https://github.com/itsmeares/better-zcp  (same guides, online)
 
 - docs/install/windows.md         Windows: running at startup / as a service, firewall.
 - docs/install/linux.md           Linux: the bundled systemd service, a non-root
@@ -1058,7 +1058,7 @@ async function main() {
 
   console.log("Building client...");
   try {
-    execSync("npm run build", {
+    execSync("pnpm run build", {
       cwd: "./client",
       stdio: "inherit",
       env: {
@@ -1159,7 +1159,7 @@ async function main() {
     // stuck on Node 18.5). Its CLI is also named `pkg`.
     // Build without embedded V8 bytecode cache so binaries remain portable
     // across Linux hosts and don't fail with "V8 rejected the bytecode cache".
-    execSync('npx pkg . --compress GZip --public --public-packages "*"', {
+    execSync('pnpm exec pkg . --compress GZip --public --public-packages "*"', {
       cwd: distDir,
       stdio: "inherit",
     });
@@ -1201,7 +1201,7 @@ async function main() {
     fs.cpSync(clientDist, targetClientDist, { recursive: true });
   } else {
     console.error(
-      'Client dist not found. Run "npm run build" in client first.',
+      'Client dist not found. Run "pnpm run build" in client first.',
     );
     process.exit(1);
   }
@@ -1348,7 +1348,7 @@ Recommended safe-upgrade commands:
     fs.copyFileSync(wasmSrc, "./release/sql-wasm.wasm");
   } else {
     console.warn(
-      "sql-wasm.wasm not found in node_modules/sql.js/dist — vehicle cleanup will fail at runtime. Run `npm install` first.",
+      "sql-wasm.wasm not found in node_modules/sql.js/dist — vehicle cleanup will fail at runtime. Run `pnpm install` first.",
     );
   }
 

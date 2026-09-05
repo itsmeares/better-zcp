@@ -191,7 +191,7 @@ if (unverifiable.length) {
 }
 
 // wire-up-the-unrun-checkers (2026-08-31 bug hunt): this script had no
-// caller anywhere in the repo until this pass -- npm script + CI job added
+// caller anywhere in the repo until this pass -- package script + CI job added
 // alongside this exit code. Confirmed zero mismatches on HEAD before adding
 // this. Only real MISMATCHES fail the build -- the UNVERIFIABLE count above
 // is a permanent, honest ceiling (the generic passthrough's dynamic action

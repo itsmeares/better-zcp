@@ -18,8 +18,7 @@
     "confirmNewPassword": "Підтвердьте новий пароль",
     "recoveryTokenLocalReset": "Токен відновлення для локального скидання",
     "newPasswordLocalReset": "Новий пароль для локального скидання",
-    "confirmNewPasswordLocalReset": "Підтвердьте новий пароль для локального скидання",
-    "buyMeCoffeeKofi": "Пригостити мене кавою на Ko-fi"
+    "confirmNewPasswordLocalReset": "Підтвердьте новий пароль для локального скидання"
   },
   "tabs": {
     "groups": {
@@ -615,15 +614,12 @@
     "upToDateBadge": "Актуальна версія",
     "notCheckedYet": "Ще не перевірялося",
     "description": "Вебпанель керування виділеними серверами Project Zomboid. Включає RCON, керування гравцями, виявлення оновлень модів, заплановані перезапуски, резервні копії світу, інтеграцію з Discord і Lua-мод PanelBridge для дій у світі гри.",
-    "supportTitle": "Подобається панель?",
-    "supportDesc": "Підтримайте розробку, щоб оновлення та нові можливості з'являлися й далі.",
-    "buyMeCoffee": "Пригостити мене кавою",
     "joinDiscord": "Приєднатися до Discord",
     "githubRepo": "Репозиторій GitHub",
     "releasesChangelog": "Випуски та журнал змін",
     "reportIssue": "Повідомити про проблему",
     "builtWith": "Створено з React, Node.js і Socket.IO",
-    "mitLicensed": "Ліцензія MIT"
+    "agplLicensed": "AGPL-3.0-only"
   },
   "corsLockoutDialog": {
     "title": "Заблокувати собі доступ до панелі?",

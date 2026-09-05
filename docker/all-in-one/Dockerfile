@@ -1,16 +1,17 @@
 FROM node:22-bookworm-slim AS client-build
 
 WORKDIR /src
-COPY package.json ./
-COPY client/package.json client/package-lock.json* ./client/
-RUN cd client && npm install --no-audit --prefer-offline --include=optional
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY client/package.json ./client/package.json
+RUN corepack install && pnpm install --filter pz-server-manager-client --frozen-lockfile
 COPY client/ ./client/
 # Same reasoning as the root Dockerfile: the frontend and the backend must be given the SAME
 # build sha, or the build-compatibility gate compares "unknown" against a real sha and blocks
 # the UI. No .git and no git binary exists in either stage.
 ARG PANEL_BUILD_SHA=""
 ENV PANEL_BUILD_SHA=${PANEL_BUILD_SHA}
-RUN cd client && npm run build
+RUN pnpm --filter pz-server-manager-client build
 
 FROM cm2network/steamcmd:root
 
@@ -27,8 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install --no-audit --prefer-offline --omit=dev
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN corepack enable && corepack install && pnpm install --filter pz-server-manager --prod --frozen-lockfile
 
 COPY server/ ./server/
 COPY --from=client-build /src/client/dist ./client/dist

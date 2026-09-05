@@ -78,8 +78,6 @@
   },
   "footer": {
     "signOut": "Cerrar sesión",
-    "supportKofi": "Apoya en Ko-fi (se abre en una pestaña nueva)",
-    "buyMeCoffee": "Invítame a un café",
     "githubRepo": "Repositorio de GitHub (se abre en una pestaña nueva)",
     "keyboardShortcuts": "Atajos de teclado",
     "keyboardShortcutsTitle": "Atajos de teclado (?)",

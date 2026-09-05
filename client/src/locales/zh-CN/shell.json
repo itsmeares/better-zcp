@@ -78,8 +78,6 @@
   },
   "footer": {
     "signOut": "退出登录",
-    "supportKofi": "在 Ko-fi 上支持（在新标签页打开）",
-    "buyMeCoffee": "请我喝杯咖啡",
     "githubRepo": "GitHub 仓库（在新标签页打开）",
     "keyboardShortcuts": "键盘快捷键",
     "keyboardShortcutsTitle": "键盘快捷键（?）",

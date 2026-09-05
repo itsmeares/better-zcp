@@ -17,7 +17,9 @@ echo Node.js found:
 node --version
 echo.
 echo Installing dependencies...
-call npm run install:all
+call corepack enable
+call corepack install
+call pnpm install
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Failed to install dependencies
     pause
@@ -25,7 +27,7 @@ if %ERRORLEVEL% neq 0 (
 )
 echo.
 echo Building client...
-call npm run build
+call pnpm build
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Failed to build client
     pause
@@ -37,5 +39,5 @@ echo Starting server...
 echo (the panel will print the URL to open once it is ready)
 echo ============================================
 echo.
-npm start
+pnpm start
 pause

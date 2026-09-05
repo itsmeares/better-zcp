@@ -105,7 +105,7 @@ console.log(`NOT IN ALLOW-LIST:          ${missingAllow.join(", ") || "none"}`);
 console.log(`ALLOWED BUT NO HANDLER:     ${allowedButUnimplemented.join(", ") || "none"}`);
 
 // wire-up-the-unrun-checkers (2026-08-31 bug hunt): this script had no
-// caller anywhere in the repo until this pass -- npm script + CI job added
+// caller anywhere in the repo until this pass -- package script + CI job added
 // alongside this exit code. Confirmed zero mismatches on HEAD before adding
 // this (see the dispatch report); a checker that can never fail is
 // decoration, the exact thing that let this script's own coverage rot

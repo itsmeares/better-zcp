@@ -17,7 +17,7 @@
 
 services:
   panel:
-    image: ghcr.io/fpsacha/zomboid-panel:latest
+    image: ghcr.io/itsmeares/better-zcp:latest
     pull_policy: always
     container_name: zomboid-panel
     restart: unless-stopped

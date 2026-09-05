@@ -41,7 +41,7 @@ export function computeInlineScriptCspHash(clientDistPath, log) {
         `script (${err.message}). script-src will NOT allow inline ` +
         "scripts until this is fixed — the anti-FOUC script (and any " +
         "other inline script) will be blocked by the browser. This " +
-        "usually means the client hasn't been built (npm run build) or " +
+        "usually means the client hasn't been built (pnpm run build) or " +
         "dist has moved.",
     );
     return null;

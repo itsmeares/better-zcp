@@ -18,8 +18,7 @@
     "confirmNewPassword": "Confirm new password",
     "recoveryTokenLocalReset": "Recovery token for local reset",
     "newPasswordLocalReset": "New password for local reset",
-    "confirmNewPasswordLocalReset": "Confirm new password for local reset",
-    "buyMeCoffeeKofi": "Buy me a coffee on Ko-fi"
+    "confirmNewPasswordLocalReset": "Confirm new password for local reset"
   },
   "tabs": {
     "groups": {
@@ -552,15 +551,12 @@
     "upToDateBadge": "Up to date",
     "notCheckedYet": "Not checked yet",
     "description": "A web-based management panel for Project Zomboid dedicated servers. Includes RCON, player management, mod update detection, scheduled restarts, world backups, Discord integration, and the PanelBridge Lua mod for in-world actions.",
-    "supportTitle": "Enjoying the panel?",
-    "supportDesc": "Support development to keep updates and new features coming.",
-    "buyMeCoffee": "Buy me a coffee",
     "joinDiscord": "Join Discord",
     "githubRepo": "GitHub repository",
     "releasesChangelog": "Releases & changelog",
     "reportIssue": "Report an issue",
     "builtWith": "Built with React, Node.js, and Socket.IO",
-    "mitLicensed": "MIT licensed"
+    "agplLicensed": "AGPL-3.0-only"
   },
 
   "corsLockoutDialog": {

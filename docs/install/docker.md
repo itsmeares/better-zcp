@@ -50,7 +50,7 @@ need `sudo` in front of the commands below).
 
 3. Run:
    ```sh
-   curl -fsSL https://raw.githubusercontent.com/fpsacha/zomboid-control-panel/main/docker/all-in-one/bootstrap.sh | sh
+   curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker/all-in-one/bootstrap.sh | sh
    ```
    This resolves the latest release, creates its state under
    `~/.local/state/zomboid-panel/` (override with the `PANEL_HOME` or
@@ -61,7 +61,7 @@ need `sudo` in front of the commands below).
    To install a specific version instead of the latest release, pass it as
    an argument:
    ```sh
-   curl -fsSL https://raw.githubusercontent.com/fpsacha/zomboid-control-panel/main/docker/all-in-one/bootstrap.sh | sh -s -- 1.2.6
+   curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker/all-in-one/bootstrap.sh | sh -s -- 2.0.0
    ```
 
    For the panel and updater images, it pulls the exact release-tagged image
@@ -182,8 +182,8 @@ container as the panel.
 
 4. ```sh
    mkdir -p ~/zomboid-panel && cd ~/zomboid-panel
-   curl -O https://raw.githubusercontent.com/fpsacha/zomboid-control-panel/main/docker-compose.yml
-   curl -O https://raw.githubusercontent.com/fpsacha/zomboid-control-panel/main/.env.example
+   curl -O https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker-compose.yml
+   curl -O https://raw.githubusercontent.com/itsmeares/better-zcp/main/.env.example
    mv .env.example .env
    ```
 
@@ -286,12 +286,12 @@ RCON shows connected.
 
 - **Published image vs. build from source:** `docker-compose.yml` already
   has both `image:` and `build:` set — there's nothing to edit either way.
-  `docker compose up -d` tries to pull `ghcr.io/fpsacha/zomboid-panel:latest`
+  `docker compose up -d` tries to pull `ghcr.io/itsmeares/better-zcp:latest`
   first; if that fails (no tagged release yet, or a private fork without
   GHCR access), it builds from source automatically and tags the result the
   same, so later `up -d` runs won't try to pull again. Each tagged release
   also publishes a version-pinned image with a matching name (for example
-  `ghcr.io/fpsacha/zomboid-panel:1.2.4` — no `v` prefix, unlike the git tag
+  `ghcr.io/itsmeares/better-zcp:2.0.0` — no `v` prefix, unlike the git tag
   it's built from), if you'd rather pin a version than track `:latest`.
 
 ---
@@ -311,7 +311,7 @@ panel before committing to a full setup.
 ### Phase 2 — Start it
 
 2. ```sh
-   curl -O https://raw.githubusercontent.com/fpsacha/zomboid-control-panel/main/docker-compose.install.yml
+   curl -O https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker-compose.install.yml
    docker compose -f docker-compose.install.yml up -d
    ```
    `pull_policy: always` means every `up -d` you run later fetches the
@@ -354,7 +354,7 @@ install or run Project Zomboid itself.
 ### Phase 2 — Import and configure
 
 2. In Unraid's **Docker** tab, add the container from template:
-   `https://raw.githubusercontent.com/fpsacha/zomboid-control-panel/main/docker/unraid/zomboid-panel.xml`
+   `https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker/unraid/zomboid-panel.xml`
    (or search "Zomboid Control Panel" if it's listed in Community
    Applications).
 3. Set these four path mappings — the panel's own two are pre-filled, the

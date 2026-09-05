@@ -323,8 +323,8 @@ internal or external command...`. That's still this bug — see below for
 why the log is sometimes empty and sometimes has that one line in it
 instead.
 
-**Which versions this affects:** **v1.2.15**, the current release, on
-**Windows only** — v1.2.14 and earlier don't have this specific bug.
+**Which versions this affects:** legacy **v1.2.15 and earlier** Windows
+installs. The independent `v2.0.0` release line contains the fix.
 v1.2.14 launched the server executable by its bare filename rather than
 its full path, so the install path itself never appeared on the command
 line handed to `cmd.exe` at all (that version had a different Windows
@@ -362,14 +362,9 @@ This is a workaround, not the intended fix; there is nothing else you
 need to change, and nothing about your server's own configuration
 (`.ini`, mods, RCON) is involved.
 
-**When does a real fix arrive:** the fix exists in this project's source
-today but **has not shipped in any released version yet** — v1.2.15 is
-still the latest release and still has this bug. Once a release contains
-it, you'll be able to use a path with spaces or these characters again
-without the workaround above; this page will be updated to name that
-version once it exists. Don't take "the code is fixed" to mean "my
-installed copy is fixed" — check your actual version against the
-release notes before assuming an upgrade already covers this.
+**When does a real fix arrive:** upgrade to `v2.0.0` or later. Don't take
+"the code is fixed" to mean "my installed copy is fixed" — check the actual
+panel version in Settings before assuming an upgrade covers this.
 
 ---
 

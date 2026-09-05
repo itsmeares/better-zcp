@@ -16,22 +16,6 @@ updates:
       - dependency-name: "*"
         update-types:
           - version-update:semver-major
-  - package-ecosystem: npm
-    directory: /client
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    groups:
-      client-non-breaking:
-        update-types:
-          - minor
-          - patch
-        patterns:
-          - "*"
-    ignore:
-      - dependency-name: "*"
-        update-types:
-          - version-update:semver-major
   - package-ecosystem: github-actions
     directory: /
     schedule:

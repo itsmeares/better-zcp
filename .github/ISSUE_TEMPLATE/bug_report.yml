@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible problem in better-zcp
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include passwords, tokens, private IPs, or unredacted support bundles.
+        Security vulnerabilities belong in the private advisory flow, not here.
+  - type: input
+    id: version
+    attributes:
+      label: Panel version
+      description: Include the release or commit you are running.
+      placeholder: v2.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Windows binary
+        - Linux binary
+        - Docker
+        - From source
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest reliable sequence that reproduces the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Sanitized logs and environment
+      description: Include OS, browser, Project Zomboid build, and relevant redacted logs.

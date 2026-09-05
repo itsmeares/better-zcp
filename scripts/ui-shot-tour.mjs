@@ -13,9 +13,9 @@
 // one screen you just built, not just as an end-of-night audit.
 //
 // USAGE
-//   npm run ui:shot-tour                      # full sweep, every known view
-//   npm run ui:shot-tour -- <name>             # ONE view -- the fast, primary path
-//   npm run ui:shot-tour -- --list             # print every valid <name>
+//   pnpm run ui:shot-tour                      # full sweep, every known view
+//   pnpm run ui:shot-tour -- <name>             # ONE view -- the fast, primary path
+//   pnpm run ui:shot-tour -- --list             # print every valid <name>
 //
 //   <name> is `page` or `page:tab`, matching this app's own routing/tabs --
 //   e.g. `players` for the roster, `players:vitals` for the Vitals tab. Get
@@ -67,7 +67,7 @@
 //
 // REQUIREMENTS
 //   - `playwright` as a devDependency here (already added) with its
-//     Chromium browser downloaded: `npx playwright install chromium`.
+//     Chromium browser downloaded: `pnpm exec playwright install chromium`.
 //   - Node with global fetch (Node 18+).
 //   - Nothing else. No real Project Zomboid server, no real panel-bridge
 //     mod connection, no auth setup ahead of time.
@@ -297,14 +297,13 @@ async function buildClient(root) {
   const clientDir = path.join(root, 'client')
   if (!existsSync(path.join(root, 'node_modules'))) {
     console.log('[ui-shot-tour] installing root deps...')
-    await run('npm', ['install', '--no-audit', '--no-fund'], root)
-  }
-  if (!existsSync(path.join(clientDir, 'node_modules'))) {
-    console.log('[ui-shot-tour] installing client deps...')
-    await run('npm', ['install', '--no-audit', '--no-fund'], clientDir)
+    await run('corepack', ['pnpm', 'install', '--frozen-lockfile'], root)
+  } else if (!existsSync(path.join(clientDir, 'node_modules'))) {
+    console.log('[ui-shot-tour] linking client deps...')
+    await run('corepack', ['pnpm', 'install', '--filter', 'pz-server-manager-client', '--frozen-lockfile'], root)
   }
   console.log('[ui-shot-tour] building client...')
-  await run('npm', ['run', 'build'], clientDir)
+  await run('corepack', ['pnpm', '--filter', 'pz-server-manager-client', 'build'], root)
 }
 
 function spawnServer(root, dataRoot, port, keepServer) {
@@ -535,7 +534,7 @@ async function installFixtureRoutes(context) {
 // View names are addressable as `page` or `page:tab`, matching this app's
 // own routing/tab vocabulary rather than an invented scheme -- e.g.
 // `players:vitals` for the Vitals tab on the player dossier. Run
-// `npm run ui:shot-tour -- <name>` for one view, or with no name for the
+// `pnpm run ui:shot-tour -- <name>` for one view, or with no name for the
 // full sweep (see parseArgs/printViewList below).
 
 const SETTINGS_TABS = ['updates', 'https', 'access', 'security', 'users', 'roles', 'sso', 'connection', 'bridge', 'mods', 'backups', 'about']
@@ -1032,7 +1031,7 @@ const VIEWS = [
 // executor and its 'error' listener) -- independent of this tool, and out
 // of scope to fix here. Rather than gamble the whole baseline on it,
 // `unstable` views are skipped by the default (no-argument) full sweep;
-// capture one deliberately with `npm run ui:shot-tour -- server-finder`
+// capture one deliberately with `pnpm run ui:shot-tour -- server-finder`
 // (single-view mode also isolates the blast radius to that one run).
 // ui-tour-never-drives-interactive-state (2026-08-31): Setup.tsx is
 // structurally unreachable through the normal VIEWS loop below -- it
@@ -1074,7 +1073,7 @@ const SWEEP_VIEWS = VIEWS.filter((v) => !v.unstable)
 function printViewList() {
   console.log('Valid view names (use `page` for the top-level view, `page:tab` for a specific tab):\n')
   console.log(VIEW_NAMES.map((n) => `  ${n}`).join('\n'))
-  console.log(`\nUsage:\n  npm run ui:shot-tour                 # capture every view above\n  npm run ui:shot-tour -- <name>       # capture just one, e.g. players:vitals`)
+  console.log(`\nUsage:\n  pnpm run ui:shot-tour                 # capture every view above\n  pnpm run ui:shot-tour -- <name>       # capture just one, e.g. players:vitals`)
 }
 
 const VIEWPORTS = [

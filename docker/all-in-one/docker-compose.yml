@@ -47,7 +47,7 @@ services:
       COMPOSE_FILE: /build/ctx/docker-compose.yml
       PANEL_CONTAINER: zomboid-panel
       PANEL_IMAGE: zomboid-panel-allinone:latest
-      GITHUB_REPOSITORY: fpsacha/zomboid-control-panel
+      GITHUB_REPOSITORY: itsmeares/better-zcp
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PANEL_BUILD_DIR:?Set PANEL_BUILD_DIR in .env}:/build

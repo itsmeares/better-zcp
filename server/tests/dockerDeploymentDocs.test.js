@@ -34,8 +34,8 @@ describe("Docker deployment guidance", () => {
   it("pulls immutable release images before falling back to local builds", () => {
     const bootstrap = readRepoFile("docker/all-in-one/bootstrap.sh");
 
-    expect(bootstrap).toContain("zomboid-panel:aio-$VERSION");
-    expect(bootstrap).toContain("zomboid-panel:updater-$VERSION");
+    expect(bootstrap).toContain("ghcr.io/itsmeares/better-zcp:aio-$VERSION");
+    expect(bootstrap).toContain("ghcr.io/itsmeares/better-zcp:updater-$VERSION");
     expect(bootstrap).toContain('docker pull "$published_image"');
     expect(bootstrap).toContain('docker build -t "$local_image"');
     expect(bootstrap).toContain("up -d --no-build");
@@ -46,7 +46,7 @@ describe("Docker deployment guidance", () => {
   it("publishes versioned panel and updater images from release tags", () => {
     const workflow = readRepoFile(".github/workflows/docker-aio-build.yml");
 
-    expect(workflow).toContain("- 'v*'");
+    expect(workflow).toContain("- 'v2.*'");
     expect(workflow).toContain("type=raw,value=updater");
     expect(workflow).toContain("type=semver,pattern={{version}},prefix=aio-");
     expect(workflow).toContain(
@@ -73,7 +73,7 @@ describe("Docker deployment guidance", () => {
     const verifier = readRepoFile("scripts/verify-release-version.mjs");
 
     expect(workflow).toContain("node scripts/verify-release-version.mjs");
-    expect(verifier).toContain("package-lock.json root package");
+    expect(verifier).toContain("pnpm-lock.yaml");
     expect(verifier).toContain("PanelBridge must contain exactly one");
     expect(verifier).toContain("release-manifest.json client file inventory differs");
   });
