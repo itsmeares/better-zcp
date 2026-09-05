@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v2.*"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -57,7 +56,6 @@ jobs:
         run: node build.js ${{ matrix.build_arg }}
 
       - name: Verify release version parity
-        if: startsWith(github.ref, 'refs/tags/')
         run: node scripts/verify-release-version.mjs "${{ github.ref_name }}"
 
       - name: Verify Linux ABI compatibility
@@ -107,7 +105,6 @@ jobs:
 
   publish:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-22.04
 
     steps:
@@ -156,7 +153,6 @@ jobs:
             Dockerfile > checksums.txt
 
       - name: Create or update GitHub release
-        id: create-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -165,46 +161,11 @@ jobs:
           if gh release view "$release_tag" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "Release $release_tag already exists; uploading assets."
           else
-            release_version="${release_tag#v}"
-            # Match the heading by string prefix, not by regex. The previous version used
-            # "^## \\[" inside an awk STRING, where the escape is implementation-defined:
-            # gawk strips the backslash, turning [1.1.55] into a character class that cannot
-            # match "## [1.1.55]", so the section was never found and every release silently
-            # fell back to the placeholder below. mawk keeps it and the same line works. A
-            # release note that depends on which awk the runner ships is not worth debugging
-            # twice - index() has no escaping to get wrong.
-            awk -v version="$release_version" '
-              index($0, "## [" version "]") == 1 { in_section = 1; next }
-              in_section && index($0, "## [") == 1 { exit }
-              in_section { print }
-            ' CHANGELOG.md > release-notes.md
-
-            if [ ! -s release-notes.md ]; then
-              # Do not fail the release HERE for a missing changelog entry -- the
-              # artifacts still need to ship, and this branch only runs at all for
-              # a release that bypassed the release pre-flight (which blocks a
-              # missing heading before anything is built). A bypass is usually an
-              # emergency, which is the worst moment to withhold an upload. The
-              # "Fail if CHANGELOG entry was missing" step at the end of this job
-              # fails the job loudly AFTER assets are uploaded -- see that step for
-              # why this one only records the fact instead of stopping here.
-              echo "::warning title=No changelog entry::CHANGELOG.md has no '## [${release_version}]' section. Publishing a placeholder instead of real release notes."
-              printf 'Release %s\n\nSee CHANGELOG.md for details.\n' "$release_tag" > release-notes.md
-              echo "changelog_missing=true" >> "$GITHUB_OUTPUT"
-            fi
-
             gh release create "$release_tag" \
               --repo "${GITHUB_REPOSITORY}" \
               --title "Release $release_tag" \
-              --notes-file release-notes.md
+              --generate-notes
           fi
-
-      - name: Remove obsolete release-manifest.json from prior releases
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          release_tag="${GITHUB_REF_NAME}"
-          gh release delete-asset "$release_tag" release-manifest.json --repo "${GITHUB_REPOSITORY}" --yes 2>/dev/null || true
 
       - name: Upload release assets
         env:
@@ -229,17 +190,4 @@ jobs:
             echo "Upload attempt $attempt failed; retrying in 5s..."
             sleep 5
           done
-          exit 1
-
-      # Runs last, deliberately: assets are already uploaded above by the time
-      # this can fail, so a bypass release (one that skipped the normal
-      # pre-flight block) still ships its binaries even though this makes the
-      # job -- and the workflow run -- red. The normal pre-flight refuses to reach
-      # this workflow at all when CHANGELOG.md has no matching heading; this is
-      # only reachable by pushing a v2.* tag some other way. Loud, not silent,
-      # without withholding the artifacts a real emergency release needs.
-      - name: Fail if the release shipped without a CHANGELOG entry
-        if: steps.create-release.outputs.changelog_missing == 'true'
-        run: |
-          echo "::error title=No changelog entry::Release ${GITHUB_REF_NAME} shipped with assets uploaded, but CHANGELOG.md had no '## [${GITHUB_REF_NAME#v}]' section, so its release notes are a placeholder. Add the section, update the release notes (gh release edit ${GITHUB_REF_NAME} --notes-file <file>), and find out how this tag was pushed without going through the release pre-flight check."
           exit 1

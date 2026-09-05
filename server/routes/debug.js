@@ -343,18 +343,9 @@ function sanitizeForBundle(value, depth = 0) {
   return out;
 }
 
-// ───────────────────────────────────────────────────────────────────────
-// Raw-log redaction (support-bundle-2026-08-30 follow-up, operator ruling):
-// sanitizeForBundle() above only ever runs on structured data this route
-// itself builds, and is a no-op on free text -- it cannot touch a RAW log
-// file's content. The operator's ruling was to redact ALL raw logs in the
-// bundle uniformly (the four pre-existing filesystem categories AND the
-// two container/service-log files added earlier tonight), biased toward
-// false positives, but never at the cost of destroying the exact kind of
-// evidence (a stack trace, a file path) this bundle exists to preserve --
-// see redactRawLogText's own header for the two-layer design and the
-// regression test built from the literal line that motivated this feature.
-// ───────────────────────────────────────────────────────────────────────
+// Raw logs need their own redaction pass. sanitizeForBundle() handles
+// structured values, not free text. Keep exact secret matches separate from
+// shape-based patterns so stack traces and paths remain readable.
 
 // Discord bot tokens are three base64url segments joined by literal dots --
 // a shape distinctive enough that it will not collide with a file path,
@@ -834,19 +825,8 @@ async function buildZomboidPaths(activeServer) {
 
   const root = configured;
 
-  // 2026-09-04, god's finding in Charon's real bundle: installPath is not
-  // always a directory. "Custom launcher" mode (operator ruling 2026-08-27,
-  // custom-launcher-as-a-real-supported-mode-not-an-accident) legitimately
-  // stores a .bat/.sh/.exe FILE path in installPath -- resolveLaunchMode()
-  // is the shared, already-correct detector for this (serverManager.js's
-  // own launch-mode selection uses it). Joining "logs" straight onto a
-  // custom-launcher installPath produces a path like
-  // "...\StartServer_CharonWorld.bat\logs" (ENOENT, and listDir(installPath)
-  // itself would fail the same way trying to readdir a file) -- the
-  // install DIRECTORY for a custom launcher is the folder the script lives
-  // in, exactly the same relationship scanForPzPaths() already relies on
-  // (a discovered installPaths entry is the folder containing the launcher
-  // script it found alongside it).
+  // Custom launcher profiles store a file path in installPath. Resolve the
+  // containing directory before looking for logs or other install files.
   const { mode: launchMode } = resolveLaunchMode({
     installPath: activeServer?.installPath,
   });
@@ -1183,23 +1163,9 @@ async function buildBackupsSummary(req) {
   }
 }
 
-// support-bundle-2026-08-30: a real production report (Discord #bug_report,
-// see hive/agents/god/research/discord-restart-etxtbsy-2026-08-30.md) was
-// only diagnosable because of one decisive line -- a "Text file busy"
-// .NET stack trace from DepotDownloader -- that a user happened to paste
-// by hand from `docker logs`. None of the collectors above would have
-// caught it -- not because every one of them scans the filesystem
-// (bug hunt 2026-08-31: buildProcessSnapshot() is pure process-API,
-// buildBridgeStatus()'s core comes from an in-memory getStatus(), and
-// buildNetworkInterfaces() is an OS call, none of those touch disk --
-// the false claim didn't change the conclusion below, only the reasoning
-// for it) -- but because a container's stdout/stderr is not a file
-// anywhere on disk regardless of source: it is owned by Docker's log
-// driver (or, for a systemd/OpenRC managed lifecycle, by journald or
-// whatever the service supervisor does with it), and none of this
-// bundle's collectors -- file-based, in-memory, or OS-API -- reach it.
-// A bundle generated at the moment of that report would not have
-// contained the line that solved the case.
+// Container stdout/stderr is owned by Docker's log driver rather than the
+// filesystem collectors above. Include a bounded tail so support bundles
+// contain the same startup failures visible through docker logs or journald.
 //
 // Bounded the same way as every other raw-log collector in this bundle:
 // last N lines, not the full history, so one chatty deployment can't
@@ -5207,13 +5173,9 @@ router.get("/worldmap", requirePermission("diagnostics.manage"), async (req, res
             `Build ${resolution.directory} was resolved dynamically from build_list.json.`,
             {
               category: "worldmap",
-              // Resolution goes through curl now (Node's fetch and https
-              // share one blocked TLS stack) and only succeeds with a
-              // realistic browser user-agent -- a generic or missing one
-              // gets a 403. That's an upstream heuristic this panel does
-              // not control and two independent checks tonight found it
-              // behaving inconsistently across identical requests, so this
-              // is "working right now", not a permanent fix.
+              // Resolution depends on an upstream bot-detection heuristic
+              // outside the panel's control and may change without a panel
+              // release.
               hint: "Resolution depends on an upstream bot-detection heuristic outside the panel's control, which has been observed responding inconsistently to identical requests. Treat this as working right now, not permanently solved -- it can start failing again with no change on the panel's side.",
               // i18n param key stays `build` (reads better in the message
               // template) even though the source property is `directory`.

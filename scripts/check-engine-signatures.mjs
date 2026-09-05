@@ -1,43 +1,11 @@
 #!/usr/bin/env node
-// Sixth gate check, alongside LINT/RUNNER/CLIENT/CLIENTLINT/TSC: validates every engine method call
-// PanelBridge.lua makes (both through the PanelBridge.invoke/hasMethod/safeCall/safeGet/tryGet
-// helper family and bare `recv:method(...)` calls) against scripts/engine-signatures.manifest.json,
-// a real jar-derived record of what methods actually exist on each Java class (see
-// scripts/gen-engine-signatures.mjs, which builds that manifest, and scripts/lib/
-// engine-signature-core.mjs, the resolution engine both scripts share).
+// Validates PanelBridge.lua engine calls against the committed, JAR-derived
+// method manifest. Regenerating the manifest requires a local JDK and game JAR.
 //
-// No JDK is needed here -- the manifest is committed, and this script only reads it. Regenerating
-// the manifest (a local JDK + the game jar) is a separate, manual step; see gen-engine-signatures.mjs.
-//
-// PASS/FAIL contract (operator-confirmed 2026-08-30, see gen-engine-signatures.mjs's header for the
-// full reasoning): a call site whose receiver resolves to a known class AND whose method is absent
-// from that class's full inheritance chain in the manifest is a DEFINITE bug -- FAILS the gate. Any
-// other outcome (receiver unresolved, method name dynamic, class not in the manifest, method
-// present) PASSES -- presence is evidence the call is plausible, never proof it is callable through
-// PZ's Kahlua Lua<->Java binding, so this script only ever fails on the ABSENT side of that
-// asymmetry, never claims success beyond it.
-//
-// Coverage is reported every run, unconditionally: call sites found, receivers resolved, and why
-// the rest were not -- a checker that quietly resolves 3 sites and passes looks identical to one
-// that resolves 300 and passes, which is exactly the failure mode this tool exists to not repeat.
-//
-// BASELINE (operator-requested 2026-08-30, after this check would otherwise have shipped
-// permanently red): a fresh checkout of PanelBridge.lua already has 15 ABSENT findings, and they
-// were individually reviewed, not rubber-stamped -- see scripts/engine-signatures.baseline.json's
-// own header for the full reasoning. A check that is red from the moment it lands, on findings its
-// own author already called harmless, teaches everyone to stop reading it -- and the day it lands a
-// GENUINE new regression, nobody notices, which defeats the entire point of building this. So:
-// findings are matched against the baseline by CLASS+METHOD, not by line number (an edit that only
-// shifts lines shouldn't need a baseline update) and not by call site (so a second, later call to an
-// already-baselined absent pair doesn't need its own entry either) -- chosen over per-site keying
-// because the failure mode of a wrong choice is asymmetric: per-site keying breaks (spuriously RED)
-// on every unrelated edit near a baselined call, which is exactly the "everyone stops reading it"
-// outcome this baseline exists to prevent; class+method keying's failure mode is instead a NEW call
-// to an already-baselined absent method absorbing silently -- worse in principle, but the baseline's
-// own match count is printed every run specifically so that absorption stays visible rather than
-// silent (see "already-baselined" below). A method NOT in the baseline that is ABSENT still fails
-// the gate exactly as before -- the baseline only covers the 10 specific (class, method) pairs
-// reviewed and recorded in that file, nothing broader.
+// The check fails only when a call resolves to a known class and the method is
+// absent from that class's inheritance chain. Unknown or dynamic calls remain
+// unresolved rather than being treated as proof of support. Existing reviewed
+// absences are matched by class and method in the baseline file.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -118,16 +86,8 @@ for (const s of unresolved) {
   skipReasonCounts.set(s.skipReason, (skipReasonCounts.get(s.skipReason) || 0) + 1);
 }
 
-// Fail loudly rather than silently narrow (checker script audit, 2026-09-05,
-// ci-pipefail-and-dead-tests hunt): this gate's whole contract is "no NEW
-// absent engine call" -- an empty/near-empty callSites list makes that
-// vacuously true, which reads identically to a real pass. Mutation-verified:
-// pointing --lua at a file with no real engine call sites reproduces
-// `call sites found: 0` / `receivers resolved: 0` and still printed
-// "PASS: no NEW definitively absent engine method calls" before this guard
-// existed. Baseline on the real PanelBridge.lua: 367 call sites found, 201
-// resolved -- same ~55% floor as the MIN_* guards in this script's sibling
-// checkers (audit-bridge-actions.mjs, audit-bridge-routes.mjs).
+// Fail loudly rather than silently narrowing the extraction: an empty or
+// near-empty call-site set would make this check pass vacuously.
 const MIN_CALL_SITES = 200;
 if (callSites.length < MIN_CALL_SITES) {
   console.error(

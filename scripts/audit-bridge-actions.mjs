@@ -1,19 +1,9 @@
-// Cross-checks every PanelBridge action name this file can find as a literal in Events.tsx/api.ts
-// against the deployed Lua handlers and the server-side allow-list. Reports only mismatches.
+// Cross-checks literal PanelBridge action names in Events.tsx and api.ts
+// against the Lua handlers and server allow-list.
 //
-// HONEST CEILING (2026-08-31 bug hunt): this is NOT "every action the Events page can send" --
-// most of Events.tsx's real dispatch is `sendCommand(action, args)` / `sendCommand(bridgeOperation,
-// parsedArgs)` with a VARIABLE action name, invisible to any literal-string regex by construction.
-// What this script actually covers: the handful of hardcoded pre-fetch calls (sendCommand('name',
-// ...)) plus every key in getBridgeOperationTemplates()'s returned object (the fixed free-form-args
-// operation list the "raw JSON" UI path offers) -- roughly 20 of the ~90-100 real bridge actions,
-// not all of them. Was previously checking ~4 of those ~20 (0 of the 17 template keys) because its
-// extraction anchor (`const bridgeOperationTemplates` followed by an inline object at 2-space
-// indent) went stale when that data moved into a separately exported getBridgeOperationTemplates()
-// function at 4-space indent -- a checker that silently covers almost nothing while printing a
-// clean pass, the exact failure class this whole hunt kept finding. Fixed to anchor on the function
-// itself and match keys at ANY indent depth, and to fail loudly (not print a quiet "0 mismatches")
-// if the resulting corpus looks implausibly small -- see MIN_TEMPLATE_KEYS below.
+// Dynamic action names cannot be checked by this source scan. The fixed
+// getBridgeOperationTemplates() list is included, and the script fails if its
+// extraction unexpectedly returns fewer than MIN_TEMPLATE_KEYS entries.
 import fs from "fs";
 import path from "path";
 
@@ -46,11 +36,8 @@ const events = read("client/src/pages/Events.tsx");
 const literalEventsActions = [...events.matchAll(/sendCommand\(\s*'([a-zA-Z]+)'/g)].map((m) => m[1]);
 const eventsOps = new Set(literalEventsActions);
 
-// getBridgeOperationTemplates() returns the fixed operation list the raw-JSON-args UI path offers
-// -- anchor on the FUNCTION (not a `const` that may or may not still hold the data inline) and
-// match its top-level keys at ANY indent (not a hardcoded depth that breaks the moment someone
-// reformats). Bounded by the first column-0 `}` after the anchor, same as the function's own
-// closing brace.
+// Extract the fixed operation list from the function rather than relying on
+// a particular indentation or declaration shape.
 const templateFnAnchor = "function getBridgeOperationTemplates";
 const templateFnIdx = events.indexOf(templateFnAnchor);
 let templateKeyCount = 0;
@@ -64,12 +51,8 @@ if (templateFnIdx !== -1) {
   }
 }
 
-// A checker that silently covers almost nothing while printing a clean "0 mismatches" is worse
-// than one that errors -- this is the exact failure class this script itself was found to be
-// (2026-08-31: matched 0 of 17 real template keys after a refactor moved the data it was reading).
-// If the anchor is found at all, finding implausibly few keys under it means the extraction regex
-// itself has gone stale again, not that the file genuinely shrank to almost nothing -- fail loudly
-// rather than let a future silent break look identical to a real pass.
+// Fail loudly when the extraction anchor becomes stale instead of reporting
+// a misleading clean result.
 const MIN_TEMPLATE_KEYS = 10;
 if (templateFnIdx !== -1 && templateKeyCount < MIN_TEMPLATE_KEYS) {
   console.error(
@@ -104,12 +87,6 @@ console.log(`NO LUA HANDLER:             ${missingHandler.join(", ") || "none"}`
 console.log(`NOT IN ALLOW-LIST:          ${missingAllow.join(", ") || "none"}`);
 console.log(`ALLOWED BUT NO HANDLER:     ${allowedButUnimplemented.join(", ") || "none"}`);
 
-// wire-up-the-unrun-checkers (2026-08-31 bug hunt): this script had no
-// caller anywhere in the repo until this pass -- package script + CI job added
-// alongside this exit code. Confirmed zero mismatches on HEAD before adding
-// this (see the dispatch report); a checker that can never fail is
-// decoration, the exact thing that let this script's own coverage rot
-// silently until tonight.
 if (missingHandler.length || missingAllow.length || allowedButUnimplemented.length) {
   process.exit(1);
 }

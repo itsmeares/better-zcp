@@ -12,27 +12,8 @@
 // to see the panel-side denominator alone (see the argv.length branch
 // below) -- that half needs no live server at all.
 //
-// finish-the-scripts-checker-audit (2026-08-31 bug hunt): this script's own
-// coverage was never established until this pass, which is the entire
-// method that found the other defects in this class tonight -- RUN it and
-// count, don't read it and assume. Result: its hardcoded 3-file list
-// (server/services/rcon.js, server/routes/server.js,
-// server/services/scheduler.js) missed TWO real literal-command call sites
-// outside those three -- server/routes/config.js (`rconService.execute(
-// "players", ...)`, a duplicate of one already found elsewhere, so no lost
-// coverage there) and, genuinely uncaught until now,
-// server/services/discordBot.js's `kickuser` command (Discord bot's kick-
-// player feature) -- a real command this checker had never once verified
-// against the server's actual support, silently, for as long as the
-// hardcoded list existed. Root cause: a fixed file list is itself
-// undeclared coupling -- correct the day it's written, stale the moment
-// anyone adds a new call site elsewhere, with nothing to say so.
-//
-// Fixed by removing the file list entirely: walks every .js file under
-// server/ (skipping tests/, node_modules/, __fixtures__/, data/, database/
-// -- none of those can contain real dispatch code) and applies the pattern
-// to all of them. A new call site anywhere in server/ is covered
-// automatically from here on; nothing to keep in sync by hand again.
+// Scan every server-side JavaScript file instead of maintaining a list of
+// call sites. This keeps new RCON dispatches in the audit automatically.
 import fs from "fs";
 import path from "path";
 
@@ -74,13 +55,8 @@ for (const file of files) {
   }
 }
 
-// Pattern 2: a command built into a local variable first, then handed to
-// execute() by NAME rather than as a literal -- e.g. rcon.js's banPlayer():
-// `let cmd = \`banuser "${safeUser}"\`; ... return this.execute(cmd);`.
-// Pattern 1 can't see this: the literal isn't the direct execute() argument,
-// the variable is. Found via Pam's ground-truth count (43 real vs 42 here) --
-// banuser was the missing one, and it's a call-shape gap, not a file this
-// walk never reads (rcon.js was already included). Two-step, no AST needed:
+// Also catch commands assigned to a local variable before execute() receives
+// the variable. The direct-literal pattern cannot see that call shape.
 // find `word` = a template/string literal starting with a lowercase command
 // word, then check that SAME variable name is later passed to execute() in
 // the same file.

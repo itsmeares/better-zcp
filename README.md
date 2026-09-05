@@ -366,7 +366,7 @@ pnpm test                  # Run tests
 - **Issues** — [Report bugs or request features](https://github.com/itsmeares/better-zcp/issues) on GitHub.
 - **Contributing** — Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 - **Security** — Follow [SECURITY.md](SECURITY.md) for private vulnerability reports.
-- **Changelog** — See the [latest release notes](https://github.com/itsmeares/better-zcp/releases/latest) for what's new.
+- **Release notes** — See the [latest release notes](https://github.com/itsmeares/better-zcp/releases/latest) for what's new.
 
 ---
 

@@ -11,11 +11,9 @@
 //      one resolved mapping, two outputs -- not two independent parsers
 //      that can silently drift apart from each other.
 //
-// Run manually: `node scripts/extract-pz-sandbox-ground-truth.js <path to PZ install>`
-// (no PZ install path -> defaults to the well-known dev machine location
-// below; this script is never run in CI, only by hand when re-syncing
-// against a new PZ build -- see the fixture's own _provenance block for
-// when it was last run and against which PZ build).
+// Run manually: `node client/scripts/extract-pz-sandbox-ground-truth.mjs <path to PZ install>`
+// This script is never run in CI. Pass a local install when re-syncing against
+// a new PZ build; the fixture records the source build.
 //
 // READ-ONLY on the PZ install. Never writes anything under it.
 
@@ -26,7 +24,11 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CLIENT_ROOT = path.resolve(__dirname, '..')
 
-const PZ_ROOT = process.argv[2] || 'D:/SteamLibrary/steamapps/common/ProjectZomboid'
+const PZ_ROOT = process.argv[2]
+if (!PZ_ROOT) {
+  console.error('PZ install path required')
+  process.exit(2)
+}
 const APOC_PATH = path.join(PZ_ROOT, 'media/lua/shared/Sandbox/Apocalypse.lua')
 const TRANSLATE_DIR = path.join(PZ_ROOT, 'media/lua/shared/Translate')
 const APP_MANIFEST_PATH = path.resolve(PZ_ROOT, '..', '..', 'appmanifest_108600.acf')

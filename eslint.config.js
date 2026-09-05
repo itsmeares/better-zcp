@@ -54,9 +54,7 @@ export default [
         },
       ],
 
-      // Triaged 2026-08-04: the one real race (server wipe guard) is fixed.
-      // The rest are per-request/per-socket objects and function-local
-      // variables, which this rule reports as false positives.
+      // Per-request and per-socket objects make this rule too noisy here.
       "require-atomic-updates": "off",
 
       // Escaping `-` and `[` inside character classes is deliberate defensive

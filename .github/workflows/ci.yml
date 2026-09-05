@@ -17,14 +17,7 @@ jobs:
     name: Server (lint + tests)
     runs-on: ubuntu-latest
     steps:
-      # fetch-depth: 0 (full history) -- roleDescriptionStalenessGate.test.js
-      # needs real git blame/log history to detect a stale capability-
-      # description translation. actions/checkout defaults to depth 1: on a
-      # shallow clone, git blame attributes every line to the single shallow-
-      # boundary commit, which silently collapses that gate to "0 findings"
-      # regardless of actual drift (verified by cloning this repo at depth 1
-      # and confirming the collapse before this fix). The client job doesn't
-      # need this and stays shallow for its usual faster checkout.
+      # The server suite uses git history for translation-staleness checks.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
@@ -46,28 +39,15 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Warning ceiling is a ratchet: it must only ever be lowered.
       - name: Lint
         run: pnpm run lint:server
 
-      # vitest-worker-teardown-flake-exits-1: vitest 4.1.11 has a known,
-      # currently-open upstream race in its birpc worker-teardown path
-      # (vitest-dev/vitest#8649 fixed the "fetch"-pending variant in the
-      # v4 pool rewrite; this is the same class of bug for a different
-      # pending RPC call -- "onUserConsoleLog" -- and there is no newer
-      # 4.x release that fixes it; 4.1.11 is current stable). Symptom:
-      # `EnvironmentTeardownError: [vitest-worker]: Closing rpc while
-      # "onUserConsoleLog" was pending`, vitest counts it under Errors
-      # and exits 1 even when every test passed -- a red CI run with no
-      # FAIL line anywhere in the report, roughly 1 in 4 locally.
-      # Retry exactly once, and only when the failure has this exact
-      # shape (no "Failed Tests" heading, i.e. zero real test failures,
-      # AND the known error signature present) -- a real test failure
-      # still fails the job immediately with no retry, since "Failed
-      # Tests" would be present and this condition is false.
+      # Vitest can report an environment-teardown race after all tests pass.
+      # Retry that exact error once, but never retry a real test failure.
       - name: Tests
         shell: bash
         run: |
+          set -o pipefail
           if pnpm run test:server 2>&1 | tee /tmp/server-test-output.log; then
             exit 0
           fi
@@ -79,21 +59,8 @@ jobs:
             exit 1
           fi
 
-  # Deliberately a SEPARATE job from `server`, not a step tacked onto it: this check must never be
-  # able to red-gate lint/tests/tsc, and a job boundary is the only thing GitHub Actions actually
-  # enforces that with -- steps within one job all report under that job's single status, so a
-  # crash/timeout/wrong-verdict here could otherwise read as "Server (lint + tests)" failing. This
-  # job's only dependency is the repo checkout; it does not install dependencies for the full
-  # client+server tree.
-  #
-  # No JDK here, and none needed: validates PanelBridge.lua's engine calls against the COMMITTED
-  # scripts/engine-signatures.manifest.json (a real jar-derived record of what methods actually
-  # exist on each Java class -- see scripts/gen-engine-signatures.mjs). Regenerating that manifest
-  # needs a local JDK and the actual game server jar, neither of which a GitHub-hosted runner has or
-  # ever will -- that is a local-only step, done before committing the refreshed manifest, never part
-  # of this job. FAILS only on a method the manifest confirms is definitively absent from a resolved
-  # receiver's class -- see scripts/check-engine-signatures.mjs's header for the full PASS/FAIL
-  # contract and its reported-coverage output.
+  # Keep this independent from the dependency-heavy test jobs. The committed
+  # manifest is checked in CI; regenerating it requires a local game JAR.
   engine-signatures:
     name: Engine signature check
     runs-on: ubuntu-latest
@@ -107,42 +74,10 @@ jobs:
       - name: Engine signature check
         run: node scripts/check-engine-signatures.mjs
 
-  # wire-up-the-unrun-checkers (2026-08-31 bug hunt): these three had NO
-  # caller anywhere in the repo before this job -- not a package script, not
-  # CI, not docs. A checker nobody runs can rot indefinitely because
-  # nothing ever contradicts it: this is very likely why coverage collapsed
-  # silently in exactly these scripts and not in engine-signatures (the one
-  # already wired). Same job-isolation reasoning as engine-signatures above
-  # -- pure fs.readFileSync + regex, no package install, no dependency on the
-  # server/client jobs' heavier setup, and its own job so a failure here
-  # reads unambiguously as one of these checks, not "Server" or "Client".
-  #
-  # All three FAIL the build on a real mismatch (confirmed zero mismatches
-  # on the tree this job was added against, per the wiring dispatch's own
-  # "confirm green first" requirement) -- verified by injecting a real
-  # mismatch into a throwaway scratch copy of each and confirming exit 1,
-  # not just assumed from reading the exit() call.
-  #
-  # audit-rcon-commands.mjs is the deliberately incomplete one: its full
-  # check needs a supported-commands file from a live PZ server's RCON
-  # `help` response, which no CI runner can obtain. Run here with only the
-  # repo root argument, it prints the panel-side denominator (every literal
-  # RCON command the panel can send) and fails only if that count is
-  # implausibly small -- i.e. this step verifies the CHECKER'S OWN
-  # extraction still works, not that every command it finds is one the
-  # server actually supports. See the script's own header for the honest
-  # ceiling; do not read a green tick here as "the panel's RCON usage is
-  # fully verified against a live server."
-  # i18n French duplicate-value check, added once its findings had a reviewed
-  # baseline: scripts/i18n-duplicates.baseline.json (2026-08-31) covers 43
-  # previously-reviewed legitimate duplicates across 7 named categories (see
-  # that file's header for the taxonomy and the one-sentence triage rule) --
-  # a 44th finding that was a real mistranslation was fixed, not baselined,
-  # before this step was added. --all fails only on a NEW suspicious
-  # duplicate not already in the baseline; a baselined one never reddens the
-  # build. Break-verified before wiring: a synthetic duplicate injected into
-  # a scratch copy produced exit 1 under "NEW SUSPICIOUS FRENCH DUPLICATE(S)",
-  # restoring the file returned it to exit 0.
+  # Run source audits in their own job so failures identify the affected
+  # contract. The RCON audit checks extraction only; it cannot query a live
+  # server from CI. The i18n audit compares new findings with its reviewed
+  # baseline.
   scripts-checkers:
     name: Scripts checkers (bridge actions/routes, RCON commands, i18n duplicates)
     runs-on: ubuntu-latest
@@ -221,35 +156,8 @@ jobs:
       - name: Install server dependencies
         run: pnpm install --frozen-lockfile
 
-      # serverManagerSpacedPathCmdQuoting.test.js and
-      # serverManagerWindowsSpawnFixes.test.js both gate on
-      # `process.platform === "win32"` and were previously never run on any
-      # CI job -- the `server` job above is ubuntu-latest, and this was the
-      # only windows-runs-on job, but it wasn't listed here. Confirmed
-      # (2026-09-04 P0 review): a change that silently drops
-      # windowsVerbatimArguments:true from the Windows spawn branches would
-      # have shipped fully green. A platform-gated test not wired into any
-      # job that actually runs on that platform reads as coverage in the
-      # tree but provides none.
-      #
-      # serverManagerEmptyScanWindows.test.js (all 8 cases) and
-      # serverManager-stopTimeout.test.js:163 (the win32 half of its
-      # platform-contract describe block) have the same defect, added here
-      # 2026-09-05: win32-gated, and this was still the only
-      # windows-runs-on job before this line, but neither file was listed.
-      # serverManagerEmptyScanWindows's subject is a real Discord-reported
-      # field regression (an empty ConvertTo-Csv on a genuinely-stopped
-      # server misread as a failed scan, so every fail-closed guard,
-      # /wipe included, refused forever on Windows) -- its regression test
-      # was never actually executed by CI.
-      #
-      # setDataPaths.test.js, same session: its one win32-gated case (the
-      # sole test of BLOCKED_PREFIXES) ran on no CI job either -- CI's only
-      # non-Windows-latest job for this file is ubuntu. Listed here so the
-      # BLOCKED_PREFIXES contract that four codeql[js/path-injection]
-      # suppressions cite as their justification is actually exercised, not
-      # assumed. The rest of the file's tests are platform-independent and
-      # unaffected by running here too.
+      # These tests contain Windows-only branches. Running them on the Windows
+      # job keeps path quoting, process spawning, and path guards covered.
       - name: Exercise bundle transaction and generated supervisor
         run: pnpm exec vitest run server/tests/panelUpdateBundle.test.js server/tests/supervisor-restart.test.js server/tests/serverManagerSpacedPathCmdQuoting.test.js server/tests/serverManagerWindowsSpawnFixes.test.js server/tests/serverManagerCustomStartCommandQuoting.test.js server/tests/serverManagerCommandLineRoundTrip.test.js server/tests/serverManagerEmptyScanWindows.test.js server/tests/serverManager-stopTimeout.test.js server/tests/setDataPaths.test.js
 

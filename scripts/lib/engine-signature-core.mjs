@@ -74,19 +74,10 @@ export function stripLuaComments(src) {
   return out.join('');
 }
 
-// 2026-08-31 bug hunt (scripts/**): the Pass-1 assignment regex below (`assignRe`) has no way to
-// tell a real Lua assignment (`local cell = getWorld():getCell()`) apart from a TABLE CONSTRUCTOR
-// FIELD of the same shape (`{ cell = someExpr, ... }`) -- its only precondition on the character
-// before the identifier is "not `.` or a word character", which `{`, `,`, and plain whitespace all
-// satisfy, and all three precede table fields constantly. A field whose value is itself a chain
-// expression (not a string/number literal, which parseChainAt can't start from) gets recorded into
-// `varTypes` exactly like a real assignment -- silently overwriting a REAL variable's correctly
-// resolved type with whatever the field's value chain resolves to (frequently null, since return-
-// value fields are rarely typed the same as an unrelated in-scope variable that happens to share
-// its name). A later REAL use of that variable then walks from the wrong starting type and reports
-// `chain-broke-before-end` -- SKIPPED, not checked -- even though the receiver's real type was
-// already known moments earlier. Confirmed on the real PanelBridge.lua: 220 non-local `NAME = expr`
-// matches collide with a real tracked local-variable name of the same spelling.
+// Pass 1 must distinguish real Lua assignments from table-constructor fields.
+// Both can match `name = expression`; recording a field as a variable can
+// overwrite a correctly resolved type and hide later call sites. The parser
+// therefore restricts this pass to assignment forms it can identify safely.
 //
 // Fix: track `{}` nesting depth (string-aware, using the same quote-skipping logic
 // stripLuaComments already uses, since a brace inside a string literal must not count) across the

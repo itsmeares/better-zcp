@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 // real current install, none of those branches could ever fire, and every
 // real apply failure classified as "unknown" no matter what actually
 // happened. Only the [pre-spawn]/"apply helper started" pair genuinely
-// matches spawnWindowsApplyHelper()'s wording (dead in production, kept for
+// matches the legacy helper's wording (kept for
 // an un-upgraded pre-v1.0.21 install); the rest of the prose predates even
 // that -- `git log -S"quarantined by av"` shows it was introduced once, at
 // v1.0.14, and never touched since, through two later apply-mechanism
@@ -69,7 +69,7 @@ describe("classifyApplyFailure() recognises Supervisor v2's real, current wordin
     expect(checker.classifyApplyFailure(log, false)).toBe("rollback_failed");
   });
 
-  it("the legacy [pre-spawn]-blocked path (spawnWindowsApplyHelper's format) still works for an un-upgraded pre-v1.0.21 install", () => {
+  it("the legacy [pre-spawn]-blocked path still works for an un-upgraded install", () => {
     const checker = new PanelUpdateChecker();
     const log =
       "[2026-09-04T10:00:00.000Z] [PRE-SPAWN] Panel is about to spawn apply helper: C:\\panel\\.panel-helpers\\apply-update-1.cmd\n" +

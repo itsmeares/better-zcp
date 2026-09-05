@@ -8,17 +8,9 @@ import Servers from '../Servers'
 import { serversApi, serversDetectApi, dockerApi, configApi, updateApi } from '@/lib/api'
 import en from '../../locales/en/servers.json'
 
-// 2026-08-31 quality-pass finding: Add Remote Server had no duplicate
-// detection at all. ui-shot-tour.mjs's servers:remote-card view resubmits
-// the identical name+host+password on every single capture of that view
-// against one shared persistent session, and the panel silently accepted
-// every one of them -- servers-remote-card__mobile__light.png shows FOUR
-// byte-identical "Tour Remote Server" cards, distinguishable only by an
-// Inactive/Selected badge. A real user double-clicking Add Server, or
-// resubmitting after a page that looked unresponsive, hits the same result.
-// Fixed with a client-side pre-submit check in Servers.tsx's
-// handleAddExistingServer (name + rconHost + rconPort match, scoped to
-// remote mode, where the finding was observed).
+// Add Remote Server must reject duplicate name + host + port submissions.
+// A repeated browser submission used to create identical remote-server cards;
+// the client-side pre-submit check in handleAddExistingServer prevents that.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({

@@ -202,14 +202,9 @@ router.post("/create", requirePermission("backups.manage"), async (req, res) => 
     const result = await backupService.createBackup({ ...req.body, io });
 
     if (result.success) {
-      // 2026-08-26 bug hunt: createBackup surfaces skipped files rather than
-      // deciding policy -- this is the routine/manual path, so a skip
-      // (a temp/log/lock file the live game process rotated out from under
-      // the scan, OR a symbolic link deliberately not followed -- see
-      // walkDirectory's own comment, 2026-08-29) is tolerated, not fatal.
-      // Reported as a warnings array so it's visible rather than silently
-      // dropped, same convention as the reloadWarnings/scriptWarnings
-      // responses used elsewhere tonight.
+      // Manual backups tolerate files that disappear during the scan or
+      // symbolic links that are deliberately not followed. Return those
+      // skips as warnings instead of hiding them.
       if (result.skippedFiles?.length > 0) {
         res.json({
           ...result,
@@ -296,16 +291,8 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
   // it) purely so a refusal from a concurrent operation can name which
   // server it's for -- see lifecycleCoordinator.js's comment.
   const activeServerForLock = await getActiveServer();
-  // bug hunt 2026-09-05 (backup-restore-round-trip sweep, item #2): this
-  // route's own stopped-check above, and restoreBackup()'s own internal
-  // one, only ever prove the server was NOT running at the instant they
-  // ran. Nothing stood between that instant and the destructive rename
-  // swap deep inside restoreBackup() -- a Start (manual, Discord, or a
-  // scheduler tick) landing in that window raced the live JVM against the
-  // extraction/swap. Same process-wide lock /start, /stop, /force-stop and
-  // /restart already take for the identical reason (see their own comment
-  // in routes/server.js) -- not a new mechanism, held for the whole
-  // restore, not just the check.
+  // Hold the lifecycle lock for the whole restore. A stopped check alone
+  // leaves a race between validation and the destructive rename.
   const lifecycleLock = acquireLifecycleLock(
     "restore",
     activeServerForLock?.name || activeServerForLock?.serverName || null,

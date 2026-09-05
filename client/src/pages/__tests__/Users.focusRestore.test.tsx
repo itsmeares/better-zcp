@@ -18,8 +18,8 @@ import { usersApi, permissionsApi, type ManagedUserAccount } from '@/lib/api'
 // about `users` changed) -- Users.tsx instead focuses the surviving button
 // directly in the catch branch. That direct call exists because Radix's own
 // onCloseAutoFocus does NOT reliably restore focus to the trigger here --
-// confirmed 2026-08-31 against a REAL Chromium (scripts/ui-shot-tour.mjs's
-// bootstrap, not jsdom): activeElement lands on document.body after this
+// A real Chromium smoke test, not jsdom, showed activeElement landing on
+// document.body after this
 // exact flow, a genuine keyboard-accessibility defect, not a test artifact.
 
 vi.mock('@/lib/api', async () => {
@@ -187,8 +187,8 @@ describe('Users -- focus after a confirmed delete', () => {
     const aliceButtonStillThere = await screen.findByRole('button', { name: 'Remove alice' })
     expect(aliceButtonStillThere).toBeInTheDocument()
 
-    // Real-browser check (2026-08-31, scripts/ui-shot-tour.mjs's bootstrap
-    // against a real server + Chromium, not jsdom): after this exact flow
+    // A real-browser check against a server, not jsdom, showed that after this
+    // exact flow
     // -- trigger correctly pre-focused, dialog confirmed, delete rejected
     // -- document.activeElement lands on document.body, not the trigger,
     // against the UNFIXED component. Confirmed reproducible, not a jsdom

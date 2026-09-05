@@ -613,7 +613,7 @@ router.delete("/users/:id", requirePermission("users.manage"), async (req, res) 
  * tokens, every user, every device, including the caller's own. Exists for
  * an operator who has ever shared or offsited a backup taken before the
  * JWT secret moved out of db.json (older backups still contain the old key
- * in plaintext — see CHANGELOG). There is no automatic or scheduled
+ * in plaintext). There is no automatic or scheduled
  * rotation by design; this is a deliberate, rare, explicit action.
  *
  * Why it stays admin-only rather than becoming a delegable capability:

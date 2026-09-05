@@ -69,14 +69,9 @@ const MASTER_SERVERS = [
 const QUERY_TIMEOUT = 10000;
 const SERVER_QUERY_TIMEOUT = 3000;
 
-// Caps how many master-listed servers GET /'s fallback path will actually
-// probe. Each probe is bounded (SERVER_QUERY_TIMEOUT above), but the batch
-// loop that walks them has no overall ceiling of its own -- an unusually
-// large listed count (hunt-wave10, 2026-08-29) could otherwise make a
-// single GET / take minutes. The cap is surfaced in the response
-// (masterDiscovery.truncated) rather than applied silently -- a short
-// server list and "there really are only this many" must stay
-// distinguishable from "we stopped counting".
+// Bound the fallback fan-out. The cap is returned as
+// masterDiscovery.truncated so a short result stays distinguishable from an
+// intentionally truncated one.
 const MAX_MASTER_SERVERS_TO_QUERY = 200;
 
 /**
@@ -174,28 +169,12 @@ export async function queryServerInfo(ip, port, onFailureReason) {
     // message handler retries once with the challenge appended as required by
     // the protocol.
     //
-    // socket.connect() ties this socket to exactly the queried ip:port for
-    // its whole lifetime -- the kernel then only ever delivers a reply from
-    // that address, the same hardening applied to queryMasterServer()
-    // (hunt-wave10, 2026-08-29). LOWER SEVERITY than that gap was, and
-    // recorded here rather than left implicit: by the time this function
-    // runs, `ip` has already passed either validateQueryIp (GET /query,
-    // GET /ping -- caller-supplied) or the isPrivateIp filter inside
-    // selectMasterServersToQuery (GET /'s master-server fallback), so a
-    // spoofer here must answer FOR a specific address the panel was
-    // already willing to probe, not redirect it to an arbitrary internal
-    // one. Still worth closing: without this, any host that can land a
-    // datagram on this socket's local port can fabricate the entire A2S
-    // reply for a server the operator is actually checking on, not merely
-    // add noise to a list.
+    // A connected socket accepts replies only from the requested address,
+    // preventing another host from fabricating the response after the SSRF
+    // checks have passed.
     socket.connect(port, ip, () => {
-      // Same escape hazard as the retry send() above: a synchronous throw
-      // from send() here runs inside connect()'s callback, not this
-      // Promise's own executor, so nothing upstream would ever catch it
-      // without this try/catch -- it would kill the whole server process,
-      // not just this one query. Confirmed for real in
-      // server/routes/serverFinder.js's queryMasterServer() (2026-08-30);
-      // this function has the identical shape and needed the identical fix.
+      // A synchronous send() error inside this callback would otherwise escape
+      // the Promise and terminate the server process.
       try {
         socket.send(buildA2SInfoQuery());
       } catch (err) {
@@ -316,16 +295,9 @@ function parseA2SInfoResponse(buffer) {
  */
 export async function queryMasterServer(masterHost, masterPort, region = 0xFF, filters = '') {
   return new Promise((resolve, reject) => {
-    // socket.connect() makes this a CONNECTED UDP socket: the kernel then
-    // only delivers datagrams whose source address:port matches the
-    // resolved master, and send() below no longer names a destination.
-    // Fixes a response-spoofing gap (hunt-wave10, 2026-08-29): the socket
-    // used to be unconnected and would process a reply from ANY sender on
-    // its local port as if it were the master's -- including a
-    // caller-chosen private/loopback address, which then got probed
-    // directly by GET /'s master-server fallback with no isPrivateIp
-    // filter of its own. Proof of both the gap and the fix living in the
-    // same file: server/tests/jimServerFinderMasterSpoof.test.js.
+    // A connected UDP socket accepts replies only from the resolved master,
+    // preventing a spoofed response from steering the fallback to an internal
+    // address.
     const socket = dgram.createSocket('udp4');
     const servers = [];
     let lastIp = '0.0.0.0';
@@ -409,7 +381,7 @@ export async function queryMasterServer(masterHost, masterPort, region = 0xFF, f
       // the socket's own 'error' listener. Node's default handling of an
       // uncaught exception is to kill the whole process, not just this
       // request -- confirmed the hard way, twice, via
-      // scripts/ui-shot-tour.mjs's server-finder capture (2026-08-30).
+      // a manual browser smoke test.
       // Catching it here, once, covers both call sites.
       try {
         socket.send(packet);
@@ -557,12 +529,10 @@ export function deriveEmptyReason({ source, serversFound, mastersReachable, mast
   return mastersListedCount > 0 ? 'no-servers-responded' : 'no-servers-listed';
 }
 
-// Surfaces two decisions GET /'s master-server fallback makes about which
-// listed servers it actually probes, so neither reads as a plain (and
-// therefore indistinguishable-from-"that's everything") short list:
+// Surfaces the master-server fallback's filtering and query cap, so a short
+// result is not ambiguous:
 //   - privateFiltered: entries refused because isPrivateIp() flagged them
-//     (SSRF guard, hunt-wave10 2026-08-29 -- matches GET /query and
-//     GET /ping's own validateQueryIp() check, now applied here too).
+//     (same SSRF guard used by GET /query and GET /ping).
 //   - truncated: the queryable count exceeded MAX_MASTER_SERVERS_TO_QUERY,
 //     so `queried` is a prefix, not the full list.
 // Only meaningful for the master_server path -- undefined otherwise,
@@ -587,10 +557,7 @@ export function deriveMasterDiscoveryStats({
 // Applies both decisions GET /'s master-server fallback makes about a raw
 // master-listed candidate list before probing any of it: the SSRF filter
 // (isPrivateIp) and the query cap (MAX_MASTER_SERVERS_TO_QUERY). Extracted
-// as its own pure function so the cap can be asserted directly against a
-// large candidate list without a slow live UDP fan-out for every entry --
-// per god's explicit instruction (hunt-wave10, 2026-08-29): "assert the
-// CAP... a fast, exact assertion about the thing you actually changed."
+// as its own pure function so the cap can be tested without live UDP calls.
 export function selectMasterServersToQuery(masterServers) {
   const queryable = masterServers.filter((s) => !isPrivateIp(s.ip));
   return {
@@ -600,16 +567,8 @@ export function selectMasterServersToQuery(masterServers) {
   };
 }
 
-// Surfaces the Steam-API error that triggered the master-server fallback,
-// but ONLY when that fallback ALSO came up empty -- if the fallback found
-// servers, the caller got a working list and the earlier API hiccup isn't
-// worth reporting as if it were still a live problem. Previously this was
-// only log.warn'd, never returned to the caller (hunt-wave11 follow-up,
-// 2026-08-29): "an admin can read the server logs" is the exact reasoning
-// that left three other bugs tonight invisible for months -- a signal that
-// exists only in a log file is a signal nobody sees at the moment they
-// need it. Same convention as deriveEmptyReason/deriveMasterDiscoveryStats
-// above: undefined outside the relevant case, dropped by JSON.stringify.
+// Surface the Steam API error only when the fallback also returns no servers.
+// A successful fallback should not report an earlier, recovered error.
 export function deriveSteamApiFailureReason({ steamApiError, serversFound }) {
   if (!steamApiError || serversFound > 0) return undefined;
   return sanitizeError(steamApiError);
@@ -671,12 +630,8 @@ router.get('/', async (req, res) => {
             mastersReachable = true;
             mastersListedCount += masterServers.length;
 
-            // SSRF guard + visible cap: GET /query and GET /ping both refuse
-            // private/reserved addresses via validateQueryIp() before
-            // probing -- this fallback used to skip that check entirely for
-            // master-listed addresses (hunt-wave10, 2026-08-29). Neither
-            // decision is silent: both counts feed deriveMasterDiscoveryStats
-            // below, into the response.
+            // Apply the same SSRF guard as the direct query routes and expose
+            // both filtering and truncation in the response.
             const { toQuery: serversToQuery, privateFilteredCount, truncated } =
               selectMasterServersToQuery(masterServers);
             mastersPrivateFilteredCount += privateFilteredCount;

@@ -178,8 +178,7 @@ export async function testRconConnection({ host, port, password, timeoutMs = RCO
 
 // Response texts the real B42 dedicated server sends back for a command it
 // accepted but refused to run -- each confirmed verbatim against the actual
-// server jar (D:/Zomboid_dev_panel/ServerB42Files/java/projectzomboid.jar,
-// zombie/commands/serverCommands/*.class: GodModePlayerCommand.class /
+// server jar (zombie/commands/serverCommands/*.class: GodModePlayerCommand.class /
 // InvisiblePlayerCommand.class for "Wrong arguments!", NoClipCommand.class
 // for "Not enough rights", ReleaseSafehouseCommand.class for "...can be
 // executed only from the game"), not guessed. A normal RCON reply carrying

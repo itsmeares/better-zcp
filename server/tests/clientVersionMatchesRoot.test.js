@@ -13,17 +13,8 @@ const WORKSPACE_LOCKFILE = path.join(__dirname, "..", "..", "pnpm-lock.yaml");
 // root. Kept deliberately dumb: parse, compare, done. A test that needs to
 // be clever to pass is a test that can fail to catch the thing it's for.
 //
-// The release checklist names four things that should agree: root version,
-// client version, the CHANGELOG heading, and the git tag. Only the first two
-// are asserted here. The git tag needs git state to check, which this test
-// deliberately doesn't touch. The CHANGELOG heading isn't actually the same
-// kind of invariant as the other three -- this repo's CHANGELOG.md carries
-// an [Unreleased] section that accumulates entries between releases, so the
-// latest *numbered* heading legitimately trails root's version during any
-// normal in-progress period (root is 1.2.6 with this comment written; the
-// latest CHANGELOG heading is [1.2.5]). Asserting heading == root version
-// would fail right now, correctly, for a reason that has nothing to do with
-// the bug this test exists to catch.
+// The release process bumps both package files together. Keep this check
+// deliberately dumb: parse, compare, done.
 describe("client version stays in sync with root", () => {
   const rootVersion = JSON.parse(fs.readFileSync(ROOT_PACKAGE_JSON, "utf8")).version;
 

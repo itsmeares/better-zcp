@@ -1,44 +1,6 @@
-// Follows every /panel-bridge/* REST route to the bridge action(s) it sends,
-// then verifies each against the deployed Lua mod's handler set. Reports
-// mismatches, plus (mandatory, see below) every call site it structurally
-// cannot check at all.
-//
-// HONEST CEILING (audit-bridge-routes-blind-to-the-passthrough, 2026-08-31
-// bug hunt): the generic passthrough route (POST /command,
-// server/routes/panelBridge.js) dispatches via `bridge.sendCommand(action,
-// args)` where `action` is a runtime request-body variable, not a string
-// literal -- structurally invisible to a literal-string regex, by
-// construction, forever. This script used to just silently drop that one
-// call site from BOTH its numerator and its denominator: `MISMATCHES: 0`
-// printed as if the check were complete, while the route that can reach
-// ANY of the ~102 Lua handlers (not just the ~34 named-route ones) had zero
-// coverage. That is the exact failure class this whole hunt kept finding --
-// "checked actions: 4" sat directly above "MISMATCHES: none" in this
-// script's own sibling (audit-bridge-actions.mjs) and nobody compared 4
-// against 21. The fix here is the same rule stated twice: (1) report what
-// cannot be verified, loudly, never just omit it; (2) then extend real
-// coverage where the code makes that possible -- BRIDGE_ACTION_CAPABILITY
-// (panelBridge.js) is a closed, named allowlist of exactly the actions this
-// codebase bothered to give elevated/replacement gating, and unlike the
-// passthrough's fully-dynamic `action` variable, its keys ARE literal and
-// checkable. Order matters: (1) alone leaves this honest; (2) alone would
-// leave it silently narrow again the same way it just was.
-//
-// This is still not "every action reachable through the app" -- any of the
-// ~85 Lua handlers NOT named in BRIDGE_ACTION_CAPABILITY is technically
-// reachable through the passthrough by any role holding plain
-// bridge.command, and nothing here (or anywhere else, as of this fix)
-// checks THOSE against the Lua handler set. Said explicitly in the output
-// below rather than implied by a clean-looking summary.
-//
-// Also removed: an `executeAction(` search pattern that matched zero real
-// call sites in this codebase -- a pattern that can only ever match nothing
-// is the same defect as a checker whose corpus went stale, just caught
-// before it ever had a false green to give. If a future refactor
-// reintroduces a differently-named dispatch function, this script needs a
-// new pattern for it, the same as it would need updating for any other
-// structural change -- kept simple rather than guarding against a dispatch
-// shape that has never existed here.
+// Follows /panel-bridge/* routes to the actions they send and verifies those
+// actions against the Lua handler set. Dynamic passthrough actions are listed
+// as unverifiable; the named BRIDGE_ACTION_CAPABILITY keys are checked too.
 import fs from "fs";
 import path from "path";
 
@@ -113,10 +75,7 @@ if (capabilityIdx !== -1) {
   }
 }
 
-// Same "fail loudly rather than silently narrow" rule audit-bridge-actions.mjs
-// was just fixed to follow: an anchor that's found but yields an implausibly
-// small key count means the extraction itself has gone stale, not that the
-// map genuinely shrank to almost nothing.
+// Fail loudly if the capability map extraction becomes stale.
 const MIN_CAPABILITY_KEYS = 10;
 if (capabilityIdx === -1) {
   console.error(
@@ -134,16 +93,8 @@ if (capabilityActions.length < MIN_CAPABILITY_KEYS) {
   process.exit(1);
 }
 
-// Kept in its OWN array, not pushed into `verified` -- a checker script
-// audit (2026-09-05, ci-pipefail-and-dead-tests hunt) found that mixing
-// capability-derived hits into the same bucket as route-segment-derived
-// hits let the route extraction above (the `segments`/`marks` loop) collapse
-// to zero real matches -- e.g. a refactor from `router.get("path", ...)` to
-// `router.route("path").get(...)`, mutation-verified locally -- while this
-// script kept reporting a plausible-looking non-zero "route->action pairs
-// checked" number and exiting 0, because that number was silently ALL
-// BRIDGE_ACTION_CAPABILITY hits and zero real route hits. Same failure
-// class as the two MIN_* guards below; this one had none.
+// Keep capability-derived hits separate so a stale route extractor cannot be
+// hidden by a healthy capability map.
 const capabilityVerified = [];
 const capabilityMissingHandler = [];
 for (const action of capabilityActions) {
@@ -151,17 +102,8 @@ for (const action of capabilityActions) {
   else capabilityMissingHandler.push(action);
 }
 
-// Same "fail loudly rather than silently narrow" rule as MIN_CAPABILITY_KEYS
-// below, for the OTHER denominator this script has (the route-segment
-// extraction can go stale independently of the capability-map extraction --
-// they read different anchors in the same file). Baseline on a real
-// checkout: 34 (this was previously invisible -- the pre-fix print conflated
-// it with BRIDGE_ACTION_CAPABILITY's 17 into a combined "51", see above).
-// Same ~59% floor as MIN_CAPABILITY_KEYS/MIN_TEMPLATE_KEYS elsewhere in this
-// file's family. Mutation-verified (2026-09-05): renaming every
-// `router.<verb>("path"` to `router.route("path").<verb>(` collapses this
-// to 0 with no other symptom -- MISMATCHES still printed 0 and the script
-// still exited 0 before this guard existed.
+// Keep a minimum route count so a changed route declaration shape cannot
+// silently turn the audit into a no-op.
 const MIN_ROUTE_ACTION_PAIRS = 20;
 const routeActionPairs = verified.length + problems.length;
 if (routeActionPairs < MIN_ROUTE_ACTION_PAIRS) {
@@ -190,13 +132,6 @@ if (unverifiable.length) {
   );
 }
 
-// wire-up-the-unrun-checkers (2026-08-31 bug hunt): this script had no
-// caller anywhere in the repo until this pass -- package script + CI job added
-// alongside this exit code. Confirmed zero mismatches on HEAD before adding
-// this. Only real MISMATCHES fail the build -- the UNVERIFIABLE count above
-// is a permanent, honest ceiling (the generic passthrough's dynamic action
-// argument), not a regression signal, and must never gate the build on its
-// own.
 if (problems.length + capabilityMissingHandler.length > 0) {
   process.exit(1);
 }

@@ -2807,27 +2807,8 @@ export default function Players() {
                           {t('spawn.browserBadge')}
                         </span>
                       </p>
-                      {/* line-clamp-2, not truncate -- same defect class as the moderation
-                          ActionTile descriptions fixed earlier tonight, found here too on the
-                          2026-08-31 impeccable pass ("...without closing the dial…" was
-                          genuinely clipping mid-word). CANNOT be verified by reshooting:
-                          scripts/ui-shot-tour.mjs's expandMainForCapture() forces
-                          overflow:visible/height:auto on any element whose scrollHeight
-                          exceeds its clientHeight before every screenshot (to keep genuinely
-                          scrollable panels from being clipped by fullPage capture) -- which
-                          also defeats -webkit-line-clamp's own overflow:hidden the moment
-                          there's real text to cut, so a reshoot of this row shows spilled
-                          text overlapping the next card even though the class is correct and
-                          the real app renders it properly clamped. (First-pass mistake here:
-                          reshot, saw the spillover, chased it as a real bug, shortened this
-                          copy and its three siblings across all 6 locales to dodge the
-                          symptom, and stripped the <Trans> nested player-name span suspecting
-                          it as the cause -- none of that was the actual defect. Reverted; the
-                          class alone is the fix.) Verified instead via the compiled CSS
-                          (.line-clamp-2 correctly emits display:-webkit-box;
-                          -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden)
-                          and the RTL test below, which never runs the tour's capture-time DOM
-                          rewrite. */}
+                      {/* Keep line-clamp-2 here. It preserves the card height while keeping
+                          the description readable in both LTR and RTL layouts. */}
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                         {selectedPlayer
                           ? <Trans i18nKey="spawn.giveItemsDescWithPlayer" t={t} values={{ player: selectedPlayer }} components={{ 1: <span className="text-primary font-medium" /> }} />

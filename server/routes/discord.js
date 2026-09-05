@@ -16,10 +16,8 @@ const router = express.Router();
 // `null` means the command has no panel-side capability gate to match
 // against (server.js's own GET /status is likewise ungated for every role),
 // so retuning its own tier needs nothing beyond integrations.manage itself.
-// Checked individually against each command's own real route rather than a
-// blanket rule, same discipline as the bridge:saveWorld carve-out earlier
-// tonight -- one family rule would have gotten at least "start"/"stop"
-// wrong if a future command reused a generic verb.
+// Check each command individually rather than applying a blanket rule to
+// generic verbs such as start and stop.
 const DISCORD_COMMAND_CAPABILITY = {
   status: null,
   players: "players.view",
@@ -607,16 +605,9 @@ router.put("/permissions", async (req, res) => {
       });
     }
 
-    // Retuning a command's Discord tier is handing out an authority through
-    // a second, unaudited door (Discord's own role check, not the panel's)
-    // -- an integrations.manage holder cannot grant an authority they do
-    // not themselves hold in the panel, e.g. dropping /rcon to "everyone"
-    // without holding rcon.execute. Only a tier that would actually CHANGE
-    // is checked: the settings UI may resend every tier on each save
-    // (Settings' PUT /app-settings and serverFiles.js's PUT /ini hit this
-    // same shape earlier tonight), and re-submitting an unchanged value
-    // must never require a capability the caller never needed for the
-    // status quo.
+    // Changing a Discord tier grants authority through a second entry point.
+    // The caller must hold the panel capability being granted. Only changed
+    // tiers need checking because the settings UI resends the full map.
     const current = discordBot.getCommandPermissions();
     const missing = [];
     let callerCapabilities = null;

@@ -13,8 +13,8 @@ import { SANDBOX_SCHEMA } from '../serverConfigSchema'
 // same comparison run every test invocation, forever, against a COMMITTED
 // fixture rather than a live PZ install (so CI needs no PZ install at all).
 //
-// Regenerate the fixture with: node scripts/extract-pz-sandbox-ground-truth.mjs
-// (requires a local PZ install; see that script for the default path).
+// Regenerate the fixture with:
+// node client/scripts/extract-pz-sandbox-ground-truth.mjs <path-to-pz-install>
 //
 // THIS TEST MUST NEVER PASS VACUOUSLY. A fixture that's missing, empty,
 // unparseable, or that matches zero schema entries is a broken gate, not a

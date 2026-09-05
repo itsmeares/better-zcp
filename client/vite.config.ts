@@ -105,13 +105,9 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       globals: true,
       setupFiles: './src/test-setup.ts',
-      // Stock vitest per-test timeout is 5000ms. This floor commonly runs several concurrent
-      // Claude agents plus normal dev tooling, and a cold-clone client-suite run has been
-      // observed failing a single test under that contention while passing comfortably once
-      // warm. 60000ms matches the same evidence-based value adopted in the root vitest.config.js
-      // for the equivalent server-suite contention artifacts (see that file's comment for the
-      // reproduction). Not a defect mask -- a test failing for a reason other than contention
-      // still fails at 60000ms, it just isn't falsely blamed on the clock.
+      // The client suite waits on real browser-like async work. Keep the
+      // timeout aligned with the server suite so busy runners do not fail it
+      // before the assertion can run.
       testTimeout: 60000,
     },
   }
