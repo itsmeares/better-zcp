@@ -1283,7 +1283,7 @@ class AuthService {
         // exact path out of its router-level requirePermission("mods.manage")
         // gate to match (see the comment above that router.use() there); if
         // that carve-out is ever removed, this route 401s for everyone again
-        // (9c6ce2e / v1.2.0, conv-mods-thumbnails).
+        // Keep this exception aligned with routes/mods.js.
         if (req.path.startsWith("/api/mods/thumbnail/")) {
           return next();
         }

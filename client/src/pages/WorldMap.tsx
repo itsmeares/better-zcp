@@ -197,7 +197,7 @@ export interface MapConfig {
   // tile host rendered that deep. Defaults to maxLevel for configs that have
   // no better source (MAP_B41 has no server-side discovery yet); B42 gets a
   // real discovered value from /api/map/resolve. See GH#109 /
-  // conv-gh109-worldmap-black.
+  // GH#109.
   renderedMaxLevel: number
   isoX0: number
   isoY0: number
@@ -334,7 +334,7 @@ const MAP_B41: MapConfig = {
   // (see its comment above) rather than the full (near-certainly-too-deep)
   // maxLevel. The coarser-tile fallback in drawTileWithFallback covers
   // whatever this clamp gets wrong either way. See GH#109 /
-  // conv-gh109-worldmap-black.
+  // GH#109.
   renderedMaxLevel: conservativeRenderedMaxLevel(22),
   // Isometric projection from pzmap.org (multiply=2):
   // Origin derived from PxToTileOffset {x:-5577, y:10327}
@@ -352,7 +352,7 @@ const MAX_SCALE = 1.0           // canvas px per DZI px (zoomed way in)
 const POLL_INTERVAL = 3000
 const MARKER_HIT_RADIUS = 14
 // How many coarser levels drawTileWithFallback will walk up looking for a
-// cached tile to degrade to. See GH#109 / conv-gh109-worldmap-black.
+// cached tile to degrade to. See GH#109.
 const MAX_FALLBACK_LEVELS = 8
 
 // ─── Cached top-down vehicle icons ────────────────────────
@@ -901,7 +901,7 @@ export default function WorldMap() {
   // real HTTP 404, not a network/proxy failure) — e.g. a sparse/edge tile,
   // or any tile past the real (often much shallower than maxLevel) rendered
   // coverage depth for this build (see mapProxy.js's discoverRenderedMaxLevel
-  // and GH#109 / conv-gh109-worldmap-black). Treating a 404 as a load error
+  // and GH#109). Treating a 404 as a load error
   // caused a false "tiles offline" banner and visible view jumps on zoom, so
   // it's tracked as its own state rather than folded into a failure retry —
   // see the status-aware fetch() below, since an <img> tag alone can't
@@ -1200,7 +1200,7 @@ export default function WorldMap() {
   }, [buildDirectTileUrl])
 
   // A requested level can be within maxLevel yet still have no tile rendered
-  // upstream for most of the map -- see GH#109 / conv-gh109-worldmap-black
+  // upstream for most of the map -- see GH#109
   // and worldMapTileFallback.ts's header comment. When the exact tile is
   // missing or still loading, draw the matching sub-rectangle of the
   // nearest cached COARSER tile instead of leaving the rect untouched.
@@ -1482,7 +1482,7 @@ export default function WorldMap() {
     // Clamp to renderedMaxLevel, not maxLevel -- maxLevel is the depth a
     // FULL Deep Zoom pyramid would need for these dimensions, not evidence
     // the tile host actually rendered that deep (see GH#109 /
-    // conv-gh109-worldmap-black). The DZI addressing math below (levelScale
+    // GH#109). The DZI addressing math below (levelScale
     // etc.) still keys off the real maxLevel, since tile level numbering is
     // defined relative to the full theoretical pyramid regardless of how
     // much of it actually exists upstream.

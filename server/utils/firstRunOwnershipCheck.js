@@ -133,8 +133,7 @@ export function checkAndExitIfOwnershipBlocked(candidatePaths) {
     // FILE, X_OK checks the execute bit, which a 0600 secret/database file
     // correctly never has -- checking it there made a genuinely correctly-
     // owned db.json/jwt.secret fail this probe 100% of the time, even for
-    // root against a root-owned file. Confirmed live on Linux (god,
-    // 2026-08-29) before this was caught: RWX on a 0600 file throws EACCES
+    // root against a root-owned file. On Linux, RWX on a 0600 file throws EACCES
     // even as uid 0 against a uid-0 file. R|W is the correct, and correctly
     // passable, mask for a file.
     const mask = stat.isDirectory()

@@ -1,4 +1,4 @@
-// GH#109 / conv-gh109-worldmap-black: a requested DZI tile level can be
+// GH#109: a requested DZI tile level can be
 // within the map's theoretical maxLevel yet still have no tile actually
 // rendered upstream for most of the map -- maxLevel is the depth a FULL
 // Deep Zoom pyramid would need for the image's dimensions, computed purely

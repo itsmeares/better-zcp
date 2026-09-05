@@ -1943,7 +1943,7 @@ router.post("/climate/reset", requirePermission("server.world_events"), async (r
 });
 
 // Individual climate shortcuts (setTemperature/setWind/setFog/setClouds).
-// hunt-wave12-2026-08-30 UI-reachability audit: all four are dead routes --
+// These dedicated routes are retained for compatibility; the client uses
 // nothing in client/src calls any of them. The feature is not missing:
 // Events.tsx's climate panel (temperature/wind/fog/clouds/humidity/
 // precipitation sliders) applies through the generic setClimateFloat
@@ -2177,8 +2177,8 @@ router.get("/world/stats", requirePermission("server.world_events"), async (req,
 
 // Save world. admin+technician, matching /api/server/save -- an operational
 // action, not player-facing GM authority.
-// hunt-wave12-2026-08-30 UI-reachability audit: this dedicated route itself
-// is dead -- nothing in client/src calls POST /panel-bridge/world/save
+// The client reaches this action through the command passthrough rather than
+// POST /panel-bridge/world/save
 // directly. Two separate live paths exist instead: Scheduler.tsx's
 // schedulable 'bridge:saveWorld' preset (still this same action, via the
 // /panel-bridge/command passthrough, not this route); and Dashboard.tsx's
@@ -2345,8 +2345,7 @@ router.post("/message", requirePermission("server.world_events"), async (req, re
 });
 
 // Sandbox options (read-only)
-// hunt-wave12-2026-08-30 UI-reachability audit: dead route -- nothing in
-// client/src calls GET /panel-bridge/sandbox. ServerConfig.tsx reads
+// ServerConfig.tsx reads
 // sandbox options through the passthrough action getAllSandboxOptions
 // instead (a different, broader action, not this route's getSandboxOptions).
 router.get("/sandbox", requirePermission("players.gm_tools"), async (req, res) => {
@@ -2379,7 +2378,6 @@ router.get("/sandbox", requirePermission("players.gm_tools"), async (req, res) =
 // several missing actions have no dedicated route anywhere in this
 // codebase to verify a real argument shape through, and documenting a
 // shape nobody has confirmed would be worse than the current gap).
-// bug-hunt-2026-08-27.
 router.get("/commands", (req, res) => {
   res.json({
     commands: [
@@ -2900,12 +2898,8 @@ router.get("/commands", (req, res) => {
           z: "number (optional default: 0)",
         },
       },
-      // addLamppost/removeLamppost removed here 2026 (release v0.8.0, commit
-      // f47ea1a) -- deliberately dropped from VALID_ACTIONS, but these two
-      // documentation entries were left behind and kept advertising them as
-      // callable. POST /command's whitelist check would refuse either one
-      // with "Unknown or invalid action" if anyone tried, since neither name
-      // exists in VALID_ACTIONS any more. bug-hunt-2026-08-27.
+      // addLamppost/removeLamppost are not in VALID_ACTIONS and must not be
+      // advertised as callable commands.
 
       // === Moderation Automation ===
       {
@@ -3673,8 +3667,7 @@ router.post("/character/import", requirePermission("players.gm_tools"), async (r
 // ============================================
 
 // Give item to player
-// hunt-wave12-2026-08-30 UI-reachability audit: dead route -- nothing in
-// client/src calls it. Players.tsx's "Give items" flow (SpawnBrowser
+// The client uses Players.tsx's "Give items" flow (SpawnBrowser
 // dialog) calls playersApi.addItem instead -- a different API family
 // entirely (players.js's own route, not this file's giveItem action).
 router.post("/players/:username/give-item", requirePermission("players.gm_tools"), async (req, res) => {

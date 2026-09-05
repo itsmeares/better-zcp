@@ -157,8 +157,7 @@ export const ErrorCode = Object.freeze({
    * every key present gets ALL of its lines rewritten to one value --
    * permanently discarding the other copy on every save, even one that
    * never touched that key. Refused rather than allowed; the raw tab
-   * round-trips the file byte-for-byte and stays available to fix it.
-   * bug-hunt-2026-08-27, Angela's structured-save destructive-write trace. */
+   * round-trips the file byte-for-byte and stays available to fix it. */
   INI_DUPLICATE_KEY_BLOCKS_STRUCTURED_SAVE: "INI_DUPLICATE_KEY_BLOCKS_STRUCTURED_SAVE",
   /** server/routes/serverFiles.js (3 sites: GET /sandbox, GET
    * /sandbox/validate, POST /sandbox/repair) -- no <serverName>_SandboxVars.
@@ -379,10 +378,8 @@ export const ErrorCode = Object.freeze({
    * different, specific, useful reasons that a single shared string (or a
    * template-substituted one) would flatten into one generic "server is
    * running" message, throwing away whichever half didn't get picked.
-   * A NEW call site, not yet wired -- server/index.js was dirty (Kevin's
-   * CSP work, Dwight's route sweep) when this was added, so the actual
-   * `code: "server_running"` -> `code: ErrorCode.SERVER_RUNNING_RCON_
-   * UNAVAILABLE` swap at that one site is pending sequencing. */
+   * Reserved for a future call site; keep it distinct from the generic
+   * running-state error because the recovery action differs. */
   SERVER_RUNNING_RCON_UNAVAILABLE: "SERVER_RUNNING_RCON_UNAVAILABLE",
 
   /** server/routes/docker.js -- POST /api/docker/containers/:id/:action,
@@ -657,8 +654,8 @@ export const ErrorCode = Object.freeze({
    * safety check here (hasPzInstallMarker) only confirmed a handful of
    * marker FILENAMES exist in the target directory -- trivially satisfied
    * by creating an empty file with one of those names anywhere on the host,
-   * not an authorization check (bug-hunt-2026-08-27, filed alongside the
-   * server.wipe capability-description undersell it made real). Both real
+   * not an authorization check. The server.wipe capability-description
+   * undersell made this gap real. Both real
    * callers (Servers.tsx's "Delete Everything" and "Clear Install Folder")
    * only ever pass a path already sitting in a configured server record's
    * own installPath -- so deletePath is now required to exactly match one,
@@ -669,8 +666,8 @@ export const ErrorCode = Object.freeze({
    * replacement. */
   DELETE_FILES_NOT_CONFIGURED_SERVER: "DELETE_FILES_NOT_CONFIGURED_SERVER",
   /** server/routes/server.js -- POST /api/server/delete-files, caller didn't
-   * pass `confirm: true`. Split from WIPE_CONFIRM_REQUIRED below (2026-08-26
-   * bug hunt round 2, Angela's find) rather than continuing to share it: that
+   * pass `confirm: true`. Split from WIPE_CONFIRM_REQUIRED below rather than
+   * continuing to share it: that
    * code's own name and message ("Wipe requires confirm: true") are correct
    * for /wipe, and /delete-files was the borrower, not a co-owner -- unlike
    * WIPE_SERVER_RUNNING two entries below, which genuinely IS shared by
@@ -1262,8 +1259,7 @@ export const ErrorCode = Object.freeze({
   /** server/routes/panelBridge.js -- POST /command, `action` is one of the
    * four moderation actions (BRIDGE_ACTION_CAPABILITY) and the caller holds
    * bridge.command but not the specific capability (players.moderate) that
-   * governs discipline actions everywhere else in the app.
-   * bug-hunt-2026-08-27: Pam's cross-route-family capability sweep. */
+   * governs discipline actions everywhere else in the app. */
   PANELBRIDGE_ACTION_CAPABILITY_REQUIRED: "PANELBRIDGE_ACTION_CAPABILITY_REQUIRED",
   /** server/routes/panelBridge.js -- POST /command action=spawnVehicleAt,
    * `vehicle`/`scriptName` fails VEHICLE_SCRIPT_REGEX. */
@@ -1531,8 +1527,8 @@ export const ErrorCode = Object.freeze({
    * OAuth error code or failure message, sanitizeError()'d). */
   OIDC_TEST_UNDETERMINED: "OIDC_TEST_UNDETERMINED",
 
-  // --- server/routes/players.js -- never adopted this registry at all
-  // until now (2026-08-26 bug hunt round 2, Angela's find): every
+  // --- server/routes/players.js -- the registry was not used there
+  // previously: every
   // validation branch in the GM-tools surface (add-item, add-xp,
   // vehicle-spawn, moderation, notes, exports) was a bare error string
   // with no code, so none of it could be translated, carry a fix-it
@@ -1970,8 +1966,7 @@ export const ErrorCode = Object.freeze({
   /** server/routes/templates.js -- POST /:id/apply, the target is a
    * configured-but-not-active server. serverManager only tracks the active
    * server's process, so there's no way to check a different server's
-   * running state -- refused rather than assumed stopped. See 2026-08-24
-   * conv-template-privesc. */
+   * running state -- refused rather than assumed stopped. */
   SIM_TEMPLATE_APPLY_INACTIVE_SERVER_UNVERIFIABLE:
     "SIM_TEMPLATE_APPLY_INACTIVE_SERVER_UNVERIFIABLE",
   /** server/services/templateService.js -- applyTemplate(), the target

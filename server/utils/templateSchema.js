@@ -30,7 +30,7 @@ export const SANDBOX_SECTIONS = [
 // protection entirely — the leaked-key check ran against the attacker's own
 // empty list, at both the validate and the apply-time write sites, letting
 // a templates.manage-only role rewrite RCONPassword, the public port and
-// the server name. See 2026-08-24 conv-template-privesc.
+// the server name.
 export const DEFAULT_INI_EXCLUSIONS = [
   "RCONPassword",
   "Password",

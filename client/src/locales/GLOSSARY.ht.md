@@ -151,10 +151,8 @@ but the token itself never does. Example: English `Deleted {{name}}` could becom
 
 ## Latin abbreviations and single-letter markers: check what the badge actually is
 
-RULING (2026-08-23, revised same day — requested by the operator's own question before Pam wrote a
-word). The first version of this ruling said "keep all four as-is" on the strength of a plausible-sounding
-principle, not the evidence. Rechecked directly against what fr/es/de actually do for each one; the
-correct rule is CHECK WHAT THE BADGE ACTUALLY IS, not a blanket keep-or-translate:
+RULING: The correct rule is CHECK WHAT THE BADGE ACTUALLY IS, not a blanket keep-or-translate.
+Check what fr/es/de actually do for each marker before deciding:
 
 | Marker | Where it shows up | Verdict |
 | --- | --- | --- |
@@ -199,5 +197,5 @@ chat tags, `SERVER.INI` and `SANDBOX` section labels.
 
 ## If you need a term that is not here
 
-Add it to this file in the same commit as the strings that use it, so the next agent to hit the same
-word finds it already settled instead of inventing a second answer.
+Add it to this file in the same commit as the strings that use it, so future translations use the same
+decision instead of inventing a second answer.

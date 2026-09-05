@@ -170,8 +170,7 @@ router.post("/:id/apply", requirePermission("templates.manage"), async (req, res
       // running and active, template applied to configured-but-inactive
       // server B) would otherwise silently overwrite B's live .ini while
       // its own process holds the file open. Real cross-server process
-      // detection is a separate feature; refusing is the fix for tonight.
-      // See 2026-08-24 conv-template-privesc.
+      // detection is a separate feature; fail closed until it exists.
       return res.status(409).json({
         error:
           "Can't verify this server's running state — the panel can only check the currently active server. Switch to this server first, then apply the template.",

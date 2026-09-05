@@ -1098,10 +1098,7 @@ export class BackupService {
     // assignment yet), both proceeded past every guard, and both extracted
     // + swapped the save directory concurrently -- the second rename to
     // finish silently wins over the first, with BOTH callers reported
-    // success:true and no error anywhere. Confirmed empirically (two
-    // concurrent calls, force !== true, an artificial delay inside
-    // getServerProcessDetails to widen the window), not just reasoned
-    // about -- bug-hunt-2026-08-27, backup-restore hunt. Every early return
+    // success:true and no error anywhere. Every early return
     // below now happens inside the try/finally so the flag is still always
     // released, same as the pre-restore-backup-failure path already was.
     this.restoreInProgress = true;

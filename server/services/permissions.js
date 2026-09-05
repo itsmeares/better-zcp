@@ -333,9 +333,8 @@ const TECHNICIAN_CAPABILITIES = [
 // server.world_events joins here too (not just players.gm_tools/moderate/view):
 // weather/climate/zombie-horde/broadcast-message routes were previously
 // reachable by any signed-in role including moderator with no gate at all,
-// same as the players.* routes -- folding them in is adding a capability
-// that already existed as "no gate", not narrowing anything (see god's
-// ruling: "adding a capability is not restricting it").
+// same as the players.* routes -- folding them in records the existing
+// access surface rather than narrowing it.
 const MODERATOR_CAPABILITIES = [
   "players.moderate",
   "players.gm_tools",

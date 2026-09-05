@@ -297,16 +297,15 @@ export const KNOWN_RCON_REJECTIONS = [
     pattern: /^User ".*" is not in the whitelist nor the server, use \/adduser first\s*$/i,
     describe: (text) => `${text}.`,
   },
-  // 2026-08-29, hunt-wave11, B42 jar audit:
-  // banuser / unbanuser / adduser / removeuserfromwhitelist each delegate
-  // their entire result string to zombie/network/BanSystem or
+  // The banuser, unbanuser, adduser, and removeuserfromwhitelist commands
+  // delegate their entire result string to zombie/network/BanSystem or
   // zombie/network/ServerWorldDatabase -- their own command classes carry no
   // rejection text at all, which is why these four still reported a genuine
   // failure as a success even after the anchoring fix above. Same anchoring
   // discipline as every entry above: full-string where the PZ text has no
   // interpolation, bounded by fixed text immediately before/after the
-  // interpolated portion where it does. Confidence tiers below are Kevin's
-  // own (constant-pool string presence, not bytecode-traced return values --
+  // interpolated portion where it does. Confidence tiers distinguish
+  // constant-pool string presence from bytecode-traced return values --
   // a literal being in the class is not proof of which exact call site
   // returns it) -- the tier reflects certainty about WHICH COMMAND triggers
   // a string, not whether the string itself is real or the anchoring below
@@ -376,7 +375,7 @@ export const KNOWN_RCON_REJECTIONS = [
   {
     // MEDIUM -- BanSystem.class (BanUser): a second, redundant capability
     // check inside BanUser itself, on top of whatever the RCON
-    // @RequiredCapability annotation already gates -- Kevin's own framing:
+    // @RequiredCapability annotation already gates -- this is still useful
     // "worth having as a backstop pattern even if it's not expected to
     // normally fire." Bare, non-interpolated literal -- no anchoring risk
     // regardless of the backstop framing. Applies to banuser/unbanuser.
@@ -384,14 +383,13 @@ export const KNOWN_RCON_REJECTIONS = [
     describe: () => "You don't have capability to ban/unban users.",
   },
   // NOT added, named as the residual rather than left implicit: BanSystem.class
-  // also carries "Connection not found" and "Player not found" -- Kevin's
-  // Pass 4 rated these LOW confidence ("plausible RCON-reply shape but could
+  // also carries "Connection not found" and "Player not found". These are
+  // low-confidence candidates ("plausible RCON-reply shape but could
   // equally be internal-console-only text", not bytecode-traced to a
   // ban/unban call site at all). Two rejection shapes for
   // banuser/unbanuser/adduser/removeuserfromwhitelist remain genuinely
   // unrecognized after this fix -- inventing an attribution for either would
-  // be worse than leaving them out (same standard Pam's original commit
-  // held to for these same four commands).
+  // be worse than leaving them out.
 ];
 
 export class RconService extends EventEmitter {

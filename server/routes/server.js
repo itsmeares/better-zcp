@@ -1166,8 +1166,7 @@ router.get("/network-interfaces", async (req, res) => {
 // between launched PZ against the OLD baked cachedir, PZ found no ini at
 // that (now-wrong) location, and generated itself a fresh default one
 // (2026-08-27, user-report-servertest-ini-and-sandbox-reverted-to-default-
-// after-restart, loonE/Discord -- root cause confirmed by Jim's
-// scheduledRestartStaleLaunchScript.test.js reproduction).
+// after-restart; the regression test reproduces the same failure).
 //
 // `managedHandled` mirrors the /start route's own `managed.handled` check:
 // a container-managed server's image owns the launch command, so there is
@@ -5294,7 +5293,7 @@ async function runWithConcurrencyBounded(items, limit, worker) {
 }
 
 // Recursively count files and total size under `dir`. Was fully synchronous
-// (fs.readdirSync/fs.statSync, no concurrency, no cap) -- Jim measured 20.7
+// (fs.readdirSync/fs.statSync, no concurrency, no cap) -- a 20.7-second
 // SECONDS for map/ alone on a 147,136-file save, fully blocking the Node
 // event loop that whole time for every other admin session and RCON call on
 // the panel, not just the requester's own page. Now async with bounded
@@ -5402,8 +5401,8 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
     // directory independently -- otherwise several individually-under-
     // budget walks could still add up to the multi-second block this fix
     // exists to remove. 15s / 300,000 entries is generous headroom over
-    // Jim's 20.7s/147,136-file measurement (which was the fully synchronous,
-    // no-concurrency walk); truncation is a backstop for pathological or
+    // The 20.7s/147,136-file synchronous walk is the baseline; truncation is
+    // a backstop for pathological or
     // slow-storage cases, not an expected outcome for a normal save.
     const budget = {
       deadline: Date.now() + 15_000,

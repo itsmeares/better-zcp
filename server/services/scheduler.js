@@ -889,7 +889,7 @@ export class Scheduler {
       }
 
       this.backupJob = cron.schedule(settings.schedule, async () => {
-        // Linux bug hunt (2026-08-29, hunt-wave5, suspect 4 -- overlap):
+        // A scheduled backup must not run during a restart:
         // createBackup() zips whatever is currently on disk under savesPath
         // with no awareness of restartInProgress, and performRestart()'s
         // world-save (RCON `save`) + the server actively writing during
@@ -1839,7 +1839,7 @@ export class Scheduler {
       backupScheduleEnabled: !!this.backupJob,
       modUpdateRestartPending: this.modUpdateRestartPending,
       nextRun: this.getNextRun(),
-      // Timezone-picker card (2026-08-29, hunt-wave5 follow-up): `timezone`
+      // `timezone`
       // is the EFFECTIVE zone every cron.schedule() call in this file
       // actually uses right now -- resolveTimezone() sets it once at boot
       // (migrating a not-yet-configured install to the then-current process

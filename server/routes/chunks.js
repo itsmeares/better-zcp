@@ -369,8 +369,8 @@ function assertRealSaveDataPath(zomboidDataPath) {
   }
 }
 
-// The REAL gate for delete-chunks/delete-region (bug-hunt-2026-08-27, item
-// C). assertRealSaveDataPath above only asks "does this directory contain
+// The destructive-route gate. assertRealSaveDataPath above only asks "does
+// this directory contain
 // SOMETHING that looks like save data" -- and by the time delete-chunks/
 // delete-region reach their own fs.existsSync(savePath) check, a matching
 // Saves/Multiplayer/<saveName> subtree already has to exist for the delete
@@ -425,7 +425,7 @@ async function assertKnownSaveRoot(zomboidDataPath) {
   throw error;
 }
 
-// Operator ruling, hunt-wave12 2026-08-30: /saves, /suggested-paths,
+// Read endpoints (/saves, /suggested-paths,
 // /chunks/:saveName, /stats/:saveName and /browse below used to sit only
 // behind the global auth middleware, authed but not permissioned, while
 // their mutating siblings (/delete-chunks, /delete-region, /save-path) all
