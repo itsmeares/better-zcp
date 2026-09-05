@@ -357,11 +357,8 @@ async function findSteamCmdPath() {
   return null;
 }
 
-// activeSteamOperations itself, isSteamOperationIdle, clearActiveSteamOperation
-// and hasActiveSteamOperation now live in ../services/activeSteamOperations.js
-// (hunt-wave5-2026-08-29) so serverManager.js's startServer() can check the
-// same tracked state before spawning the PZ JVM -- see that module's header
-// comment for why this couldn't just be a reverse import instead.
+// Steam-operation state is shared through activeSteamOperations.js so the
+// server manager and these routes use the same start/update guard.
 const activeSteamOperations = getActiveSteamOperations();
 
 // True only for the exact shape that crashes PZ on first boot: no admin
@@ -4419,10 +4416,8 @@ router.get("/steamcmd/check", requirePermission("server.install"), async (req, r
 // running -- getServerProcessDetails() exposes scanFailed so that case can
 // be refused instead.
 //
-// NOT wired into /wipe, which has its own identical inline copy: that route
-// is out of scope for this pass (2026-08-26 bug hunt round 2, Pam's
-// asset-destruction hunt finding 2 -- TOCTOU on /delete-files specifically).
-// A natural follow-up for whoever next touches /wipe.
+// /wipe has a separate confirmation flow and is intentionally not covered by
+// this helper.
 async function checkServerConfirmedStopped(serverManager, actionLabel) {
   const processDetails = await serverManager.getServerProcessDetails();
   if (processDetails.scanFailed) {
@@ -4499,10 +4494,9 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
       });
     }
 
-    // hasPzInstallMarker() above only confirms a handful of marker
-    // FILENAMES exist -- trivially satisfied by creating an empty file
-    // with one of those names anywhere on the host, not an authorization
-    // check (bug-hunt-2026-08-27). The two real callers of this route
+    // hasPzInstallMarker() only confirms marker filenames, not ownership.
+    // The callers pass a configured server install path, so require an exact
+    // match against one rather than trusting marker files alone. The two real callers of this route
     // (Servers.tsx's "Delete Everything" and "Clear Install Folder") only
     // ever pass a path that's already a configured server's own
     // installPath, so require an exact match against one -- turning
@@ -4549,10 +4543,9 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
       }
     }
 
-    // Re-check immediately before the irreversible delete (2026-08-26 bug
-    // hunt round 2, Pam's finding 2): the FIRST check above is stale by the
-    // time we get here -- getServerProcessDetails() takes real wall-clock
-    // time (OS process enumeration), and everything between that await
+    // Re-check immediately before the irreversible delete: the first check
+    // can become stale while process enumeration is in flight, and everything
+    // between that await
     // resolving and this point is synchronous path/marker validation with
     // no further awaits, so a second admin session, a scheduler task, or a
     // supervisor auto-restart starting the server DURING that first scan

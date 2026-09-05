@@ -134,18 +134,9 @@ export function isCronTooFrequent(expression) {
   return false;
 }
 
-// 2026-09-05, scheduler-time-audit: node-cron's own README states its DST
-// model verbatim -- "Across a daylight-saving fall-back the repeated hour
-// runs once, so a sub-hourly schedule (for example */15) can pause for up
-// to the length of the DST shift during that hour." A schedule whose MINUTE
-// field fires more than once per hour (independent of which hour(s) it's
-// combined with) is exactly that shape; a schedule with a single fixed
-// minute value fires once per listed hour and is unaffected (the repeated
-// hour "runs once" is a correct fire, not a skip, for that case) --
-// confirmed empirically tonight against real node-cron 4.6.0 output, not
-// just read from the doc. Reuses expandCronField rather than a second
-// parser, so this can never drift out of sync with isCronTooFrequent's own
-// understanding of what a cron minute field means.
+// A schedule with multiple minute values can pause across a DST fall-back
+// because the repeated hour runs once. Reuse expandCronField so this check
+// stays aligned with the main cron-frequency validator.
 //
 // Returns the approximate interval in minutes (60 / fire-count-per-hour)
 // when the schedule is sub-hourly, or null when it isn't (or the field

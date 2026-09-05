@@ -875,11 +875,8 @@ class AuthService {
   }
 
   // ============================================
-  // OIDC seam — for Dwight's OIDC work. These methods do NO token
-  // verification of their own; the caller must have already verified the
-  // external provider's ID token / userinfo response before calling any of
-  // these. They only map an already-verified external identity to a local
-  // account (and issue a normal panel session, for the login path).
+  // OIDC methods receive an already-verified external identity. Token
+  // verification belongs to the route/service that handles the provider flow.
   // ============================================
 
   /**

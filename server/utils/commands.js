@@ -427,16 +427,8 @@ export const PERKS = PERK_CATALOG.map((perk) => perk.id);
 // everything except "none" against zombie.characters.Roles's live,
 // DB-backed role table (see zombie.network.GameServer.changeRole()).
 //
-// hunt-wave13-2026-08-30: previously cited "the official PZ Admin Commands
-// wiki (Build 42.17.0)" -- a documentation citation with its own expiry
-// date, and it was wrong in both directions. Replaced with jar evidence:
-// the real setupRole() id literals found in zombie/characters/Roles.class,
-// buildid 24909800 (this could NOT be mapped to a human-readable 42.x.y
-// version string -- whether this build actually IS 42.17.0 is genuinely
-// unknown). Re-derive with the jar-audit classfile parser
-// (parseClass + listMethodRefs against SetAccessLevelCommand.class,
-// GameServer.class, and Roles.class) against a newer jar to re-verify
-// rather than re-trusting a wiki.
+// Keep this list aligned with the role ids in the bundled Project Zomboid
+// classes; `none` is handled separately by the game command.
 //
 // - 'overseer' REMOVED: Roles.class declares a getDefaultForOverseer()
 //   method, but no "overseer"/"oversee" id literal backs it anywhere in the

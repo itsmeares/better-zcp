@@ -91,38 +91,10 @@ async function countFiles(rootDir) {
   return count;
 }
 
-// Orphan temp sweep, hunt-wave11-2026-08-29 follow-up. Dwight found this
-// while copying this function as the model for fileWriteQueue.js's own
-// sweep (531dfd8d) -- his copy came out stronger than the original.
-// cleanupOrphanBackupTemps deleted on FILENAME PATTERN ALONE, with no check
-// that the process which created a match is actually gone. Safe TODAY only
-// because backups are effectively single-flight -- an assumption resting
-// OUTSIDE this function rather than a guarantee inside it. If concurrent
-// backups ever become possible, this deleted a live backup's temp with no
-// warning.
-//
-// Applies the shared isPidAlive() helper (utils/pidLiveness.js) exactly:
-// any outcome other than a confirmed ESRCH (including EPERM, a pid this
-// process cannot signal) is treated as "still alive" -- an ambiguous
-// signal never authorises a delete. fileWriteQueue.js's writeFileAtomic
-// sweep applies the same helper to its own, differently-shaped pattern
-// (hunt-wave12, 2026-08-30: unifies what used to be two duplicated copies
-// of this pid-liveness check, one per file).
-//
-// The two patterns THIS function sweeps do NOT uniformly embed a pid, so
-// this deliberately does NOT force one sweep mechanism onto both (that
-// generalisation is what Dwight correctly deferred rather than inventing,
-// and unifying the pid-liveness check above does not change that):
-//   - .central-{pid}-{timestamp}-{random}.tmp (StreamingZipWriter's own
-//     centralPath, server/utils/streamingZip.js) DOES embed a pid as its
-//     first segment, extracted and liveness-checked below.
-//   - *.zip.tmp (`${backupPath}.tmp`, this file's own createBackup) has NO
-//     pid anywhere in its name. There is no liveness check to run without
-//     changing that naming scheme, which is a separate, larger change than
-//     this card's scope -- left exactly as before (pattern-only deletion),
-//     still resting on the single-flight assumption above. Deliberately
-//     NOT given a false sense of safety by bolting a liveness check onto a
-//     name that cannot carry one.
+// Remove orphan temporary files without deleting a file owned by a live
+// process. Central archive temps include a PID and use the shared liveness
+// check; `.zip.tmp` files do not, so they retain the existing pattern-only
+// cleanup behavior.
 const CENTRAL_TEMP_PATTERN = /^\.central-(\d+)-\d+-[0-9a-z]+\.tmp$/;
 
 // Exported alias, not a fresh implementation: kept so this sweep's own
@@ -154,17 +126,8 @@ export function cleanupOrphanBackupTemps(backupsPath) {
   }
 }
 
-// 2026-08-26 bug hunt: used to resolve with nothing (undefined) on BOTH a
-// genuine "entry" success and an ENOENT warning (a file that vanished
-// between the initial scan and archiving -- a real race on a live PZ
-// directory, since the game process rotates/deletes temp files, logs and
-// lock files while a backup can be mid-scan). That made the two outcomes
-// indistinguishable to every caller, so a silently-dropped file left zero
-// trace anywhere -- createBackup resolved success:true regardless of how
-// many files were actually skipped. Now resolves { skipped: boolean } so
-// callers can track precisely which archive entries made it in and which
-// didn't, entry by entry, with no separate bookkeeping needed: every path
-// that adds anything to the archive already goes through this function.
+// Distinguish a successfully archived entry from an ENOENT race so callers
+// can report files that disappeared during the archive pass.
 export function waitForArchiveEntry(archive, append) {
   return new Promise((resolve, reject) => {
     let settled = false;

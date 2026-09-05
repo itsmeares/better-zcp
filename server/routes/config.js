@@ -154,18 +154,9 @@ const VALID_SETTINGS_KEYS = [
 // label: server.js's getServerConfigPath()/console-log route, chunks.js's
 // getZomboidDataPath(), modChecker.js's ACF-path lookup, and updateChecker.js
 // all resolve `activeServer?.<field> || getSetting(<legacy key>)` -- a
-// PER-FIELD fallback that consults the legacy setting even while a real
-// active server exists, whenever that server's own field happens to be
-// unset. That makes this the same "one operation, two doors" shape closed
-// four other times tonight: servers.js's own writes to these fields are
-// gated servers.manage, so this door is mapped to match the sibling write
-// path (per the field being genuinely the same one, not the label) rather
-// than to server.configure. serverPort is the one exception -- grepped
-// every getSetting("serverPort") call site and found none outside this
-// file itself; nothing ever reads the legacy value, so it's dead storage
-// with no live consumer to create a two-doors risk. Left unmapped
-// (panel.settings only) rather than invented a requirement for a value
-// nothing acts on.
+// Legacy path settings can still be read when the active server leaves a
+// field unset, so their writes use the same capability as server records.
+// `serverPort` has no live consumer and remains a panel setting.
 const SETTINGS_KEY_CAPABILITY = {
   rconHost: "server.configure",
   rconPort: "server.configure",
@@ -730,16 +721,9 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       return true;
     });
 
-    // A key whose real, effective value would actually CHANGE requires the
-    // capability that governs it, not just panel.settings. Compared against
-    // the CURRENTLY STORED value (via getAllSettings(), not the masked
-    // response GET returns) rather than mere presence in the request:
-    // Settings.tsx's Save button resends the entire settings object on
-    // every save, so gating on presence alone would refuse every save by
-    // anyone who isn't already an admin -- Angela hit this identical trap
-    // in the ini editor a few hours earlier tonight. `filtered` already
-    // excludes a masked-placeholder resend of an untouched secret, so this
-    // only ever fires for a value genuinely different from what's stored.
+    // Require the capability only when a governed value actually changes.
+    // Compare with stored values because the editor resends the whole object
+    // and masked secrets may be unchanged placeholders.
     const touchesGovernedKey = filtered.some(
       ([key]) => key in SETTINGS_KEY_CAPABILITY,
     );

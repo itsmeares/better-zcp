@@ -123,17 +123,9 @@ export function normalizePlayerLogLimit(value) {
   return parseClampedInteger(value, 100, 1, 500);
 }
 
-// STALE CLAIM CORRECTED 2026-08-27: this comment used to say B42's
-// godmod/invisible RCON commands ignore a target username and are a no-op
-// over RCON. That was true of an earlier version of rcon.js; Kevin's
-// real-jar verification (b42-command-verification, fcc61a9) found B42 splits
-// a self-only command (godmod/invisible, no username slot) from a separate
-// other-player command (godmodplayer/invisibleplayer, required username),
-// and fixed setGodMode/setInvisible to send the other-player form whenever a
-// username is given -- so the RCON fallback below DOES target the named
-// player for those two. noclip's RCON targeting remains genuinely
-// unresolved (does-noclip-actually-target-a-player-over-rcon, folded into
-// b42-commands-need-live-verification) pending a live B42 server.
+// B42 uses separate self and other-player commands for god mode and
+// invisibility; the RCON fallback selects the targeted form when a username
+// is provided. Noclip retains its own targeting behavior.
 async function setPlayerMode(req, bridgeAction, rconMethod, username, enabled) {
   if (bridge.isRunning) {
     const result = await bridge.sendCommand(bridgeAction, { username, enabled: enabled === true });
@@ -237,13 +229,8 @@ router.post('/ban', requirePermission("players.moderate"), async (req, res) => {
     }
 
     const result = await rconService.banPlayer(username, banIp, reason);
-    // banPlayer() folds/transliterates `reason` before it reaches RCON (see
-    // services/rcon.js's sanitizeForBanReason) -- sentReason is what
-    // actually went to the server, and can differ from what was typed.
-    // Logging the raw `reason` here would leave the panel's own record
-    // (both this debug line and the persisted activity log below)
-    // disagreeing with reality, which is exactly the mismatch Kevin's fix
-    // existed to close.
+    // Log the sanitized reason returned by the command so the activity record
+    // matches what actually reached the server.
     // Fallback to `reason` covers a path that somehow doesn't return
     // sentReason, so this never logs "undefined".
     const sentReason = result?.sentReason ?? reason;
