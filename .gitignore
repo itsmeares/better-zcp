@@ -18,11 +18,6 @@ client/dist/
 dist-exe/
 server.cjs
 
-# Build & deploy scripts (internal tooling)
-bundle-server.js
-deploy*.ps1
-nodemon.json
-
 # Logs
 *.log
 logs/
@@ -37,16 +32,10 @@ Thumbs.db
 *.swp
 *.code-workspace
 
-# Copilot instructions (internal dev context)
-.github/copilot-instructions.md
-
 # Release builds
 release/
 ZomboidControlPanel-linux.tar.gz
 ZomboidControlPanel-windows.zip
-
-# GitHub Releases are the canonical release notes
-release-notes-*.md
 
 # Backup files
 *.bak
@@ -71,12 +60,3 @@ data/reset-token.txt
 data/*.token
 data/*.secret
 data/server-secrets/
-
-# Impeccable design-skill tooling (agent harness, not product code)
-.agents/
-.claude/
-skills-lock.json
-
-# scripts/ui-shot-tour.mjs output (regenerable; Screenshots/ is the tracked,
-# hand-curated README gallery -- this is a disposable full-app baseline).
-.ui-tour/

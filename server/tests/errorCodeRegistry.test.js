@@ -24,7 +24,7 @@ const SERVER_DIR = path.join(__dirname, "..");
 // both genuinely internal, never-user-facing codes (ETIMEDOUT, an
 // internal GitHub-API timeout marker read back by isRetryableGitHubError())
 // and at least one real user-facing one (`apply_in_progress` in
-// spawnWindowsApplyHelper()) with no structural way to tell them apart
+// legacy update-helper code with no structural way to tell them apart
 // short of reading intent -- see server/utils/errorCodes.js's own trailing
 // comment for the full accounting of that gap. A code introduced that way
 // will NOT be caught here if it's missing from the registry.

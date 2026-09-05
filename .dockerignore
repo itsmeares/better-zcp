@@ -12,11 +12,7 @@ logs/*.log
 Screenshots/
 server/tests/
 build.js
-deploy*.ps1
-release.ps1
-*.bat
 *.md
-nodemon.json
 docker-compose.yml
 Dockerfile
 .dockerignore

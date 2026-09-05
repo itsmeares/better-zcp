@@ -13,23 +13,14 @@
 // enumeration methods (hasNext/next/size/get/entrySet/keySet). A tiny,
 // single-purpose command class that talks to one of these is very likely
 // looping over a collection to build its reply -- every command already
-// hand-verified tonight as informative (players, showoptions, stats) shows
+// verified informative commands such as players, showoptions, and stats show
 // exactly this pattern.
 //
-// This is the ONLY decision signal -- there used to be a second one (a raw
-// constant-pool string count, verdict AMBIGUOUS/LIKELY_ACK split at
-// stringCount>=4) that this comment did not even describe. It was removed
-// 2026-08-31 after running against the real jar showed it was dead: every
-// one of the 44 real command classes scores stringCount>=11 (class names,
-// exception constructors and permission-check messages alone clear that),
-// so the LIKELY_ACK branch never fired -- 0 of 44. Worse, the number did not
-// even correlate with the thing it was proxying for: kickuser, a hand-
-// verified bare-ack command, scored stringCount=25, higher than 3 of the 4
-// hand-verified INFORMATIVE commands (13, 14, 18 vs. players' 18). stringCount
-// is still printed per-line as raw context for a human reader, but no longer
-// drives the verdict.
+// The collection-reference signal is the only decision input. A raw
+// constant-pool string count does not correlate with response shape, so it is
+// reported only as context and never drives the verdict.
 //
-// This is NOT proof of what the method actually returns -- a class could
+// This is not proof of what the method actually returns. A class could
 // reference Iterator for validation logic that never reaches the reply, or
 // build a short reply without ever touching a collection. Read it as a
 // strong, jar-grounded HINT for the ~44 commands this panel actually calls

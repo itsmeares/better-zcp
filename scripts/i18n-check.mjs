@@ -30,13 +30,9 @@ const root = path.resolve(__dirname, "..");
 const enDir = path.join(root, "client/src/locales/en");
 const frDir = path.join(root, "client/src/locales/fr");
 
-// Baseline for --all's suspicious-duplicate findings: 43 of the 44 raw
-// findings as of 2026-08-31 were individually reviewed and are legitimate
-// (see scripts/i18n-duplicates.baseline.json's header for the taxonomy and
-// the triage rule). Keyed by namespace+frValue, same class+method-style
-// stability as scripts/engine-signatures.baseline.json -- a rename or
-// reformat doesn't need a baseline update. Missing baseline file is not a
-// hard error; --all just reports everything as NEW in that case.
+// The baseline contains reviewed, legitimate duplicate translations. It is
+// keyed by namespace and French value so key renames do not create noise.
+// A missing baseline makes every finding new instead of disabling the check.
 const BASELINE_PATH = path.join(__dirname, "i18n-duplicates.baseline.json");
 let baselineEntries = [];
 if (fs.existsSync(BASELINE_PATH)) {
@@ -173,15 +169,8 @@ function reportSuspicious(suspicious) {
 function checkAllNamespaces() {
   const files = fs.readdirSync(enDir).filter((f) => f.endsWith(".json"));
 
-  // Fail loudly rather than silently narrow (checker script audit,
-  // 2026-09-05, ci-pipefail-and-dead-tests hunt): --all's whole contract is
-  // "no NEW suspicious duplicate across every namespace" -- zero namespaces
-  // scanned makes that vacuously true, which prints an identical-looking
-  // PASS. Mutation-verified: pointing enDir at an empty directory reproduced
-  // "Namespaces scanned: 0" and still printed "PASS: no NEW suspicious
-  // French duplicates" before this guard existed. Baseline on the real
-  // locales tree: 57 namespaces. Same ~55% floor as this repo's other
-  // checker MIN_* guards (audit-bridge-actions.mjs, check-engine-signatures.mjs).
+  // `--all` must scan real locale files; an empty directory would make the
+  // no-new-findings check pass vacuously.
   const MIN_NAMESPACES = 30;
   if (files.length < MIN_NAMESPACES) {
     console.error(

@@ -15,8 +15,7 @@
 // CALLED correctly (argument types, overload resolution) -- only whether a
 // method with that exact name is declared on that exact class.
 //
-// See scripts/jar-audit/README.md for what this technique can and cannot
-// answer, based on what tonight's audits actually ran into.
+// See scripts/jar-audit/README.md for the technique's limitations.
 
 export function parseClass(buf) {
   let p = 0;

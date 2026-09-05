@@ -4,25 +4,9 @@
 # "exec /entrypoint.sh: no such file or directory".
 *.sh text eol=lf
 entrypoint.sh text eol=lf
-Start.bat text eol=crlf
-
-# Same failure class as the *.sh rule above, one file this repo had missed
-# (hunt-wave6-2026-08-29): a systemd unit file, always installed and parsed
-# on the target Linux machine regardless of which OS checked it out. Copied
-# verbatim by build.js (fs.copyFileSync, no normalization -- contrast with
-# generateStartSh()'s explicit .replace(/\r\n/g, "\n") two lines above that
-# copy) into every Linux release package. Without this rule, a Windows
-# checkout (core.autocrlf=true) puts a trailing \r on every directive line;
-# confirmed on this exact file in this exact repo, not assumed: `xxd` showed
-# real 0d0a bytes on a Windows checkout before this rule existed. Only bites
-# a LOCALLY-run `pnpm run build:exe:linux`/`node build.js --linux` on
-# Windows -- release-artifacts.yml builds the Linux leg on ubuntu-22.04, so
-# CI-published releases were never affected.
+# The service file is copied verbatim into Linux release packages and must
+# remain LF-only on Windows checkouts too.
 zomboid-panel.service text eol=lf
 
-# Defense in depth for the CSP script-hash bug (browser-bug-hunt-2026-09-02):
-# server/utils/cspScriptHash.js now newline-normalizes before hashing, which
-# is the real fix and correct on any checkout regardless of line endings --
-# but pinning this file to LF removes the CRLF case entirely on machines
-# where core.autocrlf=true would otherwise check it out with CRLF.
+# Keep the CSP source stable for script-hash calculation.
 client/index.html text eol=lf

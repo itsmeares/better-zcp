@@ -80,18 +80,8 @@ router.post('/execute', requirePermission('rcon.execute'), async (req, res) => {
     
     const result = await rconService.execute(command);
 
-    // Emit to connected clients. Redact both fields before broadcasting --
-    // this is the FULL, untruncated command reaching every socket in the
-    // "rcon-live" room, unlike the 100-char log.info above, and
-    // command_history (database/init.js's logCommand) already redacts both
-    // command and response for the identical reason: `response` is
-    // defense-in-depth in case a verbose RCON reply ever echoes the command
-    // it's replying to. Targets "rcon-live" (gated rcon.execute in
-    // index.js), not "logs" (gated the broader diagnostics.manage) -- moved
-    // 2026-08-31 bug hunt: this is the same class of content /rcon/history
-    // deliberately gates on rcon.execute alone, per this file's own header
-    // comment above, and the live broadcast must not reopen that through a
-    // different, broader capability.
+    // Broadcast only redacted values. This room is gated by rcon.execute,
+    // while the broader logs room requires diagnostics.manage.
     const io = req.app.get('io');
     if (io) io.to('rcon-live').emit('rcon:response', {
       command: redactRconCommandSecrets(command),
@@ -198,36 +188,14 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
   }
 });
 
-// Test arbitrary RCON credentials without applying them — lets the UI
-// validate host/port/password before the user saves a server's settings.
-// requirePermission('rcon.execute') ALONE used to be the only gate here,
-// but this route makes the panel open a raw TCP connection (and attempt an
-// RCON auth handshake) against ANY host/port the caller names — CodeQL
-// js/request-forgery #26/#333 (2026-08-27 CodeQL triage): rcon.execute's
-// own description ("execute arbitrary console commands" against the
-// configured server) never promised "connect to arbitrary hosts," so a
-// role holding only rcon.execute could use this endpoint as a blind
-// internal-network TCP prober. Chained a second requirePermission() rather
-// than an inline check since the requirement is static, not conditional on
-// request content (unlike scheduler.js's requireCapabilityInline, which
-// exists specifically because ITS second capability depends on parsed
-// body content) — operator's own framing: you need the power to ADD a
-// server to be allowed to test one, so servers.manage is the natural
-// second gate, not a new capability. Confirmed both capabilities'
-// descriptions still read correctly after this change: rcon.execute no
-// longer implies arbitrary-host reach, and servers.manage's "add, edit...
-// a server entry" already covers testing a connection as part of that
-// workflow — neither needed a text change.
+// Test arbitrary RCON credentials without applying them. The endpoint opens
+// a TCP connection to a caller-supplied host, so it requires both the ability
+// to execute RCON commands and the ability to manage server entries.
 router.post('/test', requirePermission('rcon.execute'), requirePermission('servers.manage'), async (req, res) => {
   try {
     const { host, port, password } = req.body || {};
-    // host/port only, for audit — NEVER the password. Run through the
-    // shared redaction helper as defense-in-depth (the same discipline
-    // every other RCON log line in this file uses) even though this
-    // specific template can't currently produce an adduser-shaped match —
-    // six separate RCON credential leak sites were found and fixed
-    // tonight, and a bespoke "just don't interpolate password" line is
-    // exactly the kind of ad-hoc logic that produced those.
+    // Log only host and port. Keep the shared redaction helper as defense in
+    // depth if this message shape changes later.
     log.info(redactRconCommandSecrets(`POST /test (host=${host || 'none'}, port=${port || 'none'})`));
 
     const validationError = validateTestInput(host, port, password);

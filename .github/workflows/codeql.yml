@@ -23,58 +23,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # codeql-alert-suppression-status (updated 2026-08-31, see
-      # the previous triage): attempt 2 below WORKS. Verified by
-      # downloading the raw SARIF for analysis id=1701372703 (commit
-      # 59bc9bc5) -- 109 of 330 results carry a non-empty `suppressions:
-      # [{"state":"accepted"}]`, including known-annotated sites like
-      # server/routes/players.js:55. The ~105 in-code `// codeql[...]`
-      # justifications ARE being recognized.
-      #
-      # BUT: an accepted suppression does NOT cause GitHub to auto-dismiss
-      # the alert -- that's a separate action. 5 of the 109 suppressed
-      # results are still open on GitHub (e.g. server/services/panelBridge.js
-      # :897, :902, :925), proving suppression only produces the annotation
-      # GitHub's UI shows on an alert; every alert still needs an explicit
-      # dismissal (UI or `gh api .../code-scanning/alerts/{n}` PATCH) to
-      # actually close, whether or not it carries an accepted suppression.
-      # Treat `// codeql[...]` comments as documentation for a human doing
-      # that dismissal pass, not as a backlog-clearing mechanism on their
-      # own.
-      #
-      # ATTEMPT 1 (queries: security-extended,codeql/javascript-queries:
-      # AlertSuppression.ql) was pushed and REJECTED at `codeql database
-      # init` time: "Specifier for external repository is invalid:
-      # codeql/javascript-queries:AlertSuppression.ql". Reproduced that
-      # exact failure locally with the CLI (2.26.4) before touching this
-      # file again -- `codeql database init --codescanning-config=...` with
-      # that entry under `queries:` fails identically, no push needed to
-      # confirm it's broken.
-      #
-      # ROOT CAUSE, confirmed by reading codeql-action's own source
-      # (src/config/db-config.ts): a `queries:` entry gets NO format
-      # validation on the action's side -- it's split on commas and handed
-      # to the CLI as an opaque string, which database init then appears to
-      # try parsing as a git-hosted custom-query reference (owner/repo/path
-      # @ref) whenever it isn't a known suite name, hence "external
-      # repository". `packs:` entries go through a DIFFERENT, dedicated
-      # parser (parsePacksSpecification) explicitly documented as accepting
-      # `scope/name[@version][:path]` -- the grammar this actually needs.
-      # AlertSuppression.ql itself sits at the pack ROOT (confirmed via a
-      # real `codeql pack download codeql/javascript-queries`), not under a
-      # subdirectory.
-      #
-      # ATTEMPT 2 (this one): moved the query into packs: with the correct
-      # grammar. Locally this clears the exact "external repository" error
-      # attempt 1 hit -- confirmed via `codeql database init` reproducing
-      # cleanly past that point. Could NOT get a fully green local
-      # database init even for the CURRENT, known-good security-extended-
-      # only baseline in this same harness (a separate "javascript-
-      # security-extended cannot be found" resolution gap that affects the
-      # baseline identically, so it isn't something this change caused --
-      # most likely a registry/qlconfig wiring the hosted GitHub runner has
-      # that a bare local CLI invocation doesn't). CONFIRMED WORKING IN THE
-      # REAL PIPELINE as of the 2026-08-31 SARIF check described above.
+      # In-code CodeQL suppressions document reviewed findings. They do not
+      # dismiss alerts automatically. The AlertSuppression query is loaded
+      # from the JavaScript query pack root.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@6f5948dfacef28e207b48d0905cf90c03365536d # v3
         with:

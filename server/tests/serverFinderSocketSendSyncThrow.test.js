@@ -11,7 +11,7 @@ import { queryMasterServer, queryServerInfo } from "../routes/serverFinder.js";
 // socket's own 'error' listener -- it becomes a genuine, uncaught Node
 // exception, and Node's default handling of that KILLS THE WHOLE SERVER
 // PROCESS, not just this one request. Confirmed for real, twice, via
-// scripts/ui-shot-tour.mjs's server-finder capture: the first hit didn't
+// a manual browser smoke test: the first hit didn't
 // crash (looked clean), the second did, several seconds after the page had
 // already rendered -- invisible to manual QA, which is why it survived.
 //

@@ -223,8 +223,8 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
     } catch (error) {
       // The row survived -- its own button is still there. Radix's
       // onCloseAutoFocus does NOT reliably land focus back on it (confirmed
-      // 2026-08-31 against a real Chromium via scripts/ui-shot-tour.mjs's
-      // bootstrap: focus lands on document.body after this exact flow, a
+      // A real Chromium smoke test showed focus landing on document.body after
+      // this exact flow, a
       // real keyboard-accessibility defect, not a jsdom artifact) -- so
       // focus it explicitly rather than trust Radix's restore. Deferred to
       // the failedDeleteFocusId effect above, not called inline here -- see

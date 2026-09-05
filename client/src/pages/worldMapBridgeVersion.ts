@@ -1,5 +1,5 @@
 // getServerInfo only started sending isAlive/isInfected/accessLevel per
-// player at PanelBridge v1.7.39 (see that version's changelog entry in
+// player at PanelBridge v1.7.39 (see that version's compatibility note in
 // PanelBridge.lua). Before that, the keys are absent from the response
 // entirely, not merely falsy -- a client that assumes them present (or
 // defaults them, e.g. `isAlive ?? true`) renders every player as alive,

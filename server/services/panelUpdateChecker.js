@@ -620,18 +620,9 @@ export class PanelUpdateChecker {
     let incomingClientPath = null;
 
     try {
-      // 2026-08-29: the pre-update database snapshot used to be taken HERE,
-      // at download/stage time. That was correct back when download and
-      // apply were one atomic user action -- taking it right before that
-      // one action began WAS taking it right before the destructive step.
-      // The bundle-journal rewrite decoupled the two: an operator can
-      // download/stage now and click "Restart and Apply" hours or days
-      // later, making a download-time snapshot stale by the time it would
-      // actually matter (it would be missing every operator-state change
-      // made in between). The snapshot is now taken in server/index.js's
-      // POST /api/panel/restart, immediately before either platform's
-      // actual destructive apply step -- see createUpdateDataBackup()'s own
-      // call site there for why.
+      // Take the database snapshot immediately before the destructive apply,
+      // not when the update is downloaded. Staging and applying may be hours
+      // apart, so an earlier snapshot would miss later state changes.
       log.info(
         `Downloading update: ${asset.name} (${(asset.size / 1024 / 1024).toFixed(1)} MB)`,
       );
@@ -964,267 +955,6 @@ export class PanelUpdateChecker {
     }
   }
 
-  /**
-   * On Windows we spawn an external helper that:
-   *   1. Waits for this panel process to exit
-   *   2. Launches the staged .new binary in place (no rename, AV-safe)
-   *   3. Falls back to the previous .exe if staged won't start
-   *
-   * v1.0.21+ rewrite: the helper is a plain `.cmd` batch file written next
-   * to the panel exe (not a `.ps1` in %TEMP%). Rationale:
-   *   - ASR rules and Defender heuristics treat scripts in %TEMP% much more
-   *     aggressively than files in the app's own install folder. In v1.0.20
-   *     we saw a PS1 in TEMP get blocked BEFORE PowerShell could even load
-   *     it — no log line was written at all.
-   *   - cmd.exe is a first-party Windows binary that is not ASR-blockable.
-   *     A plain `.cmd` has essentially no heuristic surface.
-   *   - The panel install folder is the folder users/admins are most likely
-   *     to have already AV-excluded.
-   *
-   * On Linux the caller should just overwrite the running binary directly —
-   * the running process keeps its inode, and the new binary takes effect on
-   * the next spawn. This helper is Windows-only.
-   */
-  async spawnWindowsApplyHelper() {
-    if (process.platform !== "win32") {
-      throw new Error("spawnWindowsApplyHelper is Windows-only");
-    }
-    // Guard against a second restart-and-apply landing while the first
-    // helper is already running. Two helpers watching the same PID would
-    // both wait, both win the wait, then race to start the staged exe.
-    if (this.isApplying) {
-      const err = new Error("An update apply is already in progress");
-      err.code = "apply_in_progress";
-      throw err;
-    }
-    const staged = this.getStagedUpdate();
-    if (!staged) {
-      throw new Error("No staged update found");
-    }
-
-    const { stagedPath, exePath } = staged;
-    const ts = Date.now();
-    let logsDir;
-    try {
-      logsDir = getDataPaths().logsDir;
-    } catch {
-      logsDir = path.join(path.dirname(exePath), "logs");
-    }
-    try {
-      fs.mkdirSync(logsDir, { recursive: true });
-    } catch {
-      /* non-fatal */
-    }
-    const logPath = path.join(logsDir, `panel-update-${ts}.log`);
-    const stableLogPath = path.join(logsDir, "panel-update-last.log");
-
-    // Helper lives next to the exe. Create a dot-prefixed subfolder so it
-    // doesn't clutter the install dir but stays inside any AV exclusion the
-    // user set for the panel folder.
-    const helperDir = path.join(path.dirname(exePath), ".panel-helpers");
-    try {
-      fs.mkdirSync(helperDir, { recursive: true });
-    } catch {
-      /* non-fatal */
-    }
-    const cmdPath = path.join(helperDir, `apply-update-${ts}.cmd`);
-
-    // Pre-spawn sentinel: write a marker line to the STABLE log BEFORE we
-    // spawn the helper. If, after relaunch, the stable log still contains
-    // only this line (no entries from the helper itself), we know the helper
-    // was blocked from running at all (ASR / AV / group policy). That is a
-    // different failure mode than "helper ran and failed" and gets its own
-    // UI hint.
-    const spawnSentinel =
-      `[${new Date().toISOString()}] [PRE-SPAWN] Panel is about to spawn apply helper: ${cmdPath}\r\n` +
-      `[${new Date().toISOString()}] [PRE-SPAWN] If no further lines appear below, the helper was blocked from running (AV / ASR / policy).\r\n` +
-      `[${new Date().toISOString()}] [PRE-SPAWN] Recovery: close any running panel, then double-click Start.bat in ${path.dirname(exePath)}\r\n`;
-    try {
-      fs.writeFileSync(stableLogPath, spawnSentinel, { encoding: "utf8" });
-    } catch (err) {
-      log.debug(`Could not write pre-spawn sentinel: ${err.message}`);
-    }
-
-    // Build the .cmd helper. Uses only cmd.exe built-ins (tasklist, start,
-    // timeout, netstat) — no PowerShell, no third-party tools. Paths must
-    // not contain literal double-quotes; Windows file paths never can, so
-    // that's safe. We strip any quotes defensively.
-    //
-    // Path encoding hardening:
-    //   - Strip stray `"` (paranoia; Windows paths can't legally contain it).
-    //   - Double `%` to `%%` so a literal `%` in a username/folder doesn't
-    //     trigger env-var expansion at parse time and silently truncate the
-    //     path. Real-world example: `C:\Users\foo%bar\Desktop\panel\` would
-    //     become `C:\Users\foo` without this.
-    //   - File is written as plain ASCII. Empirically cmd.exe does NOT honor
-    //     a UTF-8 BOM (it errors on `@echo off` if the BOM is present), so
-    //     non-ASCII paths are unsupported here. ASCII paths are by far the
-    //     common case; the failure mode for non-ASCII is a clean error in
-    //     `if not exist` rather than a silent mis-apply.
-    const safePath = (s) => String(s).replace(/"/g, "").replace(/%/g, "%%");
-    const workDir = path.dirname(exePath);
-    const cmd = [
-      "@echo off",
-      "setlocal ENABLEEXTENSIONS",
-      `set "PID_WATCH=${process.pid}"`,
-      `set "EXE_PATH=${safePath(exePath)}"`,
-      `set "STAGED=${safePath(stagedPath)}"`,
-      `set "WORK_DIR=${safePath(workDir)}"`,
-      `set "LOG=${safePath(logPath)}"`,
-      `set "STABLE=${safePath(stableLogPath)}"`,
-      `set "SELF=${safePath(cmdPath)}"`,
-      "",
-      "rem === Helper is alive. Overwrite stable log so we know this ran. ===",
-      "rem === Avoid parens in messages -- cmd.exe IF/ELSE blocks can mis-parse them. ===",
-      'call :stamp "Apply helper started cmd mode pid to watch %PID_WATCH%" NEW',
-      'call :stamp "exePath=%EXE_PATH%"',
-      'call :stamp "stagedPath=%STAGED%"',
-      'if not exist "%STAGED%" (',
-      '  call :stamp "ERROR: staged file missing before helper began"',
-      "  goto :end_fail",
-      ")",
-      "",
-      "rem === Wait up to 60s for panel process to exit. ===",
-      "rem === Use findstr (not find) -- find can block on stdin in edge cases. ===",
-      "",
-      "set /a TRIES=0",
-      ":waitloop",
-      'tasklist /NH /FI "PID eq %PID_WATCH%" 2>nul | findstr /C:"%PID_WATCH%" >nul',
-      "if errorlevel 1 goto panel_gone",
-      "set /a TRIES+=1",
-      "if %TRIES% geq 60 goto panel_timeout",
-      "timeout /t 1 /nobreak >nul 2>&1",
-      "goto waitloop",
-      "",
-      ":panel_timeout",
-      'call :stamp "WARNING panel did not exit within 60s, force-killing pid %PID_WATCH%"',
-      "taskkill /F /PID %PID_WATCH% >nul 2>&1",
-      "timeout /t 2 /nobreak >nul 2>&1",
-      "goto after_wait",
-      "",
-      ":panel_gone",
-      'call :stamp "Panel process exited"',
-      "",
-      ":after_wait",
-      "rem === Verify staged file still on disk (AV could eat it during wait). ===",
-      'if not exist "%STAGED%" (',
-      '  call :stamp "CRITICAL: staged file vanished during wait (AV quarantine)"',
-      '  if exist "%EXE_PATH%" (',
-      '    call :stamp "Relaunching previous .exe as fallback"',
-      '    start "" /D "%WORK_DIR%" "%EXE_PATH%"',
-      "  ) else (",
-      '    call :stamp "CRITICAL: previous .exe is also gone -- user must add AV exclusion and restore from .bak-*"',
-      "",
-      "  )",
-      "  goto :end_fail",
-      ")",
-      "",
-      "rem === Launch staged binary in place. ===",
-      'call :stamp "Launching staged binary in place: %STAGED%"',
-      'start "" /D "%WORK_DIR%" "%STAGED%"',
-      "if errorlevel 1 (",
-      '  call :stamp "start command returned errorlevel %errorlevel% -- staged launch may have failed"',
-      '  if exist "%EXE_PATH%" (',
-      '    call :stamp "Falling back to previous .exe"',
-      '    start "" /D "%WORK_DIR%" "%EXE_PATH%"',
-      "  )",
-      "  goto :end_fail",
-      ")",
-      "",
-      "rem === Give the new panel a moment to start, then verify it ran. ===",
-      "rem === If start succeeded but the staged exe crashed on load, the   ===",
-      "rem === filename will not appear in tasklist a few seconds later.    ===",
-      'rem === HOWEVER: tasklist /FI "IMAGENAME eq foo.exe.new" is unreliable',
-      "rem === because the Windows IMAGENAME filter does not consistently   ===",
-      "rem === match files whose extension is not literally .exe. We saw    ===",
-      "rem === false negatives in the wild where the staged binary was      ===",
-      "rem === actually running but the filter returned no rows, causing    ===",
-      'rem === the helper to "fall back" by launching the canonical .exe -- ===',
-      "rem === resulting in TWO panels racing for port 3001 and EADDRINUSE. ===",
-      "rem === Detect the process using a more permissive search instead.   ===",
-      'for %%I in ("%STAGED%") do set "STAGED_NAME=%%~nxI"',
-      "timeout /t 4 /nobreak >nul 2>&1",
-      "rem Try multiple detection paths -- any hit confirms the staged exe is alive.",
-      'tasklist /NH 2>nul | findstr /I /C:"%STAGED_NAME%" >nul && goto staged_alive',
-      'tasklist /NH /FI "IMAGENAME eq %STAGED_NAME%" 2>nul | findstr /I /C:"%STAGED_NAME%" >nul && goto staged_alive',
-      "rem Last-resort: check the listening socket. If port 3001 is bound, a",
-      "rem panel started successfully -- almost certainly the staged one we",
-      "rem just launched, since the previous panel exited cleanly above.",
-      'netstat -ano -p tcp 2>nul | findstr /R /C:":3001 .*LISTENING" >nul && goto staged_alive',
-      "goto staged_unverified",
-      "",
-      ":staged_alive",
-      'call :stamp "Update applied -- staged version is running. Reconcile will confirm on next boot."',
-      'call :stamp "Apply helper done"',
-      "goto :end_ok",
-      "",
-      ":staged_unverified",
-      "rem === We could not confirm the staged binary is running. Do NOT     ===",
-      "rem === relaunch the previous .exe -- if the staged binary actually   ===",
-      "rem === DID start (and our detection was just wrong) the fallback     ===",
-      "rem === would create two panels racing for port 3001. Better to       ===",
-      "rem === leave the user with a clear failure they can recover from    ===",
-      "rem === manually via Start.bat than to silently corrupt the run.      ===",
-      'call :stamp "Staged binary not detected after 4s -- not relaunching previous exe to avoid port conflict"',
-      'call :stamp "If the panel is not running, double-click Start.bat in the panel folder to recover"',
-      "goto :end_fail",
-      "",
-      ":end_fail",
-      'call :stamp "Apply helper exiting with failure"',
-      '(goto) 2>nul & del /f /q "%SELF%" >nul 2>&1',
-      "exit /b 3",
-      "",
-      ":end_ok",
-      '(goto) 2>nul & del /f /q "%SELF%" >nul 2>&1',
-      "exit /b 0",
-      "",
-      "rem === Helpers ===",
-      "rem === Goto-based branching avoids the cmd.exe IF/ELSE parens parser ===",
-      'rem === bug that truncates messages containing ")".                   ===',
-      "",
-      ":stamp",
-      'rem %~1 = message, %~2 = "NEW" to overwrite stable log, else append',
-      'for /f "tokens=1-3 delims=:.," %%a in ("%time%") do set "NOW=%date% %%a:%%b:%%c"',
-      'if /I "%~2"=="NEW" goto :stamp_new',
-      'echo [%NOW%] %~1>> "%STABLE%"',
-      "goto :stamp_log",
-      ":stamp_new",
-      'echo [%NOW%] %~1> "%STABLE%"',
-      ":stamp_log",
-      'echo [%NOW%] %~1>> "%LOG%"',
-      "exit /b 0",
-    ].join("\r\n");
-
-    // Write the helper as plain ASCII. cmd.exe interprets a UTF-8 BOM as
-    // part of the first command and breaks `@echo off`, so we cannot use it.
-    // Non-ASCII paths are not supported — if `set` ends up with a mojibake
-    // value the subsequent `if not exist` will fail clean rather than silently
-    // mis-applying.
-    fs.writeFileSync(cmdPath, cmd, { encoding: "ascii" });
-
-    log.info(`Spawning update apply helper: ${cmdPath} (log: ${logPath})`);
-
-    // Mark applying BEFORE spawn so a concurrent restart sees the guard
-    // even before spawn() returns.
-    this.isApplying = true;
-
-    // Spawn cmd.exe DIRECTLY (not via `start "" /B`) so the helper gets its
-    // own process group + hidden console and is fully detached from the
-    // panel's console. When the panel calls process.exit(), its console
-    // window closes immediately — it does not wait for the helper.
-    //   - detached: true        -> new process group, survives parent exit
-    //   - windowsHide: true     -> CREATE_NO_WINDOW flag, no console window
-    //   - stdio: 'ignore'       -> no inherited handles keeping parent alive
-    const child = spawn(process.env.ComSpec || "cmd.exe", ["/c", cmdPath], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-      cwd: path.dirname(cmdPath),
-    });
-    child.unref();
-
-    return { helperPath: cmdPath, logPath };
-  }
 
   /**
    * Download a file with progress tracking
@@ -1666,27 +1396,9 @@ export class PanelUpdateChecker {
 
     if (this.dockerUpdateProxy.enabled) {
       info.dockerUpdater = true;
-      // Everything binary mode checks below (disk space, write permissions,
-      // database readability) is about THIS process's own filesystem
-      // access -- none of it applies here, since a separate update
-      // controller container does the build/health-check/rollback for
-      // docker mode. Returning bare ok:true with empty warnings used to
-      // look identical to "we checked, you are fine" when the truth is "we
-      // cannot check this from here" -- checksPerformed:false is the
-      // honest, machine-readable core of that fix and must stay true for
-      // every docker preflight, not just failing ones.
-      //
-      // The explanation text is informational, not a warning: it is the
-      // SAME sentence on every single docker preflight, forever, regardless
-      // of the operator's actual setup -- god's 2026-09-04 review call on
-      // 2b043928. A `warnings` entry that always fires isn't a warning, it's
-      // a label, and it spends the one channel we'll need later to tell a
-      // docker operator something is actually wrong with their install (by
-      // which point they'll have been trained for months that this screen's
-      // warnings are furniture). Kept out of `warnings`/`warningDetails` on
-      // purpose; surfaced instead as a self-contained informational field in
-      // the same {key, params, message} shape translatePanelUpdateMessages
-      // already knows how to translate, for whenever the client wants it.
+      // Docker mode performs these checks in the separate update controller.
+      // Report that explicitly instead of returning an empty, misleading
+      // warning list.
       info.checksPerformed = false;
       info.dockerNotChecked = {
         key: "updates.preflight.dockerNotChecked",
@@ -1830,16 +1542,8 @@ export class PanelUpdateChecker {
       }
     }
 
-    // Free disk space check — need ~2x asset size (staged + rename buffer).
-    // 2026-09-04, Dwight's finding: `free !== null && free < needed` reads as
-    // careful, but the other half of that condition is silent -- a null free
-    // (statfs unsupported, or getFreeDiskSpace's own try/catch swallowing a
-    // real error) or a thrown error here both fell through with NO warning
-    // at all, same as no check had ever run. That is the exact shape the
-    // Docker preflight path was deliberately built NOT to have
-    // (checksPerformed:false, an honest "we did not check" rather than a
-    // bare ok:true) -- this check just never got the same treatment. Now an
-    // unknown free-space result surfaces as a warning instead of silence.
+    // Need roughly 2x the asset size for staging and replacement. An unknown
+    // free-space result is a warning, not a successful check.
     if (asset?.size) {
       try {
         const free = await this.getFreeDiskSpace(exeDir);
@@ -2281,7 +1985,7 @@ export class PanelUpdateChecker {
   }
 
   /**
-   * Look at the helper log + disk state and guess why apply failed. Used
+   * Look at the apply log and disk state and guess why apply failed. Used
    * purely to help the UI render a useful hint. Never throws.
    *   'helper_blocked' — helper script was blocked from even starting (ASR)
    *   'av_quarantine' — placed file vanished / relaunch couldn't find it
@@ -2299,55 +2003,8 @@ export class PanelUpdateChecker {
     if (!helperLog) return "no_helper_log";
     const l = helperLog.toLowerCase();
 
-    // 2026-09-04, Dwight's finding + god's follow-up: readMostRecentApplyLog()
-    // prefers supervisor.log (build.js's generateStartBat(), "Supervisor v2")
-    // whenever it exists, and only falls back to panel-update-last.log (the
-    // spawnWindowsApplyHelper() .cmd helper -- itself dead code, never called
-    // in production) for an un-upgraded pre-v1.0.21 install. Checked, by
-    // grepping build.js for every phrase in the prose lists below: NONE of
-    // them occur in it, so none of these branches can ever fire against a
-    // real current install's log.
-    //
-    // Only the [pre-spawn]/"apply helper started" pair genuinely matches
-    // spawnWindowsApplyHelper()'s own wording. The rest of the prose below
-    // (av_quarantine/permission/rename_locked) matches nothing currently in
-    // this repository, including that dead function -- `git log -S"quarantined
-    // by av"` shows it was introduced once, at v1.0.14, and never touched
-    // since, through two later apply-mechanism rewrites. Whatever wrote that
-    // wording at v1.0.14 is gone; the classifier was never updated either
-    // time its producer changed underneath it. That's why Dwight saw
-    // "unknown" while the log plainly said `staged binary missing or
-    // quarantined [av_quarantine]`: the classifier was entirely keyed to
-    // wording nothing has written in at least two apply-mechanism
-    // generations.
-    //
-    // Supervisor v2 already stamps a stable bracketed code on every FAILURE
-    // line it writes (see build.js's `:apply_update`/`:rollback_update`
-    // labels) -- exactly the "producer emits a code, classifier matches the
-    // code" shape that should have existed from the start. Checked first,
-    // ahead of the legacy prose fallbacks below, because it's the current,
-    // most specific, most authoritative signal when present. Only the last
-    // occurrence is used: a real log can carry an earlier informational tag
-    // from an unrelated prior step, and the final stamped line is the one
-    // that actually ended the run (`goto :eof` follows every one of these).
-    //
-    // Three of Supervisor v2's codes get mapped to an existing or new
-    // client-recognised cause here -- av_quarantine (exact name match,
-    // Dwight's actual case), binary_swap_failed (both of its trigger
-    // lines are a failed `ren` on the live/staged exe, which is precisely
-    // what 'rename_locked' already means per this function's own doc
-    // comment above), and rollback_failed (its own bucket -- see
-    // isRollbackRetryLikely() below for why one value can carry this
-    // honestly across all eight of its trigger lines). The remaining codes
-    // -- version_mismatch, startup_handshake_failed, frontend_swap_failed,
-    // bundle_apply_failed -- have no existing bucket that honestly
-    // describes them, and client/src/lib/api.ts's likelyCause union type
-    // doesn't know about them; inventing new values here would just move
-    // this exact defect shape (a value nothing on the other end consumes)
-    // to the client instead of fixing it. Left unmapped on purpose -- they
-    // fall through to 'unknown' below, exactly like today, not a
-    // regression -- as a named, deliberate gap for a follow-up that
-    // extends the client-side vocabulary, not a silent one.
+    // Supervisor v2 writes bracketed failure codes. Prefer the last code in
+    // the log, then fall back to legacy prose for upgraded installations.
     const supervisorTags = [
       ...helperLog.matchAll(
         /\[(av_quarantine|version_mismatch|startup_handshake_failed|frontend_swap_failed|binary_swap_failed|bundle_apply_failed|rollback_failed)\]/gi,
@@ -2358,19 +2015,13 @@ export class PanelUpdateChecker {
     if (lastSupervisorTag === "binary_swap_failed") return "rename_locked";
     if (lastSupervisorTag === "rollback_failed") return "rollback_failed";
 
-    // Helper was blocked from running at all (ASR / AV / Group Policy).
-    // The PRE-SPAWN sentinel line written by the main panel is there, but
-    // no lines from the helper itself. Unique signature of the v1.0.21+
-    // helper framework — we can tell the user exactly what to do. Legacy
-    // path: spawnWindowsApplyHelper() is dead in production (see above),
-    // kept here only in case an un-upgraded pre-v1.0.21 install is still
-    // writing panel-update-last.log.
+    // Legacy helper was blocked before it could start (ASR, AV, or policy).
     if (l.includes("[pre-spawn]") && !l.includes("apply helper started")) {
       return "helper_blocked";
     }
 
-    // Legacy AV / Controlled Folder Access wording (see the class-level
-    // comment above): file vanished between helper steps.
+    // Legacy AV / Controlled Folder Access wording: the staged file vanished
+    // between helper steps.
     // Patterns cover: post-place verify failure, rollback copy wiped, staged
     // gone before we started, and the Windows "cannot find" messages that
     // surface as Move-Item failures when the source was deleted mid-apply.
@@ -2425,26 +2076,12 @@ export class PanelUpdateChecker {
   }
 
   /**
-   * For a "rollback_failed" apply, whether the operator should expect the
-   * SAME failure to recur automatically on a later restart/relaunch, as
-   * opposed to a fully-recovered state with only a harmless leftover
-   * update-bundle.json.
+   * Whether a rollback failure will recur automatically on the next restart.
    *
    * Never throws.
    *
-   * god's 2026-09-04 review: one likelyCause value ("rollback_failed") must
-   * not lie in any of its eight build.js trigger lines. Traced the full
-   * :rollback_update label (build.js ~605-678): 7 of the 8 lines fire before
-   * -- or because -- the pending-update marker files (.update-pending /
-   * .update-applying) failed to clear, and Supervisor v2's run_loop watches
-   * those files to decide whether to retry (a stuck .update-pending
-   * re-triggers a fresh swap attempt; a stuck .update-applying re-triggers
-   * the rollback itself via the startup-handshake check -- two different
-   * mechanisms, same operator-facing symptom: the identical failure keeps
-   * happening on its own). Only the 8th line ("...could not remove
-   * journal") is reached with both marker files already successfully
-   * cleared -- a cosmetic update-bundle.json leftover with no retry risk,
-   * and the only one of the eight this must return false for.
+   * The final "could not remove journal" line means the swap recovered and
+   * only the journal cleanup failed. That case is not retryable.
    *
    * Checks the LAST rollback_failed-tagged line specifically (not just
    * whether the tag appears anywhere), for the same reason
@@ -2468,17 +2105,9 @@ export class PanelUpdateChecker {
    * Returns up to 8KB of log text or null.
    */
   readMostRecentApplyLog() {
-    // Start.bat v2 writes apply diagnostics to supervisor.log. Older helper
-    // versions (pre-v1.0.21) used panel-update-last.log or timestamped
-    // files under logsDir, so those fallbacks are retained for upgraded
-    // installations. The oldest fallback -- timestamped files under the
-    // shared, world-writable os.tmpdir() -- is NOT retained: nothing in
-    // this codebase still writes there (cleanupOldHelperArtifacts() only
-    // prunes it, confirming it's dead even for pre-v1.0.21 installs), and
-    // reading a predictably-named file from a directory shared with every
-    // other local OS user is a symlink-following disclosure primitive
-    // (CodeQL js/insecure-temporary-file #289) with no live caller left to
-    // justify keeping it.
+    // Current releases write supervisor.log. Keep the older logs-directory
+    // fallbacks for upgraded installations, but never read predictable files
+    // from the shared system temp directory.
     try {
       const logsDir = getDataPaths().logsDir;
       const supervisor = path.join(logsDir, "supervisor.log");
@@ -2556,8 +2185,7 @@ export class PanelUpdateChecker {
   }
 
   /**
-   * Remove old apply-helper artifacts. Each apply writes one .log and one
-   * .cmd (or legacy .ps1). Prune:
+   * Remove artifacts left by current and legacy apply flows. Prune:
    *   - .ps1 files in %TEMP% (legacy, pre-v1.0.21)
    *   - .cmd files in <exeDir>/.panel-helpers/ (v1.0.21+)
    *   - timestamped .log files in logsDir

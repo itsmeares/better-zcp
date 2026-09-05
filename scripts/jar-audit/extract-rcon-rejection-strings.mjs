@@ -10,17 +10,13 @@
 // rcon.js). A pattern that stops matching anything is invisible everywhere
 // else -- the code compiles, existing tests pass, the regex is syntactically
 // perfect, it just silently never fires again. This fixture is what makes
-// that state visible: this file's own extraction on 2026-08-27 (build
-// 24909800) already found exactly this happening to the
-// "can be executed only from the game" pattern, which an earlier B42 audit
-// had verbatim-confirmed just three days earlier.
+// that state visible when the game changes a rejection message.
 //
 // Reuses this directory's own parseClass() (real constant-pool parsing per
 // the JVM class file format, not a flat strings grep) rather than inventing
 // a second extraction technique for the same jar.
 //
 // Usage: node scripts/jar-audit/extract-rcon-rejection-strings.mjs <path-to-projectzomboid.jar>
-// (no path -> defaults to the well-known dev machine location below)
 // READ-ONLY on the jar. Never writes anything under the PZ install.
 
 import fs from "node:fs";
@@ -32,7 +28,12 @@ import { parseClass } from "./classfile-parser.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../..");
 
-const jarPath = process.argv[2] || "D:/SteamLibrary/steamapps/common/ProjectZomboid/projectzomboid.jar";
+const jarPath = process.argv[2] || process.env.PZ_JAR_PATH;
+if (!jarPath) {
+  console.error("projectzomboid.jar path required (pass it as the first argument or set PZ_JAR_PATH)");
+  process.exit(2);
+}
+
 const appManifestPath = path.resolve(path.dirname(jarPath), "..", "..", "appmanifest_108600.acf");
 const FIXTURE_PATH = path.join(REPO_ROOT, "server/__fixtures__/pzRconRejectionStrings.json");
 
@@ -48,19 +49,17 @@ const d = await unzipper.Open.file(jarPath);
 // command" lives here, not in any one command class), plus BanSystem.class
 // and ServerWorldDatabase.class (+ its LogonResult inner class).
 //
-// hunt-wave11-2026-08-29: banuser/unbanuser/adduser/removeuserfromwhitelist
-// were confirmed to carry NO rejection-text literals of their own -- each
+// banuser/unbanuser/adduser/removeuserfromwhitelist carry no rejection-text
+// literals of their own. Each
 // command class (BanUserCommand, UnbanUserCommand, AddUserCommand,
 // RemoveUserFromWhiteList) just returns whatever String BanSystem's or
 // ServerWorldDatabase's own methods hand back (BanSystem.BanUser/
 // BanUserByIP/BanUserBySteamID/BanIP; ServerWorldDatabase.banUser/
-// addUser/removeUser). The rejection text -- if the target isn't found, is
-// already banned, can't be banned, etc. -- lives in THOSE two classes, not
+// addUser/removeUser). The rejection text, if the target isn't found, is
+// already banned, or cannot be banned, lives in those two classes, not
 // in any per-command class this scope already covered. Added here rather
-// than in a separate script/fixture, per the standing rule this file's own
-// header states: don't invent a second extraction technique for the same
-// jar. This scope widening found the same class of drift the fixture is meant
-// to catch.
+// than in a separate script or fixture, so one extraction technique remains
+// responsible for the complete fixture.
 const targets = d.files.filter(
   (f) =>
     (f.path.startsWith("zombie/commands/serverCommands/") ||
@@ -120,9 +119,9 @@ const fixture = {
       "not a flat strings/grep pass -- every value here is a genuine CONSTANT_Utf8 entry from the class file.",
     note:
       "Every UTF8 constant-pool string from every zombie/commands/serverCommands/*.class plus " +
-      "zombie/network/GameServer.class (the command dispatcher, where 'Unknown command' lives -- not in " +
+      "zombie/network/GameServer.class (the command dispatcher, where 'Unknown command' lives, not in " +
       "any per-command class), zombie/network/BanSystem.class and zombie/network/ServerWorldDatabase.class " +
-      "(+ its LogonResult inner class) -- added hunt-wave11-2026-08-29 because banuser/unbanuser/adduser/" +
+      "(plus its LogonResult inner class) because banuser/unbanuser/adduser/" +
       "removeuserfromwhitelist's own command classes carry no rejection text of their own; they return " +
       "whatever these two classes' methods hand back. server/tests/rconRejectionGroundTruth.test.js asserts " +
       "every pattern in rcon.js's KNOWN_RCON_REJECTIONS matches at least one string somewhere in this " +

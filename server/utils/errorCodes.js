@@ -2018,6 +2018,6 @@ export const ErrorCode = Object.freeze({
  * `code: "<literal>"` object-literal property) are NOT scanned by
  * errorCodeRegistry.test.js at all -- see that file's own header comment
  * for why, and for the one known case (`apply_in_progress` in
- * spawnWindowsApplyHelper()) where that same assignment shape IS user-
+ * legacy update-helper code where that same assignment shape IS user-
  * facing and is covered here anyway, just not by the automated scan.
  */

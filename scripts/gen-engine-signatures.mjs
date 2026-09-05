@@ -13,9 +13,9 @@
 // regenerate itself without a JDK, so it validates whatever the committed manifest covers and
 // reports the rest as unresolved rather than pretending to know).
 //
-// IMPORTANT ASYMMETRY (operator-confirmed, 2026-08-30): javap saying a method is ABSENT from a
-// class's full inheritance chain is a definitive, reliable fact -- if PanelBridge.lua calls it,
-// that is a bug. javap saying a method is PRESENT is necessary but NOT sufficient: PZ's Kahlua
+// IMPORTANT ASYMMETRY: javap saying a method is ABSENT from a class's full inheritance chain is
+// a definitive, reliable fact -- if PanelBridge.lua calls it, that is a bug. javap saying a method
+// is PRESENT is necessary but NOT sufficient: PZ's Kahlua
 // Lua<->Java binding does not necessarily expose every public Java method to Lua (java.lang.Object
 // methods in particular are known to be selectively rejected at the binding layer even though they
 // are unquestionably present on every class -- getClass() is final on Object, so any real rejection
@@ -23,20 +23,12 @@
 // manifest lets the checker FAIL definitively on ABSENT, and PASS (not "confirm callable") on
 // PRESENT. Do not let a later refactor upgrade a PRESENT match into a stronger claim than that.
 //
-// Usage: node scripts/gen-engine-signatures.mjs [--javap <path>] [--jar <path>]
-// Defaults match the toolchain the operator installed 2026-08-30:
-//   javap: C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot\bin\javap.exe
-//   jar:   D:\pz-verify\Server\java\projectzomboid.jar
-// Override with --javap/--jar or PZ_JAVAP_PATH/PZ_JAR_PATH if your checkout differs.
+// Usage: node scripts/gen-engine-signatures.mjs --jar <path> [--javap <path>]
+// The JAR path is required. `javap` is resolved from PATH unless overridden by
+// --javap or PZ_JAVAP_PATH.
 //
-// WHY THE SERVER JAR, NOT THE STEAM CLIENT ONE: PanelBridge.lua runs on the dedicated SERVER, and
-// that jar's bytecode is what actually executes it -- the client jar is a different install that
-// merely happens to be identical today (verified 2026-08-30: same 5,080 zombie/* classes, same
-// 61MB, byte-for-byte). The moment the operator updates one install and not the other, a manifest
-// generated from the client jar would silently validate against a runtime that isn't the one
-// running PanelBridge.lua -- still green, and wrong, which is exactly the failure mode this whole
-// tool exists to stop repeating. Always point this at a server install's <install>/java/
-// projectzomboid.jar, never a client one, even when they currently match.
+// Use the server JAR, not the Steam client JAR. PanelBridge.lua runs on the
+// dedicated server, and the two installs may diverge after a game update.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -62,8 +54,9 @@ const MANIFEST_PATH = path.join(__dirname, 'engine-signatures.manifest.json');
 // near-total coverage would throw away a correct, well-evidenced seed to protect against a handful
 // of expected misses. This floor exists only to catch a WRONG class guess (which shows up as
 // coverage far below this, since an unrelated class matches almost none of the fingerprint) --
-// verified empirically 2026-08-30: zombie.characters.IsoPlayer (66+ call sites) and
-// zombie.iso.IsoCell both score 86-88% from genuine absent-method findings, not a bad guess.
+// Known absent methods and version-specific fallback probes can keep valid
+// class guesses below 100% coverage, so this only rejects clearly wrong
+// guesses.
 const MIN_SEED_FINGERPRINT_COVERAGE = 0.7;
 const MAX_SUPERCLASS_DEPTH = 25;
 
@@ -80,12 +73,17 @@ const cli = parseArgs(process.argv.slice(2));
 const JAVAP_PATH =
   cli.javap ||
   process.env.PZ_JAVAP_PATH ||
-  String.raw`C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot\bin\javap.exe`;
+  "javap";
 // Server install, not the Steam client one -- see the header comment for why.
 const JAR_PATH =
   cli.jar ||
   process.env.PZ_JAR_PATH ||
-  String.raw`D:\pz-verify\Server\java\projectzomboid.jar`;
+  null;
+
+if (!JAR_PATH) {
+  console.error("projectzomboid.jar path required (pass --jar or set PZ_JAR_PATH)");
+  process.exit(2);
+}
 
 if (!fs.existsSync(JAVAP_PATH)) {
   console.error(`javap not found at ${JAVAP_PATH} (pass --javap or set PZ_JAVAP_PATH)`);

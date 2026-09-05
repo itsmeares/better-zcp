@@ -1,13 +1,9 @@
-# jar-audit: verifying against the real Project Zomboid B42 server
+# Jar audit: verify against the real Project Zomboid B42 server
 
 These scripts read the actual game server's own compiled Java classes and
 Lua-callable API surface out of its shipped jar, so RCON/console commands
-and Lua bridge (PanelBridge) calls can be checked against ground truth
-instead of the wiki (which lags patches) or this repo's own comments (which
-have already been wrong twice in the same night these scripts were built).
-
-Built during the 1.2.0 B42 command audit and the PanelBridge Lua audit
-(2026-08-23). These are verification tools, not a runtime dependency.
+and Lua bridge (PanelBridge) calls can be checked against the shipped bytecode
+instead of an external wiki. These are verification tools, not runtime code.
 
 ## What you need
 
@@ -16,7 +12,7 @@ A copy of `projectzomboid.jar` from a real B42 dedicated server install
 point every command below at wherever your own copy lives, e.g.:
 
 ```
-D:/Zomboid_dev_panel/ServerB42Files/java/projectzomboid.jar
+/path/to/server-install/java/projectzomboid.jar
 ```
 
 No other setup. `unzipper` (already a project dependency) reads the jar
@@ -94,7 +90,7 @@ no script at all.
 
 ## What this technique CANNOT tell you
 
-This is the part that matters most, discovered the hard way tonight:
+This is the main limitation:
 
 **A method not found under one class is not proof the method doesn't
 exist.** The first Lua-audit pass checked one class per receiver and got

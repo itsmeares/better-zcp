@@ -101,42 +101,9 @@ function buildLdLibraryPath(serverDir) {
   return result;
 }
 
-// 2026-09-04, P0 regression (41d0c6e5/1130108a broke real users): builds the
-// string handed to `cmd.exe /c` ourselves instead of letting Node quote each
-// argv element independently. With an install path containing a space --
-// "C:\Program Files (x86)\..." or just "...\Zomboid Server\..." -- Node
-// quotes BOTH the bat path and launchLogPath (4 quote chars total on the /c
-// line). cmd.exe's documented quote-preservation rule (`cmd /?`) only kicks
-// in with EXACTLY two quote characters; with 4 it falls back to stripping
-// only the first character of the whole line and the last quote character
-// anywhere in it, which mangles the boundary between the two paths and the
-// redirection -- cmd exits 1 before ever launching java.exe, with the launch
-// log never written. Reproduced directly: a bare space in either path was
-// enough on its own, parens weren't even required.
-//
-// Fix: quote each piece ourselves (only where it actually needs it), join
-// into one line, then wrap that ENTIRE line in one more pair of quotes. That
-// gives cmd's fallback-strip exactly one outer pair to remove (first
-// character of the line, and the last quote character in it -- which is
-// now our own closing wrapper quote, since we control where it sits) and
-// leaves every inner per-path quote untouched. This must be paired with
-// `windowsVerbatimArguments: true` on the spawn() call, or Node re-quotes
-// this already-quoted string on top and reintroduces the same bug one layer
-// out.
-// 2026-09-04, P0 follow-up (adversarial review caught the other half of the
-// same regression): this originally only triggered on whitespace/quotes.
-// With windowsVerbatimArguments:true (above), Node's own argv joiner is no
-// longer a backstop -- this regex is now the ENTIRE defence against cmd.exe
-// treating a character as special. cmd's special set is `&<>()@^|`, and
-// batch parameter substitution (%1, %2, ...) additionally treats `,`, `;`,
-// and `=` as delimiters equivalent to whitespace (documented behavior, not
-// a cmd.exe quirk) -- so an unquoted path/arg containing any of those splits
-// or breaks identically to the whitespace case this P0 was opened for.
-// Confirmed on a real host: "...\Rock&Roll\..." and "...\PZ(x86)\..." and
-// "...\PZ^1\..." all failed with the same exit-1/empty-log signature before
-// this widening, and passed after. Deliberately NOT adding `%` (quoting
-// does not stop %VAR% expansion, so it buys nothing) or `!` (delayed
-// expansion is off under `cmd /c`, so there's nothing to protect against).
+// Quote each command part before wrapping the complete line for `cmd.exe /c`.
+// `windowsVerbatimArguments` keeps Node from adding another quoting layer.
+// Include cmd.exe metacharacters that would otherwise split or alter a path.
 export function windowsQuoteArgIfNeeded(value) {
   return /[\s"&<>()^|,;=]/.test(value) ? `"${value}"` : value;
 }
@@ -152,30 +119,8 @@ export function buildWindowsCmdLine(exePath, args, launchLogPath) {
   return `"${parts.join(" ")}"`;
 }
 
-// Splits a custom start command string into a command path and its
-// arguments. The regex glues an unquoted run and an adjacent quoted run
-// together with nothing between them into ONE token (so `-servername="My
-// World"` stays a single argument, not two) -- which means a quote can land
-// anywhere inside a token, not just at its edges.
-//
-// 2026-09-04, carded during the P0 review, pre-existing (not a regression):
-// the previous de-quoting step stripped only a LEADING and a TRAILING quote
-// (`/^"|"$/g`), which assumes every quote sits at a token boundary. For
-// `-servername="My World"` the first character is `-` (leading strip is a
-// no-op) but the last character IS the closing quote (stripped) -- leaving
-// the unbalanced `-servername="My World`, one stray unpaired quote. Handed
-// to buildWindowsCmdLine, that stray quote makes the /c line's total quote
-// count odd, corrupting cmd's parse WORSE than the spaced-path P0: cmd
-// exits 0 and server-launch.log is never created -- no error signal
-// anywhere, silently misfiled as a recurrence of that bug. Reproduced
-// directly against real cmd.exe before this fix, confirmed exit 0/no log.
-//
-// Fix: strip EVERY quote character from a token, not just the outermost
-// pair. Every quote this regex matched is grouping syntax it introduced
-// itself (`"[^"]*"` already captured the space-containing content between a
-// pair as the group's payload), never literal data, so removing all of
-// them recovers the intended bare value regardless of where in the token
-// they land.
+// Splits a custom start command into a path and arguments. Adjacent quoted and
+// unquoted runs stay in one token, then grouping quotes are removed.
 export function parseCustomStartCommand(startCommand) {
   const parts = startCommand.match(/(?:[^\s"]+|"[^"]*")+/g) || [
     startCommand,
@@ -310,63 +255,20 @@ function isLinuxDedicatedServerCommandLine(commandLine) {
 // for a different purpose: not to decide ownership, but to decide whether a
 // zero-match scan is entitled to claim "definitely not running" at all.
 //
-// isLinuxDedicatedServerCommandLine requires a specific launch shape
-// (zombie.network.GameServer, or ProjectZomboid64/32 combined with a
-// -server-ish flag). A REAL dedicated server invoked a different way -- a
-// -jar launcher (plausible for Build 42's shaded jar, see
-// buildClasspathEntries()'s own comment), a wrapper script, a renamed
-// binary -- produces a command line this function would confidently (and
-// wrongly) call "not a dedicated server", and the scan around it returns
-// `{running:false, scanFailed:false}`: a CONFIDENT wrong answer that skips
-// every downstream fallback written to trigger on doubt (2026-08-29 Linux
-// bug hunt, live Discord report -- verified false negative:
-// isLinuxDedicatedServerCommandLine("... -jar projectzomboid.jar") is false
-// even though the process is genuinely a running PZ server).
+// isLinuxDedicatedServerCommandLine requires a specific launch shape. A
+// wrapper script, renamed binary, or -jar launcher can be a real server while
+// failing that narrow match, so this broader check detects uncertainty.
 //
-// This can never be made "complete" by adding more shapes to the narrow
-// matcher -- there will always be one more shape nobody thought of, failing
-// exactly as silently. Instead, the scan casts THIS wider, looser net
-// (just "zomboid" or "zombie.network" appearing anywhere) purely to detect
-// its own uncertainty: a candidate this catches that the narrow matcher
-// rejects is EVIDENCE WORTH DOUBTING, not automatic proof -- see
-// looksLikeUndeterminedJvmCandidate below for the second filter that turns
-// "mentions zomboid somewhere" into "plausibly IS the thing we're unsure
-// about".
+// A candidate that matches this broader check but not the narrow matcher is
+// uncertain, not automatically running. The JVM check below filters out
+// unrelated processes whose working directory merely contains "zomboid".
 function looksZomboidAdjacent(commandLine) {
   const lower = String(commandLine || "").toLowerCase();
   return lower.includes("zomboid") || lower.includes("zombie.network");
 }
 
-// CI regression (2026-08-29, same day as the fix above): a v1 version of
-// this classified ANY looksZomboidAdjacent() match that failed the narrow
-// test as ambiguous -- which is wrong, and the wrongness is exactly what
-// god's dispatch warned about: "the exclusion has to be about what a
-// candidate IS, not which pid it is". On a GitHub Actions runner the repo
-// is checked out to /home/runner/work/zomboid-control-panel/zomboid-
-// control-panel -- so EVERY sibling process on that host (other vitest
-// workers, the runner's own supervisor, an unrelated shell) has "zomboid"
-// somewhere in its own cwd-derived argv or script path, none of them a PZ
-// server. The original fix only excluded THIS process's own pid
-// (process.pid), which does nothing for a DIFFERENT process on the same
-// host with a different pid -- so a genuinely idle CI runner reported
-// "unknown" on every single check, permanently. Confirmed by reproducing
-// the runner's exact checkout shape locally (a checkout literally named
-// .../zomboid-control-panel/zomboid-control-panel with other node
-// processes alive) -- byte-identical failure, not a hypothesis.
-//
-// The real fix has to ask a different question than "does this path
-// mention zomboid" -- a path can ALWAYS mention zomboid for reasons that
-// have nothing to do with a game server (this very repo's own directory
-// name, a terminal cd'd into it, a backup job, an unrelated tool). What
-// actually distinguishes a plausible-but-unrecognized PZ server from that
-// noise is that a PZ dedicated server, however it's invoked -- the panel's
-// own script, a -jar launcher, a native ProjectZomboid64/32 stub that execs
-// into one -- is ALWAYS, by the time it's running, a JVM. A vitest worker,
-// a shell, a backup script, an editor sitting in a zomboid-named directory
-// are never going to have "java" as a substring of their own command line.
-// Requiring BOTH signals (mentions zomboid/zombie.network AND looks like a
-// JVM) is what makes "worth doubting" actually mean something, instead of
-// "shares a directory name with the panel".
+// Paths can mention "zomboid" because of the checkout directory alone. A
+// plausible unknown server must also look like a JVM process.
 function looksLikeUndeterminedJvmCandidate(commandLine) {
   const lower = String(commandLine || "").toLowerCase();
   if (!looksZomboidAdjacent(lower)) return false;
@@ -395,20 +297,9 @@ function normalizePathForCompare(value) {
   return isWindows ? normalized.toLowerCase() : normalized;
 }
 
-// Two supported ways to point the panel at a server -- an operator ruling,
-// not an accident (2026-08-27, user-report-servertest-ini-and-sandbox-
-// reverted-to-default-after-restart): MANAGED (a directory -- the panel
-// generates, owns, and regenerates StartServer_<name>.bat/.sh, baking
-// -cachedir/-servername into it) or CUSTOM LAUNCHER (a path ending in
-// .bat/.sh/.exe -- the operator's own script; the panel launches it as-is
-// and never regenerates or manages it). ONE predicate, asked by every
-// caller that needs to know which: loadConfig() below (to resolve
-// serverBat), server.js's refreshLaunchTargetBeforeStart() (to decide
-// whether to regenerate the launch script before a start/restart), and
-// servers.js's PUT/POST validation (to decide which shape rule a saved
-// installPath/serverPath must satisfy). An existing file-shaped value must
-// keep resolving as CUSTOM LAUNCHER -- this codifies behavior loadConfig()
-// already had, it does not change it.
+// A managed profile stores a directory and uses a generated launcher. A
+// custom profile stores a .bat, .sh, or .exe path and launches it unchanged.
+// Keep this predicate shared by config loading, start/restart, and validation.
 export function resolveLaunchMode(server) {
   const raw = server?.serverPath || server?.installPath;
   if (!raw || typeof raw !== "string") {
@@ -659,58 +550,11 @@ export class ServerManager {
   }
 
   /**
-   * Whether the previous server's JVM binary is still held open by a running
-   * process -- checked directly at the kernel/filesystem level (ETXTBSY on
-   * open-for-write) rather than inferred from the OS process table.
+   * Checks whether the JVM binary is open for writing (ETXTBSY).
    *
-   * getServerProcessDetails()'s pgrep/ps scan only sees processes in the
-   * panel's OWN PID namespace. Our own docker-compose.yml explicitly
-   * recommends and supports topologies where that isn't true -- PZ running
-   * natively on the host, or in a separate container, with only the install
-   * directory bind-mounted into the panel's container (docker-compose.yml's
-   * "Topology 1"/"Topology 2"). In that shape the process scan can never see
-   * the real PZ process and reports a confident `running: false` even while
-   * it's still alive and shutting down -- there's nothing wrong with the
-   * scan reading empty, the emptiness just isn't evidence of anything in
-   * this topology. restartServer()'s "wait until the old process is
-   * confirmed dead" loop then has nothing left to wait on, and starts a new
-   * JVM while the old one still holds its own binary open -- the old one (or
-   * whatever validates/patches the install before relaunching) then hits
-   * "Text file busy" (Discord report, Rhazun, 2026-08-30) trying to rewrite
-   * a file a process is still executing.
-   *
-   * This asks the kernel the actual question ETXTBSY is about -- is this
-   * exact file currently busy -- which works regardless of which PID
-   * namespace holds the process, because it's a property of the inode, not
-   * the process table. Non-destructive: opens for read+write and closes
-   * immediately without writing a single byte, so a clean result never
-   * touches the binary's contents.
-   *
-   * Best-effort by design: if the JVM binary can't be located (unusual
-   * install layout, custom launcher), or the open fails for any reason OTHER
-   * than ETXTBSY (permissions, the file genuinely not existing), this
-   * returns false rather than treating an unrelated error as "still busy" --
-   * a permissions problem would fail identically forever and turn every
-   * restart into an infinite wait, which is a worse failure than the one
-   * this exists to catch. Windows doesn't have this failure mode at all
-   * (file locking works differently there), so this is a no-op on Windows.
-   *
-   * This answers "is this file busy", never "is this MY server's old
-   * process" -- multiple PZ servers legitimately sharing one install
-   * directory (differing only by -servername/-cachedir, a normal
-   * deployment shape this codebase already accommodates elsewhere) both
-   * execute this same binary, so a "busy" result alone is NOT evidence of
-   * anything wrong. That makes it safe to use as a REFUSAL only where the
-   * cause is already known and unambiguous -- restartServer()'s wait loop,
-   * right after THIS manager told the process at THIS path to quit. Anywhere
-   * else (2026-08-30, caught before landing -- see startServer()'s own
-   * comment at its call site), it must never be more than a bounded WAIT
-   * that proceeds regardless once the bound expires: launching a new process
-   * against a binary another process is already executing is ordinary,
-   * unrestricted POSIX behavior (ETXTBSY is about opening for WRITE, never
-   * about a second execute), so "still busy" after waiting a little is not
-   * a reason to refuse -- it likely just means a sibling server is
-   * legitimately running from the same install.
+   * This probes the file directly because process scans may miss servers in a
+   * different PID namespace. It is best effort and returns false for missing
+   * files or unrelated errors; Windows does not use this check.
    */
   isJvmExecutableBusy() {
     if (isWindows) return false;
@@ -919,17 +763,8 @@ export class ServerManager {
               return;
             }
 
-            // Empty stdout with NO error is a legitimate, successful result,
-            // not a failure: ConvertTo-Csv derives its header from the first
-            // object it receives, so an empty filtered Win32_Process pipeline
-            // (the normal, expected shape when no PZ server process exists)
-            // produces NO output at all -- not even a header row. Confirmed
-            // empirically on a real Windows host (2026-08-23): psError is
-            // null, exit code 0, psStdout is "". Treating that identically to
-            // a real exec failure meant a genuinely STOPPED Windows server
-            // could never be confirmed stopped -- deterministically, on every
-            // check -- which is exactly the state every fail-closed guard
-            // (/wipe included) exists to detect. This is what a real user hit.
+            // ConvertTo-Csv emits no header when the filtered process list is
+            // empty, so empty stdout with no error means the server is stopped.
             if (!psStdout) {
               this.isRunning = false;
               resolve({ running: false, matched: [] });
@@ -1325,35 +1160,9 @@ export class ServerManager {
       if (serverId !== this._serverId) this.configLoaded = false;
       await this.loadConfig(serverId);
 
-      // SteamCMD (POST /install, POST /steam-update -- see
-      // ../services/activeSteamOperations.js) writes game files directly
-      // into this same directory. Spawning the PZ JVM while that write is
-      // still in flight means launching against a partially-patched
-      // install: a truncated/corrupted jar, a ClassNotFoundError, or a
-      // version mismatch between files that finished writing and ones
-      // that haven't -- not merely untidy, a real crash-or-worse shape
-      // (hunt-wave5-2026-08-29 concurrency hunt). Every path that can
-      // reach startServer() -- POST /start, performRestart()'s two start
-      // steps, the Discord bot's /start command, index.js's own
-      // auto-start-on-panel-boot, and updateChecker.js's restart-after-
-      // update -- funnels through this ONE function, so the guard lives
-      // here rather than duplicated at each caller; a guard only at the
-      // HTTP route protects the human clicking Start and nothing else.
-      // Deliberately unconditional, not nested inside the
-      // skipRunningCheck branch below: "is SteamCMD active" is orthogonal
-      // to "is the OLD PZ process confirmed stopped" -- restartServer()'s
-      // skipRunningCheck:true is specifically about skipping the latter.
-      // Placed ABOVE the managed-lifecycle branch below (2026-08-31 fix --
-      // it used to sit after that branch's own early return, so a
-      // systemd/openrc-managed install could get systemctl-started while
-      // SteamCMD was still writing into the exact same directory, silently
-      // bypassing the one guard this comment claims is unconditional).
-      // Thrown as a plain Error with no ErrorCode, matching every OTHER
-      // refusal already in this function (Server path not configured /
-      // already running / RCON port in use, none of which carry one
-      // either) rather than introducing the one site in this function
-      // that departs from its own neighbors' convention -- the message
-      // itself is the "named, visible, not a quiet no-op" signal here.
+      // SteamCMD writes game files into this directory. Check for an active
+      // install/update before every start path, including managed services
+      // and restarts, so the JVM cannot load a partial install.
       const installPathForSteamCheck =
         this._serverRecord?.installPath || this.serverPath;
       if (installPathForSteamCheck) {
@@ -1438,46 +1247,8 @@ export class ServerManager {
         }
       }
 
-      // isJvmExecutableBusy() answers a DIFFERENT question than
-      // restartServer()'s (dead-code, no real caller) wait loop: not "has
-      // the process I just told to quit released the binary" but "is ANY
-      // process anywhere executing it" -- and that has a legitimate "yes"
-      // that isn't a bug. Multiple PZ servers (differing only by
-      // -servername/-cachedir) sharing ONE install directory to avoid a
-      // second multi-gigabyte copy is a normal deployment shape this
-      // codebase already accommodates elsewhere (db.data.servers has no
-      // installPath uniqueness constraint; server/routes/server.js's and
-      // updateChecker.js's activeSteamOperations guards are keyed by PATH,
-      // not by server, for exactly this reason).
-      //
-      // So this WAITS, then PROCEEDS regardless -- never refuses. The
-      // actual danger ETXTBSY describes is something REWRITING the binary
-      // while a process executes it; simply launching a new process
-      // against a binary another process is already executing is
-      // ordinary, unrestricted POSIX behavior (many processes can
-      // execve() the same file at once with zero conflict -- ETXTBSY is
-      // specifically about OPENING FOR WRITE, never about a second
-      // execute). So a bounded wait protects the case this exists for
-      // (Rhazun's own prior instance still finishing its exit right after
-      // a manual Stop, in the Stop-then-Start workaround) without ever
-      // punishing the shared-install case: if it's still busy once the
-      // bound expires -- most likely a legitimately running sibling
-      // server -- starting anyway is correct, not a compromise.
-      //
-      // Moved OUT of the !skipRunningCheck block above (2026-08-31,
-      // ordering-dependent-guards pass): the ONLY reachable production
-      // restart flow, scheduler.js's performRestart(), stops the old
-      // process itself and then calls startServer({skipRunningCheck:
-      // true}) specifically to skip re-verifying "is the old process
-      // confirmed stopped" -- a concern this comment's own SteamCMD-guard
-      // sibling above was already pulled out for being orthogonal to that.
-      // The ETXTBSY wait is exactly as orthogonal (it answers "did the
-      // kernel finish releasing the binary", not "does the process table
-      // still show it"), but had been left nested here, so every real
-      // restart launched a new JVM with zero wait for the kernel to
-      // release the binary -- reproducing the exact "Text file busy" crash
-      // this check exists to prevent, through the one code path that
-      // actually restarts a server in production.
+      // A shared install may legitimately be in use by another server. Wait
+      // briefly for a previous process, then continue once the bound expires.
       if (this.isJvmExecutableBusy()) {
         for (let attempt = 0; attempt < 10 && this.isJvmExecutableBusy(); attempt++) {
           await this.sleep(300);
@@ -1496,9 +1267,7 @@ export class ServerManager {
           throw new Error(`Invalid start command: ${validation.reason}`);
         }
 
-        // Custom start command — split into command and arguments (see
-        // parseCustomStartCommand's comment for the carded quote-stripping
-        // fix this went through on 2026-09-04).
+        // Split the custom start command into its executable and arguments.
         const { cmd, args } = parseCustomStartCommand(this.startCommand);
         const cwd = this.serverPath || path.dirname(path.resolve(cmd));
 
@@ -1529,17 +1298,8 @@ export class ServerManager {
         const launchStdio = ["ignore", this._launchLogFd, this._launchLogFd];
 
         if (isWindows && (ext === ".bat" || ext === ".cmd")) {
-          // 2026-09-03, Windows spawn bugs (Dwight's pz-verify repro): do
-          // NOT pass launchStdio's raw fd here -- see the isWindows branch
-          // in the default-bat path below for why cmd.exe now does its own
-          // `>`/`2>&1` redirection instead. We don't need our own copy of
-          // the fd for this branch at all, so close it now rather than
-          // leaving it open across the spawn call for no reason.
-          //
-          // 2026-09-04, P0: build the /c command line ourselves (see
-          // buildWindowsCmdLine's comment) instead of handing cmd.exe loose
-          // argv tokens that Node quotes independently -- that broke every
-          // install path with a space in it.
+          // Let cmd.exe own redirection for detached batch files. Build the
+          // /c command line ourselves so paths with spaces remain intact.
           this._closeLaunchLogFd();
           const commandLine = buildWindowsCmdLine(
             resolvedCmd,
@@ -1641,42 +1401,9 @@ export class ServerManager {
       const launchStdio = ["ignore", this._launchLogFd, this._launchLogFd];
 
       if (isWindows) {
-        // Two fixes, 2026-09-03 Windows spawn bugs (Dwight's pz-verify
-        // repro, both real, neither an artifact of his setup):
-        //
-        // (a) this.serverBat is a bare filename (e.g.
-        // "StartServer_pz-verify.bat"). cmd.exe's own implicit
-        // search-cwd-for-a-bare-name behavior is the only reason that ever
-        // worked, and NoDefaultCurrentDirectoryInExePath=1 -- a real,
-        // non-exotic Windows hardening option -- turns that off, breaking
-        // every server start on such a host with "... is not recognized as
-        // an internal or external command", independent of PanelBridge.
-        // Dwight confirmed by running the identical `cmd /c
-        // "StartServer_pz-verify.bat"` from the same cwd outside Node
-        // entirely. Fixed by spawning the already-resolved batPath (used
-        // for the existsSync check above) instead of the bare name.
-        //
-        // (b) Passing launchStdio's raw fd through Node's stdio array
-        // silently failed to carry the JVM's output into
-        // server-launch.log through the cmd.exe hop when combined with
-        // detached:true -- proved by Dwight: PZ's own DebugLog was
-        // populated for the same boot, but server-launch.log stayed at 0
-        // bytes throughout. Rather than depend on exactly how Node's
-        // stdio-fd-to-child-then-grandchild inheritance behaves under
-        // DETACHED_PROCESS on Windows (an interaction this floor can't
-        // fully instrument), cmd.exe now does its own file redirection via
-        // `>`/`2>&1` on the reconstructed command line -- one hop
-        // (cmd.exe's own CreateFile, inherited directly by the java.exe it
-        // launches) instead of a handle passed two processes deep. We
-        // don't need our own copy of the fd for this branch, so close it
-        // now rather than across the spawn call.
-        //
-        // 2026-09-04, P0: build the /c command line ourselves (see
-        // buildWindowsCmdLine's comment) instead of handing cmd.exe loose
-        // argv tokens that Node quotes independently -- that broke every
-        // install path with a space in it (e.g. "...\Zomboid Server\...",
-        // "C:\Program Files (x86)\..."), which is the common case, not an
-        // edge case.
+        // Use the resolved batch path rather than relying on cmd.exe's search
+        // path. Redirect through cmd.exe because detached child processes do
+        // not reliably inherit Node's file descriptor on Windows.
         this._closeLaunchLogFd();
         const commandLine = buildWindowsCmdLine(batPath, [], launchLogPath);
         this.serverProcess = spawn("cmd.exe", ["/c", commandLine], {
@@ -2405,22 +2132,8 @@ export class ServerManager {
       startTime: this.startTime,
       uptime: uptimeSeconds,
       serverPath: this.serverPath,
-      // Renamed from `configured` (2026-08-31, quality-pass follow-up):
-      // this has only ever meant "does the LOCAL process-launch path have
-      // a directory to run in" -- the exact thing startServer() itself
-      // checks (`!this.startCommand && !this.serverPath`, above) before
-      // it will spawn anything. That's a real, narrower question than "is
-      // this server configured": a remote server's launch happens on a
-      // different host entirely and correctly never sets serverPath, so
-      // under the old name every remote server read as permanently
-      // unconfigured to any consumer that didn't already know to special-
-      // case isRemote. Four independent readers (client/src/pages/
-      // Dashboard.tsx's verdict, banner, and Live Activity empty state)
-      // hit exactly that misreading in the same night before this was
-      // traced to its root and renamed rather than "fixed" -- the VALUE
-      // was already right for what it actually gates, only the name over-
-      // promised. Callers that want "is this server profile complete"
-      // should look at isRemote-aware validation, not this field.
+      // This describes the local launch path only; remote profiles do not
+      // need a local server directory.
       serverPathConfigured: !!this.serverPath,
       publicIp: this.publicIp,
       localIp: await this.getLocalIp(),
@@ -2632,16 +2345,8 @@ export class ServerManager {
             continue;
           }
           const escapedKey = escapeRegExp(key);
-          // [ \t]* tolerance around "=" matches the convention routes/mods.js
-          // settled on 2026-08-27 and server/utils/templateFiles.js's
-          // readIniValues/mergeIniValues were just brought in line with
-          // (bughunt-2026-08-31-b): a bare `^key=` regex doesn't match a
-          // hand-edited "Key = value" line, so this would have replaced
-          // nothing and appended a duplicate key instead. saveServerConfig()
-          // is not called from anywhere today (verified via a full grep of
-          // every call site) -- this is aligned to the settled convention on
-          // principle, not because it was observed to fire live, so a future
-          // reader doesn't mistake this for a confirmed live bug.
+          // Allow spaces around "=" so hand-edited INI lines are replaced
+          // instead of causing duplicate keys.
           const regex = new RegExp(`^[ \\t]*${escapedKey}[ \\t]*=.*$`, "m");
           // Strip newlines from values to prevent INI injection
           const safeValue = String(value).replace(/[\r\n]/g, "");
@@ -2654,18 +2359,8 @@ export class ServerManager {
 
         writeFileAtomic(configPath, content, "utf-8");
 
-        // 2026-09-03, serverManager.js sweep: read the write back rather
-        // than trusting writeFileAtomic() not throwing as proof the file on
-        // disk now says what we intended -- same "verify the effect, not
-        // just that the call didn't throw" shape as every other fix this
-        // sweep found. Cheap (content is already in memory) and catches a
-        // wrong-encoding or truncated-on-disk write that writeFileAtomic()
-        // itself has no way to detect from inside its own call. This
-        // function has no production caller today (see the comment above),
-        // but it is listed in eslint-rules/require-result-handling.js as a
-        // result callers must check -- closing this gap now means whoever
-        // wires it up later doesn't inherit a config write that reports
-        // success without ever having verified it landed.
+        // Verify the atomic write so a truncated or mismatched file is not
+        // reported as successfully saved.
         const writtenBack = fs.readFileSync(configPath, "utf-8");
         if (writtenBack !== content) {
           throw new Error(

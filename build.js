@@ -328,101 +328,23 @@ server-side drop-in, NOT a Workshop mod — there is no client component.
 }
 
 export function generateStartBat() {
-  // Start.bat v2 — supervisor + applier.
+  // Generate the Windows update supervisor. It swaps the executable and
+  // frontend between panel runs, so the running process never replaces itself.
   //
-  // Why a supervisor instead of an in-process helper:
-  //   The previous design spawned a detached cmd.exe helper from the panel
-  //   right before exit, which had to wait for the panel PID to die, rename
-  //   the staged exe into place, and respawn. That design was fragile on
-  //   Windows for reasons that bit us repeatedly:
-  //     - Defender / ASR silently killed the detached helper before it ran.
-  //     - `start "" "panel.exe.new"` has no .new file association, hangs or
-  //       no-ops depending on shell config.
-  //     - TIME_WAIT on port 3001 made the staged exe fail to bind on restart.
-  //     - UNC installs (\\host\share) had inconsistent SMB caching of the
-  //       helper's writes.
-  //   The supervisor sidesteps all of these by performing the rename BETWEEN
-  //   panel runs, in a user-visible batch file the user already trusts.
+  // The panel sets PANEL_SUPERVISOR_V=2, writes .update-pending, and exits
+  // with code 75 when an update is ready. The supervisor validates the
+  // journal and staged hashes, backs up the live files, activates both staged
+  // artifacts, and records the operation in logs\\supervisor.log.
   //
-  // Protocol with the panel (server/services/panelUpdateChecker.js):
-  //   1. Panel reads env var PANEL_SUPERVISOR_V=2 to know the supervisor is
-  //      live, and uses the supervisor path instead of spawning a helper.
-  //   2. When the user clicks "Apply", the panel writes
-  //      ZomboidControlPanel.exe-dir\.update-pending  (a small JSON marker)
-  //      and exits with code 75.
-  //   3. This .bat sees exit 75 OR sees .update-pending and performs the
-  //      apply: back up the running .exe and client/dist, activate both staged
-  //      artifacts, and retain both backups until the new listener acknowledges.
-  //   4. All apply events are logged to logs\supervisor.log for diagnostics.
+  // A staged binary is selected only after its matching frontend is active.
+  // Unexpected exits use bounded backoff and stop after MAX_RAPID_CRASHES;
+  // MIN_STABLE_SECONDS resets the crash counter after a healthy run.
   //
-  // A staged binary is never selected by mtime alone. It is launched only
-  // after the matching frontend has been activated by the journaled apply.
-  //
-  // Crash-loop protection: any exit code other than 0 (clean shutdown) or 75
-  // (update requested), with no update marker present, is treated as a crash
-  // and relaunched with backoff, up to MAX_RAPID_CRASHES attempts. Past the
-  // cap this falls through to the same "stop and show the operator the exit
-  // code" behavior every non-zero exit used to have unconditionally -- a
-  // real boot loop must still surface itself, not spin forever quietly. A
-  // run that stays up at least MIN_STABLE_SECONDS resets the counter, so one
-  // crash after hours of uptime is never treated as part of a boot loop. All
-  // three tunables are overridable via environment variable (used by
-  // server/tests/supervisor-restart.test.js to keep the test fast).
-  //
-  // Rollback-retry protection (2026-09-04, god's design review of Angela's
-  // :rollback_update proposal): a stuck .update-pending and a stuck
-  // .update-applying are NOT the same risk and must not get the same
-  // treatment. .update-pending re-triggers a fresh :apply_update on the next
-  // restart (run_loop's own `if exist MARKER` check below) -- a genuinely
-  // different attempt each time, against possibly-changed external
-  // conditions (an AV scan finishing, OneDrive releasing a lock), naturally
-  // rate-limited to once per restart, a human-paced action. Retention here
-  // is deliberately unbounded and untouched by this change -- Dwight proved
-  // it rescues a real transient failure (a relaunch completed his pending
-  // update once he released a file lock).
-  //
-  // .update-applying is different in kind, not just in which file survives.
-  // It only exists once :apply_update has ALREADY succeeded and the new
-  // binary has ALREADY been launched -- the swap is done, so there is
-  // nothing left to retry there. If that binary never acknowledges startup,
-  // the handshake check below calls :rollback_update to undo the swap; if
-  // THAT also fails, retrying is not a fresh attempt at anything, it is the
-  // identical file-restore operation run again against a state nothing has
-  // changed about, at crash-loop cadence (every relaunch, seconds apart,
-  // not every restart). Two of :rollback_update's three failure shapes
-  // ("backup is missing") are permanent -- there is nothing to restore FROM,
-  // ever -- and even the plausibly-transient third ("could not be removed" /
-  // "could not be activated", the same held-lock class .update-pending's
-  // retry can recover from) does not need more than one or two genuine
-  // attempts. So: bounded at MAX_ROLLBACK_RETRIES, then halt rather than
-  // loop -- and halting is strictly better than looping here, not merely
-  // safer, because the panel is ALREADY down in this scenario (the new
-  // binary never acknowledged startup); this is a choice between a visible
-  // stop and an invisible loop, not between running and stopped. The halt
-  // message names the same three files
-  // (.update-pending/.update-applying/update-bundle.json) the panel's own
-  // Settings.tsx rollback_failed hint already tells the operator to delete
-  // by hand, because this is exactly the one case that hint cannot reach --
-  // there is no running panel left to render it in.
-  //
-  // Rollback false-positive fix (2026-09-04, Dwight's finding): the inverse
-  // defect from everything above -- the log says broken, the state is fine.
-  // :rollback_update used to decide "was a backup made?" by asking only
-  // whether %BIN_BACKUP% / %CLIENT_BACKUP% exist on disk. When the backup
-  // MOVE step itself is what failed (a locked file inside client\\dist, an
-  // AV scan holding a handle), no backup was ever created -- but the live
-  // copy was never disturbed either, since a failed move leaves its source
-  // in place. That is a completely safe state: nothing to restore, nothing
-  // broken. The old code could not tell that apart from a genuinely lost
-  // backup (one that existed and then vanished), so it reported the safe
-  // case as "[rollback_failed] ... journal retained for recovery" -- an
-  // operator reading that would reasonably believe their panel was damaged
-  // when it was not. EXE_BACKUP_MADE / CLIENT_BACKUP_MADE below track
-  // whether each backup step actually RAN and SUCCEEDED, set once per
-  // :apply_update attempt, so :rollback_update can tell "nothing to
-  // restore" apart from "backup missing" without weakening the genuine
-  // failure path -- a real lost/corrupted backup still trips
-  // [rollback_failed] exactly as before.
+  // Pending updates may be retried on the next full restart. Rollback of an
+  // already-applied update is bounded by MAX_ROLLBACK_RETRIES because the
+  // panel is down and repeating the same restore operation cannot recover a
+  // missing backup. EXE_BACKUP_MADE and CLIENT_BACKUP_MADE distinguish a
+  // backup that was never created from one that was lost during rollback.
   return `@echo off
 setlocal ENABLEDELAYEDEXPANSION
 title Zomboid Control Panel
@@ -448,9 +370,7 @@ set "CRASH_COUNT=0"
 if defined PANEL_SUPERVISOR_MAX_CRASHES set "MAX_RAPID_CRASHES=%PANEL_SUPERVISOR_MAX_CRASHES%"
 if defined PANEL_SUPERVISOR_MIN_STABLE_SECONDS set "MIN_STABLE_SECONDS=%PANEL_SUPERVISOR_MIN_STABLE_SECONDS%"
 
-rem === See "Rollback-retry protection" above. In-memory only (mirrors    ===
-rem === CRASH_COUNT's own choice) -- resets on a full supervisor restart, ===
-rem === a legitimately fresh context worth one more shot.                 ===
+rem === Rollback retries reset when the supervisor starts.                ===
 set "MAX_ROLLBACK_RETRIES=2"
 set "ROLLBACK_RETRY_COUNT=0"
 if defined PANEL_SUPERVISOR_MAX_ROLLBACK_RETRIES set "MAX_ROLLBACK_RETRIES=%PANEL_SUPERVISOR_MAX_ROLLBACK_RETRIES%"
@@ -629,43 +549,9 @@ rem ============================================================
     goto :eof
   )
 
-  rem Presence alone (the STAGED_NAME lookup above) does not catch a file
-  rem that exists under the right name but was partially written or
-  rem corrupted after staging -- the 1-2 second window Dwight measured
-  rem between the last presence check and this rename. journal.hashes
-  rem .binarySha256 is already computed and written for both platforms by
-  rem stageUpdateBundle() (updateBundle.js); the Linux apply path
-  rem (applyUpdateBundle()) already verifies against it before touching
-  rem anything. This mirrors that check on Windows, with the same
-  rem [av_quarantine] failure code Linux uses for a hash mismatch.
-  rem main-is-red, 2026-09-05: on a clean, unprivileged GitHub windows-2022
-  rem runner, Get-FileHash is not recognized at all -- Windows PowerShell
-  rem 5.1's module autoload for it silently fails there (confirmed via a
-  rem two-round diagnostic: round 1 logged [MISMATCH] with no detail; round
-  rem 2 carried the actual/expected hashes or the exception text, and it
-  rem came back "The term 'Get-FileHash' is not recognized...", 5/5 times,
-  rem never once locally). That silent MISMATCH conflated "I computed a
-  rem hash and it differs" with "I could not compute a hash at all" and
-  rem stamped both [av_quarantine] -- a real user whose PowerShell can't
-  rem load that module, or whose AV holds the staged file, would have every
-  rem update refused forever with a label that blames corruption instead of
-  rem environment. Fixed at the root by computing SHA256 via the .NET types
-  rem directly ([System.Security.Cryptography.SHA256], File.ReadAllBytes)
-  rem instead of the Get-FileHash cmdlet -- these are always available
-  rem regardless of PSModulePath/autoload state, the same way ConvertFrom-
-  rem Json above never had this problem. Still wrapped in try/catch: a
-  rem locked/unreadable file is a real possibility this doesn't remove, and
-  rem now reports UNVERIFIABLE with the actual exception text instead of
-  rem being misread as MISMATCH. The exception message has its own parens
-  rem defensively stripped to brackets, same as the client check's own
-  rem diagnostic text below -- a literal ")" inside a delayed-expansion
-  rem value used within an "if (...) ( ... )" block PREMATURELY CLOSES that
-  rem block at runtime, taking the rest of the line as a new command.
-  rem cmd.exe's block parser does not know or care that the paren only
-  rem exists inside what will become a quoted string argument -- confirmed
-  rem the hard way while building the client check's own diagnostic below
-  rem (a "(...)"-wrapped file list broke it with "is not recognized as an
-  rem internal or external command").
+  rem Verify the staged binary hash before changing the live installation.
+  rem Use .NET SHA256 instead of Get-FileHash so PowerShell module loading
+  rem cannot turn an unavailable hash into a false corruption report.
   set "STAGED_HASH_STATUS="
   for /f "usebackq delims=" %%F in (\`powershell -NoProfile -Command "$j = Get-Content -LiteralPath $env:JOURNAL -Raw | ConvertFrom-Json; $expected = $j.hashes.binarySha256; if (-not $expected) { 'NOHASH' } else { try { $actual = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.IO.File]::ReadAllBytes($env:STAGED_NAME))).Replace('-','').ToLowerInvariant(); if ($actual -ieq $expected) { 'OK' } else { 'MISMATCH actual=' + $actual + ' expected=' + $expected } } catch { 'UNVERIFIABLE ' + $_.Exception.Message.Replace('(','[').Replace(')',']').Replace('|',':') } }"\`) do set "STAGED_HASH_STATUS=%%F"
 
@@ -690,55 +576,10 @@ rem ============================================================
     goto :eof
   )
 
-  rem Mirrors the staged-binary hash check above, for the frontend bundle.
-  rem Content integrity here was never checked on either platform (only the
-  rem binary was ever hashed) -- confirmed while researching this: the
-  rem journal.hashes.clientFiles map that looked like a ready-made answer is
-  rem a *different* artifact (release-manifest.json, for GitHub releases,
-  rem read by the release pipeline), never written into this runtime journal.
-  rem journal.hashes.clientSha256 is a single combined hash over every staged
-  rem client file (relative path + per-file sha256, ordinal-sorted, then
-  rem hashed together) computed by stageUpdateBundle() (updateBundle.js) and
-  rem verified there before every apply on Linux; this reproduces the exact
-  rem same value on Windows, same posture as the binary. Per-file hashing
-  rem uses the .NET SHA256 type directly rather than Get-FileHash, for the
-  rem same reason the binary check above does now -- see its comment.
-  rem main-is-red, 2026-09-05: the SECOND, genuine (not Get-FileHash-
-  rem related) mismatch this raised on the same clean runner -- reproduced
-  rem locally once the diagnostic showed a relative path missing its
-  rem leading character ("ndex.html" instead of "index.html"). Cause:
-  rem journal.paths.stagedClient can carry a trailing separator (confirmed
-  rem by deliberately feeding one in a test), and Resolve-Path's .Path does
-  rem NOT strip it -- so $root.Length was one character too long, and
-  rem Substring($root.Length + 1) on Get-ChildItem's own FullName (which
-  rem has no such redundant separator) cut one character too many.
-  rem TrimEnd() on both possible separator characters closes this
-  rem regardless of which form (or none) the journal path arrives in.
-  rem main-is-red, 2026-09-05: a THIRD, still-genuine mismatch, once the
-  rem trailing-separator fix above was already on the runner --
-  rem journal.paths.stagedClient there resolved through Resolve-Path to an
-  rem 8.3 SHORT NAME (C:\Users\RUNNER~1\... for the "runneradmin" account),
-  rem while Get-ChildItem's own FullName for each child came back LONG-form
-  rem -- $root ends up SHORTER than the prefix it's meant to strip, so
-  rem Substring($root.Length + 1) cuts too FEW characters this time, and a
-  rem fragment of the real directory name survives as a bogus leading path
-  rem segment (observed: "st/index.html" instead of "index.html", the
-  rem tail of "dist.new-test" leaking through). Never fires locally --
-  rem dev machine temp paths have no short-name component to begin with,
-  rem which is exactly why this is a REAL USER BUG and not a CI quirk: any
-  rem install whose temp or install path has one (a username over 8
-  rem characters, one with a space, a redirected TEMP under PROGRA~1) gets
-  rem every update refused as [av_quarantine] forever, forever misreporting
-  rem environment as corruption. Get-Item -LiteralPath, not Resolve-Path,
-  rem for $root: it comes from the SAME FileSystemInfo family Get-ChildItem
-  rem uses for its children, so both resolve to the same long/short form
-  rem consistently instead of two different cmdlets independently choosing
-  rem how to spell the same path. Defended further with a runtime check:
-  rem if a child's FullName ever does not actually start with $root (this
-  rem exact class of bug, or a future one nobody has found yet), that's an
-  rem UNVERIFIABLE with both strings in the log, not a silently wrong
-  rem relative path -- the assertion that would have turned every one of
-  rem tonight's confusing timeouts into one readable line the first time.
+  rem Verify the combined hash of every staged frontend file. Get-Item and
+  rem Get-ChildItem both resolve the root through FileSystemInfo, avoiding
+  rem short-name mismatches when building relative paths. A prefix mismatch
+  rem is reported as unverifiable instead of producing a wrong hash.
   set "STAGED_CLIENT_HASH_STATUS="
   for /f "usebackq delims=" %%F in (\`powershell -NoProfile -Command "$j = Get-Content -LiteralPath $env:JOURNAL -Raw | ConvertFrom-Json; $expected = $j.hashes.clientSha256; if (-not $expected) { 'NOHASH' } else { try { $root = (Get-Item -LiteralPath $env:STAGED_CLIENT).FullName.TrimEnd([char]92,[char]47); $pairs = @(Get-ChildItem -LiteralPath $root -Recurse -File | ForEach-Object { if (-not $_.FullName.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) { throw 'root prefix mismatch: root=' + $root + ' fullname=' + $_.FullName }; $rel = $_.FullName.Substring($root.Length + 1).Replace([char]92,[char]47); $h = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.IO.File]::ReadAllBytes($_.FullName))).Replace('-','').ToLowerInvariant(); $rel + ':' + $h }); [System.Array]::Sort($pairs, [System.StringComparer]::Ordinal); $nul = [char]0; $nl = [char]10; $combined = ($pairs | ForEach-Object { $p = $_.Split(':',2); $p[0] + $nul + $p[1] + $nl }) -join ''; $bytes = [System.Text.Encoding]::UTF8.GetBytes($combined); $actual = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)).Replace('-','').ToLowerInvariant(); if ($actual -ieq $expected) { 'OK' } else { 'MISMATCH actual=' + $actual + ' expected=' + $expected + ' root=' + $root + ' pairs={' + ($pairs -join ';') + '}' } } catch { 'UNVERIFIABLE ' + $_.Exception.Message.Replace('(','[').Replace(')',']').Replace('|',':') } }"\`) do set "STAGED_CLIENT_HASH_STATUS=%%F"
 
@@ -923,15 +764,8 @@ PANEL_PID=""
 STOPPING=0
 CRASH_COUNT=0
 MAX_RAPID_CRASHES="\${PANEL_SUPERVISOR_MAX_CRASHES:-5}"
-# 2026-09-04, Dwight's finding: this used to be a flat BACKOFF_SECONDS
-# (default 2, no escalation), while Start.bat's crash-loop protection has
-# always ramped BACKOFF_BASE_SECONDS*CRASH_COUNT up to BACKOFF_CAP_SECONDS --
-# so a Windows install got up to ~30s of spaced-out retries across its
-# MAX_RAPID_CRASHES attempts before giving up, and a Linux install got only
-# ~10s (5 attempts x a flat 2s) for the identical fault. Same tunable names
-# and defaults as Start.bat now, including the PANEL_SUPERVISOR_BACKOFF_SECONDS
-# escape hatch (still an explicit FIXED override when set, same as Windows --
-# tests use this to force a 0s backoff for speed).
+# Use the same bounded crash backoff as the Windows supervisor. The values
+# remain environment-configurable so the restart tests can run quickly.
 MIN_STABLE_SECONDS="\${PANEL_SUPERVISOR_MIN_STABLE_SECONDS:-60}"
 BACKOFF_BASE_SECONDS="\${PANEL_SUPERVISOR_BACKOFF_BASE_SECONDS:-2}"
 BACKOFF_CAP_SECONDS="\${PANEL_SUPERVISOR_BACKOFF_CAP_SECONDS:-30}"
