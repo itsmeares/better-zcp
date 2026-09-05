@@ -4,7 +4,7 @@ better-zcp is a fork of [Zomboid Control Panel](https://github.com/fpsacha/zombo
 
 Portions of this repository are derived from the upstream project and were
 originally distributed under the MIT License. The original upstream license
-text is preserved in [LICENSES/MIT-UPSTREAM.txt](LICENSES/MIT-UPSTREAM.txt).
+text is preserved below.
 
 The modified combined work in this repository is distributed under the
 GNU Affero General Public License, version 3 only, subject to the notices
@@ -14,3 +14,29 @@ This fork is maintained independently at
 [itsmeares/better-zcp](https://github.com/itsmeares/better-zcp). Changes made
 in this repository after the fork are offered under
 [AGPL-3.0-only](LICENSE).
+
+## Upstream MIT license
+
+```text
+MIT License
+
+Copyright (c) 2025 [Your Name or Username]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
