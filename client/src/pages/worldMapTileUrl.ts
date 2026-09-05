@@ -1,13 +1,6 @@
-// hunt-wave12-2026-08-30 (version-the-tile-url-by-resolved-b42-build):
-// mapProxy.js's browser-facing tile URL used to carry no identifier for
-// WHICH resolved B42 build produced its bytes, so a long browser
-// Cache-Control risked serving an old build's tile under a URL a new build
-// now answers differently -- see mapProxy.js's TILE_BROWSER_CACHE_CONTROL
-// comment for the full history. The fix: name the resolved build in the
-// URL itself (`?v=<dir>`) so two different builds are two different URLs,
-// and mapProxy.js can safely cache a versioned request indefinitely. This
-// is the pure query-string half of that, pulled out so it's unit-testable
-// without mounting the canvas -- same reasoning as worldMapTileFallback.ts.
+// Include the resolved B42 build in the tile URL so browser caches cannot
+// reuse a tile from a different map build. This pure query-string helper is
+// kept separate so it can be tested without mounting the map canvas.
 
 // `floor` is a query param on THIS proxy route specifically (not a path
 // segment -- see buildDirectTileUrl's own comment in WorldMap.tsx), and

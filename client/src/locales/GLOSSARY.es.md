@@ -1,9 +1,9 @@
 # Spanish (es) translation glossary
 
-The panel's Spanish locale was written by several people at once. This file is the shared vocabulary
-they worked from. **Use these renderings.** Consistency across screens matters more than any single
-word being the nicest possible choice — an operator who reads *servidor* on one screen and
-*host* on the next has to stop and work out whether they mean the same thing.
+This file is the shared Spanish vocabulary. **Use these renderings.** Consistency across
+screens matters more than any single word being the nicest possible choice — an operator
+who reads *servidor* on one screen and *host* on the next has to stop and work out whether
+they mean the same thing.
 
 Target is **neutral international Spanish**. No *vosotros*, no strongly regional vocabulary. If a
 term differs between Spain and Latin America, pick the one that will be understood in both.

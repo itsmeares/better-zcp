@@ -1,37 +1,9 @@
 /**
- * hunt-wave6-2026-08-29 follow-up 1 (RCON success-branch leak): discordBot.js's
- * handleRcon() posts a command's raw response to Discord with no secret-aware
- * sanitization — only the pre-existing sourceRcon.js timeout-message tracing
- * showed that failure-path leaks were (coincidentally) neutralized; nothing
- * protects a SUCCESS response that happens to echo a secret. god's ruling,
- * verbatim reasoning kept here because it explains every choice below:
+ * Redact known secret values at the Discord publishing boundary.
  *
- *   - NOT a shape heuristic ("looks like a password"). A heuristic that
- *     guesses what a secret looks like is a new bug: it over-matches
- *     ordinary output and under-matches a real secret that doesn't look
- *     like one, either way giving false assurance.
- *   - NOT pinned to which PZ command produced the string, or to today's
- *     PZ build. "Only 1 of 44 commands is a plausible leak vector today"
- *     is a property of THIS build, not something this codebase controls —
- *     a defence pinned to someone else's release notes is not a defence.
- *   - Instead: redact the secret VALUES the panel already holds, by EXACT
- *     match. No guessing, no false positives on unrelated text, and it
- *     doesn't care which command (or a 45th one added tomorrow) produced
- *     the string.
- *   - Applied at the boundary where messages LEAVE for Discord (see
- *     discordBot.js's _safeDiscordMakeRequest), not inside handleRcon()
- *     or any other individual caller — the same "guard the exit, not each
- *     caller" reasoning as Kevin's startServer() funnel fix the same day.
- *     This covers the success branch, the failure branch, and every
- *     future sender nobody has written yet.
- *
- * Precedent in this repo: server/utils/serverRconSecrets.js's
- * redactRconSecretsForWrite() and (structurally identical) the
- * panelBridgeSftpPassword handling already redact-before-persistence at the
- * db.json write boundary, by FIELD NAME on a structured object. This module
- * is the free-text analogue for a different boundary (the Discord publish
- * path) that had no equivalent — exact-value replacement instead of
- * field-name omission, because there is no schema to a Discord message.
+ * Exact-value matching avoids guessing which output looks sensitive. Keeping
+ * the guard at the publishing boundary covers both success and failure paths,
+ * plus future senders.
  */
 
 import { getServers, getSetting } from "../database/init.js";

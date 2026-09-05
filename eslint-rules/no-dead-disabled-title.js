@@ -1,26 +1,8 @@
 /**
- * Chromium shows no native tooltip on a `title={...}` attribute of a
- * disabled element -- confirmed empirically (2026-08-27, a live Chromium
- * test with `<button disabled title="...">`, with and without
- * `pointer-events:none`: zero tooltip in either case). A `title` and a
- * `disabled` attribute on the SAME JSX element is therefore never a safe
- * combination: whatever text `title` carries never reaches an operator
- * while the element is actually disabled, native tooltip mechanics being
- * what they are. The fix in this codebase is `components/DisabledReason.tsx`
- * (a focusable wrapper span that becomes the real Radix Tooltip trigger).
- *
- * Real case: Dashboard.tsx's Start/Force Stop/Restart/Wipe buttons and
- * seven more across Players.tsx and Events.tsx all had correct, six-locale
- * translated copy sitting in a dead `title=` -- see commits dd339a7 and
- * 551c75f. A first counting pass (a `<[A-Za-z]` regex over raw file text)
- * found 49 across the client, then -- while manually re-reading Events.tsx
- * rather than trusting that regex -- three MORE turned up that the regex
- * had silently missed (a naive tag-start regex cannot tell a JSXOpeningElement
- * from a TypeScript generic like `useState<T>()`; no patch fixes that,
- * only a real parser does). That regex is gone; this is the parser-based
- * replacement, and it is a lint RULE rather than a one-off count on
- * purpose -- a count goes stale silently the moment someone adds the next
- * occurrence; a rule fails on it.
+ * Chromium does not show native tooltips for disabled elements. A conditional
+ * `title` on the same element is therefore invisible when it is meant to
+ * explain the disabled state. Use `components/DisabledReason.tsx`, which
+ * places the tooltip trigger on a focusable wrapper instead.
  *
  * THREE SHAPES FOUND SO FAR, ONLY ONE OF WHICH IS THE BUG:
  *
@@ -35,16 +17,9 @@
  *      conditional on some state and silently absent otherwise -- exactly
  *      the shape a disabled-reason takes and a hint never does.
  *
- *   2. DOUBLE DUTY (found the hard way, twice -- Dashboard's Force
- *      Stop/Wipe, then Events.tsx's Lightning/Thunder): a ternary where the
- *      final branch is NOT undefined/null -- something is shown regardless
- *      of the disabled state. One branch is a genuine disabled-reason, the
- *      other an always-relevant "what this does" hint (forceStopTooltip,
- *      lightningTooltip) that already works correctly while the element is
- *      enabled. Needs SPLITTING (the reason branch moves into
- *      DisabledReason, the hint branch stays a plain title=), never a blind
- *      wrap of the whole ternary -- that would either show a Radix tooltip
- *      on a perfectly clickable element or silently delete a working hint.
+ *   2. DOUBLE DUTY: the final branch is not undefined/null, so the value may
+ *      contain both a disabled reason and an always-relevant enabled-state
+ *      hint. Split those cases instead of wrapping the whole expression.
  *
  *   3. PURE HINT (not a defect at all -- Start Rain, Alarm, Teleport
  *      Player/Self, and several unconditional titles elsewhere): `title`'s
@@ -60,22 +35,15 @@
  * which says so explicitly and asks for a human read rather than asserting
  * a defect. Shape 1 alone gets the confident message.
  *
- * Both messages are reported at the SAME lint severity (see
- * client/eslint.config.js) -- deliberately `warn`, not `error`. Unlike
- * no-duplicate-interface-name (one real violation when it landed, safe to
- * hard-error), the client had dozens of hits across both categories the
- * night this rule shipped. A hard error would force either fixing all of
- * them in one pass or maintaining a per-file exemption list -- and this
- * codebase has already deleted four such lists' worth of stale exemptions
- * tonight for other reasons. `warn` keeps `pnpm run lint` informative
- * without inventing a new list to keep honest forever.
+ * Both messages are warnings. Shape 1 is mechanically provable; the other
+ * shapes need a human read because the rule cannot infer the intended copy.
  *
  * Known gaps, accepted rather than chased (same policy as the other rules
  * in this directory -- documented, not silently assumed complete):
  *   - `title={cond && text}` (a logical-AND short-circuit rather than a
  *     ternary) is not recognized as shape 1 even when it resolves to
  *     `false`/absent on the same branch a ternary would use `undefined`
- *     for. No real site used this shape as of this rule landing.
+ *     for.
  *   - Attributes reaching the element through a spread (`{...props}`)
  *     aren't traced -- only literal `title`/`disabled` JSXAttribute nodes
  *     are checked, same limitation as no-duplicate-interface-name's
@@ -84,7 +52,7 @@
  *     structure; it does not (and structurally cannot) check whether the
  *     condition it keys on is the SAME state `disabled` itself checks --
  *     a title conditioned on a different variable than disabled would
- *     still match. No real site found this gap live as of landing.
+ *     still match.
  *   - The inverse defect -- a `disabled` with no `title` at all, when one
  *     genuinely ought to explain a real precondition -- is invisible to
  *     this rule by construction (nothing to key off). That is a design

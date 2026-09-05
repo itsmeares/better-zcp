@@ -1,11 +1,7 @@
 # Haitian Creole (ht) translation glossary
 
-This is a brand-new locale being written by three agents at once (bucket 1: conflictsPanel,
-dashboardPerformanceCharts, discord, discoverySetup, itemPicker, login, modRow, scheduler,
-serverSetup, serverStatusBadge, settings, setup, spawnBrowser, templateApplyPanel, templateCard,
-templateCreateDialog, templateDiffList, workshopCollectionPanel — the other two buckets split the
-remaining 43 namespaces). This file exists so all three settle on the same words before any of them
-starts translating. **Use these renderings.**
+This glossary defines the shared vocabulary for the Haitian Creole locale.
+**Use these renderings** so every namespace uses the same terms.
 
 None of us is a native Kreyòl speaker, and the operator knows that going in. This glossary is a
 best-effort, consistent starting point for a native-speaker review pass — not a claim of fluency.
