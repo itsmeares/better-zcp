@@ -1,0 +1,17 @@
+{
+  "overrides": [
+    {
+      "files": ["client/**/*.{js,jsx,ts,tsx}"],
+      "options": {
+        "semi": false,
+        "singleQuote": true
+      }
+    },
+    {
+      "files": ["scripts/**/*.{js,mjs,cjs}"],
+      "options": {
+        "singleQuote": true
+      }
+    }
+  ]
+}

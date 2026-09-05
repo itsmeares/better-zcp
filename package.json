@@ -39,7 +39,11 @@
     "check:bridge-actions": "node scripts/audit-bridge-actions.mjs .",
     "check:bridge-routes": "node scripts/audit-bridge-routes.mjs .",
     "check:rcon-commands": "node scripts/audit-rcon-commands.mjs .",
-    "check:i18n": "node scripts/i18n-check.mjs --all"
+    "check:i18n": "node scripts/i18n-check.mjs --all",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{json,yml,yaml}": "prettier --ignore-unknown --write"
   },
   "dependencies": {
     "archiver": "^7.0.1",
@@ -72,8 +76,11 @@
     "eslint": "^9.39.5",
     "fengari": "^0.1.5",
     "globals": "^14.0.0",
+    "husky": "9.1.7",
     "jose": "^6.2.10",
+    "lint-staged": "16.4.0",
     "nodemon": "^3.1.14",
+    "prettier": "3.9.6",
     "vitest": "^4.1.11",
     "ws": "^8.21.0"
   },
