@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # codeql-alert-suppression-status (updated 2026-08-31, see
-      # docs/security/codeql-triage.md): attempt 2 below WORKS. Verified by
+      # the previous triage): attempt 2 below WORKS. Verified by
       # downloading the raw SARIF for analysis id=1701372703 (commit
       # 59bc9bc5) -- 109 of 330 results carry a non-empty `suppressions:
       # [{"state":"accepted"}]`, including known-annotated sites like

@@ -409,7 +409,7 @@ describe('RconService', () => {
     });
   });
 
-  // Finding 2 (docs/qa/kevin-adversarial-findings.md): sanitizeForBanReason()
+  // Regression coverage for sanitizeForBanReason():
   // used to have its own, less careful character-folding rules than
   // serverMessage() -- same class of user-typed text, different treatment
   // depending on which RCON call carried it. Both now share

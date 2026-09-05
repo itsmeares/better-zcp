@@ -10,7 +10,7 @@ const CLIENT_PACKAGE_JSON = path.join(__dirname, "..", "..", "client", "package.
 const CLIENT_LOCKFILE = path.join(__dirname, "..", "..", "client", "package-lock.json");
 
 // client/package.json sat at 1.2.2 for four releases while root advanced to
-// 1.2.6, because nothing ever compared them -- release.ps1 only ever bumped
+// 1.2.6, because nothing ever compared them -- the release process only bumped
 // root. Kept deliberately dumb: parse, compare, done. A test that needs to
 // be clever to pass is a test that can fail to catch the thing it's for.
 //

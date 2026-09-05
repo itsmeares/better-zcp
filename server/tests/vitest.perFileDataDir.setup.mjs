@@ -1,5 +1,5 @@
-// bug-hunt-2026-08-26: replaces vitest.globalSetup.mjs's approach of minting
-// ONE temp dataDir for the entire `vitest run` invocation. That design meant
+// Give every test file its own temp data root instead of sharing one root for
+// the entire `vitest run` invocation. Sharing one root meant
 // every test file importing the real, unmocked server/database/init.js (12
 // of them as of this fix -- adminPasswordFirstBoot, bugfixes,
 // circuitBreakerStatus, db-tmp-cleanup, oidcRoutes, reassignRoleMembers,
@@ -19,9 +19,8 @@
 // because coordinating access to a file that should never have been shared
 // is worse than just not sharing it.
 //
-// WHY A setupFiles SCRIPT WORKS HERE, where vitest.globalSetup.mjs's own
-// comment once warned "a setupFiles hook would be too late": that warning
-// was about the ORIGINAL constraint -- PANEL_PATHS_CONFIG_PATH had to be in
+// A setupFiles hook runs before each file's module graph is imported. The old
+// constraint was that PANEL_PATHS_CONFIG_PATH had to be in
 // process.env before vitest forked worker processes, because a forked
 // child's env is a snapshot taken at fork time. This script has a
 // DIFFERENT job: give each *file* its own value, not hand one value to

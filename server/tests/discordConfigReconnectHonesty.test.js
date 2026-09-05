@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 // PUT /discord/config reported success even when the reconnect it triggers
-// (stop() then start()) actually failed -- diagnosed in
-// docs/qa/kevin-route-hunt.md Finding 1, confirmed still present.
+// (stop() then start()) actually failed -- a prior route audit caught the
+// mismatch, which was still present here.
 // discordBot.start()'s return value was discarded even though the sibling
 // route POST /start (30 lines below) already checks it correctly.
 

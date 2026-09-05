@@ -753,8 +753,7 @@ export async function updateRole(
  * users.manage -- the same "wipe out the ability to administer the panel"
  * catastrophe the recovery-lockout rules below exist to prevent, reached
  * by deleting the ROLE DEFINITION instead of removing its last manager's
- * membership. See docs/qa/kevin-access-control-french-usability.md
- * Finding 1. The guard belongs here, in the service every caller goes
+ * membership. The guard belongs here, in the service every caller goes
  * through, not only in the one route or the one screen that happens to
  * call it today.
  *
