@@ -46,7 +46,7 @@ describe("Docker deployment guidance", () => {
   it("publishes versioned panel and updater images from release tags", () => {
     const workflow = readRepoFile(".github/workflows/docker-aio-build.yml");
 
-    expect(workflow).toContain("- 'v*'");
+    expect(workflow).toContain("- 'v2.*'");
     expect(workflow).toContain("type=raw,value=updater");
     expect(workflow).toContain("type=semver,pattern={{version}},prefix=aio-");
     expect(workflow).toContain(
