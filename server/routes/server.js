@@ -357,11 +357,8 @@ async function findSteamCmdPath() {
   return null;
 }
 
-// activeSteamOperations itself, isSteamOperationIdle, clearActiveSteamOperation
-// and hasActiveSteamOperation now live in ../services/activeSteamOperations.js
-// (hunt-wave5-2026-08-29) so serverManager.js's startServer() can check the
-// same tracked state before spawning the PZ JVM -- see that module's header
-// comment for why this couldn't just be a reverse import instead.
+// Steam-operation state is shared through activeSteamOperations.js so the
+// server manager and these routes use the same start/update guard.
 const activeSteamOperations = getActiveSteamOperations();
 
 // True only for the exact shape that crashes PZ on first boot: no admin
@@ -1169,8 +1166,7 @@ router.get("/network-interfaces", async (req, res) => {
 // between launched PZ against the OLD baked cachedir, PZ found no ini at
 // that (now-wrong) location, and generated itself a fresh default one
 // (2026-08-27, user-report-servertest-ini-and-sandbox-reverted-to-default-
-// after-restart, loonE/Discord -- root cause confirmed by Jim's
-// scheduledRestartStaleLaunchScript.test.js reproduction).
+// after-restart; the regression test reproduces the same failure).
 //
 // `managedHandled` mirrors the /start route's own `managed.handled` check:
 // a container-managed server's image owns the launch command, so there is
@@ -4419,10 +4415,8 @@ router.get("/steamcmd/check", requirePermission("server.install"), async (req, r
 // running -- getServerProcessDetails() exposes scanFailed so that case can
 // be refused instead.
 //
-// NOT wired into /wipe, which has its own identical inline copy: that route
-// is out of scope for this pass (2026-08-26 bug hunt round 2, Pam's
-// asset-destruction hunt finding 2 -- TOCTOU on /delete-files specifically).
-// A natural follow-up for whoever next touches /wipe.
+// /wipe has a separate confirmation flow and is intentionally not covered by
+// this helper.
 async function checkServerConfirmedStopped(serverManager, actionLabel) {
   const processDetails = await serverManager.getServerProcessDetails();
   if (processDetails.scanFailed) {
@@ -4499,10 +4493,9 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
       });
     }
 
-    // hasPzInstallMarker() above only confirms a handful of marker
-    // FILENAMES exist -- trivially satisfied by creating an empty file
-    // with one of those names anywhere on the host, not an authorization
-    // check (bug-hunt-2026-08-27). The two real callers of this route
+    // hasPzInstallMarker() only confirms marker filenames, not ownership.
+    // The callers pass a configured server install path, so require an exact
+    // match against one rather than trusting marker files alone. The two real callers of this route
     // (Servers.tsx's "Delete Everything" and "Clear Install Folder") only
     // ever pass a path that's already a configured server's own
     // installPath, so require an exact match against one -- turning
@@ -4549,10 +4542,9 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
       }
     }
 
-    // Re-check immediately before the irreversible delete (2026-08-26 bug
-    // hunt round 2, Pam's finding 2): the FIRST check above is stale by the
-    // time we get here -- getServerProcessDetails() takes real wall-clock
-    // time (OS process enumeration), and everything between that await
+    // Re-check immediately before the irreversible delete: the first check
+    // can become stale while process enumeration is in flight, and everything
+    // between that await
     // resolving and this point is synchronous path/marker validation with
     // no further awaits, so a second admin session, a scheduler task, or a
     // supervisor auto-restart starting the server DURING that first scan
@@ -5301,7 +5293,7 @@ async function runWithConcurrencyBounded(items, limit, worker) {
 }
 
 // Recursively count files and total size under `dir`. Was fully synchronous
-// (fs.readdirSync/fs.statSync, no concurrency, no cap) -- Jim measured 20.7
+// (fs.readdirSync/fs.statSync, no concurrency, no cap) -- a 20.7-second
 // SECONDS for map/ alone on a 147,136-file save, fully blocking the Node
 // event loop that whole time for every other admin session and RCON call on
 // the panel, not just the requester's own page. Now async with bounded
@@ -5409,8 +5401,8 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
     // directory independently -- otherwise several individually-under-
     // budget walks could still add up to the multi-second block this fix
     // exists to remove. 15s / 300,000 entries is generous headroom over
-    // Jim's 20.7s/147,136-file measurement (which was the fully synchronous,
-    // no-concurrency walk); truncation is a backstop for pathological or
+    // The 20.7s/147,136-file synchronous walk is the baseline; truncation is
+    // a backstop for pathological or
     // slow-storage cases, not an expected outcome for a normal save.
     const budget = {
       deadline: Date.now() + 15_000,

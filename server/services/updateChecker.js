@@ -580,8 +580,8 @@ export class UpdateChecker {
     //     block's restart attempt below runs.
     let phase = "not-started";
     // Throws with a STABLE reason key (never a raw message) so the client
-    // can translate it -- see errorMessage.ts's whole workstream tonight
-    // for why a raw string reaching the UI is the thing to avoid. `params`
+    // can translate it. A raw string reaching the UI would bypass the
+    // localized error path. `params`
     // carries the one piece of dynamic detail a couple of these need,
     // sanitized the same way an HTTP error response would be.
     const fail = (reason, message, params) => {
@@ -647,9 +647,8 @@ export class UpdateChecker {
 
       // Guard against racing a manual POST /install or POST /steam-update
       // (routes/server.js) writing into the SAME install directory -- this
-      // unattended job is the other remaining SteamCMD call site that ran
-      // without going through activeSteamOperations.js at all (hunt-wave6,
-      // 2026-08-29, the direct continuation of the startServer() guard in
+      // unattended job is another SteamCMD call site that must go through
+      // activeSteamOperations.js, alongside the startServer() guard in
       // serverManager.js). No await between the check and the claim below,
       // same discipline as routes/server.js's own check (see its comment
       // on steamUpdateConcurrency.test.js) -- a gap there is exactly how

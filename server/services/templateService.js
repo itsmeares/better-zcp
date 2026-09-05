@@ -255,7 +255,7 @@ function prepareIniChange(template, paths, result) {
   // the `||` version treated the template's own (attacker-controlled) list
   // as authoritative, so `"iniExclusions": []` (truthy, so `||` never fell
   // back) disabled the RCONPassword/port/ServerName protection at the
-  // actual apply-time write site. See 2026-08-24 conv-template-privesc.
+  // actual apply-time write site.
   const exclusions = resolveIniExclusions(template);
   const requested = Object.fromEntries(
     Object.entries(template.serverIni || {}).filter(([key]) => !exclusions.includes(key)),

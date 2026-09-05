@@ -27,33 +27,10 @@ export { normalizeUserPath, getCandidateZomboidPaths, invalidateMapFolderScan };
 
 const router = express.Router();
 
-// Run `worker` over `items` with at most `limit` in flight at once. Used for
-// directory-tree walks where the item count can run into the hundreds or
-// thousands (e.g. one X-directory per iteration on a large B42 map) —
-// unbounded Promise.all over that many entries can exhaust file handles
-// (EMFILE) and, on a spinning array or network share, queue so many
-// concurrent round trips that it's slower than doing them one at a time.
-// Fully sequential has the opposite problem: on the same slow storage, each
-// round trip's latency is paid one after another with nothing overlapped.
-// A small bounded batch overlaps latency without either extreme.
-//
-// The bound is PER CALL, not global. getDirSize/getDirStats
-// below call this recursively — each nesting level gets its own fresh
-// `limit`-wide batch, so the true worst case across a walk N levels deep is
-// limit^N concurrent operations, not limit. For a save shaped like
-// savePath -> map -> {X} -> {Y}.bin (3 levels) at limit=8 that's a
-// theoretical 8^3=512 in-flight file handles, not 8. A shared semaphore
-// threaded through the recursion would cap it at a true global 8, but a
-// naive version of that deadlocks: a directory-level worker holds its slot
-// while awaiting its own children's walk, and children recursing into the
-// same shared pool can end up with every slot held by parents who are
-// themselves just waiting — confirmed this by hand before ruling it out,
-// not worth attempting again without a proper acquire-then-release-before-
-// recursing redesign. Left as a per-level bound: still a large, real
-// improvement over the fully-unbounded Promise.all this replaced (which
-// had no ceiling at all, i.e. an unbounded, not just larger, blast radius),
-// and 512 in a genuine worst case is well below typical OS handle limits
-// for the shapes these saves actually take in practice.
+// Bound each directory walk batch to avoid exhausting file handles while
+// still overlapping filesystem latency. The bound applies per recursive call,
+// not globally, because a shared semaphore would need to release parent slots
+// before recursing to avoid deadlocks.
 async function runWithConcurrency(items, limit, worker) {
   const results = new Array(items.length);
   let nextIndex = 0;
@@ -392,8 +369,8 @@ function assertRealSaveDataPath(zomboidDataPath) {
   }
 }
 
-// The REAL gate for delete-chunks/delete-region (bug-hunt-2026-08-27, item
-// C). assertRealSaveDataPath above only asks "does this directory contain
+// The destructive-route gate. assertRealSaveDataPath above only asks "does
+// this directory contain
 // SOMETHING that looks like save data" -- and by the time delete-chunks/
 // delete-region reach their own fs.existsSync(savePath) check, a matching
 // Saves/Multiplayer/<saveName> subtree already has to exist for the delete
@@ -448,7 +425,7 @@ async function assertKnownSaveRoot(zomboidDataPath) {
   throw error;
 }
 
-// Operator ruling, hunt-wave12 2026-08-30: /saves, /suggested-paths,
+// Read endpoints (/saves, /suggested-paths,
 // /chunks/:saveName, /stats/:saveName and /browse below used to sit only
 // behind the global auth middleware, authed but not permissioned, while
 // their mutating siblings (/delete-chunks, /delete-region, /save-path) all

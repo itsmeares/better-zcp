@@ -75,8 +75,7 @@ const router = express.Router();
 // there too. Gating this router at the request level with no carve-out
 // re-imposes the very check middleware() intentionally skipped, so
 // req.user is always absent and requirePermission() 401s every thumbnail
-// request, for every user, always — this is exactly the bug that shipped
-// in 9c6ce2e / v1.2.0 (conv-mods-thumbnails). The exemption has to be
+// request. The exemption has to be
 // explicit and live here rather than via route registration order: order
 // is invisible, and the next reorder of this file breaks it again silently.
 const requireModsManage = requirePermission("mods.manage");
@@ -279,7 +278,7 @@ router.get("/tracked", async (req, res) => {
           if (fs.existsSync(iniPath)) {
             const content = readTextFile(iniPath);
             // Widened to tolerate whitespace around "=" -- same fix as this
-            // file's other ini-read sites (hunt-wave13, 3d1921ad/783672aa),
+            // file's other INI-read sites,
             // missed here. A hand-edited "WorkshopItems = ..." line
             // previously parsed as zero configured items, not "the check
             // couldn't run" -- so every tracked mod would show as missing
@@ -977,7 +976,7 @@ router.post("/sync-from-server", async (req, res) => {
     // Read and parse the INI file (normalize CRLF for cross-platform compatibility)
     const content = readTextFile(iniPath);
     // Widened to tolerate whitespace around "=" -- same fix as this file's
-    // other ini-read sites (hunt-wave13, 3d1921ad/783672aa), missed here. A
+    // other INI-read sites, missed here. A
     // hand-edited "WorkshopItems = ..." line previously parsed as zero
     // workshop items, so this button -- the actual onboarding path for
     // adding an already-running server -- reported "No mods found in
@@ -2369,8 +2368,8 @@ router.post("/toggle-mod-id", async (req, res) => {
 
     const result = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
-      // Widened to tolerate whitespace around "=" (see hunt-wave13,
-      // 3d1921ad): modsMatch doubles as BOTH the current-value parse and
+      // Widened to tolerate whitespace around "=": modsMatch doubles as
+      // BOTH the current-value parse and
       // the exists-check the replace below relies on, so a hand-edited
       // "Mods = foo" line previously parsed as zero current mods AND took
       // the append branch, creating a duplicate "Mods=" key.
@@ -2532,7 +2531,7 @@ router.post("/batch-toggle-mod-ids", async (req, res) => {
 
     const result = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
-      // Widened to tolerate whitespace around "=" (hunt-wave13, 3d1921ad) --
+      // Widened to tolerate whitespace around "=" --
       // see /toggle-mod-id above for why the guard AND the read must both
       // change together.
       const modsMatch = content.match(/^[ \t]*Mods[ \t]*=[ \t]*(.*)$/m);
@@ -2710,7 +2709,7 @@ router.post("/add-to-ini", async (req, res) => {
     const result = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
 
-      // Widened to tolerate whitespace around "=" (hunt-wave13, 3d1921ad) --
+      // Widened to tolerate whitespace around "=" --
       // see /toggle-mod-id for why the guard AND the read must both change
       // together (each match variable doubles as the current-value parse
       // and the exists-check the replace below relies on).
@@ -3488,7 +3487,7 @@ router.post("/remove-from-ini", async (req, res) => {
       let content = readTextFile(iniPath);
 
       // Get current workshop items. Widened to tolerate whitespace around
-      // "=" (hunt-wave13, 3d1921ad) -- this match doubles as the
+      // "=" -- this match doubles as the
       // exists-check for the replace below (no whitespace tolerance here
       // previously meant a "WorkshopItems = ..." line was read as EMPTY,
       // and the replace two guards down silently no-opped instead of
@@ -3737,7 +3736,7 @@ router.post("/batch-remove", async (req, res) => {
             const removeSet = new Set(validIds);
 
             // Parse current lists. Widened to tolerate whitespace around
-            // "=" (hunt-wave13, 783672aa) -- each match doubles as the
+            // "=" -- each match doubles as the
             // exists-check for its replace below.
             const workshopMatch = content.match(
               /^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m,
@@ -3912,12 +3911,12 @@ router.post("/repair-map-entries", async (req, res) => {
     // Atomically read-modify-write inside the lock
     const lockResult = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
-      // Widened to tolerate whitespace around "=" (hunt-wave13, 783672aa) --
+      // Widened to tolerate whitespace around "=" --
       // mapMatch is the guard for the replace below.
       const mapMatch = content.match(/^[ \t]*Map[ \t]*=[ \t]*(.*)$/m);
       const currentMaps = mapMatch?.[1]?.split(";").filter(Boolean) || [];
 
-      // Same widening -- this site was missed when hunt-wave13 landed. A
+      // Same widening -- this site was missed previously. A
       // hand-edited "WorkshopItems = ..." line previously read as zero
       // workshop items, so this route would see no valid map folders from
       // any configured mod and strip every non-vanilla Map= entry as
@@ -4055,7 +4054,7 @@ router.post("/deduplicate-mod-ids", async (req, res) => {
     const lockResult = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
       // Widened to tolerate whitespace around "=" (same fix as this file's
-      // other ini-write sites, hunt-wave13, 3d1921ad/783672aa) -- this site
+      // other ini-write sites) -- this site
       // was missed when that fix landed. modsMatch doubles as the exists-
       // check for the replace below: a hand-edited "Mods = foo;bar" line
       // previously matched nothing here, so currentMods came back empty and
@@ -4188,7 +4187,7 @@ router.post("/add-missing-dep", async (req, res) => {
       let content = readTextFile(iniPath);
 
       // Add to WorkshopItems if not present. Widened to tolerate whitespace
-      // around "=" (hunt-wave13, 783672aa) -- wsMatch is the guard below.
+      // around "=" -- wsMatch is the guard below.
       const wsMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
       const currentWs = wsMatch?.[1]?.split(";").filter(Boolean) || [];
       let wsAdded = false;
@@ -4362,7 +4361,7 @@ router.post("/add-all-resolved-deps", async (req, res) => {
     // Atomically read-modify-write inside the lock
     const lockResult = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
-      // Widened to tolerate whitespace around "=" (hunt-wave13, 783672aa) --
+      // Widened to tolerate whitespace around "=" --
       // each match doubles as the exists-check for its replace below.
       const wsMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
       const currentWs = new Set(wsMatch?.[1]?.split(";").filter(Boolean) || []);
@@ -4926,7 +4925,7 @@ router.post("/sync-mod-ids", async (req, res) => {
     // First pass: read INI to get workshop IDs list (no lock needed for read-only)
     const preContent = readTextFile(iniPath);
     // Widened to tolerate whitespace around "=" -- same fix as the write
-    // pass further below in this same route (hunt-wave13, 783672aa), missed
+    // pass further below in this same route, missed
     // on this earlier read pass. This is the list the whole sync loop
     // iterates over, so a hand-edited "WorkshopItems = ..." line made the
     // entire route a silent no-op (0 synced, 0 missing, no error) instead
@@ -4964,7 +4963,7 @@ router.post("/sync-mod-ids", async (req, res) => {
     const lockResult = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
 
-      // Widened to tolerate whitespace around "=" (hunt-wave13, 783672aa) --
+      // Widened to tolerate whitespace around "=" --
       // modsMatch is the guard for the replace below.
       const modsMatch = content.match(/^[ \t]*Mods[ \t]*=[ \t]*(.*)$/m);
       const currentModIds = modsMatch?.[1]?.split(";").filter(Boolean) || [];
@@ -5113,7 +5112,7 @@ router.get("/validate-config", async (req, res) => {
 
     const content = readTextFile(iniPath);
     // Widened to tolerate whitespace around "=" -- same fix as this file's
-    // other ini-read sites (hunt-wave13, 3d1921ad/783672aa), missed here. A
+    // other INI-read sites, missed here. A
     // hand-edited "WorkshopItems = ..." line previously parsed as zero
     // workshop items/mods, which this "closest thing to a health check"
     // route (see the duplicate-key comment below) would have validated as
@@ -5277,7 +5276,7 @@ router.post("/presets", async (req, res) => {
 
     const content = readTextFile(iniPath);
     // Widened to tolerate whitespace around "=" -- same fix as this file's
-    // other ini-read sites (hunt-wave13, 3d1921ad/783672aa), missed here. A
+    // other INI-read sites, missed here. A
     // hand-edited "WorkshopItems = ..." line previously parsed as zero
     // workshop items/mods, silently saving an EMPTY preset while reporting
     // success ("Preset ... created successfully") for a server that
@@ -5810,7 +5809,7 @@ router.post("/add-mod-advanced", async (req, res) => {
     const lockResult = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
 
-      // Widened to tolerate whitespace around "=" (hunt-wave13, 783672aa) --
+      // Widened to tolerate whitespace around "=" --
       // each match doubles as the exists-check for its replace below.
       const workshopMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
       const currentWorkshopIds =
@@ -6504,7 +6503,7 @@ async function readIniModLists() {
     // route, it silently zeroed out workshopIds/modIdsFromIni for every
     // caller of this function -- an empty-modlist result with no error,
     // same bug class this file already fixed at several other call sites
-    // (hunt-wave13, 3d1921ad/783672aa) but missed here.
+    // but missed here.
     const wsMatch = iniContent.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
     const modsMatch = iniContent.match(/^[ \t]*Mods[ \t]*=[ \t]*(.*)$/m);
     if (wsMatch && wsMatch[1].trim()) {
@@ -8190,7 +8189,7 @@ router.get("/disk-only", async (req, res) => {
         if (fs.existsSync(iniPath)) {
           const content = readTextFile(iniPath);
           // Widened to tolerate whitespace around "=" -- same fix as this
-          // file's other ini-read sites (hunt-wave13, 3d1921ad/783672aa),
+          // file's other INI-read sites,
           // missed here. A hand-edited "WorkshopItems = ..." line previously
           // parsed as zero enabled items, so this route would show every
           // already-enabled downloaded mod as "installed but disabled".
@@ -8296,7 +8295,7 @@ router.post("/enable-disk-mod", async (req, res) => {
       let content = readTextFile(iniPath);
 
       // WorkshopItems. Widened to tolerate whitespace around "="
-      // (hunt-wave13, 783672aa) -- wsMatch/modsMatch double as the
+      // -- wsMatch/modsMatch double as the
       // exists-check for their replace below.
       const wsMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
       const wsList = wsMatch?.[1]?.split(";").filter(Boolean) || [];
@@ -8389,7 +8388,7 @@ async function deleteModFromDiskAndIni(wsId) {
   let backupWarning = null;
   await withIniLock(iniPath, async () => {
     let content = readTextFile(iniPath);
-    // Widened to tolerate whitespace around "=" (hunt-wave13, 783672aa) --
+    // Widened to tolerate whitespace around "=" --
     // each match doubles as the exists-check for its replace below.
     const wsMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
     if (wsMatch) {
@@ -8672,7 +8671,7 @@ router.post("/batch-delete-disk-mods", async (req, res) => {
     let backupWarning = null;
     await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
-      // Widened to tolerate whitespace around "=" (hunt-wave13, 783672aa) --
+      // Widened to tolerate whitespace around "=" --
       // each match doubles as the exists-check for its replace below.
       const wsMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
       if (wsMatch) {
@@ -8860,7 +8859,7 @@ router.post("/resolve-orphan-workshop", async (req, res) => {
       let content = readTextFile(iniPath);
 
       if (wsToDrop.size > 0) {
-        // Widened to tolerate whitespace around "=" (hunt-wave13,
+        // Widened to tolerate whitespace around "=" --
         // 783672aa) -- wsMatch is the exists-check for the replace below.
         const wsMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
         if (wsMatch) {
@@ -8876,7 +8875,7 @@ router.post("/resolve-orphan-workshop", async (req, res) => {
       }
 
       if (modIdsToAdd.size > 0) {
-        // Widened to tolerate whitespace around "=" (hunt-wave13,
+        // Widened to tolerate whitespace around "=" --
         // 783672aa) -- modsMatch is the exists-check for the replace below.
         const modsMatch = content.match(/^[ \t]*Mods[ \t]*=[ \t]*(.*)$/m);
         const existing = modsMatch?.[1]?.split(";").filter(Boolean) || [];

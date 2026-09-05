@@ -72,18 +72,8 @@ const MASKED_SECRET_SENTINEL = '••••••••'
 const FIELD_KEYS = (['issuerUrl', 'clientId', 'redirectUri', 'scope', 'providerName'] as const) satisfies readonly (keyof OidcSettingsFields)[]
 type FieldKey = (typeof FIELD_KEYS)[number]
 
-// Compile-time guard for buildUpdatePayload below: FIELD_KEYS plus
-// allowInsecureHttp (handled separately there -- it's a boolean, not part of
-// the string-keyed `form` object) must cover every key OidcSettingsFields
-// has. bughunt-2026-08-31: this list can silently fall out of sync with the
-// type it's meant to mirror -- same shape as the mapConfigsEqual bug fixed
-// earlier tonight, just not yet armed since the two currently match. If a
-// field is ever added to OidcSettingsFields (client/src/lib/api.ts) without
-// also adding it here, this line fails to compile instead of letting
-// buildUpdatePayload silently drop the new field from every save. The
-// `satisfies` clause above catches the opposite mistake -- a FIELD_KEYS
-// entry that isn't a real OidcSettingsFields key at all (typo, or a key
-// that no longer exists).
+// Keep the form-field list aligned with the API type. The assertion catches
+// both missing fields and stale keys at compile time.
 type UncoveredOidcSettingsField = Exclude<keyof OidcSettingsFields, FieldKey | 'allowInsecureHttp'>
 const _assertFieldKeysCoversOidcSettingsFields: UncoveredOidcSettingsField extends never
   ? true

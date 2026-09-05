@@ -6,7 +6,7 @@
     "jarSourcePath": "projectzomboid.jar (repo root of the PZ Steam install)",
     "classesScanned": 72,
     "technique": "Structural JVM constant-pool parse via scripts/jar-audit/classfile-parser.mjs (parseClass), not a flat strings/grep pass -- every value here is a genuine CONSTANT_Utf8 entry from the class file.",
-    "note": "Every UTF8 constant-pool string from every zombie/commands/serverCommands/*.class plus zombie/network/GameServer.class (the command dispatcher, where 'Unknown command' lives -- not in any per-command class), zombie/network/BanSystem.class and zombie/network/ServerWorldDatabase.class (+ its LogonResult inner class) -- added hunt-wave11-2026-08-29 because banuser/unbanuser/adduser/removeuserfromwhitelist's own command classes carry no rejection text of their own; they return whatever these two classes' methods hand back. server/tests/rconRejectionGroundTruth.test.js asserts every pattern in rcon.js's KNOWN_RCON_REJECTIONS matches at least one string somewhere in this corpus. A pattern matching nothing here is not a fixture bug -- it means the live jar no longer contains that text, which is exactly the drift this fixture exists to catch."
+    "note": "Every UTF8 constant-pool string from the relevant server-command classes and their shared command handlers. The regression test asserts that every pattern in rcon.js's KNOWN_RCON_REJECTIONS matches at least one string in this corpus; a pattern matching nothing means the live jar has drifted."
   },
   "classes": {
     "zombie/commands/serverCommands/AddAllToWhiteListCommand.class": [

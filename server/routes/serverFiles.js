@@ -1400,8 +1400,7 @@ router.put("/ini", async (req, res) => {
     }
 
     // Enforced on CHANGE, not presence: the structured editor round-trips
-    // GET /ini's whole settings object back on every save (same trap
-    // Angela hit in this same editor for the RCON-masking fix above), so
+    // GET /ini's whole settings object back on every save, so
     // gating on mere presence would refuse every non-admin save that
     // touches this tab at all. Compared against the file's own CURRENT
     // value, never GET's masked response.

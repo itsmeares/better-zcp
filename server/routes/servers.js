@@ -1525,8 +1525,8 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
           // currently running (reads the old value until the next restart)
           // or currently stopped (reads the new value on its next start
           // either way). Saying so explicitly rather than letting "saved"
-          // imply "live", same defect class as the two silent-failure fixes
-          // earlier tonight -- a confident status the app cannot back.
+          // imply "live", because the app cannot verify that the running
+          // process has reloaded the file yet.
           reloadWarnings.push(
             "UPnP setting saved and written to the server config -- takes effect the next time this server starts, not immediately.",
           );

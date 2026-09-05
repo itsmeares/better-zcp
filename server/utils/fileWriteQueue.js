@@ -46,23 +46,8 @@ function sleepSync(ms) {
   Atomics.wait(buffer, 0, 0, ms);
 }
 
-// Orphan temp sweep (2026-08-29, config hunt follow-up). writeFileAtomic
-// below only ever cleans up its own tmp file on the SAME call that created
-// it -- a crash between the writeFileSync a few lines down and the
-// rename/unlink that normally follows (power loss, a kill, an uncaught
-// fatal error) leaves a .{filename}.{pid}.{random}.tmp sibling behind
-// forever. Cosmetic, not a safety issue (Pam, same hunt, correctly
-// de-escalated it) -- nothing reads these files, they just accumulate.
-// Mirrors backupService.js's cleanupOrphanBackupTemps in shape (sweep the
-// directory on the next write into it, not a proactive background scan)
-// but needs one thing that function does not: writeFileAtomic has ~15 call
-// sites shared across processes that can briefly overlap (this codebase's
-// own supervised-restart window runs an outgoing and incoming process
-// together), so a temp can't be assumed dead just because it exists. The
-// pid is embedded in the name for exactly this reason -- liveness checked
-// via the shared isPidAlive() helper (utils/pidLiveness.js, hunt-wave12
-// unification of this file's and backupService.js's until-then-duplicated
-// copies of the same process.kill(pid, 0) check).
+// Crash leftovers use the writer PID in their filename. Sweep them on the
+// next write and delete only when the owning process is confirmed gone.
 const ORPHAN_TEMP_PATTERN = /^\.(.+)\.(\d+)\.[0-9a-z]{6}\.tmp$/;
 
 function sweepOrphanWriteTemps(dir) {

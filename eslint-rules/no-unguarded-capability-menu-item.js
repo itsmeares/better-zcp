@@ -1,122 +1,33 @@
 /**
- * Radix builds a non-native item primitive's click handler as
- * `composeEventHandlers(props.onClick, handleSelect)` -- the caller's
- * `onClick` runs UNCONDITIONALLY, first. The internal `disabled` check only
- * guards Radix's own select/close side effect, never the raw `onClick` prop.
- * So `disabled={!canX}` on a `DropdownMenuItem` (or `ContextMenuItem`,
- * `MenubarItem`, `SelectItem`, `CommandItem` -- all render a `<div>`, not a
- * `<button>`) is CSS (`pointer-events:none`) and unfocusability, not a
- * code-level gate. A style override, a programmatic click, or a refactor
- * that keeps the `disabled` expression but drops the attribute silently
- * restores access.
+ * Radix menu items invoke the caller's `onClick` before their own disabled
+ * handling. Their `disabled` prop is therefore an affordance, not a complete
+ * code-level gate; capability checks must also guard the handler.
  *
- * A plain `<button disabled>` (native, or shadcn's `Button`, which forwards
- * `disabled` to a real native `<button>`) does not have this problem --
- * disabled native form controls dispatch no click, Enter, or Space
- * activation at all. That is WHY this rule deliberately does not flag a
- * native button for LACKING a guard: demanding one there is demanding dead
- * code, and that is the noise that gets a rule switched off. THE GUARD IS
- * NEEDED EXACTLY WHERE THE ELEMENT IS NOT A REAL BUTTON.
+ * Native `<button disabled>` controls do not dispatch activation events, so
+ * the rule only requires missing guards for Radix-style non-native items.
  *
- * But a native button is NOT exempt from the other half of this rule: if a
- * guard exists and tests a DIFFERENT `can*` binding than the element's own
- * `disabled` prop, that is a defect anywhere, and on a native button it is
- * the WORST case -- because the guard is unreachable in production (a
- * disabled native button never dispatches the click that would exercise
- * it), NO TEST CAN EVER OBSERVE THE DISAGREEMENT AT RUNTIME. It is invisible
- * by construction, which is exactly why this half of the rule exists:
- * Angela break-verified this shape on Debug.tsx (2026-08-27) -- pulling the
- * function guard broke nothing there (a real browser already refuses the
- * click), pulling the `disabled` prop broke the tests. So MISSING is fine
- * on a native button; MISMATCHED is not, and is the one case a human (or
- * this rule) has to catch by reading the code, since no click-through test
- * can ever prove it wrong.
+ * Native buttons are still checked when a handler contains a capability guard
+ * that does not match the capability used by `disabled`; that mismatch is
+ * unreachable while the button is disabled and is easy to miss in tests.
  *
- * Real case (2026-08-27, Players.tsx dossier "..." menu): six
- * `DropdownMenuItem`s gated on `disabled={... || !canModerate}` /
- * `!canGmTools` / `!canBridgeGmTools` with no guard inside `onClick` at all
- * -- Angela found the general shape reading Dashboard.tsx and
- * @radix-ui/react-menu's own source (not inferred), Pam had it live on
- * Players.tsx. Fixed by adding `if (!canX) return` as the first line of
- * each `onClick` body -- the same two-layer pattern (attribute = affordance,
- * function guard = the actual gate) already used for a keyboard-shortcut
- * bypass on Console.tsx. This rule makes a future omission of that guard
- * unwritable rather than relying on someone re-reading Radix's source again.
+ * A handler guard is checked directly and through one same-file delegate. This
+ * covers inline callbacks without attempting general interprocedural analysis.
  *
- * === 0/10: THE FIRST FULL-CLIENT RUN WAS ALL FALSE POSITIVES ===
+ * Local component declarations are skipped because a JSX name alone cannot
+ * prove whether the rendered control is native or Radix-based. Same-file
+ * delegate callbacks are followed by one hop; unresolved, imported, or
+ * multi-definition handlers are left alone to avoid false positives.
  *
- * God hand-verified all ten hits from this rule's first run and found ZERO
- * real defects among them -- two distinct structural causes, both fixed
- * below, both real lessons about "one JSX element, no cross-file inference"
- * being a narrower promise than it first looked:
+ * Capability guards may appear anywhere in the leading run of
+ * `if (...) return` statements, not only as the first statement.
  *
- * CAUSE 1 (nine hits, WorldMap.tsx): the file does NOT import
- * `ContextMenuItem` from `@/components/ui/context-menu` -- it DECLARES ITS
- * OWN local `function ContextMenuItem(...)` (same file, module scope) that
- * renders a real native `<button role="menuitem" disabled={...}>`. The
- * rule matched on the JSX TAG NAME alone and had no way to know the name
- * was shadowed by a completely different, native-rendering component. Fix:
- * before treating an element as a Radix item or a native button, resolve
- * its tag name via the ESLint scope manager; if it resolves to a LOCAL
- * (non-import) declaration in this file, skip it entirely -- we can't
- * safely assume what a locally-declared component renders, and "skip" is
- * strictly safer than "assume Radix" or "assume native." This is still
- * single-file, same-AST analysis, not cross-file inference: the shadowing
- * declaration lives in the exact file being linted.
- *
- * CAUSE 2 (the tenth hit, Servers.tsx:1610): a genuine Radix
- * `DropdownMenuItem` gated on `canServersManage` with no guard VISIBLE
- * INSIDE onClick -- but `onClick={() => handleActivateServer(server)}` is
- * an arrow that immediately delegates to `handleActivateServer`, a
- * `useCallback`-wrapped handler DECLARED IN THE SAME FILE whose own body
- * opens with `if (server.isActive) return; if (!canServersManage) return`.
- * The gap this rule's own header used to document -- `onClick={someName}`,
- * a BARE identifier reference, not analyzed -- missed this by exactly one
- * character: the real shape is `onClick={() => someName(arg)}`, an arrow
- * that calls a same-file function rather than referencing it bare. Fix:
- * when the onClick body's ONLY statement is a call to an Identifier callee
- * (`() => helper(x)` or `() => { helper(x) }`), resolve that callee via
- * the scope manager and, if it's a same-file function/useCallback-wrapped
- * function with EXACTLY one definition, check ITS leading statements for
- * the same guard shape this rule already knows how to recognize -- one hop,
- * not general data-flow, same philosophy as `no-raw-error-message.js`'s own
- * one-hop widening (a7138e1), which this implementation is modeled on
- * rather than reinvented from scratch.
- *
- * FALLBACK POLICY WHEN THE ONE HOP CAN'T BE RESOLVED (imported callee,
- * member-expression call, multiple definitions, delegate body isn't a bare
- * call, ...): SKIP, do not flag. A missed detection is survivable; a wrong
- * warning -- especially the FIRST warning a brand-new rule ever produces --
- * is not. This is a deliberately asymmetric choice: the rule would rather
- * stay silent on an unprovable case than risk teaching the floor to ignore
- * it, the same reasoning that killed three other rule proposals tonight for
- * being "too subtle to encode."
- *
- * The guard-recognition shape ALSO widened as part of this fix: it used to
- * require the capability check be literally `body[0]`; `handleActivateServer`
- * puts it SECOND, after an unrelated `if (server.isActive) return`. Both the
- * direct check and the one-hop check now look at the LEADING RUN of
- * `if (...) return`-shaped statements (stopping at the first statement that
- * isn't one) rather than only the very first statement -- a strict
- * generalization, so nothing that passed before stops passing.
- *
- * === THE HEURISTIC, AND WHY IT STAYS MECHANICAL ===
- *
- * "A capability binding" is defined PURELY BY NAME: an `Identifier` whose
- * name matches `/^can[A-Z]/` (canModerate, canGmTools, canBridgeCommand,
- * canBridgeGmTools, canRestartNow, canControlServer, ...). This is not a
- * guess -- every capability boolean in this codebase (28 call sites across
- * 16 pages, checked 2026-08-27 before writing this rule) is a `const can*`
- * bound from `useAuth().can(...)`, and nothing else in the tree is named
- * that way. The rule never resolves what a `can*` identifier actually IS
- * (no type analysis, no reading its initializer) -- it only compares names
- * that appear in two (now, with the one-hop check, up to three) different
- * expressions, resolved via the file's own scope tree, never leaving the
- * file being linted.
+ * A capability binding is identified by the `/^can[A-Z]/` naming convention.
+ * The rule compares those names within the current file; it does not perform
+ * type analysis or resolve capability values across modules.
  *
  * TWO SEPARATE CHECKS, one per element category:
  *
- * MISSING-GUARD (RADIX_ITEM_COMPONENTS only, after the Cause-1 shadow
+ * MISSING-GUARD (RADIX_ITEM_COMPONENTS only, after the local-shadow
  * check) -- a violation requires ALL of:
  *   1. The JSX element's tag name is one of RADIX_ITEM_COMPONENTS and does
  *      NOT resolve to a local (non-import) declaration in this file.
@@ -127,13 +38,13 @@
  *      inline arrow/function expression (see gap below for anything else).
  *   4. That function's body is a block whose LEADING RUN of `if (...)
  *      return`-shaped statements does NOT include one testing at least one
- *      of the SAME `can*` names found in (2) -- AND, if the whole onClick
+ *      of the same `can*` names found in (2) -- AND, if the whole onClick
  *      body is a single delegating call to a same-file function/useCallback
- *      handler, that function's OWN leading run doesn't either (see Cause 2
- *      above). An unresolvable delegate is NOT flagged (fallback policy
+ *      handler, that function's own leading run doesn't either. An
+ *      unresolvable delegate is NOT flagged (fallback policy
  *      above).
  *
- * MISMATCH-ONLY (NATIVE_BUTTON_COMPONENTS only, after the same Cause-1
+ * MISMATCH-ONLY (NATIVE_BUTTON_COMPONENTS only, after the same local-shadow
  * shadow check) -- a violation requires ALL of:
  *   1. The JSX element's tag name is one of NATIVE_BUTTON_COMPONENTS and
  *      does not resolve to a local (non-import) declaration in this file.
@@ -158,14 +69,11 @@
  *     follows an inline arrow/function whose body IS the delegating call;
  *     a bare identifier never gives the rule an inline function to inspect
  *     in the first place, so there's no `onClick` body to extract a callee
- *     from. No real site uses this exact bare shape for a gated menu item
- *     as of landing.
+ *     from.
  *   - The one-hop resolution is exactly one hop: `onClick={() =>
  *     helper(x)}` where `helper` itself delegates to a SECOND same-file
  *     function is not traced further, same "one hop, not general data-flow"
- *     boundary `no-raw-error-message.js`'s own widening drew for the
- *     identical reason. No real site does this for a gated menu item as of
- *     landing.
+ *     boundary used by other local lint rules for the same reason.
  *   - The one-hop check only unwraps a SINGLE `useCallback(fn, deps)` /
  *     `useMemo(fn, deps)` layer around the target function's own
  *     declaration (`const helper = useCallback((x) => {...}, [...])`) --
@@ -175,23 +83,22 @@
  *   - Direct `can('capability.name')` calls inlined into `disabled`
  *     (instead of a precomputed `const canX = can(...)`) are invisible to
  *     this rule -- the `/^can[A-Z]/` name check does not match a bare
- *     lowercase `can` call. Every gated site in this codebase precomputes
- *     the boolean as of landing; if that convention is ever broken, this
- *     rule will not catch it.
+ *     lowercase `can` call; callers must expose a named `can*` boolean for
+ *     this rule to inspect it.
  *   - A guard whose leading run references a DIFFERENT `can*` name than the
  *     one(s) in `disabled` (rather than none at all) is accepted as
  *     "guarded"/"not mismatched" as long as the two name-sets overlap at
  *     all -- the rule does not require the sets to match exactly.
  *     `disabled={!canA || !canB}` guarded only by `if (!canA) return`
  *     passes here even though `canB` alone could still let the click
- *     through. No real site combines two capability names in one
- *     `disabled` as of landing.
+ *     through. The rule intentionally checks for overlap, not exact set
+ *     equality.
  *   - Only `DropdownMenuItem`, `ContextMenuItem`, `MenubarItem`,
  *     `SelectItem`, `CommandItem` are checked for missing guards, and only
  *     `<button>`/`<Button>` for mismatched ones -- any other component
  *     under a different name (a checkbox/radio item variant, another native-
  *     rendering wrapper) is invisible unless added to the relevant Set
- *     below. The Cause-1 shadow check protects against a WRONG conclusion
+ *     below. The local-shadow check protects against a wrong conclusion
  *     from a name collision; it doesn't discover components under names
  *     this rule was never told to look for.
  */

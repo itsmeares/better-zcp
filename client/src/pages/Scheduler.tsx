@@ -391,14 +391,9 @@ export default function Scheduler() {
     activeTasks: number
     autoRestartEnabled: boolean
     modUpdateRestartPending: boolean
-    // Timezone-picker card (2026-08-29, hunt-wave5 follow-up): `timezone`
-    // is the EFFECTIVE zone every schedule below actually runs in right
-    // now. `configuredTimezone` is the operator's saved choice (normally
-    // identical). `timezoneFallback` is non-null only when the saved zone
-    // stopped being valid (tzdata dropped a deprecated name, or db.json
-    // was restored from a different machine) -- the panel falls back to
-    // the process default rather than refusing to schedule, and this is
-    // how the UI shows that mismatch instead of staying quiet about it.
+    // `timezone` is the effective zone. `configuredTimezone` is the saved
+    // value; `timezoneFallback` describes an invalid saved zone and its
+    // replacement.
     timezone?: string
     configuredTimezone?: string | null
     timezoneFallback?: { configured: string; effective: string } | null
@@ -574,16 +569,8 @@ export default function Scheduler() {
     }
   }
 
-  // Preview the custom cron field as the operator types, so an invalid
-  // expression is caught here instead of only on Save. Advanced-only: the
-  // simple builder always produces a cron string it already knows is valid,
-  // so validating it too would just be an extra request for no signal.
-  // Debounced via the effect's own cleanup (a new keystroke cancels the
-  // still-pending timer before it fires) -- but that alone doesn't cover a
-  // slower-typed request resolving AFTER a faster-typed later one, so the
-  // generation counter below still gates every state update. Same
-  // shape as the fetch-race hunt's loadIdRef fixes tonight, applied to a
-  // debounce instead of a mount-triggered fetch.
+  // Validate custom cron input after a debounce. The generation counter keeps
+  // an older response from overwriting a newer validation result.
   useEffect(() => {
     if (scheduleMode !== 'advanced' || !newTaskCron.trim()) {
       setCronValidation(null)
@@ -1254,12 +1241,7 @@ export default function Scheduler() {
           </DialogContent>
       </Dialog>
 
-      {/* Timezone-picker card (2026-08-29, hunt-wave5 follow-up): the
-          install-wide zone EVERY schedule below (user tasks, the backup
-          job, AUTO_RESTART_CRON) runs in. Migrated automatically on
-          upgrade to whatever was already effective, so this section shows
-          a real, already-correct value even for an operator who never
-          opens it -- it only needs to be touched to CHANGE the zone. */}
+      {/* The install-wide timezone used by all schedules. */}
       <Card>
         <CardHeader className="p-4 pb-3">
           <div className="flex items-center gap-1.5">

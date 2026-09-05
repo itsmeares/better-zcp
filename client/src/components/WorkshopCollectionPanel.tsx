@@ -810,13 +810,8 @@ export function WorkshopCollectionPanel() {
                           return
                         }
                         if (action === 'untrack') {
-                          // Unlike Settings.tsx's plain untrack (local tracking
-                          // only), this one also writes an ignore-list entry AND
-                          // mirrors the removal into the user's real Steam
-                          // Workshop collection -- an effect outside the panel
-                          // entirely, on an account we do not own. Untiered in
-                          // Pam's 52-action destructive audit (only "Remove
-                          // everywhere" was), so it never got a confirm at all.
+                          // This also changes the user's Steam Workshop
+                          // collection, so confirm before syncing the removal.
                           confirm({
                             title: t('untrackConfirmTitle'),
                             description: t('untrackConfirmDescription'),

@@ -37,7 +37,7 @@ export function findDuplicateIniKeys(content) {
   // cannot fire on a key name mentioned inside a comment or inside another
   // field's free text (PublicDescription, ServerWelcomeMessage) -- the
   // exact class of false positive the includes()-vs-regex bug fixed
-  // earlier tonight was built on. `g` + `m` together: every real
+  // this check was built on. `g` + `m` together: every real
   // assignment line in the file, not just the first.
   const re = /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*=/gm;
   let match;

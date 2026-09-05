@@ -97,13 +97,8 @@ export async function getOidcSettings() {
 }
 
 /**
- * Which fields are currently pinned by an environment variable and are
- * therefore NOT editable through the settings UI — surfaced by GET
- * /api/auth/oidc/settings so the panel can show "set via environment
- * variable" instead of silently accepting an edit that env would win over
- * anyway. Same false-guarantee shape as everything else found tonight:
- * a save that reports success but has no effect is exactly the bug this
- * whole feature exists to avoid one layer up (see resetOidcConfigCache).
+ * Return the fields pinned by environment variables so the settings UI can
+ * explain why those values are not editable.
  */
 export function getOidcEnvOverrides() {
   const overrides = {};

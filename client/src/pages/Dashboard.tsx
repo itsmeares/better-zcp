@@ -246,15 +246,8 @@ export default function Dashboard() {
   const [composedStatus, setComposedStatus] = useState<ComposedServerStatus | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus | null>(null)
-  // hunt-wave12-2026-08-30: getZombieCount and getWorldStats were both
-  // confirmed working by Kevin's engine-side audit but had no caller
-  // anywhere in the client -- nothing on the Dashboard showed a zombie or
-  // survivor count from any source. Checked first (per the same
-  // precondition as the visual controls, 1c6ea6cc): neither value arrives
-  // via any existing poll or the panelBridge:modStatus socket push (that
-  // push only carries alive/version/serverName/playerCount), so this is a
-  // genuine new poll, not five fields nobody was reading out of one that
-  // already ran.
+  // These metrics are not included in the existing status poll or
+  // `panelBridge:modStatus` payload, so they need their own state and request.
   const [zombieCount, setZombieCount] = useState<number | null>(null)
   const [worldMap, setWorldMap] = useState<string | null>(null)
   const [playerActivity, setPlayerActivity] = useState<PlayerActivity[]>([])
@@ -655,15 +648,8 @@ export default function Dashboard() {
   // Real-time perf subscription via Socket.IO — appends each new snapshot
   useEffect(() => {
     if (!socket || !showPerformanceCharts) return
-    // bug-hunt-2026-09-04: 'subscribe:perf' was only ever emitted once, when
-    // this effect first ran -- but room membership is server-side
-    // per-connection state, lost whenever the underlying socket.io
-    // connection drops and re-establishes, even though the client reuses
-    // the same Socket object (see Console.tsx's identical subscribeRcon
-    // fix/comment for 'subscribe:rcon', same root cause). After any
-    // reconnect the server no longer had this client in the perf room, so
-    // perf:snapshot stopped arriving and the chart just went quiet with no
-    // error -- re-subscribing on every 'connect', not just on mount, fixes it.
+    // Room membership is per connection, so reconnecting requires a new
+    // subscription even when Socket.IO reuses the client object.
     const subscribePerf = () => socket.emit('subscribe:perf')
     if (socket.connected) subscribePerf()
     socket.on('connect', subscribePerf)
@@ -818,13 +804,8 @@ export default function Dashboard() {
   }
   const handleConnect = async () => {
     await handleAction('Connect RCON', () => rconApi.connect(), {
-      // getRecoveryUrl (lib/errorMessage.ts) is the single place that knows
-      // RCON_CONNECT_AUTH_FAILED is fixable from Servers while
-      // RCON_CONNECT_UNREACHABLE (install-level: server not running,
-      // firewall never opened) isn't fixable from any in-app screen --
-      // reusing it here instead of re-deriving that same classification
-      // inline is what keeps the two from drifting apart the way
-      // routes/rcon.js's OWN two error-reporting paths once did tonight.
+      // Reuse the central recovery mapping instead of duplicating route
+      // classification here.
       errorAction: (error) => {
         const url = getRecoveryUrl(error)
         if (url !== '/servers') return undefined
@@ -898,18 +879,7 @@ export default function Dashboard() {
 
   /* One verdict at a time, highest severity wins. Calm states say nothing at all. */
   const verdict: Verdict = (() => {
-    // status.serverPathConfigured (server-side rename of `configured`, see
-    // the ServerStatus interface above) means "the local process-launch
-    // path has a directory to run in" -- correctly, structurally false for
-    // every remote server, since a remote server's launch happens on a
-    // different host and never sets serverPath (installPath isn't required
-    // for isRemote:true in server/routes/servers.js's create validation).
-    // This verdict used to read that as "remote == unconfigured" before the
-    // rename made the narrower meaning explicit (2026-08-31 visual sweep:
-    // "NOT CONFIGURED" sitting under a named, addressed, REMOTE-badged
-    // server). Same family as Layout.tsx's servers-as-[] fix (3665aa20): a
-    // signal that cannot represent one real case was trusted for all cases
-    // instead of being scoped to the ones it actually describes.
+    // A remote server has no local process-launch path by design.
     if (!hasServer || (status && !status.serverPathConfigured && !activeServer?.isRemote)) {
       return {
         level: 'warning',

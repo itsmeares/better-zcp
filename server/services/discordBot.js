@@ -56,7 +56,7 @@ async function _resolveDiscordBody(body) {
   throw new TypeError("Unable to resolve body.");
 }
 
-// hunt-wave6-2026-08-29 follow-up 1: this is THE boundary every outbound
+// Route every outbound
 // Discord API call passes through -- channel.send(), interaction.reply()/
 // editReply(), slash-command registration, everything -- because it's wired
 // as the REST transport for the Client itself (see the `rest.makeRequest`
@@ -202,7 +202,7 @@ export class DiscordBot {
     // silence server notifications going to a perfectly healthy one.
     this._channelBreakers = new Map(); // channelId -> {failures, openUntil, suppressed}
 
-    // hunt-wave6-2026-08-29 suspect 6: getStatus() used to have no field at
+    // Track gateway degradation separately from the bot's process status:
     // all for gateway health, so a real (self-healing) heartbeat black hole
     // or a permanent (unrecoverable) shard disconnect both left `running`
     // reporting true throughout — an operator watching the page saw a

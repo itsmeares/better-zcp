@@ -1376,17 +1376,8 @@ export default function Settings() {
     }
   }, [selectedInstallServerId]);
 
-  // bug-hunt-2026-09-04: this listener used to reload the wrong state and
-  // never reload the right one. configApi.getAppSettings()/PUT app-settings
-  // (server/routes/config.js) is a flat GLOBAL key/value store with no
-  // server-id resolution anywhere -- switching servers can never make it
-  // stale, so refetching it unconditionally only risked discarding a user's
-  // in-progress typing (isDirty, tracked above) for no reason. What DOES go
-  // stale on a switch -- activeServer's rconHost/rconPort/name, shown in the
-  // PanelBridge card below -- was never refreshed at all; fetchServers() has
-  // no dirty-tracking of its own (read-only display), so it's safe to
-  // reload unconditionally, same as the other four pages' own
-  // activeServerChanged handlers.
+  // App settings are global, so do not discard dirty form state on a server
+  // switch. The read-only server list can be refreshed safely.
   useEffect(() => {
     if (!socket) return;
 

@@ -1,0 +1,7 @@
+node_modules/
+client/dist/
+dist-exe/
+release/
+coverage/
+data/
+pnpm-lock.yaml

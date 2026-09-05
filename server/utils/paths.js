@@ -18,13 +18,9 @@ const baseDir = isPkg
 const defaultDataDir = path.join(baseDir, 'data');
 const defaultLogsDir = path.join(baseDir, 'logs');
 
-// Config file stores custom path overrides. PANEL_PATHS_CONFIG_PATH lets a
-// caller point at a different config file entirely -- used by the test setup
-// so each concurrent test run gets its
-// own file instead of every process on the machine (every agent's test
-// runs AND the real panel) racing on one shared path at the repo root.
-// Unset (the normal case for the real panel) falls back to today's
-// behaviour exactly.
+// Config file stores custom path overrides. Tests can set
+// PANEL_PATHS_CONFIG_PATH so concurrent runs use isolated config files
+// instead of sharing the repository-root default.
 const configPath = process.env.PANEL_PATHS_CONFIG_PATH
   ? path.resolve(process.env.PANEL_PATHS_CONFIG_PATH)
   : path.join(baseDir, 'paths.config.json');
@@ -55,22 +51,9 @@ export function getDataPaths() {
   const dataDir = config.dataDir || defaultDataDir;
   const logsDir = config.logsDir || defaultLogsDir;
 
-  // Ensure directories exist. This is the Windows analogue of Linux's
-  // root-first-run trap (server/utils/firstRunOwnershipCheck.js): the
-  // default location is a subfolder of wherever the exe lives, and nothing
-  // upstream of this call has confirmed the current account can actually
-  // write there. 2026-09-05, reproduced live (non-admin shell, no elevation):
-  // pointing process.execPath at a path under "C:\Program Files\..." -- a
-  // completely ordinary place for a Windows user to extract a "program" to,
-  // and one this project's own docs steer away from by example but never
-  // warn against -- throws a raw, uncaught EPERM out of this function with
-  // no indication of WHY, at module-load time (database/init.js calls
-  // getDataPaths() at its own top level), before index.js's body has even
-  // started. There is no Windows equivalent of the Linux ownership check
-  // that would turn that into one clear diagnostic instead of a bare node
-  // stack trace. Fix: catch EPERM/EACCES specifically, name the two most
-  // likely paths forward, and exit -- do NOT swallow any other error (disk
-  // full, path too long, etc. should still surface as-is).
+  // Ensure directories exist. The default location may be unwritable on
+  // Windows, so turn permission failures into a clear startup message while
+  // allowing unrelated filesystem errors to surface normally.
   for (const dir of [dataDir, logsDir]) {
     if (fs.existsSync(dir)) continue;
     try {

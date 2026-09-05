@@ -2554,15 +2554,9 @@ export async function getObservedServerRunning() {
 // claim without ever touching `lastKnownRunning` -- is closed now: routes
 // ask this function to re-check instead of emitting their own.
 //
-// 2026-08-31 bug hunt (consolidation, carded by Pam's completeness-claims
-// audit and Dwight's own file): the rconService "disconnected" handler
-// below (:1219-1244) used to be a SECOND, independent reader/writer of
-// `lastKnownRunning` -- same comparison shape, same guard, so the two never
-// actually drifted, but a future fix made only here would not have reached
-// it. That handler now calls this function instead (with `detectionReason`
-// identifying itself), so there is genuinely only one place left that reads,
-// compares, mutates and emits this decision -- the property this function's
-// own name has always implied.
+// The rconService "disconnected" handler delegates here as well, so there is
+// one reader/writer for `lastKnownRunning` and status transitions cannot drift
+// between detection paths.
 export async function checkServerStatusNow(detectionReason = "watchdog") {
   try {
     const running = await getObservedServerRunning();

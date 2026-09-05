@@ -773,13 +773,8 @@ export function getDiagnosticsFixAction(
       };
 
     // ─── Explicitly manual, no case-specific action possible ──────────────
-    // These 6 ids used to fall through to the generic `default` case below
-    // with no comment anywhere explaining why -- correct behavior (a
-    // fallback note built from the server's own hint text), but silent
-    // about it. Giving each its own case changes nothing about what the
-    // operator sees; it's here so the next person auditing this switch
-    // doesn't have to re-derive "why doesn't this have a real fix" from
-    // scratch, per god's ask.
+    // These checks have no local remediation; keep their server-provided
+    // guidance instead of inventing an action.
     case "mods.thumbnailResolution":
       // Steam CDN reachability for a specific Workshop item's thumbnail
       // image -- server/routes/debug.js's own hint already names the real
@@ -965,14 +960,7 @@ export default function Debug() {
   const { t, i18n } = useTranslation("debug");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
-  // True once fetchSystemInfo() has settled with no usable data (a failed
-  // request, or a 200 whose body is missing memoryUsage) -- distinct from
-  // "haven't fetched yet", which is what a bare systemInfo === null
-  // otherwise means. Every field below fell back to a plain "-" for BOTH
-  // cases, so a genuine, standing failure looked identical to the brief
-  // instant before the mount-time fetch resolves (2026-08-30 visual sweep):
-  // unlike this page's health/diagnostics fetches, this one had no error
-  // state at all to tell the two apart.
+  // Distinguish a failed or unusable response from the initial loading state.
   const [systemInfoFailed, setSystemInfoFailed] = useState(false);
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [logFiles, setLogFiles] = useState<LogFile[]>([]);
@@ -1258,11 +1246,8 @@ export default function Debug() {
       const action = getDiagnosticsFixAction(check, t);
       if (!action) return;
 
-      // The button's own disabled state (below, in the render) is an
-      // affordance -- this is the actual gate, same two-layer pattern as
-      // every other capability check tonight. Manual fixes (a toast or a
-      // navigation) call no API and need no capability; only look this up
-      // for the automated ones that actually reach a gated route.
+      // Manual fixes do not call a protected route; automated fixes must pass
+      // the capability check here as well as the button state.
       if (action.automated) {
         const requiredCapability = getRequiredCapabilityForCheck(check.id);
         if (requiredCapability && !can(requiredCapability)) return;

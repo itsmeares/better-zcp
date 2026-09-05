@@ -1,12 +1,8 @@
 /**
  * Shared cookie policy for the panel's refresh-token cookie.
  *
- * Was duplicated between routes/auth.js and routes/oidc.js — oidc.js kept
- * its own copy deliberately (see the comment it left behind) rather than
- * import from a file that was mid-edit by another agent at the time. Now
- * that both routes are stable, this is the one definition both import —
- * two copies of a security-relevant cookie policy WILL drift, and the
- * drift stays invisible until a cookie stops surviving a redirect.
+ * Both routes import this definition so the security-relevant cookie policy
+ * cannot drift between password and OIDC flows.
  */
 
 // Force all refresh cookies to be Secure when the operator has explicitly

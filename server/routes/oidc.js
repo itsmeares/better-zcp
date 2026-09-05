@@ -6,9 +6,9 @@
 //
 // This file owns provider config, the PKCE/state/nonce flow, and ID token
 // validation (services/oidc.js). It deliberately does NOT own user or role
-// resolution — once a token is validated, /callback hands the (already
-// verified) issuer+subject straight to authService.loginWithExternalIdentity(),
-// which is Jim's auth.js work and decides find-vs-refuse/role policy.
+// resolution — once a token is validated, /callback hands the issuer and
+// subject to authService.loginWithExternalIdentity(), which applies the
+// find-or-refuse and role policy.
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import authService from "../services/auth.js";
@@ -154,13 +154,9 @@ router.get("/callback", callbackRateLimiter, async (req, res) => {
     return res.redirect("/?oidcError=invalid_token");
   }
 
-  // User/role resolution is entirely authService's call (Jim's
-  // loginWithExternalIdentity, final signature per god) — this route only
-  // supplies the VALIDATED issuer+subject+email and reacts to the outcome.
-  // loginWithExternalIdentity does NO token verification itself; that
-  // already happened above in handleOidcCallback. Refuse-by-default: an
-  // identity with no local account already linked to it is NOT
-  // auto-created (linked:false, canBootstrapAdmin:false).
+  // Token verification already happened in handleOidcCallback. This route
+  // passes the validated identity to authService and does not auto-create an
+  // account for an unlinked identity.
   let result;
   try {
     result = await authService.loginWithExternalIdentity(
@@ -172,24 +168,9 @@ router.get("/callback", callbackRateLimiter, async (req, res) => {
     return res.redirect("/?oidcError=session_failed");
   }
 
-  // -----------------------------------------------------------------------
-  // BOOTSTRAP GATE SEAM — DO NOT CALL bootstrapAdminFromExternalIdentity()
-  // FROM THIS ROUTE. DO NOT INVENT A GATING MECHANISM HERE.
-  // -----------------------------------------------------------------------
-  // canBootstrapAdmin:true means zero local users exist — the exact same
-  // trust boundary /api/auth/setup relies on for the password path. Kevin
-  // is CURRENTLY closing that boundary (a per-install setup secret,
-  // generated at first boot, written to console/log) because today it's a
-  // free-for-all: whoever reaches a fresh panel first becomes admin. If
-  // this route bootstrapped an OIDC admin without going through whatever
-  // Kevin lands, it would be a side door around his front door — anyone
-  // who can complete a Google login on a fresh panel would own it,
-  // regardless of the setup secret. So: this branch NEVER calls
-  // bootstrapAdminFromExternalIdentity. It only signals the distinct case
-  // (setup_required, not refused) so a future setup flow — gated by
-  // Kevin's mechanism, coordinated through god once its shape is settled —
-  // can pick it up. Until then a brand-new panel's first admin can only be
-  // created via the existing password-based /api/auth/setup route.
+  // Never bootstrap an OIDC identity here. A fresh installation must use the
+  // password setup flow's trust boundary; this branch only reports whether
+  // setup is required or the identity is refused.
   if (!result.linked) {
     log.warn(
       `OIDC identity not linked to any account (sub=${claims.sub}, canBootstrapAdmin=${result.canBootstrapAdmin})`,

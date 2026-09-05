@@ -640,11 +640,8 @@ interface BridgeResultDisplayProps {
 // (failedCount > 0) -- Lua returns the same `data` table either way so a
 // caller can always tell 9-of-10 from 0-of-10 without parsing `results`
 // itself. See server/routes/panelBridge.js's POST /command catch handler for
-// why this can currently be absent on a failed sequence (a separate,
-// server-side gap -- reported, not fixed here, since it's outside this file):
-// when present, render the three real states below; when absent (e.g. an
-// infra-level failure, or the pre-Kevin's-fix bridge mod), fall through to
-// the generic failure card unchanged.
+// Failed sequences may omit this payload on an infrastructure error. In that
+// case the UI falls back to the generic failure card.
 interface EventSequenceStepResult {
   index: number
   kind: string
@@ -1185,13 +1182,8 @@ export default function Events() {
   // once the bridge reports them; sliders fall back to the old hardcoded range until then.
   const [climateRanges, setClimateRanges] = useState<Record<number, ClimateFloatRange>>({})
 
-  // Visual controls (hunt-wave12-2026-08-30: setViewDistance/setDayLight/
-  // setNightStrength/setDesaturation/setAmbient each have a dead dedicated
-  // route -- applied the same way climate above is, through
-  // setClimateFloat with these floats' ids (0/2/9/10/11, see
-  // PanelBridge.lua's handlers.getClimateFloats). Read-back verified before
-  // building this: getClimateFloats already reports all five, so these
-  // sliders show real state, not a seeded guess.
+  // These visual controls use the corresponding climate-float ids and read
+  // their current values from getClimateFloats.
   const [viewDistance, setViewDistance] = useState(0)
   const [dayLight, setDayLight] = useState(0)
   const [nightStrength, setNightStrength] = useState(0)
@@ -1829,15 +1821,8 @@ export default function Events() {
   const removeZombiesNear = (username: string) => panelBridgeApi.clearZombiesNearPlayer(username, clearZombiesRadius)
 
   // Time commands
-  // CORRECTED 2026-08-30 (panelbridge-audit): this comment used to claim the
-  // PanelBridge GameTime multiplier "does not speed up the dedicated server
-  // clock" -- checked against the real jar rather than trusted, and it's
-  // wrong. SetTimeSpeedCommand.class's own method refs are
-  // GameTime.getInstance() -> GameTime.setMultiplier(), the exact same
-  // singleton and field PanelBridge.lua's getGameTime/getTimeSpeed read via
-  // gt:getMultiplier(). RCON's setTimeSpeed IS the authoritative multiplier,
-  // not a separate, disconnected value -- which is why reading it back
-  // (getGameTime's poll, below) is safe to treat as real state.
+  // The bridge reads and writes the server's authoritative game-time
+  // multiplier, so the value returned by getGameTime is safe to display.
   const setGameTimeSpeed = () => executeCommand(`setTimeSpeed ${timeSpeed}`)
 
   // Teleport commands

@@ -320,25 +320,10 @@ export default function ChunkCleaner() {
   const { theme } = useTheme();
   const socket = useSocket();
   const { can } = useAuth();
-  // Bound to routes/chunks.js's requirePermission("chunks.manage") on both
-  // /chunks/save-path and /chunks/delete-chunks -- the same capability for
-  // both, unlike WorldMap's mixed bridge.command/players.gm_tools/
-  // server.world_events split (2026-08-27 bug-hunt capability trace).
+  // Matches the server permission used by both save-path and delete routes.
   const canManageChunks = can("chunks.manage");
-  // 41fa20a3 gated every chunks.js READ route (saves/suggested-paths/
-  // chunks/stats/browse) behind chunks.manage, previously unpermissioned.
-  // Set from a REAL 403 on fetchSaves' mount-time call, not the client-side
-  // canManageChunks guess above -- same precedent as Mods.tsx/Users.tsx/
-  // RolesPermissions.tsx/OidcSettings.tsx/Debug.tsx (28bfb0c), and for the
-  // same reason their own comments give: a stale/wrong local capability
-  // read would either wrongly hide a page the user CAN use, or (worse)
-  // silently skip surfacing that access was genuinely denied. loadChunks
-  // below still guards on canManageChunks directly, matching this file's
-  // OWN existing savePath/deleteChunks convention (assert unreachable,
-  // don't just rely on the UI never offering the path) -- it can only ever
-  // run after a save is selected, which requires fetchSaves to have
-  // succeeded first, so by the time it could fire, canManageChunks and the
-  // real permission state have already had every chance to agree.
+  // Read requests also report permission failures from the server; keep this
+  // separate from the local capability value so the UI can show a real 403.
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [saves, setSaves] = useState<SaveInfo[]>([]);
   const [selectedSave, setSelectedSave] = useState<string>("");
@@ -353,15 +338,8 @@ export default function ChunkCleaner() {
     total: number;
     chunks: number;
   } | null>(null);
-  // Starts true: fetchSaves() always fires from the mount effect below, so
-  // there is never a real moment where we're neither loading nor loaded --
-  // starting this false lied about that window and let saves.length === 0
-  // (the confirmed-empty case) and "haven't fetched yet" render identically
-  // (2026-08-30 visual sweep; same idiom as 3665aa20/da9bb687/a83c425a, but
-  // this one had no honest flag to fall back on even briefly, unlike those
-  // three -- the canvas below reads `false` as "checked and there are none"
-  // from the very first frame, and stays that way for the fetch's entire
-  // duration since the canvas's own condition never consulted this flag).
+  // The initial request starts immediately; keep its loading state true so an
+  // empty list is not mistaken for a confirmed empty result.
   const [loadingSaves, setLoadingSaves] = useState(true);
   const [selectedChunks, setSelectedChunks] = useState<Set<string>>(new Set());
   const { toast } = useToast();
@@ -683,9 +661,7 @@ export default function ChunkCleaner() {
   const persistCurrentPath = useCallback(
     async (pathToSave: string) => {
       if (!pathToSave) return;
-      // Function-level guard, not just the button's disabled state --
-      // 2026-08-27 bug-hunt floor rule (Angela's Console.tsx Enter-key
-      // bypass finding): assert the action is unreachable.
+      // Keep the action guarded when called outside the button handler.
       if (!canManageChunks) return;
       setSavingPath(true);
       try {
@@ -2066,10 +2042,7 @@ export default function ChunkCleaner() {
   // ─── Delete handlers ───
   const handleDelete = async () => {
     if (selectedChunks.size === 0) return;
-    // Function-level guard, not just the trigger button/keyboard-shortcut
-    // disabled state -- 2026-08-27 bug-hunt floor rule (Angela's
-    // Console.tsx Enter-key bypass finding): assert the action is
-    // unreachable, don't just make the control look disabled.
+    // Keep the action guarded when called outside the trigger or shortcut.
     if (!canManageChunks) return;
 
     setDeleting(true);
@@ -2109,17 +2082,9 @@ export default function ChunkCleaner() {
                 maxY: (rect.maxY + 1) * tilesPerChunk,
               });
             } catch (err) {
-              // Bridge unreachable (server stopped, bridge not running) is
-              // benign here — the authoritative vehicles.db cleanup above
-              // already ran server-side, so live removal was only ever a
-              // cosmetic "no ghost car for a second" nicety. A 403 is a
-              // DIFFERENT failure the operator can act on: it means this
-              // role has chunks.manage (or it couldn't have reached this
-              // far) but not bridge.command -- true for every remaining
-              // rectangle too, so stop issuing more calls instead of
-              // repeating the same failure N times. Previously both cases
-              // hit the same bare catch and looked identical — 2026-08-27
-              // bug-hunt silent-swallow-class fix.
+              // Server-side cleanup already ran. Treat an unavailable bridge
+              // as best-effort, but stop after a permission failure because
+              // every remaining rectangle would fail the same way.
               if (err instanceof ApiError && err.status === 403) {
                 toast({
                   title: t("toasts.liveVehicleCleanupNoPermissionTitle"),

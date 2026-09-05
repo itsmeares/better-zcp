@@ -2,22 +2,9 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("SteamOperations");
 
-// Extracted out of routes/server.js (hunt-wave5-2026-08-29, concurrency
-// hunt) so serverManager.js's startServer() can check it too, without a
-// circular import: routes/server.js already imports resolveLaunchMode from
-// serverManager.js, so a reverse edge (serverManager.js importing FROM
-// routes/server.js) would create a real cycle. This module sits below both
-// -- routes/server.js and serverManager.js both import from here, neither
-// imports from the other for this.
-//
-// Tracks in-flight SteamCMD operations (install/update/validate) per
-// normalized install path. POST /install and POST /steam-update
-// (routes/server.js) already guarded against a SECOND SteamCMD operation
-// on the SAME path this way -- what was missing (see
-// server/tests/startServerBlockedDuringSteamOperation.test.js) is that
-// nothing checked this before SPAWNING THE PZ SERVER ITSELF: a Start or
-// Restart could launch the JVM directly against an install directory
-// SteamCMD was still mid-write to.
+// Shared by routes/server.js and serverManager.js so both can coordinate
+// SteamCMD work without introducing a circular import. Operations are tracked
+// per normalized install path, including the server-start guard.
 const activeSteamOperations = new Map();
 export const STEAM_OPERATION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 

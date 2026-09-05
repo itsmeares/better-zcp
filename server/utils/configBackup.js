@@ -100,7 +100,7 @@ async function listBackupsFor(backupDir, filename) {
 // from "the backup failed" ends up treating both the same way, which is
 // exactly how a response ended up asserting a backup existed when it
 // didn't. Same defect shape as
-// `if (!req.user) return next()` from earlier tonight -- one value quietly
+// `if (!req.user) return next()` -- one value quietly
 // carrying two meanings, one benign and one dangerous.
 //   { backedUp: true, name }               -- a real backup now exists on disk
 //   { backedUp: false, reason: "no-source" } -- benign: the file being edited
@@ -191,7 +191,7 @@ export async function createBackup(configPath, filename) {
 // backup-every-time here silently fills the keep-10 quota with duplicate
 // copies of an unchanged file and EVICTS the real, content-different
 // human-edit backups that are the ones actually worth keeping -- the same
-// shape as the sort-order pruner bug fixed earlier tonight, just reached
+// shape as the sort-order pruner bug, just reached
 // by flooding the count instead of misordering it. This is the fix's own
 // answer to that risk, not a follow-up: nothing new is written, so
 // nothing enters the retention count, so nothing gets evicted.

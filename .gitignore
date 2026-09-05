@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-client/node_modules/
 
 # Environment & Secrets (NEVER COMMIT)
 .env
@@ -50,13 +49,12 @@ _artifacts/
 paths.config.json
 data/*.lock
 
-# Secrets relocated out of db.json (jwt.secret, *.secret, per-server RCON store)
-data/jwt.secret
+# Secrets relocated out of db.json (per-server RCON store, reset token)
+data/*.secret
 # Single-use admin password-reset token. The Settings recovery flow tells the
 # operator to paste it from here, so it exists on real installs and is a live
 # credential while unused. The secret list above enumerated members and missed
 # this one; *.token covers the class rather than just the instance.
 data/reset-token.txt
 data/*.token
-data/*.secret
 data/server-secrets/

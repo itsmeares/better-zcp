@@ -2116,8 +2116,8 @@ export async function reassignRoleMembers(fromRole, toRole) {
     // for a seeded target left it stale for a custom one, so every request
     // from a reassigned user kept authorizing against their OLD role
     // indefinitely -- fail-open on the one operation whose entire purpose
-    // is taking access away. Found by Kevin reading this function; the fix
-    // is that .role always becomes the target's exact .name, seeded or not.
+    // is taking access away. Always set .role to the target's exact .name,
+    // whether the target role is seeded or custom.
     user.role = toRole.name;
     count++;
   }

@@ -596,8 +596,8 @@ router.post('/restart-now', async (req, res) => {
     // scheduling half of that same reasoning: someone holding it but not
     // server.control could restart the live server right now through this
     // door, which /server/restart's own gate exists specifically to
-    // require. bug-hunt-2026-08-27, Pam's undersell pass, routed as a
-    // bypass row rather than a label fix.
+    // require. Keep this direct route behind the same capability rather than
+    // allowing the scheduled-task capability to bypass it.
     const allowed = await requireCapabilityInline('server.control', req, res);
     if (!allowed) return;
 

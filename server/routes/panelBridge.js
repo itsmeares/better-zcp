@@ -212,79 +212,13 @@ export const VALID_ACTIONS = new Set([
   "clearErrors",
   "getItemCatalog",
   "getVehicleCatalog",
-  // Was missing entirely (2026-08-29, pin-literal-sendcommand-strings-
-  // against-valid-actions): POST /catalog/debug-item-script has called
-  // bridge.sendCommand("debugItemScript", {}) directly since that route was
-  // added, and the Lua side (PanelBridge.lua's handlers.debugItemScript)
-  // genuinely implements it -- this was never a runtime bug, only a gap in
-  // this allowlist, unlike every other dedicated-route action, which all
-  // have a matching VALID_ACTIONS entry.
+  // Keep this allowlist aligned with the Lua handlers and dedicated routes.
   "debugItemScript",
 ]);
 
-// POST /command is gated bridge.command alone -- deliberately, as the
-// generic passthrough for every action above, including the ~30 with no
-// dedicated route at all (vehicles, safehouses, factions, sandbox reads,
-// time-speed, infrastructure snapshot, event sequences). That breadth is
-// intentional and documented at the route below: those actions are all
-// GM-tool/world-management flavored, the same risk tier as
-// players.gm_tools or server.world_events, which bridge.command -- an
-// admin-only-by-default, deliberately-granted capability -- already
-// legitimately subsumes.
-//
-// The four moderation actions are different in kind, not just degree.
-// "Discipline a player" is carved out into its OWN capability
-// (players.moderate) everywhere else this app reaches it -- players.js's
-// own header comment names exactly why: kick/ban carries a
-// favouritism/griefing risk distinct from a GM tool's risk, which is the
-// entire reason the matrix splits players.moderate from players.gm_tools
-// in the first place. These four have no dedicated route of their own (the
-// only caller is Events.tsx's "Moderation Automation" panel, via this
-// exact endpoint), so bridge.command is currently their ONLY gate -- a
-// custom role granted bridge.command for legitimate GM/world-event
-// automation, but never granted players.moderate, gets full kick/ban/
-// ban-by-IP/ban-by-SteamID power as an undocumented side effect.
-// bug-hunt-2026-08-27: Pam's cross-route-family capability sweep.
-//
-// setGodMode/setInvisible/setNoclip/healPlayer are the SAME shape, found the
-// same day (bug-hunt-2026-08-27, were-the-dedicated-gm-tools-routes-ever-wired):
-// unlike the moderation four, these DO each have a dedicated, correctly-
-// gated players.gm_tools route (players.js's /godmode, /invisible, /noclip;
-// this file's /players/:username/heal) -- but Players.tsx has not called any
-// of them since commit 8bd0edc ("Release v1.0.2"), which silently swapped
-// three of the four onto this passthrough (and built the fourth, heal,
-// against the passthrough from the start) as an incidental side effect of an
-// unrelated 641-line UI-overhaul release commit, with no comment anywhere in
-// that diff acknowledging the capability implication.
-//
-// hunt-wave12-2026-08-30 UI-reachability audit, extending the above: THIS
-// FILE also has its own dedicated /players/:username/godmode and
-// /players/:username/invisible routes (below), separate from players.js's
-// /godmode and /invisible -- the original 2026-08-27 comment named only the
-// players.js pair and didn't mention this file has a second, independent
-// implementation. Checked both: players.js's /godmode, /invisible AND this
-// file's /players/:username/godmode, /players/:username/invisible are ALL
-// dead (playersApi.setGodMode/setInvisible, the client wrappers for the
-// players.js pair, are never called either). The only live path for
-// setGodMode/setInvisible is this route's own bridge.command passthrough,
-// same as healPlayer.
-//
-// The two buckets below use DIFFERENT gating shapes, not the same one:
-//  - The moderation four have no dedicated route of their own, so the
-//    capability named here is ADDITIONAL, on top of this route's own
-//    bridge.command gate (still enforced for them -- see
-//    requireBridgeCommandUnlessGmToolsOnly below).
-//  - The GM four (GM_TOOLS_ONLY_ACTIONS) use REPLACEMENT semantics as of
-//    an operator ruling (bug-hunt-2026-08-27, reverses c3083d5 the same
-//    day): players.gm_tools ALONE is sufficient, and bridge.command is not
-//    required at all for these four. c3083d5 had made it "gm_tools AND
-//    bridge.command" -- the operator ruled that was never the intended
-//    fix, since bridge.command was only ever an accidental side effect of
-//    these four routing through the generic passthrough, and requiring it
-//    denies Technician (who holds gm_tools but not bridge.command by
-//    default) the GM tools it's meant to have. A role holding ONLY
-//    players.gm_tools must reach these four through this passthrough, the
-//    same as it already can through their own dedicated routes.
+// POST /command uses bridge.command by default. Actions listed in
+// BRIDGE_ACTION_CAPABILITY may require an additional or replacement
+// capability; the explicit sets below define which semantics apply.
 export const BRIDGE_ACTION_CAPABILITY = {
   moderationKickUser: "players.moderate",
   moderationBanUser: "players.moderate",
@@ -294,39 +228,10 @@ export const BRIDGE_ACTION_CAPABILITY = {
   setInvisible: "players.gm_tools",
   setNoclip: "players.gm_tools",
   healPlayer: "players.gm_tools",
-  // ADDITIONAL semantics (bridge.command AND bridge.diagnostics), not
-  // GM_TOOLS_ONLY_ACTIONS replacement semantics -- unlike the GM four,
-  // there's no described legitimate automation role that needs this
-  // specific debug/diagnostic probe without also holding bridge.command;
-  // its own dedicated route (POST /catalog/debug-item-script) already gates
-  // on bridge.diagnostics alone, but adding debugItemScript to VALID_ACTIONS
-  // (this same commit) makes it newly reachable through the generic
-  // passthrough too -- without this entry, ANY role holding only
-  // bridge.command (e.g. a GM/world-event automation role) would gain this
-  // debug action for free, the exact bypass class e728248 closed for the
-  // moderation four.
+  // Requires bridge.command and bridge.diagnostics.
   debugItemScript: "bridge.diagnostics",
-  // 2026-08-31 bug hunt: these eight are the SAME actions the 2026-08-27
-  // ranked-bug #5 ruling (see the big comment above the route matrix,
-  // "operator ruling on ranked-bug #5") moved off server.world_events onto
-  // players.endanger_or_impersonate for their own dedicated routes
-  // (/sound/near-player, /sound/gunshot, /sound/alarm, /sound/noise,
-  // /zombies/spawn-near, /zombies/spawn-behind, /chat/admin,
-  // /chat/general) -- but this generic passthrough was never updated to
-  // match, so a role holding only bridge.command (a legitimate GM/
-  // world-event-automation grant, per this file's own header comment) could
-  // reach targeted zombie-spawning, targeted sound effects, and chat
-  // impersonation-as-server/admin through POST /command with no
-  // endanger_or_impersonate check at all -- the exact bypass class e728248
-  // closed for the moderation four, just not extended here. REPLACEMENT
-  // semantics (see ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS below), not
-  // ADDITIONAL like the moderation four or debugItemScript: unlike
-  // debugItemScript (ADDITIONAL because "there's no described legitimate
-  // automation role that needs this probe without also holding
-  // bridge.command"), a role holding ONLY players.endanger_or_impersonate
-  // already reaches all eight through their dedicated routes today --
-  // requiring bridge.command here too would newly block that role from this
-  // passthrough for actions it's otherwise fully entitled to.
+  // These targeted actions use players.endanger_or_impersonate instead of
+  // bridge.command, matching their dedicated routes.
   playSoundNearPlayer: "players.endanger_or_impersonate",
   triggerGunshot: "players.endanger_or_impersonate",
   triggerAlarmSound: "players.endanger_or_impersonate",
@@ -337,11 +242,8 @@ export const BRIDGE_ACTION_CAPABILITY = {
   sendToGeneralChat: "players.endanger_or_impersonate",
 };
 
-// The subset of BRIDGE_ACTION_CAPABILITY that uses REPLACEMENT semantics
-// (see the comment above) -- an explicit set rather than derived from the
-// capability string, so a future action that happens to reuse
-// "players.gm_tools" with ADDITIONAL semantics can't silently fall into
-// the wrong bucket.
+// Explicit replacement-capability sets prevent a future action from inheriting
+// semantics merely because it uses the same capability string.
 export const GM_TOOLS_ONLY_ACTIONS = new Set([
   "setGodMode",
   "setInvisible",
@@ -349,11 +251,7 @@ export const GM_TOOLS_ONLY_ACTIONS = new Set([
   "healPlayer",
 ]);
 
-// Same REPLACEMENT-semantics bucket as GM_TOOLS_ONLY_ACTIONS above, for the
-// eight players.endanger_or_impersonate actions (2026-08-31 bug hunt) --
-// see BRIDGE_ACTION_CAPABILITY's own comment on those eight entries for why
-// this is REPLACEMENT (matching their dedicated routes, which require
-// players.endanger_or_impersonate alone) rather than ADDITIONAL.
+// Targeted sound, zombie, and chat actions use the same replacement rule.
 export const ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS = new Set([
   "playSoundNearPlayer",
   "triggerGunshot",
@@ -365,16 +263,9 @@ export const ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS = new Set([
   "sendToGeneralChat",
 ]);
 
-// POST /command's own gate can't be a flat requirePermission("bridge.command")
-// the way every other bridge.setup route above is: GM_TOOLS_ONLY_ACTIONS and
-// ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS must each be reachable WITHOUT
-// bridge.command, decided per-request by the action in the body, which
-// requirePermission()'s capability argument (fixed at route-registration
-// time) has no way to see. This still enforces authentication (401) exactly
-// like requirePermission does; it only skips the bridge.command capability
-// check when the action is in one of those two REPLACEMENT-semantics sets,
-// leaving BRIDGE_ACTION_CAPABILITY's own inline check further down in the
-// handler as their sole gate.
+// The route-level middleware cannot choose a capability from the request body,
+// so replacement actions skip the default bridge.command check and are
+// authorized by the inline matrix check in the handler.
 const requireBridgeCommand = requirePermission("bridge.command");
 function requireBridgeCommandUnlessGmToolsOnly(req, res, next) {
   const { action } = req.body || {};
@@ -2052,7 +1943,7 @@ router.post("/climate/reset", requirePermission("server.world_events"), async (r
 });
 
 // Individual climate shortcuts (setTemperature/setWind/setFog/setClouds).
-// hunt-wave12-2026-08-30 UI-reachability audit: all four are dead routes --
+// These dedicated routes are retained for compatibility; the client uses
 // nothing in client/src calls any of them. The feature is not missing:
 // Events.tsx's climate panel (temperature/wind/fog/clouds/humidity/
 // precipitation sliders) applies through the generic setClimateFloat
@@ -2286,8 +2177,8 @@ router.get("/world/stats", requirePermission("server.world_events"), async (req,
 
 // Save world. admin+technician, matching /api/server/save -- an operational
 // action, not player-facing GM authority.
-// hunt-wave12-2026-08-30 UI-reachability audit: this dedicated route itself
-// is dead -- nothing in client/src calls POST /panel-bridge/world/save
+// The client reaches this action through the command passthrough rather than
+// POST /panel-bridge/world/save
 // directly. Two separate live paths exist instead: Scheduler.tsx's
 // schedulable 'bridge:saveWorld' preset (still this same action, via the
 // /panel-bridge/command passthrough, not this route); and Dashboard.tsx's
@@ -2454,8 +2345,7 @@ router.post("/message", requirePermission("server.world_events"), async (req, re
 });
 
 // Sandbox options (read-only)
-// hunt-wave12-2026-08-30 UI-reachability audit: dead route -- nothing in
-// client/src calls GET /panel-bridge/sandbox. ServerConfig.tsx reads
+// ServerConfig.tsx reads
 // sandbox options through the passthrough action getAllSandboxOptions
 // instead (a different, broader action, not this route's getSandboxOptions).
 router.get("/sandbox", requirePermission("players.gm_tools"), async (req, res) => {
@@ -2488,7 +2378,6 @@ router.get("/sandbox", requirePermission("players.gm_tools"), async (req, res) =
 // several missing actions have no dedicated route anywhere in this
 // codebase to verify a real argument shape through, and documenting a
 // shape nobody has confirmed would be worse than the current gap).
-// bug-hunt-2026-08-27.
 router.get("/commands", (req, res) => {
   res.json({
     commands: [
@@ -3009,12 +2898,8 @@ router.get("/commands", (req, res) => {
           z: "number (optional default: 0)",
         },
       },
-      // addLamppost/removeLamppost removed here 2026 (release v0.8.0, commit
-      // f47ea1a) -- deliberately dropped from VALID_ACTIONS, but these two
-      // documentation entries were left behind and kept advertising them as
-      // callable. POST /command's whitelist check would refuse either one
-      // with "Unknown or invalid action" if anyone tried, since neither name
-      // exists in VALID_ACTIONS any more. bug-hunt-2026-08-27.
+      // addLamppost/removeLamppost are not in VALID_ACTIONS and must not be
+      // advertised as callable commands.
 
       // === Moderation Automation ===
       {
@@ -3782,8 +3667,7 @@ router.post("/character/import", requirePermission("players.gm_tools"), async (r
 // ============================================
 
 // Give item to player
-// hunt-wave12-2026-08-30 UI-reachability audit: dead route -- nothing in
-// client/src calls it. Players.tsx's "Give items" flow (SpawnBrowser
+// The client uses Players.tsx's "Give items" flow (SpawnBrowser
 // dialog) calls playersApi.addItem instead -- a different API family
 // entirely (players.js's own route, not this file's giveItem action).
 router.post("/players/:username/give-item", requirePermission("players.gm_tools"), async (req, res) => {

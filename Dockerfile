@@ -27,6 +27,7 @@ RUN corepack enable
 # pnpm's workspace lockfile includes the platform-specific optional binaries.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY client/package.json ./client/package.json
+COPY .husky/install.mjs ./.husky/install.mjs
 RUN corepack install && pnpm install --filter pz-server-manager-client --frozen-lockfile
 
 # Copy client source and build.
@@ -77,9 +78,11 @@ RUN set -eux; \
     fi
 
 WORKDIR /app
+ENV NODE_ENV=production
 
 # Install server dependencies only (no devDeps).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY .husky/install.mjs ./.husky/install.mjs
 RUN corepack enable && corepack install && pnpm install --filter pz-server-manager --prod --frozen-lockfile
 
 # Copy server source
@@ -113,8 +116,7 @@ ENV PANEL_BUILD_SHA=${PANEL_BUILD_SHA}
 
 EXPOSE 3001
 
-ENV NODE_ENV=production \
-    PUID=1000 \
+ENV PUID=1000 \
     PGID=1000
 
 # Healthcheck hits the unauthenticated /api/health endpoint.

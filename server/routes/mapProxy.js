@@ -13,20 +13,9 @@ const execFileAsync = promisify(execFile);
 
 const router = express.Router();
 
-// ROLE NOTE (role-sweep, not this file's original author): no requireRole
-// anywhere in this file, deliberately, on two different grounds:
-//   - /tiles/:level/:tile, /toptiles/:level/:tile, /b41tiles/:level/:tile
-//     are already exempted from the central login gate entirely (see
-//     authService.middleware(), which matches /api/map/tiles/,
-//     /api/map/toptiles/, /api/map/b41tiles/ before req.user is ever set —
-//     they're loaded via <img> tags, which can't send an auth header). A
-//     role check here would be dead code: req.user is never populated for
-//     these paths in the first place.
-//   - /resolve and /vehicles ARE behind the login gate (any authenticated
-//     request reaches them) and stay open to every role on purpose: viewing
-//     the world map and live vehicle positions is exactly the kind of thing
-//     a moderator wants for locating a reported incident, and neither
-//     returns anything sensitive or mutates any state.
+// Tile requests are public image loads and cannot carry an auth header.
+// /resolve and /vehicles remain readable by every authenticated role because
+// they expose map state without mutating it or returning sensitive data.
 //
 // ─── Persistent disk-backed tile cache ───────────────────────────────────
 // A given PZ map build's tiles never change once published, so unlike a
@@ -354,7 +343,7 @@ let _b42ResolvePromise = null;
 // dynamic resolve would have picked (it does today), so the directory string
 // alone cannot tell a healthy resolve apart from a permanently broken one —
 // this is what makes the fallback silent without an explicit source flag.
-let _b42Source = null; // "dynamic" | "fallback" — contract fixed in conv-mapbuild, shared with getB42ResolutionStatus()'s consumers
+let _b42Source = null; // "dynamic" | "fallback" — shared with getB42ResolutionStatus()
 let _b42FallbackReason = null; // why we're not on "dynamic", or null when the last resolution attempt succeeded
 
 // Same known-safe conservative floor as the client's own
@@ -365,12 +354,8 @@ let _b42FallbackReason = null; // why we're not on "dynamic", or null when the l
 // every server-side "deepest level probably safe to trust before real
 // discovery confirms otherwise" computation goes through this one
 // constant/function rather than repeating the literal `- 6` inline, so a
-// future change to the offset can't silently miss a site (bug-hunt-
-// 2026-08-27, the-maxlevel-minus-6-floor-is-one-rule-on-the-client-and-
-// four-literals-on-the-server card — this collapses three of those four
-// into one; the fourth, B42_GEOMETRY_FALLBACK below, is a DELIBERATE
-// exception to this rule, not a fourth call site of it — see its own
-// comment for why).
+// future change to the offset can't silently miss a site. The fourth use,
+// B42_GEOMETRY_FALLBACK below, is a deliberate exception; see its comment.
 const RENDERED_MAX_LEVEL_CONSERVATIVE_OFFSET = 6;
 function conservativeRenderedMaxLevel(maxLevel) {
   return Math.max(0, maxLevel - RENDERED_MAX_LEVEL_CONSERVATIVE_OFFSET);
@@ -422,7 +407,7 @@ async function hasTileCoverage(directory, geometry) {
 // tiles is roughly 563,000 tiles for one floor, so real coverage falls well
 // short and the client (WorldMap.tsx) was clamping to this inflated ceiling
 // and asking for tiles that 404 across most of the map — see GH#109 /
-// conv-gh109-worldmap-black. hasTileCoverage() above already establishes,
+// GH#109. hasTileCoverage() above already establishes,
 // empirically, that maxLevel-6 is deep enough to find real tiles at these
 // probe points; that's what gates picking this directory at all, so it's a
 // known-good floor here, not a guess. Binary search the [maxLevel-6,
@@ -647,14 +632,13 @@ async function getB42Dir() {
 // For the worldmap diagnostic: reports whether the build currently in use
 // was actually discovered dynamically or is the hardcoded fallback, and
 // why. Never infer health from the directory string alone (see
-// _b42Source's comment above) — call this instead. Contract fixed in
-// conv-mapbuild (corrected): { source, directory, reason }, shared with
+// _b42Source's comment above) — call this instead. Contract:
+// { source, directory, reason }, shared with
 // debug.js. Two source values only — a client-resolve tier was considered
-// and explicitly rejected: Pam could not get a single verified-working
-// cross-origin resolve through Cloudflare from any browser she could drive,
-// and shipping unverifiable fallback machinery is worse than not having it
-// — it's the same "looks healthy, isn't" shape as the defect this whole
-// feature exists to fix.
+// and explicitly rejected: a verified cross-origin resolve through
+// Cloudflare was not reliable from a browser, so shipping
+// unverifiable fallback machinery would create the same "looks healthy,
+// isn't" failure this feature is meant to prevent.
 function getB42ResolutionStatus() {
   return {
     source: _b42Source,
@@ -757,7 +741,7 @@ async function fetchTileWithRetry(url) {
   }
 }
 
-// hunt-wave10-2026-08-29 (suspect 4, REAL): the browser-facing tile URL
+// The browser-facing tile URL
 // (/api/map/tiles/:level/:tile, no :dir segment — see the comment on
 // buildDirectTileUrl in WorldMap.tsx) carries no identifier for WHICH
 // resolved B42 build (getB42Dir()) produced the bytes at that URL, but this
@@ -776,7 +760,7 @@ async function fetchTileWithRetry(url) {
 // file's own disk/mem cache (Tier 1/2 above), so shortening this does not
 // reintroduce a real upstream round-trip on the common path.
 //
-// hunt-wave12-2026-08-30 (version-the-tile-url-by-resolved-b42-build): the
+// The version marker on that URL means the
 // 1h bound above CAPS staleness, it doesn't eliminate it -- it exists only
 // because the browser-facing URL for /tiles and /toptiles has no component
 // identifying which resolved B42 build (getB42Dir()) produced the bytes.

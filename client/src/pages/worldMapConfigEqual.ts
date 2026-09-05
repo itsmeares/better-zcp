@@ -1,6 +1,6 @@
 import type { MapConfig } from './WorldMap'
 
-// conv-worldmap-black-2026-08-31: detectServerVersion's "skip if nothing
+// detectServerVersion's "skip if nothing
 // changed" guard used to compare a hand-picked field LIST (label, tileSize,
 // fullWidth, isoX0, isoY0) instead of the whole config. That list was
 // widened once already, from a label-only check to those five geometry

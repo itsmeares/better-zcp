@@ -411,15 +411,8 @@ export default function Mods() {
   const [presets, setPresets] = useState<ModPreset[]>([])
   const [presetsLoading, setPresetsLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
-  // mods.js gates its whole router (reads included) behind mods.manage --
-  // so a role that lacks it doesn't get a partially-broken page, it gets
-  // every one of the five mount-time fetches below rejecting at once and
-  // "The backend may be unreachable" being shown, which is FALSE: the
-  // backend answered and said no (bug-hunt-2026-08-27, Angela's stock-role
-  // hunt). Answer that with one clean page-level state instead, same
-  // precedent as Users.tsx/RolesPermissions.tsx/OidcSettings.tsx/
-  // Debug.tsx (28bfb0c) -- a real 403 from the mount-time fetch, not a
-  // client-side can() guess.
+  // The router requires mods.manage for reads and writes. Track a server 403
+  // separately so permission denial is not shown as a network failure.
   const [permissionDenied, setPermissionDenied] = useState(false)
   const [savePresetOpen, setSavePresetOpen] = useState(false)
   const [presetName, setPresetName] = useState('')
@@ -2704,11 +2697,7 @@ export default function Mods() {
           </div>
         )}
 
-        {/* hunt-wave7-2026-08-29: mods Steam confirmed no longer exist on the
-            Workshop (EResult 9 -- FileNotFound). Warning-style, not quiet --
-            unlike a transient Steam API outage below, this needs the
-            operator to actually act: the item is never coming back and will
-            keep breaking future update checks / restarts until removed. */}
+        {/* A confirmed missing Workshop item requires operator action. */}
         {removedWorkshopMods.length > 0 && (
           <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm">
             <div className="flex items-start gap-3">
@@ -2748,18 +2737,8 @@ export default function Mods() {
           </div>
         )}
 
-        {/* hunt-wave7-2026-08-29: Steam Workshop API unreachable this cycle
-            (quiet -- deliberately NOT the accented-warning treatment above).
-            Unlike the removed-mods case, this needs the operator to do
-            NOTHING: mod update-checking silently fell back to local-file-only
-            comparison and will resume checking Steam automatically on the
-            next cycle. Shown immediately on a single failed cycle rather
-            than debounced, because a check cycle (tens of minutes) is
-            already the finest-grained real fact this system produces --
-            there's no sub-cycle flapping to filter the way Discord's
-            multi-second gateway reconnects needed. The muted styling, not a
-            delay, is what keeps this from training the operator to ignore
-            it. */}
+        {/* A transient Workshop outage falls back to local comparison and
+            retries on the next update cycle. */}
         {status && !status.steamApiHealthy && status.lastSteamApiFailureAt &&
           steamApiIssueDismissed !== status.lastSteamApiFailureAt && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -2786,15 +2765,8 @@ export default function Mods() {
             </div>
         )}
 
-        {/* hunt-wave7-2026-08-29: the THIRD state -- Steam answered with a
-            resultCode other than 1 (found) or 9 (removed). Neither
-            "confirmed gone" nor "healthy", so no warning/action framing and
-            no muted "this will self-heal" framing either -- purely
-            informational, no icon severity. Deliberately shows the RAW
-            resultCode rather than any invented explanation: only 1 and 9
-            are verified against Steam's own EResult meaning here, and a
-            guessed label for an unverified code is worse than the bare
-            number, which at least a support ticket can act on precisely. */}
+        {/* Unknown Workshop result codes stay informational and display the
+            raw code instead of an unverified label. */}
         {(status?.unknownWorkshopIds?.length ?? 0) > 0 && (
           <div className="flex flex-wrap items-start gap-2 px-1 text-xs text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />

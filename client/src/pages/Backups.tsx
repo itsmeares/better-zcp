@@ -81,14 +81,8 @@ export default function Backups() {
   // State
   const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null)
   const [backups, setBackups] = useState<ServerBackupArchive[]>([])
-  // Set once fetchBackups() itself has settled (success or failure), distinct
-  // from the shared `loading` flag below which only clears once ALL THREE of
-  // refreshAll()'s concurrent fetches finish. Without this, `backups.length
-  // === 0` is ambiguous between "confirmed empty" and "not fetched yet" --
-  // exactly the gap that let the main card show an infinite spinner even
-  // after backupStatus (a DIFFERENT one of those three fetches) had already
-  // resolved to a definitive "no saves folder" answer visible in the header
-  // above it (2026-08-30 visual sweep).
+  // Separate from the shared loading flag: the backup list can be resolved
+  // before the other refreshAll() requests finish.
   const [backupsLoaded, setBackupsLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -106,17 +100,8 @@ export default function Backups() {
   const [activeServerRemote, setActiveServerRemote] = useState(false)
   const [activeServerId, setActiveServerId] = useState<string | number | null>(null)
   const [history, setHistory] = useState<BackupHistoryRecord[]>([])
-  // bug-hunt-2026-09-04: the comment on activeServerRemote/activeServerId
-  // above CLAIMED this already refreshed on the server-changed socket event
-  // "via socket effect below" -- it didn't; only backup:progress was ever
-  // subscribed. createBackup()/restoreBackup(name)/deleteBackup(name) all
-  // resolve the active server fresh server-side per-request (same pattern
-  // as ServerConfig's ini/sandbox routes), so a stale display here isn't
-  // just cosmetic: restoreBackup is a live-world overwrite. True only for
-  // the brief window between the switch and refreshAll() landing, and used
-  // to also close any destructive dialog left open across a switch, since
-  // its own local state (a specific backup name) doesn't update just
-  // because the list behind it refreshed.
+  // Mark the view stale during an active-server switch so destructive dialogs
+  // cannot operate on a list from the previous server.
   const [serverChangedSinceLoad, setServerChangedSinceLoad] = useState(false)
   // Named in the restore confirmation itself, read fresh at the moment the
   // dialog opens -- not from activeServerId/mount state -- because the
@@ -289,10 +274,7 @@ export default function Backups() {
 
   // Actions
   const handleCreateBackup = async () => {
-    // Function-level guard, not just the button's `disabled` -- the button
-    // is an affordance, this is the gate. 2026-08-27 bug-hunt floor rule:
-    // assert the action is unreachable, don't just make the control look
-    // disabled (Angela's Console.tsx Enter-key bypass finding).
+    // Keep the action guarded even when called outside the button handler.
     if (!canManageBackups) return
     if (serverChangedSinceLoad) {
       toast({
@@ -1045,15 +1027,8 @@ export default function Backups() {
         </CardHeader>
         <CardContent>
           {backupStatus && !backupStatus.savesExists && backupsLoaded && backups.length === 0 ? (
-            // Known, actionable answer as soon as BOTH fetches it actually
-            // depends on have resolved -- doesn't wait on the unrelated,
-            // slower-or-not fetchHistory() call the generic `loading` flag
-            // below is also gated on. Matches the informative "what was
-            // tried, how to fix it, an action" pattern Chunks and Mods
-            // already use for this identical no-saves-folder condition,
-            // rather than inventing a fourth one (2026-08-30 visual sweep:
-            // this card used to show an infinite spinner here even after
-            // the header above had already resolved to the same fact).
+            // The empty state depends only on backupStatus and the backup
+            // list, so it should not wait for unrelated history requests.
             <EmptyState
               type="empty"
               title={t('mainCard.noSavesFolderTitle')}
@@ -1251,23 +1226,8 @@ export default function Backups() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Restore Confirmation Dialog. Michelle's UX audit (2026-08-26): this
-          used to be styled text-warning/bg-warning -- the same tier as
-          "delete a few old backup files" below -- despite replacing the
-          entire live world, arguably the highest-impact button in the app.
-          Bumped to text-destructive/bg-destructive to match this file's own
-          single-backup delete dialog and Dashboard's wipe confirm button,
-          both of which already use destructive for a smaller blast radius
-          than a full restore. Also fixed the bullet list's self-contradiction
-          flagged by the same audit: bulletSafetyBackup ("the panel will
-          create a safety backup") and the old bulletCannotUndo ("this action
-          cannot be undone") asserted opposite things. Verified against
-          backupService.js's restoreBackup() and this component's own
-          handleRestoreBackup call (passes createPreRestoreBackup: true) --
-          the safety-backup claim is true, so "cannot be undone" was the
-          false one: a restore CAN be undone, just not automatically.
-          Replaced with bulletUndoRequiresRestore, which keeps the real
-          warning (undoing isn't one click) without the false claim. */}
+      {/* Restoring replaces the live world. The confirmation copy also notes
+          that undoing it requires another restore, despite the safety backup. */}
       <AlertDialog open={restoreDialog.open} onOpenChange={(open) => setRestoreDialog({ open, backupName: null })}>
         <AlertDialogContent>
           <AlertDialogHeader>

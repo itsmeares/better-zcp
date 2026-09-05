@@ -364,8 +364,8 @@ pnpm test                  # Run tests
 - **Discord** — [discord.gg/jHsWJDNmSg](https://discord.gg/jHsWJDNmSg) for questions, support, and feature ideas.
 - **Discussions** — [Ask questions and share ideas](https://github.com/itsmeares/better-zcp/discussions).
 - **Issues** — [Report bugs or request features](https://github.com/itsmeares/better-zcp/issues) on GitHub.
-- **Contributing** — Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
-- **Security** — Follow [SECURITY.md](SECURITY.md) for private vulnerability reports.
+- **Contributing** — Read [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) before opening a pull request.
+- **Security** — Follow [.github/SECURITY.md](.github/SECURITY.md) for private vulnerability reports.
 - **Release notes** — See the [latest release notes](https://github.com/itsmeares/better-zcp/releases/latest) for what's new.
 
 ---

@@ -16,38 +16,12 @@
  *   the opt-in "include DB" game-backup zip), so a signing key kept there
  *   would ride along in both.
  *
- * 2026-08-29 (auth/sessions hunt, hunt-wave7): two things in the Design
- * block above were stale, found in two passes, not one.
+ * Access tokens are short-lived because logout revokes refresh sessions, not
+ * already-issued access tokens. The client refreshes on 401, so the shorter
+ * window does not interrupt active use.
  *
- * FIRST PASS fixed only the line I was explicitly told about: access
- * tokens used to be 24h, and this comment already called that
- * "short-lived" -- it never was. An access token can't be individually
- * revoked (logout only revokes the refresh SESSION, see logout() below;
- * authenticateAccessToken() only ever checks tokenGen, which logout
- * doesn't touch), so 24h was the real size of the "logout doesn't
- * actually log you out" window. 15m is anchored to two measured, real
- * properties of this app, not a round number that felt safe: (1)
- * client/src/lib/api.ts already does transparent, deduped refresh-on-401
- * (one extra round trip, replayed once, safe even for mutations since the
- * server rejects the original request first) -- the machinery that makes
- * a short TTL free was already built and working, so shortening this
- * completes a design that was three-quarters there rather than trading UX
- * for security; (2) the client's own busiest legitimate polling interval
- * observed in this codebase is 5s (ServerConfig.tsx), with most pages in
- * the 10-30s range -- 15m is roughly two orders of magnitude above every
- * one of them, so active use essentially never re-triggers a refresh more
- * than once per TTL window, not once per poll.
- *
- * SECOND PASS, after being asked to re-check the rest of the SAME block
- * rather than trust that fixing the one named line meant it was clean:
- * the "stored in db.json" line was ALSO stale -- pointed at a location
- * this service moved away from specifically for a security reason (see
- * utils/jwtSecret.js: db.json is copied wholesale by two backup paths, so
- * a signing key kept there would ride along in both), which made it
- * actively misleading to anyone reasoning about backups/restores, not
- * merely out of date. A named fix is a searchlight -- it lights one spot
- * and leaves its neighbors dark unless you deliberately read past the
- * edge of what was pointed at.
+ * The signing key lives outside db.json because database backups copy that
+ * file wholesale. See utils/jwtSecret.js for the file lifecycle.
  */
 
 import bcrypt from "bcryptjs";
@@ -901,11 +875,8 @@ class AuthService {
   }
 
   // ============================================
-  // OIDC seam — for Dwight's OIDC work. These methods do NO token
-  // verification of their own; the caller must have already verified the
-  // external provider's ID token / userinfo response before calling any of
-  // these. They only map an already-verified external identity to a local
-  // account (and issue a normal panel session, for the login path).
+  // OIDC methods receive an already-verified external identity. Token
+  // verification belongs to the route/service that handles the provider flow.
   // ============================================
 
   /**
@@ -1312,7 +1283,7 @@ class AuthService {
         // exact path out of its router-level requirePermission("mods.manage")
         // gate to match (see the comment above that router.use() there); if
         // that carve-out is ever removed, this route 401s for everyone again
-        // (9c6ce2e / v1.2.0, conv-mods-thumbnails).
+        // Keep this exception aligned with routes/mods.js.
         if (req.path.startsWith("/api/mods/thumbnail/")) {
           return next();
         }

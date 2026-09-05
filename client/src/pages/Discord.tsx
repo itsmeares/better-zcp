@@ -243,13 +243,8 @@ export default function Discord() {
   const eventLabels = useMemo(() => getEventLabels(t), [t]);
   const SETUP_STEPS = useMemo(() => getSetupSteps(t), [t]);
   const confirm = useConfirm();
-  // Every mutating route on this page sits behind one whole-file server
-  // gate -- router.use(requirePermission("integrations.manage")) in
-  // server/routes/discord.js:41, no per-route override anywhere -- so a
-  // single capability covers the entire page (verified against the live
-  // route list, bug-hunt-2026-08-27 Tier-3 sweep). Open/true when
-  // capabilities are unknown/null, same convention as every other
-  // capability check in the app.
+  // The page's mutating routes share the server-side integrations.manage
+  // permission, so one capability gates all actions here.
   const { can } = useAuth();
   const canManageIntegrations = can("integrations.manage");
   const [status, setStatus] = useState<DiscordStatus | null>(null);
@@ -437,9 +432,7 @@ export default function Discord() {
   );
 
   const handleSaveConfig = async (andStart = false) => {
-    // The disabled attribute on the buttons below is only the affordance --
-    // this early return is the real gate, in case another path ever calls
-    // this handler directly (bug-hunt-2026-08-27 floor rule).
+    // Keep the action guarded when called outside the button handler.
     if (!canManageIntegrations) return;
     try {
       setSaving(true);

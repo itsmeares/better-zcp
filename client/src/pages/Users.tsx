@@ -87,13 +87,8 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
 
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
 
-  // Focus-restore-after-delete pattern (Pam found the shape; see the block
-  // comment above the effect below for the full writeup) -- REPLICATE THIS
-  // SHAPE, don't just copy these three lines, for every other useConfirm()
-  // delete site: refs to each row's own trigger, a "where should focus go
-  // next" ref set BEFORE the row is removed (its neighbors are only knowable
-  // from the list as it exists right now), and a stable fallback for when
-  // the list empties out.
+  // Store the post-delete focus target before removing the row. The next row,
+  // previous row, or add-user button provides a stable keyboard fallback.
   const rowDeleteButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const pendingFocusTargetRef = useRef<string | 'fallback' | null>(null)
   const addUserButtonRef = useRef<HTMLButtonElement>(null)

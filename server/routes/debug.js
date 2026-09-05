@@ -404,7 +404,7 @@ async function collectBundleKnownSecrets() {
  *
  * MUST NOT touch ordinary diagnostic text -- proven by the regression test
  * built from the exact "Text file busy" .NET stack trace that motivated
- * tonight's Docker/systemd log capture in the first place. A scrubber that
+ * the Docker/systemd log capture in the first place. A scrubber that
  * mangled that line would have destroyed the one piece of evidence that
  * made the feature useful.
  */
@@ -5076,7 +5076,7 @@ function buildStaleLocksCheck(saveStats, saveDirUsed) {
         category: "server",
         hint: "Stop the server, delete every *.lock file under the save folder, then restart.",
         meta: { staleLocks: saveStats.staleLocks.slice(0, 10) },
-        // NOTE (flagged to god, not inherited by accident): `dir` is the
+        // NOTE: `dir` is the
         // save folder's absolute path. The English fallback `message`
         // above already ships it unredacted (message/label/hint were never
         // sanitized, only `params` is) -- but sanitizeErrorParams() WILL
