@@ -2594,10 +2594,7 @@ export const panelBridgeApi = {
         worldAgeHours: number;
         moonPhase: number;
         nightsSurvived: number;
-        // Optional: added 2026-08-30 (panelbridge-audit) to the Lua
-        // handler's response, and read defensively (typeof check, not a
-        // required field) by Events.tsx's time-speed slider -- a bridge
-        // mod predating that Lua change simply won't send it yet.
+        // Older bridge mods may omit this optional read-back value.
         multiplier?: number;
       };
     }>,
@@ -3608,9 +3605,7 @@ export const usersApi = {
     apiDelete(`/auth/users/${encodeURIComponent(userId)}`),
 };
 
-// OIDC settings (server/routes/oidc.js "Settings" section, gated on
-// panel.settings) -- built by Kevin to the shape agreed in advance. Every
-// field here mirrors the server's own publicSettingsShape() exactly.
+// OIDC settings exposed by the server's public settings shape.
 export interface OidcSettingsFields {
   issuerUrl: string;
   clientId: string;

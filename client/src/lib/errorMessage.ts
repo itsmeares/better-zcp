@@ -65,37 +65,14 @@ function getRegisteredTranslation(code: string, params: TranslationParams | unde
   return resolveRegisteredTranslation('errors', key, params, resolveParamValue)
 }
 
-// api.ts synthesizes `code: HTTP_${status}` whenever a failed response omits
-// one, so `code` above is essentially never falsy for a real fetch — the
-// `!code` case below only fires for hand-built Error/plain-object inputs.
-// That means the real signal that a 5xx response is an uncoded catch-all
-// (server.js/panelBridge.js's dominant shape — see the 2026-08-26 hunt
-// this key came out of) isn't "no code", it's "no CODE THAT TRANSLATES":
-// `translated` is still null whether the wire code was absent, unregistered,
-// or registered but missing required params. A ≥500 status with a raw
-// message and no translation is presumed to be that shape and gets this
-// generic wrapper around the preserved detail; a 4xx (validation text
-// authored deliberately, no code by design — the "bucket C" convention) is
-// left exactly as it was, untouched. If a real code for this response DOES
-// resolve later (translated non-null above), this branch is never reached.
+// A failed fetch may have a code that has no registered translation. For 5xx
+// responses, wrap the preserved detail in the generic server-error message;
+// leave deliberate 4xx validation text unchanged.
 const GENERIC_SERVER_ERROR_KEY = 'UNEXPECTED_SERVER_ERROR'
 const GENERIC_SERVER_ERROR_STATUS_FLOOR = 500
 
-// bug-hunt-2026-08-31: UNEXPECTED_SERVER_ERROR's template (all 6 locales) is
-// `"{{detail}} <boilerplate sentence>"` -- {{detail}} is an arbitrary
-// upstream string (an exception message, a driver error, plain status
-// text) that this function has no control over, and most raw messages
-// don't end in terminal punctuation. Spliced in unmodified, that reads as
-// one run-on sentence with no boundary: "Internal server error This wasn't
-// expected...". Fixing it in the six templates instead of here was
-// considered and rejected: a template can't know whether `detail` already
-// ends in punctuation, so a hard-coded period after {{detail}} fixes the
-// common case and breaks the other one (a message that already ends in
-// '.', '!', or '?' would render "Something failed. . This wasn't
-// expected..."). Only the interpolation site can see what it's about to
-// splice, so the normalization belongs here, once, rather than duplicated
-// (and risking drift) across five languages someone editing this file may
-// not read.
+// Normalize the detail before interpolation so messages with and without
+// terminal punctuation render as separate sentences in every locale.
 const SENTENCE_TERMINATOR_RE = /[.!?]["')\]]*$/
 
 function wrapUncodedServerError(status: number | undefined, message: string): string | null {
@@ -136,26 +113,8 @@ export function getUserErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-// Escape hatch for eslint-rules/no-raw-error-message.js: that rule forbids
-// writing `error instanceof Error ? error.message : fallback` directly in a
-// toast/error-state call, in favor of getUserErrorMessage() above.
-//
-// In practice this turned out to be nearly unused: getUserErrorMessage()
-// already falls through to the exact same raw-message behavior when no
-// error code matches (see its own body above), so a "bucket C" site (the
-// 2026-08-26 coverage audit's term for self-contained validation text with
-// no code and no sensible recovery link) shows byte-identical text either
-// way — there is no real site found in that audit where calling
-// getUserErrorMessage() instead of the raw ternary was worse. The honest
-// answer is that almost every real site should just call
-// getUserErrorMessage() and take the free upgrade if a code ever gets
-// added later, not reach for this.
-//
-// Kept anyway, deliberately trivial, as a named and greppable way to state
-// "I considered getUserErrorMessage() here and it's wrong for this specific
-// site" for the rare future case that isn't just bucket C — a plain
-// eslint-disable comment hides that reasoning; a call to this function
-// puts it in the diff and in code review.
+// Named escape hatch for the rare call site that intentionally needs raw
+// error text instead of translated messaging.
 export function rawErrorMessageIntentional(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }

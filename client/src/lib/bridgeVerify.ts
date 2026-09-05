@@ -1,7 +1,5 @@
-// Shared classification for PanelBridge's per-command `verified` field
-// (server/services/panelBridge.js resolves `{ success, data }`; `data.verified`
-// is the mod's own read-back confirmation, added across select mutating
-// handlers 2026-08-23 -- see server/tests/panelBridge*VerifyGating.test.js).
+// Shared classification for PanelBridge's per-command `verified` field.
+// The server returns it inside `data` as the mod's read-back status.
 //
 // Three states, not a boolean, because "we didn't get a confirmation" has two
 // structurally different causes that need different words to the operator:
@@ -18,25 +16,9 @@
 //                     different, actionable fact (the mod itself is out of date).
 export type BridgeVerifiedState = "confirmed" | "unverifiable" | "old-bridge";
 
-// The exact set of PanelBridge Lua handler action names (server/services/
-// panelBridge.js's `action` string, matching pz-mod/PanelBridge/media/lua/
-// server/PanelBridge.lua's `handlers.<name>`) that report a `verified` state
-// today. NOT every mutating handler has this -- derived by scanning the Lua
-// source for every `handlers.X` body that sets `verified =` (last verified
-// 2026-08-23 against commit f7e5901, Angela's full matched->verified
-// migration -- 22 handlers, up from the 19 found before that commit; the 3
-// moderationBan* handlers gained an explicit verified in that same pass):
-// healPlayer, vehicleRepair, vehicleHotwire, removeVehicle, moderationKickUser,
-// and every weather/climate/rain/time/sound handler were never given a
-// read-back check, so a missing `verified` key on THOSE actions doesn't mean
-// an old bridge -- it means nothing, on any mod version, past or future.
-// Only an action in this set can be meaningfully classified as "old bridge"
-// when the key is absent; getBridgeVerifiedState() returns null for
-// anything else, telling the caller "this isn't a verify-gated action,
-// don't show any of the three states, render your normal success toast."
-// Keep in sync with the Lua source: a handler added there without being
-// added here fails safe (silently renders as always-confirmed, undersells
-// uncertainty) rather than crying wolf on an action that was never gated.
+// Only actions with a Lua read-back contract belong here. Missing `verified`
+// means "old bridge" for these actions; other actions use normal success
+// handling because they never promised verification.
 export const VERIFY_GATED_ACTIONS: ReadonlySet<string> = new Set([
   "teleportPlayer",
   "setSandboxOption",

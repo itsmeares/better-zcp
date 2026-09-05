@@ -251,11 +251,7 @@ export default function Servers() {
   const runtimeInfo = useRuntimeInfo()
   const confirm = useConfirm()
   const { can } = useAuth()
-  // bug-hunt-2026-08-27 (Tier 3 gating sweep): six distinct capabilities
-  // gate this one page's privileged actions -- see the mapping sent to god
-  // (dwight-tier3-table) for the full route-by-route trace. Open/true when
-  // capabilities are unknown/null, same convention as every other capability
-  // check in the app.
+  // Each privileged action uses the capability enforced by its server route.
   const canDockerManage = can('docker.manage')
   const canServersManage = can('servers.manage')
   const canServerControl = can('server.control')
@@ -348,13 +344,8 @@ export default function Servers() {
     return found
   }, [addMode, servers, newServer.serverName, newServer.serverPort, newServer.rconPort, newServer.zomboidDataPath, newServer.installPath, t])
 
-  // Same name+host+port collision handleSaveEdit already blocks Save on
-  // (see its own comment for why -- bug-hunt-2026-08-31, f557c795) --
-  // computed live here too so the two fields that actually collided keep a
-  // persistent invalid marker after the save-time toast fades, instead of
-  // only surfacing at the moment Save is clicked. Derived from current field
-  // values every render, so it clears itself the instant either field no
-  // longer collides -- no separate state to remember to reset.
+  // Keep the duplicate fields invalid after the save-time toast disappears.
+  // Deriving this from current values clears the marker automatically.
   const editDuplicateRemoteConflict = useMemo(() => {
     if (!editingServer || !editingServer.isRemote) return false
     const normalizedName = (editingServer.name || '').trim().toLowerCase()
@@ -1098,10 +1089,8 @@ export default function Servers() {
     try {
       // If deleteFiles is checked and server has an installPath, delete the files first.
       // The checkbox itself is gated on server.wipe (can't be checked without it) --
-      // this canServerWipe re-check is defense-in-depth per Angela's Console.tsx
-      // lesson (disabled control != gate), and skips the file-delete step rather
-      // than aborting the whole action: panel-record-only deletion is a
-      // legitimately lower bar than servers.manage already grants.
+      // Re-check the capability at the action boundary; a disabled control is
+      // only an affordance. Without it, still remove the panel record.
       if (deleteFiles && deleteServer.installPath && canServerWipe) {
         try {
           const result = await serversDetectApi.deleteFiles(deleteServer.installPath) as { error?: string }
@@ -1191,18 +1180,9 @@ export default function Servers() {
       return
     }
 
-    // bug-hunt-2026-08-31: f557c795 added this same check to Add Remote
-    // Server only. server/routes/servers.js has no uniqueness enforcement
-    // of its own (confirmed by god -- grepped the whole file for
-    // duplicate/already-exists/unique, only hits are a required-fields list
-    // and rconFieldsChanged), so editing an existing remote server's
-    // name/host/port to collide with another server reproduces the exact
-    // same two-indistinguishable-cards outcome the Add-path fix exists to
-    // prevent. Excludes the server being edited from its own comparison.
-    // Shares editDuplicateRemoteConflict's own logic (defined above with the
-    // other hooks) rather than re-deriving it here, so the persistent
-    // field-level styling below can never drift from what actually blocks
-    // Save.
+    // The server does not enforce uniqueness for remote records, so apply the
+    // same collision check when editing as when adding. The current record is
+    // excluded by editDuplicateRemoteConflict.
     if (editDuplicateRemoteConflict) {
       toast({
         title: t('toasts.error'),
@@ -1908,14 +1888,8 @@ export default function Servers() {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button size="iconDense" variant="ghost" disabled={pending || !isRunning || !canDockerManage} onClick={async () => {
-                                // Traced via Dwight: this route saves via RCON first and
-                                // refuses outright if that save fails (stricter than plain
-                                // process Stop), but the actual termination is Docker
-                                // SIGTERM-then-SIGKILL, not RCON's own graceful quit -- so
-                                // unlike plain Stop, it CAN end in a forced kill. Closer to
-                                // Force Stop's tier than plain Stop's, hence red + confirm
-                                // here despite the ghost/icon-only styling everywhere else
-                                // on this row.
+                                // Container stop may terminate forcefully after the
+                                // optional RCON save, so require confirmation.
                                 const ok = await confirm({
                                   title: t('card.stopContainerConfirmTitle'),
                                   description: t('card.stopContainerConfirmDescription', { name: container.name }),

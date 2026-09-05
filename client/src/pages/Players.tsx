@@ -163,14 +163,8 @@ function getAccessLevelLabels(t: TFunction): Record<string, string> {
     moderator: t('accessLevels.moderator'),
     gm: t('accessLevels.gm'),
     observer: t('accessLevels.observer'),
-    // 'priority' has no translated entry, deliberately -- it falls through
-    // to the raw-token capitalize fallback below ("Priority"). A wire token
-    // and its display label have already diverged unpredictably once on
-    // this floor (bug-hunt-2026-08-27, 16 of 35 PZ perk ids differed from
-    // their label by no rule); the real in-game name is "PriorityUser", not
-    // "Priority", so this is a deliberate "close enough and honest" choice,
-    // not an oversight -- adding a real translated label would mean
-    // touching every locale file, out of this fix's scope.
+    // `priority` has no translated entry, so the shared fallback displays
+    // the wire token as "Priority".
     user: t('accessLevels.user'),
     none: t('accessLevels.none'),
   }
@@ -300,13 +294,7 @@ function ActionTile({
       </div>
       <div className="min-w-0 flex-1">
         <p className={cn('font-medium leading-tight', compact ? 'text-[12px]' : 'text-sm', e.label)}>{label}</p>
-        {/* line-clamp-2, not truncate: truncate's single-line ellipsis cut
-            real meaning out of short phrases ("Permanent · two-step" ->
-            "Permanent · two-s...") specifically in the desktop 3/4-column
-            grid, where these cards are narrower than they are on mobile's
-            single column -- the same content read complete one viewport
-            over (2026-08-31 visual sweep). Two lines is enough headroom for
-            every description these tiles actually carry. */}
+        {/* Two lines preserve short action descriptions in the desktop grid. */}
         {description && !compact ? (
           <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{description}</p>
         ) : null}
@@ -342,20 +330,9 @@ function VitalBar({ label, value, goodWhenLow }: { label: string; value: number;
 export default function Players() {
   const { t, i18n } = useTranslation('players')
   const accessLevelLabels = useMemo(() => getAccessLevelLabels(t), [t])
-  // Two server gates, not three -- kick/ban/whitelist/access-level require
-  // players.moderate; teleport/spawn/character import-export AND
-  // godmode/invisible/noclip/heal all require players.gm_tools.
-  // godmode/invisible/noclip/heal route through the generic PanelBridge
-  // passthrough (POST /panel-bridge/command), but as of an operator ruling
-  // (bug-hunt-2026-08-27, reverses server commit c3083d5 from earlier the
-  // same day) players.gm_tools ALONE gates them there too -- bridge.command
-  // is not required. c3083d5 had briefly made it "gm_tools AND
-  // bridge.command"; the operator ruled bridge.command was only ever an
-  // accidental side effect of these four routing through the passthrough,
-  // not a deliberate second gate, and requiring it would deny Technician
-  // (who holds gm_tools but not bridge.command by default) the GM tools
-  // it's meant to have. See server/routes/panelBridge.js's
-  // BRIDGE_ACTION_CAPABILITY / GM_TOOLS_ONLY_ACTIONS.
+  // Moderation actions use players.moderate. Teleport, spawn, character
+  // import/export, and player powers use players.gm_tools; the latter do not
+  // additionally require bridge.command.
   const { can } = useAuth()
   const [searchParams] = useSearchParams()
   const requestedPlayer = searchParams.get('player')?.trim() || ''
@@ -2095,16 +2072,7 @@ export default function Players() {
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="moderation">
-              {/* flex-wrap, not horizontal scroll: the previous overflow-x-auto
-                  strip clipped "Notes & Log" down to a bare "N" on mobile,
-                  with only a 12px edge mask as the sole cue that there was
-                  more to scroll to -- easy to miss, no arrow or shadow, and
-                  the strip starts scrolled to the clipped position by
-                  default (2026-08-31 visual sweep). These five tabs are
-                  label-only, same shape as Debug.tsx's own tab strip, which
-                  already wraps instead of scrolling -- matching that
-                  existing, already-proven convention here instead of tuning
-                  the mask/adding scroll arrows. */}
+              {/* Wrap tabs so every label remains visible on narrow screens. */}
               <TabsList className="flex h-auto flex-wrap items-center gap-1 rounded-md border border-border/55 bg-muted/30 p-1">
                 <TabsTrigger value="vitals" className="min-h-8 shrink-0 px-3 text-xs font-medium">{t('tabs.vitals')}</TabsTrigger>
                 <TabsTrigger value="moderation" className="min-h-8 shrink-0 px-3 text-xs font-medium">{t('tabs.moderation')}</TabsTrigger>
@@ -3708,12 +3676,8 @@ export default function Players() {
         </DialogContent>
       </Dialog>
 
-      {/* Character Import Confirmation -- the failure mode here is the wrong
-          player, so the target's name is the title, not a line inside the
-          body. Pam's panelBridge.js snapshots the target's current data to
-          Saved Exports before overwriting; if that snapshot fails the server
-          refuses the import instead of proceeding, so this is honestly
-          recoverable and the copy says so. */}
+      {/* The target name is part of the confirmation title; the server creates
+          a recovery export before replacing the character. */}
       <AlertDialog open={importConfirmOpen} onOpenChange={(open) => { if (!open) { setImportConfirmOpen(false); setPendingImportData(null) } }}>
         <AlertDialogContent>
           <AlertDialogHeader>

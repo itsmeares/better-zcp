@@ -205,11 +205,8 @@ export default function Chat() {
 
   const sendMessage = async () => {
     if (!message.trim() || sendingRef.current || !canSendChat) return
-    // This guard is the real gate -- it covers both the Send button's
-    // onClick and the Enter-keydown path in handleKeyDown below, since both
-    // call this same function. The disabled attribute on the Send button is
-    // only the affordance (bug-hunt-2026-08-27 floor rule, from Angela's
-    // Console.tsx Enter-key finding).
+    // Both the button and Enter-key path call this function, so guard here as
+    // well as using the button's disabled state as an affordance.
     sendingRef.current = true
     setSending(true)
     try {

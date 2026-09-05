@@ -186,9 +186,7 @@ export default function ServerFinder() {
       // success:false (server/routes/serverFinder.js), so a plain
       // `throw new Error(data.error)` here discarded response.status
       // before getUserErrorMessage() below could ever translate it via
-      // the generic-500 wrapper -- same shape as the raw-fetch sites
-      // fixed earlier tonight (AuthContext.tsx, FileDiffViewer.tsx,
-      // Debug.tsx, Login.tsx).
+      // the generic-500 wrapper used by the other raw-fetch callers.
       if (!response.ok || !data || data.success === false) {
         throw new ApiError(data?.error || `HTTP ${response.status}`, {
           status: response.status,

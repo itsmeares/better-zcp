@@ -602,31 +602,10 @@ export default function WorldMap() {
   const { theme } = useTheme()
   const socket = useSocket()
   const { can } = useAuth()
-  // 2026-08-27 bug-hunt capability trace: most of this page's actions go
-  // through POST /panelBridge/command, gated ONLY bridge.command server-side
-  // regardless of what the action name implies -- teleport/vehicle-tool/
-  // airdrop are NOT players.gm_tools or server.world_events despite sounding
-  // like it. bridge.command is admin-only by default (TECHNICIAN_CAPABILITIES
-  // omits it even though technician holds players.gm_tools/server.world_events),
-  // so gating these on the name-implied capability would show a stock
-  // technician an enabled button that 403s on click -- worse than no gate.
-  // Only addVehicleAt is genuinely players.gm_tools alone: it hits a
-  // dedicated route (POST /players/add-vehicle-at) instead of the passthrough.
-  //
-  // setGodMode/healPlayer are a THIRD shape: as of an operator ruling
-  // (bug-hunt-2026-08-27, reverses server commit c3083d5 from earlier the
-  // same day) players.gm_tools ALONE gates them, same as Spawn Vehicle
-  // below -- bridge.command is NOT required despite routing through the
-  // generic PanelBridge passthrough. c3083d5 had briefly made it "gm_tools
-  // AND bridge.command"; the operator ruled bridge.command was only ever an
-  // accidental side effect of these two routing through the passthrough,
-  // not a deliberate second gate, and requiring it would deny Technician
-  // (who holds gm_tools but not bridge.command by default) the GM tools
-  // it's meant to have. See server/routes/panelBridge.js's
-  // BRIDGE_ACTION_CAPABILITY / GM_TOOLS_ONLY_ACTIONS. Do NOT widen this to
-  // any other action on the page -- everything else stays bridge.command
-  // alone, same reasoning as always: gating on a capability a route doesn't
-  // actually check hides a working control.
+  // Most actions use the panel-bridge command route and require
+  // bridge.command. addVehicleAt uses a dedicated route and requires
+  // players.gm_tools. setGodMode and healPlayer also use players.gm_tools
+  // without an additional bridge.command requirement.
   const canRunBridgeCommand = can('bridge.command')
   const canWorldEvents = can('server.world_events')
   const canGmTools = can('players.gm_tools')
@@ -2508,9 +2487,7 @@ export default function WorldMap() {
   // ─── Actions ────────────────────────────────────────────
   const triggerLightningAt = useCallback(
     async (x: number, y: number) => {
-      // Function-level guard, not just the menu item's disabled state --
-      // 2026-08-27 bug-hunt floor rule (Angela's Console.tsx Enter-key
-      // bypass finding): assert the action is unreachable.
+      // Keep the action guarded when called outside the menu item handler.
       if (!canWorldEvents) return
       setActionLoading('lightning')
       try {
@@ -4202,7 +4179,7 @@ function ContextMenuItem({ icon, label, onClick, loading, description, disabled,
       role="menuitem"
       onClick={onClick}
       disabled={loading || disabled}
-      // eslint-disable-next-line local/no-dead-disabled-title -- description is also rendered as a visible line below (`{description && <span ...>}` a few lines down), so this title is redundant, not a hidden disabled-reason. Adjudicated 2026-08-27 (god chased the "hidden reason" hypothesis and refuted it against the actual JSX).
+      // eslint-disable-next-line local/no-dead-disabled-title -- description is rendered visibly below.
       title={description}
       className="group relative w-full pe-2 py-1.5 text-xs flex items-stretch gap-2.5 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent hover:bg-muted/45 focus-visible:bg-muted/45 focus-visible:outline-none"
     >
