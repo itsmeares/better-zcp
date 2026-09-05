@@ -25,8 +25,8 @@ Project Zomboid gets there differs.
 ## Path A: All-in-one
 
 **What it is:** one container running the panel, SteamCMD, and the Project
-Zomboid dedicated server together. This is what the maintainer actually runs
-in production, and the most complete path — pick this if you're starting
+Zomboid dedicated server together. This is the most complete path in the
+repository — pick this if you're starting
 from nothing.
 
 ### Phase 1 — Prerequisites
