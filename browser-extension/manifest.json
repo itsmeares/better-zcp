@@ -22,7 +22,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "zomboid-control-panel@fpsacha.github.io",
+      "id": "better-zcp@itsmeares.github.io",
       "strict_min_version": "115.0"
     }
   }

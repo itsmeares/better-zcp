@@ -10,7 +10,7 @@
 
 3. **Check your work.** Run:
    ```
-   npx vitest run src/locales/__tests__/localeParity.test.ts
+   pnpm exec vitest run src/locales/__tests__/localeParity.test.ts
    ```
    This is discovery-based — it finds every language folder and every namespace file on its own, so a new language is tested automatically. It fails loudly, one test per `language/namespace` pair, listing exactly which keys are missing, which are stale/misspelled, and which are present but empty. There is nothing else to configure for a new language to be checked.
 

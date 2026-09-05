@@ -27,24 +27,20 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: client/package-lock.json
+          cache: pnpm
 
-      # npm ci is fragile here: the lockfile's linux gnu/musl split optional
-      # deps (rollup/lightningcss, pulled in via vite) don't reliably carry
-      # libc metadata (verified 2026-08-22),
-      # same reasoning as the Dockerfile's client stage. npm install
-      # re-resolves optional deps against the runner instead.
+      - name: Enable pnpm
+        run: corepack enable && corepack install
+
       - name: Install client dependencies
-        working-directory: client
-        run: npm install --no-audit --prefer-offline --include=optional
+        run: pnpm install --filter pz-server-manager-client --frozen-lockfile
 
       - name: Build static demo
         working-directory: client
         env:
           VITE_DEMO_MODE: "true"
-          VITE_BASE_PATH: "/zomboid-control-panel/"
-        run: npm run build
+          VITE_BASE_PATH: "/better-zcp/"
+        run: pnpm --filter pz-server-manager-client build
 
       - name: Publish to gh-pages branch
         uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4

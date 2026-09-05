@@ -818,6 +818,22 @@ export class ServerManager {
       );
     }
 
+    // A confirmed process for another server does not make an ambiguous JVM
+    // candidate safe to ignore. If this manager has no positively owned
+    // process, an unrecognized JVM-shaped candidate still means this server
+    // may be running under a launch shape the narrow matcher missed.
+    if (!scan.scanFailed && owned.length === 0 && scan.ambiguous?.length > 0) {
+      log.warn(
+        `getServerProcessDetails: found ${scan.ambiguous.length} ambiguous JVM-shaped process(es) while no process could be attributed to "${this.serverName}" -- cannot confirm the server is stopped`,
+      );
+      return {
+        running: false,
+        matched: [],
+        owned: [],
+        scanFailed: true,
+      };
+    }
+
     // A failed scan always resolves to an empty `matched` list, so
     // `resolved.length > 0` is unconditionally false here whenever
     // scanFailed is true -- writing it into the cached this.isRunning would
@@ -978,7 +994,7 @@ export class ServerManager {
             }
 
             this.isRunning = matched.length > 0;
-            resolve({ running: matched.length > 0, matched });
+            resolve({ running: matched.length > 0, matched, ambiguous });
           },
         );
       } else {
@@ -1068,7 +1084,7 @@ export class ServerManager {
                 return;
               }
               this.isRunning = matched.length > 0;
-              resolve({ running: matched.length > 0, matched });
+              resolve({ running: matched.length > 0, matched, ambiguous });
               return;
             }
             // Fallback: ps aux
@@ -1120,7 +1136,7 @@ export class ServerManager {
                 return;
               }
               this.isRunning = matched.length > 0;
-              resolve({ running: matched.length > 0, matched });
+              resolve({ running: matched.length > 0, matched, ambiguous });
             });
           },
         );

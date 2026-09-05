@@ -975,7 +975,7 @@ input[type="number"] {
   }
 
   /* U13: bare <button>/<a> icon controls (sidebar collapse toggle, footer
-     logout/help/Ko-fi/GitHub icon links) weren't covered by the selector
+     logout/help/GitHub icon links) weren't covered by the selector
      above, so they rendered well under the 44px comfortable touch target
      on coarse-pointer (touch) devices. The Button *component* was already
      fine (mobile-first h-11); this only affects hand-rolled controls. Scoped

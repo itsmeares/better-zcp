@@ -94,7 +94,10 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
 
     it("reports busy while the binary is genuinely being executed", async () => {
       const { spawn } = await import("child_process");
-      child = spawn(javaPath, ["30"], { stdio: "ignore" });
+      child = spawn(javaPath, ["30"], {
+        argv0: "sleep",
+        stdio: "ignore",
+      });
       await new Promise((resolve, reject) => {
         child.once("spawn", resolve);
         child.once("error", reject);
@@ -108,7 +111,10 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
 
     it("clears once the process actually exits", async () => {
       const { spawn } = await import("child_process");
-      child = spawn(javaPath, ["30"], { stdio: "ignore" });
+      child = spawn(javaPath, ["30"], {
+        argv0: "sleep",
+        stdio: "ignore",
+      });
       await new Promise((resolve, reject) => {
         child.once("spawn", resolve);
         child.once("error", reject);
@@ -160,7 +166,10 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
     // after waiting is not evidence of anything wrong.
     it("startServer() proceeds (never throws the busy error) if the shared install's JVM binary stays busy the whole bounded wait -- that busy-ness may belong to an unrelated sibling server", async () => {
       const { spawn } = await import("child_process");
-      child = spawn(javaPath, ["30"], { stdio: "ignore" });
+      child = spawn(javaPath, ["30"], {
+        argv0: "sleep",
+        stdio: "ignore",
+      });
       await new Promise((resolve, reject) => {
         child.once("spawn", resolve);
         child.once("error", reject);
@@ -170,6 +179,7 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
         serverName: "JvmBusyTest",
         serverPath: tmpDir,
         serverBat: "start-server.sh",
+        rconPort: 1,
       });
 
       const manager = new ServerManager();
@@ -189,12 +199,15 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
     // it has already confirmed the old process stopped itself -- got ZERO
     // protection against the exact ETXTBSY race this file exists to guard,
     // reproducing Rhazun's original "Text file busy" crash through the one
-    // code path that actually restarts a server. Before the fix, this test
-    // observed elapsedMs near-instant (the wait block was skipped
-    // entirely); after it, elapsedMs is close to the full 3000ms bound.
+    // code path that actually restarts a server. The test uses a deterministic
+    // probe and a no-op sleep so it checks the loop without adding three
+    // seconds to every server test run.
     it("startServer({skipRunningCheck: true}) ALSO waits for the busy binary to clear -- this is the flag scheduler.js's performRestart() actually uses", async () => {
       const { spawn } = await import("child_process");
-      child = spawn(javaPath, ["30"], { stdio: "ignore" });
+      child = spawn(javaPath, ["30"], {
+        argv0: "sleep",
+        stdio: "ignore",
+      });
       await new Promise((resolve, reject) => {
         child.once("spawn", resolve);
         child.once("error", reject);
@@ -204,33 +217,46 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
         serverName: "JvmBusyTest",
         serverPath: tmpDir,
         serverBat: "start-server.sh",
+        rconPort: 1,
       });
 
       const manager = new ServerManager();
-      const start = Date.now();
+      // The real kernel probe is covered by the first three tests. This test
+      // only needs a deterministic busy signal to verify the bounded wait is
+      // also present on the skipRunningCheck=true restart path.
+      vi.spyOn(manager, "isJvmExecutableBusy").mockReturnValue(true);
+      const sleepSpy = vi
+        .spyOn(manager, "sleep")
+        .mockResolvedValue(undefined);
       await expect(
         manager.startServer({ skipRunningCheck: true }),
       ).rejects.not.toThrow(/Text file busy/);
-      const elapsedMs = Date.now() - start;
 
-      expect(elapsedMs).toBeGreaterThanOrEqual(2500);
+      expect(sleepSpy).toHaveBeenCalledTimes(10);
+      expect(sleepSpy).toHaveBeenCalledWith(300);
     }, 10000);
 
     it("startServer() stops waiting as soon as the binary frees, rather than always sleeping the full bound", async () => {
-      const { spawn } = await import("child_process");
-      child = spawn(javaPath, ["1"], { stdio: "ignore" }); // exits after ~1s
-      await new Promise((resolve, reject) => {
-        child.once("spawn", resolve);
-        child.once("error", reject);
-      });
-
       getActiveServer.mockResolvedValue({
         serverName: "JvmBusyTest",
         serverPath: tmpDir,
         serverBat: "start-server.sh",
+        rconPort: 1,
       });
 
       const manager = new ServerManager();
+      vi.spyOn(manager, "getServerProcessDetails").mockResolvedValue({
+        running: false,
+        scanFailed: false,
+      });
+      // Model a probe that stays busy for two polls and then clears. The
+      // real probe's transient kernel behavior is covered above; this keeps
+      // the loop test deterministic and fast on every CI runner.
+      vi.spyOn(manager, "isJvmExecutableBusy")
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(true)
+        .mockReturnValue(false);
       // gate-blocking-flaky-2026-08-31: this used to assert a wall-clock
       // bound (elapsedMs < 2500), which measured 3946ms on a busy machine
       // and failed the gate on a commit that never touched serverManager.js
@@ -253,7 +279,9 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
       //     bound regardless of when the binary actually cleared.
       //   - every call used the real poll interval (300ms), not some
       //     other duration standing in for the loop.
-      const sleepSpy = vi.spyOn(manager, "sleep");
+      const sleepSpy = vi
+        .spyOn(manager, "sleep")
+        .mockResolvedValue(undefined);
       await expect(
         manager.startServer({ skipRunningCheck: false }),
       ).rejects.not.toThrow(/Text file busy/);

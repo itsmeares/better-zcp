@@ -16,7 +16,7 @@
     6. Creates a GitHub Release with Keep a Changelog format notes
 
 .PARAMETER Version
-    Explicit version string (e.g., "0.9.0"). If omitted, auto-increments based on -Bump.
+    Explicit version string (e.g., "2.0.0"). If omitted, auto-increments based on -Bump.
 
 .PARAMETER Bump
     Auto-increment type when -Version is not provided. Valid: major, minor, patch (default: patch).
@@ -45,9 +45,9 @@
 
 .EXAMPLE
     .\release.ps1                                          # Auto-increment patch
-    .\release.ps1 -Version "0.9.0"                         # Explicit version
+    .\release.ps1 -Version "2.0.0"                         # Explicit version
     .\release.ps1 -Bump minor                              # Auto-increment minor
-    .\release.ps1 -Version "0.9.0" -SkipDocker             # Skip Docker build
+    .\release.ps1 -Version "2.0.0" -SkipDocker             # Skip Docker build
     .\release.ps1 -DryRun                                  # Preview all steps
 #>
 
@@ -73,7 +73,7 @@ param(
 # CONFIGURATION - Edit these paths as needed
 # ============================================
 $RepoDir          = $PSScriptRoot
-$GitHubRepo       = "fpsacha/zomboid-control-panel"
+$GitHubRepo       = "itsmeares/better-zcp"
 
 $ReleaseDir       = "release"
 $WinExePath       = "release\ZomboidControlPanel.exe"
@@ -177,18 +177,16 @@ function Assert-DirectoryMatchesManifest($source, $manifestFiles, $label) {
 
 function Assert-ReleaseVersionParity($expectedPanelVersion, $expectedBridgeVersion) {
     $rootPackage = Get-Content (Join-Path $RepoDir "package.json") -Raw | ConvertFrom-Json
-    $rootLock = Get-Content (Join-Path $RepoDir "package-lock.json") -Raw | ConvertFrom-Json -AsHashtable
     $clientPackage = Get-Content (Join-Path $RepoDir "client\package.json") -Raw | ConvertFrom-Json
-    $clientLock = Get-Content (Join-Path $RepoDir "client\package-lock.json") -Raw | ConvertFrom-Json -AsHashtable
-    $rootLockPackage = $rootLock["packages"][""]
-    $clientLockPackage = $clientLock["packages"][""]
+    $workspaceLock = Get-Content (Join-Path $RepoDir "pnpm-lock.yaml") -Raw
+    if ($workspaceLock -notmatch '(?m)^lockfileVersion:' -or
+        $workspaceLock -notmatch '(?m)^  \.:$' -or
+        $workspaceLock -notmatch '(?m)^  client:$') {
+        throw "pnpm-lock.yaml is missing the root or client workspace importer"
+    }
     $versions = @(
         @{ Label = "package.json"; Value = $rootPackage.version },
-        @{ Label = "package-lock.json"; Value = $rootLock.version },
-        @{ Label = "package-lock.json root package"; Value = $rootLockPackage.version },
-        @{ Label = "client/package.json"; Value = $clientPackage.version },
-        @{ Label = "client/package-lock.json"; Value = $clientLock.version },
-        @{ Label = "client/package-lock.json root package"; Value = $clientLockPackage.version }
+        @{ Label = "client/package.json"; Value = $clientPackage.version }
     )
     foreach ($version in $versions) {
         if ([string]$version.Value -ne [string]$expectedPanelVersion) {
@@ -252,6 +250,10 @@ if (-not $PanelBridgeVersion) {
 }
 
 $TagName = "v$Version"
+
+if ($Version -notmatch '^2\.\d+\.\d+$') {
+    throw "Independent releases must use the v2.x.x version line: $Version"
+}
 if (-not $ReleaseTitle) { $ReleaseTitle = "$TagName" }
 
 Write-Host ""
@@ -326,25 +328,6 @@ if (Test-Path $pkgFile) {
     Write-Warning "Package file not found: $pkgFile"
 }
 
-$rootLockFile = Join-Path $RepoDir "package-lock.json"
-if (Test-Path $rootLockFile) {
-    $rootLockContent = Get-Content $rootLockFile -Raw
-    $rootLockPattern = '("name":\s*"pz-server-manager",\s*\r?\n\s*"version":\s*")[^"]*(")'
-    $rootLockMatchCount = [regex]::Matches($rootLockContent, $rootLockPattern).Count
-    if ($rootLockMatchCount -ne 2) {
-        throw "Expected exactly 2 root package version occurrences in $rootLockFile, found $rootLockMatchCount"
-    }
-    $newRootLockContent = [regex]::Replace($rootLockContent, $rootLockPattern, "`${1}$Version`${2}")
-    if ($DryRun) {
-        Write-Dry "Would update $rootLockFile ($rootLockMatchCount occurrences)"
-    } else {
-        [System.IO.File]::WriteAllText($rootLockFile, $newRootLockContent, [System.Text.UTF8Encoding]::new($false))
-        Write-Ok "Updated $rootLockFile ($rootLockMatchCount occurrences)"
-    }
-} else {
-    throw "Package lock file not found: $rootLockFile"
-}
-
 # client/package.json drifted from root for four releases (1.2.2 while root
 # reached 1.2.6) because this step never touched it -- bump it in the same
 # step as root so there's no window where they can disagree. A test
@@ -364,36 +347,6 @@ if (Test-Path $clientPkgFile) {
     }
 } else {
     Write-Warning "Package file not found: $clientPkgFile"
-}
-
-# client/package-lock.json carries the version TWICE (top-level, and again
-# under packages[""]) -- a blind "replace every version string" would also
-# clobber unrelated dependencies that happen to share the same version
-# number (e.g. a dependency pinned to the same "1.2.x" string). Anchor on
-# the package's own name, which appears nowhere else in the file, so only
-# the two real occurrences move.
-$clientLockFile = Join-Path $RepoDir "client\package-lock.json"
-if (Test-Path $clientLockFile) {
-    $lockContent = Get-Content $clientLockFile -Raw
-    $lockPattern = '("name":\s*"pz-server-manager-client",\s*\r?\n\s*"version":\s*")[^"]*(")'
-    # ${1}/${2}, not $1/$2 -- .NET tries to parse digits immediately after a
-    # bare $N as part of the group number, and $Version starts with a digit,
-    # so "$1" + "9.9.9" reads as "reference group 19" (which doesn't exist)
-    # and silently drops the whole backreference instead of falling back to
-    # group 1. Caught this only by actually running it against a scratch
-    # copy -- the pattern read correctly, the substitution didn't.
-    $newLockContent = [regex]::Replace($lockContent, $lockPattern, "`${1}$Version`${2}")
-    $matchCount = [regex]::Matches($lockContent, $lockPattern).Count
-    if ($matchCount -ne 2) {
-        Write-Warning "Expected exactly 2 version occurrences anchored to pz-server-manager-client in $clientLockFile, found $matchCount -- skipping automatic edit, update it by hand"
-    } elseif ($DryRun) {
-        Write-Dry "Would update $clientLockFile ($matchCount occurrences)"
-    } else {
-        [System.IO.File]::WriteAllText($clientLockFile, $newLockContent, [System.Text.UTF8Encoding]::new($false))
-        Write-Ok "Updated $clientLockFile ($matchCount occurrences)"
-    }
-} else {
-    Write-Warning "Package lock file not found: $clientLockFile"
 }
 
 $bridgeModInfoPath = Join-Path $RepoDir "pz-mod\PanelBridge\mod.info"
@@ -420,7 +373,7 @@ if ($DryRun) {
     [System.IO.File]::WriteAllText($bridgeModInfoPath, $newBridgeModInfoContent, [System.Text.UTF8Encoding]::new($false))
     Write-Ok "Updated PanelBridge Lua and mod.info to $PanelBridgeVersion"
     Assert-ReleaseVersionParity $Version $PanelBridgeVersion
-    Write-Ok "All package, lockfile, and PanelBridge versions are synchronized"
+    Write-Ok "All package and PanelBridge versions are synchronized"
 }
 
 # ============================================
@@ -431,11 +384,11 @@ Write-Step "2/6" "Building client (Vite/React)"
 if ($SkipBuild) {
     Write-Skip "Build skipped (-SkipBuild)"
 } elseif ($DryRun) {
-    Write-Dry "Would run: cd client && npm run build"
+    Write-Dry "Would run: cd client && pnpm run build"
 } else {
     Push-Location (Join-Path $RepoDir "client")
     try {
-        npm run build
+        pnpm run build
         if ($LASTEXITCODE -ne 0) { throw "Client build failed" }
         Write-Ok "Client built successfully"
     } finally {
@@ -451,11 +404,11 @@ Write-Step "3/6" "Building Windows + Linux binaries (esbuild + pkg)"
 if ($SkipBuild) {
     Write-Skip "Build skipped (-SkipBuild)"
 } elseif ($DryRun) {
-    Write-Dry "Would run: npm run build:exe:all, then create ZomboidControlPanel-windows.zip"
+    Write-Dry "Would run: pnpm run build:exe:all, then create ZomboidControlPanel-windows.zip"
 } else {
     Push-Location $RepoDir
     try {
-        npm run build:exe:all
+        pnpm run build:exe:all
         if ($LASTEXITCODE -ne 0) { throw "Binary build failed" }
 
         $winExe = Join-Path $RepoDir $WinExePath

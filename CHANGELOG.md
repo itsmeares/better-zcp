@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-05
+
+### Changed
+
+- This fork begins its independent release line at `v2.0.0`.
+- The project is now published under the `itsmeares/better-zcp` repository and
+  `ghcr.io/itsmeares/better-zcp` container package.
+- Dependency management is consolidated in the pnpm workspace lockfile.
+- The project license is now GNU AGPL version 3 only (`AGPL-3.0-only`); the
+  original upstream MIT notice is preserved in [`LICENSES/MIT-UPSTREAM.txt`](LICENSES/MIT-UPSTREAM.txt).
+
+### Removed
+
+- Upstream maintainer funding and repository links were removed from the
+  application and release tooling.
+
 ### Added
 
 - **The panel is now available in Ukrainian.** Українська joins the other seven languages - every

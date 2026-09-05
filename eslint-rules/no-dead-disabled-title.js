@@ -67,7 +67,7 @@
  * night this rule shipped. A hard error would force either fixing all of
  * them in one pass or maintaining a per-file exemption list -- and this
  * codebase has already deleted four such lists' worth of stale exemptions
- * tonight for other reasons. `warn` keeps `npm run lint` informative
+ * tonight for other reasons. `warn` keeps `pnpm run lint` informative
  * without inventing a new list to keep honest forever.
  *
  * Known gaps, accepted rather than chased (same policy as the other rules

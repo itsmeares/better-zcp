@@ -13,7 +13,7 @@ you did it right before moving to the next one.
 ## Phase 1: Extract and run the panel
 
 1. Download `ZomboidControlPanel-linux.tar.gz` from
-   [Releases](https://github.com/fpsacha/zomboid-control-panel/releases/latest).
+   [Releases](https://github.com/itsmeares/better-zcp/releases/latest).
 2. Make a folder for it and extract the archive into it:
    ```bash
    mkdir zomboid-panel && cd zomboid-panel

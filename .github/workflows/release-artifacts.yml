@@ -3,7 +3,7 @@ name: Build Release Artifacts
 on:
   push:
     tags:
-      - "v*"
+      - "v2.*"
   workflow_dispatch:
 
 permissions:
@@ -41,20 +41,13 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
-      # npm ci is fragile on the ubuntu-22.04 leg of this matrix: the
-      # lockfile's linux gnu/musl split optional deps (rollup/lightningcss,
-      # pulled in via vite) don't reliably carry libc metadata (verified
-      # 2026-08-22), same reasoning as the
-      # Dockerfile's own install steps. npm install re-resolves optional
-      # deps against the runner instead of trusting the lockfile's entry.
+      - name: Enable pnpm
+        run: corepack enable && corepack install
+
       - name: Install dependencies
-        run: npm install --no-audit --prefer-offline --include=optional
-
-      - name: Install client dependencies
-        run: npm install --no-audit --prefer-offline --include=optional
-        working-directory: client
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: node build.js ${{ matrix.build_arg }}
@@ -88,7 +81,7 @@ jobs:
       # Linux packaging is no longer a separate step: build.js itself writes
       # ZomboidControlPanel-linux.tar.gz with explicit per-entry mode bits as
       # part of the "Build" step above, so this leg exercises the exact same
-      # packaging code a developer runs locally via `npm run build:exe:linux`
+      # packaging code a developer runs locally via `pnpm run build:exe:linux`
       # -- one path, not a CI-only recipe a local build can silently diverge
       # from.
 
@@ -239,7 +232,7 @@ jobs:
       # pre-flight block) still ships its binaries even though this makes the
       # job -- and the workflow run -- red. The normal pre-flight refuses to reach
       # this workflow at all when CHANGELOG.md has no matching heading; this is
-      # only reachable by pushing a v* tag some other way. Loud, not silent,
+      # only reachable by pushing a v2.* tag some other way. Loud, not silent,
       # without withholding the artifacts a real emergency release needs.
       - name: Fail if the release shipped without a CHANGELOG entry
         if: steps.create-release.outputs.changelog_missing == 'true'

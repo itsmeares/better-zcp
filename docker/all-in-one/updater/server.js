@@ -13,7 +13,7 @@ const COMPOSE_FILE = process.env.COMPOSE_FILE || path.join(BUILD_ROOT, "ctx", "d
 const PANEL_SERVICE = process.env.PANEL_SERVICE || "panel";
 const PANEL_CONTAINER = process.env.PANEL_CONTAINER || "zomboid-panel";
 const PANEL_IMAGE = process.env.PANEL_IMAGE || "zomboid-panel-allinone:latest";
-const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || "fpsacha/zomboid-control-panel";
+const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || "itsmeares/better-zcp";
 const HEALTH_TIMEOUT_MS = 120000;
 
 let updateState = { status: "idle", version: null, message: null, startedAt: null, completedAt: null };

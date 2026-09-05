@@ -47,7 +47,7 @@ services:
     # If the pull fails (e.g. before the first tagged release, or on a private fork),
     # `build:` below kicks in automatically and the locally built image is tagged with
     # this same name so subsequent `up -d` calls don't try to pull again.
-    image: ghcr.io/fpsacha/zomboid-panel:latest
+    image: ghcr.io/itsmeares/better-zcp:latest
     build:
       context: .
       args:

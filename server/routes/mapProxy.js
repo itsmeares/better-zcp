@@ -143,7 +143,7 @@ const PZ_TILES_ROOT = "https://tiles.pzmap.org"; // tiles + per-build descriptor
 // browser-spoofing string on the theory that it's required, that theory
 // didn't hold up.
 const CURL_DISCOVERY_UA =
-  "ZomboidControlPanel/1.0 (+https://github.com/fpsacha/zomboid-control-panel)";
+  "ZomboidControlPanel/1.0 (+https://github.com/itsmeares/better-zcp)";
 const CURL_TIMEOUT_S = 8;
 const CURL_STATUS_MARKER = "\n__CURL_HTTP_STATUS__:";
 
@@ -395,7 +395,7 @@ async function probeLevelHasCoverage(directory, geometry, level) {
           signal: AbortSignal.timeout(4000),
           headers: {
             "User-Agent":
-              "ZomboidControlPanel/1.0 (+https://github.com/fpsacha/zomboid-control-panel)",
+              "ZomboidControlPanel/1.0 (+https://github.com/itsmeares/better-zcp)",
           },
         },
       );
@@ -711,7 +711,7 @@ async function fetchTileWithTimeout(url) {
       // Some upstreams (Cloudflare on tiles.pzmap.org) return 403/503 when the
       // User-Agent header is missing entirely. Send a neutral identifier.
       "User-Agent":
-        "ZomboidControlPanel/1.0 (+https://github.com/fpsacha/zomboid-control-panel)",
+        "ZomboidControlPanel/1.0 (+https://github.com/itsmeares/better-zcp)",
       Accept: "image/*,*/*;q=0.8",
     },
   });

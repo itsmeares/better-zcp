@@ -1,8 +1,7 @@
 #!/bin/sh
 set -eu
 
-REPOSITORY="fpsacha/zomboid-control-panel"
-REGISTRY="ghcr.io/fpsacha"
+REPOSITORY="itsmeares/better-zcp"
 VERSION="${1:-}"
 
 for required_command in docker curl tar; do
@@ -26,7 +25,7 @@ if [ -z "$VERSION" ]; then
     | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p' | head -n 1)"
 fi
 case "$VERSION" in
-  ''|*[!0-9.]*) echo "Could not determine a valid release version. Pass it explicitly, for example: ./bootstrap.sh 1.1.4" >&2; exit 1 ;;
+  ''|*[!0-9.]*) echo "Could not determine a valid release version. Pass it explicitly, for example: ./bootstrap.sh 2.0.0" >&2; exit 1 ;;
 esac
 
 PANEL_HOME="${PANEL_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}/zomboid-panel}"
@@ -35,8 +34,8 @@ CONTEXT_DIR="$BUILD_ROOT/ctx"
 SOURCE_DIR="$BUILD_ROOT/source"
 LOCAL_PANEL_IMAGE="zomboid-panel-allinone:latest"
 LOCAL_UPDATER_IMAGE="zomboid-panel-updater:latest"
-PUBLISHED_PANEL_IMAGE="${PANEL_IMAGE_SOURCE:-$REGISTRY/zomboid-panel:aio-$VERSION}"
-PUBLISHED_UPDATER_IMAGE="${UPDATER_IMAGE_SOURCE:-$REGISTRY/zomboid-panel:updater-$VERSION}"
+PUBLISHED_PANEL_IMAGE="${PANEL_IMAGE_SOURCE:-ghcr.io/itsmeares/better-zcp:aio-$VERSION}"
+PUBLISHED_UPDATER_IMAGE="${UPDATER_IMAGE_SOURCE:-ghcr.io/itsmeares/better-zcp:updater-$VERSION}"
 
 mkdir -p "$CONTEXT_DIR"
 

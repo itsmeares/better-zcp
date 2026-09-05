@@ -18,8 +18,7 @@
     "confirmNewPassword": "تأكيد كلمة المرور الجديدة",
     "recoveryTokenLocalReset": "رمز الاسترداد لإعادة التعيين المحلية",
     "newPasswordLocalReset": "كلمة المرور الجديدة لإعادة التعيين المحلية",
-    "confirmNewPasswordLocalReset": "تأكيد كلمة المرور الجديدة لإعادة التعيين المحلية",
-    "buyMeCoffeeKofi": "ادعمني بقهوة على Ko-fi"
+    "confirmNewPasswordLocalReset": "تأكيد كلمة المرور الجديدة لإعادة التعيين المحلية"
   },
   "tabs": {
     "groups": {
@@ -615,15 +614,12 @@
     "upToDateBadge": "محدَّث",
     "notCheckedYet": "لم يتم التحقق بعد",
     "description": "لوحة إدارة عبر الويب لخوادم Project Zomboid المخصصة. تشمل RCON، وإدارة اللاعبين، واكتشاف تحديثات المودات، وعمليات إعادة التشغيل المجدولة، والنسخ الاحتياطية للعالم، والتكامل مع Discord، ومود PanelBridge المكتوب بلغة Lua للإجراءات داخل العالم.",
-    "supportTitle": "هل تستمتع باللوحة؟",
-    "supportDesc": "ادعم التطوير لاستمرار التحديثات والميزات الجديدة.",
-    "buyMeCoffee": "ادعمني بقهوة",
     "joinDiscord": "انضم إلى Discord",
     "githubRepo": "مستودع GitHub",
     "releasesChangelog": "الإصدارات وسجل التغييرات",
     "reportIssue": "الإبلاغ عن مشكلة",
     "builtWith": "بُني باستخدام React وNode.js وSocket.IO",
-    "mitLicensed": "مرخَّص برخصة MIT"
+    "agplLicensed": "AGPL-3.0-only"
   },
   "corsLockoutDialog": {
     "title": "هل تريد حجب نفسك عن اللوحة؟",

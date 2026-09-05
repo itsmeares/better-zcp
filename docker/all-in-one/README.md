@@ -23,14 +23,14 @@ installer runs Compose inside its own controller container.
 Run this on the Docker host:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/fpsacha/zomboid-control-panel/main/docker/all-in-one/bootstrap.sh | sh
+curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker/all-in-one/bootstrap.sh | sh
 ```
 
 To install a specific version instead of the latest release, pass it as an
 argument:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/fpsacha/zomboid-control-panel/main/docker/all-in-one/bootstrap.sh | sh -s -- 1.2.4
+curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker/all-in-one/bootstrap.sh | sh -s -- 2.0.0
 ```
 
 The script validates Docker and the host architecture, resolves the latest

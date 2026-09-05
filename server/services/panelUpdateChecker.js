@@ -2,7 +2,7 @@
  * Panel Update Checker
  *
  * Checks for new panel releases on GitHub and provides a self-update mechanism.
- * - Periodically checks github.com/fpsacha/zomboid-control-panel/releases
+ * - Periodically checks github.com/itsmeares/better-zcp/releases
  * - Compares installed version vs latest GitHub release
  * - Downloads and replaces the binary for one-click updates (exe mode only)
  */
@@ -22,8 +22,8 @@ import { stageUpdateBundle } from "./updateBundle.js";
 
 const log = createLogger("PanelUpdater");
 
-const GITHUB_OWNER = "fpsacha";
-const GITHUB_REPO = "zomboid-control-panel";
+const GITHUB_OWNER = "itsmeares";
+const GITHUB_REPO = "better-zcp";
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // Check every 6 hours
 const GITHUB_API_TIMEOUT_MS = 15000;
 const DOWNLOAD_TIMEOUT_MS = 60000;

@@ -1,0 +1,7 @@
+packages:
+  - client
+
+allowBuilds:
+  cpu-features: true
+  esbuild: true
+  ssh2: true

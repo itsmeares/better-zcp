@@ -18,7 +18,6 @@
     "confirmNewPassword": "确认新密码",
     "newPasswordLocalReset": "本地重置的新密码",
     "confirmNewPasswordLocalReset": "确认本地重置的新密码",
-    "buyMeCoffeeKofi": "在 Ko-fi 请我喝杯咖啡",
     "recoveryTokenLocalReset": "用于本地重置的恢复令牌"
   },
   "tabs": {
@@ -615,15 +614,12 @@
     "upToDateBadge": "已是最新版本",
     "notCheckedYet": "尚未检查",
     "description": "一款基于 Web 的 Project Zomboid 专用服务器管理面板。包含 RCON、玩家管理、模组更新检测、计划重启、世界备份、Discord 集成，以及用于游戏内操作的 PanelBridge Lua 模组。",
-    "supportTitle": "喜欢这个面板吗？",
-    "supportDesc": "支持开发，让更新与新功能持续到来。",
-    "buyMeCoffee": "请我喝杯咖啡",
     "joinDiscord": "加入 Discord",
     "githubRepo": "GitHub 仓库",
     "releasesChangelog": "发布记录与更新日志",
     "reportIssue": "报告问题",
     "builtWith": "基于 React、Node.js 与 Socket.IO 构建",
-    "mitLicensed": "采用 MIT 许可证"
+    "agplLicensed": "AGPL-3.0-only"
   },
   "corsLockoutDialog": {
     "title": "将自己锁定在面板之外？",

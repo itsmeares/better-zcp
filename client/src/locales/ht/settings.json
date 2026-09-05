@@ -18,8 +18,7 @@
     "confirmNewPassword": "Konfime nouvo modpas",
     "recoveryTokenLocalReset": "Jeton rekiperasyon pou reyinisyalizasyon lokal",
     "newPasswordLocalReset": "Nouvo modpas pou reyinisyalizasyon lokal",
-    "confirmNewPasswordLocalReset": "Konfime nouvo modpas pou reyinisyalizasyon lokal",
-    "buyMeCoffeeKofi": "Ofri m yon kafe sou Ko-fi"
+    "confirmNewPasswordLocalReset": "Konfime nouvo modpas pou reyinisyalizasyon lokal"
   },
   "tabs": {
     "groups": {
@@ -552,15 +551,12 @@
     "upToDateBadge": "Ajou",
     "notCheckedYet": "Poko tcheke",
     "description": "Yon panèl jesyon sou entènèt pou sèvè dedye Project Zomboid. Genyen RCON, jesyon jwè, deteksyon mizajou mod, redemaraj pwograme, kopi sovgad mond, entegrasyon Discord, ak mod Lua PanelBridge pou aksyon nan mond lan.",
-    "supportTitle": "Ou renmen panèl la?",
-    "supportDesc": "Sipòte devlopman an pou kenbe mizajou ak nouvo fonksyon ap vini.",
-    "buyMeCoffee": "Ofri m yon kafe",
     "joinDiscord": "Antre nan Discord",
     "githubRepo": "Depo GitHub",
     "releasesChangelog": "Vèsyon ak istorik chanjman",
     "reportIssue": "Rapòte yon pwoblèm",
     "builtWith": "Bati ak React, Node.js, ak Socket.IO",
-    "mitLicensed": "Lisans MIT"
+    "agplLicensed": "AGPL-3.0-only"
   },
 
   "corsLockoutDialog": {

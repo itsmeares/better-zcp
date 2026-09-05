@@ -14,20 +14,20 @@
 # one): this stage only produces static client assets (client/dist — plain
 # JS/CSS/HTML, no native binaries in the output), so there's nothing
 # architecture-specific to gain from building it per-target. Without this
-# pin, buildx runs `npm install`/`vite build` under QEMU for every non-native
+# pin, buildx runs dependency installation and `vite build` under QEMU for every non-native
 # target platform (e.g. arm64 on GitHub's amd64 runners) — Rolldown/lightningcss's
 # native binaries under emulation are dramatically slower and can hang for
 # a very long time instead of the ~30s this takes natively.
 FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 
 WORKDIR /app
+RUN corepack enable
 
 # Install client dependencies (includes devDeps for build tooling).
-# We use `npm install` rather than `npm ci` because Rolldown/lightningcss ship
-# OS-specific optional binaries; a Windows-generated lockfile won't contain
-# the linux/amd64 + linux/arm64 entries that `npm ci` requires.
-COPY client/package.json client/package-lock.json* ./client/
-RUN cd client && npm install --no-audit --prefer-offline --include=optional
+# pnpm's workspace lockfile includes the platform-specific optional binaries.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY client/package.json ./client/package.json
+RUN corepack install && pnpm install --filter pz-server-manager-client --frozen-lockfile
 
 # Copy client source and build.
 # The root package.json is needed because vite.config.ts reads the panel version from it.
@@ -41,7 +41,7 @@ COPY client/ ./client/
 # Both halves must be given the same value or the check compares two different things.
 ARG PANEL_BUILD_SHA=""
 ENV PANEL_BUILD_SHA=${PANEL_BUILD_SHA}
-RUN cd client && npm run build
+RUN pnpm --filter pz-server-manager-client build
 
 # --- Runtime stage ---
 FROM node:22-bookworm-slim
@@ -79,9 +79,8 @@ RUN set -eux; \
 WORKDIR /app
 
 # Install server dependencies only (no devDeps).
-# Same reasoning as the client: cross-platform optional deps make `npm ci` fragile.
-COPY package.json package-lock.json* ./
-RUN npm install --no-audit --prefer-offline --omit=dev
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN corepack enable && corepack install && pnpm install --filter pz-server-manager --prod --frozen-lockfile
 
 # Copy server source
 COPY server/ ./server/

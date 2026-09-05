@@ -3,12 +3,8 @@ name: Build AIO Docker Image
 # CI + publish for docker/all-in-one/Dockerfile (Debian-based: panel +
 # SteamCMD + the PZ dedicated server in one image). Deliberately kept as its
 # own workflow, independent of docker-publish.yml: that workflow publishes
-# the standard panel-only image this repo shares a history with upstream
-# (fpsacha/zomboid-control-panel), and must keep working unmodified if/when
-# this fork's changes go back upstream as a PR. The AIO image is this fork's
-# own addition — publishing it here, under its own tag, on its own trigger
-# paths, means it can never affect (or conflict with) the upstream-shared
-# build.
+# the standard panel-only image. The AIO image uses separate tags in the same
+# repository package, so it cannot overwrite the panel-only tags.
 #
 # Pull requests build both images without publishing. Main publishes moving
 # `aio` / `updater` tags, while release tags publish immutable version tags
@@ -25,14 +21,15 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - 'v2.*'
     paths:
       - 'docker/all-in-one/**'
       - 'server/**'
       - 'client/**'
       - 'pz-mod/**'
       - 'package.json'
-      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - '.github/workflows/docker-aio-build.yml'
   pull_request:
     paths:
@@ -41,7 +38,8 @@ on:
       - 'client/**'
       - 'pz-mod/**'
       - 'package.json'
-      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - '.github/workflows/docker-aio-build.yml'
   workflow_dispatch:
 
@@ -63,7 +61,7 @@ jobs:
         id: panel-meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/zomboid-panel
+          images: ghcr.io/itsmeares/better-zcp
           # metadata-action otherwise creates a moving `latest` tag for the
           # semver source, which would let the AIO image overwrite the
           # panel-only image consumed by the generic Compose installer.
@@ -77,7 +75,7 @@ jobs:
         id: updater-meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/zomboid-panel
+          images: ghcr.io/itsmeares/better-zcp
           # The updater is published in the shared GHCR package, so it must
           # never claim the package's generic `latest` tag.
           flavor: latest=false

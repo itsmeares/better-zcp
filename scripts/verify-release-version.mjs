@@ -49,16 +49,14 @@ function verify() {
   assert(/^\d+\.\d+\.\d+$/.test(expectedVersion), `Invalid release version: ${expectedVersion}`);
 
   const rootPackage = readJson("package.json");
-  const rootLock = readJson("package-lock.json");
   const clientPackage = readJson("client/package.json");
-  const clientLock = readJson("client/package-lock.json");
+  const workspaceLock = readText("pnpm-lock.yaml");
+  assert(workspaceLock.includes("lockfileVersion:"), "pnpm-lock.yaml is not a valid pnpm lockfile");
+  assert(workspaceLock.includes("\n  .:\n") && workspaceLock.includes("\n  client:\n"),
+    "pnpm-lock.yaml is missing the root or client workspace importer");
   const versions = [
     ["package.json", rootPackage.version],
-    ["package-lock.json", rootLock.version],
-    ["package-lock.json root package", rootLock.packages?.[""]?.version],
     ["client/package.json", clientPackage.version],
-    ["client/package-lock.json", clientLock.version],
-    ["client/package-lock.json root package", clientLock.packages?.[""]?.version],
   ];
   for (const [label, version] of versions) {
     assert(version === expectedVersion, `${label} is ${version}, expected ${expectedVersion}`);

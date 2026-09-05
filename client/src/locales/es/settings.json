@@ -18,7 +18,6 @@
     "confirmNewPassword": "Confirmar nueva contraseña",
     "newPasswordLocalReset": "Nueva contraseña para el restablecimiento local",
     "confirmNewPasswordLocalReset": "Confirmar nueva contraseña para el restablecimiento local",
-    "buyMeCoffeeKofi": "Invítame a un café en Ko-fi",
     "recoveryTokenLocalReset": "Token de recuperación para el restablecimiento local"
   },
   "tabs": {
@@ -615,15 +614,12 @@
     "upToDateBadge": "Actualizado",
     "notCheckedYet": "Aún sin comprobar",
     "description": "Un panel de administración web para servidores dedicados de Project Zomboid. Incluye RCON, gestión de jugadores, detección de actualizaciones de mods, reinicios programados, copias de seguridad del mundo, integración con Discord y el mod de Lua PanelBridge para acciones dentro del mundo.",
-    "supportTitle": "¿Disfrutas el panel?",
-    "supportDesc": "Apoya el desarrollo para que sigan llegando actualizaciones y nuevas funciones.",
-    "buyMeCoffee": "Invítame a un café",
     "joinDiscord": "Unirse a Discord",
     "githubRepo": "Repositorio de GitHub",
     "releasesChangelog": "Versiones y registro de cambios",
     "reportIssue": "Informar de un problema",
     "builtWith": "Creado con React, Node.js y Socket.IO",
-    "mitLicensed": "Con licencia MIT"
+    "agplLicensed": "AGPL-3.0-only"
   },
   "corsLockoutDialog": {
     "title": "¿Bloquearte el acceso al panel?",
