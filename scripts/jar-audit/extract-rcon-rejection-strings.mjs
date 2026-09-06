@@ -1,23 +1,4 @@
 #!/usr/bin/env node
-// Extracts the real UTF8 string constants out of every RCON command class
-// (plus the command dispatcher, for "Unknown command") in the real B42
-// server jar, and writes a committed fixture that
-// apps/panel-server/tests/rconRejectionGroundTruth.test.js diffs
-// apps/panel-server/services/rcon.js's KNOWN_RCON_REJECTIONS against on every test run.
-//
-// WHY THIS EXISTS: KNOWN_RCON_REJECTIONS's whole job is telling a real
-// command success apart from a silent rejection (see its own comment in
-// rcon.js). A pattern that stops matching anything is invisible everywhere
-// else -- the code compiles, existing tests pass, the regex is syntactically
-// perfect, it just silently never fires again. This fixture is what makes
-// that state visible when the game changes a rejection message.
-//
-// Reuses this directory's own parseClass() (real constant-pool parsing per
-// the JVM class file format, not a flat strings grep) rather than inventing
-// a second extraction technique for the same jar.
-//
-// Usage: node scripts/jar-audit/extract-rcon-rejection-strings.mjs <path-to-projectzomboid.jar>
-// READ-ONLY on the jar. Never writes anything under the PZ install.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -44,22 +25,6 @@ if (!fs.existsSync(jarPath)) {
 
 const d = await unzipper.Open.file(jarPath);
 
-// Scope: every serverCommands class (where a per-command rejection message
-// would live) plus GameServer.class (the command dispatcher -- "Unknown
-// command" lives here, not in any one command class), plus BanSystem.class
-// and ServerWorldDatabase.class (+ its LogonResult inner class).
-//
-// banuser/unbanuser/adduser/removeuserfromwhitelist carry no rejection-text
-// literals of their own. Each
-// command class (BanUserCommand, UnbanUserCommand, AddUserCommand,
-// RemoveUserFromWhiteList) just returns whatever String BanSystem's or
-// ServerWorldDatabase's own methods hand back (BanSystem.BanUser/
-// BanUserByIP/BanUserBySteamID/BanIP; ServerWorldDatabase.banUser/
-// addUser/removeUser). The rejection text, if the target isn't found, is
-// already banned, or cannot be banned, lives in those two classes, not
-// in any per-command class this scope already covered. Added here rather
-// than in a separate script or fixture, so one extraction technique remains
-// responsible for the complete fixture.
 const targets = d.files.filter(
   (f) =>
     (f.path.startsWith("zombie/commands/serverCommands/") ||
@@ -77,7 +42,7 @@ for (const entry of targets) {
   try {
     info = parseClass(buf);
   } catch {
-    continue; // not a class this parser handles -- skip, don't fail the whole extraction over one entry
+    continue;
   }
   const strings = info.constantPool.filter((c) => c && c.tag === 1).map((c) => c.value);
   perClassStrings[entry.path] = strings;
@@ -91,14 +56,6 @@ try {
   /* manifest not found at the assumed ../../appmanifest_108600.acf -- leave
      buildId null, don't fail extraction over it (see loud warning below) */
 }
-// appManifestPath is derived from jarPath by a hardcoded relative offset
-// that assumes a standard Steam library layout (steamapps/common/<App>/
-// jar, manifest two levels up in steamapps/). A jar living at any other
-// path shape (e.g. a dedicated-server backup directory) silently resolves
-// to a nonexistent manifest and buildId falls back to null with nothing
-// but a terse trailing "build null" -- easy to miss and easy to commit a
-// fixture with no provenance. Fail loudly instead: a fixture is only useful
-// if a later drift can be attributed to a specific game build.
 if (!buildId) {
   console.error(
     `WARNING: could not determine pzBuildId (looked for ${appManifestPath}). ` +

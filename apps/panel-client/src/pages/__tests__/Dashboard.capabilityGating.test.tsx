@@ -8,20 +8,6 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi, type ServerInstance,
 } from '@/lib/api'
 
-// regression Tier 1: server.control gates Start/Stop/Force-Stop/
-// Restart/Restart-Now/Save (apps/panel-server/routes/server.js), server.wipe is a
-// SEPARATE, more dangerous capability gating /wipe and /wipe/preview --
-// confirmed by reading both routes with my own eyes, not inferred from the
-// capabilities list. Dashboard.tsx had zero client-side awareness of
-// either. Two things this page needed that Console.tsx's single-capability
-// fix didn't: (1) Start has TWO entry points that both call handleAction
-// directly (the header button AND the verdict band's shortcut for the same
-// action) -- omitting the verdict shortcut when ungated, rather than
-// showing it disabled with no explanation, since VerdictAction has no
-// tooltip support; (2) Stop/Force Stop/Restart/Restart Now all share ONE
-// real execution point (the confirm dialog's AlertDialogAction) -- guarded
-// there, not just on the four buttons that stage confirmAction, mirroring
-// Console.tsx's executeCommand()/sendAnnouncement() guards.
 
 let mockCanControl = true
 let mockCanWipe = true
@@ -194,12 +180,6 @@ describe('Dashboard.tsx: Auto-start sends a boolean setting', () => {
 })
 
 async function openMoreActionsMenu() {
-  // Radix's DropdownMenuTrigger opens on pointerdown, not click (same
-  // family of quirk as Tabs switching on mousedown -- see
-  // Console.test.tsx's openRconTab) -- a plain fireEvent.click never
-  // dispatches pointerdown, so the menu would never open and
-  // findByRole('menu') would sit at the suite's 60000ms asyncUtilTimeout
-  // instead of failing fast.
   const trigger = await screen.findByRole('button', { name: /more server actions/i })
   fireEvent.pointerDown(trigger, { button: 0, pointerId: 1 })
   fireEvent.click(trigger)
@@ -227,9 +207,6 @@ describe('Dashboard.tsx: Start is gated on server.control at BOTH of its entry p
     renderDashboard()
 
     const startButtons = await screen.findAllByRole('button', { name: 'Start' })
-    // The verdict band's shortcut is OMITTED (not shown disabled) when the
-    // capability is missing -- it has no tooltip support, so only the
-    // header button (which does) should exist.
     expect(startButtons).toHaveLength(1)
     expect(startButtons[0]).toBeDisabled()
 
@@ -249,10 +226,6 @@ describe('Dashboard.tsx: Start is gated on server.control at BOTH of its entry p
 
     renderDashboard()
 
-    // findAllByRole resolves as soon as it finds ANY match, not once the
-    // render has settled -- activeServer/status arrive async, so the
-    // verdict band's second Start button can still be one render behind
-    // the header's. waitFor to the final, stable count instead.
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(2))
     for (const button of screen.getAllByRole('button', { name: 'Start' })) expect(button).not.toBeDisabled()
   })
@@ -288,8 +261,6 @@ describe('Dashboard.tsx: Stop/Force Stop/Restart/Save share server.control, gate
       fireEvent.click(button)
     }
 
-    // Disabled buttons never open the confirm dialog -- no
-    // handleAction()/AlertDialogAction path is reachable at all.
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(stop).not.toHaveBeenCalled()
     expect(forceStop).not.toHaveBeenCalled()
@@ -308,10 +279,6 @@ describe('Dashboard.tsx: Stop/Force Stop/Restart/Save share server.control, gate
     expect(restartNowItem).toHaveAttribute('aria-disabled', 'true')
 
     fireEvent.click(restartNowItem)
-    // Not just "restart was never called" -- Radix's MenuItem fires this
-    // onClick before ever consulting its own disabled prop, so the real
-    // proof is that clicking it doesn't even open the confirm dialog that
-    // would eventually call restart.
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(restart).not.toHaveBeenCalled()
   })
@@ -336,15 +303,6 @@ describe('Dashboard.tsx: Stop/Force Stop/Restart/Save share server.control, gate
     await waitFor(() => expect(stop).toHaveBeenCalledTimes(1))
   })
 
-  // regression: the test found DisabledReason-inside-Trigger-asChild
-  // silently breaks the GRANTED case (not the disabled one) on Players.tsx,
-  // and flagged that a suite which only asserts toBeDisabled()/
-  // not.toBeDisabled() would sit green through exactly that kind of break.
-  // This page doesn't use that composition (grep confirms zero
-  // AlertDialogTrigger/DialogTrigger usage -- both dialogs here are
-  // open={state}-controlled), but the lesson applies regardless: prove the
-  // granted path reaches the real API end to end, not just that the
-  // control looks enabled.
   it('holding server.control: Restart Now opens its confirm dialog and calls restart(0) once confirmed', async () => {
     mockCanControl = true
     await setUpCommon()
@@ -394,15 +352,6 @@ describe('Dashboard.tsx: Wipe is gated on server.wipe, independently of server.c
     expect(wipe).not.toHaveBeenCalled()
   })
 
-  // regression, floor-wide re-check: the test above renders an
-  // ONLINE server, so its `toHaveAttribute('aria-disabled', 'true')` check
-  // is confounded -- `online` alone already satisfies this item's disabled
-  // expression regardless of canWipeServer, same fixture bug found on the
-  // sidebar Wipe button. Deleting only `|| !canWipeServer` from the
-  // dropdown item's disabled prop left the test above still green (its
-  // click-through assertion survives on the onClick guard alone, which
-  // this edit didn't touch). This dedicated offline-fixture test isolates
-  // canWipeServer as the ONLY thing keeping the item disabled.
   it('lacking server.wipe with the server OFFLINE (so canWipeServer is the only reason left): the dropdown Wipe item is still disabled and never opens its dialog', async () => {
     mockCanControl = true
     mockCanWipe = false
@@ -430,9 +379,6 @@ describe('Dashboard.tsx: Wipe is gated on server.wipe, independently of server.c
     mockCanControl = true
     mockCanWipe = true
     await setUpCommon()
-    // Wipe's menu item is also disabled while the server is online -- stop
-    // it in this fixture so the capability grant is what's under test, not
-    // the pre-existing running-server guard this fix must not weaken.
     const offline = makeServer()
     getResolvedActive.mockResolvedValue({ server: offline })
     getStatus.mockResolvedValue({
@@ -451,8 +397,6 @@ describe('Dashboard.tsx: Wipe is gated on server.wipe, independently of server.c
     fireEvent.click(wipeItem)
     const dialog = await screen.findByRole('alertdialog')
 
-    // Not just "the dialog opened" -- the granted path has to survive both
-    // steps of the existing preview-then-wipe flow this fix must not weaken.
     fireEvent.click(within(dialog).getByRole('button', { name: /^preview$/i }))
     const wipeNowButton = await within(dialog).findByRole('button', { name: /wipe now/i })
     expect(wipeNowButton).not.toBeDisabled()
@@ -461,23 +405,10 @@ describe('Dashboard.tsx: Wipe is gated on server.wipe, independently of server.c
     await waitFor(() => expect(wipe).toHaveBeenCalledTimes(1))
   })
 
-  // regression, stock-role regression: this sidebar Maintenance-panel
-  // button opens the exact same wipe dialog as the "..." dropdown item
-  // above, but was missing canWipeServer entirely -- neither disabled nor
-  // onClick-guarded -- so a role without server.wipe (both stock
-  // TECHNICIAN and MODERATOR) could open the destructive dialog and only
-  // hit unexplained disabled Preview/Wipe Now buttons inside it. Found by
-  // an independent capability-gate audit, not by a user report.
   it('lacking server.wipe: the sidebar Maintenance Wipe Server button is disabled and never opens the dialog', async () => {
     mockCanControl = true
     mockCanWipe = false
     await setUpCommon()
-    // Offline, not setUpOnlineServer() -- the button is already disabled
-    // while online for an unrelated reason (must stop first), which would
-    // mask whether canWipeServer is doing anything. An earlier draft of
-    // this test used the online fixture and stayed green even with the
-    // capability check removed entirely from the disabled prop -- caught
-    // by break-verify, fixed by isolating the actual condition under test.
     const offline = makeServer()
     getResolvedActive.mockResolvedValue({ server: offline })
     getStatus.mockResolvedValue({

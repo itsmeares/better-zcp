@@ -68,39 +68,12 @@ export default function Chat() {
   const { toast } = useToast()
   const confirm = useConfirm()
   const socket = useSocket()
-  // Three genuinely different capabilities on this one page. Sending on the
-  // 'server' channel (POST /panel-bridge/message, plain broadcast, no
-  // spoofable author) requires server.world_events, same as weather/zombie/
-  // climate tools. Sending on 'admin' or 'general' (POST /panel-bridge/
-  // chat/admin, chat/general) requires players.endanger_or_impersonate
-  // instead -- split out of server.world_events 2026-08-27 (decision
-  // on prioritized issue #5) specifically because chat/general accepts an
-  // arbitrary custom author name, indistinguishable in the chat log from
-  // that player having said it themselves; chat/admin moved with it as the
-  // same kind of harm (apps/panel-server/routes/panelBridge.js:4024, 4083). Managing
-  // the quick-broadcast preset list (add/edit/delete, PUT /config/app-
-  // settings with chatPresets) requires panel.settings instead (server/
-  // routes/config.js:256; chatPresets is confirmed NOT in that route's
-  // per-key SETTINGS_KEY_CAPABILITY elevation map, so no secondary check
-  // applies). None of TECHNICIAN/MODERATOR hold players.endanger_or_impersonate
-  // or panel.settings by default (admin-only), so every non-admin stock
-  // role can broadcast on 'server' but not send as admin/general or save
-  // presets -- a live gap, not a hypothetical one.
   const { can } = useAuth()
   const canSendServerChat = can('server.world_events')
   const canSendTargetedChat = can('players.endanger_or_impersonate')
   const canSendChat = channel === 'server' ? canSendServerChat : canSendTargetedChat
   const canManagePresets = can('panel.settings')
 
-  // Whether the game's native ChatServer API is answering right now, or the
-  // three send paths above are silently degrading to player:Say/RCON --
-  // never observable before this (nothing else on the page or elsewhere in
-  // the panel reads getChatInfo). Fetched once on mount, not polled: this
-  // doesn't change mid-session the way bridge connection or player counts
-  // do, so a live poll would just be waste. Same capability as sending on
-  // the server channel -- read-only, but there is no dedicated read gate
-  // for this and inventing one for a single diagnostic call is not
-  // proportionate.
   const [nativeChatAvailable, setNativeChatAvailable] = useState<boolean | null>(null)
   useEffect(() => {
     if (!canSendServerChat) return
@@ -113,9 +86,6 @@ export default function Chat() {
     return () => { active = false }
   }, [canSendServerChat])
 
-  // Track whether the user is parked at (or near) the bottom of the
-  // scroll viewport. We only auto-scroll on new messages when they are,
-  // so reading older history isn't yanked back by every incoming line.
   const handleScroll = useCallback(() => {
     const el = scrollViewportRef.current
     if (!el) return
@@ -124,7 +94,6 @@ export default function Chat() {
   }, [])
 
   useEffect(() => {
-    // ScrollArea (Radix) renders a viewport div with [data-radix-scroll-area-viewport].
     const root = chatEndRef.current?.closest('[data-radix-scroll-area-viewport]') as HTMLDivElement | null
     scrollViewportRef.current = root
     if (!root) return
@@ -158,15 +127,12 @@ export default function Chat() {
     return () => clearInterval(interval)
   }, [fetchPlayers])
 
-  // Listen for chat messages from the server log tailer
   useEffect(() => {
     if (socket) {
       const handleSocketMessage = (data: { id?: string; type?: string; author?: string; message?: string; timestamp?: string }) => {
         const msg = data.message
         if (!msg) return
         setChatHistory(prev => {
-             // Coalesce an optimistic local post with the echoed server log line
-             // without dropping a legitimate repeated chat message from a player.
              const parsedTs = data.timestamp ? Date.parse(data.timestamp) : Number.NaN
              const incomingTs = Number.isFinite(parsedTs) ? parsedTs : Date.now()
              const recent = prev.slice(-20)
@@ -205,21 +171,9 @@ export default function Chat() {
 
   const sendMessage = async () => {
     if (!message.trim() || sendingRef.current || !canSendChat) return
-    // Both the button and Enter-key path call this function, so guard here as
-    // well as using the button's disabled state as an affordance.
     sendingRef.current = true
     setSending(true)
     try {
-      // Dispatch on the selected channel:
-      //   server  → yellow broadcast banner (RCON servermsg)
-      //   admin   → red admin-only chat (visible only to admins in-game)
-      //   general → posts as a custom author into the public chat stream
-      // Every branch below posts through the generic /panel-bridge/command
-      // passthrough (or its chat-specific siblings), which only ever
-      // resolves on success -- an in-game failure rejects the promise
-      // instead (see teleportPlayerTo in WorldMap.tsx for the full
-      // explanation) -- so this never sees result.success === false, only
-      // the catch below.
       let localType: ChatMessage['type'] = 'server'
       let localAuthor = t('labels.server')
       if (channel === 'admin') {
@@ -242,8 +196,6 @@ export default function Chat() {
         message: message,
         timestamp: sentAt
       }].slice(-200))
-      // Sending always pins the user back to the bottom — they just
-      // posted, so they want to see the result.
       stickToBottomRef.current = true
       setMessage('')
       toast({
@@ -269,7 +221,6 @@ export default function Chat() {
     }
   }
 
-  // Load saved chat presets from app settings; fall back to defaults.
   useEffect(() => {
     let cancelled = false
     configApi.getAppSettings()
@@ -285,10 +236,6 @@ export default function Chat() {
   }, [defaultPresets])
 
   const persistPresets = useCallback(async (next: string[]) => {
-    // The real gate for all three mutating preset actions (add, save-edit,
-    // delete) -- each of handleAddPreset/handleSaveEdit/handleDeletePreset
-    // calls this one function, including their Enter-key paths, so guarding
-    // here covers every entry point rather than each caller individually.
     if (!canManagePresets) return
     let previous: string[] = []
     setPresets(prev => {
@@ -328,11 +275,6 @@ export default function Chat() {
   }, [editingDraft, editingIdx, persistPresets, presets])
 
   const handleDeletePreset = useCallback(async (idx: number) => {
-    // Quick-broadcast presets are a shared, panel-wide setting (persisted
-    // via configApi.updateAppSettings), not per-admin -- deleting one here
-    // reaches every other admin who uses it, even though re-typing it back
-    // is trivial. The "affects others but reversible" tier: warning-amber,
-    // not destructive-red, not silent either.
     const ok = await confirm({
       title: t('quickBroadcasts.deleteConfirmTitle'),
       description: t('quickBroadcasts.deleteConfirmDescription', { preset: presets[idx] }),
@@ -382,10 +324,8 @@ export default function Chat() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Chat Window */}
         <div className="lg:col-span-2">
           <div className="relative h-[calc(100vh-260px)] min-h-[420px] flex flex-col rounded-md border border-border/55 bg-card/85 backdrop-blur-md shadow-lg overflow-hidden">
-            {/* header strip */}
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/50 bg-muted/30 select-none shrink-0">
               <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <MessagesSquare className="w-3.5 h-3.5" />
@@ -400,7 +340,6 @@ export default function Chat() {
             </div>
 
             <div className="flex-1 flex flex-col p-0 min-h-0">
-              {/* Messages Area */}
               <ScrollArea className="flex-1 px-3" role="log" aria-live="polite" aria-label={t('chatWindow.messagesAria')}>
                 <div className="py-3 space-y-2">
                   {chatHistory.length === 0 ? (
@@ -431,7 +370,6 @@ export default function Chat() {
                 </div>
               </ScrollArea>
 
-              {/* Message Input */}
               <div className="p-3 border-t border-border/50 bg-muted/20">
                 {nativeChatAvailable !== null && (
                   <div className="flex items-center gap-1.5 pb-2 text-[11px] text-muted-foreground/80">
@@ -512,9 +450,7 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-4">
-          {/* Online Players */}
           <div className="relative rounded-md border border-border/55 bg-card/85 backdrop-blur-md shadow-md overflow-hidden">
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/50 bg-muted/30 select-none">
               <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -541,7 +477,6 @@ export default function Chat() {
             </div>
           </div>
 
-          {/* Quick Messages */}
           <div className="relative rounded-md border border-border/55 bg-card/85 backdrop-blur-md shadow-md overflow-hidden">
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/50 bg-muted/30 select-none">
               <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

@@ -3,14 +3,6 @@ import { cleanup, render, screen } from '@testing-library/react'
 import ChunkCleaner from '../ChunkCleaner'
 import { chunksApi, serversApi, mapApi } from '@/lib/api'
 
-// 2026-08-30 visual sweep, 4th instance of one idiom (see 3665aa20, da9bb687,
-// a83c425a): a value that starts out looking like "confirmed empty" when it
-// really means "haven't checked yet". loadingSaves started false, and the
-// canvas's own condition never consulted it at all -- so from the very
-// first frame, and for the fetch's ENTIRE duration (not just a one-frame
-// flicker), the canvas rendered "No saves found -- here's what we tried" as
-// an investigated fact, while the Save Selection dropdown two feet away
-// correctly showed "Loading saves...". The dropdown was never the bug.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -74,11 +66,9 @@ function renderChunkCleaner() {
 
 describe('ChunkCleaner.tsx: canvas must not claim "no saves found" before fetchSaves() has settled', () => {
   it('shows a loading indicator, not the no-saves empty state, while getSaves is still in flight', async () => {
-    getSaves.mockImplementation(() => new Promise(() => {})) // never resolves within this test
+    getSaves.mockImplementation(() => new Promise(() => {}))
     renderChunkCleaner()
 
-    // Present in both the dropdown placeholder and the canvas now -- assert
-    // presence, not uniqueness, of the loading text.
     expect((await screen.findAllByText(/loading saves/i)).length).toBeGreaterThan(0)
     expect(screen.queryByText(/no saves found/i)).not.toBeInTheDocument()
   })

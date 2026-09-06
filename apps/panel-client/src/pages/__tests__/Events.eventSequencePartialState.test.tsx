@@ -6,24 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi, ApiError } from '@/lib/api'
 
-// regression (events-bridgeresultdisplay-needs-a-partial-state):
-// the 4570b52f made PanelBridge.lua's runEventSequence report
-// ok = (no step failed) instead of an unconditional true, and added
-// failedCount/executed alongside the always-present per-step `results`
-// array. Shipped deliberately WITHOUT the UI half -- BridgeResultDisplay
-// gated purely on the top-level success flag, so a 9-of-10 partial started
-// rendering the plain red "Operation Failed" card, which is still wrong
-// (just a different wrong than the green-on-total-failure it replaced).
-// This locks in the three real states: all succeeded, partial (N of M
-// failed, listed without needing to expand raw JSON), and all failed --
-// distinguished from an ordinary bridge failure (which still shows the
-// generic red card, unchanged).
-//
-// Also exercises Events.tsx's other half of this: runBridgeOperation's
-// catch branch used to hardcode `data: null` on every failure, discarding
-// whatever diagnostic table ApiError.data carried even when present. The
-// partial/all-failed cases below only render correctly because that data
-// now survives into BridgeResultData.
 
 vi.mock('@/components/ui/select', async () => {
   const React = await vi.importActual<typeof import('react')>('react')
@@ -156,7 +138,6 @@ describe('Events -- BridgeResultDisplay renders a real partial state for runEven
     await screen.findByText('1 of 2 step(s) failed')
     expect(screen.getByText('Step 2', { exact: false })).toBeInTheDocument()
     expect(screen.getByText(/Unsupported weather type/)).toBeInTheDocument()
-    // The bug this fixes: a partial must not read as the plain failure card.
     expect(screen.queryByText('Operation Failed')).not.toBeInTheDocument()
   })
 

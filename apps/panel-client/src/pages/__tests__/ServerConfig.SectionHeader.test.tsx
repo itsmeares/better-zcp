@@ -2,24 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
 import { resolveServerConfigDeepLink, SectionHeader } from '../ServerConfig'
 
-// regression phone-width overflow sweep: the ini/sandbox/spawn-points/
-// spawn-regions/mod-settings tab toolbars (Form/Raw toggle, download, Wiki
-// link, Save & reload) all share this one SectionHeader component. Its
-// action group had `shrink-0` with no wrap, so on a 390px viewport the Save
-// button's own right edge sat past the visible edge (measured live: right
-// ~407px against a 390px viewport, via Playwright) -- a real control shoved
-// half off-screen, not just a cosmetic clip.
-//
-// Wrapping the outer row alone wasn't enough (confirmed live -- it dropped
-// the action group to its own line, but that line was STILL too narrow for
-// its own five children, still clipping the Save button at ~395px): a
-// flex-wrap child with a shrink-0/auto-width sibling sizes to its own
-// max-content, not to the row it wrapped onto, so its own flex-wrap never
-// gets a width to wrap against. The action wrapper needs `w-full` below the
-// `sm` breakpoint so that once it wraps, it actually claims the full row
-// width its own children can then wrap inside of.
-// (jsdom has no real layout engine -- asserted by class, verified for real
-// pixel behavior live in a browser via Playwright.)
 describe('ServerConfig -- SectionHeader', () => {
   it('lets the label and action row wrap onto separate lines', () => {
     const { container } = render(

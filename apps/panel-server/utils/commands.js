@@ -1,6 +1,4 @@
-// All PZ Admin commands with descriptions and parameters
 export const PZ_COMMANDS = {
-  // Server Management
   save: {
     command: 'save',
     description: 'Save the current world',
@@ -47,7 +45,6 @@ export const PZ_COMMANDS = {
     category: 'server'
   },
 
-  // Player Management
   players: {
     command: 'players',
     description: 'List all connected players',
@@ -110,7 +107,6 @@ export const PZ_COMMANDS = {
     category: 'players'
   },
 
-  // Whitelist
   adduser: {
     command: 'adduser',
     description: 'Add a new user to a whitelisted server (password optional)',
@@ -139,7 +135,6 @@ export const PZ_COMMANDS = {
     category: 'whitelist'
   },
 
-  // Teleport
   teleport: {
     command: 'teleport',
     description: 'Teleport to a player or teleport player1 to player2',
@@ -160,7 +155,6 @@ export const PZ_COMMANDS = {
     category: 'teleport'
   },
 
-  // Items and XP
   additem: {
     command: 'additem',
     description: 'Give an item to a player',
@@ -191,7 +185,6 @@ export const PZ_COMMANDS = {
     category: 'items'
   },
 
-  // Weather and Events
   startrain: {
     command: 'startrain',
     description: 'Start rain on the server',
@@ -256,7 +249,6 @@ export const PZ_COMMANDS = {
     category: 'events'
   },
 
-  // Admin Modes
   godmod: {
     command: 'godmod',
     description: 'Make player invincible',
@@ -285,7 +277,6 @@ export const PZ_COMMANDS = {
     category: 'admin'
   },
 
-  // Safehouse
   releasesafehouse: {
     command: 'releasesafehouse',
     description: 'Release a safehouse you own',
@@ -293,7 +284,6 @@ export const PZ_COMMANDS = {
     category: 'safehouse'
   },
 
-  // Lua
   reloadlua: {
     command: 'reloadlua',
     description: 'Reload a Lua script on the server',
@@ -301,7 +291,6 @@ export const PZ_COMMANDS = {
     category: 'advanced'
   },
 
-  // Logging
   log: {
     command: 'log',
     description: 'Set log level for a specific type',
@@ -312,7 +301,6 @@ export const PZ_COMMANDS = {
     category: 'advanced'
   },
 
-  // Statistics
   stats: {
     command: 'stats',
     description: 'Set and clear server statistics',
@@ -323,7 +311,6 @@ export const PZ_COMMANDS = {
     category: 'advanced'
   },
 
-  // Remove zombies
   removezombies: {
     command: 'removezombies',
     description: 'Remove zombies from the server',
@@ -331,7 +318,6 @@ export const PZ_COMMANDS = {
     category: 'events'
   },
 
-  // Clear console
   clear: {
     command: 'clear',
     description: 'Clear the server console',
@@ -340,7 +326,6 @@ export const PZ_COMMANDS = {
   }
 };
 
-// Vehicle types available in PZ
 export const VEHICLES = [
   'Base.VanAmbulance',
   'Base.CarLightsPolice',
@@ -374,9 +359,6 @@ export const VEHICLES = [
   'Base.TrailerAdvert'
 ];
 
-// Perks for XP. Ids are what `addxp` accepts and are case-sensitive; several
-// differ from the name the skills screen shows. Verified against a live
-// 42.20.0 server by probing every candidate with `addxp "<user>" <id>=0`.
 export const PERK_CATALOG = [
   { id: 'Aiming', label: 'Aiming', category: 'Combat - Firearms' },
   { id: 'Reloading', label: 'Reloading', category: 'Combat - Firearms' },
@@ -423,32 +405,6 @@ export const PERK_CATALOG = [
 export const PERKS = PERK_CATALOG.map((perk) => perk.id);
 
 
-// Access levels accepted by PZ's setaccesslevel command, which resolves
-// everything except "none" against zombie.characters.Roles's live,
-// DB-backed role table (see zombie.network.GameServer.changeRole()).
-//
-// Keep this list aligned with the role ids in the bundled Project Zomboid
-// classes; `none` is handled separately by the game command.
-//
-// - 'overseer' REMOVED: Roles.class declares a getDefaultForOverseer()
-//   method, but no "overseer"/"oversee" id literal backs it anywhere in the
-//   class or the wider jar -- the same fingerprint as getDefaultForNewUser(),
-//   which is independently known not to be a real settable level. On a
-//   default server this can only ever produce "Access Level 'overseer'
-//   unknown, list of access level: ..." -- already correctly classified as
-//   a rejection by rcon.js's KNOWN_RCON_REJECTIONS, so this was a UX defect
-//   (a dropdown choice that always fails), not a silent-success lie.
-// - 'priority' ADDED: a real setupRole() id, backing
-//   getDefaultForPriorityUser() (in-game display name "PriorityUser").
-//   Was previously impossible to set from this panel at all -- the
-//   opposite-direction defect from overseer.
-// - 'none' is a SPECIAL CASE: SetAccessLevelCommand checks for the literal
-//   "none" directly in its own bytecode and never reaches the Roles table
-//   for it -- any future validation against Roles/getRoles() would need to
-//   special-case "none" too, or it would incorrectly reject a level the
-//   server actually accepts.
-// - 'admin', 'moderator', 'gm', 'observer', 'user' are all confirmed
-//   setupRole() id literals in Roles.class.
 export const ACCESS_LEVELS = [
   'admin',
   'moderator',

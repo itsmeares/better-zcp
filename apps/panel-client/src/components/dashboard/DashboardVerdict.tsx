@@ -6,9 +6,6 @@ import type { LucideIcon } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-/* -------------------------------------------------------------------------- */
-/*  Verdict                                                                   */
-/* -------------------------------------------------------------------------- */
 
 export type VerdictLevel = 'calm' | 'warning' | 'critical'
 
@@ -22,28 +19,14 @@ export interface VerdictAction {
 
 export interface Verdict {
   level: VerdictLevel
-  /**
-   * Terse statement of what is wrong. Omitted entirely when nothing is wrong,
-   * because a panel that announces its own health is just noise you learn to
-   * skip past.
-   */
   headline?: string
-  /**
-   * Inline explainer for a term inside the headline a first-time user can't
-   * be expected to know (e.g. a HelpTip on "RCON"). Kept separate from
-   * `headline` itself, which stays a plain string -- it also feeds the
-   * status dot's `title` attribute and its sr-only echo up in Dashboard.tsx,
-   * neither of which can hold JSX.
-   */
   headlineHelp?: ReactNode
-  /** Raw technical text, only where the operator genuinely needs it. */
   detail?: string
   action?: VerdictAction
 }
 
 export interface PresencePlayer {
   name: string
-  /** Human readable join age, omitted when the join event is not known. */
   since?: string
 }
 
@@ -73,11 +56,6 @@ function VerdictActionButton({ action }: { action: VerdictAction }) {
   )
 }
 
-/**
- * Freshness signal. The dot ticks once per successful status update, which is
- * what separates "healthy" from "the panel lost the link and is showing you
- * numbers from four minutes ago".
- */
 function Freshness({ lastUpdated, stale }: { lastUpdated: Date | null; stale: boolean }) {
   const { t } = useTranslation('dashboardVerdict')
   const label = (() => {
@@ -126,8 +104,6 @@ export function VerdictBand({
   stale: boolean
 }) {
   const { t } = useTranslation('dashboardVerdict')
-  // With nothing wrong and nobody online the band is just the freshness line,
-  // so it should not reserve the space of a full section.
   const hasBody = Boolean(verdict.headline || verdict.action) || (showPresence && players.length > 0)
   return (
     <section
@@ -212,16 +188,12 @@ export function VerdictBand({
   )
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Work list                                                                 */
-/* -------------------------------------------------------------------------- */
 
 export interface WorkItem {
   id: string
   to: string
   icon: LucideIcon
   label: string
-  /** Live state for this destination, rendered right aligned. */
   state?: string
   tone?: 'default' | 'good' | 'warning' | 'bad'
 }
@@ -233,10 +205,6 @@ const WORK_STATE_TONE: Record<'default' | 'good' | 'warning' | 'bad', string> = 
   bad: 'text-destructive',
 }
 
-/**
- * Destinations carrying their own state, so the numbers sit on the thing you
- * act on instead of in a separate read-only panel.
- */
 export function WorkList({ items }: { items: WorkItem[] }) {
   return (
     <nav aria-label="Server sections" className="divide-y divide-border/25">

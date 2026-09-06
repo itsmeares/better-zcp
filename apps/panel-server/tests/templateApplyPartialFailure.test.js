@@ -4,13 +4,6 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// POST /server-files/templates/:id/apply writes INI then Sandbox settings as
-// two separate steps. If the INI write succeeds and the Sandbox write then
-// fails, the route falls into its outer catch and responds with a flat
-// { error } -- reading as "nothing happened" -- even though the INI file was
-// already overwritten. Diagnosed during the route hunt,
-// confirmed still present: the `applied` array that WOULD tell the truth is
-// only ever read on the success path.
 
 const withFileLock = vi.fn(async (filePath, fn) => {
   if (String(filePath).includes("SandboxVars")) {
@@ -107,8 +100,6 @@ describe("serverFiles.js POST /templates/:id/apply: a partial apply must not rea
   it("reports which settings actually landed when the INI write succeeds but the Sandbox write then fails", async () => {
     const res = await postApply();
 
-    // The INI write really did happen (writeFileAtomic was called for it)
-    // before the Sandbox write threw.
     expect(writeFileAtomic).toHaveBeenCalledTimes(1);
     expect(String(writeFileAtomic.mock.calls[0][0])).toContain(`${SERVER_NAME}.ini`);
 

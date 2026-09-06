@@ -46,14 +46,6 @@ export function TemplatePreviewDialog({ template, canManage, onClose, onApplied 
   const [applyError, setApplyError] = useState<string | null>(null)
   const [applyResult, setApplyResult] = useState<SimTemplateApplyResult | null>(null)
 
-  // Closing this dialog and reopening it for a different template does not
-  // unmount it (Templates.tsx just swaps the `template` prop via
-  // setPreviewTemplate), so a slow preview response for the PREVIOUS
-  // template can land after a newer load() has already started and
-  // overwrite this render with the wrong template's server/running/diff --
-  // same shape as the fetch-race hunt's ChunkCleaner.tsx loadIdRef
-  // precedent. Every setState below a real await is gated on this still
-  // being the most recent load() call.
   const loadIdRef = useRef(0)
 
   const load = useCallback(async (tpl: SimTemplate) => {
@@ -101,12 +93,6 @@ export function TemplatePreviewDialog({ template, canManage, onClose, onApplied 
 
   const handleApply = async () => {
     if (!template || !server) return
-    // Overwrites the live server config with no undo -- but unlike a
-    // delete, it's fully reversible (apply a different template, or the
-    // same server config again) and only reaches players at the NEXT
-    // restart, not instantly. Affects-others-but-reversible tier:
-    // warning-amber, matching Mods.tsx's "Apply preset" confirm rather
-    // than either destructive-red or no confirmation at all.
     const ok = await confirm({
       title: t('applyConfirmTitle', { name: template.meta.name }),
       description: t('applyConfirmDescription', { count: diff?.summary.totalChanges ?? 0 }),

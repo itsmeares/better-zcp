@@ -5,16 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Console from '../Console'
 import { rconApi, serversApi, configApi, type ServerInstance } from '@/lib/api'
 
-// regression (testing, report-only on app source -- recorded here,
-// apps/panel-client/src/pages/Console.tsx is otherwise outside his slice): the RCON tab
-// correctly disables four RCON-dependent controls on `rconConnected === false`
-// (quick-command buttons, broadcast quick-templates, the broadcast textarea,
-// the broadcast Send button) but the two controls on the path an operator is
-// actually most likely to use -- the raw command Input and its Run button --
-// were missing that same check, so they stayed clickable under a HOST
-// UNREACHABLE banner while every sibling control two lines away read grey.
-// Not the socket/permission house shape: rconConnected is the right signal
-// here, it simply wasn't applied to two of the six controls that all read it.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -86,7 +76,6 @@ function renderConsole() {
 }
 
 async function openRconTab() {
-  // Radix's TabsTrigger switches on mousedown, not click (see @radix-ui/react-tabs)
   const tabButton = await screen.findByRole('tab', { name: /rcon console/i })
   fireEvent.mouseDown(tabButton, { button: 0 })
 }
@@ -100,7 +89,6 @@ describe('Console.tsx: the raw command Input and Run button gate on rconConnecte
     renderConsole()
     await openRconTab()
 
-    // The banner this bug sits directly underneath.
     const banner = await screen.findByRole('alert')
     expect(banner).toHaveTextContent(/host unreachable/i)
 
@@ -110,9 +98,6 @@ describe('Console.tsx: the raw command Input and Run button gate on rconConnecte
 
     expect(input).toBeDisabled()
     expect(runButton).toBeDisabled()
-    // The already-correct sibling this bug's own presence made the omission
-    // read as deliberate next to -- confirms the fixture is genuinely in the
-    // HOST UNREACHABLE state, not just asserting on unwired mocks.
     expect(quickCommandButton).toBeDisabled()
 
     fireEvent.click(runButton)

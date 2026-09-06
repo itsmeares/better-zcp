@@ -6,14 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// paired-buttons-2026-08-31: operator complaint -- "if i enable snow, the
-// same button should show disable, not have 2 buttons". Severe Weather's
-// Enable Snow / Disable Snow pair became a single Switch reflecting
-// liveWeather.isSnowing (from panelBridgeApi.getWeather()). This file proves
-// the three states the request explicitly requires: ON, OFF, and UNKNOWN
-// (getWeather hasn't landed yet, or failed) -- UNKNOWN must render neither a
-// confident "on" nor "off" claim, and must not be interactable, since a
-// Switch's checked position is itself a claim about current state.
 
 class StubResizeObserver {
   observe() {}
@@ -63,8 +55,6 @@ function renderEvents() {
 async function openSevereSection() {
   const nav = await screen.findByText('Severe weather')
   nav.click()
-  // Sublabel text unique to the mounted severe-weather section -- confirms
-  // the panel actually swapped in before proceeding.
   await screen.findByText('Blizzards, tropical storms, and snowfall.')
 }
 
@@ -100,11 +90,6 @@ describe('Events -- Severe Weather snow toggle reflects real state (three states
   })
 
   it('OPTIMISTIC: flips immediately on click (does not wait for the next poll), then reverts if the command fails', async () => {
-    // toggle-latency-2026-08-31, operator report on the live panel ("it take
-    // like 5 sec to trigger and see the change"): handleBridgeAction never
-    // refetched weather, so the switch stayed on the OLD value until the
-    // next scheduled 10s poll happened to land. This proves the fix without
-    // needing a real poll interval to fire in the test.
     getWeather.mockResolvedValue({
       success: true,
       data: { isRaining: false, isSnowing: false, isThunderStorming: false, windSpeed: 0, windAngle: 0 },
@@ -121,22 +106,14 @@ describe('Events -- Severe Weather snow toggle reflects real state (three states
 
     sw.click()
 
-    // Optimistic: flips to checked immediately, before setSnow's promise has
-    // even settled -- this is the state the operator wants to see instantly.
     await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'true'))
 
     rejectSetSnow(new Error('bridge command failed'))
 
-    // Reverts to the last known-real state on failure -- never leaves the
-    // optimistic guess standing as if it were confirmed.
     await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'false'))
   })
 
   it('RECONCILE: refetches the real weather after a successful command, and the real answer wins over the optimistic guess', async () => {
-    // The optimistic flip is a GUESS, not a claim of confirmed knowledge --
-    // if the real post-command read disagrees (mod silently rejected it,
-    // another admin changed it in between, ...), the refetch's answer must
-    // win, not the click's assumption.
     getWeather.mockResolvedValue({
       success: true,
       data: { isRaining: false, isSnowing: false, isThunderStorming: false, windSpeed: 0, windAngle: 0 },
@@ -150,16 +127,10 @@ describe('Events -- Severe Weather snow toggle reflects real state (three states
     await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'false'))
 
     sw.click()
-    await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'true')) // optimistic
+    await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'true'))
     await waitFor(() => expect(setSnow).toHaveBeenCalledWith(true))
-    // Baseline AFTER the optimistic flip, not before render -- mount's own
-    // poll already calls getWeather at least once, so an absolute count
-    // would be coupled to unrelated polling timing. What matters is that a
-    // NEW read happens once the command settles.
     const callsBeforeReconcile = getWeather.mock.calls.length
 
-    // The reconcile read fired after setSnow resolved still says off --
-    // must overwrite the optimistic "on".
     await waitFor(() => expect(getWeather.mock.calls.length).toBeGreaterThan(callsBeforeReconcile))
     await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'false'))
   })
@@ -188,8 +159,6 @@ describe('Events -- Severe Weather snow toggle reflects real state (three states
     await openSevereSection()
 
     const sw = await snowSwitch()
-    // Neither a confident "on" nor "off" claim: disabled communicates the
-    // state genuinely isn't known yet, distinct from a real, known "off".
     await waitFor(() => expect(sw).toBeDisabled())
     expect(sw).toHaveAttribute('aria-checked', 'false')
     expect(screen.getAllByText('…').length).toBeGreaterThan(0)
@@ -199,9 +168,6 @@ describe('Events -- Severe Weather snow toggle reflects real state (three states
   })
 
   it('UNKNOWN: renders disabled before getWeather resolves at all (pending, not yet failed)', async () => {
-    // Never resolves within this test -- models the real gap between the
-    // bridge connecting and the independent, non-batched getWeather() call
-    // landing (Events.tsx:1266's own comment on why it's fired separately).
     getWeather.mockReturnValue(new Promise(() => {}))
 
     renderEvents()

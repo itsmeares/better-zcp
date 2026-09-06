@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isUncompressedBinaryProxyPath, UNCOMPRESSED_BINARY_PROXY_PREFIXES } from "../utils/compressionFilter.js";
 
-// regression / VastayanWings: index.js's global compression()
-// middleware had no exclusion, so every map tile and mod thumbnail response
-// (already-compressed JPEG/PNG, routinely tens of KB) got gzip-encoded on
-// top, forcing Express to drop Content-Length for chunked transfer encoding
-// for zero real size benefit -- extra surface for a reverse proxy to get
-// wrong. This is the pure predicate the compression filter is built on.
 
 describe("isUncompressedBinaryProxyPath", () => {
   it("excludes all four <img>-tag-loaded binary proxy prefixes", () => {
@@ -23,8 +17,6 @@ describe("isUncompressedBinaryProxyPath", () => {
   });
 
   it("does not exclude a path that merely starts similarly but isn't the real prefix", () => {
-    // Guards against an overly loose match -- e.g. a hypothetical
-    // /api/map/tilesetc route should not accidentally match "/api/map/tiles".
     expect(isUncompressedBinaryProxyPath({ path: "/api/map/tilesetcetera" })).toBe(false);
     expect(isUncompressedBinaryProxyPath({ path: "/api/mods/thumbnails" })).toBe(false);
   });

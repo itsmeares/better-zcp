@@ -6,18 +6,6 @@ import Console from '../Console'
 import { rconApi, serversApi, configApi, type ServerInstance } from '@/lib/api'
 import enConsole from '../../locales/en/console.json'
 
-// 2026-08-30, rcon-disconnect-detection-matches-prose-not-codes: Console.tsx's
-// isRconDisconnectError() used to substring-match a hand-maintained copy of
-// RconService.getUserFriendlyError()'s prose to decide whether a failed
-// /rcon/execute response meant the RCON session had dropped -- and that copy
-// had already silently drifted out of sync with the server once (a 2026-08-30
-// audit found "Server is not running" was reworded server-side to "Game
-// server is not running." without the client's phrase list ever being told,
-// so a real disconnect stopped flipping the connection banner). Fixed by
-// checking response.code === 'RCON_EXECUTE_DISCONNECTED' instead -- this file
-// is the "zero test coverage for isRconDisconnectError" gap the audit named,
-// exercised end to end: type a command, run it, watch the banner react to
-// the code the server actually attaches.
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 'u1', username: 'someone', role: 'admin', capabilities: null },
@@ -94,7 +82,6 @@ async function setUp() {
 }
 
 async function openRconTab() {
-  // Radix's TabsTrigger switches on mousedown, not click (see @radix-ui/react-tabs)
   const tabButton = await screen.findByRole('tab', { name: /rcon console/i })
   fireEvent.mouseDown(tabButton, { button: 0 })
 }
@@ -109,8 +96,6 @@ async function runCommand(command: string) {
 describe('Console.tsx: RCON disconnect detection reacts to the code, not the prose', () => {
   it('flips the banner to offline when the server attaches RCON_EXECUTE_DISCONNECTED, whatever the prose currently says', async () => {
     await setUp()
-    // The exact reworded message that broke the old prose-matching phrase
-    // list -- proves detection no longer depends on this text at all.
     execute.mockResolvedValue({
       success: false,
       error: 'Game server is not running.',
@@ -125,15 +110,6 @@ describe('Console.tsx: RCON disconnect detection reacts to the code, not the pro
     await screen.findByText(enConsole.rcon.offline)
   })
 
-  // regression (testing): setUp()'s testRcon mock resolves
-  // connected:true, so rconConnected starts true here -- unlike the test
-  // above and every other Console fixture, which start from a probe that
-  // never succeeded (127.0.0.1:1 in the real tour demo profile) and so can
-  // only ever show hostUnreachable copy. This is the one shape that can
-  // actually reach 'dropped': the connection genuinely worked, then failed
-  // mid-session. The persistent banner must say so, not recycle
-  // hostUnreachable's "go check host/port/password" advice -- those were
-  // just proven correct seconds earlier.
   it('shows the dropped-mid-session banner copy, not the generic host-unreachable copy, after a connection that was working fails', async () => {
     await setUp()
     execute.mockResolvedValue({
@@ -165,8 +141,6 @@ describe('Console.tsx: RCON disconnect detection reacts to the code, not the pro
     await runCommand('players')
 
     await waitFor(() => expect(execute).toHaveBeenCalledWith('players'))
-    // Give the (absent) state update a tick to have happened before asserting
-    // its absence -- otherwise a false pass could just mean "too early".
     await new Promise((r) => setTimeout(r, 0))
     expect(screen.queryByText(enConsole.rcon.offline)).not.toBeInTheDocument()
   })
@@ -184,24 +158,11 @@ describe('Console.tsx: RCON disconnect detection reacts to the code, not the pro
     await runCommand('players')
     await screen.findByText(enConsole.rcon.offline)
 
-    // 2026-08-31 (regression): this used to retry by clicking Run
-    // again directly. Console.tsx's disabled-input fix now correctly
-    // disables Run (and the command input) the instant rconConnected flips
-    // false -- a page reading HOST UNREACHABLE can't also offer a live
-    // command box in the same frame -- so that retry path is no longer
-    // clickable, on purpose. What this test verifies hasn't changed (a
-    // genuinely successful outcome flips the banner back online); only the
-    // route to get there has: an explicit Recheck, the one control
-    // deliberately never gated on rconConnected itself, and exactly the
-    // recovery path DisabledReason's extended message now points the
-    // operator at (see rcon.disconnectedUseRecheck).
     testRcon.mockResolvedValueOnce({ success: true, connected: true })
     const recheckButton = screen.getByRole('button', { name: /recheck/i })
     fireEvent.click(recheckButton)
     await screen.findByText(enConsole.rcon.online)
 
-    // The command input is usable again post-recovery, and a further
-    // successful command doesn't regress the banner back to offline.
     execute.mockResolvedValueOnce({ success: true, response: '1 player online' })
     await runCommand('players')
 

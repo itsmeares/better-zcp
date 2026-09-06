@@ -14,12 +14,6 @@ vi.mock("../database/init.js", () => ({
   getServer: (...args) => getServer(...args),
 }));
 
-// A pass-through spy, not a stub: wraps the REAL createBackupIfChanged so
-// every other test in this file keeps taking real backups and checking
-// real files on disk (unchanged) -- only wrapped so a call count can be
-// asserted where the claim under test is specifically "backs up nothing"
-// (regression 2026-08-31-c, under-coverage sweep). Does not touch
-// services/scheduler.js.
 vi.mock("../utils/configBackup.js", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, createBackupIfChanged: vi.fn(actual.createBackupIfChanged) };
@@ -28,24 +22,6 @@ vi.mock("../utils/configBackup.js", async (importOriginal) => {
 const { Scheduler } = await import("../services/scheduler.js");
 const { createBackupIfChanged } = await import("../utils/configBackup.js");
 
-// 2026-08-27, decision ("make sure backups works") relayed by testing,
-// safety-net follow-up: confirmed (by grep, not guesswork) that
-// createBackup()/writeIniWithBackup() only ever fire from an explicit human
-// edit-and-save action -- no restart, scheduled or manual, ever took a
-// config backup. loonE's Discord report (servertest.ini/SandboxVars.lua
-// reverted to default after a SCHEDULED reboot) recovered from Project
-// Zomboid's OWN backup folder, not the panel's, because the panel's had
-// nothing to offer -- a safety net that only deploys when a human is
-// present and watching is not a safety net.
-//
-// _backupConfigBeforeRestart() is the fix: called once from
-// performRestart(), the ONE call site every restart trigger funnels
-// through (manual Dashboard/Scheduler-page/Discord restart, and automated
-// AUTO_RESTART_CRON / mod-update-triggered restart alike), right after the
-// old process is confirmed stopped and before the new one starts. This
-// file tests it directly rather than through the full performRestart()
-// flow, which involves real multi-minute countdowns and RCON polling loops
-// unsuited to a unit test.
 describe("Scheduler._backupConfigBeforeRestart()", () => {
   let root;
 
@@ -117,9 +93,6 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
     ).toBe(true);
   });
 
-  // The treadmill risk testing explicitly flagged: a server that restarts on a
-  // schedule calls this on every single restart, whether or not the
-  // operator has touched config since the last one.
   it("many restarts in a row with no config change in between do not flood the keep-10 retention quota", async () => {
     const { zomboidDataPath, configDir } = writeConfigFixture();
     getServer.mockResolvedValue({
@@ -139,7 +112,6 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
     const sandboxBackups = backups.filter((f) =>
       f.startsWith("servertest_SandboxVars.lua."),
     );
-    // One each -- not 12, not anywhere near the keep-10 ceiling.
     expect(iniBackups).toHaveLength(1);
     expect(sandboxBackups).toHaveLength(1);
   });
@@ -155,7 +127,6 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
     const scheduler = makeScheduler();
     await scheduler._backupConfigBeforeRestart(5);
 
-    // An operator edits the ini between two scheduled restarts.
     fs.writeFileSync(
       path.join(configDir, "servertest.ini"),
       "PVP=true\nMaxPlayers=64\n",
@@ -176,9 +147,6 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
 
     const scheduler = makeScheduler();
     await expect(scheduler._backupConfigBeforeRestart(5)).resolves.toEqual(server);
-    // regression 2026-08-31-c (under-coverage sweep): "backs up nothing" is a
-    // claim about whether a backup was ATTEMPTED, not just what the method
-    // returned -- the resolved-value check above says nothing about that.
     expect(createBackupIfChanged).not.toHaveBeenCalled();
   });
 
@@ -189,19 +157,10 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
     await expect(scheduler._backupConfigBeforeRestart(5)).resolves.toBeNull();
   });
 
-  // 2026-08-27, operator-flagged limitation fix: this method originally
-  // only checked serverConfigPath-or-zomboidDataPath/Server, never the
-  // legacy fallback locations ensureRconConfigured() already knows about
-  // -- exactly the installs the stale-launch-script defect
-  // (refreshLaunchTargetBeforeStart) is most likely to hit, since an ini
-  // sitting at a legacy location is itself a sign this install's config
-  // resolution has already drifted from the default once.
   it("an ini at the LEGACY location (directly under zomboidDataPath, no Server/ subdir) is found and backed up, not skipped", async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-scheduler-backup-"));
     const zomboidDataPath = path.join(root, "Zomboid");
     fs.mkdirSync(zomboidDataPath, { recursive: true });
-    // Deliberately no Server/ subdirectory -- only the legacy path, same
-    // shape as the ensureRconConfigured() legacy-path regression test.
     fs.writeFileSync(
       path.join(zomboidDataPath, "servertest.ini"),
       "PVP=true\n",
@@ -229,14 +188,9 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
       backups.some((f) => f.startsWith("servertest_SandboxVars.lua.")),
     ).toBe(true);
 
-    // Nothing must have been created at the default Server/ path, which is
-    // what the pre-fix version of this method would have checked instead.
     expect(fs.existsSync(path.join(zomboidDataPath, "Server"))).toBe(false);
   });
 
-  // The sandbox filename must follow whichever ini was actually found, not
-  // blindly server.serverName -- the "serveroptions.ini" legacy fallback
-  // uses a fixed name that can differ from the configured server name.
   it("the sandbox filename is derived from the ini that was actually found, not server.serverName, when they differ", async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-scheduler-backup-"));
     const zomboidDataPath = path.join(root, "Zomboid");
@@ -252,7 +206,6 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
       "utf8",
     );
 
-    // Configured serverName differs from the fixed legacy filename on disk.
     getServer.mockResolvedValue({
       id: 5,
       serverName: "MyCoolServer",
@@ -267,8 +220,6 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
     expect(
       backups.some((f) => f.startsWith("serveroptions_SandboxVars.lua.")),
     ).toBe(true);
-    // Must NOT have gone looking for a MyCoolServer_SandboxVars.lua that
-    // was never there.
     expect(
       backups.some((f) => f.startsWith("MyCoolServer_SandboxVars.lua.")),
     ).toBe(false);

@@ -5,28 +5,17 @@ import { Card, CardContent } from '../components/ui/card'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
 interface AuthScreenLayoutProps {
-  /** Optional small uppercase tag rendered above the title (e.g. "Account Recovery"). Use sparingly. */
   badge?: string
   title: string
   description: string
-  /** Optional secondary card header rendered above the form (only used when the inner content needs explicit naming). */
   cardTitle?: string
   cardDescription?: string
   children: ReactNode
-  /** Optional fine-print rendered below the card. Kept short — anything longer belongs in the form itself. */
   footer?: ReactNode
 }
 
 type PanelStatus = 'checking' | 'online' | 'unreachable'
 
-/**
- * Auth shell used by Login + Setup + Reset.
- *
- * Visual direction (see .github/copilot-instructions.md → Design Context):
- * survival-control-room. Warm smoked neutrals, moss/olive primaries, scanline
- * grain, broadcast-style stamps. Status indicators are REAL (driven by
- * /api/health) — never decorative.
- */
 export function AuthScreenLayout({
   badge,
   title,
@@ -78,25 +67,21 @@ export function AuthScreenLayout({
 
       <LanguageSwitcher className="absolute end-4 top-4 z-10" />
 
-      {/* Warm ember + moss radial wash */}
       <div
         aria-hidden="true"
         className="auth-bg-gradient absolute inset-0 opacity-90 [contain:layout_style_paint]"
       />
 
-      {/* Scanlines — committed, not whisper-thin */}
       <div
         aria-hidden="true"
         className="absolute inset-0 pointer-events-none [contain:layout_style_paint] opacity-[0.18] mix-blend-overlay [background-image:repeating-linear-gradient(0deg,hsl(var(--foreground)/0.6)_0px,hsl(var(--foreground)/0.6)_1px,transparent_1px,transparent_3px)]"
       />
 
-      {/* Paper grain */}
       <div
         aria-hidden="true"
         className="absolute inset-0 pointer-events-none [contain:layout_style_paint] opacity-[0.07] [background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22180%22 height=%22180%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%222%22 stitchTiles=%22stitch%22/><feColorMatrix values=%220 0 0 0 0.95 0 0 0 0 0.85 0 0 0 0 0.55 0 0 0 0.8 0%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>')]"
       />
 
-      {/* Corner stamps — only signals that carry real information stay. */}
       <div
         aria-hidden="true"
         className="absolute top-4 inset-x-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70 [contain:layout_style_paint]"
@@ -116,7 +101,6 @@ export function AuthScreenLayout({
         id="auth-content"
         className="relative mx-auto flex min-h-screen w-full max-w-md flex-col items-stretch justify-center px-4 py-12 sm:px-6"
       >
-        {/* Hero — stencilled brand mark + ONE supporting line */}
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandMark className="mb-5" />
 
@@ -135,9 +119,7 @@ export function AuthScreenLayout({
           <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
 
-        {/* Card — minimal chrome, just the form */}
         <Card className="relative overflow-hidden border-border/55 bg-card/85 backdrop-blur-[2px] shadow-[0_28px_90px_-40px_hsl(var(--background)/0.9)]">
-          {/* Hairline accent strip — moss with an ember spark */}
           <div
             aria-hidden="true"
             className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent_0%,hsl(var(--primary)/0.55)_20%,hsl(var(--warning)/0.7)_50%,hsl(var(--primary)/0.55)_80%,transparent_100%)]"
@@ -155,7 +137,6 @@ export function AuthScreenLayout({
           <CardContent className="space-y-5 px-6 py-6">{children}</CardContent>
         </Card>
 
-        {/* Live panel status — REAL signal from /api/health */}
         <PanelStatusPill status={status} className="mx-auto mt-5" />
 
         {footer ? (
@@ -166,14 +147,12 @@ export function AuthScreenLayout({
   )
 }
 
-/** Stencilled control-room mark. No Lucide; no shield. */
 function BrandMark({ className = '' }: { className?: string }) {
   return (
     <div
       aria-hidden="true"
       className={`relative inline-flex h-[72px] w-[72px] items-center justify-center ${className}`}
     >
-      {/* Bracket frame */}
       <svg
         viewBox="0 0 72 72"
         className="absolute inset-0 h-full w-full text-primary/85"
@@ -187,7 +166,6 @@ function BrandMark({ className = '' }: { className?: string }) {
         <path d="M2 70 L2 56 M2 70 L16 70" />
         <path d="M70 70 L70 56 M70 70 L56 70" />
       </svg>
-      {/* Inner stamp */}
       <div className="flex h-[54px] w-[54px] items-center justify-center rounded-sm border border-primary/45 bg-primary/12 font-mono text-base font-bold uppercase tracking-[0.14em] text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.18),inset_0_-12px_24px_-12px_hsl(var(--warning)/0.18)]">
         ZCP
       </div>

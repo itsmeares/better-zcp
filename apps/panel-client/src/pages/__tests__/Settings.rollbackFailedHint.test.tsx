@@ -8,17 +8,6 @@ import Settings from '../Settings'
 import { configApi, panelUpdateApi, systemApi } from '@/lib/api'
 import { resetRuntimeInfoForTests } from '@/hooks/useRuntimeInfo'
 
-// 2026-09-04, the approval of the rollback_failed likelyCause value: one
-// value must not lie in any of its eight scripts/release/build.mjs trigger lines. The server
-// side (apps/panel-server/services/panelUpdateChecker.js's isRollbackRetryLikely())
-// carries the distinction that a single cause string can't -- whether the
-// SAME failure is likely to recur automatically (7 of 8 trigger lines, a
-// stuck .update-pending or .update-applying re-triggering a swap or
-// rollback retry) versus a fully-recovered state with only a cosmetic
-// update-bundle.json leftover (the 8th line). This proves the client renders
-// the correct, honestly-different message and file list for each case, and
-// that the block is Windows-only (rollback_failed can only ever come from
-// scripts/release/build.mjs's Supervisor v2, which has no Linux/generateStartSh equivalent).
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')

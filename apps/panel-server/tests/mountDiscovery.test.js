@@ -229,8 +229,6 @@ describe("discoverMountIssues", () => {
   });
 
   it("does not report a candidate that simply isn't mounted", () => {
-    // Default fs behaviour in the tmp-only test environment: nothing at the
-    // hardcoded common-mount paths, which should be silent (not an issue).
     expect(discoverMountIssues()).toEqual([]);
   });
 });

@@ -3,12 +3,6 @@ import fs from "fs";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// A class of bug found tonight: code resolving data/log locations from
-// process.cwd() instead of getDataPaths(), silently ignoring the operator's
-// configured data directory. Confirmed for real -- an isolated instance
-// displayed the SHARED repo-root logs/error.log on its Crash Logs tab,
-// complete with literal test-mock strings from a completely different
-// process, presented as a genuine crash log.
 
 vi.mock("../database/init.js", async () => {
   const actual = await vi.importActual("../database/init.js");
@@ -17,11 +11,6 @@ vi.mock("../database/init.js", async () => {
 
 const { getDataPaths } = await import("../utils/paths.js");
 const { default: debugRouter, formatDbAccessibleMessage } = await import("../routes/debug.js");
-// panelBridgeSftp.js's getSftpCachePath fix is covered in
-// panelBridgeSftp.test.js instead, which mocks ../utils/paths.js to prove
-// a custom data dir is honoured -- doing that here would fight this file's
-// need for the REAL (test-isolated) getDataPaths() the crash-logs tests
-// below rely on.
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

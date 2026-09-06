@@ -18,10 +18,6 @@ import {
   formatRawConfigValue,
 } from '../serverConfigSchema'
 
-// The first cases keep a small synthetic German bundle so the accessor key
-// shape remains explicit and independently tested. The later cases exercise
-// the committed Chinese serverconfig bundle through the normal JSON loader in
-// apps/panel-client/src/i18n/index.ts, including the complete schema coverage contract.
 const RCON_PORT = INI_SCHEMA.find((s) => s.key === 'RCONPort')!
 const RCON_PASSWORD = INI_SCHEMA.find((s) => s.key === 'RCONPassword')!
 const PUBLIC_NAME = INI_SCHEMA.find((s) => s.key === 'PublicName')!
@@ -76,19 +72,12 @@ describe('serverConfigSchema translated accessors (proof: rcon category)', () =>
   })
 
   it('falls back to English for a DIFFERENT category with no bundle entry, even while German is active', async () => {
-    // Proves the fallback is per-key, not a blanket "German is incomplete
-    // so show English everywhere" -- exactly the coexistence a real,
-    // partially-translated rollout needs.
     await i18n.changeLanguage('de')
     const publicName = INI_SCHEMA.find((s) => s.key === 'PublicName')!
     expect(getIniSettingLabel(publicName)).toBe('Server Name')
   })
 
   it('the injected bundle uses the exact mechanical key shape getIniSettingLabel derives (category.key.field)', () => {
-    // If this drifts from the real derivation, the two "resolves the
-    // translated" assertions above would silently fall back to English
-    // instead of failing -- this test exists so a key-shape regression in
-    // getIniSettingLabel/Description shows up as a clear key-path mismatch.
     expect(`iniSettings.${RCON_PORT.category}.${RCON_PORT.key}.label`).toBe('iniSettings.rcon.RCONPort.label')
     expect(`iniSettings.${RCON_PASSWORD.category}.${RCON_PASSWORD.key}.description`).toBe('iniSettings.rcon.RCONPassword.description')
   })

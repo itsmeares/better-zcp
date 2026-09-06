@@ -168,7 +168,6 @@ const AUTH_BOOT_STEPS = [
   { code: 'OK  ', label: 'Standing by' },
 ]
 
-// Lazy load larger pages for code splitting
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Players = lazy(() => import('./pages/Players'))
 const Console = lazy(() => import('./pages/Console'))
@@ -190,7 +189,6 @@ const WorldMap = lazy(() => import('./pages/WorldMap'))
 const Login = lazy(() => import('./pages/Login'))
 const Setup = lazy(() => import('./pages/Setup'))
 
-// Loading fallback — shows a skeleton layout instead of a plain spinner
 function PageLoader() {
   const { pathname } = useLocation()
   const meta = ROUTE_LOADERS[pathname] || ROUTE_LOADERS['/']
@@ -203,12 +201,6 @@ function AuthScreenLoader() {
   const totalSteps = AUTH_BOOT_STEPS.length
 
   useEffect(() => {
-    // Advances every 350ms (was 650ms) so the full sequence takes ~1.75s
-    // instead of ~3.25s for 5 steps — this animation doesn't gate anything
-    // (the parent swaps it out the instant real auth resolves), but a
-    // shorter total duration means less of it is ever visibly cut off
-    // mid-step on a fast resolution, and less of a screen seen many times a
-    // day feels like padded theater.
     const stepTimer = window.setInterval(() => {
       setStepIndex((current) => Math.min(current + 1, totalSteps - 1))
     }, 350)
@@ -222,8 +214,6 @@ function AuthScreenLoader() {
   }, [totalSteps])
 
   const now = new Date()
-  // Real UTC, not local time — this used to be toTimeString() (LOCAL time)
-  // mislabeled "UTC" below.
   const clock = now.toISOString().slice(11, 19)
   const dots = '·'.repeat(tick) + ' '.repeat(3 - tick)
   const progress = Math.round(((stepIndex + 1) / totalSteps) * 100)
@@ -232,7 +222,6 @@ function AuthScreenLoader() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-10">
-      {/* Atmospheric backdrop */}
       <div
         aria-hidden="true"
         className="absolute inset-0"
@@ -242,14 +231,12 @@ function AuthScreenLoader() {
         }}
       />
       <div aria-hidden="true" className="control-room-sweep absolute inset-0 opacity-40" />
-      {/* Vignette */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{ boxShadow: 'inset 0 0 220px 40px hsl(var(--background))' }}
       />
 
-      {/* Top status bar */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-5 py-3 font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70">
         <span>Project Zomboid // Control Panel</span>
         <span className="flex items-center gap-2">
@@ -258,29 +245,24 @@ function AuthScreenLoader() {
         </span>
       </div>
 
-      {/* Bottom status bar */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between px-5 py-3 font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/60">
         <span>{clock} UTC</span>
         <span>STAND BY{dots}</span>
         <span>{progress.toString().padStart(3, '0')}%</span>
       </div>
 
-      {/* Center stage */}
       <div className="relative w-full max-w-[520px]">
-        {/* Corner brackets */}
         <span aria-hidden="true" className="pointer-events-none absolute -start-2 -top-2 h-5 w-5 border-s-2 border-t-2 border-primary/45" />
         <span aria-hidden="true" className="pointer-events-none absolute -end-2 -top-2 h-5 w-5 border-e-2 border-t-2 border-primary/45" />
         <span aria-hidden="true" className="pointer-events-none absolute -bottom-2 -start-2 h-5 w-5 border-b-2 border-s-2 border-primary/45" />
         <span aria-hidden="true" className="pointer-events-none absolute -bottom-2 -end-2 h-5 w-5 border-b-2 border-e-2 border-primary/45" />
 
         <div className="relative rounded-md border border-border/60 bg-card/70 px-6 py-7 backdrop-blur-sm shadow-[0_30px_80px_-50px_hsl(var(--foreground)/0.6)]">
-          {/* Header strip */}
           <div className="mb-5 flex items-center justify-between border-b border-border/50 pb-3 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
             <span className="text-primary/80">// boot.sequence</span>
             <span>node · admin</span>
           </div>
 
-          {/* Hero row */}
           <div className="flex items-center gap-5">
             <div className="relative shrink-0">
               <img
@@ -303,7 +285,6 @@ function AuthScreenLoader() {
             </div>
           </div>
 
-          {/* Boot log */}
           <ul className="mt-6 space-y-1.5 font-mono text-[11px] leading-tight" aria-live="polite">
             {AUTH_BOOT_STEPS.map((step, idx) => {
               const isDone = idx < stepIndex
@@ -346,7 +327,6 @@ function AuthScreenLoader() {
             })}
           </ul>
 
-          {/* Segmented progress */}
           <div className="mt-6 flex items-center gap-[3px]" aria-hidden="true">
             {Array.from({ length: segments }).map((_, idx) => (
               <span
@@ -410,18 +390,12 @@ function AppContent() {
   }, [toast])
 
   useEffect(() => {
-    // Don't connect socket until auth is resolved
     if (demoMode) return
     if (isLoading) return
-    // If auth is enabled and user is not authenticated, don't connect
     if (authEnabled && !isAuthenticated && !needsSetup) return
 
     let cancelled = false
     let createdSocket: Socket | null = null
-    // Set only while a reconnect_failed recovery is pending (see below);
-    // cleared on a successful connect so a recovery reached some other way
-    // (the manual Retry button) doesn't leave a stale visibilitychange/
-    // online listener registered for the rest of the session.
     let disposeRecovery: (() => void) | null = null
 
     const setupSocket = async () => {
@@ -440,12 +414,10 @@ function AppContent() {
       newSocket.auth = createSocketAuthProvider(getToken)
       newSocket.connect()
 
-      // Connection established
       newSocket.on('connect', () => {
         disposeRecovery?.()
         disposeRecovery = null
         setConnectionStatus(prev => {
-          // Show toast only on reconnect, not initial connect
           if (prev.reconnecting || prev.reconnectAttempt > 0) {
             handleReconnectSuccess()
           }
@@ -456,13 +428,11 @@ function AppContent() {
             error: null,
           }
         })
-        // Subscribe to updates
         newSocket.emit('subscribe:status')
         newSocket.emit('subscribe:players')
         newSocket.emit('subscribe:logs')
       })
 
-      // Connection lost
       newSocket.on('disconnect', (reason) => {
         setConnectionStatus(prev => ({
           ...prev,
@@ -471,10 +441,8 @@ function AppContent() {
         }))
       })
 
-      // Connection error with detailed logging (from Socket.IO best practices)
       newSocket.on('connect_error', (err) => {
         if (newSocket.active) {
-          // Temporary failure, socket will automatically reconnect
           setConnectionStatus(prev => ({
             ...prev,
             connected: false,
@@ -482,7 +450,6 @@ function AppContent() {
             error: getUserErrorMessage(err, 'Connection error'),
           }))
         } else {
-          // Connection denied by server - needs manual reconnect
           setConnectionStatus({
             connected: false,
             reconnecting: false,
@@ -492,7 +459,6 @@ function AppContent() {
         }
       })
 
-      // Reconnection events
       newSocket.io.on('reconnect_attempt', (attempt) => {
         setConnectionStatus(prev => ({
           ...prev,
@@ -501,25 +467,6 @@ function AppContent() {
         }))
       })
 
-      // socket.io's own reconnectionAttempts (10, with backoff) is left
-      // alone -- that part already works. The defect was that giving up
-      // was PERMANENT: once reconnect_failed fires, socket.io itself never
-      // tries again, and the operator's only way back was F5.
-      //
-      // Three real events can mean "it's worth trying again now" -- all
-      // event-driven, none a timer:
-      //   1. the tab was hidden and just became visible again (the operator
-      //      wasn't watching; a background tab can still exhaust all 10
-      //      attempts while nobody's looking)
-      //   2. the browser's network just came back (the actual trigger for
-      //      a transient blip)
-      //   3. the operator is looking straight at a dead connection with the
-      //      tab visible and network fine the whole time -- neither (1) nor
-      //      (2) can ever fire for them, so ConnectionStatus.tsx's Retry
-      //      button is their only path back
-      // All three call newSocket.connect() and nothing else -- the auth
-      // function above is what actually does the refresh-if-needed work,
-      // so there is exactly one implementation behind all three triggers.
       newSocket.io.on('reconnect_failed', () => {
         setConnectionStatus({
           connected: false,
@@ -533,7 +480,7 @@ function AppContent() {
           variant: 'destructive',
         })
 
-        disposeRecovery?.() // replace, don't stack, if this fires more than once in a session
+        disposeRecovery?.()
         disposeRecovery = registerReconnectRecovery(() => newSocket.connect())
       })
 
@@ -549,7 +496,6 @@ function AppContent() {
     }
   }, [toast, handleReconnectSuccess, isLoading, isAuthenticated, authEnabled, needsSetup, getToken, demoMode])
 
-  // Auth gate — show loading, setup, or login screens before main app
   if (isLoading) {
     return <AuthScreenLoader />
   }
@@ -594,8 +540,6 @@ function AppContent() {
               <Route path="/chunk-cleaner" element={<Navigate to="/chunks" replace />} />
               <Route path="/discord" element={<FeatureErrorBoundary featureName={t('nav.items.discord')}><Discord /></FeatureErrorBoundary>} />
               <Route path="/settings" element={<FeatureErrorBoundary featureName={t('nav.items.panelSettings')}><Settings /></FeatureErrorBoundary>} />
-              {/* Users and Roles & Permissions are now tabs inside Settings -- these
-                  keep old bookmarks/deep links working rather than 404ing them. */}
               <Route path="/roles" element={<Navigate to="/settings?tab=roles" replace />} />
               <Route path="/users" element={<Navigate to="/settings?tab=users" replace />} />
               <Route path="/sso" element={<Navigate to="/settings?tab=sso" replace />} />
@@ -620,16 +564,6 @@ function AppContent() {
 }
 
 function App() {
-  // Radix's own direction detection (react-direction's useDirection) has NO
-  // fallback to document.documentElement.dir -- without an explicit dir prop
-  // or this Provider, every RTL-aware Radix primitive (Slider, Select,
-  // Tabs, Accordion, Menu/DropdownMenu, ScrollArea, RovingFocus -- see
-  // node_modules/@radix-ui/react-direction's own useDirection: `localDir ||
-  // globalDir || "ltr"`, no third fallback) silently stays 'ltr' forever,
-  // regardless of the app's actual active language. i18n.language (via
-  // useTranslation, so this re-renders on every language switch, not just
-  // at boot) is the reactive source of truth here, same as
-  // applyDocumentDirection() uses for the <html dir> sync in i18n/index.ts.
   const { i18n } = useTranslation()
   return (
     <ErrorBoundary>

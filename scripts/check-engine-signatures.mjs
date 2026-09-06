@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-// Validates PanelBridge.lua engine calls against the committed, JAR-derived
-// method manifest. Regenerating the manifest requires a local JDK and game JAR.
-//
-// The check fails only when a call resolves to a known class and the method is
-// absent from that class's inheritance chain. Unknown or dynamic calls remain
-// unresolved rather than being treated as proof of support. Existing reviewed
-// absences are matched by class and method in the baseline file.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,8 +14,6 @@ function argValue(flag) {
   return idx !== -1 ? process.argv[idx + 1] : null;
 }
 
-// --lua/--manifest/--baseline exist for break-verification (point the checker at a synthetic
-// fixture instead of the real files) -- normal use (local, CI) always takes the defaults.
 const LUA_PATH = argValue('--lua') || path.join(ROOT, 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
 const MANIFEST_PATH = argValue('--manifest') || path.join(__dirname, 'engine-signatures.manifest.json');
 const BASELINE_PATH = argValue('--baseline') || path.join(__dirname, 'engine-signatures.baseline.json');
@@ -39,10 +30,6 @@ if (!fs.existsSync(LUA_PATH)) {
 const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
 const rawSrc = fs.readFileSync(LUA_PATH, 'utf8');
 
-// Missing baseline file is NOT a hard error (unlike a missing manifest) -- an empty baseline is a
-// valid, if maximally strict, starting state; every ABSENT finding just fails until reviewed and
-// added. Malformed JSON, on the other hand, is a real authoring mistake and should say so loudly
-// rather than silently behaving as if the baseline were empty.
 let baselineEntries = [];
 if (fs.existsSync(BASELINE_PATH)) {
   try {
@@ -56,11 +43,6 @@ if (fs.existsSync(BASELINE_PATH)) {
 const baselineKey = (className, methodName) => `${className}#${methodName}`;
 const baselineByKey = new Map(baselineEntries.map((e) => [baselineKey(e.class, e.method), e]));
 
-// Resolve using exactly the seeds the manifest was generated with -- not whatever
-// SEED_GLOBALS/STATIC_CLASS_SEEDS happen to contain in this checkout's copy of the shared module.
-// A seed added to the module since this manifest was generated has no javap data behind it yet;
-// treating it as live here would silently resolve call sites against classes the manifest never
-// actually covers.
 for (const key of Object.keys(SEED_GLOBALS)) delete SEED_GLOBALS[key];
 Object.assign(SEED_GLOBALS, manifest.seedGlobals || {});
 for (const key of Object.keys(STATIC_CLASS_SEEDS)) delete STATIC_CLASS_SEEDS[key];
@@ -68,7 +50,7 @@ Object.assign(STATIC_CLASS_SEEDS, manifest.staticClassSeeds || {});
 
 function classProvider(className, methodName) {
   const info = manifest.classes[className];
-  if (!info) return null; // class not in the manifest -- unknown, not absent (see header comment)
+  if (!info) return null;
   const sigs = info.methods[methodName];
   if (!sigs || sigs.length === 0) return { exists: false };
   return { exists: true, returnClass: sigs[0].returnClass, elementClass: sigs[0].elementClass };
@@ -79,15 +61,13 @@ const { callSites } = resolveAllCallSites(rawSrc, classProvider);
 const resolved = callSites.filter((s) => s.resolved);
 const unresolved = callSites.filter((s) => !s.resolved);
 const absent = resolved.filter((s) => s.methodInfo && s.methodInfo.exists === false);
-const staleClassLookups = resolved.filter((s) => s.methodInfo === null); // receiver type known, but not in manifest
+const staleClassLookups = resolved.filter((s) => s.methodInfo === null);
 
 const skipReasonCounts = new Map();
 for (const s of unresolved) {
   skipReasonCounts.set(s.skipReason, (skipReasonCounts.get(s.skipReason) || 0) + 1);
 }
 
-// Fail loudly rather than silently narrowing the extraction: an empty or
-// near-empty call-site set would make this check pass vacuously.
 const MIN_CALL_SITES = 200;
 if (callSites.length < MIN_CALL_SITES) {
   console.error(

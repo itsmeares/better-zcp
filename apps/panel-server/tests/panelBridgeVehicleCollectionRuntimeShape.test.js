@@ -3,24 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, decision on bridge-getvehicles-runtime-type-unknown:
-// IsoCell.getVehicles()'s compile-time descriptor declares java.util.Set --
-// no get(int) at all -- yet this file has always called size()/get(i)
-// unconditionally, matching real vanilla CLIENT Lua (ISVehicleBloodUI.lua)
-// which does the exact same thing. PZ's Lua binding reflects against the
-// RUNTIME object, not the descriptor, so which shape actually comes back on
-// a live server was left correctly unresolved by the jar audit -- it
-// cannot be settled from static analysis alone.
-//
-// The operator did not ask for that answer. He asked for the code to stop
-// caring: return the full vehicle list whichever shape comes back, and fail
-// loudly instead of silently reporting zero vehicles if NEITHER shape can be
-// read. These tests do not claim to know which shape the real jar returns --
-// they prove the bridge's own collectVehicles() helper handles both of the
-// only two shapes that are structurally possible (indexable, and
-// iterator-only-Collection), plus the genuinely-broken case where a
-// collection reports a nonzero size but neither access pattern can read a
-// single element from it.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -186,17 +168,11 @@ function FakeVehicleList:size() return 1 end
 function FakeVehicleList:get(i) return self[i + 1] end
 function FakeCell:getVehicles() return FakeVehicleList end
 `;
-    // fakeVehicleDecl's default permanentlyRemove() just "return true" with
-    // no actual mutation -- the exact shape of the original bug (a call
-    // that didn't throw, reported as a real removal with no confirmation).
     const bridge = loadPanelBridge(LUA_PATH, worldStub(cell));
     const result = bridge.callHandler('removeVehiclesInArea', { minX: 90, minY: 90, maxX: 110, maxY: 110 });
 
     expect(result.ok).toBe(true);
     expect(result.data.removed).toBe(0);
-    // An empty Lua table has no integer-keyed entries, so the harness's
-    // luaToJs converts it to {} not [] (see its own comment) -- matches the
-    // existing "Zero real vehicles" test above's identical assertion shape.
     expect(result.data.vehicles).toEqual({});
     expect(result.data.verified).toBe('confirmed');
   });
@@ -247,9 +223,6 @@ function FakeVehicle1:permanentlyRemove()
 end
 `;
     const bridge = loadPanelBridge(LUA_PATH, worldStub(cell));
-    // removeVehicle is a thin wrapper over findVehicleById + a removal call --
-    // reusing it here proves findVehicleById itself resolves through the
-    // fallback, without needing a second bespoke handler-specific stub.
     const result = bridge.callHandler('removeVehicle', { vehicleId: 7 });
 
     expect(result.ok).toBe(true);

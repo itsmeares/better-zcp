@@ -5,18 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Players from '../Players'
 import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
 
-// wired-no-ui-2026-08-30: getAllPlayerDetails (GET /panel-bridge/players --
-// the PLURAL bulk endpoint, distinct from getPlayerDetails, which is one
-// player at a time and drives the Vitals tab) had a live, gated route and
-// Lua handler but zero client callers. The roster list itself comes from
-// RCON's `players` command, which reports only {name, online} -- no health,
-// hunger, or infection data at all (apps/panel-server/services/rcon.js's parsePlayers),
-// so an at-a-glance health indicator per roster row is genuinely new data,
-// not a second view of something the roster already shows. Gated on
-// players.gm_tools -- the SAME capability the route itself requires, not
-// players.view (which the base roster list uses) -- so this proves the read
-// is denied to a role that only holds players.view, matching the server
-// gate exactly rather than a client-invented one.
 
 let mockCan = (_capability: string) => true
 

@@ -22,17 +22,6 @@ import { cn } from '@/lib/utils'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { usePageShortcut } from '@/hooks/useKeyboardShortcuts'
 
-// rconService.execute() (apps/panel-server/services/rcon.js) attaches
-// `code: ErrorCode.RCON_EXECUTE_DISCONNECTED` to its response whenever a
-// failure represents the RCON session having dropped -- check THAT, not
-// the accompanying prose. This used to substring-match a hand-maintained
-// copy of the server's user-facing messages, which silently broke the
-// moment either list was edited without updating the other: 2026-08-30,
-// rcon-disconnect-detection-matches-prose-not-codes -- "Server is not
-// running" was reworded to "Game server is not running." server-side and
-// this file's phrase list was never told, so a real disconnect stopped
-// being detected. A code can't drift out of sync with itself the way two
-// independently-maintained strings can.
 const RCON_EXECUTE_DISCONNECTED_CODE = 'RCON_EXECUTE_DISCONNECTED'
 function isRconDisconnectError(code: string | undefined): boolean {
   return code === RCON_EXECUTE_DISCONNECTED_CODE
@@ -53,19 +42,14 @@ interface RconResponse {
   timestamp: string
 }
 
-// Parse PZ server log line into structured parts
 interface ParsedLogLine {
   type: 'LOG' | 'WARN' | 'ERROR' | 'DEBUG' | 'INFO' | 'UNKNOWN'
   category: string
   message: string
   raw: string
-  /** Human-readable HH:mm:ss extracted from PZ's `t:<epoch_ms>` field, if present. */
   time?: string
 }
 
-// Convert a PZ epoch-ms timestamp to local HH:mm:ss. PZ logs `t:1777482455659`
-// where the value is milliseconds since epoch. We render it as wall-clock time
-// in the viewer's locale so admins can correlate events without doing math.
 function formatLogTime(epochMs: number): string | undefined {
   if (!Number.isFinite(epochMs) || epochMs < 1_000_000_000_000) return undefined
   try {
@@ -78,24 +62,17 @@ function formatLogTime(epochMs: number): string | undefined {
 }
 
 function parseLogLine(line: string): ParsedLogLine {
-  // PZ log format: "TYPE : Category    f:XXXXX, t:XXXXX, st:XXXXX> Source > Message"
-  // or just plain text
-  
+
   const trimmed = line.trim()
   if (!trimmed) {
     return { type: 'UNKNOWN', category: '', message: '', raw: line }
   }
-  
-  // Match: LOG/WARN/ERROR : Category  f:xxx, t:<epoch_ms>, st:xxx> Message
-  // The `t:` field is epoch-ms — capture it so we can show a readable time.
+
   const match = trimmed.match(/^(LOG|WARN|ERROR|DEBUG|INFO)\s*:\s*(\w+)(?:[^>]*?\bt:(\d+))?[^>]*>\s*(.+)$/i)
   if (match) {
     let type = match[1].toUpperCase() as ParsedLogLine['type']
     const tField = match[3]
     const message = match[4]
-    // Promote LOG → ERROR when the message body is a Java exception or stack trace.
-    // PZ logs every exception as `LOG : General ... > java.lang.NullPointerException ...`
-    // which makes them invisible against routine LOG spam.
     if (type === 'LOG' && /^(java\.|kotlin\.|zombie\.|com\.|org\.|at\s+\S+\.|Exception in thread|Caused by:|\S+(Exception|Error)(:|\s|$))/i.test(message)) {
       type = 'ERROR'
     }
@@ -107,8 +84,7 @@ function parseLogLine(line: string): ParsedLogLine {
       time: tField ? formatLogTime(Number(tField)) : undefined,
     }
   }
-  
-  // Check for simple prefixes
+
   if (trimmed.startsWith('ERROR')) {
     return { type: 'ERROR', category: '', message: trimmed.replace(/^ERROR\s*:?\s*/i, ''), raw: line }
   }
@@ -118,15 +94,13 @@ function parseLogLine(line: string): ParsedLogLine {
   if (trimmed.startsWith('LOG')) {
     return { type: 'LOG', category: '', message: trimmed.replace(/^LOG\s*:?\s*/i, ''), raw: line }
   }
-  // Bare Java stack-trace continuation lines ("\tat zombie.network...", "Caused by: ...")
   if (/^(\s*at\s+\S+|Caused by:|\.{3}\s+\d+ more|Exception in thread)/.test(trimmed)) {
     return { type: 'ERROR', category: '', message: trimmed, raw: line }
   }
-  
+
   return { type: 'UNKNOWN', category: '', message: trimmed, raw: line }
 }
 
-// Log line type → text color
 const typeColors: Record<string, string> = {
   'ERROR': 'text-destructive',
   'WARN': 'text-warning',
@@ -136,7 +110,6 @@ const typeColors: Record<string, string> = {
   'UNKNOWN': 'text-muted-foreground'
 }
 
-// Log line type → badge color
 const typeBadgeColors: Record<string, string> = {
   'ERROR': 'border border-destructive/25 bg-destructive/10 text-destructive',
   'WARN': 'border border-warning/25 bg-warning/10 text-warning',
@@ -146,10 +119,6 @@ const typeBadgeColors: Record<string, string> = {
   'UNKNOWN': 'border border-border/50 bg-muted/25 text-muted-foreground'
 }
 
-// Channel tag prefixes for server broadcasts. "all" = no prefix.
-// All options become `servermsg` since RCON cannot route to real chat channels.
-// `value` is the internal id sent to the backend and must stay untranslated;
-// label/description are looked up from the console namespace at call time.
 const chatChannelValues = ['all', 'admin', 'say', 'faction', 'safehouse'] as const
 
 function getChatChannels(t: TFunction<'console'>) {
@@ -160,7 +129,6 @@ function getChatChannels(t: TFunction<'console'>) {
   }))
 }
 
-// Memoized log line to avoid re-rendering unchanged lines
 const ServerLogLine = memo(function ServerLogLine({ line }: { line: string }) {
   const parsed = parseLogLine(line)
   if (!parsed.message && !parsed.raw.trim()) return null
@@ -200,8 +168,6 @@ const ServerLogLine = memo(function ServerLogLine({ line }: { line: string }) {
   )
 })
 
-// `command` is the literal RCON command text sent to the server and must
-// stay untranslated; only the button label is looked up.
 const quickCommandDefs = [
   { key: 'players', command: 'players' },
   { key: 'save', command: 'save' },
@@ -216,9 +182,6 @@ function getQuickCommands(t: TFunction<'console'>) {
   return quickCommandDefs.map(({ key, command }) => ({ label: t(`quickCommands.${key}`), command }))
 }
 
-// Quick broadcast message templates -- these ARE sent into the game via
-// RCON servermsg, so both the button label and the message text itself are
-// translated (a French server's canned announcements should read in French).
 const quickBroadcastKeys = ['restart15', 'restart5', 'restart1', 'maintenance', 'backOnline', 'saveWarning'] as const
 
 function getQuickBroadcasts(t: TFunction<'console'>) {
@@ -228,10 +191,6 @@ function getQuickBroadcasts(t: TFunction<'console'>) {
   }))
 }
 
-// No pagination on this panel -- when a fetch returns exactly this many
-// rows, older commands may exist and be silently excluded (server allows
-// up to 1000, see apps/panel-server/routes/rcon.js). Hint, not a hard truth: hitting
-// the limit exactly by coincidence is possible too.
 const COMMAND_HISTORY_FETCH_LIMIT = 50
 
 export default function Console() {
@@ -248,14 +207,6 @@ export default function Console() {
   const [commandHistoryIndex, setCommandHistoryIndex] = useState(-1)
   const [commandCache, setCommandCache] = useState<string[]>([])
   const [rconConnected, setRconConnected] = useState<boolean | null>(null)
-  // Only meaningful while rconConnected === false -- distinguishes three
-  // different reasons the banner below needs different words for:
-  // 'unreachable' (host never reachable), 'auth_failed' (reachable, but the
-  // saved password is wrong -- see 2026-08-26 regression finding 1), and
-  // 'dropped' (a mid-session transport drop detected from a failed command,
-  // not a fresh probe -- host/port/password were just proven correct
-  // seconds ago, so telling this operator to go re-check them is
-  // confidently wrong advice; see 2026-08-31 regression).
   const [rconFailureReason, setRconFailureReason] = useState<'unreachable' | 'auth_failed' | 'dropped' | null>(null)
   const [testingConnection, setTestingConnection] = useState(false)
   const [announcement, setAnnouncement] = useState('')
@@ -264,25 +215,16 @@ export default function Console() {
   const [historySearch, setHistorySearch] = useState('')
   const [showBroadcast, setShowBroadcast] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
-  const [commandDraft, setCommandDraft] = useState('') // saves in-progress text while browsing history
-  const liveLogIdRef = useRef(0) // monotonic counter for stable liveLog keys
+  const [commandDraft, setCommandDraft] = useState('')
+  const liveLogIdRef = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const socket = useSocket()
   const confirm = useConfirm()
   const { can } = useAuth()
-  // POST /rcon/execute (apps/panel-server/routes/rcon.js) requires rcon.execute -- both
-  // the typed-command path (executeCommand) and the broadcast path
-  // (sendAnnouncement) end up calling it. can() fails OPEN when capabilities
-  // are unknown/null, same convention as every other capability check in
-  // the app -- this only ever blocks the action when the answer is a
-  // confirmed no. Guarded inside the handlers themselves, not just on the
-  // visible buttons: the command input's Enter key calls executeCommand
-  // directly, bypassing whatever the Run button's disabled state says.
   const canExecuteRcon = can('rcon.execute')
 
-  // Server Console Log state
   const [serverLogLines, setServerLogLines] = useState<string[]>([])
   const [_serverLogSize, setServerLogSize] = useState(0)
   const [serverLogPath, setServerLogPath] = useState('')
@@ -292,15 +234,14 @@ export default function Console() {
   const serverLogErrorCountRef = useRef(0)
   const [serverLogAutoScroll, setServerLogAutoScroll] = useState(true)
   const [serverLogPaused, setServerLogPaused] = useState(false)
-  const [serverLogFiltered, setServerLogFiltered] = useState(true) // Filter out noise by default
+  const [serverLogFiltered, setServerLogFiltered] = useState(true)
   const [consoleTab, setConsoleTab] = useState('server-log')
 
-  // Console keyboard shortcuts
   usePageShortcut('a', () => setServerLogAutoScroll(prev => !prev))
   usePageShortcut('`', () => setConsoleTab(prev => prev === 'server-log' ? 'rcon' : 'server-log'))
   const serverLogRef = useRef<HTMLDivElement>(null)
   const serverLogIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const serverLogSizeRef = useRef(0) // Track size without recreating interval
+  const serverLogSizeRef = useRef(0)
   const hasActiveServer = !!activeServer
   const hasServerLogSource = !!activeServer && !activeServer.isRemote && Boolean(activeServer.zomboidDataPath || activeServer.installPath)
   const hasRconConfig = !!activeServer && Boolean(activeServer.rconHost && activeServer.rconPort && activeServer.rconPassword)
@@ -339,9 +280,6 @@ export default function Console() {
 
     loadConsoleTarget()
 
-    // Reload the target when the active server changes so the displayed log
-    // source and RCON state cannot describe a different server than the one
-    // receiving commands. There is no unsaved-edit state on this page.
     if (socket) socket.on('activeServerChanged', loadConsoleTarget)
 
     return () => {
@@ -350,7 +288,6 @@ export default function Console() {
     }
   }, [socket])
 
-  // Patterns to filter out (uninteresting/repetitive messages) - memoized to prevent recreation
   const noisePatterns = useMemo(() => [
     /moveZombie: There are no zombies/i,
     /ItemPickInfo -> cannot get ID for container/i,
@@ -364,7 +301,6 @@ export default function Console() {
     /Canceled loading wrong transition/i,
   ], [])
 
-  // Get filtered lines - memoized to prevent recalculation on every render
   const filteredLogLines = useMemo(() => {
     if (!serverLogFiltered) return serverLogLines
     return serverLogLines.filter(line => !noisePatterns.some(pattern => pattern.test(line)))
@@ -405,10 +341,6 @@ export default function Console() {
       setRconFailureReason(null)
     } catch (err) {
       setRconConnected(false)
-      // handleResponse() (lib/api.ts) throws on a 200 `{success:false}` body
-      // too, so the unreachable/auth_failed split from the response payload
-      // survives on err.data even though this is a caught throw, not a
-      // resolved result.
       const data = err instanceof ApiError ? (err.data as { error?: string } | undefined) : undefined
       setRconFailureReason(data?.error === 'auth_failed' ? 'auth_failed' : 'unreachable')
     } finally {
@@ -416,7 +348,6 @@ export default function Console() {
     }
   }, [hasRconConfig])
 
-  // Server Console Log functions
   const fetchServerLog = useCallback(async (initial = false) => {
     if (!hasServerLogSource) {
       if (initial) {
@@ -433,7 +364,7 @@ export default function Console() {
     }
 
     if (serverLogPausedRef.current && !initial) return
-    
+
     try {
       if (initial) {
         setServerLogLoading(true)
@@ -446,18 +377,15 @@ export default function Console() {
         setServerLogPath(data.path || '')
         setServerLogExists(data.exists || false)
       } else {
-        // Stream new content - use ref to avoid stale closure
         const data = await serverApi.streamConsoleLog(serverLogSizeRef.current)
         if (data.newLines && data.newLines.length > 0) {
           setServerLogLines(prev => [...prev, ...data.newLines].slice(-500))
         }
         if (data.rotated) {
-          // File was rotated, replace all content
           setServerLogLines(data.newLines || [])
         }
         setServerLogSize(data.currentSize || serverLogSizeRef.current)
         serverLogSizeRef.current = data.currentSize || serverLogSizeRef.current
-        // Clear error state on any successful poll
         if (serverLogErrorCountRef.current > 0) {
           serverLogErrorCountRef.current = 0
           setServerLogError(null)
@@ -499,13 +427,11 @@ export default function Console() {
     }
   }
 
-  // Ref to track paused state for interval callback (avoids stale closure)
   const serverLogPausedRef = useRef(serverLogPaused)
   useEffect(() => {
     serverLogPausedRef.current = serverLogPaused
   }, [serverLogPaused])
 
-  // Start/stop server log polling
   useEffect(() => {
     if (!hasServerLogSource) {
       if (serverLogIntervalRef.current) {
@@ -515,16 +441,14 @@ export default function Console() {
       return undefined
     }
 
-    // Initial fetch
     fetchServerLog(true)
-    
-    // Poll every 2 seconds for new log content
+
     serverLogIntervalRef.current = setInterval(() => {
       if (!serverLogPausedRef.current && document.visibilityState !== 'hidden') {
         fetchServerLog(false)
       }
     }, 2000)
-    
+
     return () => {
       if (serverLogIntervalRef.current) {
         clearInterval(serverLogIntervalRef.current)
@@ -533,7 +457,6 @@ export default function Console() {
     }
   }, [fetchServerLog, hasServerLogSource])
 
-  // Auto-scroll server log
   useEffect(() => {
     if (serverLogAutoScroll && serverLogRef.current) {
       const el = serverLogRef.current
@@ -551,7 +474,6 @@ export default function Console() {
       setRconConnected(null)
       setRconFailureReason(null)
     }
-    // Auto-focus input on mount
     inputRef.current?.focus()
   }, [fetchHistory, hasActiveServer, hasRconConfig, testRconConnection])
 
@@ -560,12 +482,6 @@ export default function Console() {
       const handleRconResponse = (data: RconResponse) => {
         const entry = { ...data, _id: ++liveLogIdRef.current } as RconResponse & { _id: number }
         setLiveLog(prev => [...prev, entry].slice(-100))
-        // This event broadcasts to the whole "rcon-live" room for EVERY
-        // /execute call, including failed/disconnected ones (data.success:
-        // false) -- only a successful response actually proves the
-        // connection is live. Forcing "connected" on any message here could
-        // mask a real drop (someone else's failed command, or this one's
-        // own failure echo) behind a stale "online" banner.
         if (data.success) {
           setRconConnected(true)
           setRconFailureReason(null)
@@ -574,20 +490,6 @@ export default function Console() {
 
       socket.on('rcon:response', handleRconResponse)
 
-      // 2026-08-31: 'rcon:response' broadcasts into "rcon-live", gated
-      // server-side on rcon.execute (apps/panel-server/index.js) -- the same
-      // capability that already gates every caller of
-      // executeCommand/sendAnnouncement below, and the same one POST
-      // /rcon/history uses for the STORED copy of this content. Moved off
-      // the diagnostics.manage-gated "logs" room App.tsx subscribes to
-      // app-wide, which let any diagnostics.manage holder read every
-      // admin's live console output whether or not they could run commands
-      // themselves -- the exact leak /rcon/history's own capability check
-      // already existed to prevent. Re-emitted on every reconnect, not just
-      // once per mount: room membership is server-side per-connection
-      // state, lost whenever the underlying socket.io connection drops and
-      // re-establishes, even though the client reuses the same Socket
-      // object.
       const subscribeRcon = () => socket.emit('subscribe:rcon')
       if (canExecuteRcon) {
         if (socket.connected) subscribeRcon()
@@ -602,7 +504,6 @@ export default function Console() {
   }, [socket, canExecuteRcon])
 
   useEffect(() => {
-    // Auto-scroll to bottom
     if (scrollRef.current) {
       const el = scrollRef.current
       requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
@@ -615,15 +516,6 @@ export default function Console() {
 
     setLoading(true)
     try {
-      // handleResponse() throws on a non-2xx status or an HTTP 200 body
-      // with success: false -- rconService.execute() resolves
-      // { success: false, error } for "server not running"/"unknown
-      // command"/etc rather than rejecting, so every RCON failure used to
-      // arrive as a caught exception here, skipping the live-log/command-
-      // cache/connection-status handling below entirely (a failed command
-      // just vanished instead of showing up in the console like a real
-      // terminal would). Reconstruct the { success, error } shape from the
-      // caught error so failures go through the same handling as successes.
       let result: { success: boolean; response?: string; error?: string; code?: string }
       try {
         result = await rconApi.execute(command)
@@ -635,17 +527,6 @@ export default function Console() {
         }
       }
 
-      // Update connection status based on result. A mid-session drop
-      // detected here is a transport-level signal, not the classified
-      // unreachable-vs-auth_failed probe testRconConnection() runs -- 2026-08-31:
-      // this used to reset to null so the banner fell back to its
-      // unreachable copy rather than showing a stale auth_failed reason from
-      // an earlier test -- sound reasoning, wrong fallback. The connection
-      // just ran a command successfully seconds before it dropped, so
-      // "unreachable, check host/port/password" is confidently wrong advice
-      // for this specific case, not just an absent one. 'dropped' is its own
-      // real reason with its own copy (borrowed from the toast below, which
-      // already has the right words for this exact event).
       if (isRconDisconnectError(result.code)) {
         setRconConnected(false)
         setRconFailureReason('dropped')
@@ -662,22 +543,11 @@ export default function Console() {
         })
       }
 
-      // No manual live-log push here: the server-side 'rcon:response'
-      // broadcast (handled above) now goes to the "rcon-live" room, gated on
-      // rcon.execute -- the exact capability this function already requires
-      // to reach this point (see the early return above), so every caller
-      // who can get this far is guaranteed to be a room member and receive
-      // the broadcast. A manual push here as well would double the entry,
-      // not fill a gap -- that used to be a real gap, back when the
-      // broadcast went to the diagnostics.manage-gated "logs" room instead,
-      // which a caller could hold rcon.execute without ever joining.
 
-      // Add to command cache (limit to 100 entries)
       setCommandCache(prev => [...prev.slice(-99), command])
       setCommandHistoryIndex(-1)
       setCommand('')
 
-      // Re-focus input after command execution
       inputRef.current?.focus()
 
       fetchHistory()
@@ -700,7 +570,6 @@ export default function Console() {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       if (commandCache.length > 0) {
-        // Stash the user's in-progress text the first time they leave the live input.
         if (commandHistoryIndex === -1) setCommandDraft(command)
         const newIndex = commandHistoryIndex < commandCache.length - 1
           ? commandHistoryIndex + 1
@@ -715,7 +584,6 @@ export default function Console() {
         setCommandHistoryIndex(newIndex)
         setCommand(commandCache[commandCache.length - 1 - newIndex] || '')
       } else if (commandHistoryIndex === 0) {
-        // Restore the draft they had typed before browsing history.
         setCommandHistoryIndex(-1)
         setCommand(commandDraft)
         setCommandDraft('')
@@ -739,11 +607,6 @@ export default function Console() {
       const cmd = selectedChannel === 'all'
         ? `servermsg "${cleaned}"`
         : `servermsg "[${selectedChannel.toUpperCase()}] ${cleaned}"`
-      // Same shape as executeCommand above: rconService.execute() resolves
-      // { success: false, error } for a genuine RCON failure rather than
-      // rejecting, so handleResponse() throws before this ever sees
-      // result.success === false. Reconstruct it here too, so a failed
-      // broadcast still gets logged instead of silently vanishing.
       let result: { success: boolean; response?: string; error?: string; code?: string }
       try {
         result = await rconApi.execute(cmd)
@@ -755,10 +618,6 @@ export default function Console() {
         }
       }
 
-      // Same shape as executeCommand above: no manual live-log push here --
-      // the 'rcon:response' broadcast goes to "rcon-live", gated on
-      // rcon.execute, which this function already requires (see the early
-      // return above). A manual push would double the entry.
 
       if (result.success) {
         toast({
@@ -865,7 +724,6 @@ export default function Console() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Server Console Log Tab */}
         <TabsContent value="server-log" className="space-y-3 mt-4">
           {serverLogUnavailable ? (
             <div className="flex h-[calc(100vh-360px)] min-h-[300px] items-center justify-center rounded-md border border-border/50 bg-muted/20 p-4">
@@ -873,7 +731,6 @@ export default function Console() {
             </div>
           ) : (
             <>
-          {/* Tactical toolbar strip */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 rounded-md border border-border/50 bg-card/70 backdrop-blur-sm">
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-mono text-[9px] uppercase tracking-[0.24em] text-primary/60 shrink-0">{t('serverLog.pathLabel')}</span>
@@ -942,7 +799,6 @@ export default function Console() {
             </div>
           </div>
 
-          {/* Error banner when log polling fails repeatedly */}
           {serverLogError && (
             <div
               role="alert"
@@ -956,19 +812,16 @@ export default function Console() {
             </div>
           )}
 
-          {/* Terminal pane — framed tactical viewer */}
           {!serverLogExists ? (
             <div className="flex h-[calc(100vh-360px)] min-h-[300px] items-center justify-center rounded-md border border-border/50 bg-muted/20 p-4">
               <EmptyState type="serverOffline" title={t('serverLog.notFoundTitle')} description={t('serverLog.notFoundDesc')} compact />
             </div>
           ) : (
             <div className="relative rounded-md border border-border/55 bg-card/85 overflow-hidden shadow-lg">
-              {/* corner brackets */}
               <div aria-hidden className="absolute top-1 left-1 w-2.5 h-2.5 border-s-2 border-t-2 border-primary/45 pointer-events-none z-10" />
               <div aria-hidden className="absolute top-1 right-1 w-2.5 h-2.5 border-e-2 border-t-2 border-primary/45 pointer-events-none z-10" />
               <div aria-hidden className="absolute bottom-1 left-1 w-2.5 h-2.5 border-s-2 border-b-2 border-primary/45 pointer-events-none z-10" />
               <div aria-hidden className="absolute bottom-1 right-1 w-2.5 h-2.5 border-e-2 border-b-2 border-primary/45 pointer-events-none z-10" />
-              {/* header strip */}
               <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border/50 bg-muted/30 font-mono text-[9px] uppercase tracking-[0.24em] select-none">
                 <span className="flex items-center gap-1.5 text-primary/65">
                   <span>{t('serverLog.streamLabel')}</span>
@@ -1001,11 +854,6 @@ export default function Console() {
                         </button>
                       </span>
                     ) : serverLogError ? (
-                      // Distinct from the genuinely-quiet case below: the error
-                      // banner right above already explains the stream is down,
-                      // so this must not also claim anything about the server
-                      // itself -- an empty body here is caused by OUR broken
-                      // connection, not by the server having nothing to say.
                       <span>{t('serverLog.noOutputStreamDown')}</span>
                     ) : (
                       <span>{t('serverLog.noStreamOutput')}</span>
@@ -1017,7 +865,6 @@ export default function Console() {
                   ))
                 )}
               </div>
-              {/* footer strip */}
               <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-border/50 bg-muted/20 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 select-none">
                 <span className="tabular-nums">
                   {serverLogFiltered
@@ -1032,7 +879,6 @@ export default function Console() {
           )}
         </TabsContent>
 
-        {/* RCON Console Tab */}
         <TabsContent value="rcon" className="space-y-3 mt-4">
           <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-border/50 bg-card/70 backdrop-blur-sm">
             <div className="flex items-center gap-2 min-w-0">
@@ -1091,11 +937,6 @@ export default function Console() {
             </div>
           )}
 
-          {/* RCON Disconnected Warning -- title/desc branch on WHY the test
-              failed (see rconFailureReason above) so a reachable host with a
-              stale password isn't told to go debug its network, and a
-              mid-session transport drop -- host/port/password just proven
-              correct -- isn't told to go re-check them either. */}
           {hasRconConfig && rconConnected === false && (
             <div
               role="alert"
@@ -1117,13 +958,11 @@ export default function Console() {
             </div>
           )}
 
-          {/* Console Output (primary surface) */}
           <div className="relative rounded-md border border-border/55 bg-card/85 overflow-hidden shadow-lg">
             <div aria-hidden className="absolute top-1 left-1 w-2.5 h-2.5 border-s-2 border-t-2 border-primary/45 pointer-events-none z-10" />
             <div aria-hidden className="absolute top-1 right-1 w-2.5 h-2.5 border-e-2 border-t-2 border-primary/45 pointer-events-none z-10" />
             <div aria-hidden className="absolute bottom-1 left-1 w-2.5 h-2.5 border-s-2 border-b-2 border-primary/45 pointer-events-none z-10" />
             <div aria-hidden className="absolute bottom-1 right-1 w-2.5 h-2.5 border-e-2 border-b-2 border-primary/45 pointer-events-none z-10" />
-            {/* header strip */}
             <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border/50 bg-muted/30 font-mono text-[9px] uppercase tracking-[0.24em] select-none">
               <span className="flex items-center gap-1.5 text-primary/65">
                 <span>{t('rcon.outputLabel')}</span>
@@ -1176,7 +1015,6 @@ export default function Console() {
             </div>
           </div>
 
-          {/* Quick Commands */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-mono text-[9px] uppercase tracking-[0.24em] text-primary/60 me-1">{t('rcon.quickLabel')}</span>
             {quickCommands.map((qc) => (
@@ -1196,7 +1034,6 @@ export default function Console() {
             ))}
           </div>
 
-          {/* Command Input */}
           <div className="flex items-center gap-1.5">
             <span className="font-mono text-[9px] uppercase tracking-[0.24em] text-primary/60">{t('rcon.commandLabel')}</span>
             <HelpTip label={t('rcon.commandLabel')}>{t('rcon.commandTip')}</HelpTip>
@@ -1237,7 +1074,6 @@ export default function Console() {
             {t('rcon.keyboardHint')}
           </p>
 
-          {/* Broadcast (collapsible) */}
           <div className="rounded-md border border-border/55 bg-card/70 backdrop-blur-sm overflow-hidden">
             <button
               type="button"
@@ -1255,7 +1091,6 @@ export default function Console() {
             </button>
             {showBroadcast && (
               <div className="border-t border-border/40 p-4 space-y-3">
-                {/* Quick templates */}
                 <div className="flex flex-wrap gap-1.5">
                   {quickBroadcasts.map((qb) => (
                     <Button
@@ -1271,7 +1106,6 @@ export default function Console() {
                   ))}
                 </div>
 
-                {/* Channel tag selector */}
                 <div className="grid gap-2 sm:grid-cols-[180px_1fr] sm:items-start">
                   <Select value={selectedChannel} onValueChange={setSelectedChannel}>
                     <SelectTrigger aria-label={t('broadcast.channelTagAria')}>
@@ -1323,7 +1157,6 @@ export default function Console() {
             )}
           </div>
 
-          {/* Command History (collapsible) */}
           <div className="rounded-md border border-border/55 bg-card/70 backdrop-blur-sm overflow-hidden">
             <button
               type="button"

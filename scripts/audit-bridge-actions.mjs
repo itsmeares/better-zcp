@@ -1,9 +1,3 @@
-// Cross-checks literal PanelBridge action names in Events.tsx and api.ts
-// against the Lua handlers and server allow-list.
-//
-// Dynamic action names cannot be checked by this source scan. The fixed
-// getBridgeOperationTemplates() list is included, and the script fails if its
-// extraction unexpectedly returns fewer than MIN_TEMPLATE_KEYS entries.
 import fs from "fs";
 import path from "path";
 
@@ -23,7 +17,6 @@ const allowList = new Set(
   ),
 );
 
-// Every action name the client can put on the wire, from the API layer.
 const api = read("apps/panel-client/src/lib/api.ts");
 const apiActions = new Set(
   [...api.matchAll(/sendCommand\(\s*"([a-zA-Z]+)"/g)].map((m) => m[1]),
@@ -36,8 +29,6 @@ const events = read("apps/panel-client/src/pages/Events.tsx");
 const literalEventsActions = [...events.matchAll(/sendCommand\(\s*'([a-zA-Z]+)'/g)].map((m) => m[1]);
 const eventsOps = new Set(literalEventsActions);
 
-// Extract the fixed operation list from the function rather than relying on
-// a particular indentation or declaration shape.
 const templateFnAnchor = "function getBridgeOperationTemplates";
 const templateFnIdx = events.indexOf(templateFnAnchor);
 let templateKeyCount = 0;
@@ -51,8 +42,6 @@ if (templateFnIdx !== -1) {
   }
 }
 
-// Fail loudly when the extraction anchor becomes stale instead of reporting
-// a misleading clean result.
 const MIN_TEMPLATE_KEYS = 10;
 if (templateFnIdx !== -1 && templateKeyCount < MIN_TEMPLATE_KEYS) {
   console.error(

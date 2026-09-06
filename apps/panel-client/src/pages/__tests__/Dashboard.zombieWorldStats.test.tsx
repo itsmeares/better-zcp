@@ -8,14 +8,6 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi, type ServerInstance,
 } from '@/lib/api'
 
-// regression-2026-08-30: getZombieCount and getWorldStats were both
-// confirmed working by the engine-side audit but had no caller
-// anywhere in apps/panel-client/src -- the Dashboard had no zombie or survivor count
-// from any source. This proves the new "Zombies" work-item tile shows the
-// real fetched count while the bridge is connected, falls back to
-// "offline" (not a seeded 0 or a stale number) while it isn't, and that
-// the map badge next to the server name only appears once getWorldStats
-// has actually reported one.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({

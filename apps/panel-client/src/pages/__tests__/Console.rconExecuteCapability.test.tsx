@@ -5,20 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Console from '../Console'
 import { rconApi, serversApi, configApi, type ServerInstance } from '@/lib/api'
 
-// regression Tier 1: POST /rcon/execute (apps/panel-server/routes/rcon.js) is
-// correctly gated server-side by requirePermission('rcon.execute') -- traced
-// and confirmed by hand, not inferred from the capability existing in the
-// list -- but Console.tsx itself had zero client-side awareness of that.
-// Both entry points that reach rconApi.execute (the typed-command Run
-// button/Enter key via executeCommand, and the broadcast Send button via
-// sendAnnouncement) were disabled only on loading/!hasRconConfig, so an
-// operator lacking rcon.execute saw a fully live console and got an
-// unexplained 403 on every command. The command input's Enter key calls
-// executeCommand directly, bypassing whatever the Run button's disabled
-// state says -- exactly the kind of second entry point Templates.tsx's own
-// canManage fix (and later Scheduler's) found the hard way -- so this
-// asserts the ACTION is unreachable via both the button and the keyboard
-// path, not just that one button looks disabled.
 
 let mockCan = (_capability: string) => true
 
@@ -58,10 +44,6 @@ const rconReadyServer: ServerInstance = {
   id: 1,
   name: 'Ashenwood',
   serverName: 'Ashenwood',
-  // Deliberately empty -- this makes hasServerLogSource false so Console.tsx
-  // never starts its server-log polling (real serverApi.getConsoleLog /
-  // streamConsoleLog calls), which is unrelated to the RCON gating under
-  // test here and isn't mocked in this file.
   installPath: '',
   zomboidDataPath: null,
   serverConfigPath: null,
@@ -102,7 +84,6 @@ async function setUp() {
 }
 
 async function openRconTab() {
-  // Radix's TabsTrigger switches on mousedown, not click (see @radix-ui/react-tabs)
   const tabButton = await screen.findByRole('tab', { name: /rcon console/i })
   fireEvent.mouseDown(tabButton, { button: 0 })
 }
@@ -123,9 +104,6 @@ describe('Console.tsx: RCON execute is gated on rcon.execute, not just page acce
     fireEvent.click(runButton)
     expect(execute).not.toHaveBeenCalled()
 
-    // The Run button being disabled proves nothing about the Enter key --
-    // handleKeyDown calls executeCommand() directly regardless of the
-    // button's own disabled attribute.
     fireEvent.change(input, { target: { value: 'players' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 

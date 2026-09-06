@@ -7,11 +7,6 @@ const readRepoFile = (relativePath) =>
 describe("Docker deployment guidance", () => {
   it("uses the all-in-one installer as the primary local-server path", () => {
     const readme = readRepoFile("README.md");
-    // Bounded by the next heading (## or ###) rather than a specific one --
-    // "### Indifferent Broccoli" no longer directly follows this section
-    // (README.md's install-guide rewrite turned it into a docs/install/hosted.md
-    // chooser-table row instead of an inline heading), so anchoring on it left
-    // this regex matching nothing rather than failing loudly on content.
     const dockerSection = readme.match(
       /### Docker and Unraid([\s\S]*?)\n#{2,3} /,
     )?.[1];

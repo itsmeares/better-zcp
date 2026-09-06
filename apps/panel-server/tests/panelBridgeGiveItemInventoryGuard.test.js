@@ -3,12 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, panelbridge-audit follow-up (full-file bug sweep): giveItem
-// called player:getInventory() bare, unlike every sibling call site in this
-// file. The dispatcher's own outer pcall already caught a throw here in
-// practice (no crash), but it replaced the handler's own friendly "Could
-// not access player inventory" message with a generic pcall error string.
-// Routed through PanelBridge.tryGet for the same reason as everywhere else.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

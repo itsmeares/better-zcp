@@ -6,15 +6,6 @@ import { modsApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmProvider } from '@/contexts/ConfirmContext'
 
-// regression-2026-08-29: modChecker.js's getStatus() has carried
-// steamApiHealthy/lastSteamApiFailureAt/removedWorkshopIds for a while with
-// ZERO consumers anywhere in apps/panel-client/src (confirmed by the grep) -- not
-// even declared on the ModStatus interface. This file covers the two new
-// quiet/warning indicators built on those fields: a Steam-API-unreachable
-// notice (quiet, dismissible, re-surfaces on the next failed cycle) and a
-// removed-from-Workshop warning (actionable -- names the mods, offers
-// Remove) that must never collapse into the same signal as a transient
-// outage.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -223,13 +214,9 @@ describe('Mods -- unknown Steam result (third state, must not collapse into remo
     )
     renderMods()
 
-    // The removed one: named, in the warning-style actionable list.
     expect(await screen.findByText('Actually Removed Mod')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /remove actually removed mod from the server/i })).toBeInTheDocument()
 
-    // The unknown one: raw id + code, in the separate neutral note --
-    // and specifically NOT rendered as a removed/actionable item (no
-    // Remove button naming it, since it was never confirmed gone).
     expect(screen.getByText(/111222333/)).toBeInTheDocument()
     expect(screen.getByText(/code 15/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /remove 111222333/i })).not.toBeInTheDocument()

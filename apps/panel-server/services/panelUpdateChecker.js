@@ -1,11 +1,3 @@
-/**
- * Panel Update Checker
- *
- * Checks for new panel releases on GitHub and provides a self-update mechanism.
- * - Periodically checks github.com/itsmeares/better-zcp/releases
- * - Compares installed version vs latest GitHub release
- * - Downloads and replaces the binary for one-click updates (exe mode only)
- */
 
 import fs from "fs";
 import os from "os";
@@ -24,7 +16,7 @@ const log = createLogger("PanelUpdater");
 
 const GITHUB_OWNER = "itsmeares";
 const GITHUB_REPO = "better-zcp";
-const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // Check every 6 hours
+const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const GITHUB_API_TIMEOUT_MS = 15000;
 const DOWNLOAD_TIMEOUT_MS = 60000;
 const MAX_GITHUB_RETRIES = 3;
@@ -41,13 +33,6 @@ export function getPanelFolderPermissionGuidance(platform, detail) {
   return `${prefix} Check the installation directory permissions for the account running the panel.`;
 }
 
-// A Linux install whose loaded systemd unit predates KillMode=process (or
-// whose launcher predates start.sh's own process-group isolation) reads as
-// "at risk": a panel restart signals the whole cgroup, which can also kill
-// every running game server. PANEL_SUPERVISOR_V/PANEL_PRESERVE_GAME_SERVERS
-// are set by the NEW start.sh only, so their absence under an orchestrator
-// means the OLD unit/launcher shape is still the one actually loaded —
-// see remediationCommand below for what an operator does about it.
 export function getRestartAssessment({
   platform = process.platform,
   packaged = typeof process.pkg !== "undefined",
@@ -87,9 +72,6 @@ export function getRestartAssessment({
       gameServers: "at-risk",
       requiresConfirmation: true,
       reason: "service-cgroup-may-stop-children",
-      // install-linux-service.sh is idempotent (no-ops if the unit already
-      // matches) and never invokes sudo itself, so this is safe to hand to
-      // an operator verbatim regardless of how far out of date they are.
       remediationCommand: `sudo ${path.join(exeDir, "install-linux-service.sh")} --enable`,
     };
   }
@@ -100,10 +82,6 @@ export function getRestartAssessment({
   };
 }
 
-// "In dev mode, pull the latest code with git" is only true for a real git
-// checkout run with plain `node apps/panel-server/index.js`. Someone running the
-// published Docker image has no checkout to pull — the correct next step is
-// to pull and recreate the image via Compose.
 export function getDevModeUpgradeInstruction(containerized = isContainerized()) {
   return containerized
     ? "Pull the newer image and recreate the container: docker compose pull && docker compose up -d."
@@ -131,23 +109,6 @@ export function createUpdateDataBackup(dataPaths, version, fsModule = fs) {
   return backupPath;
 }
 
-/**
- * Restore db.json from a pre-update snapshot (see createUpdateDataBackup()
- * above) after a rollback that can only be needed on ONE path: the update
- * bundle journal's version-mismatch rollback (updateBundle.js's
- * acknowledgeUpdateBundle()), which fires AFTER the new binary has already
- * completed its own startup -- including any database migration -- and
- * only rolls the BINARY and CLIENT back. Without this, that rollback is a
- * half-rollback: the previous binary running against a database the NEW
- * version already migrated. The bundle-transaction's OWN mid-apply rollback
- * (applyUpdateBundle() failing before the new binary ever ran) never needs
- * this -- nothing could have touched the database yet at that point.
- *
- * Returns false (never throws for a missing/absent backup -- that's the
- * caller's own thing to log, not this function's) when there is nothing to
- * restore. Propagates a real copy failure so the caller can tell the two
- * apart.
- */
 export function restorePreUpdateDataBackup(dataPaths, backupPath, fsModule = fs) {
   const dbPath = dataPaths?.dbPath;
   if (!dbPath || !backupPath || !fsModule.existsSync(backupPath)) return false;
@@ -198,64 +159,41 @@ export class PanelUpdateChecker {
     this.lastCheck = null;
     this.lastError = null;
     this.dockerUpdateProxy = new DockerUpdateProxy();
-    // Set when a Windows apply helper has been spawned (or Linux apply has
-    // started). Prevents a second concurrent /api/panel/restart from
-    // spawning a second helper that would race for the staged file.
     this.isApplying = false;
   }
 
-  /**
-   * Start the panel update checker
-   */
   async start(currentVersion) {
     this.currentVersion = currentVersion || "0.0.0";
     log.info(`Panel update checker started (current: v${this.currentVersion})`);
 
-    // Load persisted staged-version cache BEFORE reconcile so the banner
-    // reports the correct staged version even if `latestRelease` has drifted.
     await this.loadStagedVersionCache();
 
-    // Confirm or report on any update that was pending from a previous run.
-    // This runs once at startup so the client can see a success/failure banner.
     try {
       await this.reconcilePendingUpdate();
     } catch (err) {
       log.warn(`Could not reconcile pending panel update: ${err.message}`);
     }
 
-    // Legacy Windows applies may leave helper scripts in the runtime temp
-    // directory. Keep the last few logs for post-mortem debugging and remove
-    // older ones so they do not accumulate forever on long-running installs.
     try {
       this.cleanupOldHelperArtifacts();
     } catch (err) {
       log.debug(`Helper artifact cleanup failed: ${err.message}`);
     }
 
-    // Sweep orphan .partial.* files left over from downloads that were
-    // killed mid-stream (panel crashed, machine rebooted, etc). These are
-    // safe to delete: a real .partial belonging to an in-progress download
-    // would be inside our own process — we just started up, so nothing is
-    // in-progress yet.
     try {
       this.cleanupOrphanPartials();
     } catch (err) {
       log.debug(`Orphan partial cleanup failed: ${err.message}`);
     }
 
-    // Initial check after 30 seconds
     this.initialTimeout = setTimeout(() => this.checkForUpdate(), 30000);
 
-    // Periodic checks
     this.checkInterval = setInterval(
       () => this.checkForUpdate(),
       CHECK_INTERVAL_MS,
     );
   }
 
-  /**
-   * Stop the checker
-   */
   stop() {
     if (this.initialTimeout) {
       clearTimeout(this.initialTimeout);
@@ -267,9 +205,6 @@ export class PanelUpdateChecker {
     }
   }
 
-  /**
-   * Check GitHub for the latest release
-   */
   async checkForUpdate() {
     if (this.isChecking) return this.getStatus();
     this.isChecking = true;
@@ -333,9 +268,6 @@ export class PanelUpdateChecker {
     return this.getStatus();
   }
 
-  /**
-   * Fetch the latest release from GitHub API
-   */
   fetchLatestRelease() {
     return this.requestGitHubReleaseWithRetry();
   }
@@ -378,18 +310,6 @@ export class PanelUpdateChecker {
       };
 
       const req = https.get(options, (res) => {
-        // Both branches below only ever resolve/reject from res's own
-        // "data"/"end" events -- if the connection dies mid-body-read (the
-        // response already exists, only its body is incomplete) in a way
-        // Node surfaces on `res` rather than re-propagating to `req`'s own
-        // "error" listener below, neither branch's "end" fires and this
-        // promise never settles. checkForUpdate()'s try/finally only resets
-        // isChecking once its `await` on this actually settles, so an
-        // unsettled promise here latches isChecking true forever and no
-        // later scheduled check ever runs. Settling is idempotent (a
-        // Promise only honors its first resolve/reject), so this is safe to
-        // wire unconditionally alongside the two branches' own resolve/reject
-        // calls without an extra guard flag.
         res.on("error", reject);
         res.on("aborted", () => reject(new Error("GitHub response aborted")));
 
@@ -469,9 +389,6 @@ export class PanelUpdateChecker {
       : `${match[1]}.${match[2]}.${match[3]}`;
   }
 
-  /**
-   * Compare semver-ish versions (supports 3 or 4 parts). Returns true if latest > current.
-   */
   isNewer(latest, current) {
     const normalize = (v) => {
       const match = v.match(/(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?/);
@@ -493,9 +410,6 @@ export class PanelUpdateChecker {
     return lHotfix > cHotfix;
   }
 
-  /**
-   * Download the update binary and prepare for restart
-   */
   async downloadUpdate() {
     if (this.isDownloading) {
       return {
@@ -505,8 +419,6 @@ export class PanelUpdateChecker {
       };
     }
     if (this.isApplying) {
-      // Refuse to start a new download while a helper is mid-apply — that
-      // could overwrite the staged file the helper is about to rename.
       return {
         success: false,
         error: "An update apply is already in progress",
@@ -521,8 +433,6 @@ export class PanelUpdateChecker {
       };
     }
 
-    // Preflight gates the download — we refuse to stage anything if we already
-    // know the apply step will fail (no write permission, no disk space, etc).
     const pre = await this.preflight();
     if (!pre.ok) {
       return {
@@ -555,8 +465,6 @@ export class PanelUpdateChecker {
       };
     }
 
-    // Stage the executable separately and refresh client/dist from the matching
-    // archive. Standalone builds serve that directory beside the binary.
     const assetName = isWindows
       ? "ZomboidControlPanel.exe"
       : "ZomboidControlPanel";
@@ -564,7 +472,6 @@ export class PanelUpdateChecker {
 
     let asset = this.latestRelease.assets.find((a) => a.name === assetName);
     if (!asset) {
-      // Conservative fallback: require the raw extension/shape and exclude archives.
       if (isWindows) {
         asset = this.latestRelease.assets.find(
           (a) => /\.exe$/i.test(a.name) && !isArchive(a.name),
@@ -605,11 +512,6 @@ export class PanelUpdateChecker {
 
     const exePath = process.execPath;
     const exeDir = path.dirname(exePath);
-    // Since v1.0.17 the apply helper launches the staged file in place (no
-    // rename) so AV never sees a fresh write at the canonical .exe path. That
-    // means the *currently running* process may itself be a staged file
-    // (ends in .new or .new2). We must stage into a slot that is NOT the file
-    // we're running from, otherwise we'd try to overwrite our own binary.
     const stagedPath = this.getStageSlotPath();
     const tmpDownloadPath = `${stagedPath}.partial.${process.pid}`;
     const clientArchiveExtension = isWindows ? ".zip" : ".tar.gz";
@@ -620,9 +522,6 @@ export class PanelUpdateChecker {
     let incomingClientPath = null;
 
     try {
-      // Take the database snapshot immediately before the destructive apply,
-      // not when the update is downloaded. Staging and applying may be hours
-      // apart, so an earlier snapshot would miss later state changes.
       log.info(
         `Downloading update: ${asset.name} (${(asset.size / 1024 / 1024).toFixed(1)} MB)`,
       );
@@ -631,7 +530,6 @@ export class PanelUpdateChecker {
         status: "downloading",
       });
 
-      // Clear any prior staged file so we always download fresh
       try {
         if (fs.existsSync(tmpDownloadPath)) fs.unlinkSync(tmpDownloadPath);
       } catch (cleanErr) {
@@ -646,11 +544,6 @@ export class PanelUpdateChecker {
         status: "preparing",
       });
 
-      // Cryptographic integrity check against the published checksums.txt.
-      // Size + magic bytes already ruled out HTML error pages and wrong-asset
-      // confusion. SHA256 additionally rules out silent corruption in transit
-      // and supply-chain tampering on the mirror edge. Older releases may not
-      // ship checksums.txt — treat that as a warning, not a failure.
       try {
         const verified = await this.verifyChecksum(tmpDownloadPath, asset.name);
         if (verified === false) {
@@ -659,19 +552,12 @@ export class PanelUpdateChecker {
           );
         }
         if (verified === null) {
-          // Fail CLOSED, not open: a release with no checksums.txt (or no
-          // entry for this asset) could be a tampered/mis-published release,
-          // and integrity would otherwise rest entirely on the GitHub
-          // account + TLS. The release pipeline always publishes checksums.txt, so a
-          // release missing it is unexpected and should not be auto-applied.
           throw new Error(
             `Release v${this.latestRelease.version} does not publish a checksums.txt entry for ${asset.name} — refusing to apply an unverified update`,
           );
         }
         log.info(`SHA256 verified against release checksums.txt`);
       } catch (verifyErr) {
-        // Any thrown error from verifyChecksum is a hard stop: either the
-        // checksum mismatched or the verification logic failed fatally.
         try {
           fs.unlinkSync(tmpDownloadPath);
         } catch {
@@ -704,7 +590,6 @@ export class PanelUpdateChecker {
       incomingClientPath = stagedClient.incomingClientPath;
       fs.unlinkSync(tmpClientArchivePath);
 
-      // Promote .partial → .new atomically. If a stale .new exists, drop it first.
       try {
         if (fs.existsSync(stagedPath)) fs.unlinkSync(stagedPath);
       } catch (cleanErr) {
@@ -733,19 +618,6 @@ export class PanelUpdateChecker {
       fs.rmSync(incomingClientPath, { recursive: true, force: true });
       incomingClientPath = null;
 
-      // NOTE: We intentionally do NOT set `pendingPanelUpdate` here. That
-      // setting is the "we actually committed to apply this" marker used by
-      // reconcilePendingUpdate() on next boot. Setting it at download time
-      // would cause a false-positive "Update Failed to Apply" banner if the
-      // user downloads but never clicks Restart and Apply. The restart
-      // endpoint writes it right before exit instead.
-      //
-      // But we DO persist the staged version separately so `getStagedUpdate()`
-      // can report it accurately even if `latestRelease` later refreshes to a
-      // newer version between download and apply. Update the in-memory cache
-      // too — without this, a background update check that publishes a newer
-      // release would make `getStagedUpdate()` fall back to the fresher
-      // `latestRelease.version` and misreport the version actually on disk.
       this._stagedVersionCache = this.latestRelease.version;
       try {
         await setSetting(
@@ -771,7 +643,6 @@ export class PanelUpdateChecker {
     } catch (error) {
       this.lastError = error.message;
       log.error(`Update download failed: ${error.message}`);
-      // Clean up any partial on failure
       try {
         if (fs.existsSync(tmpDownloadPath)) fs.unlinkSync(tmpDownloadPath);
       } catch (delErr) {
@@ -797,26 +668,6 @@ export class PanelUpdateChecker {
     }
   }
 
-  /**
-   * Supervisor (Start.bat v2+) hand-off. When the panel was launched by the
-   * v2 supervisor batch, we don't run an in-process helper to swap the exe
-   * at all — we just drop a marker file next to the exe and exit with code
-   * 75. The supervisor sees the marker (or the exit code), renames the
-   * staged .new/.new2 over the canonical .exe, then relaunches the panel.
-   *
-   * This sidesteps every Windows failure mode of the old helper:
-   *   - No detached cmd.exe child (Defender / ASR can't kill it mid-flight).
-   *   - No taskkill of our own PID (no behavioral signature).
-   *   - No `start "" foo.exe.new` (no broken extension association).
-   *   - The swap happens BETWEEN runs of the panel, so there's no TIME_WAIT
-   *     race on port 3001.
-   *   - The supervisor is a plain-text .bat the user already launches —
-   *     fully visible, no hidden process, no UNC redirector games.
-   *
-   * The marker is intentionally a plain JSON sentinel; the .bat only needs
-   * to see that it exists. The payload is for human post-mortems and for
-   * reconcilePendingUpdate() on the next boot.
-   */
   isSupervisorAvailable() {
     return (
       process.platform === "win32" && process.env.PANEL_SUPERVISOR_V === "2"
@@ -842,23 +693,10 @@ export class PanelUpdateChecker {
     return markerPath;
   }
 
-  /**
-   * Resolve the "base" exe path by stripping any .new/.new2 suffix from
-   * process.execPath. After a launch-in-place apply, the running process's
-   * execPath is the staged file (e.g. ...\ZomboidControlPanel.exe.new), but
-   * callers that want the canonical filename for packaging lookups want the
-   * non-suffixed version.
-   */
   getExeBasePath() {
     return process.execPath.replace(/\.new2?$/i, "");
   }
 
-  /**
-   * Pick a staging slot (.new or .new2) that is NOT the file we're currently
-   * running from. Alternates between the two slots so we never try to
-   * overwrite our own binary. Windows file locks prevent that anyway, but
-   * this gives the apply helper a predictable name to launch.
-   */
   getStageSlotPath() {
     const base = this.getExeBasePath();
     const primary = `${base}.new`;
@@ -867,10 +705,6 @@ export class PanelUpdateChecker {
     return path.resolve(primary) === self ? secondary : primary;
   }
 
-  /**
-   * Find any staged file on disk (.new or .new2) that is NOT the one we're
-   * currently running from. Returns the full path, or null.
-   */
   findStagedFileOnDisk() {
     const base = this.getExeBasePath();
     const selfResolved = path.resolve(process.execPath);
@@ -882,7 +716,6 @@ export class PanelUpdateChecker {
       }
     });
     if (!candidates.length) return null;
-    // Prefer the newer file if both slots are populated.
     candidates.sort((a, b) => {
       try {
         return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
@@ -893,10 +726,6 @@ export class PanelUpdateChecker {
     return candidates[0];
   }
 
-  /**
-   * Check if a downloaded-but-not-applied update is staged next to the exe.
-   * Returns null if nothing is staged, or { stagedPath, exePath, version }.
-   */
   getStagedUpdate() {
     if (typeof process.pkg === "undefined") return null;
     const exePath = process.execPath;
@@ -923,7 +752,6 @@ export class PanelUpdateChecker {
       const stats = fs.statSync(stagedPath);
       size = stats.size;
       if (stats.size < 1024 * 1024) {
-        // Sanity: any real build is many MB. Anything smaller is a failed download.
         log.warn(
           `Staged update at ${stagedPath} is suspiciously small (${stats.size} bytes); ignoring.`,
         );
@@ -933,19 +761,11 @@ export class PanelUpdateChecker {
       log.debug(`Could not stat staged update: ${err.message}`);
       return null;
     }
-    // Prefer the version we recorded at stage time. Fall back to the current
-    // latestRelease if we somehow never persisted it (older builds, manual
-    // file drops). Reading the setting synchronously from the in-memory DB
-    // is fine — this method is called often and must stay non-async.
     let version = journal.version || this._stagedVersionCache || null;
     if (!version) version = this.latestRelease?.version || null;
     return { stagedPath, exePath, version, size, journalPath, journal };
   }
 
-  /**
-   * Load the persisted staged-update version into memory. Called at start()
-   * so getStagedUpdate() (sync) can surface it without a DB round-trip.
-   */
   async loadStagedVersionCache() {
     try {
       this._stagedVersionCache = await getSetting("stagedPanelUpdateVersion");
@@ -956,9 +776,6 @@ export class PanelUpdateChecker {
   }
 
 
-  /**
-   * Download a file with progress tracking
-   */
   async stageClientDist(archivePath, isWindows, binaryPath, artifactName) {
     const exeDir = path.dirname(process.execPath);
     const extractDir = fs.mkdtempSync(path.join(os.tmpdir(), "zpanel-update-"));
@@ -968,8 +785,6 @@ export class PanelUpdateChecker {
 
     try {
       if (isWindows) {
-        // Expand-Archive rejects a valid ZIP when its staging name lacks a
-        // .zip suffix. Keep this defensive copy for callers from older paths.
         if (path.extname(extractArchivePath).toLowerCase() !== ".zip") {
           windowsArchiveCopy = `${extractArchivePath}.zip`;
           fs.copyFileSync(extractArchivePath, windowsArchiveCopy);
@@ -1034,20 +849,6 @@ export class PanelUpdateChecker {
       fs.cpSync(incoming, incomingClientPath, { recursive: true });
       log.info("Staged verified client bundle without changing live client/dist");
 
-      // Stage the managed launcher/service files too, but do NOT swap them
-      // live here. This method only STAGES — the binary and client dist it
-      // just prepared above don't become live until applyUpdateBundle()
-      // runs (and can still be rolled back after that, until the NEW
-      // process acknowledges startup). Swapping start.sh/the unit file
-      // eagerly at stage time, as the pre-merge version of this method did,
-      // would put them ahead of a binary that might never actually apply,
-      // or leave them upgraded after a version-mismatch rollback puts the
-      // binary and client back — a half-rollback of exactly the kind
-      // restorePreUpdateDataBackup() exists to prevent for the database.
-      // Copied into a fixed, deterministic location (not extractDir, which
-      // this method's own `finally` below deletes before apply can ever
-      // run) so activateStagedLinuxLauncherFiles() can find it later,
-      // however long "later" turns out to be.
       if (!isWindows) {
         this.stageLinuxLauncherFiles(extractDir, exeDir);
       }
@@ -1067,16 +868,10 @@ export class PanelUpdateChecker {
     { name: "install-linux-service.sh", mode: 0o755 },
   ];
 
-  // Fixed, deterministic location — not a per-pid or per-transaction name —
-  // so activateStagedLinuxLauncherFiles() can find it on a later boot
-  // without needing anything threaded through updateBundle.js's journal.
   static getLinuxLauncherStageDir(exeDir) {
     return path.join(exeDir, ".update-linux-files-staged");
   }
 
-  // Called from stageClientDist() at STAGE time, once per download. Copies
-  // only — never touches the live start.sh/unit file. See the comment at
-  // this method's one call site for why activation is deferred.
   stageLinuxLauncherFiles(extractDir, exeDir) {
     const stageDir = PanelUpdateChecker.getLinuxLauncherStageDir(exeDir);
     for (const file of PanelUpdateChecker.LINUX_LAUNCHER_FILES) {
@@ -1091,15 +886,6 @@ export class PanelUpdateChecker {
     }
   }
 
-  // Called from apps/panel-server/index.js ONLY after acknowledgeUpdateBundle() has
-  // confirmed the new binary/client are good and deleted their own journal
-  // — the one point in the whole update lifecycle where a rollback of the
-  // binary/client can no longer happen, so swapping these files here can
-  // never land ahead of a binary that gets rolled back later. Best-effort:
-  // a failure here does not undo the (already-committed) binary/client
-  // update, it just leaves the old launcher/unit in place for this cycle —
-  // logged clearly, with the same remediation command getRestartAssessment()
-  // already gives an operator for exactly this state.
   activateStagedLinuxLauncherFiles(exeDir) {
     const stageDir = PanelUpdateChecker.getLinuxLauncherStageDir(exeDir);
     if (!fs.existsSync(stageDir)) return false;
@@ -1161,26 +947,11 @@ export class PanelUpdateChecker {
   downloadFile(url, destPath, expectedSize, expectedKind = "binary") {
     return new Promise((resolve, reject) => {
       let settled = false;
-      // Assigned once the response arrives and the write stream is opened;
-      // referenced here (outer scope) so fail() -- reachable from a
-      // timeout/abort that fires mid-download, before or after that point --
-      // can actually close it.
       let file = null;
 
       const fail = (error) => {
         if (settled) return;
         settled = true;
-        // On a timeout/abort partway through, the piped write stream was
-        // never told the source died -- pipe() only auto-ends a destination
-        // on a normal source end, never on a source error -- so it stayed
-        // open, holding the file descriptor. Deleting the file first and
-        // leaving the stream running left destPath potentially still
-        // writable by an orphaned handle, and on Windows an unlink against
-        // a still-open handle can silently fail (the callback below
-        // swallows the error), leaving the corrupt partial download on disk
-        // for a later attempt to trip over. Destroy the stream and wait for
-        // its own close before unlinking, so the delete has an actual
-        // chance to succeed.
         if (file && !file.destroyed) {
           file.once("close", () => fs.unlink(destPath, () => {}));
           file.destroy();
@@ -1236,7 +1007,6 @@ export class PanelUpdateChecker {
             },
           },
           (res) => {
-            // Follow redirects (GitHub uses them for asset downloads)
             if (
               res.statusCode === 301 ||
               res.statusCode === 302 ||
@@ -1272,7 +1042,6 @@ export class PanelUpdateChecker {
                 this.downloadProgress = Math.round(
                   (receivedBytes / totalBytes) * 100,
                 );
-                // Throttle progress updates to every 5% increment
                 const bucket = Math.floor(this.downloadProgress / 5) * 5;
                 if (bucket > lastEmittedProgress) {
                   lastEmittedProgress = bucket;
@@ -1297,9 +1066,6 @@ export class PanelUpdateChecker {
                     ),
                   );
                 }
-                // Reject HTML/JSON error pages and partially-written blobs.
-                // Standalone updates download both an executable and the
-                // matching client archive, which have different signatures.
                 const magicErr =
                   expectedKind === "archive"
                     ? this.validateArchiveMagic(destPath)
@@ -1332,13 +1098,8 @@ export class PanelUpdateChecker {
     });
   }
 
-  /**
-   * Get current status
-   */
   getStatus() {
     const staged = this.getStagedUpdate();
-    // Drop stale apply results: if a previous "success" was recorded for a
-    // version we are no longer running, it's no longer relevant.
     let lastApplyResult = this.lastApplyResult || null;
     if (
       lastApplyResult &&
@@ -1369,15 +1130,7 @@ export class PanelUpdateChecker {
     };
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Hardening: preflight, validation, post-apply confirmation, log surfacing
-  // ──────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Run preflight checks before download/apply. Returns:
-  *   { ok, blockers: string[], warnings: string[], blockerDetails: [], warningDetails: [], info: {...} }
-   * Blockers prevent the update from proceeding; warnings are shown to the user.
-   */
   async preflight() {
     const blockers = [];
     const warnings = [];
@@ -1396,9 +1149,6 @@ export class PanelUpdateChecker {
 
     if (this.dockerUpdateProxy.enabled) {
       info.dockerUpdater = true;
-      // Docker mode performs these checks in the separate update controller.
-      // Report that explicitly instead of returning an empty, misleading
-      // warning list.
       info.checksPerformed = false;
       info.dockerNotChecked = {
         key: "updates.preflight.dockerNotChecked",
@@ -1443,8 +1193,6 @@ export class PanelUpdateChecker {
     info.exePath = exePath;
     info.exeDir = exeDir;
 
-    // Keep the update tied to the data directory the running panel actually
-    // uses. A resumed Windows update must not silently become a fresh install.
     const dataPaths = getDataPaths();
     info.dataDir = dataPaths.dataDir;
     info.dbPath = dataPaths.dbPath;
@@ -1475,7 +1223,6 @@ export class PanelUpdateChecker {
       );
     }
 
-    // Resolve the asset so we can size-check.
     const assetName = isWindows
       ? "ZomboidControlPanel.exe"
       : "ZomboidControlPanel";
@@ -1508,7 +1255,6 @@ export class PanelUpdateChecker {
       info.asset = { name: asset.name, size: asset.size };
     }
 
-    // Write permission probe — try to create + remove a test file next to the exe.
     const probePath = path.join(exeDir, `.panel-write-probe.${process.pid}`);
     let probeCreated = false;
     try {
@@ -1542,8 +1288,6 @@ export class PanelUpdateChecker {
       }
     }
 
-    // Need roughly 2x the asset size for staging and replacement. An unknown
-    // free-space result is a warning, not a successful check.
     if (asset?.size) {
       try {
         const free = await this.getFreeDiskSpace(exeDir);
@@ -1581,7 +1325,6 @@ export class PanelUpdateChecker {
       }
     }
 
-    // OneDrive/sync warning — this is the exact failure from the bug report.
     if (isWindows) {
       const lowered = exeDir.toLowerCase();
       const inOneDrive =
@@ -1621,7 +1364,6 @@ export class PanelUpdateChecker {
       }
     }
 
-    // Existing staged file?
     const staged = this.getStagedUpdate();
     if (staged) {
       info.stagedUpdate = { version: staged.version, path: staged.stagedPath };
@@ -1634,17 +1376,6 @@ export class PanelUpdateChecker {
       );
     }
 
-    // Lingering backup from a prior apply. The bundle-journal rewrite
-    // renamed this suffix from ".old" to ".bundle-previous" (see
-    // updateBundle.js's backupBinaryPath and scripts/release/build.mjs's BIN_BACKUP), but
-    // this probe was never updated to match -- it has been checking a
-    // filename nothing writes anymore since that rewrite landed, so it can
-    // never fire for the current mechanism. That silence reads as "nothing
-    // lingering" when the actual current risk (a .bundle-previous a failed
-    // or incomplete rollback left behind -- exactly the class of bug fixed
-    // in acb202b1) goes completely unchecked here. Checking both: the
-    // current suffix as the real signal, the legacy one only so a
-    // long-unapplied pre-rewrite install still gets a warning too.
     try {
       const bundlePreviousPath = `${exePath}.bundle-previous`;
       const legacyOldPath = `${exePath}.old`;
@@ -1670,10 +1401,6 @@ export class PanelUpdateChecker {
     return { ok: blockers.length === 0, blockers, warnings, blockerDetails, warningDetails, info };
   }
 
-  /**
-   * Best-effort free-disk-space probe. Returns bytes, or null on failure.
-   * Uses a statfs API where available; falls back to null rather than throw.
-   */
   async getFreeDiskSpace(dirPath) {
     try {
       if (typeof fs.promises.statfs === "function") {
@@ -1686,10 +1413,6 @@ export class PanelUpdateChecker {
     return null;
   }
 
-  /**
-   * Validate that a downloaded file is actually a binary for the current platform.
-   * Returns null if valid, or an error message describing the mismatch.
-   */
   validateBinaryMagic(filePath) {
     try {
       const fd = fs.openSync(filePath, "r");
@@ -1707,12 +1430,10 @@ export class PanelUpdateChecker {
       if (bytesRead < 2) return "file is shorter than a file header";
 
       if (process.platform === "win32") {
-        // PE/EXE: starts with 'MZ' (0x4D 0x5A).
         if (header[0] !== 0x4d || header[1] !== 0x5a) {
           return `not a Windows executable (expected MZ header, got 0x${header[0].toString(16)}${header[1].toString(16)})`;
         }
       } else {
-        // ELF: 0x7F 'E' 'L' 'F'.
         if (
           bytesRead < 4 ||
           header[0] !== 0x7f ||
@@ -1729,14 +1450,12 @@ export class PanelUpdateChecker {
     }
   }
 
-  /** Validate the ZIP (Windows) or gzip (Linux) release package signature. */
   validateArchiveMagic(filePath) {
     try {
       const header = fs.readFileSync(filePath, { encoding: null }).subarray(0, 4);
       if (header.length < 2) return "file is shorter than an archive header";
 
       if (process.platform === "win32") {
-        // ZIP: PK followed by a local header, empty archive, or data descriptor.
         if (
           header[0] !== 0x50 ||
           header[1] !== 0x4b ||
@@ -1753,9 +1472,6 @@ export class PanelUpdateChecker {
     }
   }
 
-  /**
-   * Compute the SHA256 digest of a file as a lowercase hex string.
-   */
   sha256File(filePath) {
     return new Promise((resolve, reject) => {
       const hash = crypto.createHash("sha256");
@@ -1766,11 +1482,6 @@ export class PanelUpdateChecker {
     });
   }
 
-  /**
-   * Fetch a small text asset (e.g. checksums.txt) to memory. Enforces the same
-   * host allow-list and redirect cap as downloadFile, and caps the body at
-   * 64KB so a compromised mirror can't pin memory.
-   */
   fetchReleaseText(url, maxBytes = 64 * 1024) {
     return new Promise((resolve, reject) => {
       const allowedHost = (u) => {
@@ -1839,17 +1550,6 @@ export class PanelUpdateChecker {
     });
   }
 
-  /**
-   * Verify a downloaded file against checksums.txt from the release.
-   * Returns:
-   *   true  = checksum present and matched
-   *   false = checksum present and did NOT match (throwable by caller)
-   *   null  = checksum file not published in this release (skip w/ warning)
-   *
-   * Throws if checksums.txt IS published but cannot be fetched. Silently
-   * skipping on fetch failure would let a network-level attacker disable
-   * verification just by blocking one request.
-   */
   async verifyChecksum(filePath, assetName) {
     if (!this.latestRelease?.assets) return null;
     const checksumAsset = this.latestRelease.assets.find(
@@ -1866,8 +1566,6 @@ export class PanelUpdateChecker {
       );
     }
 
-    // Format: `<hex>  <filename>` per line. Tolerate extra whitespace and
-    // comments. We only compare to the entry for our exact asset.
     const want = text
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -1894,12 +1592,6 @@ export class PanelUpdateChecker {
     return true;
   }
 
-  /**
-   * Reconcile a pending update recorded before the last restart.
-   * - If currentVersion matches the pending one → success (emit + clear).
-   * - If staged file is still present → apply failed; capture helper log.
-   * - Otherwise → apply may have silently failed or was never run.
-   */
   async reconcilePendingUpdate() {
     const pending = await getSetting("pendingPanelUpdate");
     if (!pending) return;
@@ -1908,10 +1600,6 @@ export class PanelUpdateChecker {
       `Reconciling pending panel update: was v${pending}, now v${this.currentVersion}`,
     );
 
-    // Happy path: we are running EXACTLY the pending version. We deliberately
-    // do NOT accept "newer than pending" as success — that can happen when a
-    // user manually recovers from a failed apply by dropping a later build on
-    // disk, and we'd rather surface that as still-failed than silently green.
     if (this.currentVersion === pending) {
       this.lastApplyResult = {
         status: "success",
@@ -1926,15 +1614,10 @@ export class PanelUpdateChecker {
       return;
     }
 
-    // Apply failed. Gather as much context as we can for the UI.
     const helperLog = this.readMostRecentApplyLog();
     const staged = this.getStagedUpdate();
     const stagedStillPresent = Boolean(staged);
 
-    // A manual installation can move the panel past an older pending marker
-    // while also removing the old staged binary. There is then nothing left
-    // to retry, and keeping the marker turns a successful recovery into a
-    // permanent false failure banner on every startup.
     if (!stagedStillPresent && this.isNewer(this.currentVersion, pending)) {
       await setSetting("pendingPanelUpdate", null);
       await setSetting("stagedPanelUpdateVersion", null);
@@ -1946,10 +1629,6 @@ export class PanelUpdateChecker {
       return;
     }
 
-    // Heuristic: the helper ran, reported "Update applied", and then the exe
-    // vanished or the relaunch failed "cannot find the file specified". That
-    // is the AV / Controlled Folder Access signature. Surface it as a hint so
-    // the UI can show recovery guidance without the user having to read logs.
     const likelyCause = this.classifyApplyFailure(
       helperLog,
       stagedStillPresent,
@@ -1963,14 +1642,9 @@ export class PanelUpdateChecker {
       stagedStillPresent,
       helperLog,
       likelyCause,
-      // Only meaningful when likelyCause is "rollback_failed" -- see
-      // isRollbackRetryLikely()'s own doc comment. Omitted for every other
-      // cause rather than always including an irrelevant false.
       ...(likelyCause === "rollback_failed"
         ? { rollbackRetryLikely: this.isRollbackRetryLikely(helperLog) }
         : {}),
-      // Tell the UI whether "click Restart to retry" will work. If the staged
-      // file is gone, the user has to re-download first.
       canRetryApply: stagedStillPresent,
       panelFolder: path.dirname(process.execPath),
     };
@@ -1984,27 +1658,10 @@ export class PanelUpdateChecker {
     // download will overwrite the pending marker at restart time.
   }
 
-  /**
-   * Look at the apply log and disk state and guess why apply failed. Used
-   * purely to help the UI render a useful hint. Never throws.
-   *   'helper_blocked' — helper script was blocked from even starting (ASR)
-   *   'av_quarantine' — placed file vanished / relaunch couldn't find it
-   *   'rename_locked' — could not rename the running exe (file in use)
-   *   'permission'    — access denied on move/copy
-   *   'no_helper_log' — no log found at all
-   *   'unknown'       — log exists but doesn't match a known pattern
-   *
-   * Order matters: check permission before lock, and check AV signatures
-   * first because "cannot find path" / "system cannot find the file" can
-   * appear inside a failed Move-Item message where the real cause is AV
-   * having deleted the source between operations, not a plain file-lock.
-   */
   classifyApplyFailure(helperLog, stagedStillPresent) {
     if (!helperLog) return "no_helper_log";
     const l = helperLog.toLowerCase();
 
-    // Supervisor v2 writes bracketed failure codes. Prefer the last code in
-    // the log, then fall back to legacy prose for upgraded installations.
     const supervisorTags = [
       ...helperLog.matchAll(
         /\[(av_quarantine|version_mismatch|startup_handshake_failed|frontend_swap_failed|binary_swap_failed|bundle_apply_failed|rollback_failed)\]/gi,
@@ -2015,16 +1672,10 @@ export class PanelUpdateChecker {
     if (lastSupervisorTag === "binary_swap_failed") return "rename_locked";
     if (lastSupervisorTag === "rollback_failed") return "rollback_failed";
 
-    // Legacy helper was blocked before it could start (ASR, AV, or policy).
     if (l.includes("[pre-spawn]") && !l.includes("apply helper started")) {
       return "helper_blocked";
     }
 
-    // Legacy AV / Controlled Folder Access wording: the staged file vanished
-    // between helper steps.
-    // Patterns cover: post-place verify failure, rollback copy wiped, staged
-    // gone before we started, and the Windows "cannot find" messages that
-    // surface as Move-Item failures when the source was deleted mid-apply.
     if (
       l.includes("quarantined by av") ||
       l.includes("disappeared or is empty") ||
@@ -2039,8 +1690,6 @@ export class PanelUpdateChecker {
       return "av_quarantine";
     }
 
-    // Permission: check BEFORE rename-lock because "access is denied" on a
-    // rename attempt is a permission problem, not a transient file lock.
     if (
       l.includes("access is denied") ||
       l.includes("access denied") ||
@@ -2049,9 +1698,6 @@ export class PanelUpdateChecker {
       return "permission";
     }
 
-    // File locked by another process — either the rename (exe → .old) or the
-    // place (.new → exe) was blocked by AV scan, OneDrive sync, or another
-    // holder of the exe handle.
     if (
       l.includes("could not rename running exe") ||
       l.includes("rename attempt") ||
@@ -2059,9 +1705,6 @@ export class PanelUpdateChecker {
       l.includes("being used by another process") ||
       l.includes("it is being used by")
     ) {
-      // If rename failed AND there is no staged file left on disk, AV most
-      // likely deleted .new between download and apply — treat as quarantine
-      // so the UI surfaces the exclusion hint instead of a generic lock msg.
       if (
         !stagedStillPresent &&
         (l.includes("rename attempt") ||
@@ -2075,21 +1718,6 @@ export class PanelUpdateChecker {
     return "unknown";
   }
 
-  /**
-   * Whether a rollback failure will recur automatically on the next restart.
-   *
-   * Never throws.
-   *
-   * The final "could not remove journal" line means the swap recovered and
-   * only the journal cleanup failed. That case is not retryable.
-   *
-   * Checks the LAST rollback_failed-tagged line specifically (not just
-   * whether the tag appears anywhere), for the same reason
-   * classifyApplyFailure() does: scripts/release/build.mjs always stamps its "rollback
-   * incomplete" summary line last whenever the restore itself failed, so an
-   * earlier, different rollback_failed line earlier in the same log must
-   * not override the line that actually ended the run.
-   */
   isRollbackRetryLikely(helperLog) {
     if (!helperLog) return false;
     const rollbackLines = helperLog
@@ -2100,14 +1728,7 @@ export class PanelUpdateChecker {
     return !last.includes("could not remove journal");
   }
 
-  /**
-   * Read the most recent Windows apply-helper log from TEMP, if any.
-   * Returns up to 8KB of log text or null.
-   */
   readMostRecentApplyLog() {
-    // Current releases write supervisor.log. Keep the older logs-directory
-    // fallbacks for upgraded installations, but never read predictable files
-    // from the shared system temp directory.
     try {
       const logsDir = getDataPaths().logsDir;
       const supervisor = path.join(logsDir, "supervisor.log");
@@ -2184,14 +1805,6 @@ export class PanelUpdateChecker {
     return null;
   }
 
-  /**
-   * Remove artifacts left by current and legacy apply flows. Prune:
-   *   - .ps1 files in %TEMP% (legacy, pre-v1.0.21)
-   *   - .cmd files in <exeDir>/.panel-helpers/ (v1.0.21+)
-   *   - timestamped .log files in logsDir
-   *
-   * Keep the most recent `keep` of each so post-mortem debugging still works.
-   */
   cleanupOldHelperArtifacts(keep = 5) {
     const tmpDir = os.tmpdir();
     const tmpPatterns = [
@@ -2230,7 +1843,6 @@ export class PanelUpdateChecker {
       }
     }
 
-    // Prune .cmd helpers in <exeDir>/.panel-helpers/ (v1.0.21+)
     try {
       const helperDir = path.join(
         path.dirname(process.execPath),
@@ -2264,8 +1876,6 @@ export class PanelUpdateChecker {
       log.debug(`Could not prune helper dir: ${err.message}`);
     }
 
-    // Also prune timestamped logs in the panel's logs dir (keep the stable
-    // panel-update-last.log forever).
     try {
       const logsDir = getDataPaths().logsDir;
       const logPattern = /^panel-update-\d+\.log$/;
@@ -2295,11 +1905,6 @@ export class PanelUpdateChecker {
     }
   }
 
-  /**
-   * Remove orphan .partial.<pid> files left behind by interrupted downloads.
-   * Called at start() — at that moment no download can be in progress, so
-   * everything matching the partial pattern is safe to delete.
-   */
   cleanupOrphanPartials() {
     if (typeof process.pkg === "undefined") return;
     const exeDir = path.dirname(this.getExeBasePath());
@@ -2322,9 +1927,6 @@ export class PanelUpdateChecker {
     }
   }
 
-  /**
-   * true if version `a` is the same or newer than `b` (semver-ish, 3-4 parts).
-   */
   isSameOrNewer(a, b) {
     if (a === b) return true;
     return this.isNewer(a, b);

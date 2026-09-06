@@ -30,15 +30,6 @@ function createResponse() {
   return response;
 }
 
-// The unconfigured-server gate is the SECOND router.use() in the file, not
-// the first: requireRole("admin", "technician") (role sweep) now runs
-// ahead of it, deliberately — authorization has to happen before any data-
-// availability check, so a role that has no business touching server files
-// at all gets a 403 rather than a 404 that would still confirm whether a
-// server is configured. The gate itself must still run before anything
-// else FOR AN ALLOWED ROLE, including the existing remote-mirror
-// middleware, so an unconfigured panel never reaches a handler that could
-// invent data.
 function getGateMiddleware() {
   const nonRouteLayers = router.stack.filter((entry) => !entry.route);
   return nonRouteLayers[1].handle;
@@ -51,10 +42,6 @@ function getRouteHandler(method, routePath) {
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-// End-to-end reproduction of the finding: with the database genuinely
-// empty, GET /api/server-files/paths (and every sibling route — they all
-// share the same two path/name resolvers) must say nothing is configured,
-// not present a fabricated "servertest" server as if it were real.
 describe("server-files router: unconfigured-server gate", () => {
   beforeEach(() => {
     getActiveServer.mockReset();
@@ -87,9 +74,6 @@ describe("server-files router: unconfigured-server gate", () => {
   });
 
   it("the gate never even reaches the file the route handler would read — GET /paths itself would invent nothing anyway, but the gate stops it first", async () => {
-    // Regression guard for the exact repro: an active server row that
-    // exists but resolves to nothing real (the "Ghost" case) must not let
-    // a route handler run and report fabricated paths.
     getActiveServer.mockResolvedValue(null);
     const response = createResponse();
     const next = vi.fn();

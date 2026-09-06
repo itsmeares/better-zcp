@@ -2,10 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import i18n, { LANGUAGES, isRTL, directionOf } from '@/i18n'
 import type { LanguageDef } from '@/i18n'
 
-// RTL support (Ukrainian/Arabic project): directionOf() is a free function
-// over a LanguageDef rather than a lookup, so the RTL branch is testable
-// against a synthetic fixture without needing a real RTL row in LANGUAGES
-// -- there isn't one yet (that lands with the ar worker's row + a rebase).
 describe('directionOf', () => {
   it('defaults to ltr when dir is absent', () => {
     const lang: LanguageDef = { code: 'xx', nativeName: 'Xx' }
@@ -28,12 +24,6 @@ describe('directionOf', () => {
 })
 
 describe('isRTL -- every language actually registered today', () => {
-  // This block used to assert isRTL(x) === false for every registered code,
-  // with a note that it deliberately would NOT grow to cover a future RTL
-  // row. That was a tripwire, and it fired the moment `ar` landed -- exactly
-  // as intended. It is now the real bidirectional assertion: each language's
-  // isRTL must agree with its own registry `dir`, derived from LANGUAGES
-  // rather than restated, so a ninth language cannot land silently wrong.
   it.each(LANGUAGES.map((l) => [l.code, l.dir === 'rtl'] as const))(
     'isRTL(%s) is %s',
     (code, expected) => {
@@ -42,9 +32,6 @@ describe('isRTL -- every language actually registered today', () => {
   )
 
   it('at least one registered language is RTL, and at least one is not', () => {
-    // Guards the assertion above against becoming vacuous: if every row were
-    // LTR again, the table would still pass while proving nothing about the
-    // RTL branch.
     expect(LANGUAGES.some((l) => l.dir === 'rtl')).toBe(true)
     expect(LANGUAGES.some((l) => l.dir !== 'rtl')).toBe(true)
   })

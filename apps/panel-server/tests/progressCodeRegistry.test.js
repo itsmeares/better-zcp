@@ -13,24 +13,6 @@ const EN_LOCALE_PATH = path.join(
   "apps/panel-client/src/locales/en/installProgress.json",
 );
 
-// Own instance for the 2026-08-22 install/SteamCMD progress i18n work --
-// modeled on errorCodeRegistry.test.js (registry-membership structure) and
-// diagnosticsCheckRegistry.test.js (the bidirectional stale-entry half),
-// but not a reuse of either: every ProgressCode reference in server.js is
-// `ProgressCode.SOME_CODE` member access (enforced by review, not a lint
-// rule), never a bare string literal the way `code: "..."` sometimes is --
-// so this scans for that access pattern instead of errorCodeRegistry's
-// CODE_LITERAL_RE string-literal regex. That also means a code assigned to
-// an intermediate variable before being emitted (e.g. the steam:complete
-// 5-way branch) is still found: the regex matches the reference wherever it
-// appears in source, not just inside an object literal passed straight to
-// emit().
-//
-// fr/installProgress.json parity with en is NOT re-checked here -- that's
-// already covered unconditionally for every locale namespace, this one
-// included, by apps/panel-client/src/locales/__tests__/localeParity.test.ts. Re-adding
-// it here would be the "one mechanism, two implementations" shape this
-// floor has been correcting all night.
 const PROGRESS_CODE_REF_RE = /\bProgressCode\.([A-Z][A-Z0-9_]*)\b/g;
 
 function findReferencedCodes() {
@@ -68,10 +50,6 @@ describe("install/SteamCMD progress codes: registry membership (structure, not m
     ).toEqual([]);
   });
 
-  // The half people forget: a registry entry no longer referenced anywhere
-  // in source -- either dead from the start or orphaned by a later edit.
-  // "no entry survives for a code that was removed" applies from BOTH the
-  // source side (this) and the locale side (below).
   it("every registered ProgressCode value is referenced at least once in apps/panel-server/routes/server.js", () => {
     const unused = [...registryCodes].filter(
       (code) => !referencedCodes.has(code),

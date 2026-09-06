@@ -1,12 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// 2026-08-27: POST /debug/paths used to pass `moveFiles !== false` to
-// setDataPaths() -- a request with no moveFiles key at all got the
-// destructive file-move option by default, not by choice. This file covers
-// the ROUTE's own responsibility only (computing the right arguments and
-// forwarding them) -- setDataPaths()'s own validation/move/anti-lockout
-// logic is covered for real, without mocks, in apps/panel-server/tests/setDataPaths.test.js.
 
 const setDataPaths = vi.fn();
 const getServers = vi.fn();

@@ -3,22 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression: apps/panel-server/routes/mods.js had an 18-route family (19 including
-// resolve-orphan-workshop, which a route-name-based audit missed) that fully
-// replaced the live Mods=/WorkshopItems=/Map= ini lines with NO backup
-// anywhere, while apps/panel-server/routes/serverFiles.js -- one file over -- backed up
-// every equivalent overwrite. Fixed by extracting serverFiles.js's backup
-// logic into apps/panel-server/utils/configBackup.js and routing every ini write in
-// mods.js through its writeIniWithBackup() wrapper, which also REMOVED the
-// writeFileAtomic import from mods.js entirely so a future ini-rewriting
-// route physically cannot skip the backup without first adding that import
-// back (a visible, reviewable diff instead of a silent omission).
-//
-// These tests don't just read the code -- they run real routes against a
-// real temp directory and assert a real .bak file lands on disk, then
-// induce a real backup failure (fs.promises.copyFile rejecting) and assert
-// the edit still succeeds while the response carries backupWarning, per
-// serverFiles.js's established "never block on a failed backup" policy.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -123,7 +107,6 @@ describe("mods.js ini-rewriting routes back up the live ini before overwriting i
     const backups = readBackupFiles(configPath);
     expect(backups).toHaveLength(1);
     expect(backups[0]).toMatch(/^TestServer\.ini\..*\.bak$/);
-    // The backup is a snapshot of the PRE-write content, not the new one.
     const backedUpContent = fs.readFileSync(
       path.join(configPath, "backups", backups[0]),
       "utf-8",
@@ -141,12 +124,6 @@ describe("mods.js ini-rewriting routes back up the live ini before overwriting i
     expect(readBackupFiles(configPath)).toHaveLength(1);
   });
 
-  // resolve-orphan-workshop was the 19th ini-rewriting route -- present in
-  // mods.js, absent from the 18-route enumeration that first surfaced this
-  // bug, found only by grepping the write mechanism itself rather than
-  // route names. It gets its own dedicated case rather than piggybacking on
-  // a shared assertion, since it's the one route whose backup coverage
-  // wasn't already implied by someone else's count.
   it("POST /resolve-orphan-workshop (the 19th, previously-uncounted route) backs up the ini before rewriting", async () => {
     const res = await runRoute("/resolve-orphan-workshop", "post", {
       body: { workshopIds: ["1111111111"] },
@@ -156,9 +133,6 @@ describe("mods.js ini-rewriting routes back up the live ini before overwriting i
     expect(readBackupFiles(configPath)).toHaveLength(1);
   });
 
-  // delete-disk-mod and purge both funnel through the shared
-  // deleteModFromDiskAndIni() helper, which has its own single write site --
-  // one fix here covers both routes at once.
   it("POST /delete-disk-mod (shared deleteModFromDiskAndIni helper) backs up the ini before rewriting", async () => {
     const res = await runRoute("/delete-disk-mod", "post", {
       body: { workshopId: "1111111111" },
@@ -197,8 +171,6 @@ describe("mods.js ini writes: a failed backup warns but never blocks the edit", 
       serverName: "TestServer",
       isRemote: false,
     });
-    // Induce a real backup failure -- disk full, permissions, whatever --
-    // rather than trusting the failure branch reads correctly.
     copyFileSpy = vi
       .spyOn(fs.promises, "copyFile")
       .mockRejectedValue(new Error("ENOSPC: no space left on device"));
@@ -220,7 +192,6 @@ describe("mods.js ini writes: a failed backup warns but never blocks the edit", 
     expect(body.backupWarning).toMatch(/could not back up/i);
     expect(body.backupWarning).toMatch(/ENOSPC/);
 
-    // The edit itself was NOT blocked by the backup failure.
     const iniContent = fs.readFileSync(
       path.join(configPath, "TestServer.ini"),
       "utf-8",

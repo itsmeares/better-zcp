@@ -6,21 +6,6 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 import { maskSecretValue } from "../utils/sanitize.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 
-// regression (finding #2, /raw half): GET /server-files/raw/ini
-// returned the live .ini's full text unmasked. Unlike the structured /ini
-// route (a per-key merge -- see serverFilesIniMasksSecrets.test.js), the raw
-// editor round-trips ONE FULL TEXT BLOB on every save, unconditionally,
-// regardless of which line the operator actually touched. So masking the
-// GET response alone would let ANY raw-mode save silently overwrite the
-// live RCONPassword/Password line with the literal "••••••••xxxx"
-// placeholder. reconcileMaskedIniLines() (serverFiles.js) fixes this by
-// matching secret-shaped lines back to the live file BY KEY (immune to
-// reordering/insertion) and REFUSING the entire save -- writing nothing --
-// the instant a masked value can't be resolved to exactly one live value,
-// rather than guessing. Deliberately not mocking fileWriteQueue.js/
-// configBackup.js here: PUT /raw/ini now routes through the real
-// writeIniWithBackup(), and these tests assert on its actual side effects
-// (a .bak file appearing, or NOT appearing on a refused save).
 
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", () => ({
@@ -226,8 +211,6 @@ describe("serverFiles.js PUT /raw/ini: ambiguous or destructive cases REFUSE the
 
   it("refuses when the masked key no longer exists in the live file at all", async () => {
     const { content: masked } = (await getRawIni()).getBody();
-    // Simulate the live file changing out from under the editor between
-    // load and save (e.g. another process/route rewrote it).
     fs.writeFileSync(iniPath, "PVP=true\nDefaultPort=16261\n");
 
     const res = await putRawIni(masked);

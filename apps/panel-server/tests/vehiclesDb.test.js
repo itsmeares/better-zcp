@@ -6,12 +6,8 @@ import initSqlJs from 'sql.js';
 import { fileURLToPath } from 'node:url';
 import { deleteVehiclesInBoxes, countVehiclesInBoxes, deleteVehiclesInChunks } from '../utils/vehiclesDb.js';
 
-// Build a tiny synthetic vehicles.db that matches PZ's schema, populated with
-// fixture rows at known world-tile coordinates. Lets us verify the chunk
-// cleaner's vehicles.db surgery without needing a real save.
 
 const FIXTURES = [
-  // id, wx, wy, x, y, worldversion, data
   { id: 1, wx: 100, wy: 100, x: 800.5,  y: 800.5,  worldversion: 240 },
   { id: 2, wx: 100, wy: 100, x: 807.9,  y: 807.9,  worldversion: 240 },  // same chunk as #1
   { id: 3, wx: 101, wy: 100, x: 808.0,  y: 803.0,  worldversion: 240 },  // next chunk east
@@ -44,7 +40,6 @@ async function buildFixtureDb(dbPath) {
   db.close();
 }
 
-/** Create a save directory with a populated vehicles.db inside. Returns the save dir path. */
 async function makeSave(tmpDir, name) {
   const saveDir = path.join(tmpDir, name);
   await fs.promises.mkdir(saveDir, { recursive: true });
@@ -76,12 +71,11 @@ describe('vehiclesDb (chunk cleaner)', () => {
 
   it('deletes only vehicles whose tile coords fall inside the bbox', async () => {
     const save = await makeSave(tmpDir, 'a');
-    // B42: 1 chunk = 8 tiles. Delete chunk (100, 100) → tile bbox [800, 808) × [800, 808).
     const result = await deleteVehiclesInBoxes(save, [
       { x0: 800, x1: 808, y0: 800, y1: 808 },
     ]);
     expect(result.skipped).toBe(false);
-    expect(result.deleted).toBe(2);                  // #1 & #2 were in that chunk
+    expect(result.deleted).toBe(2);
     expect(await getAllIds(path.join(save, 'vehicles.db'))).toEqual([3, 4, 5]);
   });
 
@@ -93,14 +87,12 @@ describe('vehiclesDb (chunk cleaner)', () => {
 
   it('respects the half-open bbox (x1 is exclusive)', async () => {
     const save = await makeSave(tmpDir, 'c');
-    // Vehicle #3 at x=808.0 is in the NEXT chunk — [800,808) must NOT include it.
     await deleteVehiclesInBoxes(save, [{ x0: 800, x1: 808, y0: 800, y1: 808 }]);
     expect(await getAllIds(path.join(save, 'vehicles.db'))).toContain(3);
   });
 
   it('deleteVehiclesInChunks expands (chunkX,chunkY) into the right tile bbox', async () => {
     const save = await makeSave(tmpDir, 'd');
-    // chunk (101, 100) → tiles [808,816)×[800,808) → vehicle #3 (808,803)
     const result = await deleteVehiclesInChunks(save, [{ x: 101, y: 100 }], 8);
     expect(result.deleted).toBe(1);
     expect(await getAllIds(path.join(save, 'vehicles.db'))).toEqual([1, 2, 4, 5]);
@@ -112,7 +104,6 @@ describe('vehiclesDb (chunk cleaner)', () => {
       { x0: 800, x1: 816, y0: 800, y1: 816 }, // 2x2 chunks → #1,#2,#3,#5
     ]);
     expect(count).toBe(4);
-    // DB unchanged
     expect(await getAllIds(path.join(save, 'vehicles.db'))).toEqual([1, 2, 3, 4, 5]);
   });
 
@@ -148,7 +139,6 @@ describe('vehiclesDb (chunk cleaner)', () => {
       const result = await deleteVehiclesInBoxes(save, boxes);
       expect(result.skipped).toBe(true);
     }
-    // DB must still be intact
     expect(await getAllIds(path.join(save, 'vehicles.db'))).toEqual([1, 2, 3, 4, 5]);
   });
 
@@ -162,20 +152,18 @@ describe('vehiclesDb (chunk cleaner)', () => {
     );
     expect(result.deleted).toBe(2);
     expect(fs.existsSync(backupPath)).toBe(true);
-    // Backup should have pre-deletion state (all 5 vehicles)
     const backupIds = await getAllIds(backupPath);
     expect(backupIds).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('aborts (does not mutate) when backup path is unwritable', async () => {
     const save = await makeSave(tmpDir, 'i');
-    // Nul-byte-bearing path is rejected by fs on every platform we care about.
     const result = await deleteVehiclesInBoxes(
       save,
       [{ x0: 800, x1: 808, y0: 800, y1: 808 }],
       { backupPath: path.join(tmpDir, 'bad\u0000path', 'x.bak') },
     );
     expect(result.skipped).toBe(true);
-    expect(await getAllIds(path.join(save, 'vehicles.db'))).toEqual([1, 2, 3, 4, 5]); // untouched
+    expect(await getAllIds(path.join(save, 'vehicles.db'))).toEqual([1, 2, 3, 4, 5]);
   });
 });

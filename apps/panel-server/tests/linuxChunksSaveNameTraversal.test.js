@@ -4,38 +4,6 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// regression-2026-08-29, case #3 (path construction / containment).
-//
-// Every destructive/read route in chunks.js used to sanitize saveName with
-// just:
-//
-//   const sanitizedSaveName = path.basename(saveName);
-//   if (!sanitizedSaveName || sanitizedSaveName !== saveName) { reject }
-//
-// That DOES block every traversal payload that contains a path separator
-// ("../x", "a/../../b", "x/") -- path.basename() strips everything up to
-// the last separator, so the sanitized value never matches the original and
-// the request is rejected. It did NOT block the two special dot-segments
-// "." and ".." on their own, with no separator anywhere in the string:
-// path.basename(".") === "." and path.basename("..") === ".." (both are
-// already "just a basename" by Node's own definition), so the equality
-// check that catches every other traversal payload was a no-op for these
-// two specific inputs -- proven directly against Node's path module, not
-// just asserted:
-//   path.basename("..") === ".."   (was NOT rejected, pre-fix)
-//   path.basename(".")  === "."    (was NOT rejected, pre-fix)
-//
-// Proven real end-to-end BEFORE the fix (this file, pre-fix commit): a
-// decoy chunk-shaped file placed directly under Saves/ (outside any actual
-// save's own directory, unreachable through the normal saveName-scoped UI)
-// was deleted by POST /delete-region given saveName:"..", and GET
-// /stats/:saveName given saveName:".." returned an aggregate size across
-// every sibling save instead of the one the caller asked for -- on a route
-// that carries no permission check at all (see item 6). Fixed by adding an
-// explicit "." / ".." rejection alongside the existing basename check at
-// all four call sites. This file now asserts the FIXED (rejecting)
-// behavior; see the fix commit's diff for the pre-fix red state this was
-// break-verified against.
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
   getRoleByName: mockGetRoleByName,
@@ -106,8 +74,8 @@ function writeFileDeep(p, content = "x") {
 }
 
 let dataRoot;
-let multiplayerPath; // <dataRoot>/Saves/Multiplayer
-let savesPath; // <dataRoot>/Saves
+let multiplayerPath;
+let savesPath;
 const SAVE_NAME = "TestSave";
 
 beforeEach(() => {
@@ -132,8 +100,6 @@ describe("saveName sanitization: '.' and '..' must be rejected even though path.
   it("path.basename leaves '..' and '.' byte-for-byte unchanged (ground truth this whole file's fix relies on)", () => {
     expect(path.basename("..")).toBe("..");
     expect(path.basename(".")).toBe(".");
-    // Contrast: every OTHER traversal shape is genuinely caught by the
-    // basename-changed check alone -- no fix was needed for these.
     expect(path.basename("../etc")).not.toBe("../etc");
     expect(path.basename("a/../../b")).not.toBe("a/../../b");
   });
@@ -165,7 +131,7 @@ describe("saveName sanitization: '.' and '..' must be rejected even though path.
     });
 
     expect(res.getStatusCode()).toBe(400);
-    expect(fs.existsSync(decoy)).toBe(true); // never reached -- rejected before any fs write
+    expect(fs.existsSync(decoy)).toBe(true);
     expect(fs.existsSync(realSaveMarker)).toBe(true);
   });
 

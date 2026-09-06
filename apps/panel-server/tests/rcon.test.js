@@ -39,8 +39,6 @@ describe('RCON connection logging', () => {
   });
 });
 
-// Test RCON service logic by creating a lightweight mock
-// This tests the key behaviors without requiring a live RCON connection
 
 class MockRconService extends EventEmitter {
   constructor() {
@@ -63,9 +61,8 @@ class MockRconService extends EventEmitter {
       return { success: false, error: 'Not connected' };
     }
 
-    // Simulate successful execution
     this.lastSuccessfulCommand = Date.now();
-    this.consecutiveHealthFailures = 0; // Reset on successful command
+    this.consecutiveHealthFailures = 0;
     return { success: true, response: `Executed: ${command}` };
   }
 
@@ -275,11 +272,11 @@ describe('RconService', () => {
 
     it('should disconnect after max consecutive failures', () => {
       rcon.connected = true;
-      rcon.simulateHealthCheckFailure(); // 1
+      rcon.simulateHealthCheckFailure();
       expect(rcon.connected).toBe(true);
-      rcon.simulateHealthCheckFailure(); // 2
+      rcon.simulateHealthCheckFailure();
       expect(rcon.connected).toBe(true);
-      rcon.simulateHealthCheckFailure(); // 3 -> disconnect
+      rcon.simulateHealthCheckFailure();
       expect(rcon.connected).toBe(false);
     });
 
@@ -293,12 +290,12 @@ describe('RconService', () => {
 
     it('successful command should prevent health check disconnect', async () => {
       rcon.connected = true;
-      rcon.simulateHealthCheckFailure(); // 1
-      rcon.simulateHealthCheckFailure(); // 2
-      await rcon.execute('players'); // resets counter
-      rcon.simulateHealthCheckFailure(); // 1 again
-      rcon.simulateHealthCheckFailure(); // 2 again
-      expect(rcon.connected).toBe(true); // still connected
+      rcon.simulateHealthCheckFailure();
+      rcon.simulateHealthCheckFailure();
+      await rcon.execute('players');
+      rcon.simulateHealthCheckFailure();
+      rcon.simulateHealthCheckFailure();
+      expect(rcon.connected).toBe(true);
     });
   });
 
@@ -345,9 +342,6 @@ describe('RconService', () => {
       await liveRcon.serverMessage('It\u2019s \u2014 \u201Ctest\u201D');
 
       const sent = executeSpy.mock.calls[0][0];
-      // Curly apostrophe -> straight apostrophe (kept), em-dash -> hyphen,
-      // curly double quotes get normalized to ", which sanitize() then strips
-      // for RCON shell safety. Either way, no non-ASCII bytes remain.
       expect(sent).toContain("It's");
       expect(sent).toContain('-');
       expect(sent).toContain('test');
@@ -409,11 +403,6 @@ describe('RconService', () => {
     });
   });
 
-  // Regression coverage for sanitizeForBanReason():
-  // used to have its own, less careful character-folding rules than
-  // serverMessage() -- same class of user-typed text, different treatment
-  // depending on which RCON call carried it. Both now share
-  // foldToRconAscii().
   describe('sanitizeForBanReason / banPlayer (shared ASCII folding)', () => {
     it('transliterates accents and normalizes curly quotes the same way serverMessage() does', () => {
       const liveRcon = new RconService();

@@ -8,16 +8,6 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi,
 } from '@/lib/api'
 
-// updater-mystery-2026-08-29: a persistently-failing GET /api/panel/status
-// check exposes lastError correctly, but until this card Dashboard.tsx only
-// ever looked at updateAvailable for its banner -- a failing check produced
-// a clean server log line and ZERO signal anywhere on the page an operator
-// actually looks at. Deliberately NOT the accented-banner treatment (that
-// was the operator's own call, made explicitly: silence is correct for an
-// intentionally air-gapped install, so this must be quiet enough to dismiss
-// once and never fight the operator again -- see the dismissal-key tests
-// below for the constraint that a dismissal must NOT survive a genuinely
-// DIFFERENT failure showing up later).
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -184,8 +174,6 @@ describe('Dashboard.tsx: quiet update-check-error indicator', () => {
     await waitFor(() => expect(screen.queryByText(INDICATOR_TEXT)).not.toBeInTheDocument())
     expect(localStorage.getItem(DISMISS_KEY)).toBe('connect ECONNREFUSED 127.0.0.1:443')
 
-    // Simulate a reload: unmount and render a fresh Dashboard instance.
-    // The initial GET /api/panel/status still returns the SAME lastError.
     first.unmount()
     renderDashboard()
 
@@ -200,9 +188,6 @@ describe('Dashboard.tsx: quiet update-check-error indicator', () => {
       currentVersion: '1.2.6', updateAvailable: false, latestVersion: null, releaseUrl: null,
       releaseNotes: null, publishedAt: null, isChecking: false, isDownloading: false,
       downloadProgress: 0, lastCheck: new Date().toISOString(),
-      // Machine got network access since the dismissal; a real, different
-      // problem (rate limiting) shows up now. Must not stay suppressed by
-      // the old dismissal of a completely different error string.
       lastError: 'GitHub API rate limited',
       stagedUpdate: null, lastApplyResult: null,
     })

@@ -30,9 +30,6 @@ export function BuildCompatibilityGate({ children }: { children: ReactNode }) {
         setState(result.compatible ? { status: 'compatible' } : { status: 'mismatch', backend })
       })
       .catch(() => {
-        // Authentication screens already surface an unreachable backend. The
-        // compatibility gate only blocks a backend that answered with a
-        // demonstrably different build.
         setState({ status: 'compatible' })
       })
       .finally(() => window.clearTimeout(timer))

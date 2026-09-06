@@ -4,8 +4,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Setup from '../Setup'
 import enSetup from '../../locales/en/setup.json'
 
-// jsdom has no ResizeObserver -- Radix's Checkbox (rendered on this page for
-// "Remember me") needs one to mount at all.
 class StubResizeObserver {
   observe() {}
   unobserve() {}
@@ -13,14 +11,6 @@ class StubResizeObserver {
 }
 ;(globalThis as unknown as { ResizeObserver: typeof StubResizeObserver }).ResizeObserver = StubResizeObserver
 
-// regression: the submit button's disabled expression checked
-// loading/setupToken/usernameValid/passwordLongEnough/passwordsMatch but
-// omitted panelPortValid, even though handleSubmit's own validation (and
-// every OTHER field, including panelPortValid's siblings) blocks submission
-// on it. Every other invalid field pre-emptively disables the button;
-// an out-of-range port alone left it enabled, so the operator only found
-// out it was rejected after clicking and seeing the error -- unlike every
-// other validation failure on this form.
 const setupFn = vi.fn()
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -52,9 +42,6 @@ describe('Setup.tsx: submit button disabled state matches handleSubmit validatio
     fillValidFormExceptPort()
 
     const submitButton = screen.getByRole('button', { name: enSetup.submit })
-    // Default panelPort ('3001') is valid -- confirm the button is enabled
-    // with everything else filled in, so the next assertion isolates the
-    // port field specifically.
     expect(submitButton).not.toBeDisabled()
 
     fireEvent.change(screen.getByLabelText(enSetup.panelPort.label), { target: { value: '80' } })

@@ -1,6 +1,3 @@
-// Docker mount auto-discovery endpoints. Mounted at the same base path as
-// routes/servers.js (/api/servers) but registered first in index.js so these
-// literal paths are matched before servers.js's GET /:id catch-all.
 import express from "express";
 import path from "path";
 import { createLogger } from "../utils/logger.js";
@@ -25,14 +22,8 @@ function normalizePath(value) {
   return process.platform === "win32" ? resolved.toLowerCase() : resolved;
 }
 
-// GET /api/servers/discover-mounts — probe common bind-mount locations for
-// PZ server files so Settings can offer a one-click "connect this" profile.
 router.get("/discover-mounts", requirePermission("servers.discover"), async (req, res) => {
   try {
-    // inaccessible: candidates that exist but couldn't be read (permission
-    // denied) rather than simply not being mounted -- surfaced separately so
-    // a misconfigured host permission doesn't read identically to "nothing
-    // mounted here".
     res.json({ mounts: discoverMounts(), inaccessible: discoverMountIssues() });
   } catch (error) {
     log.error(`Mount discovery failed: ${error.message}`);
@@ -40,9 +31,6 @@ router.get("/discover-mounts", requirePermission("servers.discover"), async (req
   }
 });
 
-// POST /api/servers/create-from-discovery — turn a discover-mounts result
-// into a fully-populated local server profile, reading RCON settings from
-// the discovered server's own INI instead of asking the user to retype them.
 router.post("/create-from-discovery", requirePermission("servers.discover"), async (req, res) => {
   try {
     const { installPath, dataPath, serverName, name } = req.body || {};

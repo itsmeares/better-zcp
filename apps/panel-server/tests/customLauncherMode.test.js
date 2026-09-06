@@ -13,13 +13,6 @@ vi.mock("../database/init.js", () => ({
   logServerEvent: vi.fn(async () => {}),
 }));
 
-// regenerateStartupScriptsWithBackup() swallows every filesystem error it
-// can hit (ENOTDIR included -- see server.js's own try/catch around each
-// write) and returns [] either way, so asserting on the filesystem alone
-// cannot tell "never attempted a write, mode-aware" apart from "attempted
-// and every write silently failed" -- both produce zero artifacts. The log
-// line is the one real observable difference between the two, so it's
-// mocked and asserted on rather than treated as incidental.
 const { logSpy } = vi.hoisted(() => ({
   logSpy: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -29,16 +22,6 @@ vi.mock("../utils/logger.js", () => ({
 
 const { refreshLaunchTargetBeforeStart } = await import("../routes/server.js");
 
-// decision 2026-08-27 (card custom-launcher-as-a-real-supported-mode-
-// not-an-accident): a serverPath/installPath ending in .bat/.sh/.exe is a
-// real, supported CUSTOM LAUNCHER mode, not an accident to guess at or an
-// error to reject. resolveLaunchMode() (serverManager.js) is the ONE
-// predicate every caller asks -- loadConfig() (to resolve serverBat),
-// refreshLaunchTargetBeforeStart() below (to decide whether to regenerate),
-// and servers.js's PUT/POST validation (serverPathValidation.test.js). This
-// pins the predicate's own contract and refreshLaunchTargetBeforeStart's use
-// of it; loadConfig()'s use of it is unchanged behavior already covered by
-// serverManager.test.js/serverManagerLegacyServerNameGuard.test.js.
 describe("resolveLaunchMode()", () => {
   it("a directory-shaped installPath is MANAGED", () => {
     expect(resolveLaunchMode({ installPath: "D:\\PZServer" })).toEqual({
@@ -107,23 +90,13 @@ describe("refreshLaunchTargetBeforeStart() in CUSTOM LAUNCHER mode", () => {
 
     const { scriptBackupWarnings } = await refreshLaunchTargetBeforeStart(server);
 
-    // No backup/regeneration warnings -- the write was never attempted.
     expect(scriptBackupWarnings).toEqual([]);
-    // The operator's own file is untouched, byte for byte.
     expect(fs.readFileSync(launcherPath, "utf8")).toBe(
       "@echo off\r\nREM operator's own script\r\n",
     );
-    // Nothing else got created in the directory (no orphaned
-    // StartServer_TestServer.bat, no broken nested-path artifact).
     const entries = fs.readdirSync(root);
     expect(entries).toEqual(["MyCustomLauncher.bat"]);
 
-    // The real distinguishing signal: regenerateStartupScriptsWithBackup()
-    // catches every filesystem error it can hit and returns [] either way,
-    // so the assertions above alone can't tell "never attempted, mode-aware"
-    // apart from "attempted against a broken nested path and every write
-    // silently failed" -- the pre-fix behavior for exactly this scenario.
-    // The log line is what actually differs.
     const allMessages = [...logSpy.info.mock.calls, ...logSpy.warn.mock.calls].map(
       (call) => call[0],
     );

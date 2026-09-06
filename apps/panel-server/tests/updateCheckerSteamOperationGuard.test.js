@@ -3,37 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Concurrency regression regression-2026-08-29, direct continuation of
-// startServerBlockedDuringSteamOperation.test.js (serverManager.js's
-// startServer() guard against a JVM launch racing a live SteamCMD write).
-// the enumeration there covered every real caller of startServer(), but
-// flagged that updateChecker.js runs SteamCMD ITSELF, independent of that
-// guard entirely. the own check found TWO such call sites with zero hits
-// for activeSteamOperations anywhere in this file:
-//   - getLatestBuildInfo() (checkForUpdates()'s read-only version query)
-//   - runAutoUpdate()'s own real `+app_update ... validate` spawn -- the
-//     UNATTENDED case that matters most: nobody is there to see a refusal,
-//     so it must be visible, not silently skipped.
-//
-// This file proves, through the REAL functions and a REAL (harmless, fake)
-// steamcmd.sh -- never a real SteamCMD, per the card's explicit boundary --
-// that:
-//   1. Both spawn sites refuse WITHOUT EVER SPAWNING when the install path
-//      already has an active Steam operation (proven by a marker file the
-//      fake steamcmd.sh writes on invocation -- absent means it never ran).
-//   2. Both claim the path for the real spawn's duration and release it
-//      afterward -- on success, on a nonzero exit, and on a spawn error --
-//      never leaving a permanent claim.
-//   3. Neither one clears an operation it did not itself claim (the
-//      pre-existing "someone else is using this path" entry survives a
-//      refused call untouched).
-//   4. runAutoUpdate's refusal is VISIBLE the same way every other
-//      pre-flight refusal in this function already is: recorded via
-//      _recordAutoUpdateResult/getStatus() and emitted over the socket --
-//      not a silent skip.
-//   5. A blocked runAutoUpdate still restarts a server it had already
-//      stopped, rather than leaving it needlessly down over an update that
-//      never ran.
 
 vi.mock("../database/init.js", () => ({
   getSetting: vi.fn(async (key) => {
@@ -62,8 +31,6 @@ function makeFakeSteamcmd({ markerFile, exitCode = 0 }) {
   tempDirs.push(root);
   const steamcmdPath = root;
   const scriptPath = path.join(steamcmdPath, "steamcmd.sh");
-  // Real, harmless, self-terminating -- writes one line to the marker file
-  // so tests can prove whether a spawn actually happened, then exits.
   fs.writeFileSync(
     scriptPath,
     `#!/bin/sh\necho "run $$" >> "${markerFile}"\nexit ${exitCode}\n`,
@@ -88,33 +55,6 @@ afterEach(() => {
   }
 });
 
-// Found while verifying an unrelated build-packaging card (regression): all
-// six tests below fail outright on Windows, but not for the reason it looks
-// like at first ("Windows can't execute a shebang script"). makeFakeSteamcmd()
-// only ever creates a steamcmd.sh -- updateChecker.js's own resolution
-// (win32 ? "steamcmd.exe" : try "steamcmd.sh" then "steamcmd") never finds
-// it on win32, so EVERY call here throws "SteamCMD not found" during
-// resolution, before the guard logic under test ever runs. That's true even
-// for the two "refuses WITHOUT EVER SPAWNING" tests, which look like they
-// should be platform-neutral (nothing should spawn either way) but aren't:
-// their assertion is on the SPECIFIC rejection message ("already in
-// progress"), which resolution's own error pre-empts on Windows.
-//
-// One test in this file -- "claims the path for the real spawn's duration
-// and releases it afterward" (the getLatestBuildInfo version) -- would
-// currently PASS on Windows without a guard, but for the wrong reason: its
-// assertion only checks that no operation is left claimed, which is
-// trivially true when nothing was ever claimed because resolution failed
-// immediately and its own .catch(() => {}) swallows that. That's the exact
-// right-by-luck shape the test identified floor-wide tonight (MSYS tar marking
-// start.sh executable by extension, not by the chmod under test) -- a
-// green result here would prove nothing about claim/release, so it gets
-// skipped too rather than left as a silent false pass.
-//
-// Unlike linuxServiceLifecycle.test.js this morning, there is no
-// platform-neutral subset to preserve here -- every test in this file
-// drives the same POSIX-only fixture. Confirmed by running each individually
-// on Windows before adding these guards, not assumed from the file's shape.
 const isWindows = process.platform === "win32";
 
 describe("UpdateChecker.getLatestBuildInfo(): guarded by activeSteamOperations", () => {
@@ -132,8 +72,6 @@ describe("UpdateChecker.getLatestBuildInfo(): guarded by activeSteamOperations",
       ).rejects.toThrow(/already in progress/i);
 
       expect(countMarkerRuns(markerFile)).toBe(0);
-      // The pre-existing operation is untouched -- we never claimed it, so
-      // we must never be the ones who clear it.
       expect(getActiveSteamOperations().has(normalized)).toBe(true);
     } finally {
       clearActiveSteamOperation(normalized);
@@ -149,8 +87,6 @@ describe("UpdateChecker.getLatestBuildInfo(): guarded by activeSteamOperations",
     getActiveSteamOperations().set(otherPath, { type: "install", pid: process.pid });
     try {
       const checker = new UpdateChecker({ emit: vi.fn() });
-      // Real spawn happens (proven by the marker), rejects for an UNRELATED
-      // reason (nonzero exit / unparsable output), not the guard.
       await expect(
         checker.getLatestBuildInfo(steamcmdPath, "public", installPath),
       ).rejects.not.toThrow(/already in progress/i);
@@ -170,9 +106,6 @@ describe("UpdateChecker.getLatestBuildInfo(): guarded by activeSteamOperations",
       const markerFile = path.join(os.tmpdir(), `marker-${Date.now()}-c-${exitCode}.txt`);
       const steamcmdPath = makeFakeSteamcmd({ markerFile, exitCode });
 
-      // Don't assert the settled value here (a bare exit 0 with no real
-      // SteamCMD output won't parse as valid branch info either) -- only
-      // that the claim doesn't outlive the call, regardless of outcome.
       await checker.getLatestBuildInfo(steamcmdPath, "public", installPath).catch(() => {});
 
       expect(getActiveSteamOperations().has(normalized)).toBe(false);
@@ -228,10 +161,8 @@ describe("UpdateChecker.runAutoUpdate(): guarded by activeSteamOperations, refus
       ).rejects.toThrow(/already in progress/i);
 
       expect(countMarkerRuns(markerFile)).toBe(0);
-      expect(getActiveSteamOperations().has(normalized)).toBe(true); // untouched, not ours
+      expect(getActiveSteamOperations().has(normalized)).toBe(true);
 
-      // VISIBLE, not silent: the exact same mechanism every other
-      // pre-flight refusal in this function already uses.
       expect(io.emit).toHaveBeenCalledWith(
         "server:autoUpdateComplete",
         expect.objectContaining({ success: false }),
@@ -264,8 +195,8 @@ describe("UpdateChecker.runAutoUpdate(): guarded by activeSteamOperations, refus
       const { checker, serverManager } = buildChecker({
         getServerProcessDetails: vi.fn(async () => {
           scanCall += 1;
-          if (scanCall === 1) return { running: true, scanFailed: false }; // initially running
-          return { running: false, scanFailed: false }; // confirmed stopped
+          if (scanCall === 1) return { running: true, scanFailed: false };
+          return { running: false, scanFailed: false };
         }),
       });
 
@@ -273,10 +204,6 @@ describe("UpdateChecker.runAutoUpdate(): guarded by activeSteamOperations, refus
         checker.runAutoUpdate({ installed: { branch: "stable" } }),
       ).rejects.toThrow(/already in progress/i);
 
-      // phase reached "updating" (server was already confirmed stopped)
-      // before the guard fired, so shouldRestart && phase !== "before-stop"
-      // is true -- the finally block's restart-recovery runs, matching
-      // every other "updating"-phase failure (e.g. STEAMCMD_NOT_FOUND).
       expect(serverManager.startServer).toHaveBeenCalled();
     } finally {
       clearActiveSteamOperation(normalized);
@@ -287,7 +214,7 @@ describe("UpdateChecker.runAutoUpdate(): guarded by activeSteamOperations, refus
     const installPath = path.join(os.tmpdir(), "pz-install-guard-auto-c");
     const normalized = path.normalize(installPath).toLowerCase();
     const markerFile = path.join(os.tmpdir(), `marker-${Date.now()}-auto-c.txt`);
-    const steamcmdPath = makeFakeSteamcmd({ markerFile, exitCode: 1 }); // nonzero -- STEAMCMD_EXIT_CODE failure
+    const steamcmdPath = makeFakeSteamcmd({ markerFile, exitCode: 1 });
     vi.mocked(dbModule.getActiveServer).mockResolvedValueOnce({ id: "s1", installPath });
     vi.mocked(dbModule.getSetting).mockImplementation(async (key) => {
       if (key === "serverAutoUpdate") return true;
@@ -301,7 +228,7 @@ describe("UpdateChecker.runAutoUpdate(): guarded by activeSteamOperations, refus
       checker.runAutoUpdate({ installed: { branch: "stable" } }),
     ).rejects.toThrow(/exited with code 1/i);
 
-    expect(countMarkerRuns(markerFile)).toBe(1); // the spawn genuinely happened
-    expect(getActiveSteamOperations().has(normalized)).toBe(false); // and was released
+    expect(countMarkerRuns(markerFile)).toBe(1);
+    expect(getActiveSteamOperations().has(normalized)).toBe(false);
   });
 });

@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Fake settings store — the module under test only ever calls
-// getSetting/setSetting with the single key "setupToken", so a plain object
-// stands in for the real lowdb-backed store without touching the filesystem.
 let store;
 vi.mock("../database/init.js", () => ({
   getSetting: vi.fn(async (key) => store[key] ?? null),
@@ -31,7 +28,7 @@ describe("setupToken", () => {
   describe("getOrCreateSetupToken", () => {
     it("generates a strong token on first call and persists it", async () => {
       const token = await getOrCreateSetupToken();
-      expect(token).toMatch(/^[0-9a-f]{64}$/); // 32 bytes hex = 256 bits
+      expect(token).toMatch(/^[0-9a-f]{64}$/);
       expect(store.setupToken).toBe(token);
     });
 

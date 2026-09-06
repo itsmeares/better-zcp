@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveSteamApiFailureReason } from "../routes/serverFinder.js";
 
-// regression-2026-08-29 follow-up: when the Steam Web API path throws AND
-// the master-server fallback also comes up empty, apiError.message used to
-// only reach log.warn -- the caller got source:'master_server' plus an
-// emptyReason and nothing about the actual cause. "An admin can read the
-// server logs" was the exact reasoning that left three other bugs tonight
-// invisible for months, so this is now surfaced on the response instead,
-// following the same undefined-unless-relevant convention as
-// deriveEmptyReason/deriveMasterDiscoveryStats in the same file.
 
 describe("deriveSteamApiFailureReason", () => {
   it("is undefined when there was no Steam API error at all", () => {

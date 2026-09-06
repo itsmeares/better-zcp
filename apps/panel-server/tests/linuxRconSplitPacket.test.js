@@ -2,23 +2,6 @@ import { describe, expect, it, afterEach } from "vitest";
 import net from "net";
 import { SourceRconClient } from "../utils/sourceRcon.js";
 
-// LINUX regression (2026-08-29, card 560930): "the Source RCON protocol is
-// byte-oriented -- check packet framing across a split TCP read (a large
-// response arrives in several chunks) ... these behave differently under
-// Linux's TCP stack than under Windows' and a test with a mocked socket
-// cannot see it."
-//
-// Every prior RCON test (rcon.test.js) exercises PacketReader by calling
-// .push() ONCE with a single, already-complete, hand-built Buffer -- there
-// is nothing split about it, so the reassembly loop's "wait for more data"
-// branches (this._buf.length < 4, this._buf.length < totalLen) are never
-// actually exercised by a real multi-event delivery. This file spins up a
-// REAL net.Server + net.Socket loopback pair (no mocking of net, child_process,
-// or the socket itself) and deliberately drip-feeds bytes across many
-// separate socket.write() calls with a delay between each, which reliably
-// produces multiple distinct 'data' events on the client side -- the actual
-// mechanism a real OS TCP stack uses to deliver a large response, and the
-// exact case a synthetic single-push test cannot see.
 
 function encodePacket(id, type, body) {
   const bodyBuf = Buffer.from(body ?? "", "utf8");
@@ -43,11 +26,6 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// Writes `buf` to `socket` split into small pieces with a real delay between
-// each write -- delaying past the current event-loop tick is what forces
-// Node to deliver them as separate 'data' events on the receiving end rather
-// than coalescing them, unlike calling .push() twice back-to-back in a unit
-// test.
 async function drip(socket, buf, chunkSize) {
   for (let i = 0; i < buf.length; i += chunkSize) {
     socket.write(buf.subarray(i, Math.min(i + chunkSize, buf.length)));
@@ -55,9 +33,6 @@ async function drip(socket, buf, chunkSize) {
   }
 }
 
-// Minimal fake Source RCON server. `onExecute(body)` returns the response
-// body to send back for an EXECCOMMAND packet; `dripChunkSize` controls how
-// the response packet is fragmented across the wire (null = one write).
 function startFakeServer({ onExecute, dripChunkSize = null, sendEmptyAuthAck = false }) {
   return new Promise((resolveServer) => {
     const server = net.createServer((socket) => {
@@ -77,9 +52,6 @@ function startFakeServer({ onExecute, dripChunkSize = null, sendEmptyAuthAck = f
           (async () => {
             if (type === TYPE_AUTH) {
               if (sendEmptyAuthAck) {
-                // Real-world quirk documented in sourceRcon.js: some servers
-                // send an empty SERVERDATA_RESPONSE_VALUE immediately before
-                // the actual auth response.
                 socket.write(encodePacket(id, TYPE_RESPONSE_VALUE, ""));
               }
               socket.write(encodePacket(id, TYPE_AUTH_RESPONSE, ""));
@@ -142,9 +114,6 @@ describe("SourceRconClient: real-socket packet reassembly (not a mocked/syntheti
   });
 
   it("two complete response packets arriving in a SINGLE 'data' event are both drained (not just the first)", async () => {
-    // Two independent execute() calls whose responses the server happens to
-    // flush together -- proves the reassembly loop keeps consuming complete
-    // packets out of one buffer rather than stopping after the first.
     server = await startFakeServer({
       onExecute: (body) => `echo:${body}`,
     });

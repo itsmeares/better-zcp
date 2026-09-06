@@ -1,22 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// panelBridge.js now gates with requirePermission (DB-backed) instead of
-// requireRole -- these are gate-only tests (never proceed into a real
-// handler), so a minimal getRoleByName-only mock is enough.
 vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-// panelBridge.js: 89 routes, only 8 had a requireRole call (all SFTP/mod-
-// install, from an earlier pass) plus /command. Everything else was
-// reachable by any signed-in account. Same both-directions standard as the
-// rest of the sweep: bridge setup/integration control and its own
-// diagnostics need admin+technician; the curated in-game GM tools
-// (teleport, weather, zombies, sound, visual, chat, utilities, character
-// import/export) are deliberately left open to every role -- that's the
-// moderator's territory /command's whitelist-free passthrough is gated
-// admin-only specifically to avoid replacing.
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -159,13 +147,6 @@ describe("panelBridge.js: /status, /ping, /commands stay outside the matrix enti
   });
 });
 
-// /server-info used to sit in TRULY_UNGATED above -- it returned every
-// online player's exact x/y/z position and current health with no gate at
-// all. Now requirePermission("players.view"), same capability players.js
-// uses for reading player details/status. All three default roles hold it,
-// so this is a zero-behaviour-change addition for every legitimate caller
-// (both client call sites -- WorldMap and Debug -- only render post-login,
-// behind App.tsx's auth gate, and always send whatever token they have).
 describe("panelBridge.js: GET /server-info -- players.view (previously wide open)", () => {
   it("has a requirePermission gate ahead of its handler", async () => {
     const { default: router } = await import("../routes/panelBridge.js");
@@ -222,24 +203,6 @@ describe("panelBridge.js: server.world_events (world-wide GM effects, folded in 
     ["/chat/info", "get"],
     ["/chat/alert", "post"],
   ];
-  // /sound/near-player, /sound/gunshot, /sound/alarm, /sound/noise,
-  // /zombies/spawn-near, /zombies/spawn-behind, /chat/admin and
-  // /chat/general used to be in this list -- moved out 2026-08-27 (operator
-  // ruling on prioritized issue #5) to players.endanger_or_impersonate, see the
-  // describe block below. Each takes an optional target (a username, or in
-  // chat/general's case an arbitrary custom author name) and can spawn
-  // zombies/sound at a named player or make a chat message read as if they
-  // said it, unlike every route still in this array (/zombies/clear-near-
-  // player also takes a username but is benign -- it clears zombies FROM
-  // near a player, a help action not a harm one -- so it stayed here).
-  // /sound/alarm and /sound/noise were caught in a second pass, AFTER the
-  // operator had already ruled on the original 7+2 -- both take the exact
-  // same {username} -> resolve-to-player's-x/y/z shape as /sound/gunshot
-  // and /sound/near-player (PanelBridge.lua handlers.triggerAlarmSound/
-  // createNoise), just missed in the first enumeration. Flagged to the
-  // operator and folded into the same already-approved capability rather
-  // than left half-fixed, since the harm shape is identical to routes he
-  // already ruled on, not a new category needing its own decision.
 
   it.each(WORLD_EVENTS_ROUTES)("does not refuse a moderator on %s %s", async (routePath, method) => {
     const { default: router } = await import("../routes/panelBridge.js");

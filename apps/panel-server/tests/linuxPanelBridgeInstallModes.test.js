@@ -4,19 +4,6 @@ import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeLuaAtomic } from "../utils/embeddedLua.js";
 
-// 2026-08-29 Linux PanelBridge install-path regression (testing): the PZ dedicated
-// server process is very often a DIFFERENT, unprivileged user than the
-// panel. Confirmed on real Linux with two real users (useradd panelsvc +
-// pzgame, a shared group, a fake install tree) that a plausible hardened
-// umask (0077 -- the same style of hardening this repo's own
-// zomboid-panel.service already applies) left an installed PanelBridge.lua
-// at mode 0600: unreadable by the actual game-server user, while
-// installBridge() still reported success. The mechanism doesn't need a
-// second real-user rig to pin as a regression -- open()'s `mode` argument
-// being masked by umask is the root cause, and that's directly observable
-// via process.umask() on a single user. Mode assertions are meaningless on
-// Windows (chmod only toggles the read-only attribute there), matching this
-// codebase's existing convention (see linuxSecretsFileModes.test.js).
 function mode(p) {
   return fs.statSync(p).mode & 0o777;
 }
@@ -46,8 +33,6 @@ describe("writeLuaAtomic -- mod file stays readable by a different user regardle
       }
 
       expect(mode(targetPath)).toBe(0o644);
-      // The world-read bit specifically -- the one a different, unprivileged
-      // game-server user actually needs.
       expect(mode(targetPath) & 0o004).toBe(0o004);
     },
   );
@@ -78,18 +63,12 @@ describe("writeLuaAtomic -- mod file stays readable by a different user regardle
       root = fs.mkdtempSync(path.join(os.tmpdir(), "panelbridge-preexist-"));
       const targetDir = path.join(root, "media", "lua", "server");
       const targetPath = path.join(targetDir, "PanelBridge.lua");
-      // Pre-create the tree with a deliberately unusual mode -- simulating
-      // the operator's own game install directory, which this function
-      // must never silently override just because it happens to write a
-      // file into it.
       fs.mkdirSync(targetDir, { recursive: true });
       fs.chmodSync(targetDir, 0o750);
 
       writeLuaAtomic(targetPath, "-- fake mod content for test only\n");
 
       expect(mode(targetDir)).toBe(0o750);
-      // The file itself still gets the guarantee -- that part isn't about
-      // directory ownership, it's about the file the game process opens.
       expect(mode(targetPath)).toBe(0o644);
     },
   );
@@ -100,7 +79,7 @@ describe("writeLuaAtomic -- mod file stays readable by a different user regardle
     const targetPath = path.join(targetDir, "PanelBridge.lua");
     fs.mkdirSync(targetDir, { recursive: true });
     fs.writeFileSync(targetPath, "-- v1\n");
-    if (!isWindows) fs.chmodSync(targetPath, 0o600); // simulate a prior install under a hardened umask
+    if (!isWindows) fs.chmodSync(targetPath, 0o600);
 
     writeLuaAtomic(targetPath, "-- v2, the actual update content\n");
 

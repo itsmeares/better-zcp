@@ -1,21 +1,4 @@
 #!/usr/bin/env node
-// Extracts Project Zomboid's own sandbox ground truth (default values, and
-// select-option values/labels in English + every locale PZ itself ships)
-// from a local PZ install, and writes:
-//   1. apps/panel-client/src/lib/__fixtures__/pzSandboxGroundTruth.json -- the single
-//      committed fixture serverConfigSchema.pzGroundTruth.test.ts diffs
-//      SANDBOX_SCHEMA against on every test run (the drift gate).
-//   2. apps/panel-client/src/locales/<lang>/sandboxPz.json for en/de/es/fr/ht/zh-CN/zh-TW --
-//      the setting/option LABELS the panel actually renders, sourced from
-//      the exact same resolved data as the fixture above. One extractor,
-//      one resolved mapping, two outputs -- not two independent parsers
-//      that can silently drift apart from each other.
-//
-// Run manually: `node apps/panel-client/scripts/extract-pz-sandbox-ground-truth.mjs <path to PZ install>`
-// This script is never run in CI. Pass a local install when re-syncing against
-// a new PZ build; the fixture records the source build.
-//
-// READ-ONLY on the PZ install. Never writes anything under it.
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -37,12 +20,6 @@ const SCHEMA_PATH = path.join(CLIENT_ROOT, 'src/lib/serverConfigSchema.ts')
 const FIXTURE_PATH = path.join(CLIENT_ROOT, 'src/lib/__fixtures__/pzSandboxGroundTruth.json')
 const LOCALES_DIR = path.join(CLIENT_ROOT, 'src/locales')
 
-// PZ language dir -> our locale code. 'ht' has no PZ translation at all (not
-// among PZ's ~29 shipped languages, consistent with ht having no CLDR data
-// either and resolving to en-GB elsewhere in this app) -- it still needs a
-// full sandboxPz.json (100% English-backfilled) because this repo's
-// localeParity test requires every registered locale to share the exact
-// same key set for any namespace that exists in any of them.
 const LANG_MAP = { en: 'EN', de: 'DE', es: 'ES', fr: 'FR', 'zh-CN': 'CN', 'zh-TW': 'CH', ht: null }
 
 function loadSandboxJson(pzDir) {
@@ -52,7 +29,6 @@ function loadSandboxJson(pzDir) {
   return JSON.parse(fs.readFileSync(p, 'utf8'))
 }
 
-// ---------- Apocalypse.lua (PZ's own default table) ----------
 function parseApocalypse(src) {
   const out = { settings: {}, ZombieLore: {}, ZombieConfig: {}, MultiplierConfig: {}, Map: {}, Basement: {} }
   const sections = new Set(['ZombieLore', 'ZombieConfig', 'MultiplierConfig', 'Map', 'Basement'])
@@ -74,7 +50,6 @@ function parseApocalypse(src) {
   return out
 }
 
-// ---------- serverConfigSchema.ts SANDBOX_SCHEMA ----------
 function extractObjects(src) {
   const items = []
   let objStart = -1, depth = 0
@@ -158,7 +133,6 @@ function resolveOptionsPrefix(key, options, enGroups) {
   const lower = key.toLowerCase()
   for (const prefix of enGroups.keys())
     if (prefix.toLowerCase() === lower || prefix.toLowerCase() === lower + 'freq') return prefix
-  // content fallback: near-exact normalized label-sequence match only
   const schemaNorm = options.map((o) => normLabel(o.label))
   let best = null
   for (const [prefix, m] of enGroups) {
@@ -199,19 +173,6 @@ function main() {
     return { ...e, baseLabelKey, optionsPrefix }
   })
 
-  // ---------- Fixture: SELECT-type entries with a resolved PZ options group ----------
-  // Scope matches this gate's actual job (option value/label drift, the
-  // PlantResilience-class bug) -- defaults for ALL 269 entries were already
-  // verified against Apocalypse.lua once (see the enum-audit report); this
-  // fixture re-asserts default + option data together, per select setting,
-  // going forward.
-  // Known-untrustworthy PZ references: the match resolves cleanly (by name
-  // or content) but PZ's OWN Sandbox.json entry is the one that's wrong,
-  // not our schema. Excluding these here means the drift gate compares
-  // against PZ where PZ is trustworthy, instead of failing forever (or
-  // worse, "fixing" correct code to match a stale reference). Each entry
-  // must carry the evidence, not just an ID -- this list is deliberately
-  // hard to add to by accident.
   const KNOWN_STALE_PZ_REFERENCES = {
     'animals.AnimalAgeModifier':
       "PZ's own Sandbox_AnimalAgeModifier_option* has only 3 entries (Very Fast/Fast/Normal). Every sibling " +
@@ -293,14 +254,6 @@ function main() {
   fs.writeFileSync(FIXTURE_PATH, JSON.stringify(fixture, null, 2) + '\n', 'utf8')
   console.log(`Wrote fixture: ${FIXTURE_PATH} (${fixture._provenance.settingCount} settings)`)
 
-  // ---------- Locale files: full key skeleton for every registered locale ----------
-  // Every SANDBOX_SCHEMA entry (not just the select-type/fixture-scoped ones)
-  // gets a label; select-type entries also get option labels. en's file is
-  // the full skeleton (its own values, mechanically equal to the schema's
-  // inline fallback) and every other locale matches its key set exactly
-  // (localeParity requirement), using PZ's own translation where available
-  // and the same schema-derived English text as an explicit value everywhere
-  // PZ has no translation for that key (ht: everywhere, always).
   const coverage = {}
   for (const [localeCode, pzDir] of Object.entries(LANG_MAP)) {
     const json = localeCode === 'en' ? enJson : loadSandboxJson(pzDir)

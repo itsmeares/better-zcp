@@ -18,35 +18,7 @@ import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.js";
 import { isPidAlive } from "../utils/pidLiveness.js";
 const log = createLogger("DB");
 
-// ============================================
-// PanelBridge SFTP password — same shape as rconPassword above, not the
-// discordBotToken/steamSessionId shape. rconPassword's rehydrate/redact
-// pair lives in serverRconSecrets.js because it also owns per-server RCON
-// secrets; panelBridgeSftpPassword has no per-server counterpart and no
-// single owning service (it's read directly off getAllSettings() by
-// routes/panelBridge.js, routes/serverFiles.js and index.js alike), so its
-// pair lives here instead of growing an RCON-scoped file to cover an
-// unrelated credential.
-//
-// 2026-08-29: panelBridgeSftpPassword was the one settings-field credential
-// that never got moved out to its own file the way discordBotToken,
-// steamSessionId/steamLoginSecure and rconPassword all were -- db.json's
-// own two backup paths (this file's createBackup() below, and the #122
-// pre-update snapshot in panelUpdateChecker.js) both copy db.json as a raw
-// file, so it was riding along in every one of those in plaintext.
-// ============================================
 
-/**
- * Run on every load, same as rehydrateRconSecrets() -- not schema-version-
- * gated, because db.json never carries this value again once a single
- * write has happened (see redactPanelBridgeSftpPasswordForWrite below), so
- * it has to be re-attached in memory on every restart, not just once at an
- * upgrade. Guarded on the value already being absent: if an operator
- * restores an OLDER db.json that still has the plaintext, this leaves that
- * restored value alone rather than overwriting it with a stale (or
- * missing) secret file -- the next flush redacts whatever is actually in
- * memory, which is the just-restored value.
- */
 export function rehydratePanelBridgeSftpPassword(data, log) {
   if (!data.settings) data.settings = {};
   if (!data.settings.panelBridgeSftpPassword) {
@@ -56,14 +28,6 @@ export function rehydratePanelBridgeSftpPassword(data, log) {
   return data;
 }
 
-/**
- * Called inside flushWrites() alongside redactRconSecretsForWrite() -- see
- * that function's doc comment for why `data` itself is never mutated, only
- * the object being serialized. Chained after redactRconSecretsForWrite()
- * (order between the two doesn't matter, they touch different settings
- * keys), so this receives an already-cloned object and returns another
- * clone rather than mutating its input.
- */
 export function redactPanelBridgeSftpPasswordForWrite(data) {
   if (!data.settings?.panelBridgeSftpPassword) return data;
   writeUiSecretFile("panelBridgeSftpPassword", data.settings.panelBridgeSftpPassword);
@@ -72,65 +36,39 @@ export function redactPanelBridgeSftpPasswordForWrite(data) {
   return { ...data, settings: restSettings };
 }
 
-// ============================================
-// Database Configuration
-// ============================================
 
 const RETENTION = {
   command_history: 500,
   player_logs: 1000,
   server_events: 500,
   schedule_history: 500,
-  // 24h at 60-sec intervals. Keep this in sync with the perf polling interval
-  // in index.js: every snapshot rewrites the whole db.json, so this array's
-  // length is what sets the panel's steady-state disk write volume — and that
-  // disk is usually the one PZ is saving chunks to.
   performance_history: 1440,
   player_sessions: 50, // per player
   bridge_logs: 500,
 };
 
-const WRITE_DEBOUNCE_MS = 500; // Coalesce rapid writes
-const BACKUP_INTERVAL_MS = 6 * 3600000; // Auto-backup every 6 hours
+const WRITE_DEBOUNCE_MS = 500;
+const BACKUP_INTERVAL_MS = 6 * 3600000;
 const MAX_BACKUPS = 5;
 
-// ============================================
-// Paths
-// ============================================
 
 const paths = getDataPaths();
 const dataDir = paths.dataDir;
 const dbPath = paths.dbPath;
 const backupDir = path.join(dataDir, "backups");
 
-// Ensure directories exist with restrictive perms (POSIX). Mode is ignored on Windows.
-// 0o700 — these dirs hold db.json, its rotating backups, and the sibling
-// secret files (jwt.secret, discordBotToken.secret, rconPassword.secret,
-// server-secrets/*.secret, ...) that keep those values out of db.json
-// itself — see utils/jwtSecret.js, utils/uiSecretFile.js,
-// utils/serverRconSecrets.js.
 for (const dir of [dataDir, backupDir]) {
   if (!fs.existsSync(dir)) {
     try {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     } catch (err) {
-      // Defense-in-depth for the root-first-run trap (2026-08-29): the
-      // preflight in apps/panel-server/utils/firstRunOwnershipCheck.js (imported
-      // first in apps/panel-server/index.js, ahead of this module) is the primary
-      // guard and normally catches this before dataDir/backupDir are even
-      // reached. This second check exists for the narrower case it can't
-      // see coming -- dataDir itself is fine, but a stray root run only
-      // touched backupDir (e.g. an operator who deletes just the backups
-      // folder, then happens to restart once via sudo before switching
-      // back). Same consolidated diagnostic either way, never a raw
-      // uncaught EACCES stack trace with no path/account context.
       if (
         (err.code === "EACCES" || err.code === "EPERM") &&
         checkAndExitIfOwnershipBlocked([dataDir, backupDir])
       ) {
-        throw err; // unreachable: checkAndExitIfOwnershipBlocked() exits the process
+        throw err;
       }
-      throw err; // not an ownership problem (e.g. disk full) -- preserve prior behavior
+      throw err;
     }
   }
   try {
@@ -140,9 +78,6 @@ for (const dir of [dataDir, backupDir]) {
   }
 }
 
-// ============================================
-// Default Schema
-// ============================================
 
 const defaultData = {
   command_history: [],
@@ -168,22 +103,9 @@ const defaultData = {
   _schemaVersion: 1,
 };
 
-// ============================================
-// Schema Migrations
-// ============================================
 
 const CURRENT_SCHEMA_VERSION = 3;
 
-// Migration 2 seed: a SNAPSHOT of what every requireRole(...) call site in
-// the app actually granted at the moment this migration was written --
-// upgrade day must be a zero-behaviour-change event, so this seed follows
-// reality rather than making policy. Kept as its own local copy rather than
-// imported from services/permissions.js's DEFAULT_ROLE_CAPABILITIES to
-// avoid a circular import between this file and that one (permissions.js
-// imports getDb/getRoles/etc. from here); apps/panel-server/tests/
-// rolesMigrationMatchesSeed.test.js asserts the two copies stay identical,
-// so a future edit to one that isn't mirrored to the other fails loudly
-// instead of silently drifting.
 const MIGRATION_V2_TECHNICIAN_CAPABILITIES = [
   "backups.manage",
   "backups.download",
@@ -244,31 +166,18 @@ const MIGRATION_V2_ADMIN_CAPABILITIES = [
   "panel.settings",
 ];
 
-/**
- * Run any pending schema migrations.
- * Add new migrations as sequential `if (version < N)` blocks.
- * Each migration must be idempotent — safe to re-run if the write after
- * bumping the version failed.
- * Exported for direct testing against a plain object (see
- * apps/panel-server/tests/rolesMigration.test.js) -- getDb()'s dataDir is resolved
- * once from paths.config.json and memoized process-wide, so exercising a
- * specific pre-migration db.json
- * through the real getDb() singleton isn't practical from an individual
- * test file; this function has no I/O of its own and needs none of that.
- */
 export function runMigrations(data) {
   const version = data._schemaVersion || 0;
   if (version >= CURRENT_SCHEMA_VERSION) return data;
 
   log.info(`Running DB migrations: v${version} → v${CURRENT_SCHEMA_VERSION}`);
 
-  // Migration 1: stamp initial schema version (no data changes needed)
 
   if (version < 2) {
     if (!data.roles) data.roles = [];
 
     const seedRole = (id, name, capabilities) => {
-      if (data.roles.some((r) => r.id === id)) return; // idempotent re-run
+      if (data.roles.some((r) => r.id === id)) return;
       data.roles.push({
         id,
         name,
@@ -281,11 +190,6 @@ export function runMigrations(data) {
     seedRole("role-technician", "technician", MIGRATION_V2_TECHNICIAN_CAPABILITIES);
     seedRole("role-moderator", "moderator", MIGRATION_V2_MODERATOR_CAPABILITIES);
 
-    // Dual-write: set roleId alongside the existing role string, which
-    // stays untouched and remains what requirePermission() resolves
-    // against today (see services/permissions.js). roleId is forward
-    // compatible for when auth.js's request-auth path starts resolving by
-    // id instead of by name -- not read by anything yet.
     const roleIdByName = Object.fromEntries(data.roles.map((r) => [r.name, r.id]));
     for (const user of data.users || []) {
       if (!user.roleId && roleIdByName[user.role]) {
@@ -294,24 +198,6 @@ export function runMigrations(data) {
     }
   }
 
-  // Migration 3: backups.download was split out of backups.manage after
-  // GET /api/backup/download/:name went from having no gate at all to
-  // requiring its own capability (see routes/backup.js). The v2 seed
-  // above already grants backups.download to a FRESH v1-install's admin
-  // and technician roles directly, but that only helps an install that
-  // migrates today -- an install that already passed through v2 before
-  // this split existed has its roles frozen at whatever v2 seeded them
-  // with, and never re-runs that step. Without this, every existing
-  // technician role would silently lose an ability it already had
-  // (the route was unguarded, so it could always download) the moment
-  // this build shipped, with no explanation and nothing to click.
-  // Backfill rule, applied uniformly to every role -- seeded or a custom
-  // one an operator built themselves, since both are equally "existed
-  // before the split": whatever already held backups.manage keeps the
-  // same trust level it always had by also getting backups.download.
-  // Anything that never held backups.manage (a bare custom role, or
-  // moderator) gets nothing here -- that gap is the fix Finding 2 asked
-  // for, not a bug in this migration.
   if (version < 3) {
     for (const role of data.roles || []) {
       if (
@@ -329,9 +215,6 @@ export function runMigrations(data) {
   return data;
 }
 
-// ============================================
-// Write Queue (debounced, crash-safe)
-// ============================================
 
 let db = null;
 let _writeTimer = null;
@@ -339,34 +222,22 @@ let _writePromise = null;
 let _dirty = false;
 let _writeRetries = 0;
 const MAX_WRITE_RETRIES = 5;
-// Exponential backoff between failed flushes: 1s, 2s, 4s, 8s, 16s (capped).
 const WRITE_BACKOFF_BASE_MS = 1000;
 const WRITE_BACKOFF_MAX_MS = 16_000;
-// Circuit breaker: once tripped, refuse to schedule further writes for a cooldown.
 let _writeCircuitOpenUntil = 0;
 const CIRCUIT_OPEN_MS = 60_000;
-// State surfaced read-only via getCircuitBreakerStatus() below — purely
-// observational, never read by the write path itself, so adding these
-// doesn't change any circuit-breaker behavior.
 let _lastWriteError = null;
 let _circuitFailCount = 0;
 let _backupTimer = null;
 let _shutdownRegistered = false;
 
-/**
- * Mark the database as dirty and schedule a debounced write.
- * Multiple rapid mutations coalesce into a single disk write.
- */
 function scheduleWrite() {
   _dirty = true;
 
-  // Circuit breaker: if recent writes have been failing hard, defer.
   if (Date.now() < _writeCircuitOpenUntil) return;
 
-  // If there's already a pending timer, let it handle the write
   if (_writeTimer) return;
 
-  // Apply exponential backoff if we're currently retrying after failures.
   const delay =
     _writeRetries > 0
       ? Math.min(
@@ -381,15 +252,10 @@ function scheduleWrite() {
   }, delay);
 }
 
-/**
- * Immediately flush all pending writes to disk.
- * Safe to call multiple times — deduplicates concurrent flushes.
- */
 export async function flushWrites() {
   if (!_dirty || !db) return;
   _dirty = false;
 
-  // If a write is already in progress, chain after it
   if (_writePromise) {
     try {
       await _writePromise;
@@ -398,39 +264,11 @@ export async function flushWrites() {
     }
   }
 
-  // Declared outside the try block (rather than `const` inside it, its
-  // original scope) purely so the catch block below can reference the tmp
-  // path a failed rename leaves behind -- same value, same assignment
-  // point, not a behavior change to the write itself. tmpWriteSucceeded
-  // narrows the catch block's cleanup to specifically a failed RENAME (the
-  // diagnosed live leak: a complete, valid tmp file with nowhere to go) --
-  // NOT a failed writeFileSync, which linuxDbFileModes.test.js's own crash
-  // fault-injection deliberately leaves in place as forensic proof its
-  // interception actually engaged (a half-written, invalid-JSON casualty
-  // file). Cleaning up an INTENTIONALLY-preserved half-write would silence
-  // that test's own positive control -- this fix targets the complete-tmp
-  // leak that was actually observed live, not every possible failure.
   let tmpPath;
   let tmpWriteSucceeded = false;
   _writePromise = (async () => {
     try {
-      // Atomic write: write to temp file first, then rename
-      // This prevents corruption on NFS/SMB mounts or if process is killed mid-write
-      // mode 0o600 — db.json still holds bcrypt password hashes and other
-      // settings that don't warrant world-readability, even though the JWT
-      // secret, rconPassword, and the Discord/Steam credentials have all
-      // moved to their own files (see the dataDir comment above).
-      // We chmod the tmp file BEFORE rename because writeFileSync's `mode` option
-      // is ignored when the file already exists (e.g. orphaned tmp from prior crash).
-      // Unique tmp name per write — when two panel instances overlap (e.g.
-      // systemd restart racing the previous process's shutdown), a shared
-      // `.tmp` suffix causes the second rename to fail with ENOENT after the
-      // first instance consumed it. PID + random suffix isolates them.
       tmpPath = `${dbPath}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-      // rconPassword (per server, plus the legacy settings mirror) is
-      // persisted to its own file and stripped from what actually lands on
-      // disk here — see utils/serverRconSecrets.js. db.data itself is
-      // never mutated by this call, only the object being serialized.
       const data = JSON.stringify(
         redactPanelBridgeSftpPasswordForWrite(redactRconSecretsForWrite(db.data)),
         null,
@@ -444,23 +282,11 @@ export async function flushWrites() {
         /* best-effort: Windows */
       }
       fs.renameSync(tmpPath, dbPath);
-      _writeRetries = 0; // Reset on success
+      _writeRetries = 0;
       _lastWriteError = null;
       _circuitFailCount = 0;
       log.debug(`DB flushed (${Math.round(data.length / 1024)}KB)`);
     } catch (err) {
-      // Best-effort cleanup of THIS attempt's own tmp file (same pattern as
-      // writeFileAtomic/cleanupOrphanBackupTemps) -- a failed rename left it
-      // behind, and nothing else will ever clean it up while this process
-      // stays alive: sweepOrphanedTmpFiles() is deliberately dead-pid-only,
-      // so a live process's own retry loop leaking one tmp per failure was
-      // previously unbounded for as long as renames kept failing. Isolated
-      // in its own try/catch that swallows everything, INCLUDING an error
-      // from the unlink itself (e.g. the same contention that just failed
-      // the rename) -- this must never be able to skip or alter anything
-      // below it. A tidied-up temp file is not worth the retry counter, the
-      // backoff, or the circuit breaker that feeds the operator-facing
-      // storage-health banner.
       if (tmpWriteSucceeded) {
         try {
           fs.unlinkSync(tmpPath);
@@ -474,17 +300,15 @@ export async function flushWrites() {
         log.error(
           `DB write failed ${_writeRetries} times, opening circuit breaker for ${CIRCUIT_OPEN_MS / 1000}s: ${err.message}`,
         );
-        // Open the circuit — stop scheduling writes for a cooldown so we don't pin the event loop.
         _circuitFailCount = _writeRetries;
         _writeCircuitOpenUntil = Date.now() + CIRCUIT_OPEN_MS;
         _writeRetries = 0;
-        _dirty = true; // Keep dirty; next scheduleWrite after cooldown will retry.
+        _dirty = true;
       } else {
         log.error(
           `Write error (attempt ${_writeRetries}/${MAX_WRITE_RETRIES}): ${err.message}`,
         );
-        _dirty = true; // Re-mark dirty so next scheduleWrite retries (with backoff)
-        // Proactively schedule a retry so we don't depend on external scheduleWrite calls.
+        _dirty = true;
         if (!_writeTimer) {
           const delay = Math.min(
             WRITE_BACKOFF_BASE_MS * Math.pow(2, _writeRetries - 1),
@@ -503,13 +327,6 @@ export async function flushWrites() {
   _writePromise = null;
 }
 
-/**
- * Read-only snapshot of the write circuit breaker's current state, for
- * surfacing storage health to the UI. `failCount` reflects the consecutive
- * failures that most recently tripped the breaker while it's open (the
- * write path resets its own retry counter on open — see flushWrites above),
- * and the live retry count once it's closed again.
- */
 export function getCircuitBreakerStatus() {
   const open = Date.now() < _writeCircuitOpenUntil;
   return {
@@ -522,51 +339,16 @@ export function getCircuitBreakerStatus() {
   };
 }
 
-/**
- * Immediately persist the in-memory DB to disk, bypassing the debounce timer.
- *
- * `db.write()` (lowdb's default) does a plain, non-atomic `writeFile` straight
- * onto `db.json` — no temp-file+rename, no retry/circuit-breaker, and no
- * coordination with the debounced `flushWrites()` above. Calling it directly
- * (as some routes/services used to) risks corrupting `db.json` on a crash
- * mid-write, and can race a concurrent debounced flush clobbering each other.
- * Use this instead of `db.write()` anywhere a write needs to land on disk
- * right away (e.g. auth: password/session changes, JWT secret) — it reuses
- * the same atomic temp-file+rename path as the debounced writer.
- */
 export async function commitNow() {
   _dirty = true;
   await flushWrites();
 }
 
-// ============================================
-// Orphaned Temp File Cleanup
-// ============================================
 
-// A hard kill between writeFileSync and the rename in flushWrites() above
-// leaves `db.json.<pid>.<rand>.tmp` behind forever — a complete copy of
-// what flushWrites() serializes (the JWT secret, rconPassword and the
-// Discord/Steam credentials are already redacted out of that by this
-// point, but bcrypt password hashes and other settings are still in
-// there). Nothing else reads or removes these, so an unswept crash leaks
-// that file indefinitely.
 const TMP_FILE_RE = /^db\.json\.(\d+)\.[0-9a-z]+\.tmp$/i;
 
-// Extra margin beyond pid-liveness before a tmp file is touched: no real
-// write of this file takes anywhere near this long, so a file this old
-// cannot still be an in-progress write even in a pid-reuse edge case.
-// Belt-and-suspenders alongside the pid check below, not a substitute for it.
 const MIN_ORPHAN_AGE_MS = 60_000;
 
-/**
- * Remove orphaned write-temp files left by a crash, but only ones provably
- * dead. Two panel processes can legitimately share a data dir for a moment
- * during a restart — that's exactly why the tmp name is pid-qualified — so
- * deleting one out from under a still-writing process would turn a harmless
- * leak into the rename-ENOENT crash pidLock.js exists to prevent. If either
- * check can't establish a file is safe to remove, it is left alone: an
- * orphaned file is far cheaper than a corrupted write.
- */
 export function sweepOrphanedTmpFiles() {
   let entries;
   try {
@@ -581,12 +363,12 @@ export function sweepOrphanedTmpFiles() {
     if (!match) continue;
 
     const pid = parseInt(match[1], 10);
-    if (isPidAlive(pid)) continue; // may still be mid-write — leave it
+    if (isPidAlive(pid)) continue;
 
     const filePath = path.join(dataDir, name);
     try {
       const stat = fs.statSync(filePath);
-      if (Date.now() - stat.mtimeMs < MIN_ORPHAN_AGE_MS) continue; // too fresh to be sure
+      if (Date.now() - stat.mtimeMs < MIN_ORPHAN_AGE_MS) continue;
       fs.unlinkSync(filePath);
       log.warn(`Removed orphaned tmp file from dead pid ${pid}: ${name}`);
     } catch (err) {
@@ -595,9 +377,6 @@ export function sweepOrphanedTmpFiles() {
   }
 }
 
-// ============================================
-// Backup System
-// ============================================
 
 function createBackup(label = "") {
   try {
@@ -605,25 +384,6 @@ function createBackup(label = "") {
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const suffix = label ? `-${label}` : "";
-    // Same collision-suffix convention as utils/configBackup.js's
-    // createBackup() (2026-08-27/29 fix, "backups: the pruner still deletes
-    // the newest backup on Linux") -- toISOString() is millisecond-
-    // resolution, and several backups created in a tight loop (an
-    // automation script, or simply no real disk latency between calls) can
-    // land in the exact same millisecond. Without this, that collision
-    // produces the IDENTICAL filename and fs.copyFileSync silently
-    // OVERWRITES the earlier backup -- reported success:true on both calls,
-    // no error, no warning, earlier backup unrecoverably gone. This exact
-    // ring never got the fix configBackup.js's already did: reproduced live
-    // (2026-09-05, backup-restore-round-trip hunt), a plain sequential
-    // 8-call loop with no concurrency at all collided repeatedly on real
-    // Linux (WSL/ext4), losing several of the 8 backups before pruning ever
-    // ran. -2, -3, ... on an actual collision; the first backup at a given
-    // (timestamp, label) keeps the old, unsuffixed name. pruneBackups()/
-    // listBackupsNewestFirst() below are updated to parse and sort by this
-    // suffix too -- a raw string sort would put "-2.json" before ".json"
-    // ('-' < '.'), the same misordering configBackup.js's pruner had before
-    // its own fix.
     let backupFile = path.join(backupDir, `db-${timestamp}${suffix}.json`);
     for (let collision = 2; fs.existsSync(backupFile); collision++) {
       backupFile = path.join(
@@ -633,7 +393,6 @@ function createBackup(label = "") {
     }
 
     fs.copyFileSync(dbPath, backupFile);
-    // Backups contain the same secrets as db.json — tighten perms.
     try {
       fs.chmodSync(backupFile, 0o600);
     } catch (_) {
@@ -647,15 +406,6 @@ function createBackup(label = "") {
   }
 }
 
-// Same (timestampKey, collisionSuffix)-parsing convention as
-// utils/configBackup.js's listBackupsFor()/parseBackupName() -- see
-// createBackup()'s own comment above for why a raw filename string sort
-// isn't safe here: "-2.json" sorts BEFORE ".json" ('-' < '.'), which would
-// treat a collision's later duplicate as older than the original it
-// collided with. Collision suffixes are always digits and neither the
-// timestamp (always ends in literal "Z") nor any real label
-// (auto/manual/startup/shutdown, always alphabetic) can produce a trailing
-// all-digit segment, so a plain trailing "-<digits>" is unambiguous.
 const BACKUP_COLLISION_SUFFIX_RE = /^(.*)-(\d+)$/;
 
 function sortBackupFilenamesNewestFirst(filenames) {
@@ -668,8 +418,8 @@ function sortBackupFilenamesNewestFirst(filenames) {
         : { name, key: withoutExt, suffix: 1 };
     })
     .sort((a, b) => {
-      if (a.key !== b.key) return a.key < b.key ? 1 : -1; // newest first
-      return b.suffix - a.suffix; // higher collision suffix = created later
+      if (a.key !== b.key) return a.key < b.key ? 1 : -1;
+      return b.suffix - a.suffix;
     })
     .map((c) => c.name);
 }
@@ -690,10 +440,6 @@ function pruneBackups() {
   }
 }
 
-// Newest-first, full paths. Recovery below needs to fall through past a
-// corrupt "latest" backup to the next-older one rather than giving up --
-// see the recovery loop in getDb() for why a single bad candidate must not
-// mean the whole ring is abandoned.
 function listBackupsNewestFirst() {
   try {
     const files = fs
@@ -711,41 +457,13 @@ function listBackupsNewestFirst() {
 function startBackupSchedule() {
   if (_backupTimer) clearInterval(_backupTimer);
   _backupTimer = setInterval(async () => {
-    // Flush any pending debounced write first -- createBackup() copies
-    // whatever is CURRENTLY ON DISK via fs.copyFileSync, which does not see
-    // an in-memory change until scheduleWrite()'s up-to-500ms (or longer,
-    // under write-retry backoff) debounce actually lands. Without this, an
-    // auto-backup landing inside that window silently omits the change that
-    // triggered it -- see createDatabaseBackup()'s identical fix below and
-    // its comment for the full reasoning (2026-09-05, backup-restore-round-trip
-    // hunt: proven with vi.setSystemTime(), not just read).
     await flushWrites();
     createBackup("auto");
   }, BACKUP_INTERVAL_MS);
   if (_backupTimer.unref) _backupTimer.unref();
 }
 
-// ============================================
-// Graceful Shutdown
-// ============================================
 
-// A running process's flushWrites() failure is fine to leave for later: it
-// re-marks _dirty and schedules its own setTimeout retry, and the process
-// will still be alive when that timer fires. A process that is EXITING is
-// not still going to be alive for that timer -- index.js's gracefulShutdown()
-// calls httpServer.close(() => process.exit(0)) on its own, independent
-// SIGTERM/SIGINT listener, unsynchronized with this module's shutdown()
-// below, and with no lingering connections (the normal case on a clean
-// stop) that close() callback can fire before even flushWrites()'s own 1s
-// minimum backoff elapses -- abandoning the scheduled retry and silently
-// dropping whatever config change was still pending. flushForShutdown()
-// exists so a caller that is about to exit can wait out a few real retries
-// instead of relying on a timer that will never get to fire, bounded so a
-// write that can never succeed (e.g. a full disk) turns into "shutdown
-// proceeds anyway after a short, fixed wait", never "shutdown never
-// happens" -- matching this file's own existing tradeoff for a failed
-// write (log and move on, don't hang the process) rather than inventing a
-// new one.
 const SHUTDOWN_FLUSH_MAX_ATTEMPTS = 3;
 const SHUTDOWN_FLUSH_RETRY_DELAY_MS = 200;
 
@@ -756,17 +474,13 @@ export async function flushForShutdown() {
   }
   for (let attempt = 1; attempt <= SHUTDOWN_FLUSH_MAX_ATTEMPTS; attempt++) {
     await flushWrites();
-    if (!_dirty) return true; // nothing pending, or this attempt landed it
+    if (!_dirty) return true;
     if (attempt < SHUTDOWN_FLUSH_MAX_ATTEMPTS) {
       await new Promise((resolve) =>
         setTimeout(resolve, SHUTDOWN_FLUSH_RETRY_DELAY_MS),
       );
     }
   }
-  // Gave it real, waited-for retries and it's still failing -- give up and
-  // let shutdown proceed. Whatever's pending stays only in memory; the
-  // circuit-breaker/retry state flushWrites() already tracked is unchanged
-  // by any of this, so the storage-health banner still reflects it.
   return !_dirty;
 }
 
@@ -784,29 +498,14 @@ function registerShutdownHandlers() {
     createBackup("shutdown");
   };
 
-  // Only flush writes — do NOT call process.exit() here.
-  // The main index.js gracefulShutdown handler manages the exit sequence.
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("beforeExit", () => shutdown("beforeExit"));
 }
 
-// ============================================
-// Startup & Initialization
-// ============================================
 
-/**
- * Validate and repair the database structure.
- * Ensures all collections exist and have the correct type.
- */
 function validateData(data) {
   const repaired = { ...defaultData };
-  // Collections that existed but had the WRONG TYPE (not merely absent) get
-  // silently replaced with an empty default below. Since db.json is
-  // hand-editable and can be restored from an older backup, a subtly
-  // malformed file could otherwise quietly lose e.g. all `servers` or
-  // `users` with no warning. Track what got replaced so we can log loudly
-  // and snapshot the pre-repair file for forensics/recovery.
   const replacedKeys = [];
 
   for (const [key, defaultValue] of Object.entries(defaultData)) {
@@ -857,22 +556,6 @@ function validateData(data) {
   return repaired;
 }
 
-/**
- * Append an item to a size-capped collection.
- *
- * This DB layer uses two conventions depending on how a collection is
- * consumed: `newest: true` (default) unshifts the new item to the front and
- * caps by dropping from the end — used by command_history, bridge_logs,
- * player_logs, server_events, schedule_history, all of whose readers do
- * `.slice(0, limit)` expecting newest-first order. `newest: false` pushes to
- * the end and caps by dropping from the front — used by
- * performance_history, whose reader does `.slice(-limit)` expecting
- * chronological (oldest-first) order for charts. The two conventions aren't
- * interchangeable (see B18 in the backend audit) — this single helper
- * replaces what used to be hand-rolled unshift/push+slice at each call site,
- * so any new capped collection has one obvious place to reach for instead of
- * re-deriving the pattern.
- */
 function appendCapped(arr, item, max, { newest = true } = {}) {
   if (newest) {
     arr.unshift(item);
@@ -884,9 +567,6 @@ function appendCapped(arr, item, max, { newest = true } = {}) {
   return arr;
 }
 
-/**
- * Apply retention policies to trim oversized collections.
- */
 function compactData(data) {
   const trimArray = (arr, max) => {
     if (Array.isArray(arr) && arr.length > max) return arr.slice(0, max);
@@ -929,12 +609,8 @@ function compactData(data) {
 
 export async function getDb() {
   if (!db) {
-    // Sweep secret-bearing tmp files orphaned by a prior crash before doing
-    // anything else. See sweepOrphanedTmpFiles() above for the dead-pid rule.
     sweepOrphanedTmpFiles();
 
-    // Tighten permissions on existing files left behind by prior installs that
-    // wrote with the default umask (typically 0o644 on Linux). Idempotent.
     if (fs.existsSync(dbPath)) {
       try {
         fs.chmodSync(dbPath, 0o600);
@@ -966,17 +642,6 @@ export async function getDb() {
     } catch (err) {
       log.error(`Failed to read database: ${err.message}`);
 
-      // A permission failure is NOT corruption -- it means db.json is still
-      // sitting there, intact, just unreadable by this account (root-
-      // first-run trap, 2026-08-29: dataDir/logsDir themselves can be
-      // fine, pzuser-owned, while db.json specifically was recreated
-      // root-owned by one stray sudo restart -- e.g. renameSync() below
-      // silently self-heals ownership on its NEXT successful write, so a
-      // dataDir-level check alone can look clean while db.json itself is
-      // still blocked). Falling through to "no backup found, starting
-      // fresh" here would silently discard a real, recoverable database
-      // and replace it with empty defaults on the very next flush --
-      // strictly worse than refusing to start. Refuse loudly instead.
       if (err.code === "EACCES" || err.code === "EPERM") {
         checkAndExitIfOwnershipBlocked([dataDir, dbPath, backupDir]);
         // Falls through only if checkAndExitIfOwnershipBlocked() found
@@ -989,25 +654,8 @@ export async function getDb() {
         // fallback for that case.
       }
 
-      // Attempt recovery from backup, newest first, falling through to the
-      // next-older candidate if one is also unreadable. A single corrupted
-      // "latest" backup must not mean the whole ring is abandoned in favour
-      // of a full reset -- pruneBackups only evicts past MAX_BACKUPS, so
-      // several older, structurally-independent backups usually still exist
-      // (2026-09-03, destructive-paths-sweep: the previous single-candidate
-      // version fell straight to defaultData -- discarding every setting,
-      // server and user -- the moment that one backup also failed to read,
-      // even when an older good one was sitting right next to it).
-      //
-      // Do NOT snapshot the corrupt file first — that would poison the
-      // backup ring (pruneBackups keeps newest 5 and could evict the last
-      // known-good backup) AND make listBackupsNewestFirst() return the
-      // corrupt copy as a candidate.
       const backups = listBackupsNewestFirst();
       if (backups.length > 0) {
-        // Preserve the corrupt file for forensics ONCE, before trying any
-        // candidate, OUTSIDE the rotation ring so pruneBackups never touches
-        // it.
         try {
           const corruptPath = path.join(
             backupDir,
@@ -1050,30 +698,19 @@ export async function getDb() {
       }
     }
 
-    // Validate structure and compact
     db.data = validateData(db.data);
     db.data = runMigrations(db.data);
     db.data = compactData(db.data);
-    // Runs on EVERY load, unlike runMigrations() above (schema-version
-    // gated, only ever runs once) — db.json itself never carries
-    // rconPassword again once a single write has happened, so it has to be
-    // re-attached in memory on every restart, not just once at an upgrade.
     db.data = rehydrateRconSecrets(db.data, log);
     db.data = rehydratePanelBridgeSftpPassword(db.data, log);
 
-    // Use the atomic tmp+rename path instead of lowdb's non-atomic
-    // adapter.write(). A crash during the startup write would otherwise
-    // corrupt the file we just recovered/migrated.
     _dirty = true;
     await flushWrites();
 
-    // Snapshot only AFTER the DB loaded and wrote successfully. This prevents
-    // a corrupt file from being captured as a "good" backup at boot.
     if (loadedCleanly && fs.existsSync(dbPath)) {
       createBackup("startup");
     }
 
-    // Start periodic backups and register shutdown handlers
     startBackupSchedule();
     registerShutdownHandlers();
 
@@ -1090,9 +727,6 @@ export async function initDatabase() {
   return db;
 }
 
-// ============================================
-// Database Health & Stats
-// ============================================
 
 function getDatabaseStatsSync() {
   const data = db?.data || defaultData;
@@ -1146,16 +780,6 @@ export async function getDatabaseStats() {
 }
 
 export async function createDatabaseBackup() {
-  // createBackup() copies whatever is CURRENTLY ON DISK (fs.copyFileSync) --
-  // it has no visibility into db.data or the pending debounced write
-  // scheduleWrite() may have queued (WRITE_DEBOUNCE_MS=500, longer under
-  // retry backoff). Proven live (2026-09-05, backup-restore-round-trip
-  // hunt): setSetting() then an immediate createDatabaseBackup() call, with
-  // no flush between them, snapshotted db.json with settings STILL EMPTY --
-  // reported success:true, with no warning that the change just made wasn't
-  // in it. flushForShutdown()'s shutdown handler already gets this right
-  // (flushes before its own createBackup("shutdown") call, see
-  // registerShutdownHandlers above); this path never did.
   await flushWrites();
   const file = createBackup("manual");
   return file
@@ -1177,9 +801,6 @@ export async function compactDatabase() {
   };
 }
 
-// ============================================
-// ID Generation
-// ============================================
 
 function generateId() {
   return randomUUID();
@@ -1192,27 +813,12 @@ function generateNumericId(collection) {
         0,
       )
     : 0;
-  // Date.now() as a floor guarantees the new id is always higher than any id
-  // ever issued, even one that was later deleted. The old max(currentIds)+1
-  // scheme only looked at IDs currently present, so deleting the
-  // highest-numbered task and creating a new one reused that freed id —
-  // which could then collide with a dangling schedule_history.task_id
-  // reference to the deleted task. Date.now() is monotonic across process
-  // restarts too, unlike the in-memory max.
   return Math.max(maxExisting + 1, Date.now());
 }
 
-// ============================================
-// Command History
-// ============================================
 
 export async function logCommand(command, response, success = true) {
   const db = await getDb();
-  // Redact BEFORE persisting, not on read -- see rconCommandRedaction.js
-  // for what this catches and why. Applied to both fields: `command` is
-  // the confirmed leak (adduser embeds the password directly), `response`
-  // is defense-in-depth in case a verbose RCON reply ever echoes the
-  // command it's replying to.
   const redactedCommand = redactRconCommandSecrets(command);
   const redactedResponse = redactRconCommandSecrets(response);
   const truncatedResponse =
@@ -1239,9 +845,6 @@ export async function getCommandHistory(limit = 100) {
   return db.data.command_history.slice(0, safeLimit);
 }
 
-// ============================================
-// Bridge Logs (PanelBridge command history)
-// ============================================
 
 export async function logBridgeCommand(
   action,
@@ -1286,22 +889,11 @@ export async function getBridgeLogs(limit = 100) {
   return db.data.bridge_logs.slice(0, safeLimit);
 }
 
-// ============================================
-// Scheduled Tasks
-// ============================================
 
-// Returns ALL scheduled tasks across every server, unfiltered — the
-// Scheduler needs to register a cron job for every task on startup
-// regardless of which server is currently active in the UI. Callers that
-// want to display/scope by server (the Scheduler UI) filter client-side
-// using each task's server_id.
 export async function getScheduledTasks() {
   const db = await getDb();
   const tasks = db.data.scheduled_tasks || [];
 
-  // Legacy migration: a task saved before server_id existed gets the
-  // currently-active server as a best guess (matches how it already
-  // behaved — it always ran against whatever was active).
   const activeServerId = await getActiveServerId();
   if (activeServerId) {
     let migrated = false;
@@ -1385,9 +977,6 @@ export async function updateTaskLastRun(id) {
   }
 }
 
-// ============================================
-// Schedule History
-// ============================================
 
 export async function logScheduleExecution(
   taskId,
@@ -1434,25 +1023,12 @@ export async function clearScheduleHistory() {
   scheduleWrite();
 }
 
-/**
- * Newest schedule_history entry for a given `command` value (the third
- * argument to logScheduleExecution above) -- used by backupService.js to
- * surface whether the LAST scheduled attempt of a given kind succeeded.
- * getScheduleHistory()'s own taskId filter can't isolate this: the
- * scheduled backup job and auto-restart both log with taskId=null, so
- * filtering by taskId alone conflates them. schedule_history is
- * newest-first (see appendCapped's doc comment above), so the first match
- * is the most recent.
- */
 export async function getLatestScheduleExecutionByCommand(command) {
   const db = await getDb();
   const history = db.data.schedule_history || [];
   return history.find((h) => h.command === command) || null;
 }
 
-// ============================================
-// Player Logs
-// ============================================
 
 export async function logPlayerAction(playerName, action, details = null) {
   const db = await getDb();
@@ -1479,13 +1055,8 @@ export async function getPlayerLogs(playerName = null, limit = 100) {
   return logs.slice(0, safeLimit);
 }
 
-// ============================================
-// Server Events
-// ============================================
 
 export async function logServerEvent(eventType, message = null) {
-  // Several callers fire this without awaiting; an unhandled rejection here
-  // reaches process.on("unhandledRejection") and kills the panel.
   try {
     const db = await getDb();
     const entry = {
@@ -1504,11 +1075,7 @@ export async function logServerEvent(eventType, message = null) {
   }
 }
 
-// ============================================
-// Tracked Mods (per-server scoped)
-// ============================================
 
-/** Get the active server's ID for scoping tracked mods */
 async function getActiveServerId() {
   const db = await getDb();
   const active = db.data.servers.find((s) => s.isActive) || db.data.servers[0];
@@ -1518,14 +1085,13 @@ async function getActiveServerId() {
 export async function getTrackedMods() {
   const db = await getDb();
   const serverId = await getActiveServerId();
-  if (!serverId) return db.data.tracked_mods; // no servers yet → return all (legacy)
+  if (!serverId) return db.data.tracked_mods;
   return db.data.tracked_mods.filter((m) => m.server_id === serverId);
 }
 
 export async function addTrackedMod(workshopId, name = null) {
   const db = await getDb();
   const serverId = await getActiveServerId();
-  // Duplicate check scoped to active server
   const existing = db.data.tracked_mods.find(
     (m) =>
       m.workshop_id === workshopId &&
@@ -1533,7 +1099,7 @@ export async function addTrackedMod(workshopId, name = null) {
   );
   if (existing) {
     existing.name = name || existing.name;
-    if (!existing.server_id && serverId) existing.server_id = serverId; // migrate legacy
+    if (!existing.server_id && serverId) existing.server_id = serverId;
     scheduleWrite();
     return existing;
   }
@@ -1579,7 +1145,7 @@ export async function updateModTimestamp(workshopId, lastUpdated) {
   if (mod) {
     mod.last_updated = lastUpdated;
     mod.last_checked = new Date().toISOString();
-    if (!mod.server_id && serverId) mod.server_id = serverId; // migrate legacy
+    if (!mod.server_id && serverId) mod.server_id = serverId;
     scheduleWrite();
   }
 }
@@ -1594,18 +1160,11 @@ export async function setModUpdateAvailable(workshopId, available) {
   );
   if (mod) {
     mod.update_available = available ? 1 : 0;
-    if (!mod.server_id && serverId) mod.server_id = serverId; // migrate legacy
+    if (!mod.server_id && serverId) mod.server_id = serverId;
     scheduleWrite();
   }
 }
 
-/**
- * Batch-mark mods as just-checked.
- * - Sets `last_checked = now()` for every workshop_id in `checkedIds`.
- * - Sets `update_available` from the `updatesById` map (workshopId -> 0|1).
- *   Mods present in `checkedIds` but not in `updatesById` are cleared (0).
- * - Mods not in `checkedIds` are left untouched (e.g. Steam API failures).
- */
 export async function markModsChecked(checkedIds, updatesById = new Map()) {
   if (!checkedIds || checkedIds.size === 0) return;
   const db = await getDb();
@@ -1617,7 +1176,7 @@ export async function markModsChecked(checkedIds, updatesById = new Map()) {
     if (!checkedIds.has(mod.workshop_id)) continue;
     mod.last_checked = now;
     mod.update_available = updatesById.get(mod.workshop_id) ? 1 : 0;
-    if (!mod.server_id && serverId) mod.server_id = serverId; // migrate legacy
+    if (!mod.server_id && serverId) mod.server_id = serverId;
     touched++;
   }
   if (touched > 0) scheduleWrite();
@@ -1649,9 +1208,6 @@ export async function clearModUpdates() {
   scheduleWrite();
 }
 
-// ============================================
-// Ignored Mods (prevent auto-re-tracking)
-// ============================================
 
 export async function getIgnoredMods() {
   const db = await getDb();
@@ -1723,11 +1279,6 @@ export async function isModIgnored(workshopId) {
   );
 }
 
-// ============================================
-// Ignored Mod Conflict Pairs (false-positive dismissals on the
-// Advanced tab's variant detector — e.g. a shared library + dependant
-// being mis-flagged as two variants of the same mod).
-// ============================================
 
 function _normalizePair(modIdA, modIdB) {
   const a = String(modIdA || "").trim();
@@ -1791,9 +1342,6 @@ export async function removeIgnoredModPair(modIdA, modIdB) {
   return removed > 0;
 }
 
-// ============================================
-// Settings
-// ============================================
 
 export async function getSetting(key) {
   const db = await getDb();
@@ -1811,19 +1359,7 @@ export async function getAllSettings() {
   return db.data.settings;
 }
 
-// ============================================
-// Server Configurations (Multi-server)
-// ============================================
 
-// Falls back to the docker-compose PZ_SERVER_PATH / PZ_SAVE_PATH env vars when
-// a stored server profile has no path configured. isRemote is inferred from
-// whether the resolved paths exist on this host ONLY for legacy records that
-// predate the isRemote field (server.isRemote is genuinely undefined/null —
-// every server created via POST /api/servers since 94c5520e always stores an
-// explicit boolean). A stored isRemote, true or false, always wins: it is the
-// operator's choice, and fs.existsSync() at read time is not — a local server
-// whose install hasn't run yet (or whose drive is momentarily unmounted) must
-// not be silently reclassified as remote on every read.
 export function normalizeServerMemory(server) {
   if (!server) return server;
   const installPath = server.installPath || process.env.PZ_SERVER_PATH || "";
@@ -1886,14 +1422,6 @@ export async function createServer(serverConfig) {
     installPath: serverConfig.installPath || "",
     zomboidDataPath: serverConfig.zomboidDataPath || null,
     serverConfigPath: serverConfig.serverConfigPath || null,
-    // Same class as adminPassword below, caught in the same pass: this
-    // literal is missing anything not on its hardcoded list, silently, with
-    // no error to notice by. servers.js's POST / forwards this correctly
-    // (from the Add/Register Server dialog, not the SteamCMD wizard) -- a
-    // Docker-managed server created that way never got its container name
-    // persisted, which would have made every provider-aware fix elsewhere
-    // in the app (the status badge, dashboard headline, sidebar dot) read a
-    // container name that was never there.
     dockerContainerName: serverConfig.dockerContainerName || null,
     branch: serverConfig.branch || "stable",
     rconHost: serverConfig.rconHost || "127.0.0.1",
@@ -1904,30 +1432,10 @@ export async function createServer(serverConfig) {
     maxMemory: normalizeMemoryGb(serverConfig.maxMemory, 8),
     useNoSteam: serverConfig.useNoSteam || false,
     useDebug: serverConfig.useDebug || false,
-    // Same shape again: never on this list at all, and (per a same pass
-    // audit of every wizard field) not even in ALLOWED_SERVER_UPDATE_FIELDS
-    // or read anywhere server-side -- unlike adminPassword, there was no
-    // edit-screen workaround for this one either, because there was no edit
-    // path and no read path, only a write to a global legacy setting that
-    // nothing consulted. Both closed together: this field now exists on the
-    // record, servers.js's create/update routes both accept it, and
-    // /install writes the actual UPnP= line into the server's own .ini
-    // (what PZ itself reads), matching what /configure-network already did
-    // for an existing server.
     useUpnp: serverConfig.useUpnp !== false,
     isRemote: serverConfig.isRemote || false,
     lifecycleProvider: "direct",
     startCommand: serverConfig.startCommand || "",
-    // 2026-08-26, two real users: this field-by-field literal never named
-    // adminPassword, so servers.js's POST / forwarding it correctly made no
-    // difference -- it was dropped right here, on every single server ever
-    // created through the panel. A brand-new server's admin account never
-    // gets created because PZ never receives -adminpassword on first boot,
-    // it falls back to prompting on a stdin the panel doesn't provide, and
-    // the process dies before the world exists. updateServer() below never
-    // had this bug (it spreads `updates` generically instead of naming
-    // fields), which is why re-saving the admin password after the fact was
-    // the only thing that ever worked.
     adminPassword: serverConfig.adminPassword || "",
     isActive: isFirst,
     createdAt: new Date().toISOString(),
@@ -1975,7 +1483,6 @@ export async function deleteServer(id) {
   const serverId = String(db.data.servers[index].id);
   db.data.servers.splice(index, 1);
 
-  // Clean up tracked mods for the deleted server
   db.data.tracked_mods = db.data.tracked_mods.filter(
     (m) => m.server_id !== serverId,
   );
@@ -1984,8 +1491,6 @@ export async function deleteServer(id) {
     db.data.servers[0].isActive = true;
   }
 
-  // The password file is keyed by server id and outlives the record
-  // otherwise — nothing else ever removes it.
   deleteServerSecret(serverId);
 
   scheduleWrite();
@@ -2006,7 +1511,6 @@ export async function setActiveServer(id) {
   return server;
 }
 
-/** Sync active server config to legacy flat settings */
 function syncServerToSettings(db, server) {
   const normalizedServer = normalizeServerMemory(server);
   db.data.settings.serverPath = server.installPath;
@@ -2021,14 +1525,6 @@ function syncServerToSettings(db, server) {
   db.data.settings.serverConfigPath = server.serverConfigPath;
 }
 
-// ============================================
-// Roles & Capabilities
-// ============================================
-// Data-access layer only -- capability catalogue, requirePermission
-// middleware, default-seed content and lockout-rule enforcement all live in
-// services/permissions.js, which calls the functions below rather than
-// touching db.data.roles directly, matching every other collection in this
-// file.
 
 export async function getRoles() {
   const db = await getDb();
@@ -2074,12 +1570,6 @@ export async function removeRoleById(id) {
   return true;
 }
 
-/**
- * Every user currently resolving to `role` -- by roleId if set, otherwise
- * by name for a seeded default role (matches how requirePermission()
- * resolves a role today, since user records don't carry a live roleId
- * until auth.js's login/role-change paths are updated to set one).
- */
 export async function getUsersForRole(role) {
   const db = await getDb();
   const users = db.data.users || [];
@@ -2088,9 +1578,6 @@ export async function getUsersForRole(role) {
   );
 }
 
-// Read-only, minimal shape (id, username, role, roleId) for lockout-rule
-// counting in services/permissions.js -- not the full user record (no
-// password hash or session state), since that's authService's territory.
 export async function getUsersForRoleAccounting() {
   const db = await getDb();
   return (db.data.users || []).map((u) => ({
@@ -2101,7 +1588,6 @@ export async function getUsersForRoleAccounting() {
   }));
 }
 
-/** Move every member of `fromRole` onto `toRole`. Used by role deletion's reassignTo. */
 export async function reassignRoleMembers(fromRole, toRole) {
   const db = await getDb();
   let count = 0;
@@ -2110,14 +1596,6 @@ export async function reassignRoleMembers(fromRole, toRole) {
       user.roleId === fromRole.id || (fromRole.isSeeded && user.role === fromRole.name);
     if (!matches) continue;
     user.roleId = toRole.id;
-    // No isSeeded condition: requirePermission() resolves capabilities via
-    // getRoleByName(req.user.role) -- roleId is dual-written but read by
-    // nothing yet (see the migration's own comment). Only updating .role
-    // for a seeded target left it stale for a custom one, so every request
-    // from a reassigned user kept authorizing against their OLD role
-    // indefinitely -- fail-open on the one operation whose entire purpose
-    // is taking access away. Always set .role to the target's exact .name,
-    // whether the target role is seeded or custom.
     user.role = toRole.name;
     count++;
   }
@@ -2125,9 +1603,6 @@ export async function reassignRoleMembers(fromRole, toRole) {
   return count;
 }
 
-// ============================================
-// Player Notes & Tags
-// ============================================
 
 export async function getPlayerNotes() {
   const db = await getDb();
@@ -2189,9 +1664,6 @@ export async function deletePlayerNote(playerName) {
   return true;
 }
 
-// ============================================
-// Player Stats (playtime tracking)
-// ============================================
 
 export async function getPlayerStats() {
   const db = await getDb();
@@ -2265,9 +1737,6 @@ export async function recordPlayerSession(playerName, action) {
   return playerStat;
 }
 
-// ============================================
-// Performance History
-// ============================================
 
 export async function recordPerformanceSnapshot(snapshot) {
   const db = await getDb();
@@ -2301,23 +1770,12 @@ export async function getPerformanceHistory(limit = 60) {
   return db.data.performance_history.slice(-safeLimit);
 }
 
-/**
- * Explicitly clear all recorded performance history. NOT called
- * automatically on startup (see index.js) — retention already caps this
- * collection at RETENTION.performance_history entries, so a restart no
- * longer needs to wipe it to bound its size, and keeping it means a
- * monitoring chart can show data spanning a restart/update-apply. Exposed
- * here for any explicit user-triggered "reset performance history" action.
- */
 export async function clearPerformanceHistory() {
   const db = await getDb();
   db.data.performance_history = [];
   scheduleWrite();
 }
 
-// ============================================
-// Mod Presets
-// ============================================
 
 export async function getModPresets() {
   const db = await getDb();
@@ -2378,9 +1836,6 @@ export async function deleteModPreset(id) {
   return true;
 }
 
-// ============================================
-// Simulation Templates (user-created; built-ins live under apps/panel-server/data/templates)
-// ============================================
 
 export async function getUserTemplates() {
   const db = await getDb();
@@ -2422,9 +1877,6 @@ export async function deleteUserTemplate(id) {
   return true;
 }
 
-// ============================================
-// SteamID Ban Tracking
-// ============================================
 
 export async function getSteamIdBans() {
   const db = await getDb();
@@ -2436,7 +1888,6 @@ export async function addSteamIdBan(steamId, reason = null) {
   const db = await getDb();
   if (!db.data.steamid_bans) db.data.steamid_bans = [];
 
-  // Don't add duplicates
   if (db.data.steamid_bans.some((b) => b.steamId === steamId)) return;
 
   db.data.steamid_bans.push({

@@ -51,7 +51,7 @@ describe('createSocketAuthProvider', () => {
   })
 
   it('refreshes first when the token is within the near-expiry buffer', async () => {
-    const nearExpiryToken = makeToken(30) // inside the 60s buffer
+    const nearExpiryToken = makeToken(30)
     tryRefreshToken.mockResolvedValue(true)
     const getToken = vi.fn(() => nearExpiryToken)
     const callback = vi.fn()
@@ -80,7 +80,7 @@ describe('createSocketAuthProvider', () => {
     const staleToken = makeToken(-60)
     let currentToken: string | null = staleToken
     tryRefreshToken.mockImplementation(async () => {
-      currentToken = null // refresh failed -- token store cleared
+      currentToken = null
       return false
     })
     const getToken = vi.fn(() => currentToken)

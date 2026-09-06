@@ -29,16 +29,6 @@ describe('getIniKeyLabel / getSandboxKeyLabel', () => {
     expect(getSandboxKeyLabel('SomeBrandNewSetting')).toBe('Some Brand New Setting')
   })
 
-  // regression: PZ's own SandboxVars.lua genuinely reuses the same
-  // key across two unrelated tables -- 'Farming' is both settings.Farming
-  // (a 1-5 Agriculture-skill-growth select) and MultiplierConfig.Farming (a
-  // 0.001-1000 XP multiplier). Without `section`, getSandboxKeyLabel('Farming')
-  // always resolved to whichever entry happened to come first in
-  // SANDBOX_SCHEMA -- TemplateDiffList.tsx (the "review before applying"
-  // template preview) would show the WRONG label on one of the two rows for
-  // any template touching both. This is the regression test: passing the
-  // diff row's own `section` must resolve each to its real, distinct
-  // setting rather than colliding on the bare key.
   it('disambiguates a key PZ reuses across two unrelated sandbox tables using `section`', () => {
     expect(getSandboxKeyLabel('Farming', 'settings')).toBe('Agriculture Multiplier')
     expect(getSandboxKeyLabel('Farming', 'MultiplierConfig')).toBe('Farming XP')
@@ -71,12 +61,6 @@ describe('formatDifficultyLabel', () => {
     expect(formatDifficultyLabel(undefined)).toBe('Custom')
   })
 
-  // This is the test that would have caught the original defect: the old
-  // implementation returned the English literal "Custom" unconditionally,
-  // in every language. It reuses templateCard.json's own "custom" key
-  // (already shipped for the built-in/custom template-type badge) rather
-  // than a new key, so this exercises the real committed locale files, not
-  // a synthetic bundle.
   it('translates "Custom" for an empty level when a different language is active', async () => {
     await i18n.changeLanguage('de')
     expect(formatDifficultyLabel(undefined)).toBe('Individuell')
@@ -112,12 +96,6 @@ describe('formatDiffValue', () => {
     expect(formatDiffValue('Muldraugh, KY')).toBe('Muldraugh, KY')
   })
 
-  // This is the test that would have caught the original defect: On/Off/
-  // (not set) were English string literals with zero i18n involvement, so
-  // this suite passing was never proof the feature worked in another
-  // language -- it just proved the hardcoded fallback matched the
-  // hardcoded assertion. These check the real committed de/zh-CN
-  // templateDiffList.json keys, not a synthetic bundle.
   it('translates On/Off/(not set) when a different language is active', async () => {
     await i18n.changeLanguage('de')
     expect(formatDiffValue(true)).toBe('Ein')

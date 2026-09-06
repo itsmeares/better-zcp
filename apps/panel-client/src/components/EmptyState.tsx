@@ -16,7 +16,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-// Pre-built icon sets for common empty states
 const emptyStateIcons = {
   noData: InboxIcon,
   noResults: SearchX,
@@ -35,11 +34,6 @@ export type EmptyStateType = keyof typeof emptyStateIcons
 
 type EmptyStateActionVariant = 'default' | 'outline' | 'secondary' | 'ghost'
 
-// Either a click handler (retry, clear filters, open a dialog) or an
-// internal route to link to (a destination that isn't on this screen).
-// A prior version only had onClick, so every empty-state hint that pointed
-// at another page ("configure this in Settings") had nowhere to send the
-// click -- widened here rather than adding a second, differently-shaped prop.
 export type EmptyStateAction =
   | { label: string; variant?: EmptyStateActionVariant; onClick: () => void; to?: undefined }
   | { label: string; variant?: EmptyStateActionVariant; to: string; onClick?: undefined }
@@ -48,10 +42,6 @@ interface EmptyStateProps {
   type?: EmptyStateType
   icon?: ReactNode
   title: string
-  // A plain string covers most callers, but body copy that needs to define a
-  // jargon term inline (e.g. a HelpTip on "PanelBridge") has nowhere else to
-  // put it -- widened from `string` so that case has an escape hatch without
-  // a second, differently-shaped prop next to this one.
   description?: ReactNode
   action?: EmptyStateAction
   secondaryAction?: EmptyStateAction
@@ -76,11 +66,11 @@ function EmptyStateActionButton({ action, compact }: { action: EmptyStateAction;
   )
 }
 
-export function EmptyState({ 
-  type = 'noData', 
-  icon, 
-  title, 
-  description, 
+export function EmptyState({
+  type = 'noData',
+  icon,
+  title,
+  description,
   action,
   secondaryAction,
   compact = false,

@@ -3,11 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31, clearing the last two PROVISIONAL entries in the verify-
-// enforcement gate (panelBridgeHandlerVerifyEnforcement.test.js) --
-// triggerSwarmEvent and removeVehicle. See that file's own comment for the
-// full jar evidence (javap -c against the real B42 jar on Tower) proving
-// both treatments are safe, not just plausible.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -22,11 +17,6 @@ const LUA_PATH = path.join(
   'PanelBridge.lua',
 );
 
-// ---------------------------------------------------------------------------
-// triggerSwarmEvent -- same VirtualZombieManager-first / fire-and-forget-
-// fallback split as spawnHordeNearPlayer (see
-// panelBridgeSpawnHordeFabricatedCount.test.js, which this mirrors).
-// ---------------------------------------------------------------------------
 
 const ZOMBRAND_STUB = `ZombRand = function(n) return 0 end`;
 
@@ -78,10 +68,6 @@ describe('PanelBridge.lua handlers.triggerSwarmEvent -- VirtualZombieManager-fir
   });
 });
 
-// ---------------------------------------------------------------------------
-// removeVehicle -- re-checks findVehicleById() after removal and gates
-// `verified` on the vehicle's genuine absence.
-// ---------------------------------------------------------------------------
 
 function worldStub(cellDecl) {
   return `

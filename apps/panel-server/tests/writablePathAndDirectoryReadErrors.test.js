@@ -8,20 +8,6 @@ import {
 } from "../routes/server.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 
-// 2026-08-22 correction: WRITABLE_PATH_ERROR and DIRECTORY_READ_FAILED were
-// each ONE ErrorCode covering 4 and 2 distinct English sentences
-// respectively (a word/sentence choice -- label, isContainer, isWindows --
-// not a value), with an unreachable {{label}}/{{guidance}} placeholder that
-// never actually received params. Split into WRITABLE_PATH_{INSTALL,DATA}_
-// {BAREMETAL,CONTAINER} and DIRECTORY_READ_FAILED_{WINDOWS,POSIX}.
-//
-// These test the FORMATTERS directly, not the routes, because the failure
-// shape this was built to catch already happened twice tonight elsewhere
-// (the SANDBOX_REPAIR_BACKUP_FAILED and makeRoleError catch blocks):
-// params computed correctly but never actually reaching res.json(). Testing
-// the formatter's return value is what proves {message, code, params} is
-// the exact object every call site spreads into res.json() -- not a
-// reimplementation of the same claim.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..", "..");
@@ -38,10 +24,6 @@ const FR_ERRORS = JSON.parse(
   ),
 );
 
-// Mimics paramTranslation.ts's resolveRegisteredTranslation() interpolation
-// step closely enough to prove every {{param}} the template needs is
-// actually present in what the formatter returned -- this is a server-side
-// test and can't import the client's TS module directly.
 function interpolate(template, params) {
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => {
     expect(params, `template needs {{${name}}} but params is missing`).toBeTruthy();
@@ -57,15 +39,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// 2026-09-02, single-signal-sweep: formatWritablePathError now detects
-// containers via the shared utils/dockerDetect.js isContainerized(), which
-// falls back to a /proc/1/cgroup scan when neither marker file is present
-// (some CI sandboxes, older Docker). Every "bare-metal" case below mocks
-// existsSync to false, which -- unmocked -- would fall straight through to
-// a REAL fs.readFileSync("/proc/1/cgroup") read of whatever host actually
-// runs this test. Force the ENOENT branch explicitly so these stay
-// hermetic instead of silently depending on the test runner not itself
-// being a container.
 function mockNotContainerized() {
   vi.spyOn(fs, "existsSync").mockReturnValue(false);
   vi.spyOn(fs, "readFileSync").mockImplementation(() => {
@@ -83,11 +56,6 @@ describe("formatWritablePathError: variant split (2026-08-22 correction)", () =>
     const result = formatWritablePathError("install", "/srv/pz", false);
     expect(result.code).toBe(ErrorCode.WRITABLE_PATH_INSTALL_BAREMETAL);
     expect(result.params).toEqual({ path: "/srv/pz" });
-    // 2026-08-29 wording fix ("raw EACCES with no pointer to the fix"): the
-    // refusal was already correct, but "choose a writable folder" never
-    // said WHY this one isn't or how to fix it in place -- now names the
-    // actual mechanism (chown/chmod) instead of only suggesting a different
-    // folder.
     expect(result.message).toContain("chown");
     expect(result.message).toContain("chmod");
   });
@@ -99,11 +67,6 @@ describe("formatWritablePathError: variant split (2026-08-22 correction)", () =>
     const result = formatWritablePathError("install", "/srv/pz", false);
     expect(result.code).toBe(ErrorCode.WRITABLE_PATH_INSTALL_CONTAINER);
     expect(result.params).toEqual({ path: "/srv/pz" });
-    // 2026-08-29 wording fix: names the SPECIFIC docker-compose.yml env vars
-    // (PUID/PGID) instead of the vague "owned by the panel container
-    // UID/GID" -- the exact gap the dispatch named (docker-compose.yml's
-    // own Quick Start comments document PUID/PGID right above the
-    // bind-mount lines, and the old error never mentioned it).
     expect(result.message).toContain("PUID");
     expect(result.message).toContain("PGID");
     expect(result.message).toContain(".env");
@@ -131,7 +94,7 @@ describe("formatWritablePathError: variant split (2026-08-22 correction)", () =>
   });
 
   it("container detection is skipped entirely on Windows, by design", () => {
-    vi.spyOn(fs, "existsSync").mockReturnValue(true); // even if the marker files exist
+    vi.spyOn(fs, "existsSync").mockReturnValue(true);
     const result = formatWritablePathError("install", "/srv/pz", true);
     expect(result.code).toBe(ErrorCode.WRITABLE_PATH_INSTALL_BAREMETAL);
   });
@@ -156,15 +119,6 @@ describe("formatWritablePathError: variant split (2026-08-22 correction)", () =>
     },
   );
 
-  // 2026-09-02, single-signal-sweep, REAL DEFECT fix: this formatter used to
-  // hand-roll only the two dockerenv/containerenv marker-file checks (no
-  // cgroup fallback), the exact gap utils/dockerDetect.js's isContainerized()
-  // already closed for a "some CI sandboxes, older Docker" runtime that
-  // skips the marker file. On such a runtime the OLD code confidently
-  // returned the bare-metal "chown/chmod" guidance instead of the correct
-  // Docker PUID/PGID guidance -- a wrong answer delivered with confidence,
-  // not a hedge. Neither marker file exists here; only the cgroup scan
-  // reveals the container.
   it("detects a container via the cgroup fallback even when neither marker file exists", () => {
     vi.spyOn(fs, "existsSync").mockReturnValue(false);
     vi.spyOn(fs, "readFileSync").mockReturnValue("0::/docker/abc123\n");

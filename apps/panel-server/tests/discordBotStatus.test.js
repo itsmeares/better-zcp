@@ -1,12 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// regression follow-up: getStatus() never returned an error field in
-// normal operation, so a start() failure's real reason only ever reached
-// the user as a one-time toast at the instant they clicked Start -- gone on
-// refresh or a later visit, which is exactly what a user "stuck long enough
-// to ask twice" would do. getStatus() now includes lastStartError, mapped
-// through the same describeStartFailure() used for the toast, so the two
-// never say different things about the same failure.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: async () => null,

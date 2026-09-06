@@ -12,18 +12,6 @@ import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound } from 'lucide-react'
 
 type PanelStatus = 'checking' | 'online' | 'unreachable'
 
-// Device-scoped only: counts failed login SUBMISSIONS from this browser,
-// never the submitted username or any per-account state. The mechanism this
-// hints at (10 failed attempts on ONE account -> 15 minute lock, see
-// services/auth.js) never changes what it shows the user either way --
-// "Invalid username or password" reads identically whether the account
-// exists, is currently locked, or the password was simply wrong. That's a
-// deliberate anti-enumeration property and stays; what was actually missing
-// is that a stuck user has no way to learn the mechanism exists at all. This
-// hint fixes that without becoming an account oracle: it reacts only to "did
-// this browser's last few submissions fail," never to who or what was typed,
-// so it reads identically for a real account, a locked account, or a typo'd
-// username that doesn't exist. See conv install-idiot-proofing-2026-08.
 const LOGIN_DEVICE_FAILURE_KEY = 'pz-login-failed-attempts'
 const DEVICE_HINT_THRESHOLD = 3
 
@@ -92,8 +80,6 @@ export default function Login() {
 
   const { status, version } = usePanelHealth()
 
-  // null = not known yet -- deliberately renders no SSO button while loading
-  // rather than a flash of one that then disappears.
   const [oidcStatus, setOidcStatus] = useState<{ configured: boolean; providerName: string } | null>(null)
 
   useEffect(() => {
@@ -110,9 +96,6 @@ export default function Login() {
     return () => controller.abort()
   }, [])
 
-  // The OIDC callback redirects the browser back here with ?oidcError=<reason>
-  // on any failure (see apps/panel-server/routes/oidc.js) -- surface it once, then strip
-  // it from the URL so a reload doesn't keep re-showing a stale error.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const oidcError = params.get('oidcError')
@@ -159,19 +142,9 @@ export default function Login() {
     setLoading(true)
     try {
       await login(username, password, rememberMe)
-      // Succeeded -- this device no longer needs the hint below on a future
-      // visit, regardless of how many failures came before it.
       setDeviceFailedAttempts(0)
       try { localStorage.removeItem(LOGIN_DEVICE_FAILURE_KEY) } catch { /* ignore */ }
     } catch (err) {
-      // 2026-08-26: NOT a getUserErrorMessage() site -- AuthContext's
-      // login() already resolves and translates the final message itself
-      // (see its getLoginErrorMessage(), which routes a genuine 5xx through
-      // getUserErrorMessage() before this ever sees it, and keeps the
-      // account-enumeration-safe generic text for an actual auth failure).
-      // Calling getUserErrorMessage() here too would double-process an
-      // already-translated string. rawErrorMessageIntentional() documents
-      // that this is a deliberate exception, not a missed conversion.
       setError(rawErrorMessageIntentional(err, t('errors.loginFailed')))
       setDeviceFailedAttempts((prev) => {
         const next = prev + 1
@@ -201,8 +174,6 @@ export default function Login() {
     }
     setLoading(true)
     try {
-      // A token file, when present, stays the primary path; otherwise fall back
-      // to a saved recovery code so no host access is needed.
       const useRecoveryCode = !resetAvailable && recoveryCodesAvailable
       const res = await fetch(
         useRecoveryCode ? '/api/auth/recover-with-code' : '/api/auth/reset-password',
@@ -217,12 +188,6 @@ export default function Login() {
         },
       )
       const data = await res.json()
-      // 2026-08-26: this fetch bypasses lib/api.ts's handleResponse(), so
-      // preserving status/code here is what lets getUserErrorMessage()
-      // below translate this failure -- auth.js already ships registered
-      // codes for this exact route (RESET_TOKEN_EXPIRED, RESET_TOKEN_INVALID,
-      // RECOVERY_CODE_FIELDS_REQUIRED, RATE_LIMIT_RESET, etc.) that a plain
-      // Error would have discarded before they ever reached it.
       if (!res.ok) throw new ApiError(data.error || t('errors.resetFailed'), { status: res.status, code: data.code })
       setResetSuccess(data.message)
       setResetToken('')
@@ -250,17 +215,6 @@ export default function Login() {
       setResetMode(true)
       return
     }
-    // Always ask the server rather than branching on this browser's own
-    // (necessarily coarse) "am I local" guess: a genuinely remote visitor
-    // and one stuck behind a reverse proxy get two DIFFERENT, more specific
-    // messages back (LOCAL_RESET_NOT_LOCAL vs LOCAL_RESET_BEHIND_PROXY,
-    // apps/panel-server/routes/auth.js), which never reached this screen before --
-    // the localResetSupported shortcut used to skip the request entirely
-    // for anyone it already assumed would fail, silently discarding the
-    // more useful, more specific reason before it could ever be shown. This
-    // is safe to always attempt: a rejection here makes no server-side
-    // change at all, only success does (creating the reset-token file),
-    // which is exactly the wanted behavior when it does succeed.
     void handleCreateLocalReset()
   }
 
@@ -291,11 +245,6 @@ export default function Login() {
     try {
       const res = await fetch('/api/auth/reset-token/local', { method: 'POST' })
       const data = await res.json()
-      // 2026-08-26: same reason as handleReset above -- this bypasses
-      // handleResponse(), so status/code must be preserved here for
-      // getUserErrorMessage() to translate LOCAL_RESET_NOT_LOCAL /
-      // LOCAL_RESET_BEHIND_PROXY / LOCAL_RESET_TOKEN_CREATE_FAILED instead
-      // of always showing raw English.
       if (!res.ok) throw new ApiError(data.error || t('errors.couldNotCreateToken'), { status: res.status, code: data.code })
 
       setResetAvailable(true)

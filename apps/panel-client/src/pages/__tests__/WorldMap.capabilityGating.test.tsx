@@ -6,28 +6,6 @@ import { SocketContext } from '@/contexts/SocketContext'
 import WorldMap from '../WorldMap'
 import { panelBridgeApi, serversApi, updateApi, mapApi, type ServerInstance } from '@/lib/api'
 
-// 2026-08-27 regression: UPDATED same day per an decision that reverses
-// server commit c3083d5 (also from earlier the same day). c3083d5 had made
-// healPlayer/setGodMode require bridge.command AND players.gm_tools --
-// this file originally asserted exactly that "both capabilities" shape. The
-// operator ruled bridge.command was only ever an accidental side effect of
-// these two routing through the generic PanelBridge passthrough, not a
-// deliberate second gate, and requiring it denied Technician (who holds
-// gm_tools but not bridge.command by default) the GM tools it's meant to
-// have. players.gm_tools ALONE now gates healPlayer/setGodMode server-side
-// (GM_TOOLS_ONLY_ACTIONS in panelBridge.js) -- bridge.command is
-// irrelevant to these two specifically, same as Spawn Vehicle already was.
-// WorldMap reaches two of the four GM tools (healPlayer, setGodMode --
-// setInvisible/setNoclip live on Players.tsx), across three call sites
-// (dossier Heal/God buttons, context-menu Heal item).
-// This asserts BOTH directions of the NEW rule, not just that the old one
-// is gone: lacking gm_tools (regardless of bridge.command) must leave
-// Heal/God unreachable, and holding gm_tools WITHOUT bridge.command --
-// the Technician case the ruling exists for -- must reach them. It also
-// keeps the original "unrelated bridge.command-only action stays reachable"
-// proof, now under the lacking-gm_tools role, so a gm_tools-alone gate on
-// Heal/God is shown not to accidentally require gm_tools for anything else
-// on the page.
 
 let mockCan = (_capability: string) => true
 
@@ -90,11 +68,6 @@ const testServer: ServerInstance = {
   createdAt: '2026-01-01T00:00:00.000Z',
 }
 
-// jsdom has no ResizeObserver, and WorldMap's canvas-sizing effect needs a
-// real non-zero contentRect -- unlike a no-op stub, panToPlayer() (the
-// roster-click handler that opens the dossier panel) bails out early when
-// canvasSize.width is still 0, so a no-op stub would leave the dossier
-// panel unreachable in this test.
 class StubResizeObserver {
   private cb: ResizeObserverCallback
   constructor(cb: ResizeObserverCallback) {
@@ -129,8 +102,6 @@ function renderWorldMap() {
 
 async function setUp(players: Array<{ name: string; x: number; y: number }>) {
   vi.stubGlobal('ResizeObserver', StubResizeObserver)
-  // jsdom has no matchMedia -- WorldMap's reduced-motion effect calls it
-  // unconditionally on mount.
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
     media: query,
@@ -205,8 +176,6 @@ describe('WorldMap.tsx: healPlayer/setGodMode require players.gm_tools ALONE (20
 
     renderWorldMap()
 
-    // Wait for the bridge to report connected before opening the menu --
-    // Custom Drop is also gated on !bridgeConnected, and it starts false.
     await waitFor(() => expect(getBridgeStatus).toHaveBeenCalled())
 
     const canvas = await screen.findByRole('img', { name: /world map/i })

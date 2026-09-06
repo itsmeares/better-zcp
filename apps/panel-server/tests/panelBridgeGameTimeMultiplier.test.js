@@ -3,14 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, panelbridge-audit: the panel's time-speed slider
-// (apps/panel-client/src/pages/Events.tsx) is useState(1) and never reads back, so it
-// shows a stale multiplier after any change made via RCON or another admin.
-// handlers.getGameTime already holds the GameTime singleton (`gameTime`) for
-// its other fields -- this adds gameTime:getMultiplier() to that same
-// object, zero new round-trips. testing jar-confirmed RCON's setTimeSpeed writes
-// this exact same singleton/field (GameTime.getInstance():setMultiplier()),
-// so this read-back is authoritative, not decorative.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -45,7 +37,6 @@ describe('PanelBridge.lua getGameTime -- real multiplier read-back for the time-
     const result = bridge.callHandler('getGameTime', {});
     expect(result.ok).toBe(true);
     expect(result.data.multiplier).toBe(3);
-    // Every other field this handler already returns must still be intact.
     expect(result.data.year).toBe(1993);
     expect(result.data.nightsSurvived).toBe(4);
   });

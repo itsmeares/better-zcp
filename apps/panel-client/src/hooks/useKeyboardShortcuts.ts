@@ -61,9 +61,7 @@ export function useKeyboardShortcuts() {
   ]
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Don't intercept when typing in inputs
     if (isInputFocused()) return
-    // Don't intercept modified keys (except Shift for ?)
     if (e.ctrlKey || e.altKey || e.metaKey) return
 
     const key = e.key
@@ -94,11 +92,6 @@ export function useKeyboardShortcuts() {
   return { helpOpen, setHelpOpen, shortcuts: allShortcuts }
 }
 
-/**
- * Register a page-specific keyboard shortcut. Active only while the component is mounted.
- * For Ctrl/Cmd shortcuts, set ctrl: true — these work even when an input is focused.
- * For unmodified keys, they are ignored when an input is focused.
- */
 export function usePageShortcut(
   key: string,
   handler: () => void,

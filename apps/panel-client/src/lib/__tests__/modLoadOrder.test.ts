@@ -20,8 +20,6 @@ describe('computeAutoSortedOrder', () => {
 
     expect(result.order).toEqual(['BaseLibrary', 'Overhaul'])
     expect(result.appliedEdges).toBe(1)
-    // With only two mods either one can be called "the one that moved"; the
-    // report describes the library being pulled above the mod requiring it.
     expect(result.moved).toEqual([{ modId: 'BaseLibrary', from: 2, to: 1 }])
   })
 
@@ -31,15 +29,11 @@ describe('computeAutoSortedOrder', () => {
       requires({ Overhaul: ['BaseLibrary'] }),
     )
 
-    // Zed / Alpha / BaseLibrary keep their relative order; only Overhaul is
-    // pushed past the library it requires.
     expect(result.order).toEqual(['Zed', 'Alpha', 'BaseLibrary', 'Overhaul'])
     expect(result.moved).toEqual([{ modId: 'Overhaul', from: 2, to: 4 }])
   })
 
   it('does not report mods that merely drift when a mod above them moves', () => {
-    // Only Overhaul is constrained. A, B and C shift down by one index each,
-    // but none of them actually changed position relative to the others.
     const result = computeAutoSortedOrder(
       ['Overhaul', 'A', 'B', 'C', 'BaseLibrary'],
       requires({ Overhaul: ['BaseLibrary'] }),
@@ -85,8 +79,6 @@ describe('computeAutoSortedOrder', () => {
   })
 
   it('still orders a mod that depends on a mod caught in a cycle', () => {
-    // Patch -> A is perfectly satisfiable even though A and B require each
-    // other, so Patch must still be moved below A.
     const result = computeAutoSortedOrder(
       ['Patch', 'A', 'B'],
       requires({ A: ['B'], B: ['A'], Patch: ['A'] }),
@@ -107,8 +99,6 @@ describe('computeAutoSortedOrder', () => {
   })
 
   it('orders against a fork that satisfies the requirement instead of calling it missing', () => {
-    // The Conflicts tab already treats "BaseLibrary_Refactor" as satisfying
-    // "require=BaseLibrary"; the sort has to agree and order against it.
     const result = computeAutoSortedOrder(
       ['Overhaul', 'BaseLibrary_Refactor'],
       requires({ Overhaul: ['BaseLibrary'] }),
@@ -131,11 +121,6 @@ describe('computeAutoSortedOrder', () => {
   })
 
   describe('longestIncreasingSubsequence / stronglyConnectedComponents audit (2026-08-31)', () => {
-    // Prior coverage only exercised 2-node cycles and a single mod depending
-    // on one cycle. Every result below was hand-verified against a manual
-    // topological trace before being pinned -- see the audit report to testing
-    // for the full by-hand derivation. No defect found in either function;
-    // these close a real coverage gap rather than fix a bug.
 
     it('breaks a 3-node cycle as one group and leaves the order untouched', () => {
       const result = computeAutoSortedOrder(['A', 'B', 'C'], requires({ A: ['B'], B: ['C'], C: ['A'] }))
@@ -146,9 +131,6 @@ describe('computeAutoSortedOrder', () => {
     })
 
     it('keeps two cycles as separate SCCs while still enforcing a real edge between them', () => {
-      // cycle1={A,B}, cycle2={C,D}; B also genuinely requires C, so some
-      // member of cycle2 must land before some member of cycle1 even though
-      // neither cycle's own internal edges can be honored.
       const result = computeAutoSortedOrder(
         ['A', 'B', 'C', 'D'],
         requires({ A: ['B'], B: ['A', 'C'], C: ['D'], D: ['C'] }),
@@ -222,16 +204,6 @@ describe('createRequirementResolver', () => {
   })
 
   describe('case-sensitivity (2026-08-31 audit)', () => {
-    // The operator asked whether auto-sort's logic is perfect. It wasn't:
-    // the exact-match tier was case-SENSITIVE while the fork tier was
-    // case-INSENSITIVE, so the literal same mod under a differently-cased
-    // ID resolved to null/missing while a fork of it resolved fine -- the
-    // strictest tier was, backwards, the least forgiving one. Proved by
-    // executing the pre-fix function and reading the actual return value
-    // before touching the fix: createRequirementResolver(['Footprint'])
-    // ('footprint') returned null, while
-    // createRequirementResolver(['Footprint_Legacy'])('footprint') returned
-    // 'Footprint_Legacy' -- the real mod failed where its fork succeeded.
     it('resolves an exact match case-insensitively, same as the fork tier already did', () => {
       const resolve = createRequirementResolver(['Footprint'])
 
@@ -240,8 +212,6 @@ describe('createRequirementResolver', () => {
     })
 
     it('no longer disagrees with the fork tier once case differs', () => {
-      // Before the fix these returned null and 'Footprint_Legacy'
-      // respectively -- the real mod failing where its fork succeeded.
       const exactResolve = createRequirementResolver(['Footprint'])
       const forkResolve = createRequirementResolver(['Footprint_Legacy'])
 
@@ -250,11 +220,6 @@ describe('createRequirementResolver', () => {
     })
 
     it('still prefers a case-sensitive exact match over a case-insensitive one', () => {
-      // Two installed mods differing only by case is unusual but not
-      // impossible (two independent workshop items with the same
-      // human-typed mod.info id) -- the exact-case entry must still win
-      // over falling back to the case-insensitive lookup, and the choice
-      // must not depend on iteration/insertion order for the SAME id.
       const resolve = createRequirementResolver(['base', 'Base'])
 
       expect(resolve('Base')).toBe('Base')
@@ -269,15 +234,6 @@ describe('createRequirementResolver', () => {
   })
 
   describe('fork false-positive risk (2026-08-31 audit, documented not fixed -- deliberate, out of scope)', () => {
-    // the test checks whether a requirement can invent an edge to an unrelated
-    // mod that merely shares the underscore-fork naming convention. It can,
-    // and this is reachable with real data: any two independent workshop
-    // mods where one's ID is "<the other's declared requirement>_<anything>"
-    // trigger it, with no way for the heuristic to tell a genuine fork from
-    // a coincidence from the ID string alone. Changing this is explicitly
-    // out of scope (the fork heuristic's intent is deliberate and already
-    // tested above) -- this pins the risk as real rather than theoretical,
-    // so nobody has to re-derive it from the algorithm's shape again.
     it('resolves a requirement against an unrelated mod that happens to share the fork naming convention', () => {
       const resolve = createRequirementResolver(['Armor_Unrelated'])
 

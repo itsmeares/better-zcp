@@ -5,26 +5,7 @@ import os from "os";
 import path from "path";
 import { waitForArchiveEntry, appendDirectoryToArchive } from "../services/backupService.js";
 
-// 2026-08-26 regression: node-archiver emits a 'warning' with code ENOENT for
-// a file that vanished between the initial scan and the moment archiving
-// actually tries to read it -- a real race on a live PZ directory (the game
-// process rotates/deletes temp files, logs and lock files while a backup
-// can be mid-scan). waitForArchiveEntry used to resolve identically on that
-// warning and on a genuine "entry" success, so a silently-dropped file left
-// zero trace: createBackup resolved success:true regardless of how many
-// files were actually skipped, and the completeness check it already
-// computed (filesProcessed vs totalFiles) was never used for anything but
-// the progress bar. Fixed by having waitForArchiveEntry resolve with
-// { skipped: boolean } and appendDirectoryToArchive collect the skipped
-// archive-relative paths precisely, since every archive addition already
-// goes through this one function -- no separate counting needed.
 
-// A minimal fake archiver: archive.file(fullPath, opts) decides its own
-// outcome per call via `outcomeFor`, and emits asynchronously (queueMicrotask)
-// to mirror archiver's real async event timing -- waitForArchiveEntry
-// registers its listeners synchronously before calling append(), so this is
-// safe even if the emit were synchronous, but matching the real timing is
-// closer to what production actually does.
 function makeFakeArchive(outcomeFor) {
   const archive = new EventEmitter();
   archive.file = (fullPath, opts) => {

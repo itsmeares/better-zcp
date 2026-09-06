@@ -11,10 +11,6 @@ import {
   parseContainerStats,
 } from "../services/dockerClient.js";
 
-// Docker's own multiplexed-frame format for a non-TTY container's log
-// stream: 8-byte header (1 byte stream type, 3 reserved, 4-byte big-endian
-// payload length) then that many payload bytes, repeated per chunk written
-// to stdout/stderr.
 function frame(streamType, text) {
   const payload = Buffer.from(text, "utf-8");
   const header = Buffer.alloc(8);
@@ -37,7 +33,7 @@ describe("demuxDockerLogStream", () => {
     const complete = frame(1, "complete line\n");
     const truncated = Buffer.alloc(8);
     truncated.writeUInt8(1, 0);
-    truncated.writeUInt32BE(9999, 4); // claims a payload that was never appended
+    truncated.writeUInt32BE(9999, 4);
     const buffer = Buffer.concat([complete, truncated]);
     expect(demuxDockerLogStream(buffer)).toBe("complete line\n");
   });
@@ -58,9 +54,6 @@ describe("Docker managed-container boundary", () => {
 
 describe("lifecycleTimeoutMs", () => {
   it("waits out the container's own stop grace period", () => {
-    // A modded B42 world sets stop_grace_period: 90s, which Compose writes to
-    // the container as StopTimeout. Anything shorter aborts the socket and
-    // reports a failure on a stop Docker went on to complete.
     const container = { Config: { StopTimeout: 90 } };
     expect(lifecycleTimeoutMs("stop", container)).toBeGreaterThan(90_000);
     expect(lifecycleTimeoutMs("restart", container)).toBeGreaterThan(
@@ -99,13 +92,6 @@ describe("parseContainerStats", () => {
   });
 });
 
-// Real Docker Engine API calls over a real Unix domain socket -- a fake
-// daemon standing in for dockerd, not a mock of DockerClient's own HTTP
-// layer, so this exercises the actual request/response code path (including
-// demuxing and the byte cap) rather than assuming it. Unix domain sockets
-// are POSIX; skipped on Windows like every other real-socket/real-fs test
-// in this suite (see linuxDbFileModes.test.js et al.) -- exercised for real
-// via the WSL gate.
 const isWindows = process.platform === "win32";
 const MANAGED_CONTAINER = {
   Id: "c1",
@@ -197,8 +183,6 @@ const MANAGED_TTY_CONTAINER = {
   it("returns null rather than an unbounded string when the response exceeds the byte cap", async () => {
     await startFakeDaemon();
     client = new DockerClient({ socketPath, enabled: true });
-    // One oversized frame -- realistic worst case is a pathological single
-    // log line (e.g. a huge unbroken stack trace), not many small ones.
     logsResponseBuffer = frame(1, "x".repeat(5 * 1024 * 1024));
 
     await expect(client.getContainerLogs("c1")).resolves.toBeNull();
@@ -211,17 +195,6 @@ const MANAGED_TTY_CONTAINER = {
     await expect(client.getContainerLogs("c1")).resolves.toBeNull();
   });
 
-  // Regression (2026-08-31 services sweep): _requestBuffer's timeout handler
-  // used to set `settled = true` BEFORE calling request.destroy(error) --
-  // destroy() fires its 'error' event asynchronously, by which point the
-  // error handler's own `if (settled) return` guard silently swallowed it,
-  // so the promise never settled at all. A real daemon that accepts the
-  // connection but never writes a response (hung/overloaded dockerd) used
-  // to wedge getContainerLogs forever, with no failure a user could report.
-  // A genuinely non-responding real HTTP server over a real Unix socket --
-  // not a mock of the timeout event -- so this proves Node's actual
-  // destroy(err)-then-error-event ordering is handled, not just an
-  // assumption about it.
   it("rejects instead of hanging forever when the daemon accepts the connection but never responds", async () => {
     const hangDir = fs.mkdtempSync(path.join(os.tmpdir(), "pz-docker-hang-test-"));
     const hangSocketPath = path.join(hangDir, "docker.sock");

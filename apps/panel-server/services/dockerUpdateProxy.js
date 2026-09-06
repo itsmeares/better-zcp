@@ -104,17 +104,6 @@ export class DockerUpdateProxy {
       const result = await postJson(`${this.url}/update`, this.token, {
         version,
       });
-      // `success: true` here means only that the update controller ACCEPTED
-      // the request (its own response is a plain HTTP 202) -- it does NOT
-      // mean the update completed. The controller has its own
-      // success/failed/rollback state machine (infra/docker/all-in-one/updater's
-      // own server.js) and can fail and roll itself back well after this
-      // call already returned; this process has no way to learn which one
-      // happened, since polling the controller's own /status endpoint for
-      // that answer is a separate, not-yet-built feature (a one-shot check
-      // at the NEW container's next boot, since THIS process is what gets
-      // torn down mid-update -- it cannot poll for its own answer). Until
-      // that exists, the message must never claim more than "started".
       return {
         success: true,
         message: `${result.message || `Docker update to v${version} started`} — the panel cannot confirm this Docker update completed; check the panel container's own status or logs.`,

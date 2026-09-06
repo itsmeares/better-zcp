@@ -30,10 +30,6 @@ const {
   toIni,
 } = await import("../routes/serverFiles.js");
 
-// Finding 2: serverName is interpolated straight into filesystem paths
-// (`${serverName}.ini`, `${serverName}_SandboxVars.lua`, ...) throughout
-// serverFiles.js. A serverName containing "../" must never reach those
-// path.join() calls.
 describe("getServerName (Finding 2: path traversal via serverName)", () => {
   beforeEach(() => {
     getActiveServer.mockReset();
@@ -70,12 +66,6 @@ describe("getServerName (Finding 2: path traversal via serverName)", () => {
   });
 });
 
-// The panel used to invent a fully-populated "servertest" server pointing at
-// ~/Zomboid/Server (Project Zomboid's own default install location) whenever
-// nothing had actually been configured through Server Setup / My Servers. On
-// a machine that happens to have a real PZ install at that vanilla path, the
-// panel presented ITS real data as the panel's own "active server" -- data
-// the panel has no record of ever being told about.
 describe("getServerConfigPath (no server configured must not invent one)", () => {
   beforeEach(() => {
     getActiveServer.mockReset();
@@ -91,18 +81,11 @@ describe("getServerConfigPath (no server configured must not invent one)", () =>
   });
 
   it("throws even when an active server row exists but has no path anywhere and no legacy fallback either", async () => {
-    // A server that is "configured" in name only (e.g. a corrupt/partial
-    // profile) is exactly as unresolvable as no server at all -- there is
-    // still nothing real to point at.
     getActiveServer.mockResolvedValue({ id: "1", serverName: "Ghost" });
     getAllSettings.mockResolvedValue({});
     await expect(getServerConfigPath()).rejects.toThrow(ServerNotConfiguredError);
   });
 
-  // The bug was the fall-through PAST "nothing configured" to a default --
-  // not the legacy-settings fallback chain itself, which real upgrades from
-  // older installs depend on. Every tier of that chain must keep resolving
-  // exactly as before.
   it("resolves the active server's explicit serverConfigPath when set", async () => {
     getActiveServer.mockResolvedValue({ serverConfigPath: "/srv/pz/Server" });
     getAllSettings.mockResolvedValue({});
@@ -130,13 +113,6 @@ describe("getServerConfigPath (no server configured must not invent one)", () =>
   });
 });
 
-// Finding (regression, testing): a remote server whose SFTP
-// transport isn't configured yet fell all the way through getServerConfigPath()
-// to the generic ServerNotConfiguredError -- the SAME 404 a genuinely
-// unconfigured panel gets -- even though the router's second gate
-// (serverFiles.js's remote-mirror middleware) has its own correct
-// REMOTE_CONFIG_NOT_CONFIGURED 400 response for exactly this case. That gate
-// could never run: this function's own fallthrough already answered first.
 describe("getServerConfigPath (remote server, SFTP transport not configured)", () => {
   beforeEach(() => {
     getActiveServer.mockReset();

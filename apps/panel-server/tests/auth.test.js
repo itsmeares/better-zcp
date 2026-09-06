@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 
-// Test auth validation logic (isolated from bcrypt/jwt/database)
 
 describe('Auth validation', () => {
   function validateUsername(username) {
@@ -22,7 +21,7 @@ describe('Auth validation', () => {
       expect(validateUsername('user_name')).toBeNull();
       expect(validateUsername('user-name')).toBeNull();
       expect(validateUsername('User123')).toBeNull();
-      expect(validateUsername('abc')).toBeNull(); // min length
+      expect(validateUsername('abc')).toBeNull();
     });
 
     it('should reject empty username', () => {
@@ -40,17 +39,17 @@ describe('Auth validation', () => {
     });
 
     it('should reject special characters', () => {
-      expect(validateUsername('user name')).toBeTruthy(); // space
-      expect(validateUsername('user@name')).toBeTruthy(); // @
-      expect(validateUsername('user.name')).toBeTruthy(); // period
-      expect(validateUsername('<script>')).toBeTruthy(); // XSS
+      expect(validateUsername('user name')).toBeTruthy();
+      expect(validateUsername('user@name')).toBeTruthy();
+      expect(validateUsername('user.name')).toBeTruthy();
+      expect(validateUsername('<script>')).toBeTruthy();
     });
   });
 
   describe('password validation', () => {
     it('should accept valid passwords', () => {
       expect(validatePassword('password123')).toBeNull();
-      expect(validatePassword('123456')).toBeNull(); // min length
+      expect(validatePassword('123456')).toBeNull();
       expect(validatePassword('a very long secure password!!!')).toBeNull();
     });
 

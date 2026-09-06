@@ -88,11 +88,10 @@ import { diagnoseTileFailure, tileFailureCopyKeys, type TileFailureDiagnosis } f
 
 const TILE_RETRY_MS = [2_000, 10_000, 60_000] as const
 
-// ─── Types ────────────────────────────────────────────────
 interface MapPlayer {
   username: string
   displayName?: string
-  x: number // game-tile coordinate
+  x: number
   y: number
   z: number
   health?: number
@@ -102,13 +101,11 @@ interface MapPlayer {
   hunger?: number
   thirst?: number
   fatigue?: number
-  // Animation state
   prevX?: number
   prevY?: number
   animProgress?: number
 }
 
-/** Shape of a player record as returned by the PanelBridge getServerInfo API */
 interface RawBridgePlayer {
   name?: string
   username?: string
@@ -128,7 +125,7 @@ interface RawBridgePlayer {
 interface ContextMenu {
   screenX: number
   screenY: number
-  worldX: number // game-tile coordinate for actions
+  worldX: number
   worldY: number
   player?: MapPlayer
   vehicle?: MapVehicle
@@ -138,7 +135,7 @@ interface AirdropMarker {
   x: number
   y: number
   preset: string
-  time: number // Date.now()
+  time: number
 }
 
 interface MapVehicle {
@@ -170,8 +167,6 @@ interface MapSafehouse {
   lastVisited?: string
 }
 
-// Airdrop preset definitions. Label/description text lives in the worldMap
-// locale under airdropPresets.<id> — see presetLabel/presetDesc below.
 const AIRDROP_PRESETS = [
   { id: 'military',  icon: Swords },
   { id: 'medical',   icon: Pill },
@@ -181,10 +176,6 @@ const AIRDROP_PRESETS = [
   { id: 'tools',     icon: Wrench },
 ] as const
 
-// ─── DZI Map Constants ────────────────────────────────────
-// Camera: canvasX = dziPixelX * scale + offset.x
-// Map tiles use the browser-direct pzmap.org path when available. The backend
-// proxy remains the fallback for cached tiles and restricted browsers.
 
 export interface MapConfig {
   tileUrl: string
@@ -192,12 +183,6 @@ export interface MapConfig {
   fullWidth: number
   fullHeight: number
   maxLevel: number
-  // Deepest level actually worth requesting -- maxLevel is the depth a FULL
-  // Deep Zoom pyramid would need for these dimensions, not evidence the
-  // tile host rendered that deep. Defaults to maxLevel for configs that have
-  // no better source (MAP_B41 has no server-side discovery yet); B42 gets a
-  // real discovered value from /api/map/resolve. See GH#109 /
-  // GH#109.
   renderedMaxLevel: number
   isoX0: number
   isoY0: number
@@ -215,10 +200,6 @@ const MAP_B42: MapConfig = {
   fullWidth: 1157312,
   fullHeight: 509520,
   maxLevel: 21,
-  // Placeholder used before /api/map/resolve returns (e.g. first paint every
-  // session) -- fails CLOSED to the conservative floor, not the full 21,
-  // same as b42ConfigFor's own `??` fallback below. See
-  // conservativeRenderedMaxLevel's comment in worldMapTileFallback.ts.
   renderedMaxLevel: conservativeRenderedMaxLevel(21),
   isoX0: 518144,
   isoY0: -69648,
@@ -229,29 +210,8 @@ const MAP_B42: MapConfig = {
   label: 'B42',
 }
 
-// The game tile MAP_B42.defaultCenter points at, so the default view stays put
-// no matter which build's projection is resolved.
 const B42_DEFAULT_CENTER_TILE = { x: 10486.75, y: 6678.75 }
 
-// PZ renders each map build at its own resolution — 42.19.0 is 1157312 wide
-// with 1024px tiles, 42.20.0 doubled to 2318656 with 2048px tiles.
-//
-// The projection origin CANNOT be recovered by rescaling: 42.20.0 is exactly
-// 2x the height of 42.19.0 but 4032 px wider, because each build is cropped
-// and padded independently. So the backend reads the real origin out of the
-// build's own base/map_info.json, matching what pzmap.org's own
-// viewer does:
-//   imageX = (x0 + (gx - gy) * sqr / 2) / scale
-//   imageY = (y0 + (gx + gy) * sqr / 4) / scale
-// The MAP_B42 constants above are exactly 42.19.0's values under that formula
-// (1036288/2 = 518144, -139296/2 = -69648, 128/2/2 = 32, 128/4/2 = 16).
-//
-// Only when the backend can't supply the origin do we fall back to the old
-// width-ratio guess, which is ~2300 px (~36 tiles) west on 42.20.0.
-// Origins for builds we've already read map_info.json for. Lets an older
-// panel backend (which doesn't forward the origin yet) still project 42.20.0
-// correctly, and keeps the map right if map.projectzomboid.com is briefly
-// unreachable. Values are verbatim from <build>/base/map_info.json.
 const B42_KNOWN_ORIGINS: Record<
   string,
   { x0: number; y0: number; sqr: number; scale: number }
@@ -299,12 +259,6 @@ function b42ConfigFor(info: {
     fullWidth: info.width,
     fullHeight: info.height,
     maxLevel: info.maxLevel,
-    // If the server response predates this field (rolling restart) or a
-    // resolve genuinely failed to determine it, fail CLOSED to the
-    // conservative floor -- NOT info.maxLevel, which is exactly the
-    // inflated, never-actually-rendered ceiling this fix exists to stop
-    // trusting. See conservativeRenderedMaxLevel's comment in
-    // worldMapTileFallback.ts.
     renderedMaxLevel: info.renderedMaxLevel ?? conservativeRenderedMaxLevel(info.maxLevel),
     isoX0,
     isoY0,
@@ -327,17 +281,7 @@ const MAP_B41: MapConfig = {
   fullWidth: 2285184,
   fullHeight: 990400,
   maxLevel: 22, // ceil(log2(2285184)) = 22
-  // B41 has no server-side discovery like B42's discoverRenderedMaxLevel
-  // (mapProxy.js) -- it's a legacy/frozen build served from a hardcoded
-  // directory with no dynamic /resolve geometry today. Uses the same
-  // conservativeRenderedMaxLevel floor as B42's own static placeholder
-  // (see its comment above) rather than the full (near-certainly-too-deep)
-  // maxLevel. The coarser-tile fallback in drawTileWithFallback covers
-  // whatever this clamp gets wrong either way. See GH#109 /
-  // GH#109.
   renderedMaxLevel: conservativeRenderedMaxLevel(22),
-  // Isometric projection from pzmap.org (multiply=2):
-  // Origin derived from PxToTileOffset {x:-5577, y:10327}
   isoX0: 1017856,  // (5577 + 10327) * 64
   isoY0: -152000,  // (5577 - 10327) * 32
   isoHalfSqr: 64,  // 32 * multiply(2)
@@ -347,18 +291,12 @@ const MAP_B41: MapConfig = {
   label: 'B41',
 }
 
-const MIN_SCALE = 0.0003        // canvas px per DZI px (zoomed way out)
-const MAX_SCALE = 1.0           // canvas px per DZI px (zoomed way in)
+const MIN_SCALE = 0.0003
+const MAX_SCALE = 1.0
 const POLL_INTERVAL = 3000
 const MARKER_HIT_RADIUS = 14
-// How many coarser levels drawTileWithFallback will walk up looking for a
-// cached tile to degrade to. See GH#109.
 const MAX_FALLBACK_LEVELS = 8
 
-// ─── Cached top-down vehicle icons ────────────────────────
-// Top-down car silhouette rendered to offscreen canvases. Much more legible
-// on a world map than a side-view Lucide icon. Cache key encodes every visual
-// variable so we don't rebuild the path every frame.
 const _carIconCache = new Map<string, HTMLCanvasElement>()
 
 interface CarIconOpts {
@@ -372,7 +310,6 @@ interface CarIconOpts {
 function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
   const { color, size, alarmed, sirening, selected } = opts
   if (size < 2) return null
-  // Pad the canvas so sirens/alarm beacons can bleed outside the body outline
   const pad = Math.ceil(size * 0.2)
   const totalSize = size + pad * 2
   const key = `${color}|${size}|${alarmed ? 1 : 0}|${sirening ? 1 : 0}|${selected ? 1 : 0}`
@@ -383,33 +320,28 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
   cv.height = totalSize
   const c = cv.getContext('2d')!
 
-  // Draw on a normalized 24×24 viewport, centered inside the padded canvas.
   c.translate(pad, pad)
   const k = size / 24
   c.scale(k, k)
 
-  // Geometry constants for a top-down sedan silhouette.
   const bodyX = 6, bodyY = 2.5
   const bodyW = 12, bodyH = 19
-  const radius = 3.2 // rounded ends
+  const radius = 3.2
 
-  // 1. Chassis fill — solid colored body with subtle vertical gradient
   const grad = c.createLinearGradient(0, bodyY, 0, bodyY + bodyH)
   grad.addColorStop(0, color)
   grad.addColorStop(0.5, color)
-  grad.addColorStop(1, 'rgba(0,0,0,0.55)') // shadowed rear
+  grad.addColorStop(1, 'rgba(0,0,0,0.55)')
   c.fillStyle = grad
   roundRectPath(c, bodyX, bodyY, bodyW, bodyH, radius)
   c.fill()
 
-  // 2. Chassis rim — darker outline for definition
   c.strokeStyle = 'rgba(0,0,0,0.75)'
   c.lineWidth = 1
   c.lineJoin = 'round'
   roundRectPath(c, bodyX, bodyY, bodyW, bodyH, radius)
   c.stroke()
 
-  // 3. Specular highlight along the driver-side edge
   c.save()
   c.beginPath()
   roundRectPath(c, bodyX, bodyY, bodyW, bodyH, radius)
@@ -418,7 +350,6 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
   c.fillRect(bodyX, bodyY, 2.2, bodyH)
   c.restore()
 
-  // 4. Windshield (front) — tinted glass panel
   c.fillStyle = 'rgba(200,230,255,0.35)'
   roundRectPath(c, bodyX + 1.3, bodyY + 3.3, bodyW - 2.6, 4.2, 1.2)
   c.fill()
@@ -426,14 +357,12 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
   c.lineWidth = 0.6
   c.stroke()
 
-  // 5. Rear window — slightly darker tint
   c.fillStyle = 'rgba(200,230,255,0.22)'
   roundRectPath(c, bodyX + 1.3, bodyY + 11.5, bodyW - 2.6, 3.4, 1.0)
   c.fill()
   c.strokeStyle = 'rgba(0,0,0,0.35)'
   c.stroke()
 
-  // 6. Roof seam (between windows) — suggests the cabin
   c.strokeStyle = 'rgba(0,0,0,0.4)'
   c.lineWidth = 0.5
   c.beginPath()
@@ -443,24 +372,20 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
   c.lineTo(bodyX + bodyW - 1.3, bodyY + 10.8)
   c.stroke()
 
-  // 7. Headlights — two warm rectangles at the front (top of icon)
   c.fillStyle = 'rgba(255,235,180,0.92)'
   c.fillRect(bodyX + 1.2, bodyY + 0.6, 2.4, 1.4)
   c.fillRect(bodyX + bodyW - 3.6, bodyY + 0.6, 2.4, 1.4)
 
-  // 8. Tail lights — dim reds at the back (bottom of icon)
   c.fillStyle = 'rgba(220,60,50,0.85)'
   c.fillRect(bodyX + 1.2, bodyY + bodyH - 1.8, 2.2, 1.0)
   c.fillRect(bodyX + bodyW - 3.4, bodyY + bodyH - 1.8, 2.2, 1.0)
 
-  // 9. Four wheels — tiny dark rectangles poking from the sides
   c.fillStyle = 'rgba(15,15,15,0.9)'
-  c.fillRect(bodyX - 1, bodyY + 2.8, 1.8, 3.2) // front-left
-  c.fillRect(bodyX + bodyW - 0.8, bodyY + 2.8, 1.8, 3.2) // front-right
-  c.fillRect(bodyX - 1, bodyY + bodyH - 6, 1.8, 3.2) // rear-left
-  c.fillRect(bodyX + bodyW - 0.8, bodyY + bodyH - 6, 1.8, 3.2) // rear-right
+  c.fillRect(bodyX - 1, bodyY + 2.8, 1.8, 3.2)
+  c.fillRect(bodyX + bodyW - 0.8, bodyY + 2.8, 1.8, 3.2)
+  c.fillRect(bodyX - 1, bodyY + bodyH - 6, 1.8, 3.2)
+  c.fillRect(bodyX + bodyW - 0.8, bodyY + bodyH - 6, 1.8, 3.2)
 
-  // 10. Selection ring (when clicked/focused via keyboard)
   if (selected) {
     c.strokeStyle = 'rgba(255,255,255,0.85)'
     c.lineWidth = 1.2
@@ -468,7 +393,6 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
     c.stroke()
   }
 
-  // 11. Siren lightbar (blue/red alternating blocks on the roof)
   if (sirening) {
     c.fillStyle = 'rgba(80,140,255,1)'
     c.fillRect(bodyX + 2.6, bodyY + 9.1, 3.2, 1.5)
@@ -476,7 +400,6 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
     c.fillRect(bodyX + bodyW - 5.8, bodyY + 9.1, 3.2, 1.5)
   }
 
-  // 12. Alarm indicator — pulsing amber dot above the roof
   if (alarmed) {
     c.fillStyle = 'rgba(255,170,40,0.95)'
     c.beginPath()
@@ -492,7 +415,6 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
   return cv
 }
 
-// Small helper so every rounded-rect share uses the same algorithm
 function roundRectPath(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   const rr = Math.min(r, w / 2, h / 2)
   c.beginPath()
@@ -508,9 +430,6 @@ function roundRectPath(c: CanvasRenderingContext2D, x: number, y: number, w: num
   c.closePath()
 }
 
-// ─── Canvas color palette ─────────────────────────────────
-// Reads CSS custom properties so canvas colors follow the active theme.
-// Each HSL token is stored as "H S% L%" in the property (no commas).
 
 function hslToken(prop: string, alpha?: number): string {
   const raw = getComputedStyle(document.documentElement).getPropertyValue(prop).trim()
@@ -518,21 +437,17 @@ function hslToken(prop: string, alpha?: number): string {
   return alpha !== undefined ? `hsl(${raw} / ${alpha})` : `hsl(${raw})`
 }
 
-/** Resolve all canvas colors from CSS custom properties once per frame. */
 function resolveCanvasColors() {
   return {
     background: hslToken('--background'),
-    // Landmarks — these stay neutral/white-based since they overlay the map
     landmarkGlow: 'rgba(255,255,255,0.04)',
     landmarkDiamond: hslToken('--foreground', 0.35),
     landmarkLabel: hslToken('--foreground', 0.65),
-    // Shadows — structural, theme-independent
     shadowLight: 'rgba(0,0,0,0.4)',
     shadowMedium: 'rgba(0,0,0,0.45)',
     shadowStrong: 'rgba(0,0,0,0.6)',
     shadowDarker: 'rgba(0,0,0,0.7)',
     shadowOpaque: 'rgba(0,0,0,1)',
-    // Player markers
     headHighlight: 'rgba(255,255,255,0.3)',
     playerRim: 'rgba(10,12,16,0.92)',
     playerGlyph: 'rgba(10,12,16,0.85)',
@@ -542,12 +457,10 @@ function resolveCanvasColors() {
     healthGood: hslToken('--success', 0.8),
     healthWarning: hslToken('--warning', 0.8),
     healthCritical: hslToken('--destructive', 0.8),
-    // Player states (used by getPlayerColor)
     playerDefault: hslToken('--info', 0.92),
     playerAdmin: hslToken('--warning', 0.92),
     playerInfected: hslToken('--destructive', 0.92),
     playerDead: hslToken('--muted-foreground', 0.7),
-    // Airdrop
     crateBody: hslToken('--accent', 0.92),
     crateBorder: hslToken('--accent', 0.6),
     crateStraps: hslToken('--warning', 0.7),
@@ -556,21 +469,16 @@ function resolveCanvasColors() {
     airdropCanopyStroke: hslToken('--warning', 0.85),
     airdropCanopyFill: hslToken('--warning', 0.12),
     airdropLabel: hslToken('--warning', 0.9),
-    // Empty state
     emptyTitle: hslToken('--foreground', 0.15),
     emptySubtitle: hslToken('--foreground', 0.08),
-    // Crosshair
     crosshair: hslToken('--foreground', 0.12),
-    // Username label
     usernameLabel: hslToken('--foreground'),
-    // Vehicles
     vehicleMarker: hslToken('--info', 0.85),
     vehicleMarkerHover: hslToken('--info', 1),
     vehicleLabel: hslToken('--info', 0.8),
     vehicleGlow: hslToken('--info', 0.15),
     vehicleFuelWarn: hslToken('--warning', 0.85),
     vehicleFuelCrit: hslToken('--destructive', 0.85),
-    // Safehouses
     safehouseFill: hslToken('--success', 0.08),
     safehouseStroke: hslToken('--success', 0.45),
     safehouseStrokeActive: hslToken('--success', 0.7),
@@ -580,7 +488,6 @@ function resolveCanvasColors() {
 
 type CanvasColors = ReturnType<typeof resolveCanvasColors>
 
-// Known PZ landmarks (game-tile coordinates)
 const PZ_LANDMARKS = [
   { name: 'Muldraugh',      gx: 10630, gy:  9800 },
   { name: 'West Point',     gx: 11900, gy:  6900 },
@@ -596,16 +503,11 @@ const PZ_LANDMARKS = [
   { name: 'Echo Creek',     gx:  3520, gy: 10930 },
 ]
 
-// ─── Component ────────────────────────────────────────────
 export default function WorldMap() {
   const { t } = useTranslation('worldMap')
   const { theme } = useTheme()
   const socket = useSocket()
   const { can } = useAuth()
-  // Most actions use the panel-bridge command route and require
-  // bridge.command. addVehicleAt uses a dedicated route and requires
-  // players.gm_tools. setGodMode and healPlayer also use players.gm_tools
-  // without an additional bridge.command requirement.
   const canRunBridgeCommand = can('bridge.command')
   const canWorldEvents = can('server.world_events')
   const canGmTools = can('players.gm_tools')
@@ -628,12 +530,6 @@ export default function WorldMap() {
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
-  // Not a Radix primitive, so closing it doesn't automatically restore
-  // focus. The menu itself auto-focuses its first item on open (see the
-  // ref callback below); this half handles the close side, for any of the
-  // ~20 call sites that dismiss the menu (Escape, item selection, an
-  // action completing, clicking elsewhere) without each needing its own
-  // focus() call.
   const contextMenuWasOpenRef = useRef(false)
   useEffect(() => {
     if (contextMenu) {
@@ -646,10 +542,6 @@ export default function WorldMap() {
   const [selectedPlayer, setSelectedPlayer] = useState<MapPlayer | null>(null)
   const [bridgeConnected, setBridgeConnected] = useState(false)
   const [bridgeLoading, setBridgeLoading] = useState(false)
-  // Bridge's self-reported PanelBridge.VERSION -- gates the player-status
-  // fields (isAlive/isInfected/accessLevel) added in bridge v1.7.39. See
-  // worldMapBridgeVersion.ts for why this is a real version comparison
-  // rather than inferring support from field presence.
   const [bridgeVersion, setBridgeVersion] = useState<string | null>(null)
   const bridgeVersionRef = useRef<string | null>(null)
   useEffect(() => { bridgeVersionRef.current = bridgeVersion }, [bridgeVersion])
@@ -668,25 +560,22 @@ export default function WorldMap() {
   const [safehouses, setSafehouses] = useState<MapSafehouse[]>([])
   const [showVehicles, setShowVehicles] = useState(true)
   const [showSafehouses, setShowSafehouses] = useState(true)
-  const [hoveredVehicle, setHoveredVehicle] = useState<number | null>(null) // vehicle id
+  const [hoveredVehicle, setHoveredVehicle] = useState<number | null>(null)
   const vehiclesRef = useRef<MapVehicle[]>([])
   const safehousesRef = useRef<MapSafehouse[]>([])
   const [spawnDialog, setSpawnDialog] = useState<{ x: number; y: number; z: number } | null>(null)
   const [spawnVehicleId, setSpawnVehicleId] = useState('')
   const [dropDialog, setDropDialog] = useState<{ x: number; y: number; z: number } | null>(null)
-  // Items staged for the current drop (multi-item packages supported).
   const [dropItems, setDropItems] = useState<Array<{ itemType: string; count: number }>>([
     { itemType: '', count: 1 },
   ])
   const [dropAnnounce, setDropAnnounce] = useState(true)
   const [dropAttractZombies, setDropAttractZombies] = useState(true)
   const [dropSoundRadius, setDropSoundRadius] = useState(150)
-  // Last custom drop — enables a "repeat last drop" context menu item
   const [lastDrop, setLastDrop] = useState<{
     items: Array<{ itemType: string; count: number }>
     label: string
   } | null>(null)
-  // User-defined item packages persisted in localStorage. Save / load / delete.
   interface DropTemplate {
     id: string
     name: string
@@ -711,9 +600,7 @@ export default function WorldMap() {
     }
   })
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null)
-  // Confirm-deletion dialog state for custom drop packages.
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null)
-  // Confirm-deletion dialog state for removing a vehicle from the world.
   const [removeVehicleTarget, setRemoveVehicleTarget] = useState<{ id: number; label: string; x: number; y: number } | null>(null)
   const [templateNameInput, setTemplateNameInput] = useState('')
   const [savingTemplate, setSavingTemplate] = useState(false)
@@ -725,46 +612,31 @@ export default function WorldMap() {
       // localStorage full / unavailable — silent
     }
   }, [])
-  const [floor, setFloor] = useState(0)    // Published B42 map layers: -1 = basement, 0 = ground, 1-7 = upper floors
+  const [floor, setFloor] = useState(0)
   const floorRef = useRef(0)
   const { toast } = useToast()
 
-  // Floor label helper
   const floorLabel = (f: number) =>
     f === 0 ? t('floor.ground') : f > 0 ? t('floor.floorN', { n: f }) : t('floor.basementN', { n: Math.abs(f) })
 
-  // Airdrop preset label/description lookups (icon stays in AIRDROP_PRESETS)
   const presetLabel = useCallback((id: string) => t(`airdropPresets.${id}.label`), [t])
   const presetDesc = useCallback((id: string) => t(`airdropPresets.${id}.desc`), [t])
 
-  // Change floor — clears tile cache since tiles differ per floor
   const changeFloor = useCallback((newFloor: number) => {
     const clamped = Math.max(-1, Math.min(7, newFloor))
     setFloor(clamped)
     floorRef.current = clamped
-    // Mark all in-flight loads as orphaned so their callbacks are no-ops
     const oldCache = tileCacheRef.current
     tileCacheRef.current = {}
-    // Clean up: any null entries (pending) in old cache will complete
-    // but write to the detached object — harmless
     void oldCache
-    // Reset failure/backoff state — the new floor's tiles are independent
-    // and shouldn't inherit a stale "can't reach upstream" banner.
     tileFailRef.current = {}
     tileFailureCountRef.current = 0
     setTileLoadFailing(false)
-    // Trigger redraw
     if (drawRequestRef.current === 0) {
       drawRequestRef.current = requestAnimationFrame(() => { drawRequestRef.current = 0 })
     }
   }, [])
 
-  // Detect B41 vs B42 — check gameVersion + branch. Re-run whenever the
-  // active server changes (not just on mount): a panel managing multiple
-  // servers can have the active one switched while this page stays
-  // mounted, and B41/B42 use entirely different tile endpoints and
-  // isometric projection constants — staying on the old config would
-  // silently misplace every marker instead of just failing loudly.
   const detectServerVersion = useCallback(async (cancelledRef: { current: boolean }) => {
     try {
       const [statusRes, serverRes] = await Promise.allSettled([
@@ -787,37 +659,21 @@ export default function WorldMap() {
         if (branch && /b41/i.test(branch)) isB41 = true
       }
 
-      // B42 geometry depends on which map build the backend resolved, so it
-      // can only be built once that's known.
       const targetCfg = isB41 ? MAP_B41 : b42ConfigFor(await mapApi.resolve())
       if (cancelledRef.current) return
-      // Compare the WHOLE config, not just B41/B42 or a hand-picked field
-      // list: the initial state is a B42 placeholder, so a label-only check
-      // would skip applying the resolved build's real dimensions -- and a
-      // partial field list re-arms the identical bug for the next field
-      // anyone adds. See mapConfigsEqual's own comment above MapConfig.
       const cur = mapCfgRef.current
       if (mapConfigsEqual(cur, targetCfg)) return
 
       setMapCfg(targetCfg)
       mapCfgRef.current = targetCfg
-      // B41 has no multi-floor tiles — force floor back to 0 so we don't
-      // request `.webp` URLs the B41 backend regex rejects (which would
-      // 400 every tile and trigger the "tiles not loading" banner with
-      // no way for the user to recover, since the floor selector is
-      // hidden on B41).
       if (isB41) {
         setFloor(0)
         floorRef.current = 0
       }
-      // Clear tile cache and failure state when switching maps — tile
-      // URLs and coordinate systems differ entirely so old entries are
-      // meaningless (and stale ones would misplace markers).
       tileCacheRef.current = {}
       tileFailRef.current = {}
       tileFailureCountRef.current = 0
       setTileLoadFailing(false)
-      // Re-center on the new config's default center
       const el = containerRef.current
       if (el) {
         const s = targetCfg.defaultScale
@@ -837,10 +693,6 @@ export default function WorldMap() {
     return () => { cancelledRef.current = true }
   }, [detectServerVersion])
 
-  // Re-detect on active server switch, and drop the previous server's
-  // player/vehicle/safehouse data so stale markers don't linger under the
-  // new server's identity — mirrors the pattern used by Dashboard/Servers/
-  // Layout/Settings for this same socket event.
   useEffect(() => {
     if (!socket) return
     const cancelledRef = { current: false }
@@ -870,13 +722,11 @@ export default function WorldMap() {
     setLoading(false)
   }, [hasActiveServer])
 
-  // Track mounted state to guard async callbacks
   useEffect(() => {
     mountedRef.current = true
     return () => { mountedRef.current = false }
   }, [])
 
-  // Reduced motion preference
   const prefersReducedMotion = useRef(false)
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -886,7 +736,6 @@ export default function WorldMap() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Refs for use in animation loop (avoid stale closures)
   const scaleRef = useRef(scale)
   scaleRef.current = scale
   const offsetRef = useRef(offset)
@@ -896,33 +745,8 @@ export default function WorldMap() {
   useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
   useEffect(() => { safehousesRef.current = safehouses }, [safehouses])
 
-  // ─── Map tile cache ─────────────────────────────────────
-  // 'empty' marks a tile the upstream server confirmed doesn't exist (a
-  // real HTTP 404, not a network/proxy failure) — e.g. a sparse/edge tile,
-  // or any tile past the real (often much shallower than maxLevel) rendered
-  // coverage depth for this build (see mapProxy.js's discoverRenderedMaxLevel
-  // and GH#109). Treating a 404 as a load error
-  // caused a false "tiles offline" banner and visible view jumps on zoom, so
-  // it's tracked as its own state rather than folded into a failure retry —
-  // see the status-aware fetch() below, since an <img> tag alone can't
-  // distinguish a 404 from any other failure.
-  // pzmap.org's own OpenSeadragon viewer renders an 'empty' tile blank too,
-  // but that is NOT evidence blank is the right answer here — it is a
-  // reference-conformance fact, not a UX one, and it does not survive a real
-  // user staring at a black map (GH#109, filed by Everyday44). The
-  // requirement this state actually carries is: drawMap must fall back to
-  // the nearest cached coarser tile for an 'empty' entry (see
-  // drawTileWithFallback / worldMapTileFallback.ts), never draw nothing.
   const tileCacheRef = useRef<Record<string, HTMLImageElement | null | 'empty'>>({})
 
-  // Resolved once per session: lets the browser build direct-to-upstream
-  // tile URLs (https://tiles.pzmap.org/<dir>/...) instead of
-  // always routing through this server's proxy. Some deployments (e.g. a
-  // Kubernetes cluster with a restrictive Gateway API egress policy) block
-  // outbound access to tiles.pzmap.org for the panel's own pod while
-  // the admin's browser has no such restriction. /api/map/resolve has its
-  // own cache + hardcoded fallback server-side, so it responds instantly
-  // even when the backend itself can't reach tiles.pzmap.org.
   const mapSourceRef = useRef<{ root: string; b42Dir: string; b41Path: string } | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -932,52 +756,24 @@ export default function WorldMap() {
     return () => { cancelled = true }
   }, [])
 
-  // Builds the real tiles.pzmap.org URL for a tile, or null if we
-  // haven't resolved enough info yet (falls back to the backend proxy).
   const buildDirectTileUrl = useCallback((level: number, col: number, row: number, floor: number, ext: string) => {
     const src = mapSourceRef.current
     if (!src) return null
     if (mapCfgRef.current === MAP_B41) {
       return `${src.root}/${src.b41Path}/${level}/${col}_${row}.${ext}`
     }
-    // Floor is a path segment on the real upstream, not a query param —
-    // the ?floor= convention only exists on our own proxy route, which
-    // encodes it that way because /tiles/:level/:tile has no :floor segment.
-    // No /maps/ segment here -- that's a proxy-route convention, not part of
-    // the real upstream path (dropped along with the pzmap.org -> tiles.pzmap.org move).
     return `${src.root}/${src.b42Dir}/base/layer${floor}_files/${level}/${col}_${row}.${ext}`
   }, [])
 
-  // Cap concurrent tile loads to avoid flooding the network
   const pendingTileLoadsRef = useRef(0)
   const MAX_CONCURRENT_TILES = 8
 
-  // Per-tile failure tracking with exponential backoff. The draw loop runs at
-  // ~60fps and re-calls loadDziTile() for every visible tile every frame, so
-  // without backoff a dead upstream (firewall, DNS failure, 502 from the
-  // proxy) results in thousands of retries per second and an apparent
-  // "infinite loading" state. See issue #6.
   const tileFailRef = useRef<Record<string, { count: number; nextAt: number }>>({})
   const tileFailureCountRef = useRef(0)
   const [tileLoadFailing, setTileLoadFailing] = useState(false)
   const [tileFailureKind, setTileFailureKind] = useState<'network' | 'coverage'>('network')
   const tileCoverageFailRef = useRef(0)
-  // The byte-level diagnosis of the most recent coverage-classified failure
-  // (gated the same way as tileFailureDetail below: first failure of a
-  // fresh episode). When present it fully replaces the generic coverage
-  // hedge in the banner -- see worldMapTileFailureDiagnosis.ts and
-  // tileFailureCopyKeys for what each signature means and why an
-  // unrecognised one still gets its own honest message instead of being
-  // rounded into a guess.
   const [tileByteDiagnosis, setTileByteDiagnosis] = useState<TileFailureDiagnosis | null>(null)
-  // The raw diagnostic code behind the most recent tile failure -- surfaced
-  // in the banner itself so a report carries its own diagnosis (the X-Tile-
-  // Cache header this reads was already on every tile response; nothing
-  // ever displayed it, same defect shape as the backupWarning field nobody
-  // read). Every request that ever reaches markFailed already went through
-  // loadViaProxy (the direct path always retries via proxy before giving
-  // up, see loadDziTile's directImg.onerror below), so this header is
-  // always the relevant one -- there is no "which path" ambiguity to add.
   const [tileFailureDetail, setTileFailureDetail] = useState<string | null>(null)
 
   const loadDziTile = useCallback((level: number, col: number, row: number) => {
@@ -985,7 +781,6 @@ export default function WorldMap() {
     const key = `${f}/${level}/${col}_${row}`
     if (key in tileCacheRef.current) return
     if (pendingTileLoadsRef.current >= MAX_CONCURRENT_TILES) return
-    // Honour per-tile backoff after previous failures.
     const fail = tileFailRef.current[key]
     if (fail && Date.now() < fail.nextAt) return
     tileCacheRef.current[key] = null
@@ -997,20 +792,12 @@ export default function WorldMap() {
       diagnosis: TileFailureDiagnosis | null = null,
     ) => {
       if (floorRef.current !== f) return
-      // Drop the pending entry so the per-tile backoff guard above is what
-      // gates the next retry (rather than the "key in cache" check).
       delete tileCacheRef.current[key]
       const prev = tileFailRef.current[key]
       const count = (prev?.count ?? 0) + 1
       const delay = TILE_RETRY_MS[Math.min(count - 1, TILE_RETRY_MS.length - 1)]
       tileFailRef.current[key] = { count, nextAt: Date.now() + delay }
-      // Surface a user-visible warning if many distinct tiles are failing.
       if (count === 1) {
-        // Last-write-wins across whichever tile fails FIRST most recently --
-        // illustrative of what's currently going wrong, not a claim every
-        // failing tile shares one cause. Gated the same way as the counters
-        // just below (first failure of a given tile only) to avoid a
-        // re-render on every backoff retry of an already-known-failing tile.
         setTileFailureDetail(detail)
         setTileByteDiagnosis(diagnosis)
         tileFailureCountRef.current++
@@ -1027,9 +814,6 @@ export default function WorldMap() {
     }
 
     const markRecovered = () => {
-      // Only decrement the global counter when *this* tile was actually in
-      // the failure set, otherwise unrelated successful loads would
-      // prematurely hide the banner while other tiles are still failing.
       if (tileFailRef.current[key]) {
         delete tileFailRef.current[key]
         if (tileFailureCountRef.current > 0) {
@@ -1044,56 +828,21 @@ export default function WorldMap() {
       }
     }
 
-    // Every B42 layer DZI declares JPEG tiles, including upper floors.
     const ext = 'jpg'
-    // `v` names the resolved B42 build this URL was built against -- see
-    // mapProxy.js's TILE_BROWSER_CACHE_CONTROL_VERSIONED comment. Only
-    // meaningful for B42 (B41's upstream directory is a fixed literal, not
-    // dynamically resolved, so there's nothing to version there), and only
-    // once mapSourceRef's one-shot /resolve() has actually completed --
-    // tiles requested before that finishes just miss out on the long-cache
-    // upgrade, same as before this change, never a correctness problem.
     const isB41 = mapCfgRef.current === MAP_B41
     const versionDir = !isB41 ? (mapSourceRef.current?.b42Dir ?? null) : null
     const proxyUrl = `${mapCfgRef.current.tileUrl}/${level}/${col}_${row}.${ext}${buildTileQuery(f, versionDir)}`
 
-    // Loads through this server's proxy — the "smart" path that can tell a
-    // real 404 (tile genuinely absent — see tileCacheRef's comment above for
-    // what 'empty' means and why it must fall back, not render blank) apart
-    // from an actual connectivity failure, since an <img> tag alone can't
-    // see HTTP status codes. Used directly when we haven't resolved a direct
-    // upstream URL yet, and as the fallback when a direct browser load
-    // fails for an ambiguous reason (which itself might just be a real
-    // 404 — routing it through here resolves that ambiguity).
-    //
-    // pendingTileLoadsRef is decremented at each actual terminal point
-    // (not in a blanket .finally()) so the concurrency cap holds the slot
-    // for the full lifecycle including image decode.
     const loadViaProxy = () => {
-      // 'coverage' names tiles.pzmap.org in the failure banner; 'network'
-      // does not. That distinction must track whether upstream actually
-      // participated in THIS response, not just the HTTP status shape --
-      // serveTile (mapProxy.js) can fail a request entirely from its own
-      // memory/disk cache, never touching tiles.pzmap.org at all, and the
-      // banner must not vouch for a host that was never contacted. Only
-      // X-Tile-Cache: miss confirms an upstream fetch actually happened;
-      // hit-mem/hit-disk/absent all mean "local", regardless of status.
       let upstreamParticipated = false
-      // Raw X-Tile-Cache value (hit-mem/hit-disk/miss), kept alongside the
-      // derived upstreamParticipated boolean so the failure banner can show
-      // the actual diagnostic code rather than just the coarse network/
-      // coverage split -- see tileFailureDetail above.
       let cacheTierRaw: string | null = null
-      // The response's own declared size -- compared against the blob we
-      // actually receive if decoding later fails, to prove truncation
-      // rather than guess at it. See worldMapTileFailureDiagnosis.ts.
       let contentLengthHeader: string | null = null
       fetch(proxyUrl)
         .then((res) => {
           cacheTierRaw = res.headers.get('X-Tile-Cache')
           contentLengthHeader = res.headers.get('Content-Length')
           upstreamParticipated = cacheTierRaw === 'miss'
-          if (floorRef.current !== f) { pendingTileLoadsRef.current--; return null } // stale — floor changed mid-flight
+          if (floorRef.current !== f) { pendingTileLoadsRef.current--; return null }
           if (res.status === 404) {
             pendingTileLoadsRef.current--
             tileCacheRef.current[key] = 'empty'
@@ -1108,7 +857,7 @@ export default function WorldMap() {
           return res.blob()
         })
         .then((blob) => {
-          if (!blob) return // already handled (stale or 404) above
+          if (!blob) return
           if (floorRef.current !== f) { pendingTileLoadsRef.current--; return }
           const objectUrl = URL.createObjectURL(blob)
           const img = new window.Image()
@@ -1125,26 +874,12 @@ export default function WorldMap() {
           img.onerror = () => {
             URL.revokeObjectURL(objectUrl)
             pendingTileLoadsRef.current--
-            // Bytes arrived and only the decode failed. If upstream actually
-            // sent these bytes this request, naming it is earned ('coverage').
-            // If they came from our own cache (hit-mem/hit-disk), the
-            // corruption is local and upstream had no part in it.
-            //
-            // Classifying the blob's own bytes -- already fully in memory,
-            // no extra request, no operator devtools relay -- turns this
-            // from a hedge into a positive identification of what the
-            // response actually was, or an honest "unrecognized, here are
-            // the bytes" when it's neither our nor the operator's most
-            // likely guess. See worldMapTileFailureDiagnosis.ts.
             blob.slice(0, 4).arrayBuffer()
               .then((buf) => {
                 const diagnosis = diagnoseTileFailure(new Uint8Array(buf), blob.size, contentLengthHeader)
                 markFailed(upstreamParticipated ? 'coverage' : 'network', cacheTierRaw ?? 'no-header', diagnosis)
               })
               .catch(() => {
-                // Reading the blob's own already-in-memory bytes failed --
-                // shouldn't happen, but fall back rather than leave this
-                // tile's failure unrecorded.
                 markFailed(upstreamParticipated ? 'coverage' : 'network', cacheTierRaw ?? 'no-header')
               })
           }
@@ -1153,15 +888,6 @@ export default function WorldMap() {
         .catch((err) => {
           pendingTileLoadsRef.current--
           const status = (err as { status?: number } | undefined)?.status
-          // A readable 4xx WITH upstreamParticipated means we reached
-          // upstream and it has no tile there. Anything else -- a 5xx, a
-          // rejected fetch (couldn't even reach our own proxy), or a 4xx
-          // that never got as far as the upstream fetch (local validation) --
-          // means we can't vouch for tiles.pzmap.org either way.
-          // Detail: the response's own header when we got one (a 4xx/5xx
-          // passthrough still carries it), else `http-<status>` when there
-          // was a status but no header, else 'unreachable' for a fetch that
-          // never got a response at all (couldn't even reach our own proxy).
           markFailed(
             upstreamParticipated && status && status >= 400 && status < 500 ? 'coverage' : 'network',
             cacheTierRaw ?? (status ? `http-${status}` : 'unreachable'),
@@ -1175,13 +901,6 @@ export default function WorldMap() {
       return
     }
 
-    // Fast path: load straight from pzmap.org in the browser,
-    // bypassing this server entirely. Some deployments' backend can't reach
-    // that host (e.g. a restrictive Kubernetes egress policy) even though
-    // the admin's own browser has no such restriction. An <img> tag can't
-    // tell a real 404 apart from any other failure, so any failure here
-    // just falls back to the proxy path above, which can — still using the
-    // same pending-load slot from the increment above (not a new one).
     const directImg = new window.Image()
     directImg.onload = () => {
       if (floorRef.current !== f) { pendingTileLoadsRef.current--; return }
@@ -1193,17 +912,12 @@ export default function WorldMap() {
       }
     }
     directImg.onerror = () => {
-      if (floorRef.current !== f) { pendingTileLoadsRef.current--; return } // stale, no need to fall back
+      if (floorRef.current !== f) { pendingTileLoadsRef.current--; return }
       loadViaProxy()
     }
     directImg.src = directUrl
   }, [buildDirectTileUrl])
 
-  // A requested level can be within maxLevel yet still have no tile rendered
-  // upstream for most of the map -- see GH#109
-  // and worldMapTileFallback.ts's header comment. When the exact tile is
-  // missing or still loading, draw the matching sub-rectangle of the
-  // nearest cached COARSER tile instead of leaving the rect untouched.
   const drawTileWithFallback = useCallback((
     ctx: CanvasRenderingContext2D,
     floor: number,
@@ -1228,7 +942,6 @@ export default function WorldMap() {
     return true
   }, [loadDziTile])
 
-  // ─── Coordinate transforms (DZI pixel ↔ canvas, game-tile ↔ DZI) ─
   const dziToCanvas = useCallback(
     (dziX: number, dziY: number, s?: number, off?: { x: number; y: number }) => {
       const sc = s ?? scaleRef.current
@@ -1245,7 +958,6 @@ export default function WorldMap() {
     }, []
   )
 
-  // Player game-tile → canvas pixel (isometric projection)
   const playerToScreen = useCallback(
     (gx: number, gy: number, s?: number, off?: { x: number; y: number }) => {
       const dzi = gameTileToDzi(gx, gy, mapCfgRef.current)
@@ -1284,7 +996,6 @@ export default function WorldMap() {
     }, [playerRenderPosition]
   )
 
-  // Canvas pixel → game-tile (inverse isometric)
   const screenToTile = useCallback(
     (cx: number, cy: number, s?: number, off?: { x: number; y: number }) => {
       const dzi = canvasToDzi(cx, cy, s, off)
@@ -1292,7 +1003,6 @@ export default function WorldMap() {
     }, [canvasToDzi]
   )
 
-  // ─── Data fetching ──────────────────────────────────────
   const fetchPlayerPositions = useCallback(async () => {
     if (!hasActiveServer) {
       setBridgeConnected(false)
@@ -1309,12 +1019,6 @@ export default function WorldMap() {
         : null
       if (rawPlayers) {
         setBridgeConnected(true)
-        // isAlive/isInfected/accessLevel only exist on the wire from bridge
-        // v1.7.39 onward -- an older bridge simply omits the keys. Gate on
-        // the bridge's own reported version rather than defaulting/passing
-        // the (possibly absent) raw value through: an older bridge must
-        // read as unknown, never as a specific alive/uninfected/non-admin
-        // value we don't actually have.
         const statusFieldsSupported = bridgeSupportsPlayerStatus(bridgeVersionRef.current)
         setPlayers((prev) => {
           const prevMap = new globalThis.Map(prev.map((p) => [p.username || p.displayName, p]))
@@ -1366,7 +1070,6 @@ export default function WorldMap() {
     }
   }, [hasActiveServer])
 
-  // Fetch vehicles + safehouses from PanelBridge
   const fetchOverlays = useCallback(async () => {
     if (!mountedRef.current || !hasActiveServer) return
     if (!overlayFetchGateRef.current.enter()) return
@@ -1408,13 +1111,11 @@ export default function WorldMap() {
     }
   }, [hasActiveServer, showVehicles])
 
-  // ─── Polling ────────────────────────────────────────────
   useEffect(() => {
     checkBridgeStatus()
     fetchPlayerPositions()
   }, [fetchPlayerPositions, checkBridgeStatus])
 
-  // Fetch overlays on bridge connect and periodically (every 15s)
   useEffect(() => {
     if (!hasActiveServer || !bridgeConnected) return
     fetchOverlays()
@@ -1424,14 +1125,6 @@ export default function WorldMap() {
     return () => clearInterval(interval)
   }, [bridgeConnected, fetchOverlays, hasActiveServer])
 
-  // Deliberately NOT gated on bridgeConnected: fetchPlayerPositions is what
-  // sets bridgeConnected in the first place (true on a successful response,
-  // false on failure). Gating this interval on bridgeConnected meant that
-  // once the mod disconnected, this effect's own guard would tear the
-  // interval down and nothing would ever call fetchPlayerPositions again to
-  // notice a reconnect -- the "Bridge Offline" badge was stuck until the
-  // user reloaded the page or switched servers. Polling through the
-  // disconnected state (a cheap failed fetch every 3s) lets it self-heal.
   useEffect(() => {
     if (!hasActiveServer) return
     const interval = setInterval(() => {
@@ -1442,12 +1135,10 @@ export default function WorldMap() {
 
   useEffect(() => { playersRef.current = players }, [players])
 
-  // ─── Canvas rendering ───────────────────────────────────
 
-  // Resolve theme colors once on mount and when theme changes — not per frame
   useEffect(() => {
     canvasColorsRef.current = resolveCanvasColors()
-    _carIconCache.clear() // Car icons use theme colors — must re-render
+    _carIconCache.clear()
   }, [theme])
 
   const drawMap = useCallback(() => {
@@ -1458,7 +1149,6 @@ export default function WorldMap() {
 
     const C = canvasColorsRef.current
 
-    // DPR-aware sizing for sharp rendering on high-DPI displays
     const dpr = window.devicePixelRatio || 1
     canvas.width = Math.floor(canvasSize.width * dpr)
     canvas.height = Math.floor(canvasSize.height * dpr)
@@ -1469,41 +1159,23 @@ export default function WorldMap() {
     const s = scaleRef.current
     const off = offsetRef.current
 
-    // High-quality image interpolation
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
 
-    // Dark background
     ctx.fillStyle = C.background
     ctx.fillRect(0, 0, W, H)
 
-    // ── DZI map tiles ──
     const mc = mapCfgRef.current
-    // Clamp to renderedMaxLevel, not maxLevel -- maxLevel is the depth a
-    // FULL Deep Zoom pyramid would need for these dimensions, not evidence
-    // the tile host actually rendered that deep (see GH#109 /
-    // GH#109). The DZI addressing math below (levelScale
-    // etc.) still keys off the real maxLevel, since tile level numbering is
-    // defined relative to the full theoretical pyramid regardless of how
-    // much of it actually exists upstream.
     const level = Math.max(0, Math.min(mc.renderedMaxLevel, Math.round(mc.maxLevel + Math.log2(s))))
     const levelScale = Math.pow(2, mc.maxLevel - level)
     const levelW = Math.ceil(mc.fullWidth / levelScale)
     const levelH = Math.ceil(mc.fullHeight / levelScale)
 
-    // Visible DZI full-res pixel range
     const visMinDziX = -off.x / s
     const visMaxDziX = (W - off.x) / s
     const visMinDziY = -off.y / s
     const visMaxDziY = (H - off.y) / s
 
-    // Convert to level-pixel tile indices. Tile size is per-map-config, not
-    // a shared constant — it varies by map build (42.19.0 is 1024, 42.20.0
-    // is 2048) as well as between B41 and B42. Using the wrong value here
-    // doesn't just misplace tiles, it computes an entirely wrong column/row
-    // count — assuming 1024 against a real 2048 tile grid requests up to 2x
-    // as many columns/rows as exist, hitting real 404s past the true edge
-    // and drawing the ones that do exist at the wrong position.
     const tileSize = mc.tileSize
     const minCol = Math.max(0, Math.floor(visMinDziX / levelScale / tileSize))
     const maxCol = Math.min(Math.ceil(levelW / tileSize) - 1, Math.floor(visMaxDziX / levelScale / tileSize))
@@ -1516,9 +1188,6 @@ export default function WorldMap() {
       for (let col = minCol; col <= maxCol; col++) {
         loadDziTile(level, col, row)
         const img = tileCacheRef.current[`${floorRef.current}/${level}/${col}_${row}`]
-        // Floor the origin and pad the size by 1px so adjacent tiles
-        // slightly overlap instead of leaving a sub-pixel seam (visible as
-        // a dark line since tiles draw at globalAlpha 0.9 over a dark bg).
         const dx = Math.floor(col * tileSize * levelScale * s + off.x)
         const dy = Math.floor(row * tileSize * levelScale * s + off.y)
         if (img && img !== 'empty') {
@@ -1526,8 +1195,6 @@ export default function WorldMap() {
           const dh = Math.ceil(img.naturalHeight * levelScale * s) + 1
           ctx.drawImage(img, dx, dy, dw, dh)
         } else {
-          // Exact tile missing (confirmed absent) or still loading -- draw a
-          // coarser cached tile's matching sub-rectangle instead of nothing.
           const dw = Math.ceil(tileSize * levelScale * s) + 1
           const dh = Math.ceil(tileSize * levelScale * s) + 1
           drawTileWithFallback(ctx, floorRef.current, level, col, row, dx, dy, dw, dh)
@@ -1536,7 +1203,6 @@ export default function WorldMap() {
     }
     ctx.restore()
 
-    // ── Landmark labels ──
     const markerSize = Math.max(4, Math.min(10, s * 1500))
     const fontSize = Math.max(9, Math.min(14, s * 3000))
     ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, sans-serif`
@@ -1546,13 +1212,11 @@ export default function WorldMap() {
       const p = playerToScreen(lm.gx, lm.gy, s, off)
       if (p.x < -100 || p.x > W + 100 || p.y < -50 || p.y > H + 50) continue
 
-      // Glow
       ctx.beginPath()
       ctx.arc(p.x, p.y, markerSize * 2, 0, Math.PI * 2)
       ctx.fillStyle = C.landmarkGlow
       ctx.fill()
 
-      // Diamond
       ctx.beginPath()
       ctx.moveTo(p.x, p.y - markerSize * 0.7)
       ctx.lineTo(p.x + markerSize * 0.7, p.y)
@@ -1562,11 +1226,6 @@ export default function WorldMap() {
       ctx.fillStyle = C.landmarkDiamond
       ctx.fill()
 
-      // Label — the marker-position cull above is generous enough (±100px)
-      // that a centered label can still land mostly or entirely off-canvas,
-      // leaving only a stray fragment of the name visible (e.g. "gh" of
-      // "Muldraugh") on a narrow viewport. Only draw it if it's fully on
-      // screen; the marker alone still shows an accurate position.
       const labelWidth = ctx.measureText(lm.name).width
       const labelY = p.y - markerSize - 4
       const labelFits =
@@ -1580,18 +1239,14 @@ export default function WorldMap() {
       }
     }
 
-    // ── Safehouse rectangles ──
     if (showSafehouses) {
       const currentSafehouses = safehousesRef.current
       for (const sh of currentSafehouses) {
-        // Safehouses have x, y (top-left game-tile) and w, h (size in game-tiles)
         const topLeft = playerToScreen(sh.x, sh.y, s, off)
         const bottomRight = playerToScreen(sh.x + sh.w, sh.y + sh.h, s, off)
-        // Isometric: we need all 4 corners for the diamond shape
         const topRight = playerToScreen(sh.x + sh.w, sh.y, s, off)
         const bottomLeft = playerToScreen(sh.x, sh.y + sh.h, s, off)
 
-        // Cull if entirely off-screen
         const allX = [topLeft.x, topRight.x, bottomRight.x, bottomLeft.x]
         const allY = [topLeft.y, topRight.y, bottomRight.y, bottomLeft.y]
         const minPx = Math.min(...allX)
@@ -1600,7 +1255,6 @@ export default function WorldMap() {
         const maxPy = Math.max(...allY)
         if (maxPx < -50 || minPx > W + 50 || maxPy < -50 || minPy > H + 50) continue
 
-        // Draw isometric diamond
         ctx.beginPath()
         ctx.moveTo(topLeft.x, topLeft.y)
         ctx.lineTo(topRight.x, topRight.y)
@@ -1613,7 +1267,6 @@ export default function WorldMap() {
         ctx.lineWidth = sh.playerConnected ? 2 : 1
         ctx.stroke()
 
-        // Label (only show when zoomed in enough)
         if (s > 0.0008) {
           const centerX = (minPx + maxPx) / 2
           const centerY = (minPy + maxPy) / 2
@@ -1631,7 +1284,6 @@ export default function WorldMap() {
       }
     }
 
-    // ── Vehicle markers ──
     const now = performance.now()
     if (showVehicles) {
       const currentVehicles = vehiclesRef.current
@@ -1645,7 +1297,6 @@ export default function WorldMap() {
         const drawSize = isHovered ? vSize * 1.2 : vSize
         const half = drawSize / 2
 
-        // Color by fuel status
         const vColor = vehicle.fuelPct == null
           ? C.vehicleMarker
           : vehicle.fuelPct > 30
@@ -1655,7 +1306,6 @@ export default function WorldMap() {
               : C.vehicleFuelCrit
         const color = isHovered ? C.vehicleMarkerHover : vColor
 
-        // Glow on hover
         if (isHovered) {
           ctx.beginPath()
           ctx.arc(vp.x, vp.y, half + 6, 0, Math.PI * 2)
@@ -1663,7 +1313,6 @@ export default function WorldMap() {
           ctx.fill()
         }
 
-        // Siren halo — cycles blue/red when sirening
         if (vehicle.sirening && !prefersReducedMotion.current) {
           const sirenPhase = (now / 450) % 1
           const sirenR = half + 8 + sirenPhase * 6
@@ -1677,7 +1326,6 @@ export default function WorldMap() {
           ctx.globalAlpha = 1
         }
 
-        // Alarm pulse — amber ring when alarm is active
         if (vehicle.alarmed && !prefersReducedMotion.current) {
           const alarmPhase = (now / 900) % 1
           const alarmR = half + 4 + alarmPhase * 10
@@ -1688,7 +1336,6 @@ export default function WorldMap() {
           ctx.stroke()
         }
 
-        // Draw cached top-down vehicle icon (padded canvas → center on vp)
         const img = getCarIcon({
           color,
           size: Math.round(drawSize),
@@ -1701,7 +1348,6 @@ export default function WorldMap() {
           ctx.shadowBlur = 4
           ctx.shadowOffsetX = 0
           ctx.shadowOffsetY = 2
-          // Icon canvas is padded 20% on each side — draw centered
           const drawX = vp.x - img.width / 2
           const drawY = vp.y - img.height / 2
           ctx.drawImage(img, drawX, drawY)
@@ -1711,7 +1357,6 @@ export default function WorldMap() {
           ctx.shadowOffsetY = 0
         }
 
-        // Label on hover or at high zoom
         if ((isHovered || s > 0.003) && s > 0.0008) {
           const vFontSize = Math.max(8, Math.min(11, s * 2000))
           ctx.font = `500 ${vFontSize}px ui-sans-serif, system-ui, sans-serif`
@@ -1723,7 +1368,6 @@ export default function WorldMap() {
       }
     }
 
-    // ── Player markers ──
     const currentPlayers = playersRef.current
     const mRadius = Math.max(5, Math.min(16, s * 1400))
 
@@ -1738,12 +1382,9 @@ export default function WorldMap() {
       const isInfected = !!player.isInfected && !isDead
       const pinScale = isHovered || isSelected ? 1.2 : 1
 
-      // Top-down survivor token, centred on the real tile position so players
-      // read the same way as the top-down vehicle icons.
       const r = mRadius * pinScale
       const color = getPlayerColor(player, 0.95)
 
-      // 1. Ground shadow
       ctx.save()
       ctx.fillStyle = 'rgba(0,0,0,0.35)'
       ctx.beginPath()
@@ -1751,7 +1392,6 @@ export default function WorldMap() {
       ctx.fill()
       ctx.restore()
 
-      // 2. Pulse ring (live players only, subtle)
       if (!prefersReducedMotion.current && !isDead) {
         const seed = player.username.charCodeAt(0) / 26
         const pulsePhase = (now / 1800 + seed) % 1
@@ -1762,7 +1402,6 @@ export default function WorldMap() {
         ctx.stroke()
       }
 
-      // 3. Selection / hover halo
       if (isHovered || isSelected) {
         ctx.beginPath()
         ctx.arc(p.x, p.y, r + 4.5, 0, Math.PI * 2)
@@ -1775,7 +1414,6 @@ export default function WorldMap() {
         ctx.stroke()
       }
 
-      // 4. Token disc — dark rim keeps the marker legible over any terrain
       ctx.save()
       ctx.shadowColor = 'rgba(0,0,0,0.5)'
       ctx.shadowBlur = 4
@@ -1791,14 +1429,12 @@ export default function WorldMap() {
       ctx.fillStyle = color
       ctx.fill()
 
-      // 5. Survivor glyph — head over shoulders, dropped when it would blur
       if (r >= 6.5) {
         ctx.save()
         ctx.fillStyle = C.playerGlyph
         ctx.beginPath()
         ctx.arc(p.x, p.y - r * 0.28, r * 0.3, 0, Math.PI * 2)
         ctx.fill()
-        // Shoulders are a dome so the pair never reads as a face
         ctx.beginPath()
         ctx.arc(p.x, p.y + r * 0.58, r * 0.56, Math.PI, 0)
         ctx.closePath()
@@ -1806,7 +1442,6 @@ export default function WorldMap() {
         ctx.restore()
       }
 
-      // 6. Infected ring
       if (isInfected) {
         const wobble = prefersReducedMotion.current ? 0 : Math.sin(now / 400) * 0.6
         ctx.save()
@@ -1819,7 +1454,6 @@ export default function WorldMap() {
         ctx.restore()
       }
 
-      // 7. Dead overlay
       if (isDead) {
         const xLen = r * 0.44
         ctx.save()
@@ -1835,7 +1469,6 @@ export default function WorldMap() {
         ctx.restore()
       }
 
-      // 8. Admin ring
       if (isAdmin) {
         ctx.beginPath()
         ctx.arc(p.x, p.y, r + 1.6, 0, Math.PI * 2)
@@ -1844,7 +1477,6 @@ export default function WorldMap() {
         ctx.stroke()
       }
 
-      // 9. Username label above the token
       const labelY = p.y - r - 7
       const labelAlpha = isHovered || isSelected ? 1 : 0.85
       ctx.font = `600 ${Math.max(10, Math.min(13, s * 2500))}px ui-sans-serif, system-ui, sans-serif`
@@ -1857,7 +1489,6 @@ export default function WorldMap() {
       ctx.fillText(player.displayName || player.username, p.x, labelY)
       ctx.restore()
 
-      // 10. Health bar below the token
       if (player.health !== undefined && s > 0.0005 && !isDead) {
         const barW = 26
         const barH = 3
@@ -1865,13 +1496,11 @@ export default function WorldMap() {
         const barY = p.y + r + 5
         const healthPct = Math.max(0, Math.min(100, player.health)) / 100
 
-        // Backdrop
         ctx.fillStyle = C.healthBarBg
         ctx.beginPath()
         ctx.roundRect(barX, barY, barW, barH, 1.5)
         ctx.fill()
 
-        // Fill
         ctx.fillStyle =
           healthPct > 0.5 ? C.healthGood :
           healthPct > 0.25 ? C.healthWarning :
@@ -1880,7 +1509,6 @@ export default function WorldMap() {
         ctx.roundRect(barX, barY, barW * healthPct, barH, 1.5)
         ctx.fill()
 
-        // Rim
         ctx.strokeStyle = 'rgba(0,0,0,0.4)'
         ctx.lineWidth = 0.6
         ctx.beginPath()
@@ -1889,12 +1517,11 @@ export default function WorldMap() {
       }
     }
 
-    // ── Airdrop markers ──
     const markers = airdropMarkersRef.current
     const nowMs = Date.now()
     for (const marker of markers) {
       const age = nowMs - marker.time
-      const fadeAlpha = Math.max(0, 1 - age / 300_000) // fade over 5 min
+      const fadeAlpha = Math.max(0, 1 - age / 300_000)
       if (fadeAlpha <= 0) continue
 
       const ap = playerToScreen(marker.x, marker.y, s, off)
@@ -1902,7 +1529,6 @@ export default function WorldMap() {
 
       const dropSize = Math.max(6, Math.min(16, s * 2000))
 
-      // Pulsing ring (first 30s)
       if (age < 30_000 && !prefersReducedMotion.current) {
         const pulse = ((now / 800) % 1)
         const ringR = dropSize + 8 + pulse * 14
@@ -1913,7 +1539,6 @@ export default function WorldMap() {
         ctx.stroke()
       }
 
-      // Ground shadow (ellipse below crate)
       ctx.save()
       ctx.globalAlpha = fadeAlpha * 0.25
       ctx.beginPath()
@@ -1930,7 +1555,6 @@ export default function WorldMap() {
       const crateBottom = ap.y + bs * 1.1
       const crateH = crateBottom - crateTop
 
-      // Crate body (rounded rect)
       ctx.beginPath()
       ctx.roundRect(ap.x - bs, crateTop, bs * 2, crateH, 2)
       ctx.fillStyle = C.crateBody
@@ -1939,7 +1563,6 @@ export default function WorldMap() {
       ctx.lineWidth = 1.5
       ctx.stroke()
 
-      // Crate cross straps
       ctx.beginPath()
       ctx.moveTo(ap.x, crateTop)
       ctx.lineTo(ap.x, crateBottom)
@@ -1949,7 +1572,6 @@ export default function WorldMap() {
       ctx.lineWidth = 1
       ctx.stroke()
 
-      // Parachute lines from crate top corners + center to canopy
       const canopyY = crateTop - dropSize * 1.6
       const canopyW = dropSize * 1.8
       ctx.beginPath()
@@ -1963,7 +1585,6 @@ export default function WorldMap() {
       ctx.lineWidth = 0.8
       ctx.stroke()
 
-      // Parachute canopy (arc)
       ctx.beginPath()
       ctx.moveTo(ap.x - canopyW, canopyY)
       ctx.quadraticCurveTo(ap.x, canopyY - dropSize * 1.2, ap.x + canopyW, canopyY)
@@ -1971,7 +1592,6 @@ export default function WorldMap() {
       ctx.lineWidth = 2.5
       ctx.stroke()
 
-      // Canopy fill (subtle)
       ctx.beginPath()
       ctx.moveTo(ap.x - canopyW, canopyY)
       ctx.quadraticCurveTo(ap.x, canopyY - dropSize * 1.2, ap.x + canopyW, canopyY)
@@ -1982,7 +1602,6 @@ export default function WorldMap() {
 
       ctx.restore()
 
-      // Label
       const presetDef = AIRDROP_PRESETS.find((p) => p.id === marker.preset)
       if (presetDef && s > 0.0004) {
         ctx.save()
@@ -1998,14 +1617,7 @@ export default function WorldMap() {
       }
     }
 
-    // Empty state
     if (currentPlayers.length === 0) {
-      // The floating control rail (top-3 start-3, w-12) permanently overlaps
-      // the canvas's start edge -- left in ltr, right in rtl (canvas drawing
-      // is raw pixel math, not CSS, so it does not follow the CSS mirror on
-      // its own) -- so text centered on the full canvas width can render
-      // underneath it on narrow (mobile) viewports. Only nudge away from
-      // that edge when a naive center would tuck the text under the rail.
       const railClearance = 72
       const rtl = isRTL(getCurrentLanguage())
       ctx.textAlign = 'center'
@@ -2029,7 +1641,6 @@ export default function WorldMap() {
       ctx.fillText(subtitle, subtitleX, H / 2 + 10)
     }
 
-    // Crosshair at cursor
     if (cursorWorldPos && !isDragging) {
       const cp = playerToScreen(cursorWorldPos.x, cursorWorldPos.y, s, off)
       ctx.strokeStyle = C.crosshair
@@ -2045,15 +1656,10 @@ export default function WorldMap() {
     }
   }, [canvasSize, loadDziTile, drawTileWithFallback, playerToScreen, playerRenderPosition, hoveredPlayer, selectedPlayer, cursorWorldPos, isDragging, showVehicles, showSafehouses, hoveredVehicle, t, presetLabel])
 
-  // ─── Animation loop ─────────────────────────────────────
   useEffect(() => {
     let running = true
     const animate = () => {
       if (!running) return
-      // Only produce a new array (and thus trigger a re-render) when a
-      // player is actually mid-animation — otherwise .map() would return a
-      // fresh array every frame forever, re-rendering the whole page at
-      // 60fps even while fully idle with no players moving.
       setPlayers((prev) => {
         let changed = false
         const next = prev.map((p) => {
@@ -2079,7 +1685,6 @@ export default function WorldMap() {
     }
   }, [drawMap])
 
-  // ─── Canvas resize ──────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -2096,7 +1701,6 @@ export default function WorldMap() {
     return () => ro.disconnect()
   }, [])
 
-  // ─── Set initial view centered on Knox County ───────────
   const hasInitRef = useRef(false)
   useEffect(() => {
     if (hasInitRef.current || canvasSize.width === 0) return
@@ -2109,14 +1713,12 @@ export default function WorldMap() {
     })
   }, [canvasSize])
 
-  // ─── Fit to players ─────────────────────────────────────
   const fitToPlayers = useCallback(() => {
     const W = canvasSize.width
     const H = canvasSize.height
     if (W === 0 || H === 0) return
 
     if (players.length === 0) {
-      // Reset to default Knox County view
       const c = mapCfgRef.current.defaultCenter
       const s = mapCfgRef.current.defaultScale
       setScale(s)
@@ -2127,7 +1729,6 @@ export default function WorldMap() {
       return
     }
 
-    // Find player bounds in DZI pixel coords
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
     for (const p of players) {
       const dzi = gameTileToDzi(p.x, p.y, mapCfgRef.current)
@@ -2137,7 +1738,7 @@ export default function WorldMap() {
       maxY = Math.max(maxY, dzi.y)
     }
 
-    const pad = 50000 // DZI pixels of padding
+    const pad = 50000
     minX -= pad; minY -= pad; maxX += pad; maxY += pad
 
     const rangeX = maxX - minX
@@ -2150,7 +1751,6 @@ export default function WorldMap() {
     setOffset({ x: W / 2 - centerX * newScale, y: H / 2 - centerY * newScale })
   }, [players, canvasSize])
 
-  // Auto-fit on first player data
   useEffect(() => {
     if (players.length > 0 && !hasFittedRef.current) {
       hasFittedRef.current = true
@@ -2158,9 +1758,6 @@ export default function WorldMap() {
     }
   }, [players, fitToPlayers])
 
-  // ─── Wheel zoom (non-passive) ─────────────────────────
-  // Attached to the map wrapper (not just canvas) so overlays don't eat the event.
-  // Uses refs for immediate read/write to avoid stale-state drift during rapid scrolling.
   useEffect(() => {
     const wrapper = mapWrapperRef.current
     if (!wrapper) return
@@ -2183,7 +1780,6 @@ export default function WorldMap() {
         y: my - (my - prevOff.y) * ratio,
       }
 
-      // Update refs immediately so the next rapid wheel tick reads correct values
       scaleRef.current = newScale
       offsetRef.current = newOffset
 
@@ -2195,7 +1791,6 @@ export default function WorldMap() {
     return () => wrapper.removeEventListener('wheel', onWheel)
   }, [])
 
-  // ─── Mouse interactions ─────────────────────────────────
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 0) {
       pointerDownRef.current = { x: e.clientX, y: e.clientY }
@@ -2221,11 +1816,9 @@ export default function WorldMap() {
         return
       }
 
-      // Cursor world position (game tiles)
       const wp = screenToTile(mx, my)
       setCursorWorldPos(wp)
 
-      // Hit test players — the token is centred on the tile position
       let found: string | null = null
       for (const player of playersRef.current) {
         const p = playerRenderPosition(player)
@@ -2237,7 +1830,6 @@ export default function WorldMap() {
       }
       setHoveredPlayer(found)
 
-      // Hit test vehicles (hit radius scales with zoom to match icon size)
       let foundVehicle: number | null = null
       if (showVehicles && !found) {
         const vHitRadius = Math.max(MARKER_HIT_RADIUS, Math.max(14, Math.min(36, scaleRef.current * 4200)) * 0.7)
@@ -2328,7 +1920,6 @@ export default function WorldMap() {
     setCursorWorldPos(null)
   }, [])
 
-  // ─── Touch support ─────────────────────────────────────
   const touchRef = useRef<{ startX: number; startY: number; offX: number; offY: number; pinchDist: number | null; moved: boolean; hadPinch: boolean }>({
     startX: 0, startY: 0, offX: 0, offY: 0, pinchDist: null, moved: false, hadPinch: false,
   })
@@ -2392,7 +1983,6 @@ export default function WorldMap() {
     touchRef.current.pinchDist = null
   }, [playerAtScreenPoint])
 
-  // ─── Zoom controls ─────────────────────────────────────
   const zoomIn = useCallback(() => {
     const cx = canvasSize.width / 2
     const cy = canvasSize.height / 2
@@ -2420,7 +2010,6 @@ export default function WorldMap() {
     setOffset(newOffset)
   }, [canvasSize])
 
-  // ─── Keyboard controls ─────────────────────────────────
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       const PAN_STEP = 40
@@ -2459,7 +2048,6 @@ export default function WorldMap() {
     [zoomIn, zoomOut]
   )
 
-  // Escape key dismisses context menu globally (even without canvas focus)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -2471,7 +2059,6 @@ export default function WorldMap() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // Click outside context menu to dismiss
   useEffect(() => {
     if (!contextMenu) return
     const onClick = (e: MouseEvent) => {
@@ -2484,10 +2071,8 @@ export default function WorldMap() {
     return () => document.removeEventListener('mousedown', onClick, true)
   }, [contextMenu])
 
-  // ─── Actions ────────────────────────────────────────────
   const triggerLightningAt = useCallback(
     async (x: number, y: number) => {
-      // Keep the action guarded when called outside the menu item handler.
       if (!canWorldEvents) return
       setActionLoading('lightning')
       try {
@@ -2526,16 +2111,11 @@ export default function WorldMap() {
 
   const callAirdrop = useCallback(
     async (x: number, y: number, preset: typeof AIRDROP_PRESETS[number]['id']) => {
-      if (actionLoadingRef.current) return // prevent double-submit (ref avoids stale closure)
+      if (actionLoadingRef.current) return
       if (!canRunBridgeCommand) return
       actionLoadingRef.current = 'airdrop'
       setActionLoading('airdrop')
       try {
-        // /panel-bridge/command's generic passthrough (bridge.sendCommand())
-        // only ever resolves with { success: true, ... } -- an in-game
-        // failure rejects the promise instead (see processResult()'s
-        // pending.reject branch in services/panelBridge.js) -- so this
-        // never sees res.success === false, only the catch below.
         const res = await panelBridgeApi.triggerAirdrop({ x, y, preset, announce: true, attractZombies: true })
         if (!mountedRef.current) return
         const presetDef = AIRDROP_PRESETS.find((p) => p.id === preset)
@@ -2553,7 +2133,7 @@ export default function WorldMap() {
         toast({ title: t('toasts.airdropDeployedTitle', { label }), description: desc })
         setAirdropMarkers((prev) => {
           const next = [...prev, { x, y, preset, time: Date.now() }]
-          return next.length > 50 ? next.slice(-50) : next // cap at 50 markers
+          return next.length > 50 ? next.slice(-50) : next
         })
       } catch (err) {
         if (!mountedRef.current) return
@@ -2570,20 +2150,17 @@ export default function WorldMap() {
     [toast, t, presetLabel, canRunBridgeCommand]
   )
 
-  // Clean up expired airdrop markers (older than 5 minutes)
   useEffect(() => {
     const interval = setInterval(() => {
       const cutoff = Date.now() - 300_000
       setAirdropMarkers((prev) => {
         const filtered = prev.filter((m) => m.time > cutoff)
-        return filtered.length === prev.length ? prev : filtered // stable ref if unchanged
+        return filtered.length === prev.length ? prev : filtered
       })
     }, 15_000)
     return () => clearInterval(interval)
   }, [])
 
-  // Custom drop — drop one or more items at coords. Reuses the airdrop
-  // backend's `items` payload; no new server/Lua route required.
   const callCustomDrop = useCallback(
     async (opts: {
       x: number
@@ -2607,7 +2184,6 @@ export default function WorldMap() {
         toast({ title: t('toasts.noItemsTitle'), description: t('toasts.noItemsDesc'), variant: 'destructive' })
         return
       }
-      // Module must start with a letter; item name may start with a digit (e.g. 9mmClip, 556Bullets).
       const ID_RE = /^[A-Za-z]\w*\.\w+$/
       const bad = cleaned.find((it) => !ID_RE.test(it.itemType))
       if (bad) {
@@ -2625,9 +2201,6 @@ export default function WorldMap() {
       actionLoadingRef.current = 'drop'
       setActionLoading('drop')
       try {
-        // Same shape as callAirdrop above: the generic /panel-bridge/command
-        // passthrough only ever resolves on success, so this never sees
-        // res.success === false, only the catch below.
         const res = await panelBridgeApi.triggerAirdrop({
           x: opts.x,
           y: opts.y,
@@ -2676,19 +2249,11 @@ export default function WorldMap() {
     [toast, t, canRunBridgeCommand]
   )
 
-  // Teleport an arbitrary online player to the right-clicked coordinate.
   const teleportPlayerTo = useCallback(
     async (username: string, x: number, y: number, z: number) => {
       if (!canRunBridgeCommand) return
       setActionLoading('teleport')
       try {
-        // bridge.sendCommand() (services/panelBridge.js) only ever resolves
-        // with { success: true, ... } -- an in-game failure rejects the
-        // promise instead (see processResult()'s pending.reject branch), so
-        // handleResponse() throws into the catch below either way. This
-        // never sees res.success === false. It CAN resolve with
-        // data.verified !== 'confirmed' though (mod couldn't read back the
-        // new position) -- that's not a rejection, so it needs its own check.
         const response = await panelBridgeApi.sendCommand('teleportPlayer', {
           username,
           x: Math.round(x),
@@ -2727,10 +2292,6 @@ export default function WorldMap() {
     [toast, fetchPlayerPositions, t, canRunBridgeCommand]
   )
 
-  // Copy map coordinates to the clipboard. Goes through copyText (not the
-  // raw clipboard API directly) so this still works over a plain-HTTP LAN
-  // deployment -- navigator.clipboard requires a secure context and is
-  // unavailable there; copyText falls back to execCommand.
   const copyCoords = useCallback(
     async (x: number, y: number) => {
       const text = `${Math.round(x)}, ${Math.round(y)}`
@@ -2742,19 +2303,17 @@ export default function WorldMap() {
     [toast, t]
   )
 
-  // Pan to player (from player list click)
   const panToPlayer = useCallback((p: MapPlayer) => {
     const W = canvasSize.width
     const H = canvasSize.height
     if (W === 0) return
     const dzi = gameTileToDzi(p.x, p.y, mapCfgRef.current)
-    const viewScale = Math.max(scale, mapCfgRef.current.defaultScale * 10) // zoom in if too far out
+    const viewScale = Math.max(scale, mapCfgRef.current.defaultScale * 10)
     setScale(viewScale)
     setOffset({ x: W / 2 - dzi.x * viewScale, y: H / 2 - dzi.y * viewScale })
     setSelectedPlayer(p)
   }, [canvasSize, scale])
 
-  // ─── Render ─────────────────────────────────────────────
   return (
     <div className="space-y-4 page-transition">
       <PageHeader
@@ -2778,13 +2337,11 @@ export default function WorldMap() {
       />
 
       <div ref={mapWrapperRef} className="relative rounded-md border border-border/60 overflow-hidden bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]">
-        {/* Corner brackets — tactical control-room frame */}
         <span aria-hidden className="pointer-events-none absolute top-0 start-0 z-30 h-3 w-3 border-s-2 border-t-2 border-primary/50" />
         <span aria-hidden className="pointer-events-none absolute top-0 end-0 z-30 h-3 w-3 border-e-2 border-t-2 border-primary/50" />
         <span aria-hidden className="pointer-events-none absolute bottom-0 start-0 z-30 h-3 w-3 border-s-2 border-b-2 border-primary/50" />
         <span aria-hidden className="pointer-events-none absolute bottom-0 end-0 z-30 h-3 w-3 border-e-2 border-b-2 border-primary/50" />
 
-        {/* Control rail — top-left */}
         <div className="absolute top-3 start-3 z-10 w-12 rounded-md border border-border/55 bg-card/85 backdrop-blur-md shadow-lg overflow-hidden">
           <div className="flex items-center justify-center gap-1 px-1.5 py-1 border-b border-border/40 bg-muted/40 font-mono text-[9px] uppercase tracking-[0.24em] text-primary/70">
             <span className="text-primary/60">//</span>
@@ -2817,7 +2374,6 @@ export default function WorldMap() {
             </button>
           </div>
 
-          {/* Floor selector — B42 only (B41 has no multi-level tiles) */}
           {mapCfg.label === 'B42' && (
             <>
               <div className="flex items-center justify-center gap-1 px-1.5 py-1 border-y border-border/40 bg-muted/30 font-mono text-[9px] uppercase tracking-[0.24em] text-muted-foreground/70">
@@ -2896,12 +2452,6 @@ export default function WorldMap() {
           </div>
         </div>
 
-        {/* Tile-load failure banner — appears when many *distinct* tiles fail
-            with a real error (network outage, firewall blocking
-            pzmap.org, upstream tile server down). A genuine
-            HTTP 404 (sparse/edge tile, out of map bounds) does NOT count
-            toward this — see loadDziTile's 'empty' handling. Without this
-            banner the user just sees an indefinite empty map. See issue #6. */}
         {tileLoadFailing && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 max-w-md w-[min(28rem,calc(100%-7rem))]" role="alert">
             <div className="rounded-md border border-warning/60 bg-warning/15 backdrop-blur-md shadow-lg overflow-hidden">
@@ -2914,11 +2464,6 @@ export default function WorldMap() {
               </div>
               <div className="px-3 py-2 text-xs leading-snug">
                 {tileByteDiagnosis ? (
-                  // Bytes already in hand were classified directly instead
-                  // of guessed at -- a recognised signature earns a
-                  // specific, paste-able statement; an unrecognised one
-                  // says so plainly with the raw bytes rather than being
-                  // forced into a guess. See tileFailureCopyKeys.
                   (() => {
                     const keys = tileFailureCopyKeys(tileByteDiagnosis)
                     return (
@@ -2952,15 +2497,6 @@ export default function WorldMap() {
                   </>
                 )}
                 {tileFailureDetail && !tileByteDiagnosis && (
-                  // The raw X-Tile-Cache diagnostic code (hit-mem/hit-disk/
-                  // miss/http-<status>/unreachable) for network-classified
-                  // failures, which never go through the byte-level
-                  // classification above (no blob to inspect for those --
-                  // see loadViaProxy's .catch() branch). Shown as-is (not
-                  // translated) so a screenshot carries the same fact a
-                  // devtools Network tab would have shown. Suppressed
-                  // whenever the byte diagnosis above is already showing a
-                  // more specific, translated statement of the same idea.
                   <div className="mt-1 pt-1 border-t border-warning/20 font-mono text-[10px] text-muted-foreground/70">
                     {t('tileFailure.diagnostic', { detail: tileFailureDetail })}
                   </div>
@@ -2970,7 +2506,6 @@ export default function WorldMap() {
           </div>
         )}
 
-        {/* Roster panel — top-right */}
         <div className={cn('absolute top-3 end-3 z-10', rosterCollapsed ? 'w-auto' : 'w-56')}>
           <div className="rounded-md border border-border/55 bg-card/85 backdrop-blur-md shadow-lg overflow-hidden">
             <button
@@ -3037,7 +2572,6 @@ export default function WorldMap() {
           </div>
         </div>
 
-        {/* HUD coordinate bar — bottom-left */}
         <div className="absolute bottom-3 start-3 z-10">
           <div className="flex items-stretch rounded-md border border-border/55 bg-card/85 backdrop-blur-md shadow-lg font-mono text-[11px] tabular-nums overflow-hidden">
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-e border-border/40">
@@ -3061,10 +2595,6 @@ export default function WorldMap() {
           </div>
         </div>
 
-        {/* Dossier — bottom-right (selected player). Raised above the HUD
-            coordinate bar on narrow viewports so the two fixed-position
-            overlays stack instead of colliding; side-by-side once there's
-            room (>= sm). */}
         {selectedPlayer && (
           <div className="absolute end-3 z-10 w-60 bottom-14 sm:bottom-3">
             <div className="relative rounded-md border border-border/55 bg-card/90 backdrop-blur-md shadow-lg overflow-hidden">
@@ -3132,9 +2662,6 @@ export default function WorldMap() {
                   { key: 'thirst', value: selectedPlayer.thirst, label: t('dossier.thirst') },
                   { key: 'fatigue', value: selectedPlayer.fatigue, label: t('dossier.fatigue') },
                 ] as const).map(({ key, value, label }) => value === undefined ? null : (
-                  // PZ's stats scale is 0 (fine) to 1 (critical) -- the
-                  // inverse of the health bar above, so severity color
-                  // thresholds are flipped: full/green only near 0.
                   <div key={key} className="flex justify-between items-center">
                     <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">{label}</span>
                     <div className="flex items-center gap-1.5">
@@ -3231,11 +2758,9 @@ export default function WorldMap() {
           </div>
         )}
 
-        {/* Context menu */}
         {contextMenu && (
           <div
             ref={(el) => {
-              // Auto-focus first menu item on open for keyboard accessibility
               if (el) {
                 const first = el.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')
                 first?.focus()
@@ -3275,7 +2800,6 @@ export default function WorldMap() {
               }
             }}
           >
-            {/* Context header — coordinates + quick copy */}
             <div className="flex items-center justify-between gap-1 px-2 py-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-primary/70 border-b border-border/40 select-none bg-muted/30">
               <span className="flex items-center gap-1.5">
                 <span className="text-primary/60">//</span>
@@ -3388,9 +2912,6 @@ export default function WorldMap() {
                       onClick={() => {
                     if (!canRunBridgeCommand) return
                     setActionLoading('vehicle-repair')
-                    // Generic /panel-bridge/command passthrough only ever
-                    // resolves on success (see teleportPlayerTo above for
-                    // why), so .then() never sees res.success === false.
                     panelBridgeApi.sendCommand('vehicleRepair', { vehicleId: contextMenu.vehicle!.id })
                       .then(() => {
                         toast({ title: t('toasts.vehicleRepaired') })
@@ -3492,7 +3013,6 @@ export default function WorldMap() {
               </>
             )}
 
-            {/* ── Teleport players to this spot ── */}
             {playersRef.current.length > 0 && (
               <div className="border-t border-border/30">
                 <ContextMenuSection label={t('contextMenu.teleportLabel')} icon={<Locate className="w-2.5 h-2.5" />} tone="primary" />
@@ -3531,7 +3051,6 @@ export default function WorldMap() {
               </div>
             )}
 
-            {/* ── World effects section ── */}
             <div className="border-t border-border/30">
               <ContextMenuSection label={t('contextMenu.effectsLabel')} icon={<Zap className="w-2.5 h-2.5" />} tone="info" />
               <ContextMenuItem
@@ -3565,7 +3084,6 @@ export default function WorldMap() {
               />
             </div>
 
-            {/* ── Drops section ── */}
             <div className="border-t border-border/30">
               <ContextMenuSection label={t('contextMenu.dropsLabel')} icon={<Package className="w-2.5 h-2.5" />} tone="warning" />
               <ContextMenuItem
@@ -3576,7 +3094,6 @@ export default function WorldMap() {
                 disabled={!bridgeConnected || !canRunBridgeCommand}
                 onClick={() => {
                   setDropDialog({ x: Math.round(contextMenu.worldX), y: Math.round(contextMenu.worldY), z: floor })
-                  // Seed from last drop if any, otherwise one empty row.
                   if (lastDrop && lastDrop.items.length > 0) {
                     setDropItems(lastDrop.items.map((it) => ({ ...it })))
                   } else {
@@ -3664,7 +3181,6 @@ export default function WorldMap() {
           </div>
         )}
 
-        {/* Canvas */}
         <div
           ref={containerRef}
           className="w-full"
@@ -3689,7 +3205,6 @@ export default function WorldMap() {
         </div>
       </div>
 
-      {/* Spawn Vehicle Dialog */}
       <Dialog open={!!spawnDialog} onOpenChange={(open) => { if (!open) setSpawnDialog(null) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -3719,12 +3234,6 @@ export default function WorldMap() {
                 if (!spawnDialog || !spawnVehicleId) return
                 if (!canGmTools) return
                 setActionLoading('spawn-vehicle')
-                // /players/add-vehicle-at relays rconService.execute()'s
-                // result, which resolves { success: false, error } for a
-                // failed RCON command rather than throwing -- but
-                // handleResponse() throws on ANY 200 body with
-                // success: false too (see lib/api.ts), so this still never
-                // sees res.success === false, only the catch below.
                 playersApi.addVehicleAt(
                   spawnVehicleId,
                   spawnDialog.x,
@@ -3748,7 +3257,6 @@ export default function WorldMap() {
         </DialogContent>
       </Dialog>
 
-      {/* Custom Drop Dialog — drops one or more items at the right-clicked coords */}
       <Dialog open={!!dropDialog} onOpenChange={(open) => { if (!open) setDropDialog(null) }}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
@@ -3767,7 +3275,6 @@ export default function WorldMap() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Target info */}
             <div className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-xs font-mono tabular-nums">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Crosshair className="w-3.5 h-3.5" />
@@ -3785,7 +3292,6 @@ export default function WorldMap() {
               </button>
             </div>
 
-            {/* Templates bar */}
             <div className="flex items-center gap-2 flex-wrap">
               <Label className="text-xs text-muted-foreground flex items-center gap-1.5 me-auto">
                 <Save className="w-3.5 h-3.5" />
@@ -3834,7 +3340,6 @@ export default function WorldMap() {
               )}
             </div>
 
-            {/* Items list — NO overflow-y-auto here so the ItemPicker dropdown isn't clipped */}
             <div className="rounded-md border border-border/50 bg-muted/10 divide-y divide-border/30">
               {dropItems.length === 0 && (
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground/60 italic">
@@ -3909,7 +3414,6 @@ export default function WorldMap() {
               </div>
             </div>
 
-            {/* Save as template */}
             {savingTemplate ? (
               <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
                 <Save className="w-4 h-4 text-muted-foreground/70 flex-none" />
@@ -3980,7 +3484,6 @@ export default function WorldMap() {
               </Button>
             )}
 
-            {/* Options */}
             <div className="rounded-md border border-border/50 bg-muted/10 divide-y divide-border/30">
               <label className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/20 transition-colors">
                 <div className="flex items-start gap-2.5 min-w-0">
@@ -4068,7 +3571,6 @@ export default function WorldMap() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm deletion of a saved drop package */}
       <AlertDialog
         open={!!deleteTemplateId}
         onOpenChange={(open) => { if (!open) setDeleteTemplateId(null) }}
@@ -4104,7 +3606,6 @@ export default function WorldMap() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Confirm removal of a vehicle from the world — permanent, not undoable. */}
       <AlertDialog
         open={!!removeVehicleTarget}
         onOpenChange={(open) => { if (!open) setRemoveVehicleTarget(null) }}
@@ -4154,7 +3655,6 @@ export default function WorldMap() {
   )
 }
 
-// ─── Helpers ──────────────────────────────────────────────
 type ContextMenuTone = 'default' | 'primary' | 'warning' | 'danger' | 'info' | 'success'
 
 function ContextMenuItem({ icon, label, onClick, loading, description, disabled, tone = 'default' }: {
@@ -4226,9 +3726,6 @@ function ContextMenuSection({ label, icon, tone = 'muted' }: {
 }
 
 function getPlayerColor(player: MapPlayer, alpha: number): string {
-  // isAlive is undefined (not false) when the bridge doesn't send it --
-  // an older bridge or a mid-connect gap must render as the default
-  // (unknown) color below, never as muted/"known dead".
   if (player.isAlive === false) return hslToken('--muted-foreground', alpha)
   if (player.isInfected) return hslToken('--destructive', alpha)
   if (player.accessLevel && player.accessLevel !== '' && player.accessLevel !== 'none' && player.accessLevel !== 'user')
@@ -4240,7 +3737,6 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3)
 }
 
-// Game tile → DZI full-res pixel (isometric projection)
 function gameTileToDzi(gx: number, gy: number, cfg: MapConfig) {
   return {
     x: cfg.isoX0 + (gx - gy) * cfg.isoHalfSqr,
@@ -4248,7 +3744,6 @@ function gameTileToDzi(gx: number, gy: number, cfg: MapConfig) {
   }
 }
 
-// DZI full-res pixel → game tile (inverse isometric)
 function dziToGameTile(dziX: number, dziY: number, cfg: MapConfig) {
   const dx = dziX - cfg.isoX0
   const dy = dziY - cfg.isoY0

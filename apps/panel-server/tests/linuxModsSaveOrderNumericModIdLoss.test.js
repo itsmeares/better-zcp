@@ -3,27 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29 hunt (testing): mods-and-the-workshop, case 2 (mod load order) x
-// case 1 (workshop-id validation drift). Some mods legitimately use their
-// Steam Workshop file ID as their mod.info `id=` value too -- this file's own
-// enable-disk-mod/resolve-orphan-workshop handlers document a real example
-// ("Tear All Clothes" 3519629457) and deliberately bypass the numeric-ID
-// filter for exactly that reason when writing IDs resolved fresh off disk.
-//
-// POST /save-order and POST /presets/:id/apply did NOT get that bypass: both
-// ran the ENTIRE client-submitted mod list through sanitizeModIdList, which
-// drops any 5-15 digit entry as "looks like a misplaced workshop ID". The
-// client's reorder UI (Mods.tsx) seeds its drag-and-drop list from the
-// server's own most recent Mods= read (iniConfig.modIds) -- i.e. exactly the
-// live, already-enabled set, not free-typed text -- so any mod already
-// running with a numeric mod ID would be SILENTLY dropped from Mods= the
-// moment an operator reordered mods (or (re)applied a preset containing one)
-// and clicked Save. No error, no warning: the mod just stops loading on the
-// next restart.
-//
-// Confirmed via git log this premise was never true by design: the two
-// correct call sites explicitly comment on why the bypass is needed. save-
-// order/presets-apply simply didn't get it.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -99,9 +78,6 @@ describe("mod load order preservation for numeric-shaped mod IDs", () => {
   });
 
   it("POST /save-order preserves a numeric mod ID through a reorder instead of silently dropping it", async () => {
-    // Simulate the client's actual reorder flow: it seeds orderedModIds from
-    // the server's live Mods= read, then reorders and saves back the same
-    // set (BetaMod moved first) -- no new IDs invented, nothing removed.
     const res = await runRoute("/save-order", "post", {
       body: { modIds: ["BetaMod", "3519629457", "AlphaMod"] },
     });
@@ -112,8 +88,6 @@ describe("mod load order preservation for numeric-shaped mod IDs", () => {
     const modsLine = content.match(/^Mods=(.*)$/m)?.[1] || "";
     const ids = modsLine.split(";").filter(Boolean);
 
-    // The predicted pre-fix symptom: "3519629457" silently vanishes even
-    // though the operator never asked to remove it.
     expect(ids).toEqual(["BetaMod", "3519629457", "AlphaMod"]);
   });
 

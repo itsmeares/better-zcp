@@ -9,7 +9,7 @@ function sendToServer(message: string, error?: unknown) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).catch(() => {}) // swallow network errors — don't cascade
+    }).catch(() => {})
   } catch { /* swallow */ }
 }
 

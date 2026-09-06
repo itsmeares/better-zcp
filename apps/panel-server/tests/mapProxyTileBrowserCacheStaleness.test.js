@@ -1,29 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 
-// regression-2026-08-29, case 4 (REAL): serveTile() set
-// Cache-Control: public, max-age=604800 (7 days) on every tile response,
-// but the browser-facing URL (/api/map/tiles/:level/:tile) has no
-// component identifying WHICH resolved B42 build (getB42Dir()) produced
-// the bytes -- only this server's own disk cache is namespaced by that
-// build directory (relPath includes `dir`). If the resolved build changes
-// while a browser still holds a 7-day-old cached response for the same
-// URL, that browser keeps showing bytes from the OLD build indefinitely
-// (up to the rest of the 7-day window) -- "operator regenerates map,
-// browser keeps showing the old world", the exact shape the card named.
-//
-// Fix: bound the browser-facing Cache-Control to the same freshness
-// window as /resolve's own descriptor (1h), so staleness can never
-// outlive the client's own belief about the current build by more than
-// that -- serveTile's own disk/mem tiers stay correctly namespaced by
-// `dir` and keep making a "miss" here instant, so this costs nothing on
-// the hot path, only bounds how long a WRONG answer can survive.
-//
-// This test calls the real route handlers directly (same pattern as
-// mapProxyRenderedMaxLevel.test.js's findRoute helper) against all three
-// cache tiers (miss / hit-mem / hit-disk) for both tile routes that go
-// through serveTile() with a `dir`-namespaced disk path (/tiles,
-// /toptiles) plus /b41tiles (fixed build, still shares serveTile()).
 
 const mockExecFile = vi.fn();
 vi.mock("child_process", () => ({
@@ -66,9 +43,6 @@ function mockCurlForB42_20_0() {
   });
 }
 
-// Real upstream tile bytes for GET requests; HEAD requests (coverage
-// probes / discoverRenderedMaxLevel's binary search) always report covered
-// so build resolution completes without needing to model the search.
 function mockFetchServingTiles() {
   return vi.fn(async (url, init) => {
     if ((init?.method || "GET") === "HEAD") return { ok: true };
@@ -80,39 +54,6 @@ function mockFetchServingTiles() {
   });
 }
 
-// 2026-08-31, flake-class-fixed-margin-sync follow-up: the poll loop this
-// replaces (freshModule() -> re-invoke the full handler -> sleep 10ms ->
-// repeat, up to a 10s deadline) has an observer-effect bug, not just a slow
-// margin. Each retry that still sees a disk miss re-enters serveTile()'s
-// miss branch, which is NOT idempotent -- it calls writeDiskCacheAsync()
-// AGAIN, kicking off a brand new mkdir/writeFile/rename chain racing the
-// original one for the SAME destination path. Measured directly (temporary
-// call-counting instrumentation on fs.promises.rename during this test):
-// writeFile and rename were each invoked 9 TIMES for what should be exactly
-// one real write, before the loop happened to observe a landed file. Under
-// real multi-agent CPU/IO contention (the exact scenario the artificial
-// delay below simulates), a bigger pile of colliding, silently-caught
-// (writeDiskCacheAsync's own .catch()) renames competing for the same
-// destination is a far more direct explanation for an occasional 10s
-// timeout than raw CPU cost from re-importing the module -- the poll was
-// multiplying the very I/O it was waiting to observe finish.
-// Fix: instead of re-triggering the write path on every retry, capture the
-// Promise of the ONE real rename() call the initial (warm) request kicks
-// off, and await that directly. No retries, no duplicate writes, and the
-// fresh-module cold-cache check now runs exactly once, after the real
-// write is confirmed complete -- matching what these tests actually meant
-// to assert (a disk hit is found once the write has landed), not "keep
-// re-asking until it happens to look landed."
-//
-// MUST filter by destination filename, not just "the first rename() call
-// observed". Found this the hard way: an earlier version captured the
-// bare first call and, under stress-looped runs, intermittently threw an
-// uncaught EPERM from a completely unrelated tile -- an EARLIER test's own
-// unawaited writeDiskCacheAsync chain (fire-and-forget, still in flight
-// when the next test starts) called rename() while this spy happened to be
-// active, and the untargeted version happily captured THAT call instead of
-// this test's own. Matching on the destination's filename makes the spy
-// only ever resolve on the rename this specific test actually triggered.
 function captureFirstRename({ tileFileName, extraDelayMs = 0 }) {
   const realRename = fs.promises.rename;
   let resolveFirst;
@@ -248,29 +189,10 @@ describe("case 4 (REAL): tile Cache-Control must not outlive the build-resolutio
     mockCurlForB42_20_0();
     const originalFetch = global.fetch;
     global.fetch = mockFetchServingTiles();
-    // writeDiskCacheAsync is fire-and-forget (mkdir -> writeFile -> rename,
-    // three real fs calls the request handler deliberately never awaits).
-    // Capture the one real rename() this request's write chain makes and
-    // await it directly instead of polling by re-invoking the handler --
-    // see captureFirstRename's comment for why re-invoking was itself the
-    // bug, not just a slow margin.
     const { renameSpy, awaitFirstRename } = captureFirstRename({ tileFileName: "1_1.jpg" });
     try {
       const { default: router } = await freshModule();
       const handler = findRoute(router, "/tiles/:level/:tile", "get");
-      // A tile path not used by the two tests above (both use 2_3.jpg) --
-      // discovered directly, not theorised: awaiting the real rename here
-      // instead of retrying surfaced an intermittent EPERM on Windows
-      // (~2/15 runs), because 2_3.jpg's OWN earlier fire-and-forget writes
-      // from those two tests are not guaranteed to have finished landing by
-      // the time this test starts, and their rename can collide with this
-      // test's rename to the same destination. The old poll silently
-      // absorbed that exact collision (writeDiskCacheAsync's own .catch())
-      // and just retried until some write eventually won; awaiting one
-      // specific rename directly means a real collision surfaces instead of
-      // getting silently retried away. Same reasoning already applied to
-      // the test below (9_9.jpg) -- give each test its own tile so
-      // cross-test fire-and-forget writes never target the same path.
       const warm = makeRes();
       await handler({ params: { level: "5", tile: "1_1.jpg" }, query: {} }, warm);
       expect(warm.headers["X-Tile-Cache"]).toBe("miss");
@@ -295,23 +217,10 @@ describe("case 4 (REAL): tile Cache-Control must not outlive the build-resolutio
     mockCurlForB42_20_0();
     const originalFetch = global.fetch;
     global.fetch = mockFetchServingTiles();
-    // Simulate the exact contention this floor sees in practice: the real
-    // rename() step of writeDiskCacheAsync's fire-and-forget chain lands
-    // ~200ms late -- four times the old fixed margin. The old
-    // `await sleep(50)` version of this test would have read "miss" here;
-    // awaiting the real rename directly must still find "hit-disk" well
-    // inside a generous bound, without re-triggering the write path (see
-    // captureFirstRename's comment).
     const { renameSpy, awaitFirstRename } = captureFirstRename({ tileFileName: "9_9.jpg", extraDelayMs: 200 });
     try {
       const { default: router } = await freshModule();
       const handler = findRoute(router, "/tiles/:level/:tile", "get");
-      // A tile path not used by any other test in this file -- the disk
-      // cache directory is real, persistent filesystem state that survives
-      // across tests (only in-memory module state resets), so reusing
-      // 2_3.jpg here would find the earlier tests' own cached file and
-      // short-circuit straight to "hit-disk" before this test's delayed
-      // rename() is ever relevant.
       const warm = makeRes();
       await handler({ params: { level: "5", tile: "9_9.jpg" }, query: {} }, warm);
       expect(warm.headers["X-Tile-Cache"]).toBe("miss");
@@ -375,22 +284,6 @@ describe("case 4 (REAL): tile Cache-Control must not outlive the build-resolutio
   });
 });
 
-// regression-2026-08-30 (version-the-tile-url-by-resolved-b42-build): the
-// 1h cap above bounds staleness, it doesn't eliminate it. The complete fix
-// is to put the resolved B42 build into the browser-facing tile URL
-// (WorldMap.tsx / ChunkCleaner.tsx append `?v=<b42Dir>` once they know it --
-// see worldMapTileUrl.ts) so two different builds are two different URLs,
-// making the URL itself an accurate cache key. Once true, correctness no
-// longer trades against cache lifetime, so a request carrying that marker
-// can safely be cached indefinitely -- these tests cover the SERVER half:
-// presence of `?v=` (any non-empty value; the server never inspects it
-// past that, see requestIsVersioned's own comment) switches the response
-// to the long/immutable Cache-Control, while its absence keeps the
-// original bounded value as the safe fallback for anything that hasn't
-// opted in (an old cached JS bundle from before this change, a manual
-// request). /b41tiles never switches regardless of `v` -- its directory is
-// a hardcoded literal, never dynamically resolved, so there's nothing to
-// version there.
 describe("case 4 follow-up (REAL): a versioned request (?v=<build>) gets a long-lived Cache-Control, matching the accurate cache key", () => {
   it("/tiles: a request WITH ?v= gets the long/immutable Cache-Control instead of the bounded fallback", async () => {
     mockCurlForB42_20_0();

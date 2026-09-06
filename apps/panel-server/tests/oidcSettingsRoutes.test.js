@@ -5,17 +5,6 @@ import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 import { startMockOidcProvider } from "./helpers/mockOidcProvider.js";
 
-// GET/PUT /api/auth/oidc/settings and POST /api/auth/oidc/test-connection --
-// the OIDC-configurable-from-the-panel work. Two things this file exists
-// specifically to prove, per the operator's own ruling:
-//   1. clientSecret is NEVER echoed back by GET, not even masked -- only
-//      whether it's configured.
-//   2. THE TRAP: a PUT that saves new settings must make getOidcConfig()
-//      re-run discovery against the NEW issuer, not keep serving a
-//      memoized Configuration built from the OLD one. Without
-//      resetOidcConfigCache() in the save path, this is exactly the "save
-//      reports success, panel keeps using the old config until restart"
-//      bug the whole feature exists to avoid.
 
 const settingsStore = new Map();
 
@@ -27,10 +16,6 @@ vi.mock("../database/init.js", () => ({
   },
 }));
 
-// Seeded with a real directory before the dynamic import below: importing
-// services/oidc.js pulls in utils/logger.js, which calls getDataPaths()
-// and mkdirSyncs a logs dir at MODULE IMPORT TIME -- tmpDir must already
-// be a real path at that first import, not just non-undefined later.
 let tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-oidc-settings-seed-"));
 vi.mock("../utils/paths.js", () => ({
   getDataPaths: () => ({ dataDir: tmpDir, logsDir: tmpDir }),
@@ -205,8 +190,6 @@ describe("PUT /settings: validation", () => {
   it("a resubmitted masked clientSecret placeholder leaves the real stored secret untouched", async () => {
     await runRoute("/settings", "put", makeReq({ body: { clientSecret: "real-secret-1" } }));
 
-    // Simulate the UI echoing back whatever GET showed it (never the real
-    // value, but SOME masked-looking placeholder) alongside an unrelated field.
     await runRoute(
       "/settings",
       "put",
@@ -216,9 +199,6 @@ describe("PUT /settings: validation", () => {
     const settings = (await runRoute("/settings", "get", makeReq())).json.mock.calls[0][0];
     expect(settings.providerName).toBe("Renamed");
     expect(settings.clientSecretConfigured).toBe(true);
-    // The only way to prove the ORIGINAL secret survived without reading it
-    // back (which the route correctly never allows) is to check the file
-    // on disk directly, once, in this one test.
     const stored = fs.readFileSync(path.join(tmpDir, "oidcClientSecret.secret"), "utf8");
     expect(stored).toBe("real-secret-1");
   });
@@ -259,8 +239,6 @@ describe("PUT /settings: a successful save actually takes effect without a resta
     const configA = await getOidcConfig();
     expect(configA.serverMetadata().issuer).toBe(providerA.baseUrl);
 
-    // Now save a DIFFERENT provider entirely -- the exact scenario an
-    // operator correcting a wrong issuer URL, or rotating providers, hits.
     await runRoute(
       "/settings",
       "put",
@@ -277,8 +255,6 @@ describe("PUT /settings: a successful save actually takes effect without a resta
 
     const configB = await getOidcConfig();
     expect(configB.serverMetadata().issuer).toBe(providerB.baseUrl);
-    // If the trap were still present, this would still equal providerA's
-    // issuer -- a stale memoized Configuration from before the save.
     expect(configB.serverMetadata().issuer).not.toBe(providerA.baseUrl);
   });
 });
@@ -312,13 +288,6 @@ describe("POST /test-connection", () => {
     );
     const payload = res.json.mock.calls[0][0];
     expect(payload.success).toBe(true);
-    // regression 2026-08-31-c (under-coverage sweep): the title claims nothing
-    // is persisted at all, but this used to check only one specific key
-    // (oidcIssuerUrl) out of the five persistable OIDC settings fields --
-    // undercutting the actual promise the title makes. settingsStore is the
-    // mocked setSetting() sink for every key this route could theoretically
-    // write; asserting it stayed empty proves setSetting() was never called
-    // at all, not just that one field happened to be untouched.
     expect(settingsStore.size).toBe(0);
   });
 
@@ -360,22 +329,11 @@ describe("POST /test-connection", () => {
         },
       }),
     );
-    // The mock provider's discovery endpoint doesn't validate the secret at
-    // all (see mockOidcProvider.js), so success here just proves the call
-    // was made at all with SOME secret filled in rather than failing our
-    // own "issuerUrl/clientId/clientSecret all required" pre-check.
     const payload = res.json.mock.calls[0][0];
     expect(payload.success).toBe(true);
   });
 });
 
-// The headline bug this whole feature exists to fix: discovery alone is an
-// unauthenticated GET that never sends clientId/clientSecret anywhere, so a
-// wrong secret, wrong client ID, or unregistered redirect URI all silently
-// passed the old test. These prove the credential round trip actually
-// distinguishes "the provider rejected the client" from "the provider
-// accepted the client and only rejected our fabricated code" (the success
-// signal) from a third, genuinely ambiguous outcome.
 describe("POST /test-connection -- credential check (strictAuth mock)", () => {
   let provider;
 
@@ -473,8 +431,6 @@ describe("POST /test-connection -- credential check (strictAuth mock)", () => {
       }),
     );
     const payload = res.json.mock.calls[0][0];
-    // The important assertion: this must NOT be reported as success just
-    // because discovery worked and the client wasn't explicitly rejected.
     expect(payload.success).toBe(false);
     expect(payload.code).toBe("OIDC_TEST_UNDETERMINED");
   });

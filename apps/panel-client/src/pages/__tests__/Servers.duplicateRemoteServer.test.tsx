@@ -8,9 +8,6 @@ import Servers from '../Servers'
 import { serversApi, serversDetectApi, dockerApi, configApi, updateApi } from '@/lib/api'
 import en from '../../locales/en/servers.json'
 
-// Add Remote Server must reject duplicate name + host + port submissions.
-// A repeated browser submission used to create identical remote-server cards;
-// the client-side pre-submit check in handleAddExistingServer prevents that.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({

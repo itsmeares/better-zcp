@@ -67,22 +67,14 @@ export default function Backups() {
   const { toast } = useToast()
   const socket = useSocket()
   const { can } = useAuth()
-  // Bound to routes/backup.js's own requirePermission() gates, not to what
-  // the button label implies -- restore/download are deliberately split
-  // out from backups.manage (see that route file's header comments: restore
-  // overwrites a live world, download exfiltrates a full copy).
   const canManageBackups = can('backups.manage')
   const canRestoreBackups = can('backups.restore')
   const canDownloadBackups = can('backups.download')
 
-  // Refs for cleanup
   const progressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // State
   const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null)
   const [backups, setBackups] = useState<ServerBackupArchive[]>([])
-  // Separate from the shared loading flag: the backup list can be resolved
-  // before the other refreshAll() requests finish.
   const [backupsLoaded, setBackupsLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -94,33 +86,19 @@ export default function Backups() {
   const [uploadPercent, setUploadPercent] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Active server context — backups don't apply to remote servers because
-  // the panel can't reach the remote filesystem. Fetched on mount and
-  // refreshed by the activeServerChanged socket effect below.
   const [activeServerRemote, setActiveServerRemote] = useState(false)
   const [activeServerId, setActiveServerId] = useState<string | number | null>(null)
   const [history, setHistory] = useState<BackupHistoryRecord[]>([])
-  // Mark the view stale during an active-server switch so destructive dialogs
-  // cannot operate on a list from the previous server.
   const [serverChangedSinceLoad, setServerChangedSinceLoad] = useState(false)
-  // Named in the restore confirmation itself, read fresh at the moment the
-  // dialog opens -- not from activeServerId/mount state -- because the
-  // named confirm is meant to protect every path to an accidental restore,
-  // including ones the switch-then-click banner above doesn't cover. The
-  // last thing a user reads before an irreversible world overwrite should
-  // never be able to lie about which world that is.
   const [restoreTargetServerName, setRestoreTargetServerName] = useState<string | null>(null)
 
-  // Selection state
   const [selectedBackups, setSelectedBackups] = useState<Set<string>>(new Set())
 
-  // Settings state
   const [showSettings, setShowSettings] = useState(false)
   const [backupSchedule, setBackupSchedule] = useState('0 */6 * * *')
   const [backupMaxCount, setBackupMaxCount] = useState(10)
   const [savingSettings, setSavingSettings] = useState(false)
 
-  // Dialog state
   const [restoreDialog, setRestoreDialog] = useState<{ open: boolean; backupName: string | null }>({
     open: false,
     backupName: null,
@@ -134,7 +112,6 @@ export default function Backups() {
   const [deletingOlder, setDeletingOlder] = useState(false)
   const [snapshotDialog, setSnapshotDialog] = useState<{ name: string; snapshot: BackupSnapshot } | null>(null)
 
-  // Fetch functions
   const fetchBackupStatus = useCallback(async () => {
     try {
       const status = await backupApi.getStatus()
@@ -142,18 +119,6 @@ export default function Backups() {
       setBackupSchedule(status.schedule)
       setBackupMaxCount(status.maxBackups)
       setLoadError(null)
-      // The server's own backupInProgress mutex (backupService.js) is the
-      // one source of truth for whether a backup is actually running --
-      // including one this browser session didn't start (the scheduler, a
-      // second tab, or a backup already underway before this page loaded).
-      // creatingBackup was local-only and defaulted to false on every
-      // mount, so a page load or reload mid-backup showed no progress card
-      // and left Create Backup clickable, inviting a second backup into the
-      // server's own reject-on-conflict guard with no explanation on
-      // screen. Only ever set TRUE here -- the existing socket
-      // 'backup:progress' complete/error handlers and handleCreateBackup's
-      // own `finally` already own turning it back off correctly, and racing
-      // a false here against those would just reintroduce the bug sideways.
       if (status.backupInProgress) setCreatingBackup(true)
     } catch (error) {
       setLoadError(getUserErrorMessage(error, t('toasts.loadStatusFailed')))
@@ -165,7 +130,6 @@ export default function Backups() {
       const data = await backupApi.listBackups()
       setBackups(data.backups || [])
       setLoadError(null)
-      // Clear selection for backups that no longer exist
       setSelectedBackups(prev => {
         const backupNames = new Set((data.backups || []).map(b => b.name))
         const newSelection = new Set<string>()
@@ -212,24 +176,21 @@ export default function Backups() {
     }
   }, [fetchBackupStatus, fetchBackups, fetchHistory])
 
-  // Initial load
   useEffect(() => {
     refreshAll()
   }, [refreshAll])
 
-  // Socket.IO for progress updates
   useEffect(() => {
     if (!socket) return
 
     const handleBackupProgress = (data: BackupProgress) => {
       setBackupProgress(data)
-      
-      // Clear any existing timeout
+
       if (progressTimeoutRef.current) {
         clearTimeout(progressTimeoutRef.current)
         progressTimeoutRef.current = null
       }
-      
+
       if (data.phase === 'complete') {
         setCreatingBackup(false)
         fetchBackups()
@@ -245,23 +206,16 @@ export default function Backups() {
 
     return () => {
       socket.off('backup:progress', handleBackupProgress)
-      // Clear timeout on unmount
       if (progressTimeoutRef.current) {
         clearTimeout(progressTimeoutRef.current)
       }
     }
   }, [socket, fetchBackups, fetchBackupStatus])
 
-  // See serverChangedSinceLoad's own comment above for why this exists.
   useEffect(() => {
     if (!socket) return
     const handleActiveServerChanged = () => {
       setServerChangedSinceLoad(true)
-      // A dialog's own local state (a specific backup name/list) doesn't
-      // update just because the data behind it refreshes -- close it rather
-      // than let a confirm click resolve against whichever server the
-      // backend considers active now, not whichever one the dialog was
-      // opened against.
       setRestoreDialog({ open: false, backupName: null })
       setDeleteDialog({ open: false, names: [] })
       refreshAll().finally(() => setServerChangedSinceLoad(false))
@@ -272,9 +226,7 @@ export default function Backups() {
     }
   }, [socket, refreshAll])
 
-  // Actions
   const handleCreateBackup = async () => {
-    // Keep the action guarded even when called outside the button handler.
     if (!canManageBackups) return
     if (serverChangedSinceLoad) {
       toast({
@@ -284,11 +236,6 @@ export default function Backups() {
       })
       return
     }
-    // A PRIOR backup's 'complete'/'error' socket handler (or this
-    // function's own catch block, below) may have scheduled an auto-clear
-    // timeout that hasn't fired yet -- e.g. a second click within its 2-3s
-    // window. Without this, that leftover timer wipes THIS backup's live
-    // progress out from under it partway through, well before it's done.
     if (progressTimeoutRef.current) {
       clearTimeout(progressTimeoutRef.current)
       progressTimeoutRef.current = null
@@ -315,11 +262,6 @@ export default function Backups() {
         variant: 'destructive',
       })
       setBackupProgress({ phase: 'error', percent: 0, message: t('toasts.backupFailedMessage') })
-      // Mirror the 'backup:progress' socket handler's error-phase behavior
-      // above -- without this, a failure that never gets a corresponding
-      // socket event (e.g. the createBackup() call itself rejects before
-      // the server ever emits progress) leaves this error card on screen
-      // indefinitely instead of auto-clearing like every other transition.
       if (progressTimeoutRef.current) {
         clearTimeout(progressTimeoutRef.current)
       }
@@ -329,9 +271,6 @@ export default function Backups() {
     }
   }
 
-  // Upload an existing .zip from the user's machine into the backups folder.
-  // The file gets stored with an "uploaded-" prefix and shows up in the list
-  // alongside scheduled backups; the user then clicks Restore to apply it.
   const handleUploadFile = async (file: File) => {
     if (!canManageBackups) return
     if (serverChangedSinceLoad) {
@@ -351,8 +290,6 @@ export default function Backups() {
       toast({ title: t('toasts.invalidFileTitle'), description: t('toasts.invalidFileDesc'), variant: 'destructive' })
       return
     }
-    // Hard cap matches the server-side express.raw limit (4 GB). Anything
-    // larger would upload for minutes and then 413 — fail fast instead.
     const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024
     if (file.size > MAX_UPLOAD_BYTES) {
       toast({ title: t('toasts.fileTooLargeTitle'), description: t('toasts.fileTooLargeDesc', { size: (file.size / (1024 * 1024 * 1024)).toFixed(2) }), variant: 'destructive' })
@@ -386,9 +323,6 @@ export default function Backups() {
     }
   }
 
-  // Fetches the CURRENT active server name at the moment the dialog opens
-  // (not from mount-time state) so the confirmation can name the real
-  // target -- see restoreTargetServerName's own comment above.
   const openRestoreDialog = (name: string) => {
     setRestoreDialog({ open: true, backupName: name })
     setRestoreTargetServerName(null)
@@ -410,9 +344,6 @@ export default function Backups() {
     setRestoreDialog({ open: false, backupName: null })
     setRestoringBackup(name)
     try {
-      // POST /backup/restore/:name always responds non-2xx on failure, so
-      // handleResponse() throws into the catch below -- this never sees
-      // result.success === false.
       const result = await backupApi.restoreBackup(name, { createPreRestoreBackup: true })
       toast({
         title: t('toasts.restoredTitle'),
@@ -463,8 +394,6 @@ export default function Backups() {
       let failCount = 0
       for (const name of names) {
         try {
-          // DELETE /backup/:name always responds non-2xx on failure, so
-          // handleResponse() throws -- result.success is always true here.
           await backupApi.deleteBackup(name)
           successCount++
         } catch {
@@ -506,13 +435,6 @@ export default function Backups() {
     setDeleteOlderDialog(false)
     setDeletingOlder(true)
     try {
-      // POST /backup/delete-older-than relays backupService's result as-is
-      // over HTTP 200, and that service CAN return { success: false, ... }
-      // on a partial failure -- but handleResponse() throws on any 200
-      // body with success: false (see lib/api.ts), so that case lands in
-      // the catch below too, never in a result.success === false branch
-      // here. Confirmed no other codepath in this handler returns
-      // success: false with a 2xx status.
       const result = await backupApi.deleteOlderThan(deleteOlderDays)
       toast({
         title: t('toasts.oldBackupsRemovedTitle'),
@@ -576,7 +498,6 @@ export default function Backups() {
     }
   }
 
-  // Selection handlers
   const toggleBackupSelection = (name: string) => {
     setSelectedBackups(prev => {
       const newSet = new Set(prev)
@@ -597,7 +518,6 @@ export default function Backups() {
     }
   }
 
-  // Helpers
   const formatBytes = (bytes: number): string => {
     if (bytes < 1024) return bytes + ' B'
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
@@ -610,18 +530,10 @@ export default function Backups() {
     return date.toLocaleDateString(i18n.language) + ' ' + date.toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })
   }
 
-  // "Auto-Backup: On" alone can't tell an operator the scheduler is actually
-  // succeeding -- lastBackup only updates on a SUCCESSFUL run, so a run of
-  // failures (bad cron, unreachable backupsPath, disk full) leaves this
-  // card looking identical to a healthy one. Surface the newest scheduled
-  // attempt specifically when it failed.
   const lastScheduledAttemptFailed = Boolean(
     backupStatus?.enabled && backupStatus?.lastScheduledBackupAttempt && !backupStatus.lastScheduledBackupAttempt.success
   )
 
-  // Translate the small set of cron presets we expose into a human label.
-  // Falls back to the raw cron string for anything custom so the user
-  // still gets meaningful information without us shipping a full parser.
   const describeSchedule = (cron: string | undefined): string => {
     if (!cron) return t('schedule.none')
     const map: Record<string, string> = {
@@ -648,18 +560,10 @@ export default function Backups() {
   const isAnySelected = selectedBackups.size > 0
   const allSelected = backups.length > 0 && selectedBackups.size === backups.length
 
-  // A restore this session didn't start (another tab, or already running
-  // when this page loaded) has no backup name to show in the per-row
-  // "Restoring <name>..." card, but it must still block new
-  // create/upload/restore actions the same way a locally-tracked one does
-  // -- the server's mutex (backupService.js) rejects a second restore or a
-  // backup during one either way, so leaving these enabled just moves the
-  // failure from "greyed out with a reason" to "clicked, then an error".
   const restoreInProgressElsewhere = restoringBackup === null && Boolean(backupStatus?.restoreInProgress)
 
   return (
     <div className="space-y-6 page-transition">
-      {/* Header */}
       <PageHeader
         title={t('pageHeader.title')}
         description={t('pageHeader.description')}
@@ -763,7 +667,6 @@ export default function Backups() {
         </div>
       )}
 
-      {/* Status Cards */}
       {backups.length > 0 && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-in">
         <Card>
@@ -855,7 +758,6 @@ export default function Backups() {
       </div>
       )}
 
-      {/* Settings Panel (collapsible) */}
       {showSettings && (
         <Card className="border-primary/15">
           <CardHeader>
@@ -928,9 +830,6 @@ export default function Backups() {
         </Card>
       )}
 
-      {/* Restore Progress — the server emits no progress events for restore (it's a
-          silent extract + pre-restore-backup sequence that can run minutes), so this
-          is a static reassurance rather than a real progress readout. */}
       {restoringBackup && (
         <Card className="border-warning/15 bg-warning/5">
           <CardContent className="pt-6">
@@ -945,7 +844,6 @@ export default function Backups() {
         </Card>
       )}
 
-      {/* Progress Bar */}
       {(creatingBackup || backupProgress) && (
         <Card className="border-primary/15 bg-primary/5">
           <CardContent className="pt-6">
@@ -978,7 +876,6 @@ export default function Backups() {
         </Card>
       )}
 
-      {/* Main Backup Card */}
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1027,8 +924,6 @@ export default function Backups() {
         </CardHeader>
         <CardContent>
           {backupStatus && !backupStatus.savesExists && backupsLoaded && backups.length === 0 ? (
-            // The empty state depends only on backupStatus and the backup
-            // list, so it should not wait for unrelated history requests.
             <EmptyState
               type="empty"
               title={t('mainCard.noSavesFolderTitle')}
@@ -1043,7 +938,6 @@ export default function Backups() {
             <EmptyState type="noData" title={t('mainCard.emptyTitle')} description={t('mainCard.emptyDesc')} action={canManageBackups ? { label: t('mainCard.emptyAction'), onClick: handleCreateBackup, variant: 'default' } : undefined} />
           ) : (
             <div className="space-y-2">
-              {/* Select All Header */}
               <div className="flex items-center gap-3 px-3 py-2.5 border border-border/50 bg-muted/20 rounded-lg">
                 <Checkbox
                   checked={allSelected}
@@ -1064,7 +958,6 @@ export default function Backups() {
                 )}
               </div>
 
-              {/* Backup List */}
               <ScrollArea className="h-[300px] sm:h-[400px]">
                 <div className="space-y-2 pe-4">
                   {backups.map((backup, idx) => {
@@ -1090,7 +983,6 @@ export default function Backups() {
                             aria-label={t('mainCard.selectBackupAria', { name: backup.name })}
                           />
 
-                          {/* Leading archive tile — latest backup glows primary, others sit muted */}
                           <div
                             className={cn(
                               'grid place-items-center w-9 h-9 rounded-md border shrink-0',
@@ -1226,8 +1118,6 @@ export default function Backups() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Restoring replaces the live world. The confirmation copy also notes
-          that undoing it requires another restore, despite the safety backup. */}
       <AlertDialog open={restoreDialog.open} onOpenChange={(open) => setRestoreDialog({ open, backupName: null })}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1271,7 +1161,6 @@ export default function Backups() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ open, names: [] })}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1313,11 +1202,6 @@ export default function Backups() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Older Than Dialog -- same permanent-data-loss severity as
-          the single/bulk delete dialog above (deleteDialog), just a
-          different entry point. Styled destructive-red to match rather
-          than the amber it had before, which understated a no-undo bulk
-          delete relative to its sibling action. */}
       <AlertDialog open={deleteOlderDialog} onOpenChange={setDeleteOlderDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>

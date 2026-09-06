@@ -39,9 +39,6 @@ async function runRoute(routePath, method, req, res) {
   await next();
 }
 
-// Finding 9: PanelBridge installation routes were missing the
-// requireRole("admin") guard every other privileged PanelBridge route has
-// (see /sftp/*, /command).
 describe("PanelBridge mod-install routes require admin", () => {
   it("rejects POST /install-local for a non-admin authenticated user", async () => {
     const response = createResponse();

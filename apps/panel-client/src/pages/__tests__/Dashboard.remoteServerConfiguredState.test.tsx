@@ -8,22 +8,6 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi, type ServerInstance,
 } from '@/lib/api'
 
-// 2026-08-31 visual sweep: status.serverPathConfigured (server-side renamed
-// from `configured` in the same follow-up) is `!!serverManager.serverPath`
-// (apps/panel-server/services/serverManager.js) -- a LOCAL install-path signal.
-// installPath is not required for remote servers (apps/panel-server/routes/servers.js's
-// create validation requires only name/rconHost/rconPort/rconPassword for
-// isRemote:true), so a fully-configured remote server can never set it. The
-// verdict and the "Not configured" banner both used to read this field
-// alone, so a properly-configured remote server -- named, addressed, REMOTE-
-// badged in its own header two lines above -- was told it had "No server
-// configured" in the same frame. Same family as Layout.tsx's servers-as-[]
-// fix (3665aa20): a signal that structurally cannot represent one real case
-// (remote) was trusted for all cases instead of scoped to what it describes.
-// The client-side !activeServer?.isRemote guards stay after the rename --
-// the field's VALUE was always correct for what it actually gates (can the
-// local launch path run), only its old NAME over-promised "is this server
-// configured" in general.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -145,12 +129,6 @@ describe('Dashboard.tsx: a remote server is never told it is unconfigured by the
     renderDashboard()
 
     await screen.findByText('Ashenwood')
-    // getAllByText, not getByText: the verdict headline renders twice by
-    // design (a visible span plus a sr-only duplicate for the icon-only
-    // status dot -- see VerdictBand), so a single-match query throws
-    // "multiple elements found" every time, which waitFor swallows and
-    // retries into the ground until the (deliberately long, see
-    // test-setup.ts) asyncUtilTimeout.
     await waitFor(() => expect(screen.getAllByText('No server configured').length).toBeGreaterThan(0))
     expect(screen.getByText('Not configured')).toBeInTheDocument()
   })

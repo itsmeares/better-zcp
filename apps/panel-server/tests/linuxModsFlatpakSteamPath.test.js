@@ -3,16 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Linux regression 2026-08-29, case #3: getWorkshopPaths() (apps/panel-server/routes/mods.js)
-// is the only place that searches a user's local Steam install for downloaded
-// workshop content (used by dependency resolution and map-folder detection).
-// It already covered ~/Steam, ~/.local/share/Steam and ~/.steam/steam, but not
-// the Flatpak Steam sandbox root (~/.var/app/com.valvesoftware.Steam/...), which
-// is a real, common Linux Steam install shape distinct from all three. A mod
-// downloaded only through a Flatpak Steam client was silently invisible to
-// every function that calls getModDetailsFromWorkshop (missing-dependency
-// resolution, map detection, conflict scanning) with no error -- it just
-// looked like the mod was never downloaded.
 
 let tmpHome;
 

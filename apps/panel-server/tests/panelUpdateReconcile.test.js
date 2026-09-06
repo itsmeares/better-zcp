@@ -60,10 +60,6 @@ describe("PanelUpdateChecker pending-update reconciliation", () => {
     expect(setSetting).not.toHaveBeenCalled();
   });
 
-  // 2026-09-04, the approval of the rollback_failed value: rollbackRetryLikely
-  // must be present and correct when likelyCause is rollback_failed, and
-  // absent for every other cause (so a UI checking for it on an unrelated
-  // failure sees undefined, not a stale/irrelevant boolean).
   it("wires rollbackRetryLikely:true into lastApplyResult for a retry-risk rollback_failed log", async () => {
     getSetting.mockResolvedValue("1.2.6");
     const checker = new PanelUpdateChecker();

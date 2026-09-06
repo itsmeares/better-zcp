@@ -3,19 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-09-02, bridge-enforcement: autoInstallBridgeIfNeeded() used to run
-// ONLY on POST /:id/activate (routes/servers.js) -- an uncommon "reassign
-// the active server profile" action -- never on an ordinary POST
-// /server/start or POST /server/restart. PZ loads Lua at Java-process
-// startup, so a server that's simply restarted (the common case: crash
-// recovery, scheduled restarts, manual restarts) never got its on-disk
-// bridge file rechecked at all, no matter how far it drifted from the
-// shipped source (2026-09-02 bridge-install-integrity audit). These tests
-// assert the ORDER, not just that both things happened: a test that mocks a
-// bridge already up to date passes on the broken code too, so every test
-// here starts from a genuinely STALE on-disk file and checks it is already
-// current by the time the spawn call fires -- a fresher file written
-// afterward is invisible to the JVM until its NEXT restart.
 
 let activeServer;
 vi.mock("../database/init.js", () => ({
@@ -34,8 +21,6 @@ function getHandler(routePath, method) {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
-  // requirePermission is applied inline per-route in server.js, so the real
-  // handler is the LAST entry in this route's middleware stack.
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -80,12 +65,6 @@ const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bridge-autoinstall-route-"));
   runManagedLifecycle.mockReset();
-  // Docker-managed path (handled: true) sidesteps /start's 30s local-process
-  // poll entirely -- see dockerStartStatusPush.test.js, same reasoning.
-  // installPath is real so the installer's own fs writes land somewhere
-  // disposable; no serverName/zomboidDataPath keeps
-  // refreshLaunchTargetBeforeStart()'s ensureRconConfigured() call a
-  // harmless no-op.
   activeServer = { id: "s1", name: "Test Server", installPath: tmpDir, isRemote: false };
 });
 
@@ -137,8 +116,6 @@ describe("POST /server/start -- bridge auto-install runs before the process spaw
   });
 
   it("still starts the server when the bridge install itself fails", async () => {
-    // "media" as a plain file forces installBridge()'s directory creation to
-    // fail with ENOTDIR -- same shape panelBridgeInstaller.test.js uses.
     fs.writeFileSync(path.join(tmpDir, "media"), "not a directory");
 
     runManagedLifecycle.mockResolvedValue({

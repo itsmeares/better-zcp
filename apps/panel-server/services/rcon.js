@@ -14,20 +14,6 @@ import { parseBoundedInteger } from "../utils/queryNumbers.js";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 
-// Ordered classification of the technical error messages execute()'s catch
-// block sees, feeding BOTH getUserFriendlyError()'s user-facing prose and
-// the RCON_EXECUTE_DISCONNECTED code attached alongside it -- one shared
-// source of truth, not two independently-maintained lists. Before this,
-// the client (apps/panel-client/src/pages/Console.tsx's RCON_DISCONNECT_PHRASES) kept
-// its OWN copy of these same six outcomes as substrings to match against
-// the prose below, and a 2026-08-30 audit found it had already silently
-// drifted: "Server is not running" was reworded to "Game server is not
-// running." here without the client's phrase list ever being told, so a
-// real disconnect stopped being detected. A code can't drift the same way
-// prose can -- see RCON_EXECUTE_DISCONNECTED's own comment in
-// apps/panel-server/utils/errorCodes.js. `disconnect: false` on the authentication
-// branch is deliberate, not an oversight: a wrong RCON password is not a
-// dropped connection, and must never be reported as one.
 const RCON_ERROR_CLASSIFICATIONS = [
   {
     test: (msg) => msg.includes("ECONNREFUSED"),
@@ -69,16 +55,6 @@ const RCON_ERROR_CLASSIFICATIONS = [
   },
 ];
 
-// Common accented Latin letters (French in particular -- this panel ships an
-// FR locale) transliterated to their closest plain-ASCII equivalent, for
-// foldToRconAscii() below. PZ's RCON can't carry these bytes reliably, so
-// dropping them silently used to turn "répété" into "rpt" -- readable-ish by
-// accident, not by design. Transliterating first means "repete" instead:
-// degraded but recognisable, and consistent regardless of which RCON text
-// field (broadcast, ban reason, etc.) the string passes through. Bounded to
-// Latin-1 Supplement + Latin Extended-A (players.js's own SAFE_TEXT_REGEX
-// accepts exactly this range, À-ɏ) -- other scripts still fall
-// through to foldToRconAscii()'s final drop, same as before.
 const LATIN_TRANSLITERATION_MAP = {
   à: "a", á: "a", â: "a", ã: "a", ä: "a", å: "a",
   À: "A", Á: "A", Â: "A", Ã: "A", Ä: "A", Å: "A",
@@ -96,9 +72,6 @@ const LATIN_TRANSLITERATION_MAP = {
   œ: "oe", Œ: "OE", æ: "ae", Æ: "AE",
 };
 
-// Hosts pasted from a game-server-provider panel routinely carry surrounding
-// whitespace, which makes DNS resolution fail with ENOTFOUND and looks exactly
-// like an unreachable server.
 export function normalizeRconHost(host) {
   if (typeof host !== "string") return "127.0.0.1";
   return host.trim() || "127.0.0.1";
@@ -115,11 +88,6 @@ function parseConfiguredRconPort(value) {
   return parseBoundedInteger(value, null, 1, 65535);
 }
 
-// Raw TCP reachability probe used by testRconConnection() below — separate
-// from RconService.checkPortOpen() because that method has a fixed 2s
-// timeout tuned for the background auto-reconnect loop, while a
-// user-initiated "Test Connection" click can afford (and benefits from) a
-// longer 5s window before reporting the host unreachable.
 export function checkTcpReachable(host, port, timeoutMs) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
@@ -135,22 +103,11 @@ export function checkTcpReachable(host, port, timeoutMs) {
   });
 }
 
-// Default timeout for a user-initiated connection attempt: this function's
-// own probe, and POST /connect's follow-up reachability check below (routes/
-// rcon.js) when reused for the same purpose. Longer than checkPortOpen()'s
-// 2s background-loop timeout, same reasoning as that method's comment.
 export const RCON_USER_ACTION_TIMEOUT_MS = 5000;
 
-// The two canonical detail strings for a first-time RCON handshake failure.
-// Exported so POST /connect (routes/rcon.js) can report the exact same
-// wording for the exact same two classes /test already distinguishes,
-// instead of maintaining a second, independently-drifting mapping.
 export const RCON_UNREACHABLE_DETAIL = "Unreachable: check host and port";
 export const RCON_AUTH_FAILED_DETAIL = "Authentication failed: check RCON password";
 
-// Tests arbitrary RCON credentials without touching the shared RconService
-// singleton's connection state — used by the "Test Connection" UI so a user
-// can validate host/port/password before saving them.
 export async function testRconConnection({ host, port, password, timeoutMs = RCON_USER_ACTION_TIMEOUT_MS }) {
   const reachable = await checkTcpReachable(host, port, timeoutMs);
   if (!reachable) {
@@ -176,209 +133,79 @@ export async function testRconConnection({ host, port, password, timeoutMs = RCO
   }
 }
 
-// Response texts the real B42 dedicated server sends back for a command it
-// accepted but refused to run -- each confirmed verbatim against the actual
-// server jar (zombie/commands/serverCommands/*.class: GodModePlayerCommand.class /
-// InvisiblePlayerCommand.class for "Wrong arguments!", NoClipCommand.class
-// for "Not enough rights", ReleaseSafehouseCommand.class for "...can be
-// executed only from the game"), not guessed. A normal RCON reply carrying
-// one of these means the command did NOT do what it says, so without this
-// check it's indistinguishable from a real success.
-//
-// Deliberately a denylist of PROVEN rejection shapes, not a success
-// allowlist: a success allowlist would need every one of this file's ~40
-// commands' real success text enumerated with confidence, which static
-// bytecode reading can't give, and would fail closed on every command
-// whose success text isn't in it.
-//
-// 2026-08-29, players.js moderation/GM-tools hunt: every pattern here MUST
-// be anchored to a position a player's own (attacker-controlled) in-game
-// name cannot reach. classifyRconResponse() below runs an UNANCHORED
-// .test() against the whole response, and PZ's SUCCESS messages for these
-// same commands interpolate the target player's name -- kickuser's success
-// is `User <name> kicked.`, setaccesslevel's is `<name> granted <level>
-// access level on <server>`. A player who names themselves text containing
-// a rejection fragment (e.g. "Not enough rights") would have their own
-// SUCCESSFUL kick misclassified as a failure the instant that fragment
-// appeared anywhere in the response -- including inside their own name.
-// The three pre-existing non-anchored patterns below had this exact defect
-// in shipped code; confirmed each one's PZ source is a bare, non-
-// interpolated literal (no player name can ever appear inside "Wrong
-// arguments!" or "Not enough rights" themselves), so anchoring them to the
-// full trimmed string is a strict tightening, not a behavior change for
-// any genuine rejection. Every new pattern added below is anchored the
-// same way: full-string where the PZ text has no interpolation at all, or
-// bounded by fixed text immediately before/after the interpolated portion
-// where it does (e.g. `Invalid username "<name>"` is bounded by the
-// literal quote+prefix before the name and the literal closing quote
-// after it -- a success response's own fixed text can never coincidentally
-// reproduce both boundaries regardless of what the name in between is).
-//
-// Sourced from apps/panel-server/__fixtures__/pzRconRejectionStrings.json (a
-// decompiled catalog of the actual PZ B42 server jar's command classes,
-// confirmed verbatim -- not guessed) except where noted otherwise.
 export const KNOWN_RCON_REJECTIONS = [
   {
     pattern: /^\s*Unknown command\b/i,
     describe: (text) => `${text}. This command is not available on this server build.`,
   },
   {
-    // GodModePlayerCommand.class / InvisiblePlayerCommand.class: bare,
-    // non-interpolated literal.
     pattern: /^\s*Wrong arguments!?\s*$/i,
     describe: () =>
       "Wrong arguments. This command's syntax may have changed on this server build.",
   },
   {
-    // NoClipCommand.class: bare, non-interpolated literal.
     pattern: /^\s*Not enough rights\.?\s*$/i,
     describe: () =>
       "Not enough rights. The RCON account's role does not have permission to run this command.",
   },
   {
-    // ReleaseSafehouseCommand.class, per this array's original citation --
-    // not reachable from any command players.js currently exposes. Exact
-    // full text/interpolation not present in the checked-in fixture (only
-    // the class name citation above is available); end-anchored as the
-    // best available tightening without a confirmed complete template.
     pattern: /can be executed only from the game\.?\s*$/i,
     describe: (text) => `${text}. This command can only be run from in-game, not over RCON.`,
   },
   {
-    // KickUserCommand.class: target not currently connected. Success for
-    // this same command is "User <name> kicked." -- the fixed suffix here
-    // (" doesn't exist.") can never be produced by a genuine success
-    // response regardless of what the interpolated name contains.
     pattern: /^User .+ doesn't exist\.\s*$/i,
     describe: () =>
       "User doesn't exist. They may have disconnected, or the name may be misspelled.",
   },
   {
-    // KickUserCommand.class: target holds the CantBeKickedByUser
-    // capability (e.g. another admin). Bare, non-interpolated literal.
     pattern: /^\s*This user can't be kicked\.\s*$/i,
     describe: () => "This user can't be kicked (protected account).",
   },
   {
-    // Shared across AddItemCommand, AddXPCommand, TeleportCommand,
-    // TeleportPlayerCommand, AddVehicleCommand, VoiceBanCommand -- all
-    // resolve their target via GameServer.getPlayerByUserNameForCommand,
-    // which prints this exact, non-interpolated literal when the name
-    // doesn't match a currently connected player.
     pattern: /^\s*No such user\s*$/i,
     describe: () => "No such user. They must be currently connected for this command.",
   },
   {
-    // setaccesslevel (GameServer.changeRole): bad username argument.
-    // Bounded by the fixed `Invalid username "` prefix and the closing
-    // `"` immediately after the name, both literal PZ text -- setaccesslevel's
-    // own success message ("<name> granted...") never produces this shape.
     pattern: /^Invalid username ".*"\s*$/i,
     describe: (text) => `${text}. That username was not recognized.`,
   },
   {
-    // setaccesslevel: bad access-level argument. The interpolated value
-    // here is the admin-typed level string, already validated client-side
-    // against ACCESS_LEVELS before reaching RCON -- not player-controlled.
     pattern: /^Access Level '.+' unknown, list of access level:/i,
     describe: (text) => `${text}. That access level is not recognized on this server build.`,
   },
   {
-    // setaccesslevel: RCON-connected admin's OWN role lacks the rights to
-    // grant this level (a role-hierarchy check, distinct from the
-    // RCON-account-level "Not enough rights" above). Bare, non-interpolated
-    // literal.
     pattern: /^You do not have sufficient rights to set this access level\.\s*$/i,
     describe: () => "You do not have sufficient rights to set this access level.",
   },
   {
-    // setaccesslevel: target has no whitelist/server account at all.
-    // Bounded the same way as "Invalid username" above.
     pattern: /^User ".*" is not in the whitelist nor the server, use \/adduser first\s*$/i,
     describe: (text) => `${text}.`,
   },
-  // The banuser, unbanuser, adduser, and removeuserfromwhitelist commands
-  // delegate their entire result string to zombie/network/BanSystem or
-  // zombie/network/ServerWorldDatabase -- their own command classes carry no
-  // rejection text at all, which is why these four still reported a genuine
-  // failure as a success even after the anchoring fix above. Same anchoring
-  // discipline as every entry above: full-string where the PZ text has no
-  // interpolation, bounded by fixed text immediately before/after the
-  // interpolated portion where it does. Confidence tiers distinguish
-  // constant-pool string presence from bytecode-traced return values --
-  // a literal being in the class is not proof of which exact call site
-  // returns it) -- the tier reflects certainty about WHICH COMMAND triggers
-  // a string, not whether the string itself is real or the anchoring below
-  // is safe: every pattern here is anchored the same strict way regardless
-  // of tier.
   {
-    // HIGH -- BanSystem.class (BanUser): target holds the CantBeBannedByUser
-    // capability. Bare, non-interpolated literal, same shape as
-    // KickUserCommand's "This user can't be kicked." above. Applies to
-    // banuser.
     pattern: /^\s*This user can't be banned\.\s*$/i,
     describe: () => "This user can't be banned (protected account).",
   },
   {
-    // HIGH -- BanSystem.class (BanUserByIP, the -ip flag path): the target
-    // IP is a Steam Relay shared address, so there's no real IP to ban.
-    // Interpolated value is an IP the RCON-connected ADMIN typed as an
-    // argument, not the target player's chosen name -- not
-    // attacker-controlled the way a display name is, but anchored the same
-    // strict way regardless. Applies to banuser -ip.
     pattern: /^Cannot ban IP .+ \(Steam Relay shared address\)\. Use bansteamid or banuser instead\.\s*$/i,
     describe: (text) => `${text}`,
   },
   {
-    // HIGH -- BanSystem.class (BanUserByIP): same Steam-Relay case, but the
-    // player's real IP genuinely isn't available at all. Bounded by the
-    // literal quotes around the interpolated player name, same shape as
-    // "Invalid username" above -- a success response's own fixed text can
-    // never reproduce both boundaries. Applies to banuser -ip.
     pattern: /^Cannot ban IP for player '.+' \(Steam Relay, real IP unavailable\)\. Use bansteamid or banuser without -ip\.\s*$/i,
     describe: (text) => `${text}`,
   },
   {
-    // HIGH -- ServerWorldDatabase.class (addUser): target username is
-    // already whitelisted. Bare, non-interpolated literal. Applies to
-    // adduser.
     pattern: /^\s*A user with this name already exists\.?\s*$/i,
     describe: () => "A user with this name already exists.",
   },
   {
-    // MEDIUM -- ServerWorldDatabase.class: target isn't whitelisted at all.
-    // DELIBERATELY KEPT SEPARATE from the setaccesslevel pattern above
-    // ("...is not in the whitelist NOR THE SERVER, use /adduser first",
-    // confirmed still verbatim in GameServer.class) -- this is a shorter,
-    // differently-worded literal from a different class. Do not broaden
-    // one pattern to cover both; that is the exact direction that
-    // reintroduces the false positives the anchoring fix above eliminated.
-    // Bounded by the literal quotes around the interpolated name, same
-    // shape as "Invalid username" above. Most plausibly applies to
-    // unbanuser / removeuserfromwhitelist against a name that was never
-    // whitelisted (attribution inferred from context, not bytecode-traced
-    // -- the string and its anchoring are still fully verified).
     pattern: /^User ".*" is not in the whitelist, use \/adduser first\s*$/i,
     describe: (text) => `${text}.`,
   },
   {
-    // MEDIUM -- ServerWorldDatabase.class: target username not found.
-    // Distinct from both "User <name> doesn't exist." (KickUserCommand,
-    // requires the trailing period + different wording) and "No such user"
-    // (GameServer.getPlayerByUserNameForCommand, a different literal
-    // entirely) -- a genuinely separate rejection shape. Bounded by the
-    // fixed "User " prefix and " not found" suffix. Attribution to a
-    // specific command inferred, not bytecode-traced.
     pattern: /^User .+ not found\s*$/i,
     describe: () => "User not found.",
   },
   {
-    // MEDIUM -- BanSystem.class (BanUser): a second, redundant capability
-    // check inside BanUser itself, on top of whatever the RCON
-    // @RequiredCapability annotation already gates -- this is still useful
-    // "worth having as a backstop pattern even if it's not expected to
-    // normally fire." Bare, non-interpolated literal -- no anchoring risk
-    // regardless of the backstop framing. Applies to banuser/unbanuser.
     pattern: /^\s*You don't have capability to ban\/unban users\.\s*$/i,
     describe: () => "You don't have capability to ban/unban users.",
   },
@@ -395,13 +222,12 @@ export const KNOWN_RCON_REJECTIONS = [
 export class RconService extends EventEmitter {
   constructor() {
     super();
-    // Increase max listeners to prevent warnings during rapid reconnection cycles
     this.setMaxListeners(20);
 
     this.client = null;
     this.connected = false;
-    this.connecting = false; // Mutex to prevent concurrent connection attempts
-    this.connectPromise = null; // Store ongoing connection promise
+    this.connecting = false;
+    this.connectPromise = null;
     this.passwordFromSecretFile = Boolean(process.env.RCON_PASSWORD_FILE);
     this.config = {
       host: process.env.RCON_HOST || "127.0.0.1",
@@ -410,52 +236,43 @@ export class RconService extends EventEmitter {
     };
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
-    this.baseReconnectDelay = 2000; // Start at 2s
-    this.maxReconnectDelay = 60000; // Max 60s
+    this.baseReconnectDelay = 2000;
+    this.maxReconnectDelay = 60000;
 
-    // Throttle connection failure logging to avoid spam while the game server
-    // is intentionally offline. Reconnect attempts continue independently.
     this.lastConnectionErrorLog = 0;
-    this.connectionErrorLogCooldown = 5 * 60 * 1000; // Only log once per 5 minutes
+    this.connectionErrorLogCooldown = 5 * 60 * 1000;
     this.configLoaded = false;
-    this.serverManager = null; // Reference to ServerManager for server status checks
+    this.serverManager = null;
 
-    // Periodic auto-reconnect when server is running but RCON disconnected
     this.autoReconnectInterval = null;
-    this.autoReconnectDelay = 60000; // Try to reconnect every 60s if disconnected
-    this.lastSuccessfulCommand = null; // Track when last command succeeded
-    this.serverStarting = false; // Flag to prevent reconnects during server startup
-    this.serverStartingTimeout = null; // Failsafe timeout to clear serverStarting flag
-    this.connectionVersion = 0; // Version counter to invalidate stale connection attempts
-    this.reconnecting = false; // Mutex to prevent concurrent reconnection attempts
-    this.reconnectPromise = null; // Store ongoing reconnection promise
+    this.autoReconnectDelay = 60000;
+    this.lastSuccessfulCommand = null;
+    this.serverStarting = false;
+    this.serverStartingTimeout = null;
+    this.connectionVersion = 0;
+    this.reconnecting = false;
+    this.reconnectPromise = null;
 
-    // Connection timeout - how long to wait for authenticate() before giving up
-    this.connectionTimeout = 10000; // 10 seconds
-    this.commandTimeout = 10000; // 10 seconds execution timeout for commands
+    this.connectionTimeout = 10000;
+    this.commandTimeout = 10000;
 
-    // Periodic health check to detect stale connections
     this.healthCheckInterval = null;
-    this.healthCheckDelay = 60000; // Check every 60s
+    this.healthCheckDelay = 60000;
     this.lastHealthCheck = null;
     this.consecutiveHealthFailures = 0;
-    this.maxHealthFailures = 3; // Disconnect after 3 consecutive failures
+    this.maxHealthFailures = 3;
 
-    // Track pending clients to ensure cleanup (prevents memory leaks)
     this.pendingClients = new Set();
   }
 
-  // Set serverStarting flag with automatic timeout failsafe
   setServerStarting(value) {
     this.serverStarting = value;
 
-    // Clear any existing timeout
     if (this.serverStartingTimeout) {
       clearTimeout(this.serverStartingTimeout);
       this.serverStartingTimeout = null;
     }
 
-    // If setting to true, set a failsafe timeout to clear it after 5 minutes
     if (value) {
       this.serverStartingTimeout = setTimeout(
         () => {
@@ -467,32 +284,27 @@ export class RconService extends EventEmitter {
           }
         },
         5 * 60 * 1000,
-      ); // 5 minutes
+      );
     }
   }
 
-  // Set reference to ServerManager (called after both services are instantiated)
   setServerManager(serverManager) {
     this.serverManager = serverManager;
   }
 
-  // Start periodic auto-reconnection attempts
   startAutoReconnect() {
     if (this.autoReconnectInterval) return;
 
     this.autoReconnectInterval = setInterval(async () => {
-      // Skip if server is starting - startup sequence handles connections
       if (this.serverStarting) {
         log.debug("Skipping - server is starting");
         return;
       }
 
-      // Skip if already connected
       if (this.connected) {
         return;
       }
 
-      // Skip if any connection attempt is already in progress
       if (this.connecting || this.reconnecting) {
         log.debug("Skipping - connection already in progress");
         return;
@@ -519,7 +331,6 @@ export class RconService extends EventEmitter {
           log.info("Successfully connected!");
         }
       } catch (e) {
-        // During server startup, only log at debug level to reduce noise
         if (this.serverStarting) {
           log.debug(`Connection failed during startup, retrying: ${e.message}`);
         } else {
@@ -538,24 +349,20 @@ export class RconService extends EventEmitter {
     }, this.autoReconnectDelay);
     if (this.autoReconnectInterval.unref) this.autoReconnectInterval.unref();
 
-    // Start health check interval to detect stale connections
     this.startHealthCheck();
 
     log.debug("auto-reconnect enabled (60s interval)");
   }
 
-  // Start periodic health checks to detect dead connections
   startHealthCheck() {
     if (this.healthCheckInterval) return;
 
     this.healthCheckInterval = setInterval(async () => {
-      // Only check if we think we're connected
       if (!this.connected || !this.client) {
         this.consecutiveHealthFailures = 0;
         return;
       }
 
-      // Skip during server startup
       if (this.serverStarting) {
         return;
       }
@@ -595,7 +402,6 @@ export class RconService extends EventEmitter {
     log.debug("health check enabled (60s interval)");
   }
 
-  // Stop periodic health checks
   stopHealthCheck() {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
@@ -604,7 +410,6 @@ export class RconService extends EventEmitter {
     }
   }
 
-  // Stop periodic auto-reconnection
   stopAutoReconnect() {
     if (this.autoReconnectInterval) {
       clearInterval(this.autoReconnectInterval);
@@ -614,12 +419,6 @@ export class RconService extends EventEmitter {
     this.stopHealthCheck();
   }
 
-  // Load RCON settings from active server first, then fallback to legacy settings
-  // `serverId`: load config for a SPECIFIC server instead of "whichever is
-  // active". Used by the Scheduler to run a task against a server that
-  // isn't the currently-active one, via a throwaway RconService instance —
-  // the shared singleton (called with no args, as always) keeps following
-  // the active server exactly as before.
   async loadConfig(serverId = null) {
     if (this.configLoaded) return;
     try {
@@ -627,15 +426,6 @@ export class RconService extends EventEmitter {
         ? await getServer(serverId)
         : await getActiveServer();
       if (targetServer) {
-        // A configured server's host and port are the right target
-        // regardless of whether it has an RCON password set yet — a freshly
-        // added PZ server with no password configured is a completely
-        // normal state. Silently falling back to a different host/port here
-        // would make "wrong/missing password" and "no server configured at
-        // all" indistinguishable: both used to fall through to the
-        // hardcoded default and probe whatever else happened to be
-        // listening there. Whether we can authenticate is decided
-        // separately, below — it never changes WHERE we try to connect.
         this.config.host = normalizeRconHost(targetServer.rconHost);
         this.config.port = parseConfiguredRconPort(targetServer.rconPort);
 
@@ -644,10 +434,6 @@ export class RconService extends EventEmitter {
             this.config.password = targetServer.rconPassword;
           }
         } else if (!this.passwordFromSecretFile) {
-          // Don't carry over a stale password from a previously loaded
-          // server (e.g. after reloadConfig() on server switch) — a missing
-          // password is a real, visible state to report, not a value to
-          // silently inherit from whatever this instance last connected to.
           this.config.password = "";
           log.warn(
             serverId
@@ -665,10 +451,6 @@ export class RconService extends EventEmitter {
         return;
       }
 
-      // Fallback to legacy (global) settings — only meaningful when no
-      // specific serverId was requested. Falling back to the global/active
-      // settings for a targeted serverId lookup would silently connect to
-      // the wrong server instead of failing loudly on a misconfigured one.
       if (!serverId) {
         const dbHost = await getSetting("rconHost");
         const dbPort = await getSetting("rconPort");
@@ -693,17 +475,6 @@ export class RconService extends EventEmitter {
     }
   }
 
-  // Is there an actual RCON target on record — a server row (any server ever
-  // added, active or not) or the legacy global rcon* settings some installs
-  // still rely on? Deliberately NEVER memoized, unlike loadConfig()/
-  // configLoaded above: this is checked fresh on every connection attempt so
-  // that adding a first server while the panel is already running is picked
-  // up on the very next reconnect tick, without needing reloadConfig() to be
-  // called by whatever route created it, or a panel restart.
-  // Without this check, "nothing configured" and "configured but wrong"
-  // are indistinguishable to a caller — both used to fall through to the
-  // hardcoded default host/port and attempt authentication against whatever
-  // unrelated process happened to be listening there.
   async hasConfiguredTarget() {
     try {
       if (await getActiveServer()) return true;
@@ -723,20 +494,15 @@ export class RconService extends EventEmitter {
     }
   }
 
-  // Force reload config (called when active server changes)
   async reloadConfig(serverId = null) {
     this.configLoaded = false;
-    // Disconnect if connected since credentials may have changed
     if (this.connected) {
       await this.disconnect();
     }
     await this.loadConfig(serverId);
   }
 
-  // Force reset connection state (called when a connection attempt times out)
-  // This aggressively destroys everything to ensure next attempt starts completely fresh
   forceResetConnectionState() {
-    // Increment version to invalidate any in-flight connection attempts
     this.connectionVersion++;
     const version = this.connectionVersion;
     log.info(`Force resetting connection state (version ${version})`);
@@ -749,33 +515,24 @@ export class RconService extends EventEmitter {
     this.connected = false;
     this.consecutiveHealthFailures = 0;
 
-    // Clear serverStarting timeout to prevent memory leak
     if (this.serverStartingTimeout) {
       clearTimeout(this.serverStartingTimeout);
       this.serverStartingTimeout = null;
     }
     this.serverStarting = false;
 
-    // Clean up all pending clients to prevent memory leaks
     this._cleanupAllPendingClients();
 
-    // Clean up main client
     this._cleanupClient();
 
     log.info(`Connection state forcibly reset (ready for new attempt)`);
     this.emit("disconnected");
   }
 
-  // Helper to clean up the RCON client socket - the new SourceRconClient owns
-  // its own socket lifecycle entirely (single persistent listener set,
-  // cleaned up inside its own disconnect()), so this no longer needs to
-  // reach into private internals (client.connection/.socket/._socket) the
-  // way the old rcon-srcds-based client required.
   _cleanupClient(clientToClean = null) {
     const client = clientToClean || this.client;
     if (!client) return;
 
-    // Remove from pending clients set
     this.pendingClients.delete(client);
 
     try {
@@ -784,13 +541,11 @@ export class RconService extends EventEmitter {
       // Ignore cleanup errors
     }
 
-    // Only null out main client if we're cleaning the main client
     if (client === this.client) {
       this.client = null;
     }
   }
 
-  // Clean up all pending clients (called during force reset)
   _cleanupAllPendingClients() {
     for (const client of this.pendingClients) {
       this._cleanupClient(client);
@@ -799,17 +554,14 @@ export class RconService extends EventEmitter {
   }
 
   async connect() {
-    // If already connected, return immediately
     if (this.connected && this.client) {
       return true;
     }
 
-    // If a connection attempt is already in progress, wait for it
     if (this.connecting && this.connectPromise) {
       return this.connectPromise;
     }
 
-    // Set mutex and create promise for concurrent callers to await
     this.connecting = true;
     const connectPromise = this._doConnect();
     this.connectPromise = connectPromise;
@@ -825,11 +577,10 @@ export class RconService extends EventEmitter {
     }
   }
 
-  // Helper to check if RCON port is actually open
   async checkPortOpen(host, port) {
     return new Promise((resolve) => {
       const socket = new net.Socket();
-      socket.setTimeout(2000); // 2s timeout
+      socket.setTimeout(2000);
 
       const onConnect = () => {
         socket.destroy();
@@ -854,14 +605,8 @@ export class RconService extends EventEmitter {
   }
 
   async _doConnect() {
-    // Capture current version at start - if it changes, this attempt is stale
     const startVersion = this.connectionVersion;
 
-    // Nothing to connect to yet — the normal state for a fresh install, and
-    // for the 60s auto-reconnect interval every time it ticks before a
-    // server has been added. Checked before loadConfig() so we never even
-    // populate this.config with the hardcoded default in this case, let
-    // alone probe/authenticate against whatever else might hold that port.
     if (!(await this.hasConfiguredTarget())) {
       log.debug(
         "No RCON server configured yet — skipping connection attempt",
@@ -869,7 +614,6 @@ export class RconService extends EventEmitter {
       return false;
     }
 
-    // Load config from database before connecting
     await this.loadConfig();
 
     if (!Number.isInteger(this.config.port) || this.config.port < 1 || this.config.port > 65535) {
@@ -877,21 +621,16 @@ export class RconService extends EventEmitter {
       return false;
     }
 
-    // Check if version changed (connection was force reset)
     if (this.connectionVersion !== startVersion) {
       log.info("Connection attempt cancelled (force reset occurred)");
       return false;
     }
 
-    // Check if server is running before attempting connection (skip if disabled)
-    // This check can be slow on some systems, so we allow bypassing it
     const skipServerCheck = process.env.RCON_SKIP_SERVER_CHECK === "true";
 
     if (!skipServerCheck && this.serverManager) {
-      // ... serverManager check code ...
       let timeoutId;
       try {
-        // Add a shorter timeout for the server check to avoid long waits
         const checkPromise = this.serverManager.checkServerRunning();
         const timeoutPromise = new Promise((_, reject) => {
           timeoutId = setTimeout(
@@ -913,23 +652,18 @@ export class RconService extends EventEmitter {
         }
       } catch (error) {
         clearTimeout(timeoutId);
-        // On timeout or error, proceed with connection attempt anyway
         log.debug(
           `Server check failed (${error.message}), attempting connection anyway...`,
         );
       }
     }
 
-    // Check if RCON port is actually open/listening
-    // This prevents premature connection attempts (e.g. while server is still booting)
     try {
       const isOpen = await this.checkPortOpen(
         this.config.host,
         this.config.port,
       );
       if (!isOpen) {
-        // Throttled to one line a minute: this used to be debug-only, so a
-        // wrong host or a closed port produced no diagnosis at all.
         const now = Date.now();
         if (now - this.lastConnectionErrorLog > this.connectionErrorLogCooldown) {
           this.lastConnectionErrorLog = now;
@@ -944,20 +678,17 @@ export class RconService extends EventEmitter {
       return false;
     }
 
-    // Check if version changed again
     if (this.connectionVersion !== startVersion) {
       log.info("Connection attempt cancelled (force reset occurred)");
       return false;
     }
 
-    // Double-check in case connection completed while waiting
     if (this.connected && this.client) {
       return true;
     }
 
     let newClient = null;
     try {
-      // Clean up any existing client before creating new one
       if (this.client) {
         try {
           this.client.disconnect();
@@ -977,13 +708,11 @@ export class RconService extends EventEmitter {
         timeout: 5000,
       });
 
-      // Track this client so it can be cleaned up if connection is force reset
       this.pendingClients.add(newClient);
       this.client = newClient;
 
       log.info("Calling authenticate()...");
 
-      // Wrap authenticate() with a timeout to prevent hanging forever
       let authTimeoutId;
       const authPromise = this.client.authenticate(this.config.password);
       const timeoutPromise = new Promise((_, reject) => {
@@ -1002,7 +731,6 @@ export class RconService extends EventEmitter {
         clearTimeout(authTimeoutId);
       }
 
-      // Check if version changed during authenticate (which can hang)
       if (this.connectionVersion !== startVersion) {
         log.info(
           "Connection succeeded but version changed - discarding stale connection",
@@ -1011,22 +739,16 @@ export class RconService extends EventEmitter {
         return false;
       }
 
-      // Connection successful - remove from pending and keep as main client
       this.pendingClients.delete(newClient);
       this.connected = true;
       this.reconnectAttempts = 0;
       this.consecutiveHealthFailures = 0;
 
       log.info(`connected to ${this.config.host}:${this.config.port}`);
-      // Emit connected event for other services (like PanelBridge) to react
       this.emit("connected");
       return true;
     } catch (error) {
       const ownsCurrentClient = newClient && this.client === newClient;
-      // Clean up only the client created by this attempt. A reset or a newer
-      // connection may have installed a different client while authentication
-      // was waiting; clearing that newer socket here would resurrect the same
-      // connection storm this state machine is meant to prevent.
       if (newClient) {
         this._cleanupClient(newClient);
       } else if (this.connectionVersion === startVersion && !this.connecting) {
@@ -1039,11 +761,9 @@ export class RconService extends EventEmitter {
         this.connected = false;
       }
 
-      // Throttle connection failure logs to avoid spam when server is offline
       const now = Date.now();
       if (now - this.lastConnectionErrorLog > this.connectionErrorLogCooldown) {
         this.lastConnectionErrorLog = now;
-        // During server startup, suppress warnings to reduce noise
         if (this.serverStarting) {
           log.debug(`connection failed during startup: ${error.message}`);
         } else if (
@@ -1074,13 +794,11 @@ export class RconService extends EventEmitter {
 
     if (wasConnected) {
       log.info("disconnected");
-      // Emit disconnected event
       this.emit("disconnected");
     }
   }
 
   async reconnect() {
-    // Don't attempt reconnect during server startup - the startup sequence handles it
     if (this.serverStarting) {
       log.debug("reconnect: Skipping - server is starting");
       return false;
@@ -1088,13 +806,11 @@ export class RconService extends EventEmitter {
 
     const reconnectStartVersion = this.connectionVersion;
 
-    // If already connected, no need to reconnect
     if (this.connected) {
       log.debug("reconnect: Already connected");
       return true;
     }
 
-    // If a reconnection is already in progress, wait for it instead of starting a new one
     if (this.reconnecting && this.reconnectPromise) {
       log.debug(
         "reconnect: Already in progress, waiting for existing attempt...",
@@ -1102,7 +818,6 @@ export class RconService extends EventEmitter {
       return this.reconnectPromise;
     }
 
-    // If a connection is in progress, wait for it
     if (this.connecting && this.connectPromise) {
       log.debug("reconnect: Connection in progress, waiting...");
       try {
@@ -1113,7 +828,6 @@ export class RconService extends EventEmitter {
       }
     }
 
-    // Set mutex and create promise for concurrent callers to await
     this.reconnecting = true;
     const reconnectPromise = this._doReconnect();
     this.reconnectPromise = reconnectPromise;
@@ -1130,13 +844,11 @@ export class RconService extends EventEmitter {
   }
 
   async _doReconnect() {
-    // Capture version at start - if it changes, we should abort
     const startVersion = this.connectionVersion;
 
     await this.disconnect();
 
     while (this.reconnectAttempts < this.maxReconnectAttempts) {
-      // Check if force reset happened - abort immediately
       if (this.connectionVersion !== startVersion) {
         log.debug("reconnect: Version changed (force reset), aborting");
         this.reconnectAttempts = 0;
@@ -1146,28 +858,24 @@ export class RconService extends EventEmitter {
       this.reconnectAttempts++;
       log.info(`reconnecting... Attempt ${this.reconnectAttempts}`);
 
-      // Exponential backoff with cap: 5s, 10s, 15s, 20s, 25s, then stay at 30s
       const delay = Math.min(
         this.baseReconnectDelay * this.reconnectAttempts,
         30000,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
 
-      // Check again after delay
       if (this.connectionVersion !== startVersion) {
         log.debug("reconnect: Version changed (force reset), aborting");
         this.reconnectAttempts = 0;
         return false;
       }
 
-      // Check if server startup began while we were waiting
       if (this.serverStarting) {
         log.debug("reconnect: Server starting, aborting reconnect loop");
         this.reconnectAttempts = 0;
         return false;
       }
 
-      // If already connected (by another path), we're done
       if (this.connected) {
         log.debug("reconnect: Already connected, stopping");
         this.reconnectAttempts = 0;
@@ -1181,24 +889,20 @@ export class RconService extends EventEmitter {
           return false;
         }
         if (result) {
-          // Reset attempts on successful reconnection
           this.reconnectAttempts = 0;
           log.info("reconnected successfully");
           return true;
         }
-        // If connect returns false (server not running), don't retry
         log.debug("reconnect: Server not running, stopping attempts");
         this.reconnectAttempts = 0;
         return false;
       } catch (error) {
-        // Connection failed, will retry in next loop iteration
         log.debug(
           `reconnect attempt ${this.reconnectAttempts} failed: ${error.message}`,
         );
       }
     }
 
-    // Max attempts reached
     log.warn(
       `reconnect: Max attempts (${this.maxReconnectAttempts}) reached, giving up. Auto-reconnect will retry later.`,
     );
@@ -1206,10 +910,6 @@ export class RconService extends EventEmitter {
     return false;
   }
 
-  // Checks a raw RCON response against KNOWN_RCON_REJECTIONS -- returns
-  // {error, response} if it matches a proven rejection shape, null
-  // otherwise (including for empty/non-string responses, which are the
-  // normal shape for most commands that don't echo anything back).
   classifyRconResponse(response) {
     if (typeof response !== "string" || !response) return null;
     const trimmed = response.trim();
@@ -1221,7 +921,6 @@ export class RconService extends EventEmitter {
     return null;
   }
 
-  // Execute a command with optional skipLog to avoid polluting command history with automatic commands
   async execute(
     command,
     { skipLog = false, retryOnConnectionError = false } = {},
@@ -1229,18 +928,13 @@ export class RconService extends EventEmitter {
     let commandClient = null;
     let commandSent = false;
     try {
-      // If server is starting, don't try to connect yet
       if (this.serverStarting) {
         return { success: false, error: "Server is starting, please wait..." };
       }
 
       if (!this.connected) {
         const connectResult = await this.connect();
-        // If connect returns false, server is not running
         if (connectResult === false) {
-          // Raw literal, not routed through getUserFriendlyError() -- kept
-          // exactly as-is (quit()'s own comparison below depends on this
-          // exact string), with the code attached directly here instead.
           return {
             success: false,
             error: "Server is not running",
@@ -1251,7 +945,6 @@ export class RconService extends EventEmitter {
 
       log.debug(`executing: ${redactRconCommandSecrets(command)}`);
 
-      // Execute with timeout
       commandClient = this.client;
       if (!commandClient || typeof commandClient.execute !== "function") {
         throw new Error("RCON not connected");
@@ -1273,7 +966,6 @@ export class RconService extends EventEmitter {
         clearTimeout(timeoutId);
       }
 
-      // Track successful command for connection health monitoring
       if (this.client === commandClient && this.connected) {
         this.lastSuccessfulCommand = Date.now();
         this.consecutiveHealthFailures = 0;
@@ -1281,13 +973,8 @@ export class RconService extends EventEmitter {
 
       log.debug(`response: ${response}`);
 
-      // The server answers a command it refuses to run with a normal RCON
-      // reply, so without this check -- and without checking it BEFORE the
-      // database log below -- the refusal looks like success both to the
-      // caller and in the panel's own persisted command history.
       const rejection = this.classifyRconResponse(response);
 
-      // Log to database (unless skipLog is set for automatic commands)
       if (!skipLog) {
         logCommand(command, rejection ? rejection.error : response, !rejection);
       }
@@ -1304,7 +991,6 @@ export class RconService extends EventEmitter {
     } catch (error) {
       const errorMsg = error.message || "Unknown error";
 
-      // Categorize errors for better handling
       const isConnectionError =
         errorMsg.includes("ECONNREFUSED") ||
         errorMsg.includes("ETIMEDOUT") ||
@@ -1317,7 +1003,6 @@ export class RconService extends EventEmitter {
 
       const isServerOffline = errorMsg.includes("Server is not running");
 
-      // Use debug for connection-related failures to avoid log spam
       if (isConnectionError || isServerOffline) {
         log.debug(
           `command skipped (${isServerOffline ? "server offline" : "connection error"}): ${command}`,
@@ -1326,7 +1011,6 @@ export class RconService extends EventEmitter {
         log.warn(`command failed: ${errorMsg}`);
       }
 
-      // Mark as disconnected on connection errors
       if (isConnectionError) {
         const wasCurrentClient = commandClient && this.client === commandClient;
         if (commandClient) {
@@ -1338,7 +1022,6 @@ export class RconService extends EventEmitter {
           this.connected = false;
         }
 
-        // Don't try to reconnect during server startup - the startup sequence handles it
         if (this.serverStarting) {
           if (!skipLog) {
             logCommand(command, "Server is starting...", false);
@@ -1363,13 +1046,10 @@ export class RconService extends EventEmitter {
           };
         }
 
-        // Try to reconnect and retry the command
         try {
           await this.reconnect();
-          // Retry the command after reconnection (if reconnect succeeded)
           const retryClient = this.client;
           if (this.connected && retryClient) {
-            // Execute with timeout for retry as well
             let retryTimeoutId;
             const retryExecutePromise = retryClient.execute(command);
             const retryTimeoutPromise = new Promise((_, reject) => {
@@ -1408,9 +1088,6 @@ export class RconService extends EventEmitter {
               this.lastSuccessfulCommand = Date.now();
             }
 
-            // Same rejection check as the primary attempt above -- a retry
-            // that reconnects successfully but gets a refusal back must not
-            // report success just because the connection came back up.
             const rejection = this.classifyRconResponse(response);
             if (!skipLog) {
               logCommand(command, rejection ? rejection.error : response, !rejection);
@@ -1424,16 +1101,6 @@ export class RconService extends EventEmitter {
               response: response || "Command executed successfully",
             };
           } else {
-            // Reconnect returned false or didn't connect -- an ordinary,
-            // unambiguous disconnect (the server is genuinely offline, not
-            // an unexpected error), same shape as the connectResult===false
-            // branch above, so the code is attached directly here rather
-            // than routed through getRconDisconnectCode(), which classifies
-            // an error MESSAGE and there isn't one on this path -- reconnect()
-            // resolved without throwing. Without this, Console.tsx's
-            // isRconDisconnectError() never fires for this branch and the
-            // "connection dropped" banner silently never appears for the
-            // most ordinary case it exists to cover.
             if (!skipLog) {
               logCommand(command, "Connection failed", false);
             }
@@ -1474,29 +1141,20 @@ export class RconService extends EventEmitter {
     }
   }
 
-  // Convert technical errors to user-friendly messages
   getUserFriendlyError(errorMsg) {
     if (!errorMsg) return "Unknown error occurred";
     const match = RCON_ERROR_CLASSIFICATIONS.find((c) => c.test(errorMsg));
     return match ? match.message : errorMsg;
   }
 
-  // The code counterpart to getUserFriendlyError() above, classified from
-  // the exact same table so the two can never disagree about which
-  // outcomes are a disconnect. Returns null for a non-disconnect failure
-  // (including an unrecognized error and the authentication-failure
-  // branch) -- callers attach this alongside the prose from
-  // getUserFriendlyError(), not instead of it.
   getRconDisconnectCode(errorMsg) {
     if (!errorMsg) return null;
     const match = RCON_ERROR_CLASSIFICATIONS.find((c) => c.test(errorMsg));
     return match?.disconnect ? ErrorCode.RCON_EXECUTE_DISCONNECTED : null;
   }
 
-  // Sanitize input for RCON commands to prevent injection
   sanitize(input) {
     if (input === null || input === undefined) return "";
-    // Remove quotes, backslashes, AND control characters (newlines, tabs, etc)
     return String(input).replace(/["\\]|[\x00-\x1F\x7F]/g, "");
   }
 
@@ -1517,26 +1175,14 @@ export class RconService extends EventEmitter {
     return value;
   }
 
-  // Shared text-folding step for every free-text field that ends up inside
-  // an RCON command string (broadcasts, ban reasons, ...): normalize the
-  // punctuation PZ's RCON silently mishandles (curly quotes/dashes/
-  // ellipsis) to plain ASCII, transliterate common accented Latin letters,
-  // then drop anything still outside printable ASCII. Used to be
-  // reimplemented separately per call site with different character-class
-  // rules -- the same
-  // French text folded differently depending on which RCON call carried it,
-  // and the caller had no way to know its text had been altered. One
-  // implementation now; callers that need a narrower character set (e.g.
-  // sanitizeForBanReason()'s punctuation whitelist) apply that on top of
-  // this, not instead of it.
   foldToRconAscii(input) {
     return String(input ?? "")
-      .replace(/[\u2018\u2019]/g, "'") // curly single quotes -> '
-      .replace(/[\u201C\u201D]/g, '"') // curly double quotes -> "
-      .replace(/[\u2013\u2014]/g, "-") // en/em dash -> -
-      .replace(/[\u2026]/g, "...") // ellipsis
-      .replace(/[\u00C0-\u024F]/g, (ch) => LATIN_TRANSLITERATION_MAP[ch] ?? "") // transliterate known accented Latin
-      .replace(/[^\x20-\x7E]/g, "") // drop everything else outside printable ASCII
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/[\u2026]/g, "...")
+      .replace(/[\u00C0-\u024F]/g, (ch) => LATIN_TRANSLITERATION_MAP[ch] ?? "")
+      .replace(/[^\x20-\x7E]/g, "")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -1552,33 +1198,16 @@ export class RconService extends EventEmitter {
       .trim();
   }
 
-  // Server commands
   async save({ skipLog = false, retryOnConnectionError = false } = {}) {
     return this.execute("save", { skipLog, retryOnConnectionError });
   }
 
   async quit({ skipLog = false, retryOnConnectionError = false } = {}) {
-    // The quit command will shutdown the server and close the connection.
-    // This may result in connection errors, which are expected -- but
-    // execute() has its own try/catch spanning its whole body that never
-    // rethrows (every failure path, including every connection-error
-    // branch, resolves {success:false, ...} instead of rejecting), so a
-    // try/catch here around the await could never actually catch anything.
-    // A quit whose connection reset mid-shutdown -- the normal case --
-    // reported success:false, indistinguishable from a quit that never
-    // reached the server (e.g. scheduler.js's performRestart() used to
-    // treat every clean auto-restart quit as a failure and fall back to a
-    // forced stop). Inspect the RESULT instead of a thrown error. The two
-    // guard messages below mean execute() never actually sent "quit" at all
-    // (server already stopped / still starting) -- those stay real
-    // failures; anything else execute() can fail with for "quit"
-    // specifically is the server closing the connection as it exits.
     const quitClient = this.client;
     const result = await this.execute("quit", {
       skipLog,
       retryOnConnectionError,
     });
-    // Mark as disconnected since server is shutting down
     if (this.client === quitClient) {
       this.connected = false;
       this._cleanupClient(quitClient);
@@ -1604,7 +1233,6 @@ export class RconService extends EventEmitter {
     const result = await this.execute(`servermsg "${safeMessage}"`, {
       skipLog,
     });
-    // Detect the case where PZ returns the help text instead of broadcasting
     if (
       result?.success &&
       typeof result.response === "string" &&
@@ -1619,7 +1247,6 @@ export class RconService extends EventEmitter {
   }
 
   async getPlayers() {
-    // Skip logging for automatic player polling to avoid cluttering command history
     const result = await this.execute("players", {
       skipLog: true,
       retryOnConnectionError: true,
@@ -1634,8 +1261,6 @@ export class RconService extends EventEmitter {
   }
 
   parsePlayers(response) {
-    // Parse the players response
-    // Format typically: "Players connected (X):\n-username\n-username2"
     const players = [];
     if (!response) return players;
 
@@ -1652,7 +1277,6 @@ export class RconService extends EventEmitter {
     return players;
   }
 
-  // Player commands
   async kickPlayer(username, reason = "") {
     const safeUser = this.sanitizeQuotedArg(username, "Username", 64);
     const safeReason = this.sanitizeForBanReason(reason);
@@ -1663,11 +1287,6 @@ export class RconService extends EventEmitter {
 
   sanitizeForBanReason(input) {
     if (!input) return "";
-    // Fold first (curly quotes/accents), THEN apply the ban-reason-specific
-    // whitelist on top -- alphanumeric, spaces, and basic punctuation only.
-    // No quotes/backslash here even though foldToRconAscii() would let a
-    // straight one through: banuser's own `-r "..."` wrapping can't carry
-    // one safely, same reasoning as sanitize() elsewhere in this file.
     return this.foldToRconAscii(input)
       .replace(/[^a-zA-Z0-9\s.,!?'-]/g, "")
       .substring(0, 100);
@@ -1680,11 +1299,6 @@ export class RconService extends EventEmitter {
     if (banIp) cmd += " -ip";
     if (safeReason) cmd += ` -r "${safeReason}"`;
     const result = await this.execute(cmd);
-    // sentReason is what actually reached the server -- may differ from the
-    // caller's original `reason` (folding/whitelisting can alter or drop
-    // characters PZ's RCON can't carry). Callers that persist their own
-    // record of the ban (e.g. players.js's activity log) should log THIS,
-    // not the original input, so the panel's own record matches reality.
     return { ...result, sentReason: safeReason };
   }
 
@@ -1735,7 +1349,6 @@ export class RconService extends EventEmitter {
     return this.execute(`teleportto ${nx},${ny},${nz}`);
   }
 
-  // Items and XP
   async addItem(username, item, count = 1) {
     const safeItem = this.sanitizeQuotedArg(item, "Item ID", 128);
     const n = Math.min(Math.max(Math.floor(Number(count)) || 1, 1), 100);
@@ -1750,8 +1363,6 @@ export class RconService extends EventEmitter {
   async addXp(username, perk, amount) {
     const n = Number(amount);
     if (!Number.isFinite(n)) throw new Error("amount must be a number");
-    // The perk must NOT be quoted: PZ tokenises `"Axe"=100` as two arguments
-    // and then fails to split it on `=`, so it silently prints usage instead.
     if (!/^[A-Za-z]+$/.test(String(perk))) {
       throw new Error("Perk must be alphabetic");
     }
@@ -1781,7 +1392,6 @@ export class RconService extends EventEmitter {
     );
   }
 
-  // Weather
   async startRain(intensity = null) {
     if (intensity !== null && intensity !== undefined) {
       const n = Number(intensity);
@@ -1796,18 +1406,6 @@ export class RconService extends EventEmitter {
     return this.execute("stoprain");
   }
 
-  // 2026-08-26 regression: this used to send a bare "startstorm" with no
-  // duration when the caller omitted one, leaving PZ's own internal default
-  // to decide the length -- an internal default this panel has no way to
-  // read, and one that PanelBridge's triggerStorm Lua handler does NOT
-  // share, since it explicitly defaults an omitted duration to 2.0 hours.
-  // Two controls both labeled "Storm" could silently run for different
-  // lengths depending on which one was pressed, with nothing surfacing that
-  // they could disagree. Fixed by always sending an explicit duration here
-  // too -- 2.0 hours, matching PanelBridge's own existing default exactly,
-  // rather than inventing a new number or trying to guess PZ's hidden one
-  // (unverifiable from this repo, and not the point: the fix is making both
-  // paths agree with EACH OTHER, not with a number neither of us can see).
   async startStorm(duration = null) {
     const n = duration === null || duration === undefined ? 2.0 : Number(duration);
     if (!Number.isFinite(n) || n < 0 || n > 168)
@@ -1819,7 +1417,6 @@ export class RconService extends EventEmitter {
     return this.execute("stopweather");
   }
 
-  // Events
   async triggerChopper() {
     return this.execute("chopper");
   }
@@ -1856,14 +1453,6 @@ export class RconService extends EventEmitter {
     return this.execute(`createhorde ${n}`);
   }
 
-  // Admin modes. B42 splits each of these into a self-only command (bare
-  // godmod/invisible, ToggleGodModHimself/ToggleInvisibleHimself capability,
-  // no username argument) and a separate other-player command
-  // (godmodplayer/invisibleplayer, ToggleGodModEveryone/ToggleInvisibleEveryone
-  // capability, required username) -- confirmed from the real B42 dedicated
-  // server jar's GodModeCommand/GodModePlayerCommand/InvisibleCommand/
-  // InvisiblePlayerCommand classes. Sending a username to the self-only
-  // command doesn't target that player -- there is no "self" over RCON.
   async setGodMode(username, enabled) {
     const value = enabled ? "-true" : "-false";
     if (username) {
@@ -1894,12 +1483,10 @@ export class RconService extends EventEmitter {
     return this.execute(`noclip ${value}`);
   }
 
-  // Mod check
   async checkModsNeedUpdate() {
     return this.execute("checkModsNeedUpdate", { retryOnConnectionError: true });
   }
 
-  // Options
   async showOptions() {
     return this.execute("showoptions", { retryOnConnectionError: true });
   }
@@ -1909,17 +1496,12 @@ export class RconService extends EventEmitter {
   }
 
   async changeOption(optionName, newValue) {
-    // Options are pre-validated in routes, but validate+quote here too
-    // (defense in depth) — optionName is a fixed, never-empty PZ option name
-    // so throw-on-bad-input is safe; newValue is left lenient (sanitize()
-    // strips rather than throws) since clearing an option to '' is valid.
     const safeName = this.sanitizeQuotedArg(optionName, "Option name", 64);
     return this.execute(
       `changeoption "${safeName}" "${this.sanitize(newValue)}"`,
     );
   }
 
-  // Ban by SteamID
   async banSteamId(steamId) {
     const safeId = String(steamId ?? "").trim();
     if (!/^\d{17}$/.test(safeId)) {
@@ -1944,7 +1526,6 @@ export class RconService extends EventEmitter {
     return this.execute(`removeSteamID ${this.sanitizeQuotedArg(steamId, "SteamID", 17)}`);
   }
 
-  // Voice ban
   async voiceBan(username, enabled) {
     const value = enabled ? "-true" : "-false";
     return this.execute(
@@ -1952,7 +1533,6 @@ export class RconService extends EventEmitter {
     );
   }
 
-  // Whitelist management
   async addUser(username, password) {
     const safeUser = this.sanitizeQuotedArg(username, "Username", 64);
     if (password === undefined || password === null || password === "") {
@@ -1964,31 +1544,25 @@ export class RconService extends EventEmitter {
   }
 
   async addAllToWhitelist() {
-    // No Build 42 equivalent exists; fail loudly instead of sending a command
-    // the server will silently reject.
     throw new Error(
       "Build 42 removed the bulk whitelist command. Add players individually with a username and password.",
     );
   }
 
-  // Events
   async alarm() {
     return this.execute("alarm");
   }
 
-  // Lua
   async reloadLua(filename) {
     return this.execute(`reloadlua "${this.sanitize(filename)}"`);
   }
 
-  // Logging
   async setLogLevel(type, level) {
     const safeType = this.sanitizeQuotedArg(type, "Log type", 32);
     const safeLevel = this.sanitizeQuotedArg(String(level), "Log level", 32);
     return this.execute(`log "${safeType}" "${safeLevel}"`);
   }
 
-  // Statistics
   async setStats(mode, period = null) {
     const safeMode = this.sanitizeQuotedArg(mode, "Stats mode", 32);
     if (period !== null && period !== undefined && period !== "") {
@@ -2005,27 +1579,16 @@ export class RconService extends EventEmitter {
     });
   }
 
-  // Remove zombies
   async removeZombies() {
     return this.execute("removezombies");
   }
 
-  // Safehouse
   async releaseSafehouse() {
-    // ReleaseSafehouseCommand.class (real B42 dedicated server jar) calls
-    // isCommandComeFromServerConsole() and refuses with "...can be executed
-    // only from the game" for ANY console/RCON caller -- a hardcoded
-    // rejection keyed on connection type, not a syntax issue this panel
-    // could work around. Sending "releasesafehouse" here would always be
-    // rejected by the real server, and execute()'s failure detection
-    // doesn't recognise that rejection text, so it would report success
-    // while doing nothing. Refuse up front instead of lying about it.
     throw new Error(
       "Releasing a safehouse can only be done from in-game -- Project Zomboid's server refuses this over RCON, even from an admin console.",
     );
   }
 
-  // Test if connection is actually alive by sending a simple command
   async healthCheck() {
     if (!this.connected || !this.client) {
       return { healthy: false, reason: "Not connected" };
@@ -2034,7 +1597,6 @@ export class RconService extends EventEmitter {
     const healthClient = this.client;
     let timeoutId;
     try {
-      // Use 'players' command as a lightweight health check (with timeout)
       await Promise.race([
         healthClient.execute("players"),
         new Promise((_, reject) =>
@@ -2053,7 +1615,6 @@ export class RconService extends EventEmitter {
       if (this.client !== healthClient) {
         return { healthy: false, reason: "Connection changed" };
       }
-      // Connection is dead, mark as disconnected
       this.connected = false;
       this._cleanupClient(healthClient);
       log.warn(`health check failed: ${error.message}`);
@@ -2064,7 +1625,6 @@ export class RconService extends EventEmitter {
     }
   }
 
-  // Status check
   isConnected() {
     return this.connected;
   }
@@ -2086,7 +1646,6 @@ export class RconService extends EventEmitter {
     this.config.password =
       password !== undefined ? password : this.config.password;
 
-    // Reconnect with new config
     if (this.connected) {
       await this.disconnect();
     }

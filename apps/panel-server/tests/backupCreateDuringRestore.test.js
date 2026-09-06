@@ -4,24 +4,6 @@ import os from "os";
 import path from "path";
 import archiver from "archiver";
 
-// Concurrency regression 2026-08-29 (conversation regression-2026-08-29): the brief
-// flagged "a restart racing a backup, a backup racing a wipe" as an angle to
-// check. restoreBackup() already refuses a second restore AND a concurrent
-// createBackup() (regression, see backupRestoreSafety.test.js line
-// ~368 and the `if (this.backupInProgress)` guard at the top of
-// restoreBackup()). But that guard is one-directional: createBackup() itself
-// (backupService.js line ~355) only ever checks `this.backupInProgress`,
-// never `this.restoreInProgress` -- so a NEW backup can start while a
-// restore is mid-flight, extracting into a staging directory and then
-// renaming the live saves folder out from under any in-progress read.
-//
-// This test does NOT need an artificial timing race to prove the gap:
-// restoreBackup() sets `this.restoreInProgress = true` synchronously, before
-// its first `await` (verified by reading the source -- lines 960-982 are a
-// plain sequence of `if` checks and a bare assignment, no await ahead of it).
-// So the instant `service.restoreBackup(...)` is called (even without
-// awaiting the returned promise), the flag is already true for any code that
-// runs after that call returns control to this test.
 
 const logServerEvent = vi.fn(async () => {});
 
@@ -103,9 +85,6 @@ describe("createBackup() while a restore is in progress", () => {
       createPreRestoreBackup: false,
     });
 
-    // restoreInProgress is set synchronously before restoreBackup()'s first
-    // await, so by the time the call above returns control here, the flag
-    // is already true -- no artificial delay needed to hit this window.
     expect(service.restoreInProgress).toBe(true);
 
     const backupResult = await service.createBackup();
@@ -116,19 +95,3 @@ describe("createBackup() while a restore is in progress", () => {
     expect(backupResult.message).toMatch(/restore.*progress/i);
   });
 });
-
-// Note (testing, regression-2026-08-29): I also tried to pin down what a
-// concurrent backup actually CONTAINS when it slips through this gap --
-// archiver's directory() (readdir-glob) walks the live tree incrementally,
-// so in principle a file not yet reached when restore's swap (two
-// renameSync calls, backupService.js ~1262-1271) fires gets read from
-// whatever is at savesPath afterwards, i.e. the RESTORED world, silently,
-// under the LIVE backup's expected filename. I could not safely force that
-// exact interleaving in this harness: every product-code step between
-// "extraction succeeded" and "swap complete" is synchronous (no await), so
-// there is no legitimate awaited hook to delay right before the swap
-// without changing product code or monkey-patching fs.renameSync globally,
-// and I did not want to do either just to win a test. So this specific
-// worst-case ("silently wrong content, not just a refused/failed call") is
-// UNCONFIRMED, not proven -- report it as a plausible consequence of the
-// proven missing guard above, not as its own demonstrated finding.

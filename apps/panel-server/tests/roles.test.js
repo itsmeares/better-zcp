@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-// Proves the requireRole() wiring on real routes, not just the middleware
-// factory in isolation — a route that forgot to list "technician" (or
-// listed it when it shouldn't) is exactly the class of bug this needs to
-// catch. Same route-stack-walking approach as panelBridgeModInstallAuth.test.js.
 const { default: authRouter } = await import("../routes/auth.js");
 const { default: dockerRouter } = await import("../routes/docker.js");
 
@@ -40,12 +36,6 @@ async function runRoute(router, routePath, method, req) {
 }
 
 describe("user management gate — users.manage capability, not a role name", () => {
-  // GET/POST /users and PATCH /users/:id/role are all gated on the
-  // users.manage capability (requirePermission), not requireRole("admin").
-  // These tests exercise the real, unmocked services/permissions.js against
-  // this suite's real (test-isolated) database, so "admin passes" here is
-  // proof the seeded admin role's real capability grant includes
-  // users.manage — not an assumption about role names.
   it("refuses a technician listing users (GET /users)", async () => {
     const res = await runRoute(authRouter, "/users", "get", {
       user: { role: "technician" },
@@ -73,8 +63,6 @@ describe("user management gate — users.manage capability, not a role name", ()
       body: {},
       user: { role: "admin" },
     });
-    // Reaches the username/password validation, which 400s — the point
-    // here is it is NOT a 403, i.e. the capability gate let admin through.
     expect(res.getStatusCode()).not.toBe(403);
   });
 
@@ -93,8 +81,6 @@ describe("user management gate — users.manage capability, not a role name", ()
       body: { role: "admin" },
       user: { role: "admin" },
     });
-    // Reaches authService.changeUserRole(), which 400s on "User not found" —
-    // the point here is it is NOT a 403, i.e. the role gate let admin through.
     expect(res.getStatusCode()).not.toBe(403);
   });
 });

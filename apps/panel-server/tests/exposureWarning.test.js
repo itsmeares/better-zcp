@@ -1,19 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { logExposureWarningIfNeeded } from "../index.js";
 
-// Regression coverage for the startup exposure warning (apps/panel-server/index.js,
-// called right after the "Ready" banner in start()). authService.middleware()
-// deliberately leaves every /api/* route open while first-run setup is
-// pending, or while authentication is explicitly disabled -- both are correct
-// behavior for a LAN-only install, but become a real race/exposure risk the
-// moment the panel is reachable from the internet. This can't be prevented in
-// code (the panel has no way to know its own reachability), so the fix is to
-// make it loud rather than silent at the one moment an operator would
-// otherwise assume "it's running, so it's protected".
-//
-// The load-bearing case is the negative one: a normal, fully-set-up,
-// auth-enabled panel must NOT warn on every restart -- a warning nobody ever
-// needs to act on is one everyone learns to ignore.
 
 function fakeLogger() {
   return { warn: vi.fn() };

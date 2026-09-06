@@ -19,7 +19,7 @@ function renderLayout() {
 
 describe('AuthScreenLayout', () => {
   it('starts in the checking state, not a premature online/unreachable claim', () => {
-    vi.mocked(fetch).mockReturnValue(new Promise(() => {})) // never resolves
+    vi.mocked(fetch).mockReturnValue(new Promise(() => {}))
     renderLayout()
     expect(screen.getByRole('status')).toHaveTextContent('Reaching panel service')
   })

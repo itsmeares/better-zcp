@@ -1,21 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ErrorCode } from "../utils/errorCodes.js";
 
-// 2026-08-30, rcon-disconnect-detection-matches-prose-not-codes: Oscar's
-// audit found the client (apps/panel-client/src/pages/Console.tsx's
-// RCON_DISCONNECT_PHRASES / isRconDisconnectError) detected an RCON
-// disconnect by substring-matching a hand-maintained copy of
-// RconService.getUserFriendlyError()'s prose -- and the two had already
-// silently drifted once: "Server is not running" was reworded here to
-// "Game server is not running." and the client's case-sensitive phrase
-// list missed it (5 of 6 outputs still round-tripped; that one didn't).
-// Fix: attach ErrorCode.RCON_EXECUTE_DISCONNECTED alongside the prose, from
-// the SAME classification table getUserFriendlyError() reads, so client
-// detection checks a code that can't drift out of sync with itself the way
-// two independently-maintained strings could. This file proves the server
-// side of that: every one of the six real disconnect outcomes gets the
-// code, the one deliberately-not-a-disconnect outcome (authentication
-// failure) does NOT, and neither does an unrecognized error.
 vi.mock("../database/init.js", () => ({
   getActiveServer: async () => null,
   getSetting: async () => null,
@@ -28,9 +13,6 @@ const { RconService } = await import("../services/rcon.js");
 describe("RconService: getUserFriendlyError() / getRconDisconnectCode() classify from the same table", () => {
   const service = new RconService();
 
-  // [raw input substring, expected friendly prose] -- the six outcomes
-  // Oscar's audit confirmed the client's phrase list was built to match,
-  // straight from the real classifier's own branches.
   const DISCONNECT_CASES = [
     [
       "connect ECONNREFUSED 127.0.0.1:27015",
@@ -109,13 +91,6 @@ describe("RconService.execute(): the code actually reaches the response object c
     });
   });
 
-  // Regression (2026-08-31 services sweep): this branch used to return
-  // {success:false, error:"RCON reconnection failed"} with no `code` at
-  // all, unlike every sibling disconnect return in this function. reconnect()
-  // resolving without throwing but genuinely failing to reestablish a
-  // connection (retries exhausted, server still offline) is an ordinary,
-  // common outcome -- not an edge case -- so Console.tsx's dropped-connection
-  // banner used to silently never appear for it.
   it("attaches RCON_EXECUTE_DISCONNECTED when reconnect() resolves without throwing but genuinely fails to reconnect", async () => {
     const service = new RconService();
     service.connected = true;

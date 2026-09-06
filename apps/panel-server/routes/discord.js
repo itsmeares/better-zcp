@@ -9,15 +9,6 @@ const log = createLogger("API:Discord");
 
 const router = express.Router();
 
-// Maps each Discord slash command to the panel capability that gates the
-// identical action on the panel's own side -- same shape as
-// services/scheduler.js's requiredCapabilityForScheduledCommand(): a
-// curated action must cost at least as much to hand out as it costs to run.
-// `null` means the command has no panel-side capability gate to match
-// against (server.js's own GET /status is likewise ungated for every role),
-// so retuning its own tier needs nothing beyond integrations.manage itself.
-// Check each command individually rather than applying a blanket rule to
-// generic verbs such as start and stop.
 const DISCORD_COMMAND_CAPABILITY = {
   status: null,
   players: "players.view",
@@ -30,15 +21,8 @@ const DISCORD_COMMAND_CAPABILITY = {
   rcon: "rcon.execute",
 };
 
-// Bot config/lifecycle/permissions — "config" is technician's job per the
-// role brief; moderator has no need to reconfigure the Discord integration.
-// Applied once at the router level (matches panelBridge.js's identical
-// integration-config routes, already admin+technician) rather than
-// per-route. Previously any logged-in role could reach every route here,
-// including reconfiguring the webhook and bot permissions.
 router.use(requirePermission("integrations.manage"));
 
-// Get Discord bot status
 router.get("/status", async (req, res) => {
   try {
     const discordBot = req.app.get("discordBot");
@@ -58,7 +42,6 @@ router.get("/status", async (req, res) => {
   }
 });
 
-// Get Discord bot config
 router.get("/config", async (req, res) => {
   try {
     const discordBot = req.app.get("discordBot");
@@ -71,7 +54,6 @@ router.get("/config", async (req, res) => {
 
     await discordBot.loadConfig();
 
-    // Load auto-start setting
     const { getSetting } = await import("../database/init.js");
     const autoStart = await getSetting("discordAutoStart");
 
@@ -93,7 +75,6 @@ router.get("/config", async (req, res) => {
   }
 });
 
-// Update Discord bot config
 router.put("/config", async (req, res) => {
   try {
     const {
@@ -119,10 +100,8 @@ router.put("/config", async (req, res) => {
       });
     }
 
-    // Load current config to check for existing token
     await discordBot.loadConfig();
 
-    // Handle KEEP_EXISTING token marker
     const finalToken =
       token === "KEEP_EXISTING" && discordBot.token ? discordBot.token : token;
 
@@ -133,7 +112,6 @@ router.put("/config", async (req, res) => {
       });
     }
 
-    // Validate Discord Snowflake format for IDs
     const SNOWFLAKE = /^\d{15,21}$/;
     if (!SNOWFLAKE.test(guildId)) {
       return res.status(400).json({
@@ -177,8 +155,6 @@ router.put("/config", async (req, res) => {
       });
     }
 
-    // Snapshot current auth credentials before overwriting them so we know
-    // whether a full Discord reconnection is actually needed.
     const prevToken = discordBot.token;
     const prevGuildId = discordBot.guildId;
 
@@ -190,13 +166,11 @@ router.put("/config", async (req, res) => {
       modRoleId,
     );
 
-    // Save auto-start preference
     if (typeof autoStart === "boolean") {
       const { setSetting } = await import("../database/init.js");
       await setSetting("discordAutoStart", autoStart);
     }
 
-    // Save chat relay settings
     if (
       typeof chatRelayEnabled === "boolean" ||
       typeof chatRelayChannelId === "string" ||
@@ -215,22 +189,10 @@ router.put("/config", async (req, res) => {
       );
     }
 
-    // Only reconnect if authentication-relevant credentials (token or guild ID)
-    // changed. channelId, role IDs, and autoStart are hot-applied by updateConfig()
-    // and do not require tearing down the Discord WebSocket connection.
     const credentialsChanged =
       prevToken !== finalToken || prevGuildId !== (guildId || null);
     if (discordBot.isRunning && credentialsChanged) {
       await discordBot.stop();
-      // start()'s return value used to be discarded here even though the
-      // sibling route POST /start (below) already checks it correctly --
-      // start() genuinely returns false (not a throw) on a bad token or a
-      // ready-timeout, so a failed reconnect looked identical to a
-      // successful one. The saved config really is correct either way
-      // (that part doesn't depend on the reconnect), so this stays
-      // success:true and surfaces the reconnect outcome separately rather
-      // than conflating "your settings were saved" with "the bot is now
-      // running".
       const started = await discordBot.start();
       if (!started) {
         return res.json({
@@ -252,7 +214,6 @@ router.put("/config", async (req, res) => {
   }
 });
 
-// Start Discord bot
 router.post("/start", async (req, res) => {
   try {
     log.info("POST /start — starting Discord bot");
@@ -273,15 +234,6 @@ router.post("/start", async (req, res) => {
     if (started) {
       res.json({ success: true, message: "Discord bot started" });
     } else {
-      // "check configuration" used to be the ENTIRE message for every cause
-      // -- a bad token, a network timeout, and privileged intents not being
-      // enabled in the Discord Developer Portal (the classic one: correct
-      // token and IDs, still fails, and no amount of re-checking credentials
-      // would ever find it) all looked identical. discordBot.lastStartError
-      // carries the real discord.js error code now; describeStartFailure()
-      // is the same mapping getStatus() uses for the persistent version of
-      // this same message, so the toast here and the record that survives a
-      // page refresh never say two different things about the same failure.
       const reason = describeStartFailure(discordBot.lastStartError);
       res.status(400).json({
         error: reason,
@@ -295,7 +247,6 @@ router.post("/start", async (req, res) => {
   }
 });
 
-// Stop Discord bot
 router.post("/stop", async (req, res) => {
   try {
     const discordBot = req.app.get("discordBot");
@@ -318,7 +269,6 @@ router.post("/stop", async (req, res) => {
   }
 });
 
-// Reset Discord bot configuration
 router.post("/reset", async (req, res) => {
   try {
     const discordBot = req.app.get("discordBot");
@@ -340,7 +290,6 @@ router.post("/reset", async (req, res) => {
   }
 });
 
-// Test Discord connection
 router.post("/test", async (req, res) => {
   try {
     const { token } = req.body || {};
@@ -351,7 +300,6 @@ router.post("/test", async (req, res) => {
         code: ErrorCode.DISCORD_TEST_TOKEN_INVALID_INPUT,
       });
     }
-    // Discord bot tokens are URL-safe base64-ish: letters/digits/_-./
     if (!/^[A-Za-z0-9._-]+$/.test(token)) {
       return res.status(400).json({
         error: "Invalid token format",
@@ -359,7 +307,6 @@ router.post("/test", async (req, res) => {
       });
     }
 
-    // Try to validate token by making a test request
     const response = await fetch("https://discord.com/api/v10/users/@me", {
       headers: {
         Authorization: `Bot ${token}`,
@@ -368,10 +315,6 @@ router.post("/test", async (req, res) => {
     });
 
     if (!response.ok) {
-      // Discord's own status distinguishes "this token is wrong" from "this
-      // token is fine, Discord just isn't answering right now" -- collapsing
-      // every non-2xx into "Invalid token" sent people rotating a token that
-      // was never wrong.
       if (response.status === 429) {
         return res.status(429).json({
           error: "Discord is rate-limiting this request. Wait a moment and try again.",
@@ -402,8 +345,6 @@ router.post("/test", async (req, res) => {
 
     const userData = await response.json();
 
-    // Build invite URL with required permissions
-    // VIEW_CHANNEL(1024) + SEND_MESSAGES(2048) + EMBED_LINKS(16384) + READ_MESSAGE_HISTORY(65536)
     const permissions = 84992;
     const inviteUrl = `https://discord.com/oauth2/authorize?client_id=${userData.id}&permissions=${permissions}&scope=bot%20applications.commands`;
 
@@ -425,7 +366,6 @@ router.post("/test", async (req, res) => {
   }
 });
 
-// Send test message
 router.post("/test-message", async (req, res) => {
   try {
     const discordBot = req.app.get("discordBot");
@@ -461,7 +401,6 @@ router.post("/test-message", async (req, res) => {
   }
 });
 
-// Get webhook events configuration
 router.get("/webhook-events", async (req, res) => {
   try {
     const discordBot = req.app.get("discordBot");
@@ -469,7 +408,6 @@ router.get("/webhook-events", async (req, res) => {
       return res.json({ events: {} });
     }
 
-    // Default events - all disabled
     const defaultEvents = {
       serverStart: {
         enabled: false,
@@ -510,7 +448,6 @@ router.get("/webhook-events", async (req, res) => {
   }
 });
 
-// Update webhook events configuration
 router.put("/webhook-events", async (req, res) => {
   try {
     const discordBot = req.app.get("discordBot");
@@ -529,7 +466,6 @@ router.put("/webhook-events", async (req, res) => {
       });
     }
 
-    // Whitelist allowed event keys to prevent arbitrary data storage
     const VALID_EVENT_KEYS = [
       "serverStart",
       "serverStop",
@@ -548,16 +484,12 @@ router.put("/webhook-events", async (req, res) => {
             ? events[key].template.slice(0, 500)
             : "";
         sanitizedEvents[key] = {
-          // An enabled event with a blank template would send an empty message,
-          // which Discord rejects and which counts against the circuit breaker.
           enabled: !!events[key].enabled && template.trim().length > 0,
           template,
         };
       }
     }
 
-    // Merge rather than replace so a partial update can't silently wipe the
-    // events it didn't mention.
     const merged = { ...(discordBot.webhookEvents || {}), ...sanitizedEvents };
     await discordBot.saveWebhookEvents(merged);
 
@@ -568,7 +500,6 @@ router.put("/webhook-events", async (req, res) => {
   }
 });
 
-// Get command permissions
 router.get("/permissions", async (req, res) => {
   try {
     const discordBot = req.app.get("discordBot");
@@ -586,7 +517,6 @@ router.get("/permissions", async (req, res) => {
   }
 });
 
-// Update command permissions
 router.put("/permissions", async (req, res) => {
   try {
     const discordBot = req.app.get("discordBot");
@@ -605,15 +535,12 @@ router.put("/permissions", async (req, res) => {
       });
     }
 
-    // Changing a Discord tier grants authority through a second entry point.
-    // The caller must hold the panel capability being granted. Only changed
-    // tiers need checking because the settings UI resends the full map.
     const current = discordBot.getCommandPermissions();
     const missing = [];
     let callerCapabilities = null;
     for (const [command, tier] of Object.entries(permissions)) {
       const requiredCapability = DISCORD_COMMAND_CAPABILITY[command];
-      if (!requiredCapability) continue; // unmapped/no-op key, or status (null)
+      if (!requiredCapability) continue;
       if (!(command in current) || current[command] === tier) continue;
       if (callerCapabilities === null) {
         const role = req.user ? await getRoleByName(req.user.role) : null;

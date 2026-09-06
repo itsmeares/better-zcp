@@ -60,11 +60,6 @@ describe("whitelist database reader", () => {
   });
 });
 
-// 2026-08-30, release-runup: access-levels-should-come-from-the-server-not-a-
-// hardcoded-array Phase 2. Same [role] table listWhitelistAccounts already
-// reads (Roles.getRoles() is a live, DB-backed table per the jar audit,
-// not a fixed enum) -- listServerRoleNames just returns its names instead of
-// using them to resolve a whitelist row's role id.
 describe("listServerRoleNames", () => {
   afterEach(() => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
@@ -87,9 +82,6 @@ describe("listServerRoleNames", () => {
 
     expect(result.available).toBe(true);
     expect(result.roleNames).toEqual(expect.arrayContaining(["user", "admin", "vip"]));
-    // 'none' is a SetAccessLevelCommand special case, never a row in this
-    // table (confirmed by the real jar and by ROLE_NAMES's own defaults) --
-    // this function must not invent it, callers add it themselves.
     expect(result.roleNames).not.toContain("none");
   });
 

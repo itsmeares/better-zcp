@@ -18,13 +18,6 @@ const {
   parseWindowsPageFileOutput,
 } = await import("../utils/swapInfo.js");
 
-// Node has no swap API at all (os.totalmem/freemem are RAM only), so this is
-// genuinely platform-specific. The whole point of this feature (2026-08-26,
-// Discord report from testing: a 95%-red host-memory reading with no swap
-// context to say whether that's fine or an emergency) is that a failed or
-// unsupported lookup must never look like "zero swap" -- these tests pin
-// all three states (real reading / genuinely none / could not determine)
-// for each platform's parser, plus the process.platform dispatch itself.
 
 const originalPlatform = process.platform;
 function setPlatform(value) {
@@ -128,8 +121,6 @@ describe("getSwapInfo() platform dispatch", () => {
     mockExecFile.mockImplementation((file, args, opts, cb) => cb(null, "4096 1024", ""));
     expect(await getSwapInfo()).toEqual({ total: 4096 * 1024 * 1024, used: 1024 * 1024 * 1024 });
 
-    // Arguments must stay fixed constants -- never anything request/user
-    // derived -- since this runs on a raw system-command path.
     const [file, args] = mockExecFile.mock.calls[0];
     expect(file).toBe("powershell.exe");
     expect(args.every((a) => typeof a === "string")).toBe(true);

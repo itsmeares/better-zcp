@@ -17,24 +17,6 @@ const FR_DEBUG_JSON_PATH = path.join(REPO_ROOT, "apps/panel-client/src/locales/f
 
 const STATUS_NAMES = new Set(["ok", "fail", "warn", "skip", "info"]);
 
-/**
- * Every check id whose translation is considered DONE -- the forward
- * completeness assertion below only fires for ids in this list. Grows one
- * batch at a time (see apps/panel-client/src/lib/diagnosticsTranslation.ts /
- * apps/panel-server/routes/debug.js's own comments for the batch plan). An id NOT in
- * this list can exist in source with no locale entry at all -- that's the
- * normal, safe, incremental state (translateDiagnosticCheck() falls back to
- * the server's English text for any id with nothing registered) -- but an
- * id IN this list is a promise: every (status[, variant]) combination the
- * handler can emit for it must have complete en AND fr entries.
- *
- * Adding an id here without matching locale entries is a deliberate,
- * immediate test failure -- that's the self-enforcing half of this file.
- * The OTHER half (no stale locale entries for a check that no longer
- * exists in the handler, or a status/variant that can no longer fire) is
- * unconditional and applies to every check in the locale files regardless
- * of whether it's in this list yet.
- */
 const KNOWN_TRANSLATED_IDS = new Set([
   // Batch 1: Core Services
   "server.process",
@@ -100,35 +82,6 @@ const KNOWN_TRANSLATED_IDS = new Set([
   "server.error",
 ]);
 
-/**
- * Scans the GET /diagnostics handler ONLY (not the separate GET /worldmap
- * handler right after it, which is a different tab with its own checks and
- * out of scope here) for every diagOk/diagFail/diagWarn/diagSkip/diagInfo
- * call, and for every literal `variant: "..."` alongside one.
- *
- * Deliberately regex-based and positional, not a full parse -- same
- * reasoning as errorCodeRegistry.test.js's CODE_LITERAL_RE: narrow enough
- * not to need @babel/parser, and it keeps every id/status/variant this
- * test can see grep-able as a literal in the source, same discipline
- * apps/panel-server/utils/errorCodes.js documents for `code:` values.
- *
- * A COMPUTED variant is invisible here BY DESIGN, and has shown up in three
- * different spellings while building this file -- watch for all three when
- * adding a new check, not just the first one you happen to remember:
- *   1. A ternary:            variant: isLinux ? "linux" : "windows"
- *   2. A template literal:   variant: `${direction}_${platform}`
- *   3. Trusting a shared LABEL instead of the actual id+status call site --
- *      not a variant-construction bug exactly, but the same root failure:
- *      two genuinely different messages (e.g. db.backup's "unreadable" and
- *      "error" scenarios) can share identical English label text, so
- *      grouping by (id, status, label) instead of by call site silently
- *      collapses two entries into one.
- * All three are fixed the same way: write out separate if/else branches,
- * each with its own literal `variant: "..."` string, and verify by grepping
- * every diagOk/diagFail/diagWarn/diagSkip/diagInfo call for a given id
- * BEFORE writing any locale JSON -- see the comment above the installPath
- * and jre call sites in debug.js for a worked example.
- */
 function extractDiagnosticsChecks(source) {
   const startMarker = 'router.get("/diagnostics"';
   const endMarker = 'router.get("/worldmap"';
@@ -155,11 +108,8 @@ function extractDiagnosticsChecks(source) {
     variantOccurrences.push({ index: m.index, variant: m[1] });
   }
 
-  // Attach each variant literal to the nearest preceding diag*() call --
-  // reliable here because `variant:` only ever appears inside the options
-  // object of the call it belongs to, which starts after that call's id.
   const callIndicesWithVariant = new Set();
-  const withVariant = new Set(); // "id::status::variant"
+  const withVariant = new Set();
   for (const v of variantOccurrences) {
     let owner = null;
     for (const call of calls) {
@@ -175,11 +125,7 @@ function extractDiagnosticsChecks(source) {
     withVariant.add(`${owner.id}::${owner.status}::${v.variant}`);
   }
 
-  // A call requires a PLAIN (non-variant) locale entry only if that
-  // specific call site has no variant of its own -- a call whose id+status
-  // is ONLY ever emitted with a variant (e.g. server.jre's "warn", always
-  // linux or windows) must never demand a plain entry that was never written.
-  const plain = new Set(); // "id::status"
+  const plain = new Set();
   for (const call of calls) {
     if (!callIndicesWithVariant.has(call.index)) {
       plain.add(`${call.id}::${call.status}`);
@@ -202,20 +148,9 @@ function looksLikeCheckLeaf(node) {
   );
 }
 
-/**
- * Flattens debug.json's diagnostics.checks tree back into the same
- * "id::status" / "id::status::variant" shape extractDiagnosticsChecks()
- * produces from source, so the two can be diffed directly in both
- * directions. Check ids are recovered from the id-path segments walked to
- * reach a known status name (ok/fail/warn/skip/info); a variant is any
- * sibling of label/message/hint under a status node that itself looks like
- * a check leaf (installPath's "fail" node has both its own label/message
- * for the "missing" case AND nested netMount/local variant leaves -- this
- * walk records all three).
- */
 function flattenLocaleChecks(checksNode) {
-  const plain = new Map(); // "id::status" -> entry
-  const withVariant = new Map(); // "id::status::variant" -> entry
+  const plain = new Map();
+  const withVariant = new Map();
 
   function walk(node, idSegments) {
     for (const [key, value] of Object.entries(node)) {
@@ -245,15 +180,6 @@ function flattenLocaleChecks(checksNode) {
 function loadChecksNode(localePath) {
   const raw = JSON.parse(fs.readFileSync(localePath, "utf8"));
   const checks = { ...(raw?.diagnostics?.checks ?? {}) };
-  // The "worldmap" branch belongs to GET /worldmap, scanned and enforced
-  // separately by apps/panel-server/tests/worldMapCheckRegistry.test.js -- it shares
-  // this same locale file/tree (translateDiagnosticCheck() hardcodes the
-  // "debug" namespace and "diagnostics.checks" prefix for every check id,
-  // worldmap.* included, so there's no separate file to put it in) but this
-  // test's source scan deliberately stops at `router.get("/worldmap")` and
-  // will never see a worldmap.* id -- so it must not treat that branch as
-  // stale here either. Delete it before flattening so the two tests' id
-  // sets never overlap or collide.
   delete checks.worldmap;
   return checks;
 }
@@ -265,8 +191,6 @@ const fr = flattenLocaleChecks(loadChecksNode(FR_DEBUG_JSON_PATH));
 
 describe("diagnostics check locale registry (self-enforcing, mirrors errorCodeRegistry.test.js)", () => {
   it("found at least the checks batches 1 and 2 are known to have added (sanity check on the scan itself)", () => {
-    // If this fails, the regex/boundary scan broke, not the translations --
-    // fix extractDiagnosticsChecks() before trusting any other test below.
     expect(source.plain.has("server.process::ok")).toBe(true);
     expect(source.withVariant.has("server.installPath::fail::netMount")).toBe(true);
     expect(source.withVariant.has("server.jre::warn::linux")).toBe(true);
@@ -316,11 +240,6 @@ describe("diagnostics check locale registry (self-enforcing, mirrors errorCodeRe
     });
   }
 
-  // The half people forget: a locale entry that no longer corresponds to
-  // anything the handler can emit. Unconditional -- applies to every
-  // check.* entry in either locale file, not just KNOWN_TRANSLATED_IDS,
-  // because a stale entry is stale regardless of whether its id was ever
-  // formally "done".
   describe("no stale locale entries (check removed or renamed in source, translation left behind)", () => {
     it("every en debug.json diagnostics.checks entry (plain) still exists in the handler", () => {
       const stale = [...en.plain.keys()].filter((key) => !source.plain.has(key));
@@ -340,10 +259,6 @@ describe("diagnostics check locale registry (self-enforcing, mirrors errorCodeRe
     });
   });
 
-  // en/fr must agree on which (id,status[,variant]) combinations exist,
-  // independent of whether the source still emits them -- a translation
-  // added to only one language is worse than missing, it's silently
-  // asymmetric (French falls back to English sometimes, English never does).
   it("en and fr define exactly the same set of plain check entries", () => {
     const enOnly = [...en.plain.keys()].filter((key) => !fr.plain.has(key));
     const frOnly = [...fr.plain.keys()].filter((key) => !en.plain.has(key));
@@ -359,11 +274,6 @@ describe("diagnostics check locale registry (self-enforcing, mirrors errorCodeRe
   });
 });
 
-// mods.resolved per-ID triage (mods-unresolved-2026-08-31): classifies WHY
-// each unresolved Mods= entry failed instead of leaving the operator with a
-// bare list. Mirrors the sibling mods.orphanWorkshop triage's own test
-// coverage expectations -- one case per cause, plus the ordering rule that a
-// typo match wins even when a Steam operation happens to be active too.
 describe("triageUnresolvedMods (mods.resolved per-ID triage)", () => {
   describe("levenshteinDistance", () => {
     it("is 0 for identical strings and the length for one empty string", () => {

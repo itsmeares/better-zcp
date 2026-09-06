@@ -1,7 +1,3 @@
-// Simulation template library: a curated set of built-in PZ rulesets (see
-// apps/panel-server/data/templates/*.json) plus user-created templates persisted in
-// db.json. Templates are sparse overrides — applying one only ever touches
-// the keys it defines, never resets a server to "everything else default".
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -65,8 +61,6 @@ function loadBuiltinTemplates() {
   return builtinCache;
 }
 
-// Tests need a clean slate between runs that write different fixture files
-// into a stubbed BUILTIN_DIR — production never calls this.
 export function _resetBuiltinCacheForTests() {
   builtinCache = null;
 }
@@ -130,14 +124,6 @@ export async function deleteTemplate(id) {
     : { success: false, error: "Template not found", code: ErrorCode.SIM_TEMPLATE_NOT_FOUND };
 }
 
-// deleteTemplate above never deletes a built-in's data -- it only adds the
-// id to hiddenBuiltinTemplateIds (see that function). This is the other
-// half: previously nothing ever read that list back out, so a hidden
-// built-in was invisible everywhere (listTemplates filters it out,
-// getTemplate returns null for it) with no way for an operator to even
-// learn its id, let alone restore it. Deliberately returns ONLY the hidden
-// ones, not the full catalog with a flag on every entry -- the one caller
-// (the Templates page's "hidden" section) only ever needs this list.
 export async function listHiddenBuiltinTemplates() {
   const hiddenBuiltinIds = await getHiddenBuiltinTemplateIds();
   if (hiddenBuiltinIds.size === 0) return [];
@@ -177,8 +163,6 @@ export async function importTemplate(json) {
     };
   }
 
-  // Always mint a fresh id so an imported file can never silently collide
-  // with (or overwrite) an existing built-in or user template.
   const template = { ...json, meta: { ...json.meta, id: randomUUID() } };
   const saved = await saveUserTemplate(template);
   return { success: true, template: saved };
@@ -251,11 +235,6 @@ export async function previewTemplate(templateId, serverId) {
 }
 
 function prepareIniChange(template, paths, result) {
-  // resolveIniExclusions(), not `template.iniExclusions || DEFAULT_...` --
-  // the `||` version treated the template's own (attacker-controlled) list
-  // as authoritative, so `"iniExclusions": []` (truthy, so `||` never fell
-  // back) disabled the RCONPassword/port/ServerName protection at the
-  // actual apply-time write site.
   const exclusions = resolveIniExclusions(template);
   const requested = Object.fromEntries(
     Object.entries(template.serverIni || {}).filter(([key]) => !exclusions.includes(key)),
@@ -362,11 +341,6 @@ export async function applyTemplate(templateId, serverId, options = {}) {
       ),
     );
   } catch (error) {
-    // prepareIniChange() throws this specific message when the template has
-    // ini keys to write but the server's .ini doesn't exist yet -- was an
-    // uncaught throw that fell into templates.js's generic 500 catch.
-    // Anything else re-throws: this is a targeted catch for one known
-    // condition, not a blanket "apply never fails visibly" swallow.
     if (error instanceof Error && error.message === "Server INI file not found") {
       return {
         success: false,

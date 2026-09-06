@@ -3,17 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, panelbridge-audit follow-up (full-file bug sweep): the same
-// pcall-boundary-too-broad shape already found and fixed tonight for
-// getPlayerDetails/getAllPlayerDetails/getServerInfo, but not yet applied to
-// exportPlayerData/importPlayerData. getPlayerPerks and getKnownRecipes had
-// ZERO pcall protection (unlike their siblings getPlayerTraits/getWornItems
-// in the same handler, which already degrade gracefully) -- a throw from
-// getXp()/getPerkLevel()/getKnownRecipes() took the WHOLE export down with
-// it, including traits/wornItems/inventory, which work fine on their own.
-// importPlayerData's bare getXp() had the same shape: a throw there aborted
-// the whole handler, skipping the inventory-restore section below it even
-// though it's logically independent (gated on its own data.inventory check).
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

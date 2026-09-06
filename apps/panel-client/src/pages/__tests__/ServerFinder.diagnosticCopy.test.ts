@@ -1,12 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { emptyServersDescKey, pingFailDescKey } from '../ServerFinder'
 
-// The server fixed 5 collapsed failure modes tonight (serverFinder.js:
-// deriveEmptyReason, queryServerInfo's onFailureReason) but the client
-// still rendered one generic message for all of them -- a diagnostic
-// computed and sent, then discarded at the last hop. These two pure
-// functions are the actual decision of which explanation an operator sees;
-// tested directly rather than through a full component render.
 
 describe('emptyServersDescKey: three different empty-list causes, three different messages', () => {
   it('no API key overrides everything else', () => {

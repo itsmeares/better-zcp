@@ -5,8 +5,6 @@ import os from "os";
 import path from "path";
 import { buildWindowsCmdLine } from "../services/serverManager.js";
 
-// Exercise cmd.exe's real quote parsing with spaces in both the launcher and
-// log paths. Mocking child_process cannot cover this boundary.
 
 const isWindows = process.platform === "win32";
 
@@ -51,8 +49,6 @@ function runCmd(cmdArgs, cwd, opts = {}) {
       const { tmpRoot, batPath, launchLogPath } = makeBatFixture("before");
       cleanupDirs.push(tmpRoot);
 
-      // This is exactly what 41d0c6e5/1130108a shipped: loose argv tokens,
-      // letting Node quote batPath and launchLogPath independently.
       const oldStyleArgs = ["/c", batPath, ">", launchLogPath, "2>&1"];
       const result = await runCmd(oldStyleArgs, path.dirname(batPath));
 
@@ -84,9 +80,6 @@ function runCmd(cmdArgs, cwd, opts = {}) {
         path.join(os.tmpdir(), "zcp-spacedpath-"),
       );
       cleanupDirs.push(tmpRoot);
-      // Mirrors the reported install shape exactly: "Zomboid Server" as the
-      // spaced segment, no parens anywhere, one level deeper for the actual
-      // server dir (matching "D:\Zomboid Server\Serwer\").
       const serverDir = path.join(tmpRoot, "Zomboid Server", "Serwer");
       fs.mkdirSync(serverDir, { recursive: true });
       const batPath = path.join(serverDir, "StartServer_TestWorld.bat");
@@ -94,10 +87,6 @@ function runCmd(cmdArgs, cwd, opts = {}) {
         batPath,
         "@echo off\r\necho MARKER_STARTED\r\nexit /b 0\r\n",
       );
-      // Panel Logs Dir in the bundle was also under the spaced "Zomboid
-      // Server" root ("D:\Zomboid Server\Panel\logs"), so the log path
-      // carries the same space too -- exactly 4 quote characters on the
-      // real /c line, as confirmed.
       const logsDir = path.join(tmpRoot, "Zomboid Server", "Panel", "logs");
       fs.mkdirSync(logsDir, { recursive: true });
       const launchLogPath = path.join(logsDir, "server-launch.log");
@@ -171,8 +160,6 @@ function runCmd(cmdArgs, cwd, opts = {}) {
     it("also fixes the custom-start-command shape (extra args after the bat path)", async () => {
       const { tmpRoot, batPath, launchLogPath } = makeBatFixture("args");
       cleanupDirs.push(tmpRoot);
-      // Overwrite with a bat that echoes its args, to prove args survive
-      // the quoting too, not just the bat path itself.
       fs.writeFileSync(
         batPath,
         "@echo off\r\necho MARKER_STARTED %1\r\nexit /b 0\r\n",
@@ -194,22 +181,6 @@ function runCmd(cmdArgs, cwd, opts = {}) {
   },
 );
 
-// 2026-09-04, P0 follow-up (adversarial review, same conversation as the
-// spaced-path fix above): windowsQuoteArgIfNeeded originally triggered on
-// whitespace/quotes ONLY. With windowsVerbatimArguments:true, Node's own
-// argv quoting is no longer a backstop -- that regex is now the entire
-// defence against cmd.exe treating a character as special, and cmd's
-// special set (`&<>()@^|`) is not whitespace. This is the SAME regression
-// (41d0c6e5/1130108a: v1.2.14 spawned the bare filename with cwd set, so
-// the install directory never touched the /c line at all; v1.2.15 puts the
-// full path on the line, exposing it to every cmd.exe special character,
-// not just spaces) -- a user with "D:\Games\Rock&Roll\Server" was just as
-// broken as a user with a space, with the identical exit-1/empty-log
-// signature, and was NOT fixed by the space-only widening.
-//
-// A fixture path with a SPACE cannot catch this (same trap as the mocked-
-// spawn suite, third time on this file) -- these paths are deliberately
-// space-free so `&`/`(`/`)`/`^` are the only thing under test.
 (isWindows ? describe : describe.skip)(
   "Windows cmd.exe /c quoting on paths containing cmd.exe special characters (no spaces)",
   () => {
@@ -248,8 +219,6 @@ function runCmd(cmdArgs, cwd, opts = {}) {
           makeSpecialCharFixture(dirName);
         cleanupDirs.push(tmpRoot);
 
-        // The OLD (whitespace-only) quoting: neither path needs quoting by
-        // that rule, so this is exactly what the un-widened fix produced.
         const commandLine = `"${batPath} > ${launchLogPath} 2>&1"`;
         const result = await runCmd(
           ["/c", commandLine],
@@ -258,13 +227,6 @@ function runCmd(cmdArgs, cwd, opts = {}) {
         );
 
         expect(result.code).toBe(1);
-        // The failure SHAPE differs by character: `&`/`^` never even open
-        // the log (cmd's own redirection parse fails first, log missing --
-        // the same signature as the spaced-path bug); `(` fails at command
-        // lookup instead ("'...\PZ' is not recognized"), which cmd redirects
-        // successfully, so the log exists but never contains a real start.
-        // The shared, char-independent invariant is: the bat script never
-        // actually ran.
         const logContent = fs.existsSync(launchLogPath)
           ? fs.readFileSync(launchLogPath, "utf-8")
           : "";
@@ -321,11 +283,6 @@ function runCmd(cmdArgs, cwd, opts = {}) {
       });
 
       const logContent = fs.readFileSync(launchLogPath, "utf-8");
-      // Batch parameter substitution (%1, %2, ...) treats `,`, `;`, and `=`
-      // as delimiters equivalent to whitespace (documented behavior) -- an
-      // unquoted "-Dfoo=bar" arrives as TWO parameters ("-Dfoo" then
-      // "bar"), silently shredding common JVM argument shapes. Quoting it
-      // (this widening) keeps it as one.
       expect(logContent).toMatch(/ARG1=\["?-Dfoo=bar"?\] ARG2=\[\]/);
     });
 

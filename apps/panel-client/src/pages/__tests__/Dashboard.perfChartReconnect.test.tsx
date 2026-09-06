@@ -8,16 +8,6 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi, updateApi, type ServerInstance,
 } from '@/lib/api'
 
-// regression: 'subscribe:perf' was only ever emitted once, when the
-// perf-subscription effect first ran. Room membership is server-side
-// per-connection state, lost on every socket.io disconnect/reconnect even
-// though the client reuses the same Socket object -- after any reconnect the
-// server no longer had this client in the perf room, so perf:snapshot
-// silently stopped arriving and the chart just went quiet with no error.
-// Fixed by copying Console.tsx's own subscribeRcon pattern: re-emit on every
-// 'connect', not just on mount. This proves the wiring, not just that it
-// compiles -- without it, the next "simplify this effect back to mount-only"
-// edit gets a green suite.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -68,8 +58,6 @@ vi.mock('@/lib/api', async () => {
   }
 })
 
-// A fake socket the test can fire 'connect' on directly, matching how the
-// real socket.io client hands the app plain on/off/emit/connected.
 const socketHandlers = vi.hoisted(() => new Map<string, Set<() => void>>())
 const emitSpy = vi.hoisted(() => vi.fn())
 vi.mock('@/contexts/SocketContext', () => ({
@@ -175,11 +163,6 @@ describe('Dashboard.tsx: perf-chart subscription survives a socket reconnect', (
     setUpCommon()
 
     renderDashboard()
-    // Real timers here, deliberately: the reveal effect races
-    // requestIdleCallback (timeout: 1500) against a setTimeout(reveal, 300)
-    // fallback, and whichever one jsdom/vitest actually provides isn't
-    // worth pinning down -- waiting past the longer of the two in real
-    // wall-clock time reaches the same state either way.
     await act(async () => { await sleep(1700) })
 
     await waitFor(() => expect(emitSpy).toHaveBeenCalledWith('subscribe:perf'))

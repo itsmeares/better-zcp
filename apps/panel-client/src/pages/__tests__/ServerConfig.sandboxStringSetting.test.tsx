@@ -3,18 +3,6 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { SandboxSettingRow } from '../ServerConfig'
 import { SANDBOX_SCHEMA } from '@/lib/serverConfigSchema'
 
-// GH#143 ("Buffered"): SandboxSettingRow's renderer had no `type === 'string'`
-// branch -- boolean and select were explicitly gated, and EVERYTHING else,
-// including type: 'string', fell into the numeric branch: inputMode="decimal"
-// and, critically, onChange wrapped every keystroke (and paste) in
-// normalizeNumericInput(), which turns every comma into a period. Exactly
-// two sandbox settings are type: 'string' -- both comma-separated item
-// lists -- so a user could not type or paste a comma into either one, and
-// WorldItemRemovalList's own shipped default couldn't be retyped verbatim.
-//
-// Pulling both settings from the REAL schema rather than hand-authoring a
-// fixture, per the instruction to confirm the count (2 of 269 sandbox
-// entries) rather than re-derive it from a description.
 
 const WORLD_ITEM_REMOVAL_LIST = SANDBOX_SCHEMA.find((s) => s.key === 'WorldItemRemovalList')!
 const LOOT_ITEM_REMOVAL_LIST = SANDBOX_SCHEMA.find((s) => s.key === 'LootItemRemovalList')!
@@ -46,9 +34,6 @@ describe('ServerConfig -- sandbox string settings are not coerced through the nu
     const onChange = vi.fn()
     render(<SandboxSettingRow setting={WORLD_ITEM_REMOVAL_LIST} value="" onChange={onChange} />)
     const input = screen.getByRole('textbox')
-    // A paste fires the same change event with the full value in one shot,
-    // exactly like this -- the whole default string arriving at once,
-    // rather than one keystroke at a time.
     fireEvent.paste(input)
     fireEvent.change(input, { target: { value: defaultValue } })
     expect(onChange).toHaveBeenCalledWith(WORLD_ITEM_REMOVAL_LIST, defaultValue)

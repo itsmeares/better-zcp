@@ -3,21 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31 live bug, operator report verbatim: "the stop weather only
-// worked in game and not in the panel. i tried all buttons to remove the
-// rain and it didnt work." Root cause proven against the real B42 jar's
-// bytecode (javap -c on zombie.iso.weather.ClimateManager and its
-// ClimateManager$ClimateFloat), not guessed from method names -- see the
-// long comment above handlers.stopWeather in PanelBridge.lua for the full
-// derivation. Short version: precipitationIntensity is a ClimateFloat with
-// its own admin-override mechanism (set by handlers.startRain /
-// handlers.setSnow); once isAdminOverride is true, ClimateFloat.calculate()
-// pins finalValue = adminValue forever, completely bypassing weatherPeriod.
-// stopWeatherAndThunder (what the panel's "Stop All Weather" button already
-// correctly called) never touches that override -- only
-// transmitServerStopRain (what handlers.stopRain calls) does. This models
-// that exact mechanism, NOT the real Java class -- see panelBridgeLua.js's
-// own honest-limit header.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

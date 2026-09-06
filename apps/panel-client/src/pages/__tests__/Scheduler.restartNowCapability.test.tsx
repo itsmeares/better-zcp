@@ -5,19 +5,6 @@ import Scheduler from '../Scheduler'
 import { schedulerApi, serverApi, serversApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// regression: POST /scheduler/restart-now is gated by automation.manage
-// alone at the router level, but the route itself additionally requires
-// server.control (apps/panel-server/routes/scheduler.js, b2fc76c) -- it performs the
-// identical immediate restart POST /server/restart does. Before this fix,
-// Scheduler.tsx had zero client-side awareness of that: every button that
-// reaches restartNow was disabled only on `loading`/`!serverRunning`, so an
-// operator holding automation.manage but not server.control saw a fully
-// enabled "Restart Now" button that the server would refuse. This page has
-// SIX separate render sites that call schedulerApi.restartNow (three quick
-// buttons, a 1-minute confirm dialog, a short-countdown confirm dialog, and
-// the custom-time direct button) -- Templates.tsx's own canManage fix found
-// a second, easy-to-miss entry point the same way, so this test asserts
-// every one of them, not just the first one found.
 
 let mockCan = (_capability: string) => true
 
@@ -81,10 +68,6 @@ async function setUpRunningServer() {
   getHistory.mockResolvedValue({ history: [] })
   serversGetAll.mockResolvedValue({ servers: [] })
   serverGetStatus.mockResolvedValue({ running: true } as Awaited<ReturnType<typeof serverApi.getStatus>>)
-  // Echoes the requested value back as warningMinutes -- matches production
-  // for every value this test file ever requests (1, 2), all well under the
-  // server's 60-minute clamp. The clamped-value path itself has its own
-  // dedicated test (Scheduler.restartMinutesClamp.test.tsx).
   restartNow.mockImplementation(async (minutes) => ({
     success: true,
     message: 'Restart initiated',
@@ -128,16 +111,6 @@ describe('Scheduler.tsx: Restart Now buttons gate on server.control, not just pa
     }
   })
 
-  // regression (Players.tsx follow-up): "not disabled" only proves
-  // the visual gate is open. Two of these six triggers put DisabledReason as
-  // the DIRECT child of an AlertDialogTrigger's asChild slot -- DisabledReason
-  // is a plain function component (no forwardRef), so Radix Slot's
-  // cloneElement can silently fail to attach its onClick/ref when reason is
-  // null. A composition bug there would leave the button LOOKING enabled
-  // while doing nothing on click -- the exact "gate hides a control from
-  // someone who should have it" failure, arriving from the wiring rather
-  // than the capability logic. These two tests click all the way through:
-  // open the confirm dialog, confirm, and assert the API actually fires.
   it('actually opens the confirm dialog and calls the API when "Restart in 1m" is clicked with server.control granted', async () => {
     mockCan = () => true
     await setUpRunningServer()
@@ -147,13 +120,8 @@ describe('Scheduler.tsx: Restart Now buttons gate on server.control, not just pa
     await waitFor(() => expect(screen.getByRole('button', { name: 'Restart in 1m' })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Restart in 1m' }))
 
-    // Confirms the dialog actually opened (unique title text, unlike the
-    // button label which the trigger and confirm action share).
     await screen.findByText('Restart server in 1 minute?')
 
-    // Trigger and confirm action share the identical label ("Restart in 1m"),
-    // but Radix hides the background (including the trigger) behind the open
-    // modal, so exactly one match is queryable now -- the confirm action.
     fireEvent.click(screen.getByRole('button', { name: 'Restart in 1m' }))
 
     await waitFor(() => expect(restartNow).toHaveBeenCalledWith(1))

@@ -2,13 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { getPartiallyAppliedFromApplyTemplateError } from '../ServerConfig'
 
-// 2026-08-27, templates-apply-partiallyapplied-flag-unverified (operator
-// ruling: this was #1 on the risk-ranked backlog). apps/panel-server/routes/
-// serverFiles.js's POST /templates/:id/apply attaches `partiallyApplied` to
-// its 500 body when INI succeeded before Sandbox threw -- the server DOES
-// know what landed. This function is the client-side decision that used to
-// be missing entirely: read it off ApiError.data, or fall back to null (the
-// generic-failure toast) for every other shape.
 describe('ServerConfig -- getPartiallyAppliedFromApplyTemplateError', () => {
   it('returns the array when the server reports a partial apply', () => {
     const error = new ApiError('Failed to write Sandbox file', {

@@ -1,34 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RconService } from "../services/rcon.js";
 
-// 2026-08-29 hunt (testing): players.js moderation/GM-tools, cases 1 (player
-// name escaping into the command string) and 2 (does a failed RCON command
-// look like success to the operator) turning out to be the SAME defect seen
-// from two sides. classifyRconResponse() ran an UNANCHORED .test() against
-// the whole trimmed response, and PZ's own SUCCESS messages for these exact
-// commands interpolate the target player's name -- kickuser's success is
-// "User <name> kicked.", setaccesslevel's is "<name> granted <level> access
-// level on <server>". A player who names themselves text containing a
-// rejection fragment (a real griefer move -- it's chosen BECAUSE it breaks
-// tooling) made their own SUCCESSFUL command misclassify as a failure, for
-// EVERY pattern in the array, old and new alike.
-//
-// This is the positive control: feeding only the real rejection strings
-// proves the classifier fires; feeding a genuine success response whose
-// interpolated name contains the same fragment proves it DISCRIMINATES.
-// Testing only the first would be indistinguishable from a classifier that
-// catches everything.
-//
-// New pattern sourcing: apps/panel-server/__fixtures__/pzRconRejectionStrings.json
-// (decompiled PZ B42 server jar, build 24909800) -- KickUserCommand.class
-// ("User X doesn't exist.", "This user can't be kicked."),
-// GameServer.getPlayerByUserNameForCommand (shared by AddItemCommand,
-// AddXPCommand, TeleportCommand, TeleportPlayerCommand, AddVehicleCommand,
-// VoiceBanCommand: "No such user"), and GameServer.changeRole /
-// SetAccessLevelCommand.class (four distinct setaccesslevel rejections).
-// Automatically cross-checked against the same fixture by
-// rconRejectionGroundTruth.test.js's drift gate -- this file only owns the
-// discrimination property, not re-proving the strings are real.
 
 describe("classifyRconResponse: real rejections still fire after anchoring", () => {
   const rcon = new RconService();
@@ -50,12 +22,10 @@ describe("classifyRconResponse: a griefer's own display name must not turn their
   const rcon = new RconService();
 
   it.each([
-    // kickuser success format: "User <name> kicked."
     ["kickuser success, name = 'Not enough rights'", "User Not enough rights kicked."],
     ["kickuser success, name = 'Wrong arguments!'", "User Wrong arguments! kicked."],
     ["kickuser success, name = 'No such user'", "User No such user kicked."],
     ["kickuser success, name literally containing 'doesn't exist.'", "User Steve doesn't exist. kicked."],
-    // setaccesslevel success format: "<name> granted <level> access level on <server>"
     ["setaccesslevel success, name = 'Not enough rights'", "Not enough rights granted admin access level on MyServer"],
     ["setaccesslevel success, name = 'Invalid username \"x\"'", 'Invalid username "x" granted admin access level on MyServer'],
     ["setaccesslevel success, name containing the whitelist-rejection fragment", 'User "x" is not in the whitelist nor the server, use /adduser first granted admin access level on MyServer'],

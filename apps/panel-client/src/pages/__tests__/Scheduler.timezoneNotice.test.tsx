@@ -5,16 +5,6 @@ import Scheduler from '../Scheduler'
 import { schedulerApi, serverApi, serversApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// Timezone-picker card (2026-08-29, regression follow-up): every
-// cron.schedule() call in scheduler.js interprets its expression in an
-// install-wide timezone setting (migrated on upgrade to whatever was
-// already effective, so nothing moves until the operator deliberately
-// changes it). getStatus() reports both the OPERATOR'S saved choice
-// (configuredTimezone) and the REAL currently-effective zone (timezone),
-// which only differ when the saved zone stopped being valid
-// (timezoneFallback). This file proves the UI actually surfaces all three:
-// the always-visible settings card, the per-task dialog's notice, saving a
-// new zone, and the fallback warning.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -99,7 +89,6 @@ describe('Scheduler.tsx: timezone settings card (always visible)', () => {
     const input = await screen.findByLabelText('IANA timezone name')
     await waitFor(() => expect(input).toHaveValue('America/New_York'))
     expect(screen.getByText(/Currently in effect: America\/New_York/)).toBeInTheDocument()
-    // No fallback occurred -- the destructive warning must not render.
     expect(screen.queryByText(/no longer valid/i)).not.toBeInTheDocument()
   })
 
@@ -117,7 +106,6 @@ describe('Scheduler.tsx: timezone settings card (always visible)', () => {
     renderScheduler()
 
     expect(await screen.findByText(/no longer valid/i)).toBeInTheDocument()
-    // Both zones named, per the card's explicit requirement 5.
     expect(screen.getByText(/Not\/AZone/)).toBeInTheDocument()
     expect(screen.getByText(/Currently in effect: UTC/)).toBeInTheDocument()
   })
@@ -297,12 +285,6 @@ describe('Scheduler.tsx: timezone card is a searchable picker, not a bare free-t
   })
 
   it('offers UTC even though it is absent from Intl.supportedValuesOf("timeZone")', async () => {
-    // Real gap, not a hypothetical: on this project's engine,
-    // Intl.supportedValuesOf('timeZone') does not include 'UTC' even though
-    // Intl.DateTimeFormat (and node-cron, and this app's own server-side
-    // isValidIanaTimezone()) accept it fine -- see apps/panel-server/utils/
-    // cronValidation.js's comment on the same gap. Confirm the picker
-    // doesn't inherit that omission.
     expect(Intl.supportedValuesOf('timeZone')).not.toContain('UTC')
 
     await baseMocks()

@@ -11,14 +11,6 @@ const ruleTester = new RuleTester({
   },
 })
 
-// scripts/eslint-rules/no-raw-error-message.js: the structural half of the
-// 2026-08-26 errorMessage.ts coverage audit -- forbids writing a NEW raw
-// caught-error-message toast/error-state site, in any of the three shapes
-// found so far (ternary, `|| fallback`, bare access with no fallback),
-// scoped narrowly to two real sinks (a toast() call, a set*() state setter)
-// so it doesn't also flag errorMessage.ts's own internal use of the ternary
-// shape or client-errors.ts's diagnostic-payload use, neither of which
-// displays the raw text to a user.
 describe('local/no-raw-error-message', () => {
   ruleTester.run('no-raw-error-message', rule, {
     valid: [
@@ -120,98 +112,58 @@ describe('local/no-raw-error-message', () => {
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Optional chaining on the member access side, same identifier.
         code: "toast({ description: error instanceof Error ? error?.message : 'fallback' })",
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Shape 2, direct toast() argument -- the exact WorkshopCollectionPanel.tsx shape.
         code: "toast({ variant: 'destructive', title: t('title'), description: err?.message || t('fallback') })",
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Shape 2, direct set*() argument, no optional chaining -- the
-        // Settings.tsx apiErr.message shape.
         code: "setDiffError(apiErr.message || t('failedToReadCollection'))",
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Shape 2 nested inside a functional state update -- the
-        // setCollectionStatus/setDepSearchData shape the test found on
-        // Mods.tsx, one Property/ObjectExpression level deep.
         code: "setCollectionStatus((s) => ({ ...s, loading: false, error: err?.message || 'Network error' }))",
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Same functional-update shape, nested TWO levels deep under a
-        // computed property key -- the ConflictsPanel.tsx setDepSearchData
-        // shape, the deepest real site found.
         code: "setDepSearchData(prev => ({ ...prev, [key]: { loading: false, results: [], error: err?.message || t('searchFailed'), searchUrl: null } }))",
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Shape 3 -- the exact ChunkCleaner.tsx site: no fallback at all,
-        // so an empty/undefined .message shows nothing.
         code: "toast({ title: t('toasts.serverRunningTitle'), description: err.message, variant: 'destructive' })",
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Shape 3 with optional chaining, direct set*() argument.
         code: 'setDetectError(error?.message)',
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // The JSX-sink gap (testing, 2026-08-26): `{error.message}` rendered
-        // straight into markup, never a toast()/set*() argument at all --
-        // the exact shape that was structurally invisible before this rule
-        // learned to recognize JSXExpressionContainer as a sink.
         code: 'const el = <p>{error.message}</p>',
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // The exact ErrorBoundary.tsx / FeatureErrorBoundary.tsx shape:
-        // JSX sink AND a chained object (`this.state.error`, not a bare
-        // `error` identifier) at once -- a class component has no bare
-        // local variable to catch into. Needs both isFeedingUserVisibleSink's
-        // JSX case and isErrorLikeReference's chain case together.
         code: 'const el = <pre>{this.state.error.message}</pre>',
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Same chained-object shape via a different property name
-        // (`this.props.error`), confirming isErrorLikeReference isn't
-        // hardcoded to `state`.
         code: 'const el = <pre>{this.props.error.message}</pre>',
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // The one-hop variable-flow gap (2026-08-27): this used to be a
-        // VALID case in this file, documented as the accepted two-step
-        // limitation, until ServerFinder.tsx's fetchServers() shipped this
-        // exact shape live (fixed 7bfd32d, found by an unrelated
-        // verification pass, not by this rule).
         code: "const msg = error instanceof Error ? error.message : 'fallback'; toast({ description: msg })",
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // The exact WorldMap.tsx shape (three near-identical real sites):
-        // an early-return guard between the try and the two-step
-        // assignment doesn't change the shape. Wrapped in a function --
-        // `return` is only valid inside one.
         code: "function f() { if (!mountedRef.current) return; const msg = err instanceof Error ? err.message : t('toasts.areaNotLoaded'); toast({ title: t('toasts.airdropFailedTitle'), description: msg, variant: 'destructive' }) }",
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Shape 2, one-hop: no live site found for this exact combination,
-        // but the mechanism is general -- verifying it fires for shape 2
-        // (not just shape 1) rather than assuming.
         code: "const msg = err?.message || t('fallback'); setDetectError(msg)",
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // Shape 3, one-hop, functional-update sink -- combines the
-        // one-hop check with the pre-existing nested-functional-update
-        // sink walk, confirming the two widen independently.
         code: "const msg = err?.message; setCollectionStatus((s) => ({ ...s, loading: false, error: msg }))",
         errors: [{ messageId: 'rawMessage' }],
       },

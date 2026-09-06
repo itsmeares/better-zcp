@@ -3,44 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage found while building the general verify/gate helper
-// and its enforcement test: vehicleSetAlarm/SetSiren/SetTrunkLocked/SetFuel/
-// SetBattery were listed in the original 96-handler audit as "pcall-checked
-// at the call-didn't-throw ceiling, no cheap read-back exists" -- but
-// handlers.getVehiclesDetailed was already reading isAlarmed/
-// getLightbarSirenMode/isTrunkLocked/getRemainingFuelPercentage/
-// getBatteryCharge for its own listing. Same shape as the safehouse/faction
-// discovery: the read-back existed all along, just never reused to verify
-// a mutation.
-//
-// CORRECTED 2026-08-30 (panelbridge-audit): the siren half of that claim was
-// itself wrong, undetected until the real-jar audit -- getLightbarSirenMode
-// does not exist anywhere on BaseVehicle in the real B42 jar (confirmed by
-// two independent classfile scans); getLightbarSirenModeObject() is the real
-// accessor, returning a LightbarSirenMode wrapper whose own get():int is the
-// primitive this code wants. Both PanelBridge.lua (getVehiclesDetailed's
-// `sirening` field and vehicleSetSiren's own verify step) and FakeVehicle
-// below are updated to the real two-hop shape -- this is why this file's
-// siren stub no longer defines getLightbarSirenMode at all; a stub for a
-// method the real game doesn't have would just reintroduce the same false
-// assumption this correction exists to close.
-//
-// CORRECTED AGAIN 2026-08-30 (bridge-vehicle-parts-wrong-receiver, same night):
-// getPartById/getBattery/getBatteryCharge moved to a separate FakeVehicleParts
-// table (see below) since they live on VehicleParts, not the vehicle -- and a
-// THIRD instance of this file's own pattern (a stub built from what the code
-// believed rather than what the jar declares) surfaced while checking for it:
-// the Pass 2 audit already found setRemainingFuelPercentage absent from
-// the entire B42 vehicle API too, dead-but-harmless only because the real
-// GasTank-container path (routed through getPartById, now fixed) works. This
-// stub's old FakeVehicleParts.getPartById returned nil unconditionally, so
-// "vehicleSetFuel reports verified=true" only ever exercised the DEAD
-// fallback -- a scenario that cannot happen on a real B42 server -- and never
-// once touched the real primary path. FakeGasTank below fixes that: the
-// success case now goes through getContainerCapacity/setContainerContentAmount
-// like the genuine B42 write does, and getRemainingFuelPercentage reads back
-// its actual state instead of an independent field, so a real regression in
-// the primary path would show up here.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

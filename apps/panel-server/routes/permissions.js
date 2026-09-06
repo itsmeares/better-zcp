@@ -13,8 +13,6 @@ import {
 const log = createLogger("API:Permissions");
 const router = express.Router();
 
-// Every route here needs roles.manage: this is the matrix itself, not a
-// tool that reads/writes anything the matrix grants access to.
 router.use(requirePermission("roles.manage"));
 
 function respondWithServiceError(res, error, fallbackMessage) {

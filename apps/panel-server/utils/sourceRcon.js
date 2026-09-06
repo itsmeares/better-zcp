@@ -1,18 +1,3 @@
-/**
- * Minimal Source RCON protocol client.
- *
- * Written to replace `rcon-srcds` (see B34 in the backend audit): that
- * library required reaching into private internals
- * (`client.connection || client.socket || client._socket`), manually
- * calling `removeAllListeners`, and bumping `setMaxListeners(25)` to work
- * around it adding a fresh listener pair per `execute()` call -- a sign the
- * socket lifecycle wasn't actually owned by our code. This client owns the
- * socket directly: one persistent 'data' listener, explicit packet framing,
- * and no per-call listener accumulation.
- *
- * Protocol reference: https://developer.valvesoftware.com/wiki/Source_RCON_Protocol
- * (Project Zomboid's RCON implementation follows this protocol.)
- */
 import net from 'net';
 
 const TYPE_AUTH = 3;
@@ -20,22 +5,16 @@ const TYPE_AUTH_RESPONSE = 2;
 const TYPE_EXECCOMMAND = 2;
 const TYPE_RESPONSE_VALUE = 0;
 
-// Nominal Source RCON packets are capped around 4096 bytes, but PZ (like many
-// game servers) doesn't strictly enforce that on responses -- `showoptions`
-// on a heavily modded server can be tens of KB. Cap generously so we don't
-// silently discard a legitimately large response as "corrupt".
 const MAX_PACKET_SIZE = 8 * 1024 * 1024;
 
 let nextRequestId = 1;
 function allocRequestId() {
-  // Wrap well before Java's Integer range to stay a safe, boring positive int.
   nextRequestId = (nextRequestId % 0x7fffffff) + 1;
   return nextRequestId;
 }
 
 function encodePacket(id, type, body) {
   const bodyBuf = Buffer.from(body ?? '', 'utf8');
-  // size = id(4) + type(4) + body + null terminator(1) + empty-string terminator(1)
   const size = 4 + 4 + bodyBuf.length + 1 + 1;
   const buf = Buffer.alloc(4 + size);
   let offset = 0;
@@ -43,17 +22,11 @@ function encodePacket(id, type, body) {
   buf.writeInt32LE(id, offset); offset += 4;
   buf.writeInt32LE(type, offset); offset += 4;
   bodyBuf.copy(buf, offset); offset += bodyBuf.length;
-  buf.writeUInt8(0, offset); offset += 1; // body terminator
-  buf.writeUInt8(0, offset); offset += 1; // empty-string terminator
+  buf.writeUInt8(0, offset); offset += 1;
+  buf.writeUInt8(0, offset); offset += 1;
   return buf;
 }
 
-/**
- * Incremental packet reassembler. Source RCON packets can arrive split
- * across multiple TCP reads (or several packets can arrive in one read) --
- * this buffers raw bytes and yields complete { id, type, body } packets as
- * they become available.
- */
 export class PacketReader {
   constructor() {
     this._buf = Buffer.alloc(0);
@@ -65,20 +38,15 @@ export class PacketReader {
     for (;;) {
       if (this._buf.length < 4) break;
       const size = this._buf.readInt32LE(0);
-      // 10 = id(4) + type(4) + two terminators. Anything smaller would make the
-      // readInt32LE calls below run off the end of the buffer and throw.
       if (size < 10 || size > MAX_PACKET_SIZE) {
-        // Corrupt/unexpected framing -- drop everything buffered so far
-        // rather than getting stuck reading a bogus length forever.
         this._buf = Buffer.alloc(0);
         break;
       }
       const totalLen = 4 + size;
-      if (this._buf.length < totalLen) break; // wait for more data
+      if (this._buf.length < totalLen) break;
 
       const id = this._buf.readInt32LE(4);
       const type = this._buf.readInt32LE(8);
-      // body runs from offset 12 to totalLen - 2 (strip the two null terminators)
       const body = this._buf.toString('utf8', 12, totalLen - 2);
       packets.push({ id, type, body });
 
@@ -89,21 +57,13 @@ export class PacketReader {
 }
 
 export class SourceRconClient {
-  /**
-   * API-compatible constructor shape with the `rcon-srcds` package it
-   * replaces (`new Rcon({ host, port, timeout })` then
-   * `.authenticate(password)`), so the surrounding connection-management
-   * code in services/rcon.js needed a minimal, low-risk diff to swap
-   * transports -- import + constructor call only. `.execute()` and
-   * `.disconnect()` keep the same call shape too.
-   */
   constructor({ host, port, timeout = 5000 } = {}) {
     this.host = host;
     this.port = port;
     this.timeout = timeout;
     this.socket = null;
     this.reader = new PacketReader();
-    this._pending = new Map(); // requestId -> { resolve, reject, timer, parts }
+    this._pending = new Map();
     this._authPending = null;
     this._destroyed = false;
   }
@@ -112,11 +72,6 @@ export class SourceRconClient {
     return !!this.socket && !this.socket.destroyed;
   }
 
-  /**
-   * Opens the TCP connection and authenticates. Resolves once auth succeeds,
-   * rejects (and closes the socket) on connection error, timeout, or bad
-   * password.
-   */
   authenticate(password) {
     return new Promise((resolve, reject) => {
       const socket = new net.Socket();
@@ -141,8 +96,6 @@ export class SourceRconClient {
         clearTimeout(connectTimer);
         socket.setNoDelay(true);
 
-        // One persistent listener for the life of the connection -- no
-        // per-execute() listener accumulation (the problem this replaces).
         socket.on('data', (chunk) => this._onData(chunk));
         socket.on('close', () => this._onClose());
         socket.on('error', (err) => this._onSocketError(err));
@@ -173,8 +126,6 @@ export class SourceRconClient {
       pending.reject(err);
       return;
     }
-    // Reject every in-flight command; the caller's own reconnect logic
-    // handles re-establishing the connection.
     for (const [, entry] of this._pending) {
       clearTimeout(entry.timer);
       entry.reject(err);
@@ -209,19 +160,10 @@ export class SourceRconClient {
         }
         continue;
       }
-      // Some servers send an empty SERVERDATA_RESPONSE_VALUE immediately
-      // before the real SERVERDATA_AUTH_RESPONSE during auth -- harmless,
-      // just ignore it (there is no pending command yet at that point, so
-      // the lookup below simply won't find a match).
       if (packet.type === TYPE_RESPONSE_VALUE) {
         const entry = this._pending.get(packet.id);
         if (entry) {
           entry.parts.push(packet.body);
-          // PZ / most Source RCON servers reply with a single packet per
-          // command. Resolve on the first response for that id; if a
-          // server ever splits a large response across multiple packets
-          // sharing the same id, this would need the multi-packet
-          // terminator trick -- not needed for PZ's typical output sizes.
           clearTimeout(entry.timer);
           this._pending.delete(packet.id);
           entry.resolve(entry.parts.join(''));
@@ -230,10 +172,6 @@ export class SourceRconClient {
     }
   }
 
-  /**
-   * Sends a command and resolves with its response body. Rejects on
-   * timeout or if the connection drops before a response arrives.
-   */
   execute(command, { timeoutMs = 8000 } = {}) {
     if (!this.connected) {
       return Promise.reject(new Error('RCON not connected'));

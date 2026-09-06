@@ -9,10 +9,6 @@ const { getServer, connect, save, disconnect } = vi.hoisted(() => ({
 
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// docker.js now gates with requirePermission("docker.manage") (DB-backed
-// capability lookup) instead of requireRole -- getRoleByName needs mocking
-// alongside getServer. The old hand-rolled requireRole mock (admin-only) is
-// gone: docker.js doesn't import from services/auth.js at all anymore.
 vi.mock("../database/init.js", () => ({ getServer, getRoleByName: mockGetRoleByName }));
 vi.mock("../services/rcon.js", () => ({
   RconService: class {

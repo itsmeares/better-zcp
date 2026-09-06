@@ -4,24 +4,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } from '@/lib/api'
 
-// Dead-signal / stuck-state hunt (2026-09-03, following GH#141): grepped
-// every field on every apps/panel-client/src/lib/api.ts type for usage outside that
-// file. backupInProgress and restoreInProgress on BackupStatus were used
-// ONLY in test fixtures -- never read by Backups.tsx itself. The server's
-// own mutex (backupService.js's this.backupInProgress/restoreInProgress,
-// exercised by apps/panel-server/tests/backupCreateDuringRestore.test.js and
-// backupRestoreSafety.test.js) is real and correctly maintained; the client
-// just never asked it a question it was already answering every poll.
-//
-// Consequence: loading (or reloading) the Backups page while a backup or
-// restore was already running -- started by this same panel's scheduler, a
-// second browser tab, or already in flight before this page opened -- left
-// creatingBackup/restoringBackup at their default false/null (local-only,
-// reset on every mount), so Create Backup and the row Restore buttons
-// stayed clickable with no indication anything was already happening. A
-// click would reach the server's mutex and get rejected -- a real, visible
-// failure with no on-screen explanation, for an action the UI had no
-// business inviting in the first place.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({

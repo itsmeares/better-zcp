@@ -59,12 +59,6 @@ export function getWhitelistDatabasePath(zomboidDataPath, serverName) {
   return path.join(zomboidDataPath, "db", `${serverName}.db`);
 }
 
-// Roles.getRoles() (see zombie.network.GameServer.changeRole()) is a live,
-// DB-backed table, not the fixed ROLE_NAMES defaults above -- an admin can
-// rename/add/remove roles at runtime via the in-game role editor. Shared by
-// listWhitelistAccounts (resolving a whitelist row's role id to a name) and
-// listServerRoleNames (enumerating the access levels this server actually
-// has) so both read the exact same table the exact same way.
 function loadRoleMap(db) {
   const roles = new Map(ROLE_NAMES);
   const roleResult = db.exec("SELECT id, name FROM role");
@@ -135,16 +129,6 @@ export async function listWhitelistAccounts(zomboidDataPath, serverName) {
   }
 }
 
-// The server's real access levels, per access-levels-should-come-from-the-
-// server-not-a-hardcoded-array: Roles.getRoles() is a live, DB-backed table
-// (this same [role] table, read via getWhitelistDatabasePath -- the name is
-// whitelist-specific, the path it resolves is not), not a fixed list, so a
-// hardcoded array is wrong in principle even when it happens to be correct
-// today. 'none' is deliberately NOT added here -- it is a SetAccessLevelCommand
-// special case that never reaches this table (confirmed absent from both a
-// real jar read and ROLE_NAMES's own defaults), so callers that need it as a
-// selectable level must add it themselves, same as this file already
-// requires no other 'none' handling anywhere else in its role-table reads.
 export async function listServerRoleNames(zomboidDataPath, serverName) {
   const dbPath = getWhitelistDatabasePath(zomboidDataPath, serverName);
   if (!dbPath) {

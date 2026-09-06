@@ -57,14 +57,7 @@ export function buildRuntimeInfo({
   };
 }
 
-// No requireRole, deliberately: this is the disk-space/storage-health
-// warning the frontend polls dashboard-wide, so every role sees a full
-// disk coming before it becomes their problem. Read-only, and error
-// messages already run through sanitizeError before leaving this file.
 
-// Combined disk status for both the save volume (polled by DiskMonitor) and
-// the panel's own data directory (checked fresh — it's cheap, and its
-// disk isn't necessarily the same mount as the save volume).
 async function buildDiskSpace(req) {
   const diskMonitor = req.app.get("diskMonitor");
   const saveVolume = diskMonitor ? diskMonitor.getDiskStatus() : null;
@@ -85,8 +78,6 @@ router.get("/runtime", (_req, res) => {
   res.json(buildRuntimeInfo());
 });
 
-// Single endpoint the frontend polls: disk space + write circuit breaker
-// state, so the UI can warn before a full disk silently drops writes.
 router.get("/storage-health", async (req, res) => {
   try {
     const diskSpace = await buildDiskSpace(req);

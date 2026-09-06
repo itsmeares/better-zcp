@@ -23,7 +23,6 @@ export default [
       sourceType: "module",
       globals: {
         ...globals.node,
-        // Injected by esbuild at build time; guarded with typeof at runtime.
         PANEL_VERSION: "readonly",
         PANEL_BUILD_SHA: "readonly",
         PANEL_API_CONTRACT_VERSION: "readonly",
@@ -72,8 +71,6 @@ export default [
     },
   },
   {
-    // Test doubles must match the awaited interface they stand in for, so an
-    // async stub with no await inside is correct here.
     files: ["tests/**/*.js"],
     rules: {
       // A test calls these for their effect on a stub, not for the result.

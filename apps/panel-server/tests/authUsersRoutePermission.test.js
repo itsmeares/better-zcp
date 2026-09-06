@@ -1,16 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// GET/POST /api/auth/users used to be requireRole("admin") — a literal
-// role-name check — while PATCH /api/auth/users/:id/role beside them was
-// already on requirePermission("users.manage"). That split meant an
-// operator could grant a custom role users.manage (the matrix would show
-// it granted, the server would store it) and that role could still not
-// list users or populate a role picker, because these two routes checked
-// a name instead of the capability. This file proves a genuine CUSTOM role
-// (neither "admin" nor a seeded name) is admitted purely on holding the
-// capability, and refused purely on not holding it — not on its name.
-// Same mock shape as changeUserRoleRoute.test.js, kept self-contained per
-// file to avoid a circular-mock deadlock with services/permissions.js.
 const settings = new Map();
 const db = { data: { users: [], roles: [] } };
 
@@ -54,8 +43,6 @@ vi.mock("../database/init.js", () => ({
 
 const { default: authRouter } = await import("../routes/auth.js");
 
-// Deliberately NOT named "admin" or any legacy role string — proves the
-// gate is reading the capability, not recognizing a familiar name.
 const RECEPTIONIST_ROLE = {
   id: "role-receptionist",
   name: "front-desk",

@@ -3,22 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression coverage for the createBackup() fix
-// Finding 2, authorised and ruled on by testing): createBackup() used to return
-// null for two completely different situations -- "nothing to back up"
-// (benign) and "the backup failed" (dangerous) -- and every one of its 11
-// call sites in serverFiles.js discarded the return value either way. This
-// forces REAL backup failures (not a mocked createBackup) through the real
-// function, per the explicit instruction not to prove a branch merely runs.
-//
-// The technique: pre-create a plain FILE at the exact path the backup
-// directory should be. fs.promises.mkdir(that path, {recursive:true}) then
-// genuinely fails (EEXIST/ENOTDIR) because it cannot create a directory
-// where a non-directory file already exists -- a real, deterministic,
-// platform-portable failure. Verified against both a real Windows temp dir
-// and Node's own fs semantics before writing these tests; chmod-readonly
-// and open file handles are known (per tonight's floor) to silently fail
-// to block operations on this platform, so this file avoids both.
 
 const getActiveServer = vi.fn();
 const getAllSettings = vi.fn();
@@ -46,10 +30,6 @@ function createResponse() {
   return response;
 }
 
-// Grabs the route's final handler, skipping every middleware ahead of it
-// (the permission gate, the "server must be stopped" guard) -- this file is
-// only exercising createBackup()'s own contract and how each handler reacts
-// to it, which the gate tests elsewhere already cover independently.
 function getHandler(routePath, method) {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
@@ -63,8 +43,6 @@ async function runHandler(routePath, method, req) {
   return res;
 }
 
-/** Break the backup dir a specific way: a plain file sits where the backup
- * directory needs to be created, so mkdir(recursive:true) genuinely fails. */
 function sabotageBackupDir(configPath) {
   fs.writeFileSync(path.join(configPath, "backups"), "not a directory");
 }
@@ -88,9 +66,6 @@ describe("createBackup() itself: distinguishes no-source from a real failure", (
   });
 
   it("returns backedUp:false, reason:no-source when the file doesn't exist -- benign, not a failure", async () => {
-    // Exercised indirectly through PUT /ini writing a brand-new file: no
-    // prior INI exists, so no backup attempt should even be made, and the
-    // write must still succeed with no warning.
     const res = await runHandler("/ini", "put", {
       body: { settings: { PublicName: "Test" } },
     });
@@ -119,12 +94,10 @@ describe("createBackup() itself: distinguishes no-source from a real failure", (
       body: { settings: { PublicName: "New" } },
     });
 
-    // PUT /ini is an "ordinary edit" site: the write must still go through...
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true }),
     );
     expect(fs.readFileSync(iniPath, "utf-8")).toContain("PublicName=New");
-    // ...but the response must tell the truth about the backup.
     const payload = res.json.mock.calls[0][0];
     expect(payload.backupWarning).toMatch(/could not back up/i);
   });
@@ -158,7 +131,6 @@ describe("PUT /ini (an 'ordinary edit' site): backup failure never blocks the ed
     );
     const payload = res.json.mock.calls[0][0];
     expect(payload.backupWarning).toBeUndefined();
-    // A real backup file must actually exist -- not just "no warning".
     const backups = fs.readdirSync(path.join(tmpDir, "backups"));
     expect(backups.some((f) => f.startsWith("TestServer.ini."))).toBe(true);
   });
@@ -182,15 +154,6 @@ describe("POST /sandbox/repair (the ONE unrecoverable-operation site): refuses t
   let tmpDir;
 
   function corruptSandbox() {
-    // Missing a nested block header -- the exact orphaned-scalar shape
-    // repairSandboxSyntax() knows how to fix (see its own header comment):
-    // a scalar "key = value" line (no trailing comma) immediately followed
-    // by a MORE-indented entry line, with a dangling extra "}" below --
-    // the shape produced when a "<Name> = {" header line got dropped
-    // upstream. One closing brace with no matching opener: unbalanced,
-    // depth goes negative -- checkSandboxBraceBalance() must reject this
-    // as-is, and repairSandboxSyntax() must be able to fix it by
-    // synthesizing the missing wrapper table.
     const content = [
       "Vehicles = {",
       "    OrphanKey = true",
@@ -249,13 +212,8 @@ describe("POST /sandbox/repair (the ONE unrecoverable-operation site): refuses t
     expect(payload.success).toBe(false);
     expect(payload.error).toMatch(/could not back up/i);
     expect(payload.code).toBe("SANDBOX_REPAIR_BACKUP_FAILED");
-    // The underlying fs error must reach the wire as params.reason -- not
-    // just embedded, unresolvable, in the English `error` string. Proves
-    // the withFileLock result object's params field survives the
-    // result.code-style threading through to res.json().
     expect(payload.params).toEqual({ reason: expect.any(String) });
     expect(payload.params.reason.length).toBeGreaterThan(0);
-    // The file must be byte-for-byte untouched -- refusal, not a partial write.
     expect(
       fs.readFileSync(path.join(tmpDir, "TestServer_SandboxVars.lua"), "utf-8"),
     ).toBe(originalContent);

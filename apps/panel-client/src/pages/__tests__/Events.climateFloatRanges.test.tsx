@@ -6,18 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// regression: getClimateFloats() reports each ClimateFloat's real,
-// server-authoritative min/max (PanelBridge.lua handlers.getClimateFloats ->
-// cf:getMin()/cf:getMax()), and the route/api layer passed it through
-// untouched. Events.tsx fetched the response, read only `.value` off each
-// float, and bound every climate slider to a hardcoded range (0-100 for the
-// five percent-style floats, -30..45 for temperature) instead. A hardcoded
-// range that is too wide lets an operator request a value the game will
-// never honour; too narrow hides a legitimate one -- either way the UI lies
-// about what is possible using data it already has on the wire. This test
-// renders the real Climate trim sliders against a distinctive non-default
-// range and pins that the rendered bounds come from the wire, not from the
-// old hardcoded constants.
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
@@ -38,9 +26,6 @@ vi.mock('@/lib/api', async () => {
   }
 })
 
-// Radix's Slider measures its own DOM node via ResizeObserver, which jsdom does not
-// implement. No production code depends on real measurements here -- a stub is enough
-// for the slider to mount and report its min/max/value via ARIA attributes.
 class StubResizeObserver {
   observe() {}
   unobserve() {}
@@ -90,15 +75,6 @@ beforeEach(() => {
   } as never)
 })
 
-// Radix's Slider Thumb only gets an accessible name from the multi-thumb
-// "Minimum"/"Maximum"/"Value N of M" convention (see getLabel() in
-// @radix-ui/react-slider) -- the `aria-label` prop on our <Slider> wrapper
-// lands on the outer (non-role) container, not the role="slider" Thumb, so
-// it is not queryable by accessible name. Index into the climate section's
-// sliders by their fixed JSX order instead: fog, wind, temperature, clouds,
-// humidity, precipitation. Only one section's controls are ever mounted at
-// a time (each is behind `{activeSection === 'x' && (...)}`), so this is
-// exactly the six climate sliders once the Climate trim section is active.
 const CLIMATE_SLIDER_ORDER = ['fog', 'wind', 'temperature', 'clouds', 'humidity', 'precipitation'] as const
 
 async function getClimateSliders() {

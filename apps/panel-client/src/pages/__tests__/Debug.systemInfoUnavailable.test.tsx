@@ -6,15 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Debug from '../Debug'
 import { apiFetch } from '@/lib/api'
 
-// 2026-08-30 visual sweep (fix-backups-dead-spinner-and-debug-environment):
-// every field on Debug > Environment (Node.js, Platform, Uptime, Memory,
-// Database, Logs folder) fell back to a bare "-" whenever fetchSystemInfo()
-// didn't produce usable data -- and, unlike this page's Health tab, there
-// was no error state at all to distinguish "still loading" from "this
-// genuinely failed and will never resolve". These are facts about the
-// panel's own Node process, not the configured game server, so an
-// indefinite "-" here is never explained by "waiting on server setup" the
-// way it legitimately can be elsewhere in the app.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -69,9 +60,6 @@ function renderDebug() {
 }
 
 async function openEnvironmentTab() {
-  // Radix's TabsTrigger switches on mousedown, not click (see
-  // @radix-ui/react-tabs) -- fireEvent.click alone never flips the tab
-  // (established pattern, e.g. Console.test.tsx's openRconTab).
   const tab = await screen.findByRole('tab', { name: /environment/i })
   fireEvent.mouseDown(tab, { button: 0 })
 }
@@ -100,8 +88,6 @@ describe('Debug > Environment: distinguishes still-loading from confirmed-unavai
     renderDebug()
     await openEnvironmentTab()
 
-    // Six fields on this tab read from systemInfo: Node.js, Platform,
-    // Uptime, Memory (+ "of ... heap"), Database, Logs folder.
     await waitFor(() => {
       expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(6)
     })

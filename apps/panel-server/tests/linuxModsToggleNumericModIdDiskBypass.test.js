@@ -3,25 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29 hunt follow-up (testing): the mods/workshop regression's case 1
-// (workshop-id validation drift). /toggle-mod-id and /batch-toggle-mod-ids
-// treated any 5-15 digit modId as an unverifiable "that's a Workshop ID, not
-// a mod ID" 400 -- but enable-disk-mod/resolve-orphan-workshop already
-// established the correct precedent for this exact ambiguity: disk
-// verification (reading the real mod.info off the installed workshop
-// folder) is strictly MORE evidence than the regex that flagged it
-// ambiguous, so a disk-confirmed numeric mod ID should be allowed, not
-// rejected. Teaching toggle/batch-toggle that same bypass, per the
-// explicit "this is not a UX tradeoff, converging on a sibling's proven
-// pattern is the absence of one" instruction.
-//
-// A second, worse bug hid behind the first: toggle/batch-toggle rebuild
-// Mods= via `sanitizeModIdList(currentModIds)` on the FULL current list on
-// every write, not just the entry being toggled -- so toggling ANY
-// unrelated mod on/off silently stripped a *pre-existing*, already-disk-
-// verified numeric-ID mod elsewhere in the same Mods= line as collateral
-// damage. Both bugs share one fix: sanitize the full list through the same
-// disk-verification bypass, not just gate the one entry being added.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -69,7 +50,7 @@ async function runRoute(routePath, method, req) {
   return res;
 }
 
-const REAL_MOD_ID = "3519629457"; // "Tear All Clothes" -- a real all-numeric mod.info id=
+const REAL_MOD_ID = "3519629457";
 const WS_ID = "9999999999";
 
 describe("toggle/batch-toggle: disk-verified numeric mod IDs", () => {
@@ -152,8 +133,6 @@ describe("toggle/batch-toggle: disk-verified numeric mod IDs", () => {
     expect(res.getStatusCode()).toBe(200);
     const content = fs.readFileSync(iniPath, "utf-8");
     const ids = (content.match(/^Mods=(.*)$/m)?.[1] || "").split(";").filter(Boolean);
-    // The predicted pre-fix symptom: REAL_MOD_ID silently vanishes even
-    // though only BetaMod was toggled.
     expect(ids).toEqual(["AlphaMod", REAL_MOD_ID, "BetaMod"]);
   });
 

@@ -3,8 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Custom launcher paths point to a file, while diagnostics need the containing
-// directory for install and log listings.
 
 const { buildZomboidPaths } = await import("../routes/debug.js");
 

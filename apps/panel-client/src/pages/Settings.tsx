@@ -133,7 +133,6 @@ import {
 } from "@/components/ui/tooltip";
 
 interface AppSettings {
-  // Bridge Settings
   panelBridgeAutoUpdate: boolean;
   panelBridgeSftpEnabled: boolean;
   panelBridgeSftpHost: string;
@@ -145,12 +144,10 @@ interface AppSettings {
   panelBridgeSftpLogPath: string;
   panelBridgeSftpConfigPath: string;
 
-  // Server automation
   autoStartServer: boolean;
   autoExportOnLogin: boolean;
   autoExportMaxPerPlayer: string;
 
-  // Mod Checker Settings
   modCheckInterval: string;
   modAutoRestart: boolean;
   modRestartDelay: string;
@@ -158,40 +155,31 @@ interface AppSettings {
   serverAutoUpdateWarningMinutes: string;
   steamUpdateAccount: string;
 
-  // API Keys
   steamApiKey: string;
 
-  // Workshop Collection Sync
   workshopCollectionId: string;
   workshopCollectionAutoSync: boolean;
   steamSessionId: string;
   steamLoginSecure: string;
 
-  // General Settings
   darkMode: boolean;
   autoReconnect: boolean;
   reconnectInterval: string;
 
-  // Panel Settings
   panelPort: string;
 
-  // HTTPS Settings
   httpsEnabled: boolean;
   httpsPort: string;
   httpsKeyPath: string;
   httpsCertPath: string;
 
-  // CORS Settings
   corsAllowedOrigins: string;
   corsAllowAll: boolean;
   corsAllowPrivateNetworks: boolean;
   corsDebug: boolean;
 
-  // Privacy
   enablePublicIpLookup: boolean;
 
-  // Which detected network interface's IPv4 the dashboard displays.
-  // Empty string = auto-detect (first non-internal interface found).
   lanIpAddress: string;
 }
 
@@ -214,8 +202,6 @@ interface CorsDiagnostics {
 const MAX_CORS_ALLOWED_ORIGINS = 100;
 const MAX_CORS_ORIGIN_LENGTH = 256;
 
-// Settings written by other pages are persisted as raw strings, so a stored
-// "false" would otherwise read as truthy here.
 function toSettingBoolean(value: unknown, fallback: boolean): boolean {
   if (typeof value === "boolean") return value;
   if (value === "true") return true;
@@ -223,17 +209,10 @@ function toSettingBoolean(value: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
-// Mirrors apps/panel-server/routes/config.js's own httpsPort range check so the client
-// can reject an out-of-range port before submitting -- panelPort has no such
-// check on the server at all (unlike its httpsPort sibling), so an
-// out-of-range panelPort would otherwise save silently and only surface
-// later, on the next restart, as a redirect to a port nothing is listening on.
 export function isValidPort(port: number): boolean {
   return Number.isInteger(port) && port >= 1 && port <= 65535;
 }
 
-// Human-friendly age string for bridge diagnostics. Avoids showing the user
-// raw seconds counts like "3344627s" which read as gibberish.
 function formatBridgeAge(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "unknown";
   if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -245,16 +224,6 @@ function formatBridgeAge(seconds: number): string {
   return `${d}d`;
 }
 
-// The SFTP transport's ongoing status (not a caught request failure, so
-// getUserErrorMessage's ApiError-shaped input doesn't fit) carries its own
-// lastErrorCode alongside the pre-existing English lastError/
-// lastErrorGuidance pair -- look up the translated "{{detail}} Fix: ..."
-// sentence directly when a code is present, matching the exact classification
-// apps/panel-server/services/panelBridgeSftp.js's formatSftpError() already computed for
-// the English fallback so the two never disagree about what went wrong. A
-// server that hasn't restarted with the 2026-08-26 SFTP error-code work yet
-// (lastErrorCode absent from an old cached status) falls back to the
-// original two-piece English rendering.
 function getSftpStatusMessage(transport: {
   lastError?: string | null;
   lastErrorGuidance?: string | null;
@@ -365,7 +334,6 @@ export default function Settings() {
   const { toast } = useToast();
   const { user, authEnabled, logout, can } = useAuth();
 
-  // Change password state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -394,7 +362,6 @@ export default function Settings() {
   const [resettingLocalPassword, setResettingLocalPassword] = useState(false);
   const [showLocalResetPassword, setShowLocalResetPassword] = useState(false);
 
-  // Panel Bridge state
   const [bridgeStatus, setBridgeStatus] = useState<{
     configured: boolean;
     bridgePath: string | null;
@@ -473,14 +440,12 @@ export default function Settings() {
     null,
   );
 
-  // Server list for install dropdown
   const [servers, setServers] = useState<ServerInstance[]>([]);
   const [serversLoadError, setServersLoadError] = useState(false);
   const [selectedInstallServerId, setSelectedInstallServerId] =
     useState<string>("");
   const [installingMod, setInstallingMod] = useState(false);
 
-  // Backup state
   const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null);
   const [backups, setBackups] = useState<ServerBackupArchive[]>([]);
   const [backupsLoadError, setBackupsLoadError] = useState(false);
@@ -494,12 +459,10 @@ export default function Settings() {
   const [backupSchedule, setBackupSchedule] = useState("0 */6 * * *");
   const [backupMaxCount, setBackupMaxCount] = useState(10);
 
-  // Track if there are unsaved changes
   const isDirty =
     originalSettings !== null &&
     JSON.stringify(settings) !== JSON.stringify(originalSettings);
 
-  // Section navigation via tabs
   const settingsSections = [
     {
       id: "general",
@@ -606,13 +569,6 @@ export default function Settings() {
       description: t("tabs.about.description"),
     },
   ].filter((section) => {
-    // UX only -- see AuthContext's `can()` doc comment. Hiding these two
-    // tabs from a role that can't use them is purely cosmetic tidiness;
-    // requirePermission("users.manage"/"roles.manage") on the actual
-    // /api/users and /api/roles routes is what actually protects anything,
-    // and stays untouched. can() fails OPEN (true) when capabilities are
-    // unknown, so this never hides a tab from someone it can't confirm
-    // lacks access -- it only ever hides it when the answer is a known no.
     if (section.id === "users") return can("users.manage");
     if (section.id === "roles") return can("roles.manage");
     if (section.id === "sso") return can("panel.settings");
@@ -626,7 +582,6 @@ export default function Settings() {
     else groups.push({ name: section.group, sections: [section] });
     return groups;
   }, []);
-  // Keeps older ?tab= links and in-app deep links working after the rename.
   const legacyTabAliases: Record<string, string> = {
     panel: "general",
     rcon: "connection",
@@ -643,7 +598,6 @@ export default function Settings() {
     () => resolveTabId(searchParams.get("tab")) ?? "general",
   );
 
-  // Sync active tab to URL
   const handleTabChange = useCallback(
     (value: string) => {
       setActiveSection(value);
@@ -652,11 +606,6 @@ export default function Settings() {
     [setSearchParams],
   );
 
-  // Sync URL back to active tab -- catches ?tab= changes that don't go
-  // through handleTabChange above (e.g. an in-page <Link to="/settings?tab=roles">
-  // from an embedded tab's own content, which updates the URL without
-  // remounting this component, so the mount-time useState initializer above
-  // never re-runs on its own).
   useEffect(() => {
     const resolved = resolveTabId(searchParams.get("tab"));
     if (resolved && resolved !== activeSection) {
@@ -664,7 +613,6 @@ export default function Settings() {
     }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps -- resolveTabId/activeSection intentionally excluded: recomputed fresh each render off settingsSections (stable per render), including them would re-run this on every activeSection change instead of only on external URL changes
 
-  // Warn before leaving with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isDirty) {
@@ -677,7 +625,6 @@ export default function Settings() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
-  // Clean up restart redirect timer on unmount
   useEffect(
     () => () => {
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
@@ -691,7 +638,6 @@ export default function Settings() {
       const data = await configApi.getAppSettings();
       setSettingsLoadError(null);
       if (data.settings) {
-        // Use functional update to get current state and merge with loaded settings
         setSettings((prevSettings) => {
           const incoming = data.settings as Partial<AppSettings>;
           const loadedSettings: AppSettings = {
@@ -761,18 +707,6 @@ export default function Settings() {
       const status = await panelUpdateApi.getStatus();
       setPanelUpdateStatus(status);
       setPanelUpdateStatusError(null);
-      // "Ready to apply" reflects whether a binary is staged on disk, not just
-      // whether the last click finished. Survives page reloads.
-      //
-      // GH#141: once a failed apply reports canRetryApply:false, the staged
-      // binary is gone and NOTHING re-stages it -- clicking Restart again is
-      // guaranteed to fail identically (apps/panel-server/services/panelUpdateChecker.js's
-      // reconcilePendingUpdate() leaves pendingPanelUpdate set on purpose so a
-      // fresh download can still retry, but that means status.updateAvailable
-      // stays true with status.stagedUpdate now null, and neither branch below
-      // would otherwise touch panelUpdateReady -- leaving it stuck at whatever
-      // it was before the apply failed. Checked first and explicitly so a
-      // stuck-true "ready" from before the failure can't survive it.
       if (
         status.lastApplyResult?.status === "failed" &&
         status.lastApplyResult.canRetryApply === false
@@ -783,8 +717,6 @@ export default function Settings() {
       } else if (!status.updateAvailable) {
         setPanelUpdateReady(false);
       }
-      // If a previous apply failed, surface the helper log right away so the
-      // user can see what happened without clicking anything.
       if (status.lastApplyResult?.status === "failed") {
         if (status.lastApplyResult.helperLog) {
           setPanelApplyLog(status.lastApplyResult.helperLog);
@@ -858,8 +790,6 @@ export default function Settings() {
         : message;
     });
 
-  // Run preflight once status tells us we're in a packaged build and there is
-  // anything actionable (either an available update or a staged file on disk).
   useEffect(() => {
     if (!hasActionablePanelUpdate) return;
     fetchPanelUpdatePreflight();
@@ -986,7 +916,7 @@ export default function Settings() {
       await configApi.updateAppSettings(
         settings as unknown as Record<string, unknown>,
       );
-      setOriginalSettings(settings); // Reset dirty state after save
+      setOriginalSettings(settings);
       try {
         await fetchCorsDiagnostics();
       } catch {
@@ -1009,7 +939,6 @@ export default function Settings() {
     }
   };
 
-  // Ctrl+S to save settings
   usePageShortcut(
     "s",
     () => {
@@ -1080,8 +1009,6 @@ export default function Settings() {
         }, 3000);
       } catch (err) {
         setRestarting(false);
-        // Apply-in-progress (409): another tab/client already triggered the
-        // apply. Show a tailored message instead of the generic restart-fail.
         const apiErr = err as { code?: string; message?: string };
         if (apiErr?.code === "apply_in_progress") {
           toast({
@@ -1144,9 +1071,6 @@ export default function Settings() {
     setDownloadingPanelUpdate(true);
     setPanelUpdateStatusError(null);
     try {
-      // Pre-flight before touching disk — refuse early if we know apply will
-      // fail, and refuse just as hard if the pre-flight check itself
-      // couldn't be reached (a failed check is not a passed check).
       const pre = await fetchPanelUpdatePreflight();
       if (!pre || !pre.ok) {
         throw new Error(
@@ -1154,9 +1078,6 @@ export default function Settings() {
         );
       }
 
-      // POST /panel/update-download always responds non-2xx on failure, so
-      // handleResponse() throws into the catch below -- this never sees
-      // result.success === false.
       const result = await panelUpdateApi.download(isDockerPanelUpdate);
 
       if (!isDockerPanelUpdate) setPanelUpdateReady(true);
@@ -1171,10 +1092,6 @@ export default function Settings() {
       });
       await fetchPanelUpdateStatus();
     } catch (error) {
-      // The route can fail with a body carrying `preflight` blockers
-      // (ApiError.data holds the full payload -- see lib/api.ts) so the
-      // preflight UI still updates on a real failure, not just on the
-      // pre-flight check above.
       const data = error instanceof ApiError ? (error.data as { preflight?: PanelUpdatePreflight } | undefined) : undefined;
       if (data?.preflight) setPanelUpdatePreflight(data.preflight);
       toast({
@@ -1345,7 +1262,6 @@ export default function Settings() {
     }
   };
 
-  // Panel Bridge functions
   const fetchBridgeStatus = useCallback(async () => {
     try {
       const status = await panelBridgeApi.getStatus();
@@ -1359,13 +1275,11 @@ export default function Settings() {
     }
   }, [t]);
 
-  // Fetch servers list for install dropdown
   const fetchServers = useCallback(async () => {
     try {
       const data = await serversApi.getAll();
       setServers(data.servers || []);
       setServersLoadError(false);
-      // Auto-select active server
       const activeServer = data.servers?.find((s) => s.isActive);
       if (activeServer && !selectedInstallServerId) {
         setSelectedInstallServerId(String(activeServer.id));
@@ -1376,8 +1290,6 @@ export default function Settings() {
     }
   }, [selectedInstallServerId]);
 
-  // App settings are global, so do not discard dirty form state on a server
-  // switch. The read-only server list can be refreshed safely.
   useEffect(() => {
     if (!socket) return;
 
@@ -1392,7 +1304,6 @@ export default function Settings() {
     };
   }, [socket, fetchSettings, fetchServers, isDirty]);
 
-  // Install PanelBridge mod to selected server
   const handleInstallMod = async () => {
     if (!selectedInstallServerId) {
       toast({
@@ -1434,11 +1345,9 @@ export default function Settings() {
     }
   };
 
-  // Use ref for bridge polling interval to avoid recreation issues
   const bridgeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bridgeStatusRef = useRef(bridgeStatus);
 
-  // Keep ref in sync with state
   useEffect(() => {
     bridgeStatusRef.current = bridgeStatus;
   }, [bridgeStatus]);
@@ -1447,12 +1356,10 @@ export default function Settings() {
     fetchBridgeStatus();
     fetchServers();
 
-    // Use recursive setTimeout for adaptive interval based on current status
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const scheduleNextFetch = () => {
       const status = bridgeStatusRef.current;
-      // Poll faster when waiting for mod to connect
       const interval =
         status?.isRunning && !status?.modConnected ? 3000 : 10000;
 
@@ -1478,7 +1385,6 @@ export default function Settings() {
     };
   }, [fetchBridgeStatus, fetchServers]);
 
-  // Backup functions
   const fetchBackupStatus = useCallback(async () => {
     try {
       const status = await backupApi.getStatus();
@@ -1537,9 +1443,6 @@ export default function Settings() {
 
   const handleDeleteBackup = async (name: string) => {
     try {
-      // DELETE /backup/:name always responds non-2xx on failure, so
-      // handleResponse() throws into the catch below -- this never sees
-      // result.success === false.
       await backupApi.deleteBackup(name);
       toast({
         title: t("toasts.backupDeleted.title"),
@@ -1560,9 +1463,6 @@ export default function Settings() {
   const handleRestoreBackup = async (name: string) => {
     setRestoringBackup(name);
     try {
-      // POST /backup/restore/:name always responds non-2xx on failure, so
-      // handleResponse() throws into the catch below -- this never sees
-      // result.success === false.
       const result = await backupApi.restoreBackup(name, {
         createPreRestoreBackup: true,
       });
@@ -1585,7 +1485,6 @@ export default function Settings() {
     }
   };
 
-  // Basic cron validation helper
   const isValidCron = (cron: string): boolean => {
     const parts = cron.trim().split(/\s+/);
     if (parts.length !== 5) return false;
@@ -1602,7 +1501,6 @@ export default function Settings() {
   };
 
   const handleSaveBackupSettings = async () => {
-    // Validate cron expression before saving
     if (!isValidCron(backupSchedule)) {
       toast({
         title: t("toasts.invalidSchedule.title"),
@@ -1671,8 +1569,6 @@ export default function Settings() {
     return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
   };
 
-  // Listen for real-time bridge status updates via Socket.IO
-  // Use ref to avoid stale closure issues with fetchBridgeStatus
   const fetchBridgeStatusRef = useRef(fetchBridgeStatus);
   useEffect(() => {
     fetchBridgeStatusRef.current = fetchBridgeStatus;
@@ -1690,7 +1586,6 @@ export default function Settings() {
           ? { ...prev, isRunning: data.isRunning, bridgePath: data.bridgePath }
           : null,
       );
-      // Fetch full status to get all details
       fetchBridgeStatusRef.current();
     };
 
@@ -1705,13 +1600,11 @@ export default function Settings() {
     }) => {
       setBridgeStatus((prev) => {
         if (!prev) return null;
-        // Create a proper modStatus object, preserving previous values if new ones are missing
         const prevModStatus = prev.modStatus;
         const newModStatus = {
           alive: data.alive,
           version: data.version || prevModStatus?.version || "",
           serverName: data.serverName || prevModStatus?.serverName || "",
-          // When alive, use playerCount (defaulting to 0); when offline, leave undefined
           playerCount: data.alive ? (data.playerCount ?? 0) : undefined,
           players: Array.isArray(data.players)
             ? data.players
@@ -1745,17 +1638,12 @@ export default function Settings() {
       socket.off("panelBridge:modStatus", handleModStatus);
       socket.off("panelBridge:configured", handleBridgeConfigured);
     };
-  }, [socket]); // Only depend on socket, use ref for fetchBridgeStatus
+  }, [socket]);
 
-  // Auto-configure from active server settings (one-click setup)
   const handleAutoConfigure = async () => {
     setBridgeLoading(true);
     setBridgeError(null);
     try {
-      // handleResponse() throws on a non-2xx status or an HTTP 200 body
-      // with success: false, so this route's failures (always non-2xx --
-      // see panelBridge.js's /auto-configure) never reach a
-      // result.success === false branch here, only the catch below.
       const result = await panelBridgeApi.autoConfigure();
       toast({
         title: t("toasts.bridgeAutoConfigured.title"),
@@ -1800,9 +1688,6 @@ export default function Settings() {
     setBridgeLoading(true);
     setBridgeError(null);
     try {
-      // Same shape as handleAutoConfigure above: /configure-direct's
-      // failures are always non-2xx, so they throw into the catch below,
-      // never into a result.success === false branch here.
       const result = await panelBridgeApi.configureDirect(trimmed);
       toast({
         title: t("toasts.bridgeConfigured.title"),
@@ -1955,13 +1840,6 @@ export default function Settings() {
     setPinging(true);
     try {
       const result = await panelBridgeApi.ping();
-      // apiGet's shared handleResponse() throws on an HTTP 200 body with
-      // `success: false` (this codebase's other way of saying "this
-      // failed" -- see lib/api.ts) rather than resolving with it. The
-      // bridge service's ping() returns exactly that shape for "bridge not
-      // running" and "mod not connected" -- its two most common failure
-      // modes -- so those always land in the catch below, never in a
-      // `result.success === false` branch here.
       toast({
         title: t("toasts.modConnected.title"),
         description: t("toasts.modConnected.description", { server: result.modStatus?.serverName || t("toasts.modConnected.fallbackServer") }),
@@ -1988,7 +1866,6 @@ export default function Settings() {
     key: K,
     value: AppSettings[K],
   ) => {
-    // Validate numeric string fields
     if (
       typeof value === "string" &&
       [
@@ -2001,18 +1878,13 @@ export default function Settings() {
         "panelBridgeSftpPollIntervalSeconds",
       ].includes(key)
     ) {
-      // Allow empty string but reject non-numeric values
       if (value !== "" && isNaN(parseInt(value))) {
-        return; // Don't update with invalid value
+        return;
       }
     }
     setSettings((prev) => ({ ...prev, [key]: value }));
   };
 
-  // Lock-out guard: if the user disables "Allow Private/LAN Origins" while
-  // "Allow All" is also off and the explicit allow-list is empty, the panel
-  // will reject every browser request after the next CORS reload — including
-  // theirs. Confirm before letting that through.
   const [pendingCorsLanDisable, setPendingCorsLanDisable] = useState(false);
   const handleCorsLanToggle = (value: boolean) => {
     if (
@@ -2049,7 +1921,6 @@ export default function Settings() {
     updateSetting("httpsCertPath", "");
   };
 
-  // Detect path separator from install path; default to '/' (works on all platforms)
   const sep = selectedInstallServer?.installPath?.includes("\\") ? "\\" : "/";
   const selectedInstallTarget = selectedInstallServer
     ? `${selectedInstallServer.installPath}${sep}media${sep}lua${sep}server${sep}PanelBridge.lua`
@@ -2287,7 +2158,6 @@ export default function Settings() {
   return (
     <div className="page-transition">
       <AutoUpdateResultBanner />
-      {/* Unsaved Changes Warning */}
       {isDirty && (
         <div
           role="status"
@@ -2410,10 +2280,6 @@ export default function Settings() {
               </React.Fragment>
             ))}
           </TabsList>
-          {/* Static scroll-continuation cue for the horizontal strip on mobile/tablet --
-              the strip always has more sections than fit, so this isn't scroll-position-tracked,
-              just a constant "there's more this way" edge like the sticky sidebar gets for free
-              on lg: via the group labels being visibly cut off at the viewport bottom instead. */}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-y-0 end-0 flex w-10 items-center justify-end rounded-e-md bg-gradient-to-l rtl:bg-gradient-to-r from-muted to-transparent pe-1.5 lg:hidden"
@@ -2422,10 +2288,8 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Tab Content */}
         <div className="space-y-5 lg:order-2">
           <TabsContent value="general" className="mt-0">
-            {/* Panel Settings */}
             <Card id="settings-general">
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
@@ -2840,16 +2704,6 @@ export default function Settings() {
                         {t("updates.statusCannotReach")}
                       </span>
                     ) : !panelUpdateStatus?.latestVersion ? (
-                      // impeccable-2026-08-31: this used to be !panelUpdateStatus,
-                      // which only guards a null response -- a real-but-never-
-                      // checked status object (currentVersion set, latestVersion
-                      // still unset -- see the "Latest: Not checked yet" /
-                      // "Last Check: Never" fields a few lines below) is truthy,
-                      // so it fell through to the "Up to date" branch and showed
-                      // that badge next to a card plainly saying it was never
-                      // checked. latestVersion is the same field the two detail
-                      // cells below already gate on -- reusing it here instead
-                      // of a bare existence check.
                       <span className="inline-flex items-center rounded-full border border-border/60 bg-background/60 px-2.5 py-0.5 text-xs font-semibold text-foreground/80">
                         {t("updates.statusNotChecked")}
                       </span>
@@ -2947,9 +2801,6 @@ export default function Settings() {
                   {panelUpdateStatus?.lastApplyResult &&
                     !panelApplyResultDismissed &&
                     (panelUpdateStatus.lastApplyResult.status === "success" ? (
-                      // Hide the stale success banner if the panel has since moved to a different
-                      // version (or there's already a newer staged update). The banner should only
-                      // reflect the version that's currently running.
                       (panelUpdateStatus.lastApplyResult.appliedVersion &&
                         panelUpdateStatus.currentVersion &&
                         panelUpdateStatus.lastApplyResult.appliedVersion !==
@@ -3454,7 +3305,6 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="https" className="mt-0">
-            {/* HTTPS Settings */}
             <Card id="settings-https">
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
@@ -3630,7 +3480,6 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="connection" className="mt-0 space-y-5">
-            {/* RCON Settings */}
             <Card id="settings-rcon">
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
@@ -3738,15 +3587,8 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="bridge" className="mt-0">
-            {/* Panel Bridge - Advanced Features */}
             <Card id="settings-bridge">
               <CardHeader className="pb-4">
-                {/* impeccable-2026-08-31: this used to be a plain flex row
-                    with no responsive stacking -- on mobile the title +
-                    description column got squeezed into a narrow space next
-                    to the badge, wrapping the description into 5 short
-                    lines instead of its normal 2-3. Same fix shape as the
-                    Updates card's header a few tabs over. */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-2">
@@ -3773,7 +3615,6 @@ export default function Settings() {
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-5 text-sm">
-                            {/* What it unlocks */}
                             <div>
                               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                                 {t("bridge.unlocksTitle")}
@@ -3814,7 +3655,6 @@ export default function Settings() {
                               </div>
                             </div>
 
-                            {/* How it works */}
                             <div>
                               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                                 {t("bridge.howItWorksTitle")}
@@ -3824,7 +3664,6 @@ export default function Settings() {
                               </p>
                             </div>
 
-                            {/* Setup steps */}
                             <div>
                               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                                 {t("bridge.setupTitle")}
@@ -3872,7 +3711,6 @@ export default function Settings() {
                               </ol>
                             </div>
 
-                            {/* Requirement */}
                             <div className="rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-xs">
                               <p>
                                 <Trans t={t} i18nKey="bridge.requiresLuaChecksum" components={{ b: <strong /> }} />
@@ -3885,14 +3723,6 @@ export default function Settings() {
                   </div>
                   {bridgeStatus && (
                     <BridgeStatusBadge
-                      // modConnected alone is whether the mod is alive
-                      // (debounced -- stays true through a brief poll
-                      // miss). canSendCommands is a live, undebounced
-                      // check of whether the panel can actually write to
-                      // the bridge (dir writable, status file fresh) --
-                      // it can go false while modConnected is still true.
-                      // Badge must reflect both, or it reads "Connected"
-                      // right next to a Ping button that's about to throw.
                       connected={bridgeStatus.modConnected && bridgeStatus.connection?.canSendCommands === true}
                       running={bridgeStatus.isRunning}
                       loading={bridgeLoading}
@@ -3904,7 +3734,6 @@ export default function Settings() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Status Display - when connected */}
                 {bridgeStatus?.modConnected && bridgeStatus.modStatus && (
                   <Alert
                     className="border-primary/30 bg-primary/10"
@@ -3942,7 +3771,6 @@ export default function Settings() {
                   </Alert>
                 )}
 
-                {/* Not running - setup flow */}
                 {!bridgeStatus?.isRunning && (
                   <div className="p-4 bg-muted rounded-xl space-y-3">
                     {isRemoteServer ? (
@@ -4009,7 +3837,6 @@ export default function Settings() {
                   </div>
                 )}
 
-                {/* Waiting for mod */}
                 {bridgeStatus?.isRunning && !bridgeStatus?.modConnected && (
                   <Alert
                     className="border-warning/40 bg-warning/10"
@@ -4048,7 +3875,6 @@ export default function Settings() {
                   </Alert>
                 )}
 
-                {/* Connection Diagnostics — shown when bridge is running but has issues */}
                 {bridgeStatus?.isRunning &&
                   !bridgeStatus?.modConnected &&
                   bridgeStatus?.connection && (
@@ -4066,12 +3892,10 @@ export default function Settings() {
                           )}
                       </div>
                       <div className="p-3 space-y-3">
-                        {/* Summary */}
                         <p className="text-xs text-muted-foreground">
                           {bridgeStatus.connection.summary}
                         </p>
 
-                        {/* Issues list */}
                         {bridgeStatus.connection.issues &&
                           bridgeStatus.connection.issues.length > 0 && (
                             <div className="space-y-1">
@@ -4089,7 +3913,6 @@ export default function Settings() {
                             </div>
                           )}
 
-                        {/* File checks grid */}
                         {bridgeStatus.connection.checks && (
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
                             {Object.entries(bridgeStatus.connection.checks).map(
@@ -4132,7 +3955,6 @@ export default function Settings() {
                           </div>
                         )}
 
-                        {/* Status file info */}
                         {bridgeStatus.statusFile && (
                           <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/30">
                             <div className="flex items-center gap-1.5">
@@ -4164,7 +3986,6 @@ export default function Settings() {
                           </div>
                         )}
 
-                        {/* File watcher status */}
                         <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-1 border-t border-border/30">
                           <span>
                             {t("bridge.fileWatcherLabel")}{" "}
@@ -4187,7 +4008,6 @@ export default function Settings() {
                     </div>
                   )}
 
-                {/* Error display */}
                 {bridgeError && (
                   <Alert variant="destructive" aria-live="assertive">
                     <AlertTriangle className="h-4 w-4" />
@@ -4196,7 +4016,6 @@ export default function Settings() {
                   </Alert>
                 )}
 
-                {/* Control buttons when running */}
                 {bridgeStatus?.isRunning && (
                   <div className="flex flex-wrap gap-3">
                     <Button
@@ -4218,10 +4037,6 @@ export default function Settings() {
                       variant="outline"
                       size="sm"
                       className="gap-2"
-                      // Server's sendCommand() throws "Bridge file connection
-                      // is unhealthy" whenever !canSendCommands, regardless of
-                      // modConnected -- gating on modConnected alone leaves
-                      // this clickable while it's guaranteed to throw.
                       disabled={!bridgeStatus?.modConnected || bridgeStatus?.connection?.canSendCommands !== true || pinging}
                     >
                       {pinging ? (
@@ -4251,15 +4066,6 @@ export default function Settings() {
                     </p>
                   </div>
 
-                  {/* impeccable-2026-08-31: lg:items-start left the RCON card
-                      (much shorter content -- name, host:port, one link) at
-                      its own natural height inside a row sized to the SFTP
-                      card (host/port/user/password/folder/interval/buttons),
-                      so the RCON card's border ended with a large empty gap
-                      beneath it instead of lining up with its neighbor.
-                      Default grid stretch instead: both cards' borders now
-                      match the row height, same fix shape as any two cards
-                      meant to sit level in one row. */}
                   <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
                     <div id="rcon-command-connection" className="rounded-md border border-border/60 p-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
@@ -4336,13 +4142,6 @@ export default function Settings() {
                       </div>
                       <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
                     </div>
-                    {/* impeccable-2026-08-31: below sm:, this used to stay a
-                        row (flex-wrap alone doesn't force a break while
-                        flex-1 can still shrink) -- the path input compressed
-                        down to ~11 characters next to the button and clipped
-                        the rest with no ellipsis. Stack on mobile, row from
-                        sm: up, matching the same breakpoint the input's own
-                        sm:min-w-[18rem] already used. */}
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                       <div className="min-w-0 flex-1 space-y-1.5 sm:min-w-[18rem]">
                         <Label htmlFor="sftp-config-path">{t("bridge.remoteServerFolderLabel")}</Label>
@@ -4390,8 +4189,6 @@ export default function Settings() {
                       </div>
                       <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
                     </div>
-                    {/* impeccable-2026-08-31: same mobile truncation fix as
-                        the Remote server folder row above. */}
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                       <div className="min-w-0 flex-1 space-y-1.5 sm:min-w-[18rem]">
                         <Label htmlFor="sftp-log-path">{t("bridge.remoteLogFolderLabel")}</Label>
@@ -4460,7 +4257,6 @@ export default function Settings() {
                   </div>
                 </div>
 
-                {/* Auto-update toggle */}
                 <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/25 p-4">
                   <div>
                     <Label className="text-sm font-medium">
@@ -4479,7 +4275,6 @@ export default function Settings() {
                   />
                 </div>
 
-                {/* Install Mod */}
                 <div className="p-4 bg-muted rounded-xl space-y-3">
                   <p className="text-sm font-medium">{t("bridge.installTitle")}</p>
                   <div className="flex flex-wrap gap-3 items-center">
@@ -4542,7 +4337,6 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="mods" className="mt-0 space-y-5">
-            {/* Mod Update Settings */}
             <Card id="settings-mods">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
@@ -4679,7 +4473,6 @@ export default function Settings() {
               </CardContent>
             </Card>
 
-            {/* Workshop Collection Sync ──────────────────────────────────────── */}
             <WorkshopCollectionSyncCard
               settings={settings}
               updateSetting={updateSetting}
@@ -4692,7 +4485,6 @@ export default function Settings() {
               }}
             />
 
-            {/* API Keys */}
             <Card id="settings-api-keys">
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
@@ -4709,9 +4501,6 @@ export default function Settings() {
                     <Label htmlFor="steam-api-key" className="text-base">
                       {t("mods.steamApiKeyLabel")}
                     </Label>
-                    {/* Configured indicator — the API masks the value as "••••••••XXXX"
-                  when set, so the presence of the bullets is a reliable signal
-                  that a key is stored on the server. */}
                     {settings.steamApiKey &&
                     settings.steamApiKey.startsWith("•") ? (
                       <span className="inline-flex items-center gap-1 rounded border border-success/40 bg-success/10 px-1.5 py-0.5 text-[11px] font-medium text-success">
@@ -4789,7 +4578,6 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="backups" className="mt-0 space-y-5">
-            {/* World Backups */}
             <Card id="settings-backups">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
@@ -4817,7 +4605,6 @@ export default function Settings() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Status */}
                 {backupStatus && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-xl">
                     <div className="flex items-center gap-2">
@@ -4851,7 +4638,6 @@ export default function Settings() {
                   </div>
                 )}
 
-                {/* Scheduled Backups */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
@@ -4921,7 +4707,6 @@ export default function Settings() {
                   )}
                 </div>
 
-                {/* Backup List */}
                 <div className="space-y-2">
                   <p className="text-base font-medium">{t("backups.existingBackupsTitle")}</p>
                   {backups.length === 0 ? (
@@ -4932,10 +4717,7 @@ export default function Settings() {
                       description={
                         backupsLoadError
                           ? t("backups.loadFailedDescription")
-                          : // impeccable-2026-08-31: this used to always say "Click Backup Now
-                            // to create one" even when Backup Now is disabled because the saves
-                            // folder wasn't found (see the status row above) -- pointing the
-                            // operator at a dead control instead of the actual blocker.
+                          :
                             !backupStatus?.savesExists
                             ? t("backups.emptyDescriptionSavesNotFound")
                             : t("backups.emptyDescription")
@@ -5074,7 +4856,6 @@ export default function Settings() {
                   )}
                 </div>
 
-                {/* Path Info */}
                 {backupStatus?.savesPath && (
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p>
@@ -5147,7 +4928,6 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="security" className="mt-0">
-            {/* Security & Authentication */}
             <Card id="settings-security">
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
@@ -5159,7 +4939,6 @@ export default function Settings() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Account Info */}
                 {authEnabled && user && (
                   <div className="p-4 rounded-xl bg-muted/50 space-y-4">
                     <div className="flex items-center gap-3">
@@ -5176,7 +4955,6 @@ export default function Settings() {
                   </div>
                 )}
 
-                {/* Change Password */}
                 {authEnabled && (
                   <div className="space-y-4">
                     <p className="text-base font-medium">{t("security.changePasswordTitle")}</p>
@@ -5196,7 +4974,6 @@ export default function Settings() {
                         handleChangePassword();
                       }}
                     >
-                      {/* Hidden username helps password managers associate creds */}
                       <input
                         type="text"
                         name="username"
@@ -5659,7 +5436,6 @@ export default function Settings() {
                   </div>
                 )}
 
-                {/* Security Tips */}
                 <div className="space-y-3 text-sm text-muted-foreground pt-2 border-t">
                   <p>
                     <strong className="text-foreground">{t("security.tipsRconTitle")}</strong>{" "}
@@ -5758,7 +5534,6 @@ export default function Settings() {
               </CardContent>
             </Card>
 
-            {/* About */}
             <Card id="settings-about">
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2">
@@ -5770,7 +5545,6 @@ export default function Settings() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
-                {/* Version row */}
                 <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -5794,12 +5568,6 @@ export default function Settings() {
                                 {t("about.updateAvailableBadge")}
                               </span>
                             ) : (
-                              /* impeccable-2026-08-31: installed/latest matching used to render as
-                                 two bare numbers with no affirmative status -- the operator has to
-                                 compare them manually. The Updates tab already shows this same fact
-                                 with a status pill (statusUpToDate); this reuses that pattern instead
-                                 of leaving the "everything's fine" case silent next to the "update
-                                 available" case, which does get a badge. */
                               <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
                                 {t("about.upToDateBadge")}
                               </span>
@@ -5815,12 +5583,10 @@ export default function Settings() {
                   </div>
                 </div>
 
-                {/* Description */}
                 <p className="text-sm text-muted-foreground">
                   {t("about.description")}
                 </p>
 
-                {/* Links */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   <a
                     href="https://discord.gg/jHsWJDNmSg"
@@ -5913,19 +5679,6 @@ export default function Settings() {
   );
 }
 
-/**
- * Workshop Collection Sync card.
- *
- * Lets the admin keep a personal Steam Workshop collection mirrored against
- * the panel's tracked-mod list. Reading the collection is free (public Steam
- * API). Writing requires the user's `sessionid` + `steamLoginSecure` cookies
- * because Steam exposes no public OAuth for collection edits — same hack
- * used by every PZ collection-sync tool out there.
- *
- * The cookie pair is treated as a secret: it's masked in API responses
- * (server-side `SENSITIVE_KEYS`) and kept off-screen by default behind a
- * show/hide toggle here.
- */
 function WorkshopCollectionSyncCard({
   settings,
   updateSetting,
@@ -5954,9 +5707,6 @@ function WorkshopCollectionSyncCard({
   const [testing, setTesting] = useState(false);
   const [showCookies, setShowCookies] = useState(false);
 
-  // Unified mod table state.
-  // Filter defaults to "missing" so the page lands on actionable rows;
-  // user can switch to "all" / "tracked" / "collection" to inspect.
   const [itemFilter, setItemFilter] = useState<
     | "all"
     | "missing"
@@ -5967,23 +5717,15 @@ function WorkshopCollectionSyncCard({
     | "collection"
   >("missing");
   const [itemSearch, setItemSearch] = useState("");
-  // Per-row busy flag: { [workshopId]: 'add' | 'remove' | 'track' | 'untrack' | 'purge' | null }
   const [rowBusy, setRowBusy] = useState<Record<string, string | null>>({});
   const [purgeTarget, setPurgeTarget] = useState<{
     workshopId: string;
     name: string | null;
   } | null>(null);
-  // Mods.tsx confirms this exact modsApi.batchRemove operation on both its
-  // row and bulk paths; this row here reached the same server mutation with
-  // no confirm at all.
   const [removeServerTarget, setRemoveServerTarget] = useState<{
     workshopId: string;
   } | null>(null);
 
-  // Trust the server's credential check over a brittle bullet-prefix sniff:
-  // the diff endpoint reports `hasCredentials` based on the actual stored
-  // values (post-mask). Until the first diff loads, fall back to a heuristic
-  // so the UI doesn't flicker "Not configured" on page load.
   const credsConfigured = (() => {
     if (diff && typeof diff.hasCredentials === "boolean")
       return diff.hasCredentials;
@@ -5994,30 +5736,16 @@ function WorkshopCollectionSyncCard({
       (b.startsWith("•") || b.length >= 16)
     );
   })();
-  // diff already carries this -- WorkshopCollectionPanel.tsx (the other,
-  // independent implementation of these same row actions) reads it to
-  // refuse add/remove early with a clear reason; this page fetches the
-  // identical collectionDiff() response but never read the field.
   const tokenExpired = !!diff?.tokenExpired;
 
   const collectionId = (settings.workshopCollectionId || "").trim();
   const collectionIdValid = /^\d{1,15}$/.test(collectionId);
   const autoSyncOn = !!settings.workshopCollectionAutoSync;
 
-  // ── Paste helper for Steam cookies ──────────────────────────────────────
-  // `steamLoginSecure` is HttpOnly, so a bookmarklet on steamcommunity.com
-  // cannot read it (Steam set it that way on purpose). The least-painful
-  // workaround is: user opens DevTools → Network → right-clicks any
-  // request to steamcommunity.com → "Copy as cURL", and pastes the whole
-  // blob here. We extract the two cookie values from the `Cookie:` header.
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [pasteError, setPasteError] = useState<string | null>(null);
 
-  // navigator.clipboard.readText() requires a secure context. The panel
-  // commonly runs over plain HTTP on LAN, where the API is undefined.
-  // Detect once at mount so we can hide the button instead of showing a
-  // confusing failure when the user clicks it.
   const clipboardReadAvailable =
     typeof navigator !== "undefined" &&
     !!navigator.clipboard &&
@@ -6027,9 +5755,6 @@ function WorkshopCollectionSyncCard({
       window.location.hostname === "127.0.0.1");
 
   const safeDecode = (v: string): string => {
-    // decodeURIComponent throws on stray `%` (e.g. paste contained a
-    // mid-rotation cookie). Fall back to the raw value rather than
-    // crashing the parse.
     try {
       return decodeURIComponent(v);
     } catch {
@@ -6042,10 +5767,6 @@ function WorkshopCollectionSyncCard({
   ): { sessionId?: string; loginSecure?: string; error?: string } => {
     if (!raw || !raw.trim()) return { error: t("workshopSync.toasts.nothingToParse") };
     const text = raw.replace(/\r/g, "");
-    // Accept any of: full cURL command, raw `Cookie:` header line,
-    // a `sessionid=...; steamLoginSecure=...` snippet, DevTools
-    // "Copy → Response Cookies" tab-separated values, or a Netscape
-    // cookies.txt export (name and value separated by a tab).
     const sessionMatch = text.match(
       /(?:^|[;\s'"])sessionid\s*[=:\t]\s*([A-Za-z0-9_%-]+)/i,
     );
@@ -6142,8 +5863,6 @@ function WorkshopCollectionSyncCard({
         }
         return;
       }
-      // Partial / no match: surface the textarea so the user can see what
-      // was pasted and either fix it or grab the missing piece manually.
       setPasteText(text);
       setPasteOpen(true);
       setPasteError(
@@ -6165,7 +5884,6 @@ function WorkshopCollectionSyncCard({
     setDiffError(null);
     try {
       const r = await modsApi.collectionDiff();
-      // A newer call started after us — drop this stale result.
       if (seq !== refreshDiffSeqRef.current) return;
       setDiff(r);
       setDiffCheckedAt(new Date());
@@ -6178,8 +5896,6 @@ function WorkshopCollectionSyncCard({
     }
   }, [collectionIdValid, t]);
 
-  // Auto-load the diff once when the card mounts with a valid collection ID.
-  // Cheap public API, gives the user immediate context without clicking.
   useEffect(() => {
     if (collectionIdValid && !diff && !diffLoading && !diffError) {
       refreshDiff();
@@ -6187,8 +5903,6 @@ function WorkshopCollectionSyncCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionIdValid]);
 
-  // Probe which local browsers we can read cookies from. Cheap, just a
-  // filesystem check on the panel host. Runs once on mount.
   useEffect(() => {
     let cancelled = false;
     modsApi
@@ -6210,10 +5924,6 @@ function WorkshopCollectionSyncCard({
     try {
       const r = await modsApi.collectionExtractCookies(browserId);
       if (r.ok && r.saved) {
-        // The server already saved these -- it never sends the raw values
-        // back (2026-08-26 regression). Refresh the same way every other
-        // credential-changing action on this card does, rather than
-        // reconstructing a local mask we don't have the real value for.
         toast({
           title: t("workshopSync.toasts.cookiesSaved.title"),
           description: t("workshopSync.toasts.cookiesSaved.description"),
@@ -6259,7 +5969,6 @@ function WorkshopCollectionSyncCard({
     }
   };
 
-  // ── Unified item table derivation ───────────────────────────────────────
   const allItems = diff?.ok && Array.isArray(diff.items) ? diff.items : [];
   const missingCount = allItems.filter((it) => it.status === "to-add").length;
   const notOnServerCount = allItems.filter(
@@ -6291,9 +6000,6 @@ function WorkshopCollectionSyncCard({
     return true;
   });
 
-  // Row-level actions. Optimistic feel: spinner on the clicked button,
-  // then re-fetch the diff. Errors surface as toasts and the row remains
-  // unchanged because refreshDiff re-reads ground truth from Steam.
   const runRowAction = async (
     workshopId: string,
     action:
@@ -6330,8 +6036,6 @@ function WorkshopCollectionSyncCard({
         await modsApi.untrackMod(workshopId);
       } else if (action === "add-server") {
         await modsApi.addToIni(workshopId);
-        // Tracking is what drives update checks, so a mod the server now
-        // loads should be watched too.
         if (!allItems.find((it) => it.workshopId === workshopId)?.inTracked) {
           await modsApi.trackMod(workshopId);
         }
@@ -6393,7 +6097,6 @@ function WorkshopCollectionSyncCard({
       </CardHeader>
       <CardContent className="space-y-7">
         <div className="grid gap-6 border-b border-border/40 pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,.8fr)]">
-        {/* Collection ID */}
         <div className="space-y-2 lg:order-1">
           <Label htmlFor="ws-collection-id" className="text-base">
             {t("workshopSync.collectionIdLabel")}
@@ -6413,7 +6116,6 @@ function WorkshopCollectionSyncCard({
           </p>
         </div>
 
-        {/* Auto-sync toggle */}
         <div
           className={`flex items-start justify-between gap-4 lg:order-2 lg:border-s lg:border-border/40 lg:ps-6 ${
             autoSyncOn && !credsConfigured
@@ -6448,15 +6150,6 @@ function WorkshopCollectionSyncCard({
         </div>
         </div>
 
-        {/* Steam session cookies */}
-        {/* impeccable-2026-08-31: this whole section -- auto-detect from
-            browser, paste-a-request, manual cookie fields -- used to render
-            fully expanded even though none of it does anything until a
-            Collection ID is set (Test Connection and Check Drift below are
-            already disabled on !collectionIdValid). The one hint that said
-            so was a small corner label, easy to miss. Gate the section
-            itself instead: shorter page by default, and the placeholder
-            names the actual next step instead of leaving it implicit. */}
         {collectionIdValid ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -6528,8 +6221,6 @@ function WorkshopCollectionSyncCard({
               />
             </div>
           </div>
-          {/* Auto-detect from local browser — fastest path when Steam is
-              logged in on the same machine the panel runs on. */}
           {browsers &&
             browsers.supported &&
             browsers.browsers.some((b) => b.detected) && (
@@ -6572,7 +6263,6 @@ function WorkshopCollectionSyncCard({
               </div>
             )}
 
-          {/* Paste helper — much faster than copying two cookies by hand */}
           <div className="border-t border-border/40 pt-4 space-y-3">
             <div className="flex items-start gap-3">
               <Zap className="w-4 h-4 text-primary mt-0.5 shrink-0" />
@@ -6725,7 +6415,6 @@ function WorkshopCollectionSyncCard({
           </div>
         )}
 
-        {/* Status / actions */}
         <div className="space-y-2 pt-2 border-t border-border/40">
           <div className="flex flex-wrap items-center gap-2">
             <DisabledReason reason={!credsConfigured ? t("workshopSync.testConnectionTitleNeedsCookies") : null}>
@@ -6809,12 +6498,9 @@ function WorkshopCollectionSyncCard({
           )}
         </div>
 
-        {/* Unified mod table — every server + collection mod in one place,
-            filterable, with per-row actions applied one at a time. */}
         {diff?.ok && allItems.length > 0 && (
           <div className="space-y-2 pt-2 border-t border-border/40">
             <div className="flex flex-wrap items-center gap-2">
-              {/* Filter pills */}
               <div className="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 p-0.5 text-xs">
                 {(
                   [
@@ -6845,7 +6531,6 @@ function WorkshopCollectionSyncCard({
                   ))}
               </div>
 
-              {/* Search */}
               <div className="relative ms-auto">
                 <Search className="absolute start-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <Input
@@ -6867,7 +6552,6 @@ function WorkshopCollectionSyncCard({
               </div>
             </div>
 
-            {/* Table */}
             <div className="rounded-md border border-border/60 overflow-hidden">
               <div className="max-h-[420px] overflow-auto">
                 {filteredItems.length === 0 ? (
@@ -6966,9 +6650,6 @@ function WorkshopCollectionSyncCard({
                             </td>
                             <td className="px-3 py-2 align-top">
                               <div className="flex items-center justify-end gap-1">
-                                {/* Ordered by consequence: what the server
-                                    loads, then the collection, then local
-                                    tracking, then the destructive one. */}
                                 {it.inServer ? (
                                   <Button
                                     size="sm"
@@ -7010,7 +6691,6 @@ function WorkshopCollectionSyncCard({
                                     <span className="ms-1 hidden sm:inline">{t("workshopSync.toServer")}</span>
                                   </Button>
                                 )}
-                                {/* Collection side */}
                                 {it.inCollection ? (
                                   <DisabledReason reason={tokenExpired ? t("workshopSync.sessionExpiredShort") : !credsConfigured ? t("workshopSync.removeFromCollectionNeedsCookies") : null}>
                                     <Button
@@ -7056,7 +6736,6 @@ function WorkshopCollectionSyncCard({
                                     </Button>
                                   </DisabledReason>
                                 )}
-                                {/* Tracked side */}
                                 {it.inTracked ? (
                                   <Button
                                     size="sm"

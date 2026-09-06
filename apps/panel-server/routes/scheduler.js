@@ -29,99 +29,14 @@ export function parseTaskId(value) {
   return parseBoundedInteger(value, null, 1, Number.MAX_SAFE_INTEGER);
 }
 
-// Guards against a test double or a partial app.get() mock that returns
-// something truthy but not a real Socket.IO server for other keys -- a
-// bare truthy check on `io` isn't enough (2026-08-26 regression, scheduler
-// blind-success family: added after this exact shape broke an existing
-// req.app mock that returns the same object for any key).
-// Exported so server.js's POST /restart -- a second, independent client
-// entry point that also calls scheduler.performRestart() directly -- can
-// reuse the exact same guard and event shape rather than drifting a second
-// copy of it (2026-08-26 regression: /server/restart turned out to be the
-// same blind-success shape as /restart-now, just in a different file).
 export function emitActionResult(io, payload) {
   if (typeof io?.emit === 'function') io.emit('scheduler:action_result', payload);
 }
 
 const router = express.Router();
 
-// Task automation (create/edit/delete/run scheduled commands, trigger an
-// immediate restart) is "operate the server" — technician's job per the
-// role brief, not player-facing, so moderator is excluded. Applied once at
-// the router level rather than per-route. Previously any logged-in role,
-// including moderator, could create or run a scheduled task — including
-// /restart-now.
 router.use(requirePermission('automation.manage'));
 
-// automation.manage alone only covers "manage scheduled tasks" as a
-// concept — it says nothing about what a given scheduled command actually
-// DOES once it fires, and a scheduled command can do anything from an
-// arbitrary RCON command to a world-wide broadcast to a full server
-// restart. If scheduling an action performs the action, scheduling it
-// cannot cost less than performing it directly — so every curated
-// classification requires the SAME capability its own direct/interactive
-// route requires, not automation.manage alone:
-//   restart/save        -> server.control   (matches POST /server/restart,
-//                                             /server/save)
-//   servermsg, bridge:*  -> server.world_events (matches POST
-//                                             /server/message and most
-//                                             PanelBridge world-event
-//                                             routes) — except
-//                                             bridge:saveWorld, which
-//                                             matches server.control instead
-//                                             (PanelBridge's own equivalent
-//                                             of /server/save), and
-//                                             bridge:triggerGunshot/
-//                                             triggerAlarmSound/
-//                                             sendToAdminChat, which match
-//                                             players.endanger_or_impersonate
-//                                             (2026-08-27, decision
-//                                             on prioritized issue #5 -- these
-//                                             three can target a named
-//                                             player, same as their direct
-//                                             routes)
-//   raw (unrecognised)   -> rcon.execute     (the exact power routes/rcon.js
-//                                             gates behind, admin+technician
-//                                             only, deliberately not
-//                                             moderator)
-// requiredCapabilityForScheduledCommand() in services/scheduler.js is the
-// single source of truth for this mapping — both the checks below and
-// executeTask()'s own dispatch draw from it, so they can never silently
-// drift on what a given command needs.
-//
-// This closes two related but DIFFERENT gaps found the same night:
-// Finding 1 (raw commands reaching
-// RCON with only automation.manage, fixed 4a7dc86) verified automation.manage
-// against rcon.execute ONLY — a role built with only automation.manage (a
-// real, supported thing to do via Roles & Permissions) could create a task
-// with any RCON command and either wait for it to fire or "Run now" it
-// immediately, shutting the server down or banning anyone, invisibly (the
-// scheduled-task fallback in services/scheduler.js runs with skipLog:true,
-// so it never appears in RCON history). NOBODY ever cross-checked
-// automation.manage against server.world_events or server.control for the
-// curated verbs Finding 1's fix deliberately left alone — a role with
-// automation.manage but NOT server.world_events could still schedule a
-// servermsg broadcast and "Run now" it, reaching the exact effect
-// POST /server/message (server.world_events) exists to gate, through a
-// door that only checked a different, unrelated capability.
-//
-// A cron fire has no request and no req.user, so the gate can't live at
-// execution time for the unattended case — it has to live at the only
-// moments a scheduled command can actually enter or manually run with a
-// real, checkable identity behind the request: creating/editing a task
-// (below), and manually triggering one via "Run now" (also request-bound,
-// checked separately at that route). The cron firing itself is deliberately
-// left unchecked: authorisation happened at create/edit time, when a real
-// user session existed to check it against; the cron tick later is
-// execution, not authorisation, and a capability check there would mean
-// every existing task whose creator later loses a role starts failing
-// silently on its own schedule, with nobody watching — a worse outage than
-// the escalation this closes. Reuses requirePermission() itself rather than
-// re-deriving the role/capability lookup — same fail-closed behaviour,
-// same error shape, zero risk of drifting from what the middleware form
-// does. If requirePermission finds the caller lacks the capability it
-// sends the 403/401 response itself; the caller here just needs to know
-// whether to stop.
 async function requireCapabilityInline(capability, req, res) {
   let passed = false;
   await requirePermission(capability)(req, res, () => {
@@ -130,7 +45,6 @@ async function requireCapabilityInline(capability, req, res) {
   return passed;
 }
 
-// Get scheduler status
 router.get('/status', async (req, res) => {
   try {
     const scheduler = req.app.get('scheduler');
@@ -142,11 +56,6 @@ router.get('/status', async (req, res) => {
   }
 });
 
-// Set the install-wide timezone every schedule (user tasks, the backup job,
-// AUTO_RESTART_CRON alike) is interpreted in. Gated by the router-level
-// automation.manage check above -- this is scheduler CONFIGURATION, not an
-// action a scheduled command performs, so no per-command capability layering
-// applies the way it does for POST /tasks etc.
 router.put('/timezone', async (req, res) => {
   try {
     const scheduler = req.app.get('scheduler');
@@ -157,11 +66,6 @@ router.put('/timezone', async (req, res) => {
       return res.status(400).json({ error: 'A timezone is required', code: ErrorCode.SCHEDULER_TIMEZONE_REQUIRED });
     }
 
-    // Validated here, not just inside scheduler.setTimezone() -- refused at
-    // save time with a specific error, matching every other field this
-    // router validates before persisting (2026-08-29 timezone-picker card,
-    // requirement 3: an invalid zone accepted here would only surface as a
-    // node-cron throw the night a schedule actually tries to fire).
     if (!isValidIanaTimezone(timezone)) {
       return res.status(400).json({
         error: `"${timezone}" is not a valid timezone name (e.g. "America/New_York", "UTC")`,
@@ -189,7 +93,6 @@ router.put('/restart-warning', async (req, res) => {
   }
 });
 
-// Get all scheduled tasks
 router.get('/tasks', async (req, res) => {
   try {
     const tasks = await getScheduledTasks();
@@ -200,7 +103,6 @@ router.get('/tasks', async (req, res) => {
   }
 });
 
-// Validate cron expression
 router.post('/validate-cron', async (req, res) => {
   try {
     const cronExpression = req.body?.cronExpression;
@@ -213,9 +115,6 @@ router.post('/validate-cron', async (req, res) => {
       return res.json({ valid: false, error: 'Invalid cron expression format', code: ErrorCode.SCHEDULER_INVALID_CRON_EXPRESSION });
     }
 
-    // Keep this preview endpoint's verdict consistent with what POST /tasks
-    // and PUT /tasks/:id will actually accept -- without this, a 6-field
-    // expression previews as valid here and then gets refused on submit.
     if (hasUnsupportedCronFieldCount(cronExpression)) {
       return res.json({
         valid: false,
@@ -238,7 +137,6 @@ router.post('/validate-cron', async (req, res) => {
   }
 });
 
-// Create a new scheduled task
 router.post('/tasks', async (req, res) => {
   try {
     const scheduler = req.app.get('scheduler');
@@ -252,7 +150,6 @@ router.post('/tasks', async (req, res) => {
       return res.status(400).json({ error: 'Name, cronExpression, and command are required', code: ErrorCode.SCHEDULER_TASK_FIELDS_REQUIRED });
     }
 
-    // Validate input types and lengths
     if (typeof name !== 'string' || name.length > 100) {
       return res.status(400).json({ error: 'Invalid task name (max 100 chars)', code: ErrorCode.SCHEDULER_INVALID_TASK_NAME });
     }
@@ -263,8 +160,6 @@ router.post('/tasks', async (req, res) => {
       return res.status(400).json({ error: 'Invalid cron expression format', code: ErrorCode.SCHEDULER_INVALID_CRON_FORMAT });
     }
 
-    // Scheduling an action must not cost less than performing it directly --
-    // see the router-level comment above for the full mapping and why.
     {
       const allowed = await requireCapabilityInline(
         requiredCapabilityForScheduledCommand(command),
@@ -274,25 +169,18 @@ router.post('/tasks', async (req, res) => {
       if (!allowed) return;
     }
 
-    // Validate cron expression before saving
     if (!cron.validate(cronExpression)) {
       return res.status(400).json({ error: 'Invalid cron expression. Use format: minute hour day month weekday (e.g., "0 */6 * * *" for every 6 hours)', code: ErrorCode.SCHEDULER_INVALID_CRON_EXPRESSION });
     }
 
-    // The panel does not support seconds-precision (6-field) schedules --
-    // see hasUnsupportedCronFieldCount()'s comment for why this must be
-    // checked before isCronTooFrequent, not folded into it.
     if (hasUnsupportedCronFieldCount(cronExpression)) {
       return res.status(400).json({ error: 'The panel does not support seconds-precision schedules. Use exactly 5 fields: minute hour day month weekday (e.g., "0 */6 * * *").', code: ErrorCode.SCHEDULER_CRON_SECONDS_UNSUPPORTED });
     }
 
-    // Security: Reject tasks that run more frequently than every 5 minutes to prevent DoS
     if (isCronTooFrequent(cronExpression)) {
       return res.status(400).json({ error: 'Tasks cannot run more frequently than every 5 minutes', code: ErrorCode.SCHEDULER_CRON_TOO_FREQUENT });
     }
 
-    // Validate the target server exists, if one was explicitly given —
-    // createScheduledTask() falls back to the active server when omitted.
     let resolvedServerId = serverId ?? null;
     if (resolvedServerId) {
       const target = await getServer(resolvedServerId);
@@ -314,7 +202,6 @@ router.post('/tasks', async (req, res) => {
       enabled: 1
     };
 
-    // Schedule the task — rollback DB entry if scheduling fails
     let scheduleResult;
     try {
       scheduleResult = scheduler.scheduleTask(task);
@@ -331,11 +218,6 @@ router.post('/tasks', async (req, res) => {
       });
     }
 
-    // dstWarning (2026-09-05, scheduler-time-audit): non-null only for a
-    // sub-hourly (15-60 min) schedule in a DST-observing timezone -- already
-    // logged server-side by scheduleTask() itself. Surfaced here too so a
-    // future UI can show it without another server change (Scheduler.tsx
-    // reading this field is tracked separately, not part of this fix).
     res.json({ success: true, task, dstWarning: scheduleResult?.dstWarning || null });
   } catch (error) {
     log.error(`Failed to create scheduled task: ${error.message}`);
@@ -343,7 +225,6 @@ router.post('/tasks', async (req, res) => {
   }
 });
 
-// Update a scheduled task
 router.put('/tasks/:id', async (req, res) => {
   try {
     const scheduler = req.app.get('scheduler');
@@ -359,18 +240,12 @@ router.put('/tasks/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid task ID', code: ErrorCode.SCHEDULER_INVALID_TASK_ID });
     }
 
-    // Validate name and command length
     if (name !== undefined && (typeof name !== 'string' || name.length > 100)) {
       return res.status(400).json({ error: 'Invalid task name (max 100 characters)', code: ErrorCode.SCHEDULER_INVALID_TASK_NAME });
     }
     if (command !== undefined && (typeof command !== 'string' || command.length > 2000)) {
       return res.status(400).json({ error: 'Invalid command (max 2000 characters)', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
-    // Only gate on the command's required capability when THIS request is
-    // actually setting the command -- a caller who only toggles enabled/
-    // name/serverId on a task someone else created shouldn't need any
-    // particular capability just because that task's untouched, pre-existing
-    // command happens to need one.
     if (command !== undefined) {
       const allowed = await requireCapabilityInline(
         requiredCapabilityForScheduledCommand(command),
@@ -388,24 +263,18 @@ router.put('/tasks/:id', async (req, res) => {
     const normalizedEnabled =
       enabled === undefined ? undefined : (enabled === true || enabled === 1 ? 1 : 0);
 
-    // Validate cron expression before saving to prevent DB/scheduler inconsistency
     if (cronExpression && !cron.validate(cronExpression)) {
       return res.status(400).json({ error: 'Invalid cron expression. Use format: minute hour day month weekday (e.g., "0 */6 * * *" for every 6 hours)', code: ErrorCode.SCHEDULER_INVALID_CRON_EXPRESSION });
     }
 
-    // The panel does not support seconds-precision (6-field) schedules --
-    // see hasUnsupportedCronFieldCount()'s comment for why this must be
-    // checked before isCronTooFrequent, not folded into it.
     if (cronExpression && hasUnsupportedCronFieldCount(cronExpression)) {
       return res.status(400).json({ error: 'The panel does not support seconds-precision schedules. Use exactly 5 fields: minute hour day month weekday (e.g., "0 */6 * * *").', code: ErrorCode.SCHEDULER_CRON_SECONDS_UNSUPPORTED });
     }
 
-    // Security: Reject tasks that run more frequently than every 5 minutes to prevent DoS
     if (cronExpression && isCronTooFrequent(cronExpression)) {
       return res.status(400).json({ error: 'Tasks cannot run more frequently than every 5 minutes', code: ErrorCode.SCHEDULER_CRON_TOO_FREQUENT });
     }
 
-    // Validate the target server, if reassignment was requested
     if (serverId !== undefined && serverId !== null) {
       const target = await getServer(serverId);
       if (!target) {
@@ -426,9 +295,6 @@ router.put('/tasks/:id', async (req, res) => {
       return res.status(404).json({ error: 'Task not found', code: ErrorCode.SCHEDULER_TASK_NOT_FOUND });
     }
 
-    // Reschedule from the merged record, not the request body: a partial update
-    // (e.g. the enable/disable toggle) would otherwise re-arm the job without
-    // its pinned server and run it against whichever server is active.
     let dstWarning = null;
     if (updated.enabled) {
       try {
@@ -443,8 +309,6 @@ router.put('/tasks/:id', async (req, res) => {
         if (scheduled === false) {
           throw new Error("Scheduler rejected the updated task");
         }
-        // 2026-09-05, scheduler-time-audit: same field POST /tasks returns,
-        // see that route's own comment.
         dstWarning = scheduled?.dstWarning || null;
       } catch (schedErr) {
         log.error(`Failed to reschedule task ${taskId}, reverting DB: ${schedErr.message}`);
@@ -488,7 +352,6 @@ router.put('/tasks/:id', async (req, res) => {
   }
 });
 
-// Delete a scheduled task
 router.delete('/tasks/:id', async (req, res) => {
   try {
     const scheduler = req.app.get('scheduler');
@@ -513,12 +376,6 @@ router.delete('/tasks/:id', async (req, res) => {
   }
 });
 
-// Run a scheduled task on demand. Goes through Scheduler.runTaskNow() — the
-// same dispatch a cron fire uses — so special commands (restart/save/
-// servermsg/bridge:) are handled correctly instead of being sent to RCON as
-// a literal string. A restart can run for several minutes (warning
-// countdown), so this fires in the background and returns immediately;
-// completion shows up in the schedule history.
 router.post('/tasks/:id/run', async (req, res) => {
   try {
     const scheduler = req.app.get('scheduler');
@@ -534,15 +391,6 @@ router.post('/tasks/:id/run', async (req, res) => {
       return res.status(404).json({ error: 'Task not found', code: ErrorCode.SCHEDULER_TASK_NOT_FOUND });
     }
 
-    // Unlike a cron fire, "Run now" IS a live request with a real req.user
-    // -- check the STORED command (not request body; there isn't one here)
-    // against the caller's CURRENT capabilities, not whoever created the
-    // task. A task saved by someone who legitimately held the required
-    // capability at the time still needs it to be manually triggered by
-    // someone who doesn't hold it now -- this is HALF of the
-    // schedule-is-cheaper-than-doing escalation this whole check exists to
-    // close (the other half is create/edit-time, above); the cron firing
-    // itself is deliberately left unchecked, see the router-level comment.
     {
       const allowed = await requireCapabilityInline(
         requiredCapabilityForScheduledCommand(task.command),
@@ -554,10 +402,6 @@ router.post('/tasks/:id/run', async (req, res) => {
 
     log.info(`POST /tasks/${taskId}/run: ${task.name}`);
     const io = req.app.get('io');
-    // Same rationale as /restart-now just below in this file: the response
-    // only confirms the task was accepted, runTaskNow() runs in the
-    // background and reports its real outcome here once it resolves
-    // (2026-08-26 regression, scheduler blind-success family).
     scheduler.runTaskNow(task)
       .then((result) => {
         emitActionResult(io, {
@@ -584,20 +428,8 @@ router.post('/tasks/:id/run', async (req, res) => {
   }
 });
 
-// Trigger immediate restart
 router.post('/restart-now', async (req, res) => {
   try {
-    // This is not a scheduled-task action -- there is no stored command to
-    // classify via requiredCapabilityForScheduledCommand() the way POST
-    // /tasks, PUT /tasks/:id and POST /tasks/:id/run already do above. It is
-    // a direct, immediate call into scheduler.performRestart(), the exact
-    // same live action POST /server/restart performs under server.control.
-    // automation.manage alone ("manage scheduled tasks") only covers the
-    // scheduling half of that same reasoning: someone holding it but not
-    // server.control could restart the live server right now through this
-    // door, which /server/restart's own gate exists specifically to
-    // require. Keep this direct route behind the same capability rather than
-    // allowing the scheduled-task capability to bypass it.
     const allowed = await requireCapabilityInline('server.control', req, res);
     if (!allowed) return;
 
@@ -610,7 +442,6 @@ router.post('/restart-now', async (req, res) => {
     const io = req.app.get('io');
     const warningMinutes = req.body?.warningMinutes;
 
-    // Parse and validate warningMinutes (0-60 range)
     let parsedWarningMinutes = parseBoundedInteger(
       warningMinutes,
       5,
@@ -619,23 +450,9 @@ router.post('/restart-now', async (req, res) => {
     );
     log.info(`POST /restart-now: warningMinutes=${warningMinutes}`);
     if (parsedWarningMinutes > 60) {
-      parsedWarningMinutes = 60; // Cap at 60 minutes
+      parsedWarningMinutes = 60;
     }
 
-    // Run restart in background, passing warningMinutes directly. Labeled
-    // "Manual restart" in Schedule History rather than performRestart()'s
-    // "Auto Restart" default -- this IS a human clicking Restart Now, and
-    // the history record should say so if it later fails.
-    //
-    // The HTTP response below only confirms the restart was ACCEPTED --
-    // performRestart() runs in the background (the countdown + graceful
-    // shutdown can take minutes) and already computes a real {success,
-    // message} on every path, already logged to Schedule History. This is
-    // the one place that outcome can reach the client in real time instead
-    // of only being discoverable by someone who thinks to go check history
-    // (2026-08-26 regression, scheduler blind-success family -- restart-now
-    // used to report success:true unconditionally regardless of what
-    // actually happened).
     scheduler.performRestart(parsedWarningMinutes, { label: 'Manual restart' })
       .then((result) => {
         emitActionResult(io, {
@@ -653,11 +470,6 @@ router.post('/restart-now', async (req, res) => {
         });
       });
 
-    // Report the value actually used, not just the request -- the operator
-    // may have typed something above the 60-minute cap above (the client's
-    // own NumberInput min/max are decorative, not a client-side clamp), and
-    // the toast this feeds should say what really happened, not echo back
-    // whatever they typed.
     res.json({ success: true, message: 'Restart initiated', warningMinutes: parsedWarningMinutes });
   } catch (error) {
     log.error(`Failed to trigger restart: ${error.message}`);
@@ -665,7 +477,6 @@ router.post('/restart-now', async (req, res) => {
   }
 });
 
-// Common cron presets for convenience
 router.get('/cron-presets', (req, res) => {
   res.json({
     presets: [
@@ -684,7 +495,6 @@ router.get('/cron-presets', (req, res) => {
   });
 });
 
-// Get schedule execution history
 router.get('/history', async (req, res) => {
   try {
     const limit = parseClampedInteger(req.query.limit, 100, 1, 500);
@@ -703,7 +513,6 @@ router.get('/history', async (req, res) => {
   }
 });
 
-// Clear schedule execution history
 router.delete('/history', async (req, res) => {
   try {
     await clearScheduleHistory();

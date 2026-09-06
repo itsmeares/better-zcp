@@ -38,28 +38,11 @@ import {
 import { parseBoundedInteger } from "../utils/queryNumbers.js";
 import { setSteamSessionCredentials } from "../services/steamSessionCredentials.js";
 
-// Local to this route: autoExportMaxPerPlayer has no counterpart check in
-// server.js (or anywhere else), so unlike the port/memory constants above
-// there's no cross-file drift risk to guard against -- a plain local
-// constant is enough to remove the hand-typed literal. Range matches
-// Settings.tsx's own input (min=1 max=50).
 const AUTO_EXPORT_MAX_PER_PLAYER_MIN = 1;
 const AUTO_EXPORT_MAX_PER_PLAYER_MAX = 50;
 const SFTP_POLL_INTERVAL_MIN = 2;
 const SFTP_POLL_INTERVAL_MAX = 10;
 
-// Also local: neither of these has a server.js counterpart. Ranges chased
-// from their consuming services rather than guessed -- see the comments at
-// each call site below for the source. modRestartDelay's floor is 0, not
-// Settings.tsx's min=1: the service (modChecker.js's setRestartOptions) is
-// the authority on what the system can actually do, and it demonstrably
-// accepts 0. Refusing a value here that the consumer handles fine would be
-// a NEW disagreement between two layers -- the exact bug class this whole
-// thread closed, just pointing the other way (a save that rejects what the
-// consumer accepts, instead of a wizard that refuses what /app-settings
-// accepts). Settings.tsx keeping min=1 is fine and unrelated: that's a UI
-// recommendation, not a claim about server capability, and the two are
-// allowed to differ. See 2026-08-23 config.js numeric-field audit part 5.
 const MOD_RESTART_DELAY_MIN = 0;
 const MOD_RESTART_DELAY_MAX = 30;
 const SERVER_AUTO_UPDATE_WARNING_MINUTES_MIN = 0;
@@ -67,7 +50,6 @@ const SERVER_AUTO_UPDATE_WARNING_MINUTES_MAX = 60;
 
 const router = express.Router();
 
-// Validation helpers
 const VALID_SETTINGS_KEYS = [
   "rconHost",
   "rconPort",
@@ -134,29 +116,6 @@ const VALID_SETTINGS_KEYS = [
   "panelBridgeSftpConfigPath",
 ];
 
-// PUT /app-settings is gated by panel.settings alone, but its real reach
-// spans five OTHER capabilities' territory: rconPassword/rconHost/rconPort
-// (server.configure), Steam credentials (server.install), PanelBridge SFTP
-// including its password (bridge.setup), the Discord guild ID
-// (integrations.manage), and Workshop session cookies + collection sync
-// (mods.manage). A panel.settings holder cannot silently rewrite any of
-// these through this one door without also holding the capability that
-// actually governs it -- found in the 2026-08-26 capability-description
-// sweep. Every key NOT listed here is the genuinely app-level remainder
-// (CORS, dark mode, mod check interval, HTTPS bind config, ...) and needs
-// nothing beyond panel.settings itself, which the route is already gated
-// on.
-//
-// serverPath/serverConfigPath/zomboidDataPath are the LEGACY, pre-multi-
-// server settings mirror of servers.js's own installPath/serverConfigPath/
-// zomboidDataPath fields -- not a separate concept that merely shares a
-// name. Confirmed by reading every real consumer, not assumed from the
-// label: server.js's getServerConfigPath()/console-log route, chunks.js's
-// getZomboidDataPath(), modChecker.js's ACF-path lookup, and updateChecker.js
-// all resolve `activeServer?.<field> || getSetting(<legacy key>)` -- a
-// Legacy path settings can still be read when the active server leaves a
-// field unset, so their writes use the same capability as server records.
-// `serverPort` has no live consumer and remains a panel setting.
 const SETTINGS_KEY_CAPABILITY = {
   rconHost: "server.configure",
   rconPort: "server.configure",
@@ -223,14 +182,8 @@ function validateCorsAllowedOrigins(value) {
   return null;
 }
 
-// Sensitive settings are masked in API responses by pattern (see
-// SENSITIVE_FIELD_RE / maskSensitiveObject in utils/sanitize.js) rather than
-// an explicit key list, so a newly added secret-shaped setting (jwtSecret,
-// discordBotToken, ...) is masked automatically instead of leaking in
-// plaintext until someone remembers to list it here.
 const maskSensitiveSettings = maskSensitiveObject;
 
-// Get application settings
 router.get("/app-settings", async (req, res) => {
   try {
     const settings = await getAllSettings();
@@ -241,10 +194,6 @@ router.get("/app-settings", async (req, res) => {
   }
 });
 
-// Update application settings. Admin-gated: this endpoint can flip
-// corsAllowAll (disables CORS origin checking panel-wide) and other
-// security-relevant settings, so any authenticated-but-unprivileged
-// account must not be able to write it.
 router.put("/app-settings", requirePermission("panel.settings"), async (req, res) => {
   try {
     const { settings } = req.body || {};
@@ -256,21 +205,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       return res.status(400).json({ error: "Settings are required", code: ErrorCode.CONFIG_APP_SETTINGS_REQUIRED });
     }
 
-    // Fields whose validation only matters while a companion feature flag
-    // is on -- built as ONE table, not N copies of "if (key === X &&
-    // effectiveFlagEnabled)". GitHub #118 was exactly this bug for
-    // panelBridgeSftpPort alone; the 2026-08-26 regression (findings 4/9-12)
-    // found FOUR more fields with the identical shape (httpsCertPath/
-    // httpsKeyPath/httpsPort gated by httpsEnabled, modRestartDelay by
-    // modAutoRestart, serverAutoUpdateWarningMinutes by serverAutoUpdate,
-    // autoExportMaxPerPlayer by autoExportOnLogin, reconnectInterval by
-    // autoReconnect) sitting unfixed right next to the one that got fixed --
-    // the exact "sibling that was never hardened" pattern this whole floor
-    // spent the day on. Five hand-written copies of the same guard
-    // disagreeing with each other by the next release is the predictable
-    // outcome of writing it five times; one table can't drift from itself.
-    // An unused field must never block an unrelated save, regardless of
-    // which feature it belongs to.
     const FEATURE_GATED_FIELDS = {
       panelBridgeSftpPort: "panelBridgeSftpEnabled",
       panelBridgeSftpPollIntervalSeconds: "panelBridgeSftpEnabled",
@@ -283,22 +217,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       reconnectInterval: "autoReconnect",
     };
 
-    // What a gating flag will actually BE once this save lands -- not what
-    // it currently is in the database. Preferring the payload's own value
-    // (when this save touches the flag at all) matters both ways: a user
-    // turning a feature OFF and fixing one of its fields in the same save
-    // must not have the old, now-irrelevant field block them, and a user
-    // turning a feature ON in the same save that also sets one of its
-    // fields must still have that field validated -- reading only the
-    // stored value would validate against the state this save is about to
-    // replace, not the state it's about to create. Falls back to stored
-    // state only when this payload doesn't mention the flag at all (a
-    // partial update that never touches it shouldn't have to resend it just
-    // to stay validated correctly). Lazy and memoized PER FLAG: most saves
-    // touch at most one or two of these features, and a stored-state lookup
-    // should only happen for the flags actually needed -- an unconditional
-    // getSetting() for every gated flag on every save would be several
-    // unnecessary DB round trips per save, every time, forever.
     const effectiveFlagCache = new Map();
     function getEffectiveFlag(flagKey) {
       if (!effectiveFlagCache.has(flagKey)) {
@@ -312,7 +230,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       return effectiveFlagCache.get(flagKey);
     }
 
-    // Only allow valid setting keys to prevent prototype pollution
     const validEntries = [];
     for (const [key, value] of Object.entries(settings)) {
       if (!VALID_SETTINGS_KEYS.includes(key)) {
@@ -320,12 +237,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         continue;
       }
 
-      // Skip validation entirely for a field whose feature won't be on
-      // after this save -- still saved (a disabled field's stale value is
-      // harmless sitting in storage; refusing to even SAVE it would be its
-      // own new bug), just not checked. This one check replaces what used
-      // to be five separate "&& effectiveXEnabled" conditions bolted onto
-      // five separate validation blocks below.
       const gateFlag = FEATURE_GATED_FIELDS[key];
       if (gateFlag && !(await getEffectiveFlag(gateFlag))) {
         validEntries.push([key, value]);
@@ -343,19 +254,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      // serverName is interpolated into filesystem paths downstream
-      // (serverManager.js's getServerConfig/saveServerConfig build
-      // `${serverName}.ini`, and the same value names the launched
-      // StartServer_<name>.bat/start-server_<name>.sh script) via the
-      // legacy-settings fallback in serverManager.js's loadConfig(). The
-      // modern multi-server profile path (routes/servers.js's
-      // SERVER_NAME_REGEX) already rejects anything but a traversal-
-      // incapable name at write time for exactly this reason -- this
-      // endpoint is the one write path that never got the same check
-      // (2026-08-26 regression finding 13). Same whitelist, kept local
-      // rather than imported since route files in this codebase don't
-      // currently import from one another (servers.js/server.js each keep
-      // their own copy of this same regex already).
       if (
         key === "serverName" &&
         !/^[a-zA-Z0-9_-][a-zA-Z0-9_\- ]*[a-zA-Z0-9_-]$|^[a-zA-Z0-9_-]$/.test(
@@ -379,18 +277,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         });
       }
 
-      // Bound chased from the consuming service (modChecker.js's
-      // setRestartOptions: `Math.max(0, Math.min(30, val))`): [0, 30].
-      // Settings.tsx's own input says min=1, a real discrepancy -- flagged
-      // rather than resolved silently, and the ruling went with the
-      // service's floor, not the client's: the service is the authority on
-      // what the system can do, and refusing 0 here while the consumer
-      // accepts it fine would be a NEW save-vs-consumer disagreement, the
-      // same bug class this whole thread closed. Settings.tsx keeping min=1
-      // is fine and unrelated -- a UI recommendation, not a capability
-      // claim. See 2026-08-23 config.js numeric-field audit part 5. Gated
-      // by modAutoRestart via FEATURE_GATED_FIELDS above (2026-08-26 bug
-      // hunt finding 9) -- only reached when the feature will be on.
       if (key === "modRestartDelay") {
         const modRestartDelayCheck = requireIntInRange(
           value,
@@ -403,12 +289,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      // Bound chased from the consuming service (updateChecker.js's
-      // parseAutoUpdateWarningMinutes: `Math.min(60, Math.max(0, ...))`,
-      // default 15) -- matches Settings.tsx's own input (min=0 max=60)
-      // exactly, no discrepancy to report for this one. Gated by
-      // serverAutoUpdate via FEATURE_GATED_FIELDS above (2026-08-26 bug
-      // hunt finding 10).
       if (key === "serverAutoUpdateWarningMinutes") {
         const warningMinutesCheck = requireIntInRange(
           value,
@@ -457,28 +337,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         });
       }
 
-      // httpsCertPath/httpsKeyPath used to be accepted as any string and
-      // only ever checked at panel BOOT (utils/certs.js), where a bad value
-      // (directory instead of file, unreadable) crashed the whole process
-      // via an unguarded fs.readFileSync -- see that file's own fix for the
-      // other half of this. Rejecting a bad value here, immediately, is
-      // what actually prevents an operator from saving one in the first
-      // place; the boot-time fix alone only stops the crash for a value
-      // that goes bad AFTER being saved (moved/deleted/permissions changed
-      // later), which is a real but separate case this can't catch.
-      //
-      // GitHub #118 sibling (2026-08-26 regression, finding 4), REPRODUCIBLE:
-      // Settings.tsx never clears these fields when HTTPS is toggled off
-      // (only its one-click "Enable HTTPS" quick-setup resets them), so an
-      // operator who set a cert path, disabled HTTPS, and later had that
-      // file move/get deleted/lose permissions would find every UNRELATED
-      // settings save failing on a field doing nothing -- the exact SFTP
-      // bug, for a field with a much easier real-world path to a stale
-      // value. Handled generically above via FEATURE_GATED_FIELDS: this
-      // block is only reached at all when HTTPS will be on after this save.
-      // `value !== ""` here is a SEPARATE, orthogonal exemption -- clearing
-      // the field back to empty (auto-generated cert) must work even while
-      // HTTPS is enabled, which the feature-gate above does not cover.
       if (
         (key === "httpsCertPath" || key === "httpsKeyPath") &&
         value !== ""
@@ -518,14 +376,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      // GitHub #118 sibling (2026-08-26 regression, finding 4): this used a
-      // hand-rolled parseBoundedInteger floor of 1 and never joined the
-      // BIND_PORT_MIN family, even though HTTPS is unambiguously a bind
-      // port -- the panel itself opens and listens on it, exactly like
-      // panelPort three blocks below. Brought in now for the same reason
-      // panelPort uses it: one shared range instead of a second hand-typed
-      // copy that can silently drift from it. Disabled-feature skip is
-      // handled generically above via FEATURE_GATED_FIELDS.
       if (key === "httpsPort") {
         const httpsPortCheck = requireIntInRange(value, BIND_PORT_MIN, BIND_PORT_MAX, "HTTPS port");
         if (!httpsPortCheck.ok) {
@@ -541,29 +391,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      // Same missing-range-check shape httpsPort/reconnectInterval closed
-      // above, but this one IS the lockout case, not the mild one: panelPort
-      // sat in this same allowed-keys list, two lines from httpsPort, with
-      // no case at all here. An out-of-range value saved silently (200,
-      // no error), index.js only discovers it can't bind at the NEXT
-      // restart and falls back to 3001 -- but the Restart Panel button has
-      // already sent the browser to the port the operator typed, which
-      // nothing is listening on. Range matches auth.js's /setup check for
-      // the same field (ErrorCode.SETUP_PANEL_PORT_INVALID) -- reusing
-      // server.js's requireIntInRange rather than a third hand-rolled
-      // range check. See 2026-08-23 validateInt-coerces / config.js
-      // numeric-field audit.
-      //
-      // The collision check below is bidirectional on purpose: httpsPort's
-      // check above only compared a new httpsPort against the STORED
-      // panelPort. Left one-directional, the exact collision that guard
-      // exists to prevent was still reachable by approaching from the other
-      // side -- setting panelPort to whatever httpsPort already is. A guard
-      // reachable by walking around it from the other direction isn't a
-      // guard, it's a speed bump on one approach.
       if (key === "panelPort") {
-        // Bind: the panel itself listens on this. See the bind-vs-
-        // destination rule at server.js's BIND_PORT_MIN/DESTINATION_PORT_MIN.
         const panelPortCheck = requireIntInRange(value, BIND_PORT_MIN, BIND_PORT_MAX, "Panel port");
         if (!panelPortCheck.ok) {
           return res.status(400).json({ error: panelPortCheck.message, code: ErrorCode.CONFIG_INVALID_NUMERIC_FIELD, params: sanitizeErrorParams({ message: panelPortCheck.message }) });
@@ -578,21 +406,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      // The exact four fields server.js's /install, /quick-setup,
-      // /configure-rcon and /configure-network now refuse out-of-range on
-      // (2026-08-23 validateInt-coerces audit, commit 39f836f) were also
-      // reachable through THIS route with zero validation -- a second door
-      // onto the same four values, invisible from inside server.js since it
-      // lives in a completely different file. Same ranges as server.js's
-      // checks so the two doors can't disagree with each other.
       if (key === "rconPort") {
-        // This key is the legacy/single-active-server RCON target that
-        // /configure-rcon (server.js) hardcodes to rconHost 127.0.0.1 --
-        // always local, so it stays on the bind floor like server.js's own
-        // rconPort checks, not the destination floor RCON gets in
-        // servers.js's per-server (and genuinely remote-capable) model.
-        // See the full bind-vs-destination writeup at server.js's
-        // BIND_PORT_MIN/DESTINATION_PORT_MIN (GitHub #118).
         const rconPortCheck = requireIntInRange(value, BIND_PORT_MIN, BIND_PORT_MAX, "RCON port");
         if (!rconPortCheck.ok) {
           return res.status(400).json({ error: rconPortCheck.message, code: ErrorCode.CONFIG_INVALID_NUMERIC_FIELD, params: sanitizeErrorParams({ message: rconPortCheck.message }) });
@@ -606,12 +420,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      // Destination, not bind: SFTP is a service on someone ELSE's machine
-      // that this panel connects out to -- 22, its standard port, is why
-      // this floor was the actual bug (GitHub #118). The disabled-feature
-      // skip is handled generically above via FEATURE_GATED_FIELDS -- by
-      // the time we reach here, either SFTP will be on after this save, or
-      // this line was never reached at all for this key.
       if (key === "panelBridgeSftpPort") {
         const sftpPortCheck = requireIntInRange(
           value,
@@ -650,15 +458,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      // Lower priority than the fields above -- a garbage value here
-      // doesn't misdirect anything, it self-heals to 3 via `Number(...) ||
-      // 3` the next time it's read (see index.js's export-rotation code).
-      // But an unvalidated garbage value would still sit in the database
-      // forever, unreadable by that fallback's intent, as a trap for
-      // whoever next reads that column expecting a real number. Range
-      // matches Settings.tsx's own input (min=1 max=50). Gated by
-      // autoExportOnLogin via FEATURE_GATED_FIELDS above (2026-08-26 bug
-      // hunt finding 11).
       if (key === "autoExportMaxPerPlayer") {
         const autoExportMaxCheck = requireIntInRange(value, AUTO_EXPORT_MAX_PER_PLAYER_MIN, AUTO_EXPORT_MAX_PER_PLAYER_MAX, "Auto-export copies kept");
         if (!autoExportMaxCheck.ok) {
@@ -666,11 +465,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      // Same missing-range-check shape as httpsPort above, but the worst
-      // case if it slips through is a too-fast/too-slow reconnect timer,
-      // not a lockout -- worth closing anyway since it's one check in the
-      // same loop, not worth its own investigation. Gated by autoReconnect
-      // via FEATURE_GATED_FIELDS above (2026-08-26 regression finding 12).
       if (key === "reconnectInterval") {
         const interval = parseBoundedInteger(value, null, 1, 60);
         if (interval === null) {
@@ -684,7 +478,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       }
 
       if (key === "chatPresets") {
-        // Array of short strings, max 50 entries, each <=500 chars.
         if (!Array.isArray(value)) {
           return res
             .status(400)
@@ -706,11 +499,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       validEntries.push([key, value]);
     }
 
-    // Never overwrite a stored secret with the masked sentinel we send to
-    // the client. Without this guard, clicking Save after a page reload
-    // (where the input pre-fills with •••...) would silently corrupt
-    // RCON passwords, Discord tokens, and Steam cookies. See workshop
-    // collection "cookies not configured" bug for the symptom.
     const filtered = validEntries.filter(([key, value]) => {
       if (SENSITIVE_FIELD_RE.test(key) && isMaskedSecret(value)) {
         log.info(
@@ -721,9 +509,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       return true;
     });
 
-    // Require the capability only when a governed value actually changes.
-    // Compare with stored values because the editor resends the whole object
-    // and masked secrets may be unchanged placeholders.
     const touchesGovernedKey = filtered.some(
       ([key]) => key in SETTINGS_KEY_CAPABILITY,
     );
@@ -814,7 +599,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       await modChecker.setRestartOptions({ warningMinutes });
     }
 
-    // Reload serverManager and rconService configs after settings change
     const serverManager = req.app.get("serverManager");
     const rconService = req.app.get("rconService");
     const reloadWarnings = [];
@@ -866,10 +650,6 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
   }
 });
 
-// CORS diagnostics for remote access troubleshooting. Admin-only, same tier
-// as debug.js: this is internal panel/network diagnostic surface, not a
-// server-operation task, and can mutate CORS state (clearing the blocked
-// list, forcing a reload).
 router.get("/cors-debug", requirePermission("diagnostics.manage"), async (req, res) => {
   try {
     const getCorsDebugSnapshot = req.app.get("getCorsDebugSnapshot");
@@ -922,20 +702,14 @@ router.delete("/cors-debug/blocked", requirePermission("diagnostics.manage"), as
   }
 });
 
-// Test RCON connection
 router.post("/test-rcon", requirePermission("server.configure"), async (req, res) => {
   try {
     const rconService = req.app.get("rconService");
 
-    // Try to connect
     const connected = await rconService.connect();
 
     if (connected) {
-      // Try a lightweight command to verify the connection is alive
-      // Avoid 'help' — PZ dumps a huge response that can overflow RCON packets and hang
       try {
-        // execute() reports a failed command by return value, so the catch
-        // below only ever saw transport-level errors.
         const probe = await rconService.execute("players", { skipLog: true });
         if (!probe?.success) {
           res.json({
@@ -962,17 +736,6 @@ router.post("/test-rcon", requirePermission("server.configure"), async (req, res
         });
       }
     } else {
-      // Same reachability split as /rcon/test and /rcon/connect (see
-      // 0714d91): without this, EVERY failure -- host genuinely unreachable
-      // OR host reachable but the saved password is wrong -- collapsed into
-      // one generic message, which Console.tsx's banner then rendered as
-      // "host unreachable" even for a stale password. That told a user with
-      // a correct host/port to go debug their network for a problem that
-      // was actually a wrong password one screen away. Reuses the same
-      // canonical detail strings and error codes as those two routes
-      // (services/rcon.js) rather than a third, independently-drifting
-      // mapping -- this is the same failed-handshake outcome, just reached
-      // from a third call site.
       const { host: configuredHost, port: configuredPort } =
         rconService.getConfig();
       const reachable = await checkTcpReachable(

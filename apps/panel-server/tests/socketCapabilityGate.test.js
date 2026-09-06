@@ -1,18 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-27 regression: apps/panel-server/index.js's Socket.IO connection middleware
-// only checked that a connection was AUTHENTICATED, never that it held any
-// particular capability. socket.on("subscribe:logs"), subscribe:perf, and
-// subscribe:players joined rooms carrying the exact same data as
-// GET /api/debug/logs, POST /api/debug/performance-snapshot, and
-// GET /api/players/ -- all three gated behind diagnostics.manage /
-// players.view over HTTP -- with no equivalent check on the socket side.
-// Concretely exploitable: MODERATOR_CAPABILITIES does not include
-// diagnostics.manage, so a moderator refused GET /api/debug/logs over HTTP
-// could get the identical live log stream (including RCON command text)
-// by connecting a socket instead. socketHasCapability() is the fix, mirroring
-// requirePermission()'s own getRoleByName(role) -> role.capabilities check.
-// This file pins that mirror, independent of the real database.
 
 const { getRoleByNameMock } = vi.hoisted(() => ({
   getRoleByNameMock: vi.fn(),
@@ -20,9 +7,6 @@ const { getRoleByNameMock } = vi.hoisted(() => ({
 
 vi.mock("../database/init.js", () => ({
   getRoleByName: getRoleByNameMock,
-  // socketHasCapability doesn't touch these, but other module-load-time
-  // code in index.js may -- keep the mock module shape harmless rather
-  // than undefined.
   getDb: vi.fn(async () => ({ data: {} })),
 }));
 

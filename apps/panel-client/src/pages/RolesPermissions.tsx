@@ -39,18 +39,8 @@ import {
 } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 
-// Mirrors apps/panel-server/services/permissions.js's RECOVERY_CAPABILITIES -- the two
-// capabilities the matrix's own lockout row header flags, since unchecking
-// the last holder's box on one of these two rows is the one action on this
-// screen that can lock an administrator out of the panel.
 const RECOVERY_CAPABILITY_KEYS = new Set(['roles.manage', 'users.manage'])
 
-// Which of the two recovery capabilities (apps/panel-server/services/permissions.js
-// RECOVERY_CAPABILITIES) a pending capability change would remove -- lets
-// the client fill in the {{action}} placeholder in the server's
-// ROLE_LOCKOUT_LAST_MANAGER / ROLE_SELF_CAPABILITY_LOSS_CONFIRM messages
-// with a translated phrase instead of the server's own English fragment.
-// Checked in the same order the server checks RECOVERY_CAPABILITIES.
 function recoveryActionKey(
   existingCapabilities: string[],
   nextCapabilities: string[],
@@ -62,8 +52,6 @@ function recoveryActionKey(
   return null
 }
 
-// `embedded`: rendered inside a Settings tab panel instead of as its own
-// route -- see the matching note on Users.tsx.
 export default function RolesPermissions({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation(['roles', 'errors'])
   const { toast } = useToast()
@@ -75,10 +63,6 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
   const [loadError, setLoadError] = useState<string | null>(null)
   const [permissionDenied, setPermissionDenied] = useState(false)
 
-  // Which capability groups are collapsed in the matrix. Empty by default --
-  // every group starts open, matching the matrix's pre-collapsible behavior,
-  // so collapsing is something the operator opts into rather than a hidden
-  // capability they have to know to expand.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   function toggleGroup(group: string) {
     setCollapsedGroups((prev) => {
@@ -96,27 +80,8 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set())
   const [savingUserRows, setSavingUserRows] = useState<Set<string>>(new Set())
 
-  // Latest capability set per role, including ones still in flight. A plain
-  // ref rather than state -- it has to be readable synchronously by a second
-  // toggle fired before the first one's response has re-rendered `roles`.
-  // Without this, two toggles on the same role computed nextCapabilities
-  // from the same stale `role.capabilities` snapshot; the server's
-  // updateRole() is a hard replace (not a merge), so whichever request
-  // landed second silently reverted the first -- fail-open on a revocation
-  // (uncheck A, then uncheck B before A's response lands: request 2 still
-  // has A in it, and if it resolves after request 1, A comes back).
   const pendingCapabilitiesRef = useRef<Map<string, string[]>>(new Map())
 
-  // Focus-restore-after-delete pattern -- see Users.tsx's handleDelete /
-  // effect (same fix, first written up there) for the full reasoning:
-  // Radix restores focus correctly to the button that opened the delete
-  // dialog, and this component then deletes the very column that button
-  // lived in, stranding focus at document.body. Adapted here for a MATRIX,
-  // not a row list -- each role is a <th> COLUMN, not a <tr>, so the
-  // "neighbor" is the next/previous role column, and the target is each
-  // role's RENAME button specifically (not delete) because a seeded role's
-  // delete button is `disabled` -- an unfocusable target -- while rename
-  // is always enabled regardless of seeded status.
   const roleHeaderButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const pendingFocusTargetRef = useRef<string | 'fallback' | null>(null)
   const addRoleButtonRef = useRef<HTMLButtonElement>(null)
@@ -171,8 +136,6 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
       ])
       setGroups(g)
       setRoles(r)
-      // users.manage is a separate capability from roles.manage -- fetch it
-      // independently so a 403 here doesn't block rendering the matrix itself.
       fetchUsers()
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -210,11 +173,6 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
         capabilities: nextCapabilities,
         confirmSelfCapabilityLoss,
       })
-      // Only commit this response if no newer toggle on this role has been
-      // issued while it was in flight -- an older response landing after a
-      // newer one already committed the right state must not clobber it
-      // back (the mirror image of the request-construction race above: two
-      // in-flight requests can resolve in either order over the network).
       if (pendingCapabilitiesRef.current.get(role.id) === nextCapabilities) {
         setRoles((prev) => prev.map((r) => (r.id === role.id ? { ...r, ...updated } : r)))
       }
@@ -256,9 +214,6 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
     if (savingCells.has(cellKey)) return
     setSavingCells((prev) => new Set(prev).add(cellKey))
 
-    // Base off the latest known set for this role (including any still
-    // in-flight change), not the `role` object closed over at render time --
-    // see pendingCapabilitiesRef's comment above.
     const baseCapabilities = pendingCapabilitiesRef.current.get(role.id) ?? role.capabilities
     const nextCapabilities = checked
       ? [...baseCapabilities, cap.key]
@@ -267,9 +222,6 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
 
     const ok = await applyRoleCapabilities(role, nextCapabilities, false, baseCapabilities)
 
-    // Only clear the pending marker if nothing newer has queued behind this
-    // call while it was in flight -- otherwise a later toggle's own pending
-    // value gets discarded here.
     if (pendingCapabilitiesRef.current.get(role.id) === nextCapabilities) {
       pendingCapabilitiesRef.current.delete(role.id)
     }
@@ -377,10 +329,6 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
       setDeleteError(t('errors:ROLE_HAS_MEMBERS', { count: deleteTarget.memberCount }))
       return
     }
-    // Computed here, not earlier -- the two guard clauses above can return
-    // without deleting anything (dialog stays open, waiting on a
-    // reassignment choice), and only an attempt that's actually about to
-    // remove the column should claim a focus target.
     const index = roles.findIndex((r) => r.id === deleteTarget.id)
     const neighborId = roles[index + 1]?.id ?? roles[index - 1]?.id
     pendingFocusTargetRef.current = neighborId ?? 'fallback'
@@ -405,8 +353,6 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
       setDeleteTarget(null)
       if (result.reassigned > 0) fetchUsers()
     } catch (error) {
-      // The column survived and the dialog stays open -- nothing to
-      // restore focus to yet.
       pendingFocusTargetRef.current = null
       if (error instanceof ApiError && error.code === 'ROLE_LOCKOUT_LAST_MANAGER') {
         const nextCapabilities = reassignTo ? roles.find((r) => r.id === reassignTo)?.capabilities || [] : []
@@ -630,13 +576,6 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
                             <td className="sticky left-0 z-10 bg-card px-3 py-2 align-middle">
                               <div className="flex items-center gap-1.5">
                                 <span className="font-medium text-foreground">{capabilityLabel(cap)}</span>
-                                {/* impeccable-2026-08-31: this used to be a permanently-visible
-                                    paragraph under the label -- 3-6 lines per row, the reason the
-                                    matrix ran to 3555px on first load. The name already carries the
-                                    headline risk signal ("Wipe the world"); the paragraph is
-                                    decision-time elaboration, which is exactly what HelpTip is for.
-                                    Same information, on demand instead of permanent -- "dense by
-                                    default, help on demand," not information removed. */}
                                 <HelpTip label={capabilityLabel(cap)}>{capabilityDescription(cap)}</HelpTip>
                                 {RECOVERY_CAPABILITY_KEYS.has(cap.key) && (
                                   <span title={t('matrix.recoveryCapabilityHint')}>

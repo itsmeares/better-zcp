@@ -3,34 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, decision on bridge-syncfaction-does-not-exist-silent-
-// partial-apply: factionAddPlayer/factionRemovePlayer/factionSetTag each
-// perform a real mutation (addPlayer/removePlayer/setTag -- all confirmed
-// present and working in the real B42 jar) and then used to call
-// PanelBridge.invoke(faction, "syncFaction") -- a method that does not exist
-// ANYWHERE on zombie.characters.Faction or its superclass chain (the jar
-// audit, 2026-08-30, confirmed with a constant-pool scan for every
-// sync/transmit/propagate/broadcast/update spelling, not just a guessed-name
-// miss). invoke() swallows a missing method as a clean (false, error) rather
-// than throwing, and the old code never checked that return value at all --
-// so the mutation landed for real, the sync silently never happened, and the
-// handler still reported a clean success.
-//
-// The real client-sync path for a faction change turned out to be a network
-// packet handler unreachable from ANY Lua (client or server -- confirmed by
-// grepping the entire shipped media/lua tree for every packet class/method
-// name involved: zero hits). So there is no real propagation mechanism this
-// file is allowed to call instead (the operator explicitly forbade inventing
-// one that was not verified to exist). The fix is honesty, not a new
-// mechanism: the dead syncFaction call is gone, and the response now says
-// plainly that the change applied locally and was not pushed to already-
-// connected clients, via a `synced: false` field and a message that says so
-// -- instead of a message indistinguishable from a fully-propagated success.
-//
-// These tests do not re-prove the mutation/verification behaviour already
-// covered by panelBridgeFactionVerifyGating.test.js -- they prove the NEW
-// honesty contract specifically: `synced` is present and false, and the
-// message no longer claims an unqualified success.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

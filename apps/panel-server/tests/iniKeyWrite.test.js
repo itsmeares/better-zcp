@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hasIniKeyLine, hasIniKeyValue, setIniKeyLine } from "../utils/iniKeyWrite.js";
 
-// The test that matters (per the 2026-08-31 dispatch): an unanchored
-// content.includes("Key=")/content.replace(/Key=.*/g, ...) pair rewrites ANY
-// line containing that substring, not just the line whose KEY is Key --
-// including a free-text field (ServerWelcomeMessage, PublicDescription) that
-// happens to contain the literal text "RCONPassword=". A test asserting only
-// "the RCONPassword line changed to the new value" passes on the buggy code
-// too, since the buggy code DOES update that line -- it also corrupts the
-// unrelated line, which is the part that has to be asserted.
 describe("iniKeyWrite -- anchored key read/write, not substring matching", () => {
   const freeTextCollision = [
     "PVP=false",
@@ -25,9 +17,7 @@ describe("iniKeyWrite -- anchored key read/write, not substring matching", () =>
       expect(updated).toContain(
         'ServerWelcomeMessage="Welcome! Note: RCONPassword=notapassword is a decoy some griefer left in chat."',
       );
-      // No second/duplicate RCONPassword line was appended.
       expect(updated.match(/^RCONPassword=/gm)).toHaveLength(1);
-      // Exactly 4 lines in, 4 lines out -- nothing got split or duplicated.
       expect(updated.split("\n")).toHaveLength(4);
     });
 

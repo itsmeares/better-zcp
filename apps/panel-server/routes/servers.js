@@ -52,10 +52,6 @@ const router = express.Router();
 const RCON_HOST_REGEX = /^[a-zA-Z0-9.-]{1,255}$/;
 const RCON_PASSWORD_MAX_LENGTH = 256;
 
-// serverName is interpolated into filesystem paths (server-files, backups,
-// chunks) as `${serverName}.ini` etc. — reject anything but a plain,
-// non-traversal-capable name up front instead of relying on every
-// downstream path-building call site to re-validate it.
 const SERVER_NAME_REGEX =
   /^[a-zA-Z0-9_-][a-zA-Z0-9_\- ]*[a-zA-Z0-9_-]$|^[a-zA-Z0-9_-]$/;
 
@@ -69,22 +65,6 @@ function isValidDockerContainerRef(value) {
 
 const INSTALL_PATH_MAX_LENGTH = 1024;
 
-// HARDEN (decision 2026-08-27, card
-// custom-launcher-as-a-real-supported-mode-not-an-accident): neither
-// installPath nor serverPath was validated at all before this, despite
-// silently controlling MANAGED vs CUSTOM LAUNCHER mode (serverManager.js's
-// resolveLaunchMode() -- the same predicate this calls, so a saved value's
-// shape and the mode it will actually resolve to at load time can never
-// disagree). A launcher-shaped value (.bat/.sh/.exe) is accepted without
-// requiring it to exist yet -- the operator may be configuring this before
-// the file is in place, matching installPath's own existing not-yet-
-// installed allowance for a fresh, not-yet-downloaded server. A
-// directory-shaped value must actually BE a directory if something already
-// exists at that path; a value that already exists as a plain file with no
-// recognized launcher extension is rejected outright -- that combination
-// (file-shaped, unrecognized) is exactly the unvalidated case that used to
-// silently break regeneration (server.js's refreshLaunchTargetBeforeStart()
-// would join a filename onto a file, not a directory).
 function validateInstallPathShape(value) {
   if (typeof value !== "string" || !value.trim()) {
     return { valid: false, error: "Install path must be a non-empty string" };
@@ -115,11 +95,6 @@ function validateInstallPathShape(value) {
   return { valid: true, mode };
 }
 
-// Run a requirePermission() check outside of route-level middleware, for a
-// capability that only applies to one branch of a handler (importIniFrom
-// below needs servers.discover -- the same capability that gates /auto-scan
-// and /detect's own filesystem reads -- in addition to this route's regular
-// servers.manage gate). Mirrors routes/scheduler.js's identical helper.
 async function requireCapabilityInline(capability, req, res) {
   let passed = false;
   await requirePermission(capability)(req, res, () => {
@@ -148,12 +123,10 @@ async function refreshWorkshopCheckerIfAvailable(req) {
   try {
     await refreshWorkshopChecker(modChecker);
   } catch (error) {
-    // Server profile changes must remain saveable if workshop probing fails.
     log.warn(`Workshop checker refresh failed: ${error.message}`);
   }
 }
 
-// Helper: Parse INI file
 function parseIni(content) {
   const result = {};
   const lines = content.split(/\r?\n/);
@@ -177,18 +150,10 @@ export function parseDiscoveredPort(value, fallback, max = 65535) {
   }
   if (typeof value !== "string") return null;
   if (value.trim() === "") return fallback;
-  // Ports are unsigned. parseBoundedInteger alone would accept an explicit
-  // "+27015" (it's a general integer parser reused elsewhere for values
-  // that legitimately can be negative), but mountDiscovery.js's parsePort
-  // -- the other reader of this same ini field, used by
-  // create-from-discovery -- has always enforced digits-only. Without this
-  // check the same ini line was a valid server on one route and an invalid
-  // one on the other.
   if (!/^\d+$/.test(value.trim())) return null;
   return parseBoundedInteger(value, null, 1, max);
 }
 
-// Helper: Recursively scan for PZ server paths (max depth 3)
 function scanForPzPaths(rootPath, maxDepth = 3) {
   const results = {
     installPaths: [], // Folders containing PZ server startup scripts
@@ -208,7 +173,6 @@ function scanForPzPaths(rootPath, maxDepth = 3) {
 
       const items = fs.readdirSync(currentPath);
 
-      // Check if this is an install path (has startup script or jre64)
       if (
         items.includes("StartServer64.bat") ||
         items.includes("StartServer64_nosteam.bat") ||
@@ -217,7 +181,6 @@ function scanForPzPaths(rootPath, maxDepth = 3) {
       ) {
         results.installPaths.push(currentPath);
 
-        // Also look for custom startup scripts
         const customScripts = items.filter(
           (f) =>
             (f.startsWith("StartServer_") && f.endsWith(".bat")) ||
@@ -228,7 +191,6 @@ function scanForPzPaths(rootPath, maxDepth = 3) {
             (f.startsWith("start-server-") && f.endsWith(".sh")),
         );
         for (const script of customScripts) {
-          // Extract server name from script file name (e.g., StartServer_DoomerZ.bat -> DoomerZ)
           let serverName = script
             .replace(/^StartServer(64)?_/, "")
             .replace(/^start-server-/, "")
@@ -242,7 +204,6 @@ function scanForPzPaths(rootPath, maxDepth = 3) {
         }
       }
 
-      // Check if this is a data path (has Server/ subfolder with .ini files)
       if (items.includes("Server")) {
         const serverPath = path.join(currentPath, "Server");
         if (
@@ -250,7 +211,6 @@ function scanForPzPaths(rootPath, maxDepth = 3) {
           fs.statSync(serverPath).isDirectory()
         ) {
           const serverFiles = fs.readdirSync(serverPath);
-          // Look for .ini files that don't end with known suffixes like _SandboxVars, _spawnpoints, _spawnregions
           const hasIni = serverFiles.some(
             (f) =>
               f.endsWith(".ini") &&
@@ -264,7 +224,6 @@ function scanForPzPaths(rootPath, maxDepth = 3) {
         }
       }
 
-      // Recurse into subdirectories (skip common non-relevant folders)
       const skipFolders = [
         "node_modules",
         ".git",
@@ -299,26 +258,6 @@ function scanForPzPaths(rootPath, maxDepth = 3) {
   return results;
 }
 
-// Auto-scan a folder to find PZ server install paths and data paths.
-// Reads arbitrary local server .ini files -- admin-only, same sensitivity
-// tier as chunks delete / panel-bridge command execution -- but the RCON
-// password read off each ini is never put on the wire (hasRcon says
-// whether one is set). POST / re-reads it server-side at creation time via
-// importIniFrom, keyed off dataPath+serverName, instead of round-tripping
-// the real value through the browser.
-//
-// 2026-08-27: this route's local parseIni() duplicates
-// services/mountDiscovery.js's readServerIniSettings -- checked, not just
-// filed. The two line-parsing loops are behaviourally identical (11
-// fixtures: duplicate key, inline comment, section header, blank value,
-// CRLF, a value containing "=", leading whitespace, both comment styles,
-// eqIndex===0, lone-CR -- no divergence, not merged, since a refactor with
-// no behavioural difference is pure risk). The paired port validators
-// DID diverge -- parseDiscoveredPort (below) accepted "RCONPort=+27015"
-// while mountDiscovery.js's parsePort (digits-only) rejected it, so the
-// same ini line was a valid server on this route and not on
-// create-from-discovery. Fixed by making parseDiscoveredPort digits-only
-// too; see apps/panel-server/tests/serversRoute.test.js.
 router.post("/auto-scan", requirePermission("servers.discover"), async (req, res) => {
   try {
     const { scanPath, maxDepth = 3 } = req.body || {};
@@ -327,21 +266,15 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
       return res.status(400).json({ error: "Scan path is required" });
     }
 
-    // Validate scanPath - must be an absolute path
     if (typeof scanPath !== "string" || scanPath.length > 500) {
       return res.status(400).json({ error: "Invalid path format" });
     }
 
-    // Must check isAbsolute() on the raw input: path.resolve() always
-    // returns an absolute path (resolved against cwd), so checking it after
-    // resolving would never reject anything and silently accepted relative
-    // paths as if they'd been rejected.
     if (!path.isAbsolute(scanPath)) {
       return res.status(400).json({ error: "Must be an absolute path" });
     }
     const resolvedPath = path.resolve(scanPath);
 
-    // Block scanning root paths directly — require at least one subfolder
     const isRootPath =
       process.platform === "win32"
         ? /^[A-Za-z]:[\\/]?$/.test(resolvedPath)
@@ -363,12 +296,10 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
     const clampedDepth = parseClampedInteger(maxDepth, 3, 1, 3);
     const results = scanForPzPaths(resolvedPath, clampedDepth);
 
-    // For each data path, detect the server configs
     const detectedConfigs = [];
     for (const dataPath of results.dataPaths) {
       const serverConfigPath = path.join(dataPath, "Server");
       const files = fs.readdirSync(serverConfigPath);
-      // Filter for server .ini files (exclude _SandboxVars, _spawnpoints, _spawnregions)
       const iniFiles = files.filter(
         (f) =>
           f.endsWith(".ini") &&
@@ -392,7 +323,6 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
             throw new Error("RCONPort or DefaultPort is invalid");
           }
 
-          // Try to find a matching custom bat file for this server
           const matchingBat = results.customBatFiles.find(
             (bat) =>
               serverName.toLowerCase().includes(bat.serverName.toLowerCase()) ||
@@ -408,7 +338,6 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
             serverPort,
             publicName: settings.PublicName || serverName,
             hasRcon: !!settings.RCONPassword,
-            // New: matched bat file info
             matchedBatFile: matchingBat ? matchingBat.path : null,
             matchedInstallPath: matchingBat ? matchingBat.folder : null,
           });
@@ -435,9 +364,6 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
   }
 });
 
-// Detect server settings from data path (folder containing Server/, Saves/, Logs/)
-// Same as /auto-scan: reads RCON passwords straight off disk but never
-// returns them -- see the comment above /auto-scan.
 router.post("/detect", requirePermission("servers.discover"), async (req, res) => {
   try {
     const { dataPath, installPath } = req.body || {};
@@ -449,26 +375,19 @@ router.post("/detect", requirePermission("servers.discover"), async (req, res) =
       return res.status(400).json({ error: "Data path is required" });
     }
 
-    // Validate path format
     if (typeof dataPath !== "string" || dataPath.length > 500) {
       return res.status(400).json({ error: "Invalid path format" });
     }
 
-    // Must check isAbsolute() on the raw input: path.resolve() always
-    // returns an absolute path (resolved against cwd), so checking it after
-    // resolving would never reject anything and silently accepted relative
-    // paths as if they'd been rejected.
     if (!path.isAbsolute(dataPath)) {
       return res.status(400).json({ error: "Must be an absolute path" });
     }
     const resolvedData = path.resolve(dataPath);
 
-    // Verify data path exists
     if (!fs.existsSync(resolvedData)) {
       return res.status(400).json({ error: "Data path does not exist" });
     }
 
-    // Check if this is a valid Zomboid data folder (should have Server subfolder)
     const serverConfigPath = path.join(resolvedData, "Server");
     if (!fs.existsSync(serverConfigPath)) {
       return res
@@ -478,7 +397,6 @@ router.post("/detect", requirePermission("servers.discover"), async (req, res) =
         });
     }
 
-    // Validate installPath if provided
     let resolvedInstall = null;
     let hasNoSteam = false;
     let validInstallPath = false;
@@ -505,12 +423,10 @@ router.post("/detect", requirePermission("servers.discover"), async (req, res) =
       }
     }
 
-    // Find server INI files
     const detectedServers = [];
 
     if (fs.existsSync(serverConfigPath)) {
       const files = fs.readdirSync(serverConfigPath);
-      // Filter for server .ini files (exclude _SandboxVars, _spawnpoints, _spawnregions)
       const iniFiles = files.filter(
         (f) =>
           f.endsWith(".ini") &&
@@ -563,18 +479,10 @@ router.post("/detect", requirePermission("servers.discover"), async (req, res) =
   }
 });
 
-// Shared by GET / and GET /active so the two routes can't drift on what
-// "remote config configured" means -- the client's only consumer of this
-// field (Layout.tsx's nav) reads it off the list from GET /, not GET
-// /active, so this must actually run in both places, not just one.
-// isRemoteConfigConfigured() only checks already-loaded settings fields
-// (no I/O), so computing it per row here costs nothing beyond the one
-// getAllSettings() call already made for the whole list.
 function computeRemoteConfigConfigured(server, settings) {
   return server.isRemote ? isRemoteConfigConfigured(settings) : false;
 }
 
-// Get all servers
 router.get("/", async (req, res) => {
   try {
     const servers = await getServers();
@@ -593,11 +501,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Per-server running status. Scans the host once for all PZ server processes
-// and attributes each match to a configured server by comparing its install
-// path against the process command line. Servers with no matching process
-// are reported as not running. The active server's state is reported by
-// serverManager directly so it stays consistent with /api/server/status.
 router.get("/status", async (req, res) => {
   try {
     const serverManager = req.app.get("serverManager");
@@ -620,9 +523,6 @@ router.get("/status", async (req, res) => {
       }
     }
 
-    // Normalise install paths for comparison: lowercase + forward slashes.
-    // Windows command lines may double-quote the path or use backslashes;
-    // the substring check below covers both.
     const norm = (p) =>
       String(p || "")
         .toLowerCase()
@@ -670,10 +570,6 @@ router.get("/status", async (req, res) => {
           }
         }
       }
-      // Fallback: the active server's running state is authoritative even
-      // when the install path doesn't appear in the command line (e.g. when
-      // the process was started outside the panel and uses a different
-      // working directory).
       if (!running && server.id === activeId && serverManager?.isRunning) {
         running = true;
       }
@@ -699,8 +595,6 @@ router.get("/status", async (req, res) => {
   }
 });
 
-// Lightweight, bounded RCON connectivity probe for every configured server.
-// It creates no persistent connections and never returns credential material.
 router.get("/rcon-status", async (req, res) => {
   try {
     const servers = await getServers();
@@ -735,15 +629,12 @@ router.get("/rcon-status", async (req, res) => {
   }
 });
 
-// Get active server
 router.get("/active", async (req, res) => {
   try {
     const server = await getActiveServer();
     if (!server) {
       return res.status(404).json({ error: "No active server configured" });
     }
-    // Lets the UI stop hiding file-based pages once a remote server's Server
-    // folder is reachable over SFTP.
     const remoteConfigConfigured = computeRemoteConfigConfigured(
       server,
       await getAllSettings(),
@@ -757,7 +648,6 @@ router.get("/active", async (req, res) => {
   }
 });
 
-// Get a specific server
 router.get("/:id", async (req, res) => {
   try {
     const id = req.params.id;
@@ -781,10 +671,6 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Generate a provider-specific user-service file for the panel account to
-// install.
-// The panel deliberately returns the file as data and never writes to /etc or
-// invokes sudo itself.
 router.get(
   "/:id/lifecycle-template",
   requirePermission("servers.manage"),
@@ -833,9 +719,6 @@ router.get(
   },
 );
 
-// Switching lifecycle ownership is intentionally a separate, confirmed
-// operation instead of a generic profile update. This makes migration opt-in
-// and gives the backend a chance to reject running or conflicting services.
 router.post(
   "/:id/lifecycle-provider",
   requirePermission("servers.manage"),
@@ -886,8 +769,6 @@ router.post(
           });
         }
 
-        // While the database still says direct, use the native scanner to
-        // prove there is no process to adopt silently.
         const directManager = new ServerManager();
         await directManager.reloadConfig(serverId);
         const directStatus = await directManager.getServerProcessDetails();
@@ -935,7 +816,6 @@ router.post(
   },
 );
 
-// Create a new server
 router.post("/", requirePermission("servers.manage"), async (req, res) => {
   try {
     const config =
@@ -946,19 +826,6 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
       `POST / — creating server: name=${config?.name}, remote=${!!config?.isRemote}`,
     );
 
-    // /auto-scan and /detect never put the ini's RCON password on the wire.
-    // A server created from one of their results instead sends back which
-    // config it picked (dataPath + serverName) and we re-read the password
-    // here, server-side, from that exact ini -- same shape as
-    // discovery.js's create-from-discovery, adapted for this route's scan
-    // being an arbitrary-path scan (gated by servers.discover) rather than
-    // discovery.js's fixed, pre-enumerated mount list: there's no discovered
-    // set to validate the reference against here, so the extra guard is
-    // requiring servers.discover again, inline, for this branch specifically
-    // -- the same capability that already gates reading arbitrary local ini
-    // files on /auto-scan and /detect. Without it, a servers.manage-only
-    // caller (who cannot call /auto-scan or /detect at all) could otherwise
-    // use this branch to make the server read any *.ini path on the host.
     if (config.importIniFrom && typeof config.importIniFrom === "object") {
       const allowed = await requireCapabilityInline("servers.discover", req, res);
       if (!allowed) return;
@@ -1011,34 +878,16 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
           error: `RCON password not set in ${importServerName}.ini — set RCONPassword on the server, then retry.`,
         });
       }
-      // The freshly-read value always wins over anything the client sent
-      // directly, so a bogus client-supplied rconPassword paired with a
-      // valid importIniFrom can't stick.
       config.rconPassword = importedSettings.RCONPassword;
       if (!config.serverName) config.serverName = importServerName;
-      // discovery.js's create-from-discovery (the sibling this route's own
-      // comment says it mirrors) sets `zomboidDataPath: discovered.dataPath`
-      // -- this branch validated and read the ini from that exact same
-      // folder above but never wrote it back to `config`, so the created
-      // server had a real, working rconPassword and a null
-      // zomboidDataPath: it saved, then could not launch (serverManager
-      // needs zomboidDataPath to resolve the cachedir), with nothing at
-      // create time to connect the failure back to a bad import. Same
-      // "freshly-verified value wins" precedence as rconPassword above --
-      // this is the folder we just confirmed contains Server/<name>.ini,
-      // so a stale/mismatched client-supplied zomboidDataPath must not
-      // override it either.
       config.zomboidDataPath = resolvedImportData;
     }
 
-    // Fall back to env-configured paths (docker-compose PZ_SERVER_PATH /
-    // PZ_SAVE_PATH) when the request body doesn't set them explicitly.
     if (!config.installPath)
       config.installPath = process.env.PZ_SERVER_PATH || "";
     if (!config.zomboidDataPath)
       config.zomboidDataPath = process.env.PZ_SAVE_PATH || null;
 
-    // Validate required fields - installPath not required for remote servers
     if (config.isRemote !== undefined && typeof config.isRemote !== "boolean") {
       return res.status(400).json({ error: "isRemote must be a boolean" });
     }
@@ -1061,14 +910,12 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
       }
     }
 
-    // Validate display name length
     if (typeof config.name !== "string" || config.name.length > 100) {
       return res
         .status(400)
         .json({ error: "Server name must be under 100 characters" });
     }
 
-    // Validate RCON port
     const rconPort = parseBoundedInteger(config.rconPort, null, 1, 65535);
     if (rconPort === null) {
       return res.status(400).json({ error: "Invalid RCON port" });
@@ -1086,16 +933,6 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
       return res.status(400).json({ error: "Invalid RCON password" });
     }
 
-    // Validate serverName against path traversal. This value becomes the PZ
-    // dedicated server's own internal name -- it names the .ini file and the
-    // Saves/Multiplayer/<serverName> folder the panel reads and writes.
-    // "servertest" used to fill in here when it was left blank, which is
-    // Project Zomboid's own vanilla single-player/test-server name: on a
-    // machine with a real, unrelated PZ install using that default name, the
-    // panel would silently adopt its save/config directory as this server's
-    // own. Fall back to the required display name instead of a shared,
-    // well-known default -- and reject outright if neither is usable, rather
-    // than inventing an identity.
     const serverName = String(config.serverName || config.name || "").trim();
     if (!isValidServerName(serverName)) {
       return res
@@ -1111,7 +948,6 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
       return res.status(400).json({ error: "Invalid Docker container name" });
     }
 
-    // Validate server port if provided
     let serverPort = 16261;
     if (config.serverPort !== undefined && config.serverPort !== null && config.serverPort !== "") {
       serverPort = parseBoundedInteger(config.serverPort, null, 1, GAME_PORT_MAX);
@@ -1158,7 +994,6 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
   }
 });
 
-// Allowed fields for server update — prevents mass assignment of internal fields (id, isActive, etc.)
 const ALLOWED_SERVER_UPDATE_FIELDS = [
   "name",
   "serverName",
@@ -1214,7 +1049,6 @@ export function parseServerId(value) {
   return /^\d+$/.test(id) ? Number(id) : id;
 }
 
-// Update a server
 router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
   const lifecycleLock = acquireLifecycleLock(
     "server-profile-change",
@@ -1233,7 +1067,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       return res.status(400).json({ error: "Invalid server ID" });
     }
 
-    // Only allow whitelisted fields — block id, isActive, created, etc.
     const updates = {};
     const body =
       req.body && typeof req.body === "object" && !Array.isArray(req.body)
@@ -1245,9 +1078,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       }
     }
 
-    // Validate serverName against path traversal — this field is
-    // interpolated into filesystem paths downstream (server-files, backups,
-    // chunks), so it must pass the same check as server creation.
     if (updates.serverName !== undefined) {
       if (typeof updates.serverName !== "string") {
         return res.status(400).json({ error: "Invalid server name" });
@@ -1289,12 +1119,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       updates.dockerContainerName = value || null;
     }
 
-    // HARDEN (decision 2026-08-27): neither field was validated at
-    // all before this, despite silently controlling MANAGED vs CUSTOM
-    // LAUNCHER mode (serverManager.js's resolveLaunchMode()) -- an
-    // unvalidated path that silently changes launch behavior was the whole
-    // bug this feature closes. serverPath is the same shape as installPath
-    // and follows the same rule.
     for (const key of ["installPath", "serverPath"]) {
       if (updates[key] !== undefined && updates[key] !== "") {
         const check = validateInstallPathShape(updates[key]);
@@ -1304,23 +1128,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       }
     }
 
-    // HARDEN (2026-08-29, savepath-needs-existence-validation-at-set-time):
-    // this route wrote zomboidDataPath straight through with zero validation
-    // -- a wrong-but-structurally-valid path (nonexistent, or a real
-    // directory that just isn't a Zomboid data folder) saved here while the
-    // server is stopped passes silently. POST /wipe (server.js) later joins
-    // this stored path with "Saves/Multiplayer/<serverName>" and only checks
-    // fs.existsSync on THAT joined result -- if the wrong path happens to
-    // have a matching subtree underneath (another real Zomboid install on
-    // the same host, a leftover from a same-named server), a destructive
-    // wipe silently targets the wrong data. chunks.js's own POST /save-path
-    // already enforces existence + directory + inspectZomboidPath() for this
-    // EXACT same field (same updateServer() call, same DB column) -- this
-    // brings the second, unguarded setter up to the same bar rather than
-    // leaving it as a second path to the same risk. Remote servers are
-    // exempt: their data path lives on a different host, so a local fs
-    // check would always incorrectly fail -- same exemption installPath
-    // already gets at server-creation time (see !isRemote above in POST /).
     if (updates.zomboidDataPath !== undefined && updates.zomboidDataPath !== "") {
       const effectiveIsRemote =
         updates.isRemote !== undefined
@@ -1358,9 +1165,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       }
     }
 
-    // GET responses mask rconPassword/adminPassword (sanitizeServerResponse).
-    // If the client echoes that masked value back unmodified, drop the field
-    // so the real stored secret isn't overwritten with bullets.
     for (const key of ["rconPassword", "adminPassword"]) {
       if (updates[key] !== undefined && isMaskedSecret(updates[key])) {
         delete updates[key];
@@ -1385,7 +1189,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       return res.status(400).json({ error: "Invalid RCON password" });
     }
 
-    // Validate RCON port if provided
     if (updates.rconPort !== undefined) {
       const rconPort = parseBoundedInteger(updates.rconPort, null, 1, 65535);
       if (rconPort === null) {
@@ -1394,7 +1197,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       updates.rconPort = rconPort;
     }
 
-    // Validate server port if provided
     if (updates.serverPort !== undefined) {
       const serverPort = parseBoundedInteger(updates.serverPort, null, 1, GAME_PORT_MAX);
       if (serverPort === null) {
@@ -1403,7 +1205,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       updates.serverPort = serverPort;
     }
 
-    // Parse numeric fields
     if (updates.minMemory !== undefined) {
       updates.minMemory = normalizeMemoryGb(updates.minMemory, 4);
     }
@@ -1411,7 +1212,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       updates.maxMemory = normalizeMemoryGb(updates.maxMemory, 8);
     }
 
-    // Parse boolean fields
     for (const key of ["useNoSteam", "useDebug", "isRemote", "useUpnp"]) {
       if (updates[key] !== undefined) {
         if (typeof updates[key] !== "boolean") {
@@ -1438,8 +1238,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
 
     log.info(`Updated server: ${server.name} (ID: ${server.id})`);
 
-    // If the active server's RCON settings changed, refresh the RCON service
-    // Otherwise the service keeps stale cached credentials after a reconnect
     const reloadWarnings = [];
     if (server.isActive) {
       const rconFieldsChanged = ["rconHost", "rconPort", "rconPassword"].some(
@@ -1502,13 +1300,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
         await refreshWorkshopCheckerIfAvailable(req);
       }
 
-      // Persisting useUpnp on the server record alone changes nothing PZ
-      // actually reads (2026-08-26: adding it to ALLOWED_SERVER_UPDATE_FIELDS
-      // without this would have recreated the exact "checkbox does nothing"
-      // bug being fixed, one layer over -- found by a same pass audit
-      // before this shipped). The real toggle is the UPnP= line in the
-      // server's own .ini, the same one /configure-network writes -- reused
-      // here via applyUpnpToIni() rather than duplicated.
       if (
         Object.prototype.hasOwnProperty.call(updates, "useUpnp") &&
         server.serverConfigPath &&
@@ -1521,13 +1312,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
         );
         if (result.applied) {
           await setSetting("useUpnp", updates.useUpnp);
-          // PZ only reads this file at its own boot -- the .ini write above
-          // is immediate, but its EFFECT is not, whether the server is
-          // currently running (reads the old value until the next restart)
-          // or currently stopped (reads the new value on its next start
-          // either way). Saying so explicitly rather than letting "saved"
-          // imply "live", because the app cannot verify that the running
-          // process has reloaded the file yet.
           reloadWarnings.push(
             "UPnP setting saved and written to the server config -- takes effect the next time this server starts, not immediately.",
           );
@@ -1553,7 +1337,6 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
   }
 });
 
-// Delete a server
 router.delete("/:id", requirePermission("servers.manage"), async (req, res) => {
   const lifecycleLock = acquireLifecycleLock(
     "server-profile-change",
@@ -1572,10 +1355,6 @@ router.delete("/:id", requirePermission("servers.manage"), async (req, res) => {
       return res.status(400).json({ error: "Invalid server ID" });
     }
 
-    // Captured BEFORE deleting: deleteServer() silently promotes another
-    // server to active when the one being deleted was active, but the live
-    // serverManager/rconService need an explicit reload to match -- see
-    // reloadServicesForNewActiveServer's comment above /:id/activate.
     const targetServer = await getServer(serverId);
     const deletingActiveServer = !!targetServer?.isActive;
 
@@ -1600,11 +1379,9 @@ router.delete("/:id", requirePermission("servers.manage"), async (req, res) => {
           io.emit("activeServerChanged", { server: sanitizeServerResponse(newActiveServer) });
         }
       } else if (io) {
-        // No servers left at all.
         io.emit("activeServerChanged", { deleted: serverId });
       }
     } else if (io) {
-      // Sidebar/list still needs a refresh even though nothing was reloaded.
       io.emit("activeServerChanged", { deleted: serverId });
     }
 
@@ -1618,13 +1395,6 @@ router.delete("/:id", requirePermission("servers.manage"), async (req, res) => {
   }
 });
 
-// Reload the live in-memory services (serverManager, RCON, PanelBridge) to
-// match `server` becoming the active one. Shared by POST /:id/activate and
-// DELETE /:id below -- deleteServer() silently promotes another server to
-// active in the database when the deleted one was active, and without this
-// call the live services stayed pointed at the just-deleted server's stale
-// config (old paths, old RCON credentials) until something else happened to
-// reload them, unlike this route's own explicit activation sequence.
 async function reloadServicesForNewActiveServer(req, server) {
   const rconService = req.app.get("rconService");
   const serverManager = req.app.get("serverManager");
@@ -1650,12 +1420,9 @@ async function reloadServicesForNewActiveServer(req, server) {
     }
   }
 
-  // Best-effort: keep PanelBridge.lua current on servers the panel can
-  // reach directly on disk. Never let an install failure block activation.
   autoInstallBridgeIfNeeded(server);
 }
 
-// Set active server
 router.post("/:id/activate", requirePermission("servers.manage"), async (req, res) => {
   const lifecycleLock = acquireLifecycleLock(
     "server-profile-change",
@@ -1680,14 +1447,6 @@ router.post("/:id/activate", requirePermission("servers.manage"), async (req, re
     }
 
     const io = req.app.get("io");
-    // Best-effort, same posture as DELETE /:id's own call to this exact
-    // function (see that route and reloadServicesForNewActiveServer's own
-    // comment): the database record IS active at this point regardless of
-    // what happens next, so a reload failure here must not turn a
-    // successful activation into a 500 -- that would report failure for a
-    // request that actually succeeded, and skip the activeServerChanged
-    // broadcast below entirely, leaving connected clients unaware the
-    // active server changed at all.
     const reloadWarnings = [];
     try {
       await reloadServicesForNewActiveServer(req, server);
@@ -1700,7 +1459,6 @@ router.post("/:id/activate", requirePermission("servers.manage"), async (req, re
       );
     }
 
-    // Emit to clients that active server changed
     if (io) {
       io.emit("activeServerChanged", { server: sanitizeServerResponse(server) });
     }

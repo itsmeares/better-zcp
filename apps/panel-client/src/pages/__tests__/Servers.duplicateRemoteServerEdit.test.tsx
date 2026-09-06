@@ -8,18 +8,6 @@ import Servers from '../Servers'
 import { serversApi, serversDetectApi, dockerApi, configApi, updateApi } from '@/lib/api'
 import en from '../../locales/en/servers.json'
 
-// regression follow-up: f557c795 blocked Add Remote Server from
-// creating an exact duplicate (name + RCON host + RCON port), but only on
-// the Add path (handleAddExistingServer). apps/panel-server/routes/servers.js has no
-// uniqueness enforcement of its own (confirmed by testing -- grepped the whole
-// file for duplicate/already-exists/unique, only hits are a required-fields
-// list and rconFieldsChanged), so editing an EXISTING remote server's
-// name/host/port to collide with another server (handleSaveEdit,
-// serversApi.update) reproduced the exact same two-indistinguishable-cards
-// outcome the Add-path fix exists to prevent. Same check, same shape,
-// extended to the Edit path -- excluding the server being edited from its
-// own comparison so saving a server unchanged (or with an unrelated field
-// changed) is never blocked.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -122,9 +110,6 @@ function renderServers() {
   )
 }
 
-// Radix's DropdownMenuTrigger opens on pointerdown, not click -- same quirk
-// documented elsewhere on this floor tonight (Dashboard/Players capability
-// tests). Matches this page's own per-card "Options for <name>" trigger.
 async function openEditDialogFor(serverName: string) {
   const trigger = await screen.findByRole('button', { name: `Options for ${serverName}` })
   fireEvent.pointerDown(trigger, { button: 0, pointerId: 1 })
@@ -185,17 +170,10 @@ describe('Servers -- Edit Server duplicate detection (extends f557c795 to the up
     fireEvent.click(screen.getByRole('button', { name: /Save Changes/ }))
     await waitFor(() => expect(toastSpy).toHaveBeenCalled())
 
-    // The toast is a transient side effect that a test can only assert was
-    // called, not that it's still rendered -- the real bug was that nothing
-    // ELSE marked the collision, so simulate the toast having already faded
-    // by not asserting on it again here and checking the fields directly.
     expect(nameInput).toHaveAttribute('aria-invalid', 'true')
     expect(hostInput).toHaveAttribute('aria-invalid', 'true')
     expect(screen.getAllByText(en.editDialog.duplicateRemoteServerHint)).toHaveLength(2)
 
-    // And it must be genuinely LIVE, not a one-shot flag stuck on: changing
-    // either field back out of collision clears the marker immediately,
-    // with no second Save click needed.
     fireEvent.change(hostInput, { target: { value: '192.168.1.99' } })
     expect(nameInput).not.toHaveAttribute('aria-invalid', 'true')
     expect(hostInput).not.toHaveAttribute('aria-invalid', 'true')

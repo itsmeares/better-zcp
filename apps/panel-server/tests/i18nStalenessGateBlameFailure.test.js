@@ -1,21 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// staleness-gate-reported-3-of-5-stale-locales (2026-09-02): one run of the
-// roles.json gate reported exactly 3 of 5 equally-stale locales (fr, de, es
-// -- ht and zh-CN missing); a second run of the same test on the same
-// commit reported all 5. Staged in an isolated scratch repo: with a
-// synthetic git-blame failure injected for one language, on a tree where
-// that language was the ONLY stale one, the report came back clean for it
-// -- the exact same shape as a genuinely up-to-date translation. Root
-// cause: scripts/i18n-staleness-check.mjs's git() helper collapses every
-// git-invocation failure (transient lock contention, resource exhaustion,
-// or a genuinely untranslated file) to the same `null`, and
-// analyzeNamespace() silently `continue`d past a null result regardless of
-// which case it was. Fixed by making keyMapForFile() distinguish the two:
-// "file doesn't exist on disk" is still a legitimate silent skip (a
-// namespace not yet localized into this language), but "file exists and
-// git blame still failed" now throws, so a transient failure surfaces
-// instead of masquerading as "nothing to report".
 vi.mock("child_process", async () => {
   const actual = await vi.importActual("child_process");
   return {

@@ -3,17 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Proves the params-wiring fix for mods.js's 4 previously-PARTIAL error
-// codes (see apps/panel-server/utils/errorCodes.js) actually reaches res.json(), not
-// just that the throw/emission site sets a local variable. Same
-// "check the wire, not the code" discipline that caught the
-// RECOVERY_CAPABILITIES ordering bug in changeUserRoleById.test.js.
-//
-// Deliberately skips mods.js's router.use(requirePermission("mods.manage"))
-// gate the same way chunksDeletionLogic.test.js skips chunks.js's
-// remote-server guard -- these tests exercise validation logic behind the
-// gate, not the gate itself (see modsRoutesCapability-style tests, if any,
-// for gate coverage). Only the matched route's own two-arg handler is run.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -74,7 +63,7 @@ describe("mods.js: previously-PARTIAL error codes now carry params on the wire",
   });
 
   it("MODS_INVALID_WORKSHOP_ID_TEMPLATE (write-to-ini) sends the offending, truncated { workshopId }", async () => {
-    const overlong = "1".repeat(30); // exceeds /^\d{1,15}$/ -- also proves the 20-char truncation lands in params
+    const overlong = "1".repeat(30);
     const res = await runRoute("/write-to-ini", "post", {
       body: { mods: [{ workshopId: overlong, modId: "TestMod" }] },
     });

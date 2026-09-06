@@ -4,44 +4,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Enforcement test for the verify/gate convention this file's 2026-08-23
-// handler-verification audit established (see PanelBridge.verifiedResult's
-// own comment in the Lua file for the full rationale). A convention that
-// lives only in a helper function is a convention the next handler can
-// quietly skip -- this test is what makes skipping it visible on the first
-// CI run, instead of thirteen commits later.
-//
-// HOW THIS WORKS: it does NOT call every handler with a fake game
-// environment -- building a realistic stub for all ~100 handlers would be
-// an enormous, constantly-stale surface, and calling a handler tells you
-// nothing about whether IT claims to verify its own result. Instead it
-// enumerates PanelBridgeModule.handlers live (via Lua's own `pairs`, so a
-// handler added next year is picked up automatically -- no hardcoded name
-// list to fall out of date) and uses debug.getinfo(fn, "S") to get each
-// handler's exact source line range, then checks whether that function's
-// OWN body contains the literal token "verified". This is a textual
-// heuristic, not a behavioral one -- see the HONEST LIMIT below.
-//
-// Every handler not exempted below must satisfy one of:
-//   (a) it's a pure getter/read-only handler (GETTERS) -- the "did this
-//       verifiably happen" question doesn't apply to a handler that
-//       doesn't change anything.
-//   (b) it's in CANNOT_VERIFY_OR_EQUIVALENT with a written reason -- either
-//       a real "no read-back exists" finding (verified against the real
-//       B42 jar, not assumed), or a real "verifies via an equivalent
-//       mechanism under a different name" finding (a `matched` field, a
-//       real per-item count, gating `ok` on the read-back directly, etc.).
-//   (c) its own function body contains the literal word "verified".
-//
-// HONEST LIMIT: a textual "contains the word verified" check cannot tell
-// the difference between a real tri-state gate and someone writing the word
-// "verified" in a comment that does nothing. It is not a substitute for the
-// same jar-verification rigor this audit used to build the CANNOT_VERIFY
-// list -- it is a tripwire for the far more common failure mode this audit
-// actually found all night: a handler that never engages with the question
-// at all. A new handler that trips this test should get the same treatment
-// as the ones already fixed: read the real API, decide verified/matched/
-// documented-reason, don't just add a word to make the test pass.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -56,10 +18,6 @@ const LUA_PATH = path.join(
   'PanelBridge.lua',
 );
 
-// Pure read-only handlers. They report whether they could READ something,
-// not whether an action they took actually happened -- a different
-// question this audit was never about, and one these already handle
-// honestly (pcall-wrapped, missing data reported as missing).
 const GETTERS = new Set([
   'checkAPI', 'debugItemScript', 'exportPlayerData', 'getAllPlayerDetails',
   'getAllSandboxOptions', 'getAvailableHandlers', 'getChatInfo',
@@ -74,23 +32,7 @@ const GETTERS = new Set([
   'setDebugMode', 'clearErrors',
 ]);
 
-// name -> why this handler doesn't need to say "verified" literally.
-// NOTE: setSandboxOption and the three moderationBan* handlers used to be
-// listed here (matched-instead-of-verified, and gate-directly-on-a-string-
-// with-no-stored-flag, respectively) -- as of the 2026-08-23 string-contract
-// migration all four now emit a literal `verified` field, so they no longer
-// need an exemption. restoreUtilities/shutOffUtilities used to be listed too
-// (hydroPowerOn reported as unGated diagnostic data) -- the 2026-08-31 bug
-// hunt found `ok` was never actually gated on that read-back despite the
-// exemption's own wording implying it was, fixed both to gate ok on it for
-// real, so they no longer need an exemption either. triggerSwarmEvent and
-// removeVehicle used to be listed too (both PROVISIONAL) -- see the note
-// near the bottom of this table for what changed and the jar evidence.
-// Left this note rather than silently deleting the history, since "why
-// isn't X allowlisted anymore" is as worth answering as "why is X
-// allowlisted".
 const CANNOT_VERIFY_OR_EQUIVALENT = {
-  // Verifies via a differently-named but equivalent mechanism.
   healPlayer: 'The one truly unverifiable path (nil bodyDamage) is gated directly to ok=false; RestoreToFullHealth has no cheap read-back the game exposes.',
   vehicleHotwire: 'No single verifiable end-state exists for a multi-step hotwire sequence -- `actions` documents what ran step by step. (Also the site of the earlier undefined-global crash fix, commit 364c56d.)',
   clearZombiesNearPlayer: 'Reports a real removed-count computed via per-zombie pcall success, not a boolean -- equivalent honesty under a differently-shaped field (`removed`).',
@@ -102,37 +44,17 @@ const CANNOT_VERIFY_OR_EQUIVALENT = {
   setGameTime: 'Already gates on setAndVerify\'s own read-back-vs-expected comparison per field, failing immediately on a real mismatch (this file\'s other gold-standard pattern).',
   saveWorld: 'Already gates ok directly on the real pcall result of the bare saveGame() global (not world:saveWorld(), which does not exist -- fixed 2026-08-30) -- this IS the original b376b2c fix, no separate flag needed.',
 
-  // Genuinely no read-back exists -- confirmed against the real B42 jar,
-  // not assumed. This is an API LIMIT: the method is real, it just returns
-  // nothing.
   moderationKickUser: 'BanSystem.KickUser is declared void in the real B42 jar (confirmed 2026-08-23) -- no return value exists to verify, ever. This is a limit of the API, not a bug -- contrast with createFaction/removeFaction below.',
 
-  // *** THIS IS A BUG, NOT A VERIFICATION LIMIT -- KEEP IT LOUD AND SEPARATE
-  // FROM THE CATEGORY ABOVE. *** Faction.createFaction and
-  // faction:removeFaction do not exist ANYWHERE in the real B42 jar (zero
-  // hits scanning all 23,740 class files, confirmed 2026-08-23) -- there is
-  // no read-back to add because there is no METHOD, not because the method
-  // is void. Events.tsx advertises both operations to the operator (labels,
-  // descriptions, an args template, listed in the bridge operations group),
-  // so the panel offers two actions that cannot work on B42. The existing
-  // guard/pcall already fail safely and honestly (ok=false, not a false
-  // success) rather than crashing -- which is also exactly why nobody
-  // noticed from the logs. Tracked as a regression with this
-  // evidence attached.
   createFaction: 'BUG, not a verification limit: Faction.createFaction does not exist ANYWHERE in the real B42 jar (zero hits across all 23,740 class files). Events.tsx advertises this operation to the operator; it cannot work on B42. Tracked as a regression.',
   removeFaction: 'BUG, not a verification limit: faction:removeFaction does not exist ANYWHERE in the real B42 jar -- same finding, same Events.tsx exposure, same card as createFaction.',
 
-  // Explicitly NOT gated by design -- gating would hide real partial data.
   importPlayerData: 'Partial success is a legitimate outcome, not a boolean gate (explicit ruling, 2026-08-23) -- see restored.perks/restored.items counts instead of a verified flag.',
 
-  // Honest stubs: never claim success at all (ok is never true), so there
-  // is nothing for a verified field to describe.
   spawnVehicleAt: 'Always returns false (RCON handles vehicle spawning on B42) -- never claims success, nothing to verify.',
   setTimeSpeed: 'Always returns false (RCON handles the dedicated server clock multiplier) -- never claims success, nothing to verify.',
+  runEventSequence: 'Aggregates the success and failure outcomes of child handlers; each child owns the only verification available for its operation, so the sequence has no independent game-state read-back.',
 
-  // Genuine pcall-ceiling: no observable state exists to confirm the
-  // real-world effect happened (a zombie heard a sound, a message was
-  // read, a helicopter is now audible).
   playWorldSound: 'No observable state confirms a zombie heard the sound -- pcall-not-throwing (via emitWorldSound) is the real ceiling.',
   playSoundNearPlayer: 'Same ceiling as playWorldSound.',
   triggerGunshot: 'Same ceiling as playWorldSound.',

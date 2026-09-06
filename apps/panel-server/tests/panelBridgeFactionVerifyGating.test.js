@@ -3,19 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage from the deferred safehouse/faction/moderation class
-// of the full handler-verification audit. Faction.addPlayer/removePlayer/
-// setTag are all declared void in the real B42 jar
-// (zombie/characters/Faction.class, confirmed 2026-08-23), but real getters
-// exist: isMember(username), getTag(). These fixes read those back and gate
-// on them instead of assuming the void call worked.
-//
-// Faction.createFaction and faction:removeFaction were separately confirmed
-// to not exist ANYWHERE in the jar (zero hits across all 23,740 class
-// files) -- those two are documented with a comment, not tested here, since
-// the existing guard/pcall already fails safely and honestly (no false
-// success), and no functional replacement was investigated (out of scope
-// for a verification-gating pass).
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

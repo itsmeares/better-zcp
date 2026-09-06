@@ -4,12 +4,6 @@ import { MemoryRouter } from 'react-router-dom'
 import Templates from '../Templates'
 import { templatesApi, SimTemplate } from '@/lib/api'
 
-// 2026-08-31 (templates-builtin-hidden-with-no-restore-path): deleteTemplate
-// on a built-in template only ever added its id to a hidden-ids setting --
-// the data survives, but nothing anywhere let an operator see which
-// built-ins were hidden or bring one back. GET /templates/hidden +
-// POST /:id/unhide (apps/panel-server/routes/templates.js) are the routes; this pins
-// the client half that makes them reachable.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -99,8 +93,6 @@ describe('Templates.tsx -- restoring a hidden built-in template', () => {
     listTemplates.mockResolvedValue({ templates: [] })
     listHidden.mockResolvedValueOnce({ templates: [makeHiddenBuiltin()] })
     unhide.mockResolvedValue({ success: true })
-    // After a successful restore, the refetch should reflect it moved back
-    // to the normal list and out of the hidden one.
     listHidden.mockResolvedValueOnce({ templates: [] })
 
     renderTemplates()
@@ -133,8 +125,6 @@ describe('Templates.tsx -- restoring a hidden built-in template', () => {
         expect.objectContaining({ title: 'Restore Failed', variant: 'destructive' }),
       ),
     )
-    // Still there -- a failed restore must not silently disappear from the
-    // hidden list as if it had worked.
     expect(screen.getByRole('button', { name: 'Restore Vanilla Apocalypse' })).toBeInTheDocument()
   })
 })

@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Both defects here are the same shape as the startup fallback probe fixed in
-// rcon-autoprobe.test.js, one layer deeper: RconService itself will happily
-// fall back to the hardcoded default host/port (127.0.0.1:27015, empty
-// password) whenever it can't fully resolve a configured server. That
-// fallback is what the 60s auto-reconnect interval hits, forever, on a
-// completely unconfigured install.
 
 const getActiveServer = vi.fn();
 const getServer = vi.fn();
@@ -23,9 +17,6 @@ const { RconService } = await import("../services/rcon.js");
 
 function freshService() {
   const service = new RconService();
-  // Constructor reads process.env.RCON_HOST/PORT/RCON_PASSWORD_FILE — pin to
-  // known values so assertions aren't sensitive to the shell running the
-  // suite happening to have one of those set.
   service.config = { host: "127.0.0.1", port: 27015, password: "" };
   service.passwordFromSecretFile = false;
   return service;
@@ -85,8 +76,6 @@ describe("RconService.loadConfig", () => {
   });
 
   it("keeps the configured server's real host/port even with no RCON password set (the crack)", async () => {
-    // A freshly added PZ server with no password yet is a completely normal
-    // state. It must never look identical to "nothing configured at all".
     getActiveServer.mockResolvedValue({
       id: "srv-1",
       rconHost: "10.20.30.40",
@@ -98,8 +87,6 @@ describe("RconService.loadConfig", () => {
     await service.loadConfig();
     expect(service.config.host).toBe("10.20.30.40");
     expect(service.config.port).toBe(27099);
-    // Doesn't silently keep authenticating as whatever this instance last
-    // pointed at — an empty password is real state, not a value to inherit.
     expect(service.config.password).toBe("");
   });
 
@@ -182,8 +169,6 @@ describe("RconService auto-reconnect gate (connect/_doConnect)", () => {
 
     expect(result).toBe(false);
     expect(checkPortOpen).not.toHaveBeenCalled();
-    // Config was never touched — still the untouched fixture default, not
-    // silently marked "loaded".
     expect(service.configLoaded).toBe(false);
   });
 
@@ -195,7 +180,7 @@ describe("RconService auto-reconnect gate (connect/_doConnect)", () => {
       rconPassword: "correct-horse",
     });
     const service = freshService();
-    const checkPortOpen = vi.fn(async () => false); // port genuinely closed; we only need to prove it was asked, not fake a full RCON handshake
+    const checkPortOpen = vi.fn(async () => false);
     service.checkPortOpen = checkPortOpen;
 
     const result = await service.connect();
@@ -210,11 +195,9 @@ describe("RconService auto-reconnect gate (connect/_doConnect)", () => {
     const checkPortOpen = vi.fn(async () => false);
     service.checkPortOpen = checkPortOpen;
 
-    // Tick 1: still unconfigured.
     expect(await service.connect()).toBe(false);
     expect(checkPortOpen).not.toHaveBeenCalled();
 
-    // Operator adds a server while the panel keeps running.
     getActiveServer.mockResolvedValue({
       id: "srv-1",
       rconHost: "10.20.30.40",
@@ -222,10 +205,7 @@ describe("RconService auto-reconnect gate (connect/_doConnect)", () => {
       rconPassword: "correct-horse",
     });
 
-    // Tick 2 (the next 60s auto-reconnect attempt): no restart, no explicit
-    // reloadConfig() call from this test — hasConfiguredTarget() is checked
-    // fresh every attempt, so it's picked up immediately.
-    expect(await service.connect()).toBe(false); // port still reported closed
+    expect(await service.connect()).toBe(false);
     expect(checkPortOpen).toHaveBeenCalledWith("10.20.30.40", 27099);
   });
 });

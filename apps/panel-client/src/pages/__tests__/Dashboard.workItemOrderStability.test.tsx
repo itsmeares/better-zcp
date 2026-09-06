@@ -8,22 +8,6 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi, type ServerInstance,
 } from '@/lib/api'
 
-// GH#137: a reporter running the panel in Docker with PZ on the host saw
-// the "Console" work-item row change position in the list just from
-// leaving the panel open through a Stop/Start/Restart cycle -- three
-// screenshots showed three different row orders for the exact same
-// underlying section list. Traced to Dashboard.tsx's sortedWorkItems:
-// RCON disconnecting during a routine Stop/Restart flips the Console
-// row's tone from 'good' to 'warning', and the severity sort (added in
-// cac5cdc8 to pull a genuinely 'bad' row above several calm ones) also
-// reordered on that 'warning' transition -- reshuffling the whole list
-// for a state the operator caused themselves and already knows about.
-//
-// This proves the list's row order is stable across that exact
-// transition (RCON connected -> disconnected, nothing else changing).
-// It must fail before the fix (warning ranked above default) and pass
-// after (warning collapsed into the same rank as default/good; only
-// 'bad' reorders anything).
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -88,11 +72,6 @@ function makeServer(overrides: Partial<ServerInstance> = {}): ServerInstance {
   }
 }
 
-// Server is running throughout -- only RCON's own connected flag flips,
-// exactly what happens mid-Stop/Restart while the process is still being
-// torn down. Everything else (players, bridge, mods, schedule, errors,
-// backups) stays identical between the two renders on purpose, so any
-// observed reorder can only be explained by the Console row's tone.
 async function setUpCommon(rconConnected: boolean) {
   const server = makeServer()
   getResolvedActive.mockResolvedValue({ server })
@@ -134,10 +113,6 @@ function renderDashboard() {
   )
 }
 
-// Compare by destination (id/href), not full row text -- the row's own
-// live state text (e.g. "rcon ready" vs "rcon offline") is EXPECTED to
-// differ between the two renders. What must not differ is which row
-// comes before which.
 async function readSectionOrder() {
   const nav = await screen.findByRole('navigation', { name: 'Server sections' })
   const links = within(nav).getAllByRole('link')

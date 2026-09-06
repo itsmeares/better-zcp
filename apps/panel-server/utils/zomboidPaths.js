@@ -1,22 +1,9 @@
-// Shared utilities for resolving and probing Zomboid data folders.
-//
-// Extracted from routes/chunks.js so other path-dependent routes (backups,
-// serverFiles, serverFinder) can reuse the same normalization + suggestion
-// logic without duplicating env-var / tilde handling and platform probes.
 
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-// ─── Path normalisation ──────────────────────────────────────────────────
 
-// Normalize a user-supplied path:
-//   - trim whitespace
-//   - strip surrounding single/double quotes (common copy-paste artefact)
-//   - expand a leading "~" to the user's home dir
-//   - expand $VAR / ${VAR} (POSIX) and %VAR% (Windows) environment refs
-//   - convert empty string back to null
-// Defensive only — does NOT validate filesystem state.
 export function normalizeUserPath(input) {
   if (input == null) return null;
   let s = String(input).trim();
@@ -35,14 +22,12 @@ export function normalizeUserPath(input) {
   return s;
 }
 
-// ─── Candidate probing ───────────────────────────────────────────────────
 
 function computeCandidateZomboidPaths() {
   const home = os.homedir() || '';
   const candidates = [];
 
   if (process.platform === 'win32') {
-    // PZ on Windows stores saves under %USERPROFILE%\Zomboid (NOT inside AppData).
     if (home) candidates.push(path.join(home, 'Zomboid'));
     if (process.env.USERPROFILE) candidates.push(path.join(process.env.USERPROFILE, 'Zomboid'));
     if (process.env.PUBLIC) candidates.push(path.join(process.env.PUBLIC, 'Zomboid'));
@@ -74,8 +59,6 @@ function computeCandidateZomboidPaths() {
   return result;
 }
 
-// 30s cache — the candidate set is per-host and per-process; existsSync over
-// ~6-9 paths every request is wasteful on slow shares.
 let _cache = { ts: 0, value: null };
 const CACHE_TTL_MS = 30_000;
 
@@ -87,13 +70,10 @@ export function getCandidateZomboidPaths() {
   return value;
 }
 
-// Test/development hook to bust the cache (e.g. after the user creates a new
-// Zomboid folder and we want fresh probes).
 export function invalidateCandidatePathsCache() {
   _cache = { ts: 0, value: null };
 }
 
-// ─── Heuristics for "does this look like a Zomboid data folder?" ─────────
 
 const SAVE_ARTIFACTS = [
   'map',                  // B42 layout / B41 region dir
@@ -107,7 +87,6 @@ const SAVE_ARTIFACTS = [
   'reanimated.bin',
 ];
 
-// Files that mean "this is a PZ server install folder, NOT a user data folder".
 const SERVER_INSTALL_ARTIFACTS = [
   'ProjectZomboid64.exe',
   'ProjectZomboid32.exe',
@@ -130,18 +109,6 @@ function looksLikeServerInstall(dir) {
   } catch { return false; }
 }
 
-// Inspect a resolved path and return a structured verdict. Caller decides
-// whether to accept or reject — this lets the route surface per-check
-// diagnostics in the debug payload instead of just a generic "rejected".
-//
-// Returns:
-//   {
-//     ok: boolean,
-//     reason?: 'install-folder' | 'no-zomboid-markers',
-//     checks: { hasSavesDir, hasMultiplayerDir, isInsideSavesDir,
-//               hasZomboidMarker, hasSaveArtifacts, looksLikeInstall },
-//     parentSuggestion?: string,   // e.g. user pointed at .../Saves
-//   }
 export function inspectZomboidPath(normalized) {
   const lower = normalized.toLowerCase().replace(/\\/g, '/');
   const basename = path.basename(normalized);
@@ -169,12 +136,10 @@ export function inspectZomboidPath(normalized) {
     } catch { /* ignore */ }
   }
 
-  // Server install folder → reject early with a specific message.
   if (checks.looksLikeInstall && !checks.hasSavesDir && !checks.hasMultiplayerDir) {
     return { ok: false, reason: 'install-folder', checks };
   }
 
-  // User pointed at a "Saves" or "Multiplayer" folder — suggest the parent.
   let parentSuggestion = null;
   if (basename === 'Saves' || basename === 'Multiplayer') {
     const parent = path.dirname(normalized);

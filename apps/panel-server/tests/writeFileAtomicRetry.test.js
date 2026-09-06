@@ -68,8 +68,6 @@ describe("writeFileAtomic: bounded retry on transient Windows rename errors", ()
     });
 
     expect(() => writeFileAtomic(targetPath, "x")).toThrow(/EPERM/);
-    // Bounded to a fixed, small number of attempts (1 initial + 3 retries),
-    // not unbounded spinning.
     expect(spy).toHaveBeenCalledTimes(4);
     expect(fs.existsSync(targetPath)).toBe(false);
     expect(listTmpFiles()).toEqual([]);

@@ -3,13 +3,6 @@ import { describe, expect, it } from "vitest";
 const { applySandboxChanges, parseSandboxVars, findUnpersistedSandboxKeys } =
   await import("../routes/serverFiles.js");
 
-// PUT /sandbox used to write applySandboxChanges()'s output and report
-// success unconditionally -- but modifySandboxValue() (which
-// applySandboxChanges calls per key) silently returns its input unchanged
-// when a key's regex finds no matching line to update. A key absent from the
-// file, or living in a block the writer doesn't parse, was dropped with no
-// signal. findUnpersistedSandboxKeys() is the read-back that closes that gap:
-// re-parse what actually landed and diff it against what was submitted.
 describe("findUnpersistedSandboxKeys", () => {
   const content = [
     "SandboxVars = {",
@@ -31,15 +24,11 @@ describe("findUnpersistedSandboxKeys", () => {
     expect(persisted.ZombieLore.Speed).toBe(4);
   });
 
-  // The exact silent-drop this closes: a key with no matching line in the
-  // file (never present, wrong block, whatever) is left byte-for-byte
-  // unchanged by modifySandboxValue -- proving the old "no exception thrown"
-  // signal alone would have reported this as a successful save.
   it("flags a top-level key that has no line to update in the file", () => {
     const changes = { settings: { NotARealSetting: 99 } };
     const written = applySandboxChanges(content, changes);
 
-    expect(written).toBe(content); // the write was a silent no-op
+    expect(written).toBe(content);
     const persisted = parseSandboxVars(written);
     expect(findUnpersistedSandboxKeys(changes, persisted)).toEqual([
       "NotARealSetting",
@@ -50,7 +39,7 @@ describe("findUnpersistedSandboxKeys", () => {
     const changes = { ZombieLore: { StrengthUnknown: 1 } };
     const written = applySandboxChanges(content, changes);
 
-    expect(written).toBe(content); // the write was a silent no-op
+    expect(written).toBe(content);
     const persisted = parseSandboxVars(written);
     expect(findUnpersistedSandboxKeys(changes, persisted)).toEqual([
       "ZombieLore.StrengthUnknown",

@@ -3,15 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, regression, item 1 -- the highest-ranked of the four
-// remaining items (identical shape to getClimateFloats, which needed a real
-// fix earlier tonight for a real observed crash). handlers.getWeather wrapped
-// all 15 field reads (12 of them bare direct calls with no PanelBridge.safeGet)
-// in ONE pcall, so a single throwing getter crashed the whole handler and lost
-// the other 14 fields, which would have read fine on their own. Same per-item
-// isolation pattern as getClimateFloats (8519ea4e): one broken field is
-// skipped (and counted in a new `skipped` field) instead of taking down the
-// rest.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -72,17 +63,12 @@ describe('PanelBridge.lua handlers.getWeather -- one throwing field no longer cr
     expect(result.ok).toBe(true);
     expect(result.data.skipped).toBe(1);
     expect(result.data.windSpeed).toBeUndefined();
-    // Every other field still comes back, unaffected.
     expect(result.data.temperature).toBe(20.0);
     expect(result.data.humidity).toBe(0.5);
     expect(result.data.isRaining).toBe(false);
   });
 
   it('multiple fields throwing: every OTHER field still comes back', () => {
-    // ambient/viewDistance/isThunderStorming go through PanelBridge.safeGet,
-    // which already swallows a throw and returns its own default -- so they
-    // deliberately can't "skip" here. Pick three of the twelve bare-call
-    // fields that DO propagate the throw to this handler's own per-field pcall.
     const bridge = loadPanelBridge(LUA_PATH, climateStub(['temperature', 'dayLight', 'windAngle']));
     const result = bridge.callHandler('getWeather', {});
 

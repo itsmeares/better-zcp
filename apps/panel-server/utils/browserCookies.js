@@ -1,26 +1,3 @@
-/**
- * Browser cookie extractor (Windows)
- * ----------------------------------
- * Reads Steam session cookies (`sessionid`, `steamLoginSecure`) directly from
- * the local browser's cookie store. Saves the user from the DevTools dance.
- *
- * Supported on Windows only for v1:
- *   - Firefox  → cookies.sqlite (unencrypted)
- *   - Chrome   → Cookies SQLite + DPAPI-wrapped AES-GCM (legacy v10 scheme)
- *   - Edge     → identical scheme to Chrome
- *   - Brave    → identical scheme to Chrome
- *
- * Hard limits
- * -----------
- *   - Chrome v127+ "App-Bound Encryption" seals auth cookies to the Chrome
- *     process itself. If steamLoginSecure is bound that way, decryption will
- *     return an empty/garbage string and we surface a clean error.
- *   - Chrome/Edge/Brave keep an exclusive lock on Cookies while the browser
- *     is running. We copy the file to a temp path first to dodge most locks,
- *     but a busy browser can still fail us — error will say "close <browser>".
- *
- * No mutation: we never write to a browser's data directory.
- */
 
 import fs from 'fs';
 import path from 'path';
@@ -33,8 +10,6 @@ import { createLogger } from './logger.js';
 
 const log = createLogger('BrowserCookies');
 const STEAM_HOSTS = ['steamcommunity.com', '.steamcommunity.com', 'store.steampowered.com', '.steampowered.com'];
-// steamcommunity.com is where Workshop writes happen, so its login cookies
-// take priority over store.steampowered.com when both are present.
 const STEAM_HOST_PRIORITY = (host) => {
   if (!host) return 99;
   if (host === 'steamcommunity.com' || host === '.steamcommunity.com') return 0;
@@ -112,9 +87,6 @@ function cookieFreshness(cookie) {
 }
 
 let sqlPromise = null;
-// In-memory cache: master key per browser id. The key never changes for a
-// given Windows user account, so we can avoid re-spawning PowerShell every
-// extraction within the panel's lifetime. Cleared on process exit.
 const masterKeyCache = new Map();
 
 function locateWasm() {
@@ -297,12 +269,6 @@ function copyToTemp(srcPath) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * PowerShell fallback for files Chrome/Edge/Brave keep open with restrictive
- * share flags. `[IO.File]::Open` with `FileShare.ReadWrite | Delete` reads
- * past the SQLite WAL exclusive-mode lock without needing the browser to be
- * closed. Slower than fs.copyFileSync — only used when that fails.
- */
 async function copyToTempViaPowerShell(srcPath) {
   const tmp = path.join(os.tmpdir(), `zcp-cookies-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.sqlite`);
   const script = `
@@ -341,28 +307,18 @@ async function copyToTempViaPowerShell(srcPath) {
   return tmp;
 }
 
-/**
- * Best-effort copy that retries through Chrome's locking quirks.
- *   1. fs.copyFileSync — fastest, works for Firefox & idle Chromium.
- *   2. brief retry — Chrome occasionally drops the lock between writes.
- *   3. PowerShell shadow open with permissive share flags — works while
- *      Chrome is fully running.
- */
 async function snapshotCookiesFile(srcPath) {
-  // Attempt 1: native copyFileSync.
   try { return copyToTemp(srcPath); } catch (err) {
     if (err.code !== 'EBUSY' && err.code !== 'EPERM' && err.code !== 'UNKNOWN') {
       throw err;
     }
   }
-  // Attempt 2: short backoff + retry. Cheap, sometimes enough.
   await sleep(250);
   try { return copyToTemp(srcPath); } catch (err) {
     if (err.code !== 'EBUSY' && err.code !== 'EPERM' && err.code !== 'UNKNOWN') {
       throw err;
     }
   }
-  // Attempt 3: PowerShell with FileShare.ReadWrite | Delete.
   return copyToTempViaPowerShell(srcPath);
 }
 

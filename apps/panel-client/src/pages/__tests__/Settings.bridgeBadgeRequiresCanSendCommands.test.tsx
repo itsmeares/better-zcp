@@ -4,20 +4,6 @@ import { MemoryRouter } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Settings from '../Settings'
 
-// regression: bridgeStatus.modConnected reflects modStatus.alive,
-// which is DEBOUNCED (server keeps it true through up to 5 consecutive poll
-// misses -- deliberate anti-flap, see panelBridge.js's maxConsecutiveFailures).
-// connection.canSendCommands is a separate, undebounced, live check of
-// whether the panel can actually write to the bridge (dir writable + status
-// file fresh) -- it can go false while modConnected is still true, e.g. a
-// single stale poll tick that hasn't yet crossed the 5-failure threshold, or
-// a persistent bridge-directory permissions problem. The Ping button's
-// handler (handlePingMod -> panelBridgeApi.ping() -> server's sendCommand())
-// throws "Bridge file connection is unhealthy" whenever canSendCommands is
-// false, independent of modConnected. Before this fix, the badge and the
-// Ping button's disabled state read modConnected alone, so this exact state
-// showed a "Bridge connected" badge with an enabled Ping button that was
-// guaranteed to throw the instant it was clicked.
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
   return {

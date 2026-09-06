@@ -2,19 +2,6 @@ import { describe, expect, it } from "vitest";
 import { mapConfigsEqual } from "../worldMapConfigEqual";
 import type { MapConfig } from "../WorldMap";
 
-// regression: detectServerVersion's "skip if nothing
-// changed" guard used to compare a hand-picked field list (label, tileSize,
-// fullWidth, isoX0, isoY0) instead of the whole config -- renderedMaxLevel,
-// maxLevel, and fullHeight all sat outside that list, so a resolve response
-// whose width/height/tileSize/origin happened to numerically match
-// MAP_B42's own hardcoded placeholder made every LISTED field match while
-// the real (narrower, correct) renderedMaxLevel was silently discarded.
-// mapConfigsEqual replaces the list with a generic Object.keys walk so
-// every field the type has participates automatically, including ones
-// added after this fix. These tests pin that: they build a real base
-// config, mutate exactly ONE field per test (including the three the old
-// list dropped), and assert the comparison actually returns false for that
-// field -- reproducing the specific miss, not just testing the happy path.
 
 const BASE: MapConfig = {
   tileUrl: "/api/map/tiles",

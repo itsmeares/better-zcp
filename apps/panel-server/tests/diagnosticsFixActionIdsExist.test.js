@@ -12,20 +12,6 @@ const DEBUG_TSX_PATH = path.join(
   "apps/panel-client/src/pages/Debug.tsx",
 );
 
-// The integrity property this file exists to protect (named explicitly in
-// the diagnostics-autofix-2026-08-30 card): every `case "..."` in
-// getDiagnosticsFixAction and getRequiredCapabilityForCheck must reference
-// a check id GET /api/debug/diagnostics can actually emit. It's easy to
-// break -- add a case for an id you assumed existed, typo an id while
-// splitting a shared case into two, or rename a server-side id without
-// updating its client-side case -- and nothing else catches it: a stale
-// case id doesn't throw, it just silently never matches, so the fix button
-// for that check quietly falls back to the generic (and possibly wrong)
-// `default` case forever.
-//
-// Same extraction approach as diagnosticsCheckRegistry.test.js (regex over
-// the GET /diagnostics handler's own source range, not a full parse) --
-// reused rather than duplicated with different bugs.
 function extractDiagnosticsCheckIds(source) {
   const startMarker = 'router.get("/diagnostics"';
   const endMarker = 'router.get("/worldmap"';
@@ -45,14 +31,6 @@ function extractDiagnosticsCheckIds(source) {
   return ids;
 }
 
-// getDiagnosticsFixAction is ALSO called for the World Map tab's own check
-// list (a different endpoint, GET /api/debug/worldmap, scanned and
-// enforced separately by worldMapCheckRegistry.test.js) -- so a handful of
-// case ids in the switch are real, just not reachable from GET
-// /diagnostics. Each entry here must be paired with the sibling id that
-// case shares a body with, so this allowlist can't silently grow into a
-// dumping ground for genuine typos -- add one only alongside a code
-// comment at the case site explaining which OTHER endpoint owns it.
 const KNOWN_NON_DIAGNOSTICS_IDS = new Set([
   "worldmap.bridge.configured", // shares a case with "bridge.configured"; real id, owned by GET /worldmap
 ]);
@@ -86,8 +64,6 @@ const diagnosticsCheckIds = extractDiagnosticsCheckIds(debugJsSource);
 
 describe("Debug.tsx fix-action switches only reference real check ids (self-enforcing)", () => {
   it("sanity check on the scan itself -- found known real ids", () => {
-    // If this fails, the regex/boundary scan broke, not the switches below --
-    // fix the extraction helpers before trusting anything else in this file.
     expect(diagnosticsCheckIds.has("server.process")).toBe(true);
     expect(diagnosticsCheckIds.has("db.writable")).toBe(true);
     expect(diagnosticsCheckIds.size).toBeGreaterThan(30);

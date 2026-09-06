@@ -30,11 +30,6 @@ describe('PasswordInput', () => {
 
   it('does not leak the raw password into the accessible name of the toggle button', () => {
     render(<PasswordInput value="hunter2" onChange={vi.fn()} label="SFTP password" />)
-    // The button is icon-only -- .textContent is always empty regardless of the real
-    // accessible name, so it can never catch a leak into aria-label (2026-08-31 regression,
-    // the under-coverage sweep: injecting the password straight into aria-label left
-    // the old .textContent assertion green). aria-label IS the accessible name a screen
-    // reader announces, so that's what a credential-exposure test has to assert on.
     expect(screen.getByRole('button', { name: /show sftp password/i }).getAttribute('aria-label')).not.toContain('hunter2')
   })
 })

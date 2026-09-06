@@ -1,21 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Regression/coverage for getB42Map()'s dynamic B42 build discovery
-// (regression): the endpoint it used to call (build_list.json) is dead,
-// and every JSON/XML descriptor path this needs is behind a Cloudflare
-// challenge for Node's own TLS stack (fetch AND https alike) that curl gets
-// through far more reliably -- see the header comment in
-// apps/panel-server/routes/mapProxy.js. This proves BOTH branches by forcing them, per
-// the dispatch: (a) discovery succeeds and resolves the build pzmap.org
-// itself flags as default via /api/builds/default, including the reversed
-// (newest-first) full-list walk when that specific build isn't rendered
-// yet; (b) discovery fails outright and the panel still serves the
-// hardcoded fallback AND reports it honestly via getB42ResolutionStatus().
-// Two source states only: 'dynamic' | 'fallback' -- a client-resolve tier
-// was proposed, investigated, and explicitly rejected (see regression)
-// because its own success rate couldn't be verified through Cloudflare from
-// any browser, and shipping unverifiable fallback machinery would repeat
-// the exact "looks healthy, isn't" shape this feature exists to fix.
 
 const mockExecFile = vi.fn();
 vi.mock("child_process", () => ({
@@ -26,9 +10,6 @@ function curlResult(status, body) {
   return { stdout: `${body}\n__CURL_HTTP_STATUS__:${status}`, stderr: "" };
 }
 
-// Maps a URL to a canned curl response. `impl` receives the URL (the last
-// non-flag arg before "--") and returns a curlResult(...), or throws an
-// Error (simulating curl itself failing / ENOENT) to reject the call.
 function mockCurlRouter(impl) {
   mockExecFile.mockImplementation((_file, args, _options, callback) => {
     const url = args[args.length - 1];
@@ -85,8 +66,6 @@ describe("getB42Map() discovery: forcing success", () => {
     });
 
     const { getB42Dir, getB42ResolutionStatus } = await freshModule();
-    // hasTileCoverage() uses plain fetch (tile bytes aren't behind the
-    // challenge) -- stub global fetch so the HEAD coverage probe succeeds.
     const originalFetch = global.fetch;
     global.fetch = vi.fn(async () => ({ ok: true }));
     try {
@@ -103,11 +82,6 @@ describe("getB42Map() discovery: forcing success", () => {
   });
 
   it("falls through to the reversed full-list walk when the default build has no rendered coverage yet, and picks the newest usable one -- proving the ordering fix", async () => {
-    // api/builds is oldest-first in real life; a NEWER build than the
-    // (unrendered) default sits at the END of a realistic list, and a
-    // forward walk would never reach it. This list includes one such case:
-    // 42.21.0 (newer than the flagged default, appended last) should win
-    // over 42.19.0 (older, appears first).
     const buildList = [
       { directory: "41.78.16", default: false },
       { directory: "42.19.0", default: false },
@@ -115,16 +89,12 @@ describe("getB42Map() discovery: forcing success", () => {
     ];
     mockCurlRouter((url) => {
       if (url.endsWith("/api/builds/default")) {
-        // Flagged default (42.20.0) isn't even in the list below -- e.g.
-        // listed but pulled -- so this candidate is tried and fails.
         return curlResult(200, JSON.stringify({ directory: "42.20.0", default: true }));
       }
       if (url.endsWith("/api/builds")) {
         return curlResult(200, JSON.stringify(buildList));
       }
       if (url.includes("42.20.0/base/layer0.dzi")) {
-        // The default build: geometry reads fine, but has no coverage --
-        // simulated via global.fetch below returning ok:false for it only.
         return curlResult(200, dziXml(GEOMETRY_42_20_0));
       }
       if (url.includes("42.21.0/base/layer0.dzi")) {
@@ -133,8 +103,6 @@ describe("getB42Map() discovery: forcing success", () => {
       if (url.includes("/base/map_info.json")) {
         return curlResult(200, mapInfoJson());
       }
-      // 41.78.16 / 42.19.0 geometry: never reached if the reverse walk is
-      // correct, since 42.21.0 (tried first in a newest-first walk) succeeds.
       throw new Error(`unexpected curl URL in test (would prove the ordering bug): ${url}`);
     });
 
@@ -161,7 +129,7 @@ describe("getB42Map() discovery: forcing failure", () => {
 
     const { getB42Dir, getB42ResolutionStatus } = await freshModule();
     const dir = await getB42Dir();
-    expect(dir).toBe("42.20.0"); // B42_DIR_FALLBACK
+    expect(dir).toBe("42.20.0");
 
     const status = getB42ResolutionStatus();
     expect(status.source).toBe("fallback");
@@ -187,38 +155,15 @@ describe("getB42Map() discovery: forcing failure", () => {
   });
 });
 
-// This contract has broken twice in one night, in opposite directions --
-// once with the producer (here) emitting `build` while the consumer
-// (debug.js) read `directory`, once the other way around while the
-// contract itself was being corrected mid-flight. Both were invisible to
-// worldMapBuildDetectStates.test.js because that file mocks
-// getB42ResolutionStatus() entirely -- it asserts on whatever shape the
-// mock is TOLD to return, so it can never notice the real producer
-// drifting from what debug.js actually reads (resolution.source,
-// .directory, .reason -- see apps/panel-server/routes/debug.js's worldmap.tiles.buildDetect
-// check). This test calls the REAL function, on the producer side, so a
-// future rename here fails immediately instead of silently reintroducing
-// "Build undefined".
 describe("getB42ResolutionStatus() contract shape", () => {
   it("returns exactly {source, directory, reason} -- no more, no less, no renamed keys", async () => {
     const { getB42ResolutionStatus } = await freshModule();
-    // Before any resolution attempt, source/reason are legitimately null --
-    // this test is about the KEY SHAPE debug.js reads, not resolution
-    // state, so it doesn't trigger getB42Map() at all.
     const status = getB42ResolutionStatus();
     expect(Object.keys(status).sort()).toEqual(["directory", "reason", "source"]);
-    expect(typeof status.directory).toBe("string"); // always B42_DIR_FALLBACK or a resolved build, never null
+    expect(typeof status.directory).toBe("string");
   });
 });
 
-// Regression for regression: on a cold cache, EVERY concurrent
-// tile request called getB42Map()/getB42TopFormat() independently, each one
-// re-running the full curl-based discovery instead of sharing the one
-// already in flight. Measured against a real isolated server: 80 concurrent
-// cold requests to GET /toptiles took 7.3s uncoalesced, 1.4s after adding
-// in-flight-promise sharing (matching a single request's own cold cost) --
-// this pins that behaviour so it can't silently regress back to N redundant
-// curl spawns per page load.
 describe("getB42Map() / getB42TopFormat(): concurrent-call coalescing", () => {
   it("getB42Dir(): N concurrent cold calls trigger the discovery curl calls only once, not N times", async () => {
     let defaultCalls = 0;
@@ -239,7 +184,6 @@ describe("getB42Map() / getB42TopFormat(): concurrent-call coalescing", () => {
       const N = 20;
       const results = await Promise.all(Array.from({ length: N }, () => getB42Dir()));
       expect(results).toEqual(Array(N).fill("42.20.0"));
-      // One shared resolution, not one per caller -- the whole point of the fix.
       expect(defaultCalls).toBe(1);
     } finally {
       global.fetch = originalFetch;

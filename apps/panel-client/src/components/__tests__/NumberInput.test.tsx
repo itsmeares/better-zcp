@@ -3,20 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { NumberInput } from '../NumberInput'
 
-// GH silent-default sweep (regression, the follow-up
-// to f1ce821): every plain numeric <Input> in the client used to run
-// `onChange={(e) => setX(parseInt(e.target.value) || DEFAULT)}` -- clearing
-// the field snapped it back to DEFAULT under the operator's own cursor
-// instead of staying empty. This is the shared component that now backs
-// all 14 of those sites (ServerSetup.tsx x4, Servers.tsx x7, Players.tsx x1,
-// Scheduler.tsx x1, Settings.tsx's backup-max-count field). These tests
-// exercise the component directly rather than each page, since the fix
-// lives in exactly one place now.
 
-// A real call site is a controlled component: the parent's own state updates
-// from onChange and flows back down as the `value` prop on the next render.
-// This harness reproduces that loop instead of asserting against a frozen
-// `value` prop, the same way the pages that use NumberInput actually behave.
 function ControlledHarness({
   initial,
   onChange,
@@ -46,8 +33,6 @@ describe('NumberInput', () => {
 
     fireEvent.change(input, { target: { value: '' } })
 
-    // The old bug: parseInt('') || 27015 -> the box would show "27015" again,
-    // as if the operator's keystroke never happened.
     expect(screen.queryByDisplayValue('27015')).not.toBeInTheDocument()
     expect((input as HTMLInputElement).value).toBe('')
   })
@@ -85,10 +70,10 @@ describe('NumberInput', () => {
     const input = screen.getByDisplayValue('4')
 
     fireEvent.change(input, { target: { value: '0' } })
-    expect(onChange).toHaveBeenLastCalledWith(1) // clamp applied to a real typed value
+    expect(onChange).toHaveBeenLastCalledWith(1)
 
     fireEvent.change(input, { target: { value: '' } })
-    expect(onChange).toHaveBeenLastCalledWith(NaN) // clamp NOT applied to empty -- would otherwise hide the NaN
+    expect(onChange).toHaveBeenLastCalledWith(NaN)
   })
 
   it('re-syncs from an external value change (e.g. RAM auto-detect) when the field is not focused', () => {
@@ -107,9 +92,6 @@ describe('NumberInput', () => {
     fireEvent.change(input, { target: { value: '1' } })
     expect(input.value).toBe('1')
 
-    // Something external changes the committed value while still focused/mid-edit
-    // (e.g. a sibling control writing the same state) -- the operator's own
-    // half-typed keystroke must not be overwritten out from under them.
     rerender(<NumberInput value={9} onChange={vi.fn()} />)
     expect(input.value).toBe('1')
 
@@ -122,12 +104,6 @@ describe('NumberInput', () => {
     expect(input.value).toBe('')
   })
 
-  // Settings.tsx's backup-max-count field (site 14): a bounded count, not a
-  // port -- there is no isValidInstallPort()-style submit path for it to
-  // fall through to, so the dispatch required this component to still let
-  // the caller commit the field to a sane value itself. It does this via a
-  // plain onBlur passthrough, layered on top of (not replacing) this
-  // component's own focus bookkeeping.
   describe('onBlur/onWheel passthrough (Settings.tsx-style commit-on-blur sites)', () => {
     it('calls the caller-supplied onBlur with the real event after its own blur bookkeeping', () => {
       const onBlur = vi.fn()
@@ -162,9 +138,9 @@ describe('NumberInput', () => {
 
       fireEvent.focus(input)
       fireEvent.change(input, { target: { value: '' } })
-      expect(input.value).toBe('') // stays empty mid-edit, the actual fix
+      expect(input.value).toBe('')
       fireEvent.blur(input)
-      expect(input.value).toBe('1') // caller's own onBlur committed a sane value, same as before this fix
+      expect(input.value).toBe('1')
     })
 
     it('forwards onWheel so a caller can blur-on-scroll to stop an accidental wheel from changing the value', () => {

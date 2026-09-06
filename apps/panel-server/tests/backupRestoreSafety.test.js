@@ -101,12 +101,6 @@ describe("restoreBackup archive safety", () => {
     );
   });
 
-  // Regression: a serverManager lacking getServerProcessDetails() (an older
-  // or lighter injected manager -- see the comment above the check in
-  // backupService.js) used to fall back to checkServerRunning(), which
-  // collapses a failed scan into a plain `false` indistinguishable from a
-  // confirmed-stopped server. It must refuse the same way scanFailed does,
-  // not silently restore.
   it("refuses to restore when the injected serverManager has no process-detection method at all", async () => {
     const service = createService();
     service.setServerManager({});
@@ -122,19 +116,10 @@ describe("restoreBackup archive safety", () => {
     );
   });
 
-  // Regression: restoreBackup()'s own running-check used to be gated by
-  // `if (this.serverManager && ...)` -- no serverManager wired meant the
-  // ENTIRE check was skipped and the restore proceeded as if the server had
-  // already been confirmed stopped, rather than refusing. Not exploitable
-  // via the one production caller today (apps/panel-server/index.js wires the
-  // serverManager at boot, before routes/backup.js is reachable, and that
-  // route also runs its own independent running-check first) -- but this
-  // method must not depend on that call-graph coincidence to be safe.
   it("refuses to restore when no server manager has been wired at all", async () => {
     const service = new BackupService();
     service.getSavesPath = async () => savesPath;
     service.getBackupsPath = async () => backupsPath;
-    // Deliberately never call setServerManager().
 
     const result = await service.restoreBackup("good.zip", {
       createPreRestoreBackup: false,
@@ -149,7 +134,6 @@ describe("restoreBackup archive safety", () => {
 
   it("keeps the live save when the archive is corrupt", async () => {
     const corrupt = path.join(backupsPath, "corrupt.zip");
-    // Valid zip signature, truncated body: fails partway through extraction.
     fs.writeFileSync(corrupt, Buffer.from("PK\u0003\u0004 truncated payload"));
 
     const result = await createService().restoreBackup("corrupt.zip", {
@@ -200,13 +184,6 @@ describe("restoreBackup archive safety", () => {
     ).toBe("RESTORED");
   });
 
-  // 2026-08-26 regression: createBackup can return success:true while having
-  // silently skipped files that vanished mid-archive (a real race on a live
-  // PZ directory) -- it surfaces that via skippedFiles rather than deciding
-  // policy itself. The pre-restore backup is about to become the world's
-  // ONLY copy while restore overwrites the live save, so this must refuse
-  // exactly like an outright backup failure -- "mostly complete" is not a
-  // safety net here.
   it("refuses to restore when the mandatory pre-restore backup completed but silently skipped a file", async () => {
     const good = path.join(backupsPath, "good.zip");
     await writeValidBackup(good, "RESTORED");
@@ -225,8 +202,6 @@ describe("restoreBackup archive safety", () => {
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/pre-restore backup failed/i);
     expect(result.message).toContain("map_meta.bin");
-    // Nothing about the live save should have moved -- restore must never
-    // reach extraction when the safety net it depends on isn't real.
     expect(
       fs.readFileSync(path.join(savesPath, "map_meta.bin"), "utf8"),
     ).toBe("LIVE");
@@ -308,12 +283,6 @@ describe("restoreBackup archive safety", () => {
   });
 
   it("invalidates chunks.js's cached map/ folder scan after a successful restore", async () => {
-    // Regression: chunks.js's /chunks and /stats routes cache a scan of a
-    // save's map/ folder for a few seconds (getMapFolderScan()'s TTL
-    // backstop). A restore swaps the whole save in from the archive but has
-    // no path to call into chunks.js's own explicit invalidation -- without
-    // this, a page reload within the TTL window after a restore would show
-    // chunk counts for the PRE-restore map/ contents.
     const good = path.join(backupsPath, "good.zip");
     await writeValidBackup(good, "RESTORED");
 
@@ -354,23 +323,8 @@ describe("restoreBackup archive safety", () => {
     expect(leftovers).toEqual([]);
   });
 
-  // regression, backup-restore regression: restoreInProgress used to be
-  // set only AFTER the async getServerProcessDetails() check resolved, not
-  // before it. Two calls arriving close together (a double-click before the
-  // UI disables the button, two admin sessions, a retried request) both read
-  // restoreInProgress as false -- neither had reached the assignment yet --
-  // both passed every guard, and both extracted + swapped the save directory
-  // concurrently. The second rename to finish silently won; BOTH callers got
-  // success:true with no error anywhere. Confirmed with a real race before
-  // fixing it, not assumed: an artificial delay inside getServerProcessDetails
-  // widened the window enough to prove it deterministically rather than
-  // relying on real clock timing (same "control the clock" idea as tonight's
-  // startup-script-collision fix, applied to a lock instead of a filename).
   it("a second restoreBackup() call arriving while the first is still checking the server-running state is refused, not run concurrently", async () => {
     const service = createService();
-    // Widen the await window between the initial guard check and the flag
-    // actually being set, so a genuine regression reproduces on demand
-    // instead of depending on real scheduler timing.
     service.setServerManager({
       getServerProcessDetails: async () => {
         await new Promise((resolve) => setTimeout(resolve, 30));
@@ -392,14 +346,9 @@ describe("restoreBackup archive safety", () => {
     const blocked = results.filter((r) => r.message === "Restore already in progress");
     const completed = results.filter((r) => r.success);
 
-    // Exactly one call proceeds; the other is refused outright, not left to
-    // race it to the finish line.
     expect(blocked.length).toBe(1);
     expect(completed.length).toBe(1);
 
-    // The live save reflects exactly the one restore that was allowed to
-    // run -- not a partial mix of both, and not silently overwritten by the
-    // refused call (which must never have touched the filesystem at all).
     const finalMarker = fs.readFileSync(path.join(savesPath, "map_meta.bin"), "utf8");
     expect(["BACKUP_A", "BACKUP_B"]).toContain(finalMarker);
     expect(finalMarker).toBe(completed[0].message.includes("a.zip") ? "BACKUP_A" : "BACKUP_B");
@@ -418,15 +367,6 @@ describe("createBackup archive safety", () => {
     expect(service.backupInProgress).toBe(false);
   });
 
-  // 2026-08-26 partial-failure-state/fatalExit hunt: cleanupOldBackups()
-  // runs inside output.on("close", async () => {...}) -- an EventEmitter
-  // listener whose returned promise nothing awaits or .catches. Before
-  // this test existed, an uncaught throw here would have been an
-  // unhandledRejection -> fatalExit() panel kill sitting directly
-  // downstream of every successful backup, including the mandatory
-  // pre-wipe and pre-restore ones. Same shape as the sibling test above
-  // for logServerEvent, and it must resolve the same way: retention
-  // housekeeping failing does not mean the backup failed.
   it("still resolves successfully when cleaning up old backups fails, instead of crashing the process", async () => {
     const service = createService();
     service.cleanupOldBackups = async () => {
@@ -452,18 +392,6 @@ describe("createBackup archive safety", () => {
   });
 
   it("removes orphaned backup temp files before starting", async () => {
-    // regression-2026-08-29 follow-up: cleanupOrphanBackupTemps now
-    // liveness-checks the .central-*.tmp pattern (it embeds a pid;
-    // *.zip.tmp does not, and stays pattern-only-deleted, see the
-    // function's own comment in backupService.js). The central temp here
-    // must be shaped like a REAL one (.central-{pid}-{timestamp}-{random}.tmp,
-    // StreamingZipWriter's own construction) with a pid confirmed dead --
-    // a plain "old" placeholder no longer matches the pattern at all and
-    // would sit there UNSWEPT under the new, safer behavior, which would
-    // make this assertion pass for the wrong reason (never deleted, so
-    // trivially satisfies existsSync === false only if we'd asserted the
-    // opposite -- picked a genuinely dead pid instead so the test still
-    // proves the sweep runs, not just that a mismatched name was ignored).
     const deadPid = spawnSync(process.execPath, ["-e", "process.exit(0)"]).pid;
     const service = createService();
     fs.writeFileSync(path.join(backupsPath, "old.zip.tmp"), "partial");
@@ -483,8 +411,6 @@ describe("createBackup archive safety", () => {
 
   it("leaves a .central-*.tmp file behind whose pid is still alive, even though it matches the same filename shape", async () => {
     const service = createService();
-    // Our own pid -- unambiguously alive for the duration of this test,
-    // same technique as writeFileAtomicOrphanTempSweep.test.js.
     const liveCentralPath = path.join(
       backupsPath,
       `.central-${process.pid}-1735500000000-k3f9zq.tmp`,
@@ -590,16 +516,6 @@ describe("createBackup archive safety", () => {
 
 });
 
-// 2026-08-27, decision recorded here: "make sure backups works" --
-// prove the whole create -> list -> restore lifecycle with actual content,
-// not status codes. Every test above either restores a hand-built archive
-// (writeValidBackup) or checks the archive's entry NAMES ("includes every
-// nested save entry") -- none of them exercise the real createBackup() on a
-// real multi-file, nested, binary-containing live save AND THEN compare the
-// restored bytes back against the original. A restore that silently wrote
-// the wrong file, truncated a binary entry, or mangled non-ASCII content
-// could pass every existing assertion in this file and still hand an
-// operator back the wrong world.
 describe("full lifecycle: create -> list -> restore, byte-for-byte", () => {
   function listAllFiles(dir) {
     const out = [];
@@ -616,10 +532,6 @@ describe("full lifecycle: create -> list -> restore, byte-for-byte", () => {
     const nested = path.join(savesPath, "map", "chunks");
     fs.mkdirSync(nested, { recursive: true });
 
-    // Every byte value 0-255 once, so any single-byte corruption (a
-    // dropped high bit, a text-mode line-ending rewrite, an encoding
-    // round-trip) is guaranteed to be caught, not just "looks textually
-    // similar".
     const binary = Buffer.from(Array.from({ length: 256 }, (_, i) => i));
     const files = new Map([
       [path.join(savesPath, "map_meta.bin"), binary],
@@ -646,15 +558,10 @@ describe("full lifecycle: create -> list -> restore, byte-for-byte", () => {
     });
     expect(createResult.success).toBe(true);
 
-    // What an operator actually sees and picks from -- not the raw create
-    // result, the listing endpoint everything else in the UI is driven by.
     const listed = await service.listBackups();
     const listedEntry = listed.find((b) => b.name === createResult.backup.name);
     expect(listedEntry).toBeTruthy();
 
-    // Simulate real data loss: wipe the live save so a restored file can
-    // only be reconstructed from the archive, never coasting on a leftover
-    // copy already sitting in savesPath.
     fs.rmSync(savesPath, { recursive: true, force: true });
     expect(fs.existsSync(savesPath)).toBe(false);
 

@@ -1,16 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { detectInitialLanguage, LANGUAGE_STORAGE_KEY } from '@/i18n'
 
-// 4666849b (2026-09-01) rewrote browser-language detection to exact-match
-// the full tag plus a zh-* special case, replacing the old
-// navigator.language.slice(0,2) prefix match. The Chinese fix was real and
-// correct, but the rewrite silently dropped bare-subtag matching for every
-// OTHER language: a browser reporting only a region-qualified tag (fr-FR,
-// de-DE, es-ES, ht-HT, or a real ar-PS/ar-EG/ar-SA once Arabic lands) with
-// no bare subtag anywhere in navigator.languages fell straight through to
-// English -- silent, first-run, no error. Restored as a second-pass
-// fallback in detectInitialLanguage() so the newer exact/zh behaviour
-// still wins wherever it applies.
 
 function mockNavigatorLanguages(language: string, languages: string[] = [language]) {
   Object.defineProperty(navigator, 'language', { value: language, configurable: true })

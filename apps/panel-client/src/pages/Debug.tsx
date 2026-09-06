@@ -174,13 +174,11 @@ interface PerformanceSnapshot {
   cpuUsage: number;
   playerCount: number;
   serverRunning: boolean;
-  // New host/PZ fields
   hostMemTotal?: number;
   hostMemUsed?: number;
   pzMemUsed?: number | null;
   panelMemHeap?: number;
   panelMemRss?: number;
-  // Computed fields added by frontend
   memoryMB?: number;
   cpuLoad?: number;
   time?: string;
@@ -268,36 +266,16 @@ type DiagnosticsFixAction = {
   label: string;
   automated: boolean;
   manualRoute?: string;
-  /** Present only when the user must confirm before this automated fix runs.
-   *  destructive is required (not optional) inside this object on purpose:
-   *  requiresConfirm/confirmMessage/destructive used to be three independent
-   *  optional fields, so a fix could ask for confirmation without ever
-   *  deciding destructive, and destructive:true with no requiresConfirm was
-   *  silently inert (the only place destructive was read was gated behind
-   *  requiresConfirm). Folding them into one object makes "confirms but
-   *  never says whether it's destructive" a compile error instead of a trap
-   *  for the next fix added to the switch below. */
   confirm?: {
-    /** Confirmation text shown in the native confirm dialog. */
     message: string;
-    /** Styles the confirm button red when true. Explicit per action rather than
-     *  defaulting to red for every confirmed action -- a bounded, reversible
-     *  INI toggle and an actual file deletion aren't the same severity, and
-     *  rendering both the same color flattens that distinction for the operator. */
     destructive: boolean;
   };
   openServerConfig?: boolean;
   openMods?: boolean;
-  /** Extra navigation buttons rendered next to the primary action. */
   links?: Array<{ to: string; label: string }>;
   note?: string;
 };
 
-// This whole file fetches with authFetch() (a raw fetch, not the JSON
-// api.ts client that already parses `{ error, code }` bodies), so a
-// non-ok response needs its own body read before the real server message
-// -- "Log file not found", "No support logs found", "Invalid filename",
-// etc. -- can reach a catch block instead of just an HTTP status number.
 export async function parseDownloadError(res: Response, fallback: string): Promise<string> {
   try {
     const data: unknown = await res.json();
@@ -320,10 +298,6 @@ function getDiagMetaStringList(check: DiagCheck, key: string): string[] {
   );
 }
 
-// mods.resolved's per-ID triage (apps/panel-server/routes/debug.js's triageUnresolvedMods) --
-// the causes this reads are a closed enum matching the server's own switch;
-// an unrecognized cause is dropped rather than trusted, same defensive stance
-// as every other server-controlled value this file renders.
 const UNRESOLVED_MOD_CAUSES = new Set([
   "typo",
   "stillDownloading",
@@ -362,18 +336,10 @@ function getDiagMetaTriageList(
   return out;
 }
 
-// MUST be called with the RAW check straight from the API response, never
-// the output of translateDiagnosticCheck() -- `note` below falls back to
-// the literal `check.hint` verbatim, which should stay the server's own
-// English text, not a partially-translated mix. See translateDiagnosticCheck's
-// own call site in this file: it deliberately keeps this function fed the
-// untranslated `check`, only the three *displayed* text nodes use the
-// translated copy.
 export function getDiagnosticsFixAction(
   check: DiagCheck,
   t: TFunction,
 ): DiagnosticsFixAction | null {
-  // Never show a fix button for passing or skipped checks.
   if (check.status === "ok" || check.status === "skip") return null;
   const L = (key: string) => t(`fixActions.links.${key}`);
 
@@ -390,8 +356,6 @@ export function getDiagnosticsFixAction(
           count > 10
             ? {
                 message: t("fixActions.modsNumericInMods.confirmMessage", { count }),
-                // Disables INI entries, doesn't delete anything -- re-enabling is a
-                // toggle, not a rebuild. Bounded/reversible, not red.
                 destructive: false,
               }
             : undefined,
@@ -403,21 +367,11 @@ export function getDiagnosticsFixAction(
       };
     }
     case "mods.resolved": {
-      // INTENTIONALLY manual: bulk-disabling unresolved Mods= entries is
-      // destructive. The most common cause is "Workshop downloads still
-      // pending" or "Mods= / WorkshopItems= drift" — not typos. Running
-      // the orphanWorkshop fix first usually resolves many of these.
       const count = getDiagMetaStringList(check, "unresolvedMods").length;
       const reviewParams = new URLSearchParams({ tab: "ini", search: "Mods" });
       for (const modId of getDiagMetaStringList(check, "unresolvedMods")) {
         reviewParams.append("unresolved", modId);
       }
-      // Ride the same querystring transport as `unresolved` above -- one
-      // `modId|cause|suggestion` entry per triaged ID (suggestion left empty
-      // when the cause doesn't have one). Server Config parses and validates
-      // this itself; an untriaged or newly-added ID (this diagnostics fetch
-      // predates the fix, or the server truly had nothing to say) just
-      // renders with no cause, same as before this existed.
       for (const entry of getDiagMetaTriageList(check, "unresolvedTriage")) {
         reviewParams.append(
           "unresolvedCause",
@@ -446,7 +400,6 @@ export function getDiagnosticsFixAction(
           count > 10
             ? {
                 message: t("fixActions.modsOrphanWorkshop.confirmMessage", { count }),
-                // Same class as numericInMods above -- an INI toggle, not a deletion.
                 destructive: false,
               }
             : undefined,
@@ -487,7 +440,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.modsWorkshopCrash.note"),
       };
 
-    // ─── Server / process ──────────────────────────────────────────────────
     case "server.process":
       return {
         label: t("fixActions.serverProcess.label"),
@@ -500,10 +452,6 @@ export function getDiagnosticsFixAction(
       return {
         label: t("fixActions.serverActiveOrInstallPath.label"),
         automated: false,
-        // manualRoute makes the primary button itself navigate to /servers
-        // instead of popping a toast that just repeats the note below --
-        // don't also list "Open Servers" in links, or the row shows two
-        // identically-labelled buttons where only one of them does anything.
         manualRoute: "/servers",
         links: [{ to: "/server-finder", label: L("autoDetect") }],
         note: t("fixActions.serverActiveOrInstallPath.note"),
@@ -525,12 +473,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.serverStartScriptOrJre.note"),
       };
     case "server.ini":
-      // server.ini's own possible failures cover far more than "file
-      // missing" (invalid keys, malformed values, wrong types for a given
-      // sandbox option) -- there's no single safe rewrite that resolves an
-      // unknown subset of them without risking clobbering a value the
-      // operator set on purpose. Stays manual; Server Config is where a
-      // human reviews and fixes the specific key that's wrong.
       return {
         label: t("fixActions.serverIniOrSandboxVars.label"),
         automated: false,
@@ -538,15 +480,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.serverIniOrSandboxVars.note"),
       };
     case "server.sandboxVars":
-      // Unlike server.ini above, this check only ever warns for ONE
-      // condition: the file doesn't exist yet (see apps/panel-server/routes/debug.js's
-      // own comment above this check -- server.sandboxCorrupt, a different
-      // id, covers a malformed EXISTING file). Nothing to lose by writing a
-      // fresh one: PUT /server-files/sandbox already creates-if-missing,
-      // and an empty sandbox object produces the same VERSION-only file PZ
-      // falls back to anyway when the file is absent -- this just makes
-      // that fallback state a real, editable file instead of an implicit
-      // one, exactly what the manual hint already told the operator to do.
       return {
         label: t("fixActions.serverSandboxVars.label"),
         automated: true,
@@ -586,8 +519,6 @@ export function getDiagnosticsFixAction(
         automated: true,
         confirm: {
           message: t("fixActions.serverStaleLocks.confirmMessage"),
-          // Actually deletes files in the save-adjacent lock directory, unlike
-          // the two INI-toggle fixes above -- stays red deliberately.
           destructive: true,
         },
         links: [{ to: "/chunks", label: L("openChunkCleaner") }],
@@ -600,7 +531,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.serverRecentCrash.note"),
       };
 
-    // ─── Services ──────────────────────────────────────────────────────────
     case "rcon.connected":
       return {
         label: t("fixActions.rconConnected.label"),
@@ -610,11 +540,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.rconConnected.note"),
       };
     case "modChecker":
-      // Only warns when workshopAcfPath IS set (see the check's own
-      // if/else in apps/panel-server/routes/debug.js) but the checker still isn't
-      // running -- the exact condition POST /mods/start's own 400 case
-      // guards against is the ACF path being unset, so this call can't hit
-      // that failure here. A plain retry, not a reconfiguration.
       return {
         label: t("fixActions.modCheckerStopped.label"),
         automated: true,
@@ -622,14 +547,6 @@ export function getDiagnosticsFixAction(
       };
     case "scheduler":
     case "services.error":
-      // scheduler warns when the SERVICE SINGLETON itself is null/never
-      // initialized (unlike modChecker above, where the object exists and
-      // just isn't polling) -- there's no service-level "start" to retry
-      // when there's no live instance to call it on. Only a full panel
-      // restart re-runs that initialization, and this page has no
-      // self-restart action to invoke it with. services.error is the
-      // generic "the checker for this whole category threw" catch-all --
-      // by definition not a specific, safely-repeatable action.
       return {
         label: t("fixActions.servicesStuck.label"),
         automated: false,
@@ -637,14 +554,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.servicesStuck.note"),
       };
     case "discord.bot":
-      // Only ever fails (this branch) when a token IS already configured
-      // but the bot isn't connected (see the check's own if/else) -- a
-      // plain retry with the saved token, not a request to generate or
-      // change credentials. Covers the common "never started after a
-      // config save" and "transient network blip" cases for free; a
-      // genuinely bad token just fails again with the same descriptive
-      // error POST /discord/start already returns, and the Open Discord
-      // link stays as the escape hatch for that case.
       return {
         label: t("fixActions.discordBot.retryLabel"),
         automated: true,
@@ -652,7 +561,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.discordBot.note"),
       };
 
-    // ─── Bridge ────────────────────────────────────────────────────────────
     case "bridge.configured":
     case "worldmap.bridge.configured":
       return {
@@ -670,16 +578,7 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.bridgeWritableOrHeartbeat.note"),
       };
 
-    // ─── Database / storage ────────────────────────────────────────────────
     case "db.exists":
-      // Deliberately NOT automated, and deliberately not "just touch an
-      // empty db.json" even though that would silence the check: a missing
-      // file this critical is exactly as likely to mean "the real data
-      // volume isn't mounted" or "dataDir points somewhere wrong" as
-      // "genuine first run" -- and silently creating a blank one in either
-      // of the first two cases would start writing fresh settings into the
-      // wrong place while looking like a fix. A human needs to know WHY
-      // it's missing before anything writes there again.
       return {
         label: t("fixActions.dbExistsOrWritable.label"),
         automated: false,
@@ -687,14 +586,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.dbExistsOrWritable.note"),
       };
     case "db.writable":
-      // Unlike db.exists above, the file is confirmed to exist here --
-      // "not writable" on Windows is most commonly the read-only file
-      // ATTRIBUTE (picked up from a zip extract or a copy off read-only
-      // media), which fs.chmod can safely clear. See
-      // POST /api/debug/fix-writability's own comment in
-      // apps/panel-server/routes/debug.js for the full safety reasoning (closed
-      // target enum, file-only, honest failure on a real ACL/ownership
-      // issue chmod can't fix).
       return {
         label: t("fixActions.dbWritable.label"),
         automated: true,
@@ -718,9 +609,6 @@ export function getDiagnosticsFixAction(
       return {
         label: t("fixActions.diskFree.label"),
         automated: false,
-        // label is "Open Backups" -- manualRoute makes the primary button
-        // itself go there instead of toasting, so only the distinct second
-        // link (Chunk Cleaner) needs to stay in the links row.
         manualRoute: "/backups",
         links: [{ to: "/chunks", label: L("openChunkCleaner") }],
         note: t("fixActions.diskFree.note"),
@@ -733,7 +621,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.storageSaveSize.note"),
       };
 
-    // ─── Runtime ───────────────────────────────────────────────────────────
     case "runtime.heap":
     case "runtime.hostMem":
       return {
@@ -749,7 +636,6 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.runtimeTimeSkew.note"),
       };
 
-    // ─── Updates ───────────────────────────────────────────────────────────
     case "update.panel":
     case "updates.error":
       return {
@@ -772,29 +658,13 @@ export function getDiagnosticsFixAction(
         note: t("fixActions.updateSteamApi.note"),
       };
 
-    // ─── Explicitly manual, no case-specific action possible ──────────────
-    // These checks have no local remediation; keep their server-provided
-    // guidance instead of inventing an action.
     case "mods.thumbnailResolution":
-      // Steam CDN reachability for a specific Workshop item's thumbnail
-      // image -- apps/panel-server/routes/debug.js's own hint already names the real
-      // causes (item deleted/private/region-locked, or this host can't
-      // reach Steam's image CDN at all) and both self-resolve: the mod
-      // checker retries every 5 minutes with no restart needed. There is
-      // no local action that fixes an external CDN or a delisted Workshop
-      // item.
       return {
         label: t("fixActions.fallback.label"),
         automated: false,
         note: check.hint || t("fixActions.fallback.noteFallback"),
       };
     case "rcon.commandRejections":
-      // A forensic summary of commands the GAME rejected, not something
-      // the panel did wrong -- buildRconCommandRejectionsCheck's own
-      // RCON_REJECTION_REASON_HINTS already explain the four known
-      // rejection shapes (unknown command, wrong arguments, insufficient
-      // in-game rights, in-game-only command) inline in the check's own
-      // hint text. Nothing to click; the message itself is the fix.
       return {
         label: t("fixActions.fallback.label"),
         automated: false,
@@ -804,14 +674,6 @@ export function getDiagnosticsFixAction(
     case "runtime.error":
     case "server.error":
     case "storage.error":
-      // The *.error ids are each category's own try/catch surfacing "the
-      // check itself threw," not a failing condition in the thing being
-      // checked -- an exception while probing the bridge/runtime/server/
-      // storage state, not a bridge/runtime/server/storage problem with a
-      // known remedy. The message already carries the real exception text
-      // (see each category's own catch block in apps/panel-server/routes/debug.js);
-      // there's no single action that could be "the fix" for an arbitrary
-      // caught error.
       return {
         label: t("fixActions.fallback.label"),
         automated: false,
@@ -819,8 +681,6 @@ export function getDiagnosticsFixAction(
       };
 
     default: {
-      // Fallback: only surface a button for warn/fail. Informational checks
-      // (e.g. "panel uptime") have no actionable fix — don't show a button.
       if (check.status === "info") return null;
       const hint = (check.hint || "").toLowerCase();
       const category = check.category;
@@ -834,18 +694,6 @@ export function getDiagnosticsFixAction(
       return {
         label: t("fixActions.fallback.label"),
         automated: false,
-        // Only match literal tokens here, never English prose. SERVER.INI
-        // and Mods= are on the do-not-translate list in every locale
-        // glossary, so they still appear verbatim (just lowercased) inside
-        // a translated hint -- safe to match regardless of UI language.
-        // A prose phrase like "server config" is not: it used to also be
-        // matched here, and every check whose English hint contains that
-        // phrase already has an explicit case above that sets
-        // openServerConfig directly, so removing it changes nothing today
-        // -- but it would have silently dropped the Open Server Config
-        // button for non-English users the day someone added a new
-        // fallback-covered check with that phrase in its hint. Don't
-        // re-add a prose match here; add an explicit switch case instead.
         openServerConfig: hint.includes("server.ini"),
         openMods: category === "mods" || hint.includes("mods="),
         links: links.length > 0 ? links : undefined,
@@ -855,28 +703,6 @@ export function getDiagnosticsFixAction(
   }
 }
 
-// Each automated fix POSTs to its own route, and those routes are gated by
-// TEN DIFFERENT capabilities, not one page-level concern -- read directly
-// from apps/panel-server/routes/*.js rather than assumed from the page's own admin-only
-// read endpoints:
-//   mods.numericInMods / mods.orphanWorkshop / mods.maps / mods.duplicates
-//     -> mods.manage (mods.js's router.use, whole router)
-//   modChecker -> mods.manage (mods.js POST /start, same router)
-//   server.process -> server.control (server.js POST /start)
-//   rcon.connected -> rcon.execute (rcon.js POST /connect)
-//   db.backup -> backups.manage (backup.js POST /create)
-//   server.staleLocks / db.writable -> diagnostics.manage
-//     (debug.js POST /clear-stale-locks and POST /fix-writability)
-//   bridge.configured / worldmap.bridge.configured -> bridge.setup
-//     (panelBridge.js POST /auto-configure)
-//   server.sandboxCorrupt / server.sandboxVars -> serverfiles.manage
-//     (serverFiles.js's router.use, POST /sandbox/repair and PUT /sandbox)
-//   discord.bot -> integrations.manage (discord.js's router.use, POST /start)
-// server.recentCrash makes no API call at all (it only switches tabs), so it
-// needs no capability. Every other check.id is either non-automated (manual
-// fix: a toast or a navigation, never an API call) or falls to the `default`
-// case in getDiagnosticsFixAction, which is also never automated -- neither
-// needs a capability either.
 export function getRequiredCapabilityForCheck(checkId: string): string | null {
   switch (checkId) {
     case "mods.numericInMods":
@@ -918,20 +744,6 @@ export interface HealthHeadline {
   title: string;
 }
 
-// healthStatus.status only ever means "did GET /debug/health's own
-// collection complete without throwing" -- apps/panel-server/routes/debug.js hardcodes
-// status: "ok" in its success branch regardless of what services.rcon/
-// services.server report, and that distinction is real (two server route
-// tests assert on it; overloading this field would break them). So "ok"
-// staying "ok" while RCON/the game server are down is not a server bug --
-// but the Health tab's headline and its Services card render from the SAME
-// payload object, and a UI that draws a green verdict from one field of it
-// while showing red services from two other fields of it two inches below
-// is contradicting itself from its own data. That's the bug, and it's a
-// render-side one: derive the headline from healthStatus.services too, not
-// just .status, so it can never disagree with the card underneath it -- and
-// name which service is down rather than a vague "Degraded", so the
-// headline still answers "what do I do next" and not just "something's up".
 export function getHealthHeadline(
   healthStatus: HealthStatus | null,
   t: TFunction,
@@ -960,7 +772,6 @@ export default function Debug() {
   const { t, i18n } = useTranslation("debug");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
-  // Distinguish a failed or unusable response from the initial loading state.
   const [systemInfoFailed, setSystemInfoFailed] = useState(false);
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [logFiles, setLogFiles] = useState<LogFile[]>([]);
@@ -971,9 +782,6 @@ export default function Debug() {
   const [perfRange, setPerfRange] = useState<"1h" | "6h" | "24h">("1h");
   const [refreshingPerformance, setRefreshingPerformance] = useState(false);
   const [crashLogs, setCrashLogs] = useState<CrashLog[]>([]);
-  // The route caps the returned list at 20; totalCount is the real count
-  // before that cap, so the badges below can say "showing 20 of 47" instead
-  // of just "20" once there are more crash dumps than the cap.
   const [crashLogsTotalCount, setCrashLogsTotalCount] = useState(0);
   const [selectedCrashLog, setSelectedCrashLog] = useState<string | null>(null);
   const [crashLogContent, setCrashLogContent] = useState<string>("");
@@ -1011,24 +819,12 @@ export default function Debug() {
   );
   const [refreshingDiagnostics, setRefreshingDiagnostics] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
-  // Every read endpoint this page hits requires diagnostics.manage (server/
-  // routes/debug.js's file-level comment says so explicitly) -- so a role
-  // that lacks it doesn't get a partially-broken page, it gets a wall of
-  // 403s across every tab. Answer that with one clean page-level state
-  // instead of per-tab error banners, same precedent as Users.tsx/
-  // RolesPermissions.tsx/OidcSettings.tsx (a real 403 from the mount-time
-  // fetch, not a client-side can() guess).
   const [diagnosticsPermissionDenied, setDiagnosticsPermissionDenied] =
     useState(false);
   const [diagnosticsHideOk, setDiagnosticsHideOk] = useState(false);
   const [fixingDiagnosticsCheckId, setFixingDiagnosticsCheckId] = useState<
     string | null
   >(null);
-  // Auto-fix failures otherwise only ever surfaced via a toast, which
-  // auto-dismisses and leaves the failing check row with no indication
-  // anything was attempted -- a user who steps away or switches tabs
-  // mid-attempt has no way to tell the fix ran and failed vs. was never
-  // tried. Persisted per check.id, same pattern as healthError/worldMapError.
   const [diagnosticsFixErrors, setDiagnosticsFixErrors] = useState<
     Record<string, string>
   >({});
@@ -1048,7 +844,6 @@ export default function Debug() {
   }>({ b42: null, b41: null });
   const [worldMapError, setWorldMapError] = useState<string | null>(null);
   const [worldMapNowTick, setWorldMapNowTick] = useState(() => Date.now());
-  // Live probe + test-action state for the World Map tab.
   type ProbeResult = {
     ok: boolean;
     count: number | null;
@@ -1068,21 +863,7 @@ export default function Debug() {
   const [armedAction, setArmedAction] = useState<string | null>(null);
   const armTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Bridge tab — the 7 PanelBridge debug/diagnostics handlers
-  // (getStats/checkAPI/getAvailableHandlers/getDebugLog/setDebugMode/
-  // clearErrors/debugItemScript). Read probes reuse the same
-  // probeResults/probeLoading/runProbe machinery the World Map tab already
-  // has (each gets its own id); only the two mutating actions
-  // (setDebugMode, clearErrors) reuse actionLoading/runAction. Connectivity
-  // is its own lightweight poll rather than the World Map tab's heavier
-  // /api/debug/worldmap aggregation -- this tab only needs "is the bridge
-  // service up and is the mod connected", not tile/save diagnostics.
   const [bridgeDiagConnected, setBridgeDiagConnected] = useState(false);
-  // Whether the file-level bridge connection can actually send commands
-  // right now (getConnectionDiagnostics() server-side) -- narrower than
-  // bridgeDiagConnected's mod-alive flag, used only to keep the badge from
-  // saying "connected" while the Stats card says the connection is
-  // unhealthy. See the reconciliation comment in checkBridgeDiagStatus.
   const [bridgeDiagHealthy, setBridgeDiagHealthy] = useState(false);
   const [bridgeDiagRunning, setBridgeDiagRunning] = useState(false);
   const [bridgeDiagStatusLoading, setBridgeDiagStatusLoading] = useState(true);
@@ -1095,10 +876,6 @@ export default function Debug() {
   const [debugLogMinLevel, setDebugLogMinLevel] = useState<
     "DEBUG" | "INFO" | "WARN" | "ERROR"
   >("DEBUG");
-  // Generation counters so a slower response to an earlier filter selection
-  // (activitySource / perfRange) can't land after a newer one and overwrite
-  // it with stale data -- both are dropdowns a user can click through
-  // quickly, and both fetches are also re-triggered by a poll interval.
   const activityFetchIdRef = useRef(0);
   const perfFetchIdRef = useRef(0);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -1114,27 +891,22 @@ export default function Debug() {
     return apiFetch(endpoint, options);
   }, []);
 
-  // Path editing state
   const [editingPaths, setEditingPaths] = useState(false);
   const [newDataDir, setNewDataDir] = useState("");
   const [newLogsDir, setNewLogsDir] = useState("");
   const [moveFiles, setMoveFiles] = useState(true);
   const [savingPaths, setSavingPaths] = useState(false);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+F or Cmd+F to focus search
       if ((e.ctrlKey || e.metaKey) && e.key === "f") {
         e.preventDefault();
         searchInputRef.current?.focus();
       }
-      // Escape to clear search
       if (e.key === "Escape" && searchQuery) {
         setSearchQuery("");
         searchInputRef.current?.blur();
       }
-      // Space to toggle pause (when not in input)
       if (e.key === " " && document.activeElement?.tagName !== "INPUT") {
         e.preventDefault();
         setPaused((p) => !p);
@@ -1144,9 +916,6 @@ export default function Debug() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [searchQuery]);
 
-  // Auto-scroll to bottom — scoped to the inner ScrollArea viewport so it
-  // does NOT scroll the outer page (scrollIntoView walks ancestors and would
-  // yank the whole window down on every new log line).
   useEffect(() => {
     if (!autoScroll || paused) return;
     const root = logsScrollAreaRef.current;
@@ -1158,7 +927,6 @@ export default function Debug() {
     viewport.scrollTop = viewport.scrollHeight;
   }, [logs, autoScroll, paused]);
 
-  // Fetch system info
   const fetchSystemInfo = async () => {
     try {
       const res = await authFetch("/api/debug/system");
@@ -1177,7 +945,6 @@ export default function Debug() {
     }
   };
 
-  // Fetch health status
   const fetchHealthStatus = async () => {
     setRefreshingHealth(true);
     try {
@@ -1199,7 +966,6 @@ export default function Debug() {
     }
   };
 
-  // Fetch smart diagnostics
   const fetchDiagnostics = useCallback(async () => {
     setRefreshingDiagnostics(true);
     try {
@@ -1214,9 +980,6 @@ export default function Debug() {
       if (data?.checks) {
         setDiagnostics(data);
         setDiagnosticsError(null);
-        // Drop persisted fix-errors for checks that no longer fail/warn --
-        // the underlying issue resolved (via this fix or another path), so
-        // the stale error banner shouldn't keep showing.
         const stillBad = new Set(
           (data.checks as DiagCheck[])
             .filter((c) => c.status === "fail" || c.status === "warn")
@@ -1246,8 +1009,6 @@ export default function Debug() {
       const action = getDiagnosticsFixAction(check, t);
       if (!action) return;
 
-      // Manual fixes do not call a protected route; automated fixes must pass
-      // the capability check here as well as the button state.
       if (action.automated) {
         const requiredCapability = getRequiredCapabilityForCheck(check.id);
         if (requiredCapability && !can(requiredCapability)) return;
@@ -1284,9 +1045,6 @@ export default function Debug() {
             title: t("diagnostics.applyFixTitle"),
             description: message,
             confirmLabel: t("diagnostics.applyButton"),
-            // No `!== false` fallback needed any more -- destructive is a
-            // required field inside confirm, so this is always a real,
-            // deliberately-set boolean, never an absent one defaulting to true.
             destructive: action.confirm.destructive,
           });
           if (!ok) {
@@ -1358,10 +1116,6 @@ export default function Debug() {
               }),
             );
           }
-          // Clause separator/terminator is a language property, not something
-          // every locale's untranslated fragment can be assumed to want a
-          // Latin "; "/"." for -- zh-CN / zh-TW's own fragments carry no punctuation
-          // and expect full-width equivalents instead.
           const isZh = i18n.language.startsWith("zh");
           const clauseSep = isZh ? "；" : "; ";
           const clauseEnd = isZh ? "。" : ".";
@@ -1374,7 +1128,7 @@ export default function Debug() {
                     count: result.total,
                   }),
           });
-          void wsDropped; // count already reflected in droppedTotal
+          void wsDropped;
         } else if (check.id === "mods.maps") {
           const result = await modsApi.repairMapEntries();
           toast({
@@ -1388,9 +1142,6 @@ export default function Debug() {
             description: `${result.message}${restartHint}`,
           });
         } else if (check.id === "server.process") {
-          // /server/start always responds non-2xx on failure, so
-          // handleResponse() throws into this handler's surrounding catch
-          // -- this never sees result.success === false.
           const result = (await serverApi.start()) as {
             success?: boolean;
             message?: string;
@@ -1402,9 +1153,6 @@ export default function Debug() {
               result?.message || t("diagnostics.serverStartingFallback"),
           });
         } else if (check.id === "rcon.connected") {
-          // /rcon/connect always responds non-2xx on failure, so
-          // handleResponse() throws into this handler's surrounding catch
-          // -- the connected check below is always true when reached.
           const result = (await rconApi.connect()) as {
             success?: boolean;
             connected?: boolean;
@@ -1417,9 +1165,6 @@ export default function Debug() {
               result?.message || t("diagnostics.rconReconnectedFallback"),
           });
         } else if (check.id === "db.backup") {
-          // /backup/create always responds non-2xx on failure, so
-          // handleResponse() throws into this handler's surrounding catch
-          // -- this never sees result.success === false.
           const result = await backupApi.createBackup({ includeDb: true });
           const backupName = result?.backup?.name
             ? ` (${result.backup.name})`
@@ -1441,12 +1186,6 @@ export default function Debug() {
             code?: string;
           } | null;
           if (!res.ok || data?.success === false) {
-            // 2026-08-26: authFetch/apiFetch bypasses lib/api.ts's
-            // handleResponse(), so this throw is the only place that ever
-            // sees this response -- a plain Error here would discard
-            // res.status and any code the server sent before the
-            // getUserErrorMessage() call in this function's own catch
-            // block (below) could ever use them.
             throw new ApiError(
               data?.error || data?.message || `HTTP ${res.status}`,
               { status: res.status, code: data?.code },
@@ -1464,9 +1203,6 @@ export default function Debug() {
           check.id === "bridge.configured" ||
           check.id === "worldmap.bridge.configured"
         ) {
-          // /panel-bridge/auto-configure always responds non-2xx on
-          // failure, so handleResponse() throws into this function's
-          // surrounding catch -- this never sees result.success === false.
           const result = await panelBridgeApi.autoConfigure();
           toast({
             title: t("diagnostics.bridgeConfiguredTitle"),
@@ -1483,10 +1219,6 @@ export default function Debug() {
             description: t("diagnostics.crashLogsOpenedDesc"),
           });
         } else if (check.id === "server.sandboxCorrupt") {
-          // /server-files/sandbox/repair always responds non-2xx on
-          // failure (404/422/500), so handleResponse() throws into this
-          // function's surrounding catch -- this never sees
-          // result.success === false.
           const result = await serverFilesApi.repairSandbox();
           if (result.alreadyValid) {
             toast({
@@ -1495,11 +1227,6 @@ export default function Debug() {
                 result.message || t("diagnostics.alreadyValidFallback"),
             });
           } else {
-            // SandboxVars.lua has no live-reload path (PZ's own /reloadoptions
-            // only re-reads ServerOptions.ini, never sandbox vars — see
-            // handleSaveSandbox's comment in ServerConfig.tsx), so a repair
-            // always needs a restart to reach the running game regardless of
-            // whether the server happened to be running when it was repaired.
             toast({
               title: t("diagnostics.sandboxRepairedTitle"),
               description:
@@ -1512,12 +1239,6 @@ export default function Debug() {
             });
           }
         } else if (check.id === "server.sandboxVars") {
-          // PUT /server-files/sandbox creates the file when it doesn't
-          // exist yet (see the check's own guard in getDiagnosticsFixAction
-          // above) -- an empty-per-section sandbox object produces the same
-          // VERSION-only content PZ falls back to implicitly, just written
-          // out as a real, editable file. Always responds non-2xx on
-          // failure, so this never sees result.success === false.
           const result = await serverFilesApi.saveSandbox({
             VERSION: 4,
             settings: {},
@@ -1534,10 +1255,6 @@ export default function Debug() {
               restartHint,
           });
         } else if (check.id === "db.writable") {
-          // POST /api/debug/fix-writability always responds non-2xx on
-          // failure (chmod itself failed, or the file is still unwritable
-          // after chmod succeeds -- see that route's own comment in
-          // apps/panel-server/routes/debug.js), so this never sees a false success.
           const res = await authFetch("/api/debug/fix-writability", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1550,10 +1267,6 @@ export default function Debug() {
             code?: string;
           } | null;
           if (!res.ok || data?.success === false) {
-            // authFetch bypasses lib/api.ts's handleResponse(), same
-            // reasoning as server.staleLocks above -- reconstruct an
-            // ApiError so the surrounding catch's getUserErrorMessage()
-            // sees the real server message and code, not just a status.
             throw new ApiError(
               data?.error || `HTTP ${res.status}`,
               { status: res.status, code: data?.code },
@@ -1565,9 +1278,6 @@ export default function Debug() {
               data?.message || t("diagnostics.dbWritableFixedFallback"),
           });
         } else if (check.id === "modChecker") {
-          // /mods/start always responds non-2xx on failure, so
-          // handleResponse() throws into this handler's surrounding catch
-          // -- this never sees a false success.
           const result = (await modsApi.start()) as {
             success?: boolean;
             message?: string;
@@ -1578,10 +1288,6 @@ export default function Debug() {
               result?.message || t("diagnostics.modCheckerStartedFallback"),
           });
         } else if (check.id === "discord.bot") {
-          // /discord/start always responds non-2xx on failure (including a
-          // still-bad token -- describeStartFailure() supplies the real
-          // reason), so handleResponse() throws into this handler's
-          // surrounding catch -- this never sees a false success.
           const result = (await discordApi.start()) as {
             success?: boolean;
             message?: string;
@@ -1610,7 +1316,6 @@ export default function Debug() {
     [fetchDiagnostics, toast, authFetch, confirm, t, i18n.language, can],
   );
 
-  // Fetch world-map specific diagnostics
   const fetchWorldMapDiag = useCallback(async () => {
     setRefreshingWorldMap(true);
     setWorldMapTileErrors({ b42: false, b41: false });
@@ -1635,8 +1340,6 @@ export default function Debug() {
     }
   }, [authFetch, t]);
 
-  // Live probes — call PanelBridge endpoints the World Map relies on and
-  // record latency/count/sample for the diagnostics UI.
   const runProbe = useCallback(
     async (
       id: string,
@@ -1647,17 +1350,6 @@ export default function Debug() {
       const t0 = Date.now();
       try {
         const r = await fn();
-        // Treat explicit success:false as a probe failure so the user sees
-        // the underlying error message rather than a misleading green badge.
-        // 2026-08-26: unreachable for every current probe (panelBridgeApi
-        // .getServerInfo/.sendCommand, all resolved through apiGet/apiPost)
-        // -- lib/api.ts's handleResponse() already throws on a 200 body with
-        // success: false before this .then() branch could ever see it. Kept
-        // and commented, not deleted: a future probe that bypasses apiPost
-        // would hit a bare Error with no status/code instead of the caught,
-        // fully-translatable ApiError the live path already produces, so
-        // this check firing would be a regression signal, not a working
-        // safety net.
         const res = r as {
           success?: boolean;
           error?: string;
@@ -1821,9 +1513,6 @@ export default function Debug() {
     [runProbe],
   );
 
-  // Use the most recently probed player list to drive test actions.
-  // Prefer the first *alive* player so a stale "dead" record doesn't
-  // soak up the airdrop or lightning at coordinates the admin can't see.
   const firstPlayerCoords = useMemo(() => {
     const sample = probeResults["players"]?.sample as
       | Array<{ x?: number; y?: number; name?: string; alive?: boolean }>
@@ -1845,7 +1534,6 @@ export default function Debug() {
     };
   }, [probeResults]);
 
-  // Run every probe sequentially so users get a single "refresh everything" button.
   const probeAll = useCallback(async () => {
     await probePlayers();
     await probeVehicles();
@@ -1853,9 +1541,6 @@ export default function Debug() {
     await probeGameTime();
   }, [probePlayers, probeVehicles, probeSafehouses, probeGameTime]);
 
-  // Click-to-arm pattern for actions that are visible to all players
-  // (airdrop, lightning, gunshot). First click arms the button for 4s,
-  // second click within that window actually fires. Avoids accidental drops.
   const armOrFire = useCallback(
     (id: string, fire: () => void) => {
       if (armedAction === id) {
@@ -1875,7 +1560,6 @@ export default function Debug() {
     [armedAction],
   );
 
-  // Cleanup arm timer on unmount.
   useEffect(
     () => () => {
       if (armTimerRef.current) clearTimeout(armTimerRef.current);
@@ -1909,14 +1593,6 @@ export default function Debug() {
     [toast, t],
   );
 
-  // Bridge tab -- shared fetch wrapper for all 7 debug/diagnostics routes.
-  // authFetch doesn't throw on a non-2xx the way apiGet/apiPost do (see
-  // fetchWorldMapDiag above), so every call site needs the same ok-check +
-  // body-read; centralized here rather than repeated per handler. A 403
-  // specifically flips bridgeDiagPermissionDenied so the whole tab can show
-  // one permission-denied state instead of five separate error banners --
-  // same reasoning as diagnosticsPermissionDenied above, scoped to
-  // bridge.diagnostics rather than the page-wide capability.
   const bridgeDiagFetch = useCallback(
     async (path: string, options?: RequestInit) => {
       const res = await authFetch(path, options);
@@ -1941,15 +1617,6 @@ export default function Debug() {
       const data = await res.json();
       setBridgeDiagRunning(data?.isRunning === true);
       setBridgeDiagConnected(data?.modConnected === true);
-      // modConnected alone can lag: the mod is still marked "alive" for a
-      // few failed polls after the file-level connection has already gone
-      // bad. data.connection is the same source the Stats card's
-      // "unhealthy" error reads (getConnectionDiagnostics() server-side) --
-      // fold it into the BADGE specifically so it never claims "connected"
-      // while the card underneath it says otherwise. Left bridgeDiagConnected
-      // itself alone: it also gates the auto-probe effect and every probe
-      // button's disabled state, which is existing, tested behavior this
-      // finding never called into question.
       setBridgeDiagHealthy(data?.connection?.canSendCommands === true);
     } catch (error) {
       reportClientError("Failed to check bridge status for the Bridge tab.", error);
@@ -2033,11 +1700,6 @@ export default function Debug() {
     [runProbe, bridgeDiagFetch, debugLogLimit, debugLogMinLevel],
   );
 
-  // debugItemScript -- a fixed, zero-argument self-test (probes 9 known
-  // method names against the first 3 catalog items; there is nothing for an
-  // operator to configure, see the handler's own PanelBridge.lua source).
-  // Modeled as a probe rather than a mutating action since it changes
-  // nothing server- or game-side -- purely a read/report.
   const probeSelfTest = useCallback(
     () =>
       runProbe(
@@ -2092,7 +1754,6 @@ export default function Debug() {
     );
   }, [confirm, t, runAction, bridgeDiagFetch, probeBridgeStats]);
 
-  // Fetch log files list
   const fetchLogFiles = async () => {
     try {
       const res = await authFetch("/api/debug/logs/files");
@@ -2184,7 +1845,6 @@ export default function Debug() {
     }
   };
 
-  // Fetch recent logs
   const fetchLogs = async () => {
     setRefreshingLogs(true);
     try {
@@ -2212,7 +1872,6 @@ export default function Debug() {
     }
   };
 
-  // Fetch activity log
   const fetchActivity = useCallback(async () => {
     const thisFetchId = ++activityFetchIdRef.current;
     setRefreshingActivity(true);
@@ -2243,7 +1902,6 @@ export default function Debug() {
     fetchCrashLogs();
     fetchDiagnostics();
 
-    // Refresh system info every 30 seconds
     const interval = setInterval(() => {
       if (document.visibilityState === "hidden") return;
       fetchSystemInfo();
@@ -2253,7 +1911,6 @@ export default function Debug() {
     return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only init
 
-  // Activity tab polling
   useEffect(() => {
     if (activeTab !== "activity") return;
 
@@ -2267,7 +1924,6 @@ export default function Debug() {
     return () => clearInterval(interval);
   }, [activeTab, fetchActivity, activityPaused]);
 
-  // World Map tab — fetch on entry, refresh every 30s while visible
   useEffect(() => {
     if (activeTab !== "worldmap") return;
     fetchWorldMapDiag();
@@ -2278,11 +1934,6 @@ export default function Debug() {
     return () => clearInterval(interval);
   }, [activeTab, fetchWorldMapDiag]);
 
-  // Bridge tab — connectivity poll on entry + every 15s while visible.
-  // getStats auto-refreshes alongside it (it's the "is anything wrong right
-  // now" summary view); checkAPI/getAvailableHandlers/getDebugLog/the
-  // self-test stay manual (button-triggered) since they take operator input
-  // or return a larger payload not worth fetching on every poll tick.
   useEffect(() => {
     if (activeTab !== "bridge") return;
     checkBridgeDiagStatus();
@@ -2304,16 +1955,12 @@ export default function Debug() {
     return () => clearInterval(interval);
   }, [activeTab, bridgeDiagConnected, probeBridgeStats]);
 
-  // Auto-probe live players once when tab opens so test actions have a target.
   useEffect(() => {
     if (activeTab !== "worldmap") return;
     if (probeResults["players"]) return;
     probePlayers();
   }, [activeTab, probeResults, probePlayers]);
 
-  // Keep the players probe fresh so the action target reflects reality.
-  // Light interval (20s) — vehicles/safehouses/time stay manual to avoid
-  // hammering the bridge.
   useEffect(() => {
     if (activeTab !== "worldmap") return;
     const interval = setInterval(() => {
@@ -2324,7 +1971,6 @@ export default function Debug() {
     return () => clearInterval(interval);
   }, [activeTab, probePlayers, probeLoading]);
 
-  // Live tick so heartbeat age and "checked Xs ago" stay accurate between fetches
   useEffect(() => {
     if (activeTab !== "worldmap") return;
     setWorldMapNowTick(Date.now());
@@ -2349,7 +1995,6 @@ export default function Debug() {
     return () => clearInterval(interval);
   }, [activeTab, fetchPerformanceHistory]);
 
-  // Listen for real-time logs via Socket.IO
   useEffect(() => {
     if (!socket || paused) return;
 
@@ -2388,7 +2033,6 @@ export default function Debug() {
     });
   };
 
-  // Get unique sources for filter - defined before filteredLogs
   const availableSources = useMemo(() => {
     const sources = new Set<string>();
     logs.forEach((log) => {
@@ -2397,16 +2041,12 @@ export default function Debug() {
     return Array.from(sources).sort();
   }, [logs]);
 
-  // Memoize filtered logs
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
-      // Level filter
       if (levelFilter !== "all" && log.level !== levelFilter) return false;
 
-      // Source filter
       if (sourceFilter !== "all" && log.source !== sourceFilter) return false;
 
-      // Search query
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const matchesMessage = log.message.toLowerCase().includes(query);
@@ -2425,7 +2065,6 @@ export default function Debug() {
     let url: string | null = null;
     try {
       if (filtered) {
-        // Download filtered logs from current view
         const dataToExport = filteredLogs.map((log) => ({
           timestamp: log.timestamp.toISOString(),
           level: log.level,
@@ -2467,7 +2106,6 @@ export default function Debug() {
           }),
         });
       } else {
-        // Download full log file from server
         const res = await authFetch("/api/debug/logs/download");
         if (!res.ok) throw new Error(await parseDownloadError(res, `HTTP ${res.status}`));
         const blob = await res.blob();
@@ -2541,10 +2179,6 @@ export default function Debug() {
       a.click();
       a.remove();
 
-      // Redaction (apps/panel-server/routes/debug.js) is a best-effort scrub for known
-      // credential shapes, not a promise the bundle is safe to hand to
-      // anyone -- surfaced here, at the moment the file actually lands, per
-      // the operator's ruling that the warning matters as much as the scrub.
       toast({
         title: t("logsTab.supportBundleReadyTitle"),
         description: t("logsTab.supportBundleReadyDesc"),
@@ -2680,7 +2314,6 @@ export default function Debug() {
     });
   };
 
-  // Log stats
   const logStats = useMemo(
     () => ({
       total: logs.length,
@@ -2692,7 +2325,6 @@ export default function Debug() {
     [logs],
   );
 
-  // Activity stats — based on the server-filtered entries (already narrowed by Source select)
   const activityStats = useMemo(() => {
     const stats = {
       total: activityEntries.length,
@@ -2714,7 +2346,6 @@ export default function Debug() {
     return stats;
   }, [activityEntries]);
 
-  // Memoized + searched + result-filtered activity rows
   const filteredActivityEntries = useMemo(() => {
     const q = activitySearch.trim().toLowerCase();
     return activityEntries.filter((e) => {
@@ -2751,7 +2382,6 @@ export default function Debug() {
     [toast, t],
   );
 
-  // Performance stats — averages, peaks, span — derived from history
   const performanceStats = useMemo(() => {
     const collect = (
       sel: (p: PerformanceSnapshot) => number | null | undefined,
@@ -2941,39 +2571,8 @@ export default function Debug() {
         onValueChange={setActiveTab}
         className="space-y-4"
       >
-        {/*
-          Tab strip is organised into three operational zones, separated by
-          thin vertical dividers so the eight tabs read as three clusters
-          rather than a uniform row:
-            • Now      — what's the server doing right this second
-            • History  — what happened
-            • System   — what this panel itself is made of
-        */}
-        {/* flex-nowrap + overflow-x-auto rather than flex-wrap: at 9 tabs,
-            wrapping strands the last one ("Environment") alone on its own
-            row on desktop. shrink-0 on every trigger and divider keeps the
-            strip scrolling instead of squeezing icons/labels to fit. Unlike
-            Settings' version of this same fix, there's no lg: breakpoint
-            where this page switches to a vertical sidebar -- the strip stays
-            horizontal (and can still overflow) at every width, so the scroll
-            cue below is never lg:hidden.
-            justify-start overrides TabsList's base: centering an overflowing
-            row overflows symmetrically on both sides, and scrollLeft can't
-            go negative, so whatever hangs off the left edge (including the
-            default-active first tab) is permanently unreachable.
-            DELIBERATELY KEPT even though the base TabsList now ships its own
-            overflow-safe .justify-safe-center (justify-content: safe center,
-            with a plain `center` fallback line for browsers that don't
-            understand the `safe` keyword) -- `safe` support is not
-            universal, and on a browser without it the base's fallback IS
-            plain center, which reproduces the original shipped bug. This is
-            the one page known to overflow, so this override is unconditional
-            protection independent of browser support, not leftover
-            redundancy from a workaround. Do not delete it as "the base
-            handles this now" -- it doesn't, for every browser. */}
         <div className="relative">
         <TabsList className="flex h-auto flex-nowrap items-center justify-start gap-1 overflow-x-auto rounded-lg border border-border/60 bg-gradient-to-b from-muted/50 to-muted/25 p-1.5 w-full shadow-inner">
-          {/* Zone: Now */}
           <TabsTrigger value="diagnostics" className="gap-2 shrink-0">
             <CheckCircle className="w-4 h-4" />
             {t("tabs.diagnostics")}
@@ -3015,13 +2614,11 @@ export default function Debug() {
             {t("tabs.performance")}
           </TabsTrigger>
 
-          {/* Zone divider: Now → History */}
           <span
             aria-hidden
             className="mx-1 h-5 w-px shrink-0 self-center bg-border/60"
           />
 
-          {/* Zone: History */}
           <TabsTrigger value="activity" className="gap-2 shrink-0">
             <Zap className="w-4 h-4" />
             {t("tabs.activity")}
@@ -3040,13 +2637,11 @@ export default function Debug() {
             )}
           </TabsTrigger>
 
-          {/* Zone divider: History → System */}
           <span
             aria-hidden
             className="mx-1 h-5 w-px shrink-0 self-center bg-border/60"
           />
 
-          {/* Zone: System (panel self-introspection) */}
           <TabsTrigger value="health" className="gap-2 shrink-0">
             <Activity className="w-4 h-4" />
             {t("tabs.health")}
@@ -3056,9 +2651,6 @@ export default function Debug() {
             {t("tabs.system")}
           </TabsTrigger>
         </TabsList>
-        {/* Static scroll-continuation cue -- not scroll-position-tracked, just
-            a constant "there's more this way" edge. Same pattern as
-            Settings.tsx's sub-tab strip and RolesPermissions.tsx's matrix. */}
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-y-0 end-0 flex w-10 items-center justify-end rounded-e-lg bg-gradient-to-l rtl:bg-gradient-to-r from-muted to-transparent pe-1.5"
@@ -3067,7 +2659,6 @@ export default function Debug() {
         </div>
         </div>
 
-        {/* Diagnostics Tab — Smart health checks with green/amber/red */}
         <TabsContent value="diagnostics" className="space-y-4">
           {diagnosticsError && (
             <Card className="border-2 border-destructive/50 bg-destructive/5">
@@ -3302,15 +2893,8 @@ export default function Debug() {
                                   : check.status === "info"
                                     ? "text-primary/70"
                                     : "text-muted-foreground";
-                          // Fix-action matching (below) keys off check.id and
-                          // sniffs check.hint's ENGLISH text — must run
-                          // against the raw, untranslated check, never the
-                          // translated display copy.
                           const fixAction = getDiagnosticsFixAction(check, t);
                           const translated = translateDiagnosticCheck(check);
-                          // Manual fixes call no API (a toast or a
-                          // navigation) and need no capability -- only an
-                          // automated fix can be blocked here.
                           const requiredCapability = fixAction?.automated
                             ? getRequiredCapabilityForCheck(check.id)
                             : null;
@@ -3462,7 +3046,6 @@ export default function Debug() {
           )}
         </TabsContent>
 
-        {/* World Map Tab — dedicated diagnostics for the live map */}
         <TabsContent value="worldmap" className="space-y-4">
           {(() => {
             const wm = worldMapDiag;
@@ -3499,7 +3082,6 @@ export default function Debug() {
             };
             const lastRun = wm ? new Date(wm.timestamp) : null;
             const lastRunMs = lastRun ? lastRun.getTime() : null;
-            // Compute live ages so values keep ticking between 30s fetches.
             const sinceFetchMs =
               lastRunMs !== null ? Math.max(0, worldMapNowTick - lastRunMs) : 0;
             const liveHeartbeatAge =
@@ -3507,7 +3089,6 @@ export default function Debug() {
               wm?.bridge?.statusAgeMs !== undefined
                 ? wm.bridge.statusAgeMs + sinceFetchMs
                 : null;
-            // Most actionable items first so end users see what to fix.
             const STATUS_ORDER: Record<DiagCheck["status"], number> = {
               fail: 0,
               warn: 1,
@@ -3785,7 +3366,6 @@ export default function Debug() {
                       </CardContent>
                     </Card>
 
-                    {/* Tile sources */}
                     <Card>
                       <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-base">
@@ -3870,7 +3450,6 @@ export default function Debug() {
                           );
                         })}
 
-                        {/* Live tile preview through our proxy */}
                         <div className="mt-3 pt-3 border-t">
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-medium text-muted-foreground">
@@ -4016,7 +3595,6 @@ export default function Debug() {
                       </CardContent>
                     </Card>
 
-                    {/* Live data feed */}
                     <Card>
                       <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-base">
@@ -4150,7 +3728,6 @@ export default function Debug() {
                       </CardContent>
                     </Card>
 
-                    {/* Live data probes — actively call the bridge endpoints the World Map uses */}
                     <Card>
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between gap-2">
@@ -4333,7 +3910,6 @@ export default function Debug() {
                       </CardContent>
                     </Card>
 
-                    {/* Test live actions — exercise the same actions World Map can trigger */}
                     {(() => {
                       const bridgeReady = wm?.bridge?.modConnected === true;
                       const hasTarget = !!firstPlayerCoords;
@@ -4398,7 +3974,6 @@ export default function Debug() {
                               )}
                             </div>
 
-                            {/* Airdrop */}
                             <div className="p-2.5 rounded-md border bg-card space-y-2">
                               <div className="flex items-center gap-2">
                                 <Package className="w-4 h-4 text-warning shrink-0" />
@@ -4479,7 +4054,6 @@ export default function Debug() {
                               </div>
                             </div>
 
-                            {/* Test gunshot sound */}
                             <div className="p-2.5 rounded-md border bg-card flex items-center justify-between gap-2 flex-wrap">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Volume2 className="w-4 h-4 text-warning shrink-0" />
@@ -4531,7 +4105,6 @@ export default function Debug() {
                               </Button>
                             </div>
 
-                            {/* Test lightning */}
                             <div className="p-2.5 rounded-md border bg-card flex items-center justify-between gap-2 flex-wrap">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Zap className="w-4 h-4 text-warning shrink-0" />
@@ -4592,7 +4165,6 @@ export default function Debug() {
                       );
                     })()}
 
-                    {/* Active save / build */}
                     <Card>
                       <CardHeader className="pb-3">
                         <CardTitle className="flex items-center gap-2 text-base">
@@ -4670,7 +4242,6 @@ export default function Debug() {
                       </CardContent>
                     </Card>
 
-                    {/* Detailed checks */}
                     <Card>
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -4767,7 +4338,6 @@ export default function Debug() {
           })()}
         </TabsContent>
 
-        {/* Activity Tab — Unified command/event timeline */}
         <TabsContent value="activity" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
@@ -4892,7 +4462,6 @@ export default function Debug() {
                 </div>
               </div>
 
-              {/* Stat row: counts + result filter pills + last-updated */}
               {activityEntries.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                   <Badge variant="secondary" className="gap-1">
@@ -5169,9 +4738,7 @@ export default function Debug() {
           </Card>
         </TabsContent>
 
-        {/* Logs Tab */}
         <TabsContent value="logs" className="space-y-4">
-          {/* Stats Bar — tactical filter chips */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {(() => {
               const tiles = [
@@ -5292,7 +4859,6 @@ export default function Debug() {
             })()}
           </div>
 
-          {/* Logs Card */}
           <Card>
             <CardHeader className="pb-4">
               <div className="flex flex-col gap-4">
@@ -5408,9 +4974,7 @@ export default function Debug() {
                   </div>
                 </div>
 
-                {/* Filters Row */}
                 <div className="flex flex-wrap items-center gap-3">
-                  {/* Search */}
                   <div className="relative flex-1 min-w-0 w-full sm:max-w-md">
                     <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -5433,7 +4997,6 @@ export default function Debug() {
                     )}
                   </div>
 
-                  {/* Level Filter */}
                   <Select
                     value={levelFilter}
                     onValueChange={(v) =>
@@ -5452,7 +5015,6 @@ export default function Debug() {
                     </SelectContent>
                   </Select>
 
-                  {/* Source Filter */}
                   <Select value={sourceFilter} onValueChange={setSourceFilter}>
                     <SelectTrigger className="w-full sm:w-[160px]">
                       <SelectValue placeholder={t("logsTab.sourcePlaceholder")} />
@@ -5467,7 +5029,6 @@ export default function Debug() {
                     </SelectContent>
                   </Select>
 
-                  {/* Time Format */}
                   <Select
                     value={timeFormat}
                     onValueChange={(v) => setTimeFormat(v as TimeFormat)}
@@ -5483,7 +5044,6 @@ export default function Debug() {
                     </SelectContent>
                   </Select>
 
-                  {/* Auto-scroll toggle */}
                   <div className="flex items-center gap-2">
                     <Switch
                       id="auto-scroll"
@@ -5589,7 +5149,6 @@ export default function Debug() {
             </CardContent>
           </Card>
 
-          {/* Log Files */}
           {logFiles.length > 0 && (
             <Card className="relative overflow-hidden">
               <div
@@ -5606,7 +5165,6 @@ export default function Debug() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Support bundle hero */}
                 <div className="relative overflow-hidden rounded-lg border border-primary/35 bg-gradient-to-br from-primary/[0.09] via-primary/[0.04] to-transparent p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-3">
@@ -5642,7 +5200,6 @@ export default function Debug() {
                   </div>
                 </div>
 
-                {/* Individual files */}
                 <div>
                   <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     {t("logsTab.individualFiles")}{" "}
@@ -5694,10 +5251,8 @@ export default function Debug() {
           )}
         </TabsContent>
 
-        {/* Crashes Tab */}
         <TabsContent value="crashes" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Crash Log List */}
             <Card className="lg:col-span-1">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
@@ -5809,7 +5364,6 @@ export default function Debug() {
               </CardContent>
             </Card>
 
-            {/* Crash Log Viewer */}
             <Card className="lg:col-span-2">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-2">
@@ -5896,9 +5450,7 @@ export default function Debug() {
           </div>
         </TabsContent>
 
-        {/* Performance Tab */}
         <TabsContent value="performance" className="space-y-4">
-          {/* Toolbar */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Activity className="w-4 h-4" />
@@ -5968,7 +5520,6 @@ export default function Debug() {
             </div>
           </div>
 
-          {/* Current Snapshot Cards */}
           {(() => {
             const latest =
               performanceHistory.length > 0
@@ -6154,7 +5705,6 @@ export default function Debug() {
             );
           })()}
 
-          {/* Charts */}
           <Suspense
             fallback={
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -6185,7 +5735,6 @@ export default function Debug() {
           </Suspense>
         </TabsContent>
 
-        {/* Health Tab */}
         <TabsContent value="health" className="space-y-4">
           {healthError && (
             <Card className="border-2 border-destructive/50 bg-destructive/5">
@@ -6223,7 +5772,6 @@ export default function Debug() {
           return (
           <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Overall Status */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
@@ -6254,17 +5802,6 @@ export default function Debug() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold">
-                      {/* getHealthHeadline() derives this from BOTH
-                          healthStatus.status and healthStatus.services --
-                          never just .status. See its own comment: .status
-                          "ok" only means the collection itself succeeded,
-                          not that the services it collected data about are
-                          up, and this headline sits directly above a
-                          Services card rendering those same services. A
-                          green verdict here while that card shows RCON/the
-                          game server down would be this page contradicting
-                          itself from its own data (2026-08-31 impeccable
-                          pass, finding #1). */}
                       {headline.title}
                     </p>
                     <p className="text-sm text-muted-foreground">
@@ -6290,7 +5827,6 @@ export default function Debug() {
               </CardContent>
             </Card>
 
-            {/* Memory Usage */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
@@ -6301,12 +5837,6 @@ export default function Debug() {
               <CardContent className="space-y-3">
                 {healthStatus?.memory &&
                   (() => {
-                    // heapTotal is just the currently-allocated V8 segment
-                    // size, not a ceiling — it grows on demand, so
-                    // heapUsed/heapTotal routinely sits at 80-95% under
-                    // completely normal operation. The number that actually
-                    // means something is heapUsed against heapLimit (the
-                    // real V8 ceiling, what --max-old-space-size controls).
                     const heapLimit = healthStatus.memory.heapLimit;
                     const heapPct =
                       heapLimit && heapLimit > 0
@@ -6388,7 +5918,6 @@ export default function Debug() {
             </Card>
           </div>
 
-          {/* Services Status */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -6414,7 +5943,6 @@ export default function Debug() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* RCON Service */}
                 <div className="p-4 rounded-lg border bg-card">
                   <div className="flex items-center gap-3 mb-3">
                     {healthStatus?.services?.rcon?.connected ? (
@@ -6443,7 +5971,6 @@ export default function Debug() {
                   </p>
                 </div>
 
-                {/* Server Status */}
                 <div className="p-4 rounded-lg border bg-card">
                   <div className="flex items-center gap-3 mb-3">
                     <Server
@@ -6468,7 +5995,6 @@ export default function Debug() {
                   </p>
                 </div>
 
-                {/* Mod Checker */}
                 <div className="p-4 rounded-lg border bg-card">
                   <div className="flex items-center gap-3 mb-3">
                     <Settings
@@ -6500,7 +6026,6 @@ export default function Debug() {
             </CardContent>
           </Card>
 
-          {/* Uptime */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
@@ -6528,9 +6053,7 @@ export default function Debug() {
           })()}
         </TabsContent>
 
-        {/* System Tab */}
         <TabsContent value="system" className="space-y-4">
-          {/* System Info Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2">
@@ -6586,7 +6109,6 @@ export default function Debug() {
             </Card>
           </div>
 
-          {/* File Paths */}
           <Card>
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
@@ -6771,12 +6293,6 @@ export default function Debug() {
           </Card>
         </TabsContent>
 
-        {/* Bridge Tab — the 7 PanelBridge debug/diagnostics handlers
-            (getStats/checkAPI/getAvailableHandlers/getDebugLog/
-            setDebugMode/clearErrors/debugItemScript). Gated on
-            bridge.diagnostics specifically -- narrower than whatever
-            permission gates this whole page, so a role with page access
-            can still lack this tab's data (see bridgeDiagFetch above). */}
         <TabsContent value="bridge" className="space-y-4">
           {bridgeDiagPermissionDenied ? (
             <EmptyState
@@ -6809,7 +6325,6 @@ export default function Debug() {
                 </div>
               )}
 
-              {/* Stats + debug mode + error log */}
               <Card>
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
@@ -7012,7 +6527,6 @@ export default function Debug() {
                 </CardContent>
               </Card>
 
-              {/* checkAPI */}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -7120,7 +6634,6 @@ export default function Debug() {
                 </CardContent>
               </Card>
 
-              {/* getAvailableHandlers */}
               <Card>
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
@@ -7204,7 +6717,6 @@ export default function Debug() {
                 </CardContent>
               </Card>
 
-              {/* getDebugLog */}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -7327,7 +6839,6 @@ export default function Debug() {
                 </CardContent>
               </Card>
 
-              {/* debugItemScript -- fixed, zero-argument self-test */}
               <Card>
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">

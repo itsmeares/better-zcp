@@ -3,28 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, regression follow-up: collectVehicles() (see
-// panelBridgeVehicleCollectionRuntimeShape.test.js) has three call sites.
-// getVehiclesDetailed and removeVehiclesInArea both capture (list, err), but
-// findVehicleById used to capture only `list`, discarding the error
-// collectVehicles wrote specifically to be surfaced. findVehicleById then
-// did `if not list then return nil end`, so the caller could never tell
-// "the vehicle list itself is unreadable" apart from "no vehicle has this
-// id" -- both looked identical: a bare nil.
-//
-// findVehicleById is the lookup behind 8 per-vehicle handlers (removeVehicle,
-// vehicleRepair, vehicleHotwire, vehicleSetFuel, vehicleSetBattery,
-// vehicleSetSiren, vehicleSetAlarm, vehicleSetTrunkLocked). Every one of
-// them used to report the same generic "Vehicle not found" regardless of
-// which of the two real causes was true -- sending an admin hunting a
-// vehicle-id problem that did not exist, when the actual cause was the
-// collection-unreadable case getVehiclesDetailed already reports honestly.
-//
-// This file exercises TWO of the 8 (removeVehicle and vehicleRepair) as
-// representative siblings, not all 8 -- the fix is in the one shared
-// function they all call, so testing the propagation once per call SHAPE
-// (immediate lookup vs. lookup-then-further-action) is enough to prove the
-// class is fixed without duplicating the same assertion 8 times.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// DELETE /api/auth/users/:id -- same mock shape as changeUserRoleRoute.test.js.
 const settings = new Map();
 const db = { data: { users: [], roles: [] } };
 
@@ -103,7 +102,7 @@ describe("DELETE /api/auth/users/:id — capability gate", () => {
     const res = createResponse();
     await runRoute("/users/:id", "delete", req, res);
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(db.data.users.find((u) => u.id === "u-tech")).toBeTruthy(); // untouched
+    expect(db.data.users.find((u) => u.id === "u-tech")).toBeTruthy();
   });
 
   it("admits an admin (has users.manage) and actually deletes the target", async () => {
@@ -140,7 +139,7 @@ describe("DELETE /api/auth/users/:id — self-deletion refused via the route", (
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ code: "USER_SELF_DELETE_REFUSED" }),
     );
-    expect(db.data.users.find((u) => u.id === "u-admin")).toBeTruthy(); // untouched
+    expect(db.data.users.find((u) => u.id === "u-admin")).toBeTruthy();
   });
 
   it("an admin CAN delete a different admin's account", async () => {
@@ -161,28 +160,16 @@ describe("DELETE /api/auth/users/:id — lockout surfaces its error code through
         { id: "u-tech", username: "tech", role: "technician", roleId: "role-technician" },
       ],
     });
-    // u-tech (technician, no users.manage) can't call this route at all in
-    // practice, but the SERVICE-level lockout must hold even if somehow
-    // reached -- simulate an admin trying to delete the only OTHER admin
-    // by first demoting themselves out of the picture isn't representable
-    // here, so this proves the rule via a second caller identity that
-    // still passes the gate: u-admin (the sole users.manage holder)
-    // targeted by a request that isn't self-deletion.
     const req = { params: { id: "u-admin" }, user: { role: "admin", userId: "some-other-admin-id" } };
     const res = createResponse();
     await runRoute("/users/:id", "delete", req, res);
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith(
-      // roles.manage is checked before users.manage (RECOVERY_CAPABILITIES'
-      // fixed order in services/permissions.js) and u-admin is the sole
-      // holder of both, so that's the capability the lockout trips on
-      // first. Also proves params reach the wire, not just the code --
-      // previously dropped silently by makeRoleError/this route's catch.
       expect.objectContaining({
         code: "ROLE_LOCKOUT_LAST_MANAGER",
         params: { action: "roles.manage" },
       }),
     );
-    expect(db.data.users.find((u) => u.id === "u-admin")).toBeTruthy(); // untouched
+    expect(db.data.users.find((u) => u.id === "u-admin")).toBeTruthy();
   });
 });

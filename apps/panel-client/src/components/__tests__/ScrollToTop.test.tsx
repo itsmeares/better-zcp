@@ -23,7 +23,6 @@ function App() {
 }
 
 beforeEach(() => {
-  // jsdom doesn't implement scrollTo
   Element.prototype.scrollTo = vi.fn()
 })
 

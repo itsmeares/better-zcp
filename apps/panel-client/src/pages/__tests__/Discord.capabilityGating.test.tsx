@@ -5,22 +5,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Discord from '../Discord'
 import { discordApi } from '@/lib/api'
 
-// regression Tier-3 capability-gating sweep: every mutating route
-// this page touches sits behind one whole-file server gate --
-// router.use(requirePermission("integrations.manage")) in
-// apps/panel-server/routes/discord.js:41, no per-route override, confirmed by reading
-// the full route list -- so this page is genuinely page-grain, unlike
-// Mods/Servers/ServerSetup/Chat (all mixed). Before this change Discord.tsx
-// had zero client-side capability awareness at all: every mutating button
-// was enabled purely on its own loading/validation state, so a role lacking
-// integrations.manage saw a fully clickable dashboard that would 403 on
-// every action. Each handler now has an early-return guard
-// (`if (!canManageIntegrations) return`) as the real gate, in addition to
-// the disabled+DisabledReason affordance on the visible control -- per
-// tonight's floor rule (the Console.tsx finding) that a disabled
-// button alone is not a gate. This file asserts the ACTION is unreachable
-// (mocked API never called on click), not merely that a control renders
-// with the disabled attribute.
 
 let mockCan = (_capability: string) => true
 
@@ -113,13 +97,6 @@ describe('Discord.tsx: every mutating control gates on integrations.manage', () 
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Stop Bot' })).toBeInTheDocument())
 
-    // regression (the fixture-masking finding): Verify
-    // Token's disabled expression is `testing || !token ||
-    // !canManageIntegrations` -- with no token typed, `!token` alone
-    // already disables it regardless of the capability check, so a denied
-    // assertion here would pass even with the capability gate deleted
-    // entirely. Type a token first so canManageIntegrations is the only
-    // thing left disabling it.
     fireEvent.change(screen.getByLabelText(/Bot Token/), { target: { value: 'fake-token-value' } })
 
     const buttonNames = ['Stop Bot', 'Send Test', 'Verify Token', 'Wipe Discord Setup', 'Save Changes', 'Save Events', 'Save Permissions']
@@ -135,8 +112,6 @@ describe('Discord.tsx: every mutating control gates on integrations.manage', () 
     expect(stop).not.toHaveBeenCalled()
     expect(sendTestMessage).not.toHaveBeenCalled()
     expect(testToken).not.toHaveBeenCalled()
-    // handleResetConfig's guard sits before the confirm() dialog -- a denied
-    // click must never even open the "are you sure" prompt.
     expect(resetConfig).not.toHaveBeenCalled()
     expect(updateConfig).not.toHaveBeenCalled()
     expect(updateWebhookEvents).not.toHaveBeenCalled()

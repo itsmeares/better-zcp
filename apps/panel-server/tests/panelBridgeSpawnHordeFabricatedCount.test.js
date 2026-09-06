@@ -3,14 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage for the other "not a verification gap -- a lie" ruling
-// from the full handler audit: handlers.spawnHordeNearPlayer/BehindPlayer's
-// fallback branches (used when VirtualZombieManager isn't available) called a
-// fire-and-forget horde API that returns no count, then set `spawned = count`
-// anyway -- asserting the full requested amount as fact with zero evidence,
-// while the code's own comment admits these APIs "may silently fail if the
-// area isn't fully loaded on the server". That's a fabricated number, worse
-// than no number, because the operator can't tell which branch produced it.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -99,8 +91,6 @@ describe('PanelBridge.lua handlers.spawnHordeNearPlayer/BehindPlayer -- fallback
 
     expect(result.ok).toBe(true);
     expect(result.data.method).toBe('createHordeInAreaTo');
-    // Before the fix, spawned was hardcoded to the requested count (50) here
-    // with zero evidence any zombie actually appeared.
     expect(result.data.verified).toBe('unverifiable');
     expect(result.data.spawned == null).toBe(true);
   });

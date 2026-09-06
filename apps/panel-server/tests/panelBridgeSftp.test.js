@@ -3,26 +3,7 @@ import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// getSftpCachePath used to build its path from process.cwd() -- silently
-// ignoring the operator's configured data directory, the same defect found
-// in debug.js's crash-logs scan. Mocked here (the only export in this
-// module that touches getDataPaths() at all -- confirmed by reading the
-// source) rather than relying on the real, test-isolated data dir, so the
-// "configured non-default dir" direction can be proven against a path that
-// obviously isn't cwd and obviously isn't whatever default the test
-// environment happens to be using this run.
-// Default return value matters, not just for these tests: utils/logger.js
-// (imported transitively via panelBridgeSftp.js) ALSO calls getDataPaths()
-// once at module load time, before any test body runs -- an unconfigured
-// vi.fn() (undefined) crashes that unrelated import with "Cannot read
-// properties of undefined (reading 'logsDir')" the instant this file is
-// collected. os.tmpdir() keeps that real (a real dir, just unused by
-// anything below), so only the value getSftpCachePath actually reads is
-// ever mocked away.
 const mockDataPaths = vi.hoisted(() => {
-  // process is a Node global, safe to use before any of this file's own
-  // `import`s have run -- vi.hoisted callbacks execute above them. Plain
-  // string concatenation, not path.join, for the same reason.
   const base = (process.env.TEMP || process.env.TMPDIR || '/tmp') + '/panel-bridge-sftp-test-default';
   const fn = () => ({ dataDir: base + '/data', logsDir: base + '/logs' });
   return { current: fn };
@@ -101,13 +82,6 @@ describe('PanelBridge SFTP configuration', () => {
   });
 });
 
-// 2026-08-26: formatSftpError()/getSftpErrorGuidance() classified these
-// failures correctly but only ever produced English text -- these codes are
-// what let a route response carry the SAME classification as a translatable
-// `code` + `params.detail`, per code registered+translated in errors.json
-// (all six locales). One test per branch, in the SAME order
-// classifySftpError()'s list checks them, so a reordering that changes which
-// pattern wins on an ambiguous message is caught here.
 describe('classifySftpErrorCode: mirrors getSftpErrorGuidance\'s classification as a stable code', () => {
   it('SFTP_CHROOTED_ACCOUNT for a chrooted mkdir failure under /home', () => {
     expect(classifySftpErrorCode(new Error('mkdir: _doMkdir: Permission denied /Home'))).toBe(

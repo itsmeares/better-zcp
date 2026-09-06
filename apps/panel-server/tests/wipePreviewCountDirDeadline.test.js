@@ -1,26 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 
-// apps/panel-server/routes/server.js's POST /wipe/preview used a fully synchronous
-// countDir(dir) -- fs.readdirSync/fs.statSync, no concurrency, no cap --
-// to walk every MAP_DIRS folder (map, chunkdata, isoregiondata, zpop, apop,
-// metagrid, map_visited_server) when the operator ticked "map" before
-// wiping. the test measured 20.7 SECONDS for map/ alone on a 147,136-file save
-// (SSD), fully blocking the Node event loop for that whole time -- not just
-// the requester's own page, but RCON, player polling, and every other
-// admin's session on the panel at once.
-//
-// The fix mirrors two existing patterns in this codebase rather than
-// inventing a third: chunks.js's getDirStats (bounded per-level concurrency
-// via runWithConcurrency) for throughput, and debug.js's scanSaveStats
-// (wall-clock deadline + entry cap, reporting truncated: true rather than
-// silently under-counting) for the backstop -- a wipe-preview dialog that
-// undercounts what it's about to delete would be worse than a slow one.
-//
-// Same deterministic-fake-clock technique as
-// scanSaveStatsDeadline.test.js: only mocked fs calls advance the clock, so
-// the deadline check inside countDir's own walk is what produces a
-// truncated result, not a real setTimeout race.
 
 const { countDir } = await import("../routes/server.js");
 

@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// In-memory stand-ins so the real service logic (including bcrypt) runs
-// without touching the panel database. Mirrors recoveryCodes.test.js's setup.
 const settings = new Map();
 const db = { data: { users: [] } };
 
@@ -16,21 +14,6 @@ vi.mock("../database/init.js", () => ({
 
 const { default: authService } = await import("../services/auth.js");
 
-// redeemRecoveryCode() reads the stored code list, finds an unused match,
-// resets the password (a real bcrypt.hash — genuinely slow, ~150-300ms at
-// BCRYPT_ROUNDS=12, plenty of room for two calls to interleave), THEN marks
-// the code used and writes the list back. Unlike createUser/
-// changeUserRoleById/deleteUser/bootstrapAdminFromExternalIdentity (all of
-// which wrap this same read-check-write shape in this._withMutex, per the
-// constructor's own comment: "Serializes setup/createUser to prevent a race
-// where two concurrent /api/auth/setup requests both pass the needsSetup()
-// check"), redeemRecoveryCode() does not serialize against itself. Two
-// concurrent redemptions of the SAME code each fetch their own independent
-// parse of the stored entries (JSON.parse — not a shared reference), so
-// neither sees the other's not-yet-written usedAt mark: both pass the
-// "is this code still valid" check and both successfully reset the
-// password, defeating "each code works exactly once" -- exactly the shape
-// of race _withMutex exists to close elsewhere in this file.
 describe("redeemRecoveryCode: concurrent redemption of the same code", () => {
   beforeEach(() => {
     settings.clear();

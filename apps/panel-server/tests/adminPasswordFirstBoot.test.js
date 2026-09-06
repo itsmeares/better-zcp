@@ -5,26 +5,6 @@ import path from "path";
 import { createServer } from "../database/init.js";
 import { generateStartupScripts, isFirstBootMissingAdminPassword } from "../routes/server.js";
 
-// 2026-08-26, two real Discord users (Stefa, Elch): a server created
-// through the setup wizard could not start at all. PZ's console showed
-// "Command line admin password: null" then "Enter new administrator
-// password:" then died with NoSuchElementException at Scanner.nextLine --
-// the panel launched the server with no -adminpassword flag and no
-// interactive stdin for PZ to fall back to.
-//
-// ROOT CAUSE: apps/panel-server/database/init.js's createServer() built the persisted
-// record from an explicit field-by-field object literal that never named
-// adminPassword -- servers.js's POST / forwarded it correctly, but it was
-// dropped one layer down, on every server ever created through the panel.
-// updateServer() never had this bug (it spreads `updates` generically), which
-// is exactly why re-saving the admin password after the fact (the users' own
-// workaround) was the only thing that ever worked.
-//
-// This file pins the fix at three levels: the DB layer no longer drops the
-// field, generateStartupScripts() puts -adminpassword in the actual launch
-// args once it has a real value to work with, and the NEW loud-failure
-// guard (isFirstBootMissingAdminPassword) refuses to start a server that
-// would hit this exact crash, without over-refusing an already-booted one.
 describe("createServer() persists adminPassword (database/init.js)", () => {
   it("a server created with an admin password has it on the returned record, not silently dropped", async () => {
     const server = await createServer({

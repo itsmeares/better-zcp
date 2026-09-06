@@ -3,15 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, regression, item 4 -- panelbridge-regression-2026-08-30.
-// getAllSandboxOptions' enum-values block gated on `opt.getNumValues and
-// opt.getValueName` (a field-test on a Java object -- the same anti-pattern
-// this file bans elsewhere) and called opt:getValueName(i), a method that
-// does not exist anywhere in the real jar's SandboxOption/ConfigOption
-// hierarchy (confirmed by parsing EnumSandboxOption/StrongEnumSandboxOption/
-// EnumConfigOption/ConfigOption directly). The real method is
-// getValueTranslationByIndexOrNull. Every enum sandbox option's enumValues
-// came back empty or absent, always, with no error surfaced.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -26,11 +17,6 @@ const LUA_PATH = path.join(
   'PanelBridge.lua',
 );
 
-// Deliberately does NOT define getValueName -- models the real jar, where it
-// genuinely does not exist anywhere in the hierarchy. Only defines the real
-// jar-confirmed methods: getClass() (for enum-type detection via its
-// tostring() containing "Enum"), getNumValues(), and
-// getValueTranslationByIndexOrNull(i).
 const STUBS = `
 FakeEnumClass = setmetatable({}, { __tostring = function() return "class zombie.SandboxOptions$EnumSandboxOption" end })
 

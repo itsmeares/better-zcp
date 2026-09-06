@@ -6,15 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// wired-no-ui-2026-08-30: generateWeather (POST /panel-bridge/weather/generate)
-// had a live, gated route and Lua handler but zero client callers -- distinct
-// from triggerBlizzard/triggerTropicalStorm/triggerStorm, which each fire one
-// fixed WeatherPeriod preset stage. This is the adjustable one: an operator
-// picks a strength (0-1) and a front type, which the server maps to the
-// game's own FRONT_COLD(-1)/STATIONARY(0)/WARM(1) constants -- stationary=0,
-// cold=1, warm=2 client-side (PanelBridge.lua's javaFrontMap). A transposed
-// cold/warm selection would silently trigger the wrong kind of front with no
-// compiler signal, same defect class as the visual-controls float-id pin.
 
 class StubResizeObserver {
   observe() {}

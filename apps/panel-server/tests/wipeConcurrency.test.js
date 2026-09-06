@@ -41,7 +41,6 @@ describe("POST /api/server/wipe concurrency guard", () => {
       loadConfig: async () => {},
       getServerProcessDetails: () => {
         checkCalls += 1;
-        // Suspend the first request inside its validation phase.
         if (checkCalls === 1) {
           return new Promise((resolve) => {
             releaseRunningCheck = () =>
@@ -64,7 +63,6 @@ describe("POST /api/server/wipe concurrency guard", () => {
     const secondResponse = createResponse();
 
     const firstCall = handler(buildRequest(), firstResponse);
-    // Let the first request reach its await.
     await Promise.resolve();
 
     await handler(buildRequest(), secondResponse);
@@ -98,7 +96,6 @@ describe("POST /api/server/wipe concurrency guard", () => {
     const second = createResponse();
     await handler(request(), second);
 
-    // Both are rejected for "server running", never 409 from a stuck guard.
     expect(second.status).toHaveBeenCalledWith(400);
     expect(second.status).not.toHaveBeenCalledWith(409);
   });

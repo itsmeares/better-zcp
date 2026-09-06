@@ -8,24 +8,6 @@ import Servers from '../Servers'
 import { serversApi, serversDetectApi, dockerApi, configApi, updateApi, serverApi } from '@/lib/api'
 import en from '../../locales/en/servers.json'
 
-// regression (Tier 3 gating sweep): Servers.tsx had zero client-side
-// capability gating. Six distinct capabilities gate its privileged actions --
-// docker.manage, servers.manage, server.control, server.wipe, server.install,
-// servers.discover -- see the mapping sent to testing (capability-mapping table) for
-// the full route-by-route trace. This suite asserts the ACTION is
-// unreachable (mocked API never called), not just that a control has the
-// `disabled` attribute -- a click on a disabled control still fires here,
-// same discipline as the Console.tsx lesson.
-//
-// Two rulings from testing get their own dedicated tests, not just blanket
-// deny/allow coverage: (1) inline Start/Stop needs BOTH servers.manage AND
-// server.control -- holding only one must still leave it unreachable,
-// because the two calls fire in sequence and a role with only one gets a
-// PARTIAL execution (activate succeeds, start/stop 403s), not a clean
-// refusal. (2) the delete dialog's "also delete files" checkbox is gated on
-// server.wipe INDEPENDENTLY of the base Delete button (servers.manage) --
-// panel-record-only deletion is a legitimately lower bar and must stay
-// reachable even without server.wipe.
 
 let mockCan = (_capability: string) => true
 
@@ -80,11 +62,6 @@ vi.mock('@/lib/api', async () => {
       ...actual.updateApi,
       getStatus: vi.fn(),
     },
-    // The Steam dialog's own useEffect fires serverApi.detectSteamCmd()/
-    // getBranches() as soon as it opens -- unmocked, these hit a real fetch
-    // that fails in jsdom and retries 3x with backoff, eating enough wall
-    // time to blow the suite's 60s test timeout on any test that opens the
-    // dialog. Not asserted on directly, just needs to resolve fast.
     serverApi: {
       ...actual.serverApi,
       detectSteamCmd: vi.fn(),
@@ -120,16 +97,8 @@ const updateGetStatus = vi.mocked(updateApi.getStatus)
 const detectSteamCmd = vi.mocked(serverApi.detectSteamCmd)
 const getBranches = vi.mocked(serverApi.getBranches)
 
-// Non-docker, non-remote -- exercises servers.manage (activate/save/delete),
-// server.control (inline start), servers.discover (scan/detect/auto-scan),
-// server.install + server.wipe (Steam dialog + Clear Folder, opened via its
-// card's dropdown menu).
 const SERVER_A = {
   id: 1,
-  // name and serverName deliberately differ (CardTitle shows name,
-  // CardDescription shows serverName) -- identical values here would make
-  // every text query match two elements and hang findBy/waitFor until its
-  // timeout instead of failing fast (diagnosed via zzdiag.test.tsx).
   name: 'server-a',
   serverName: 'server-a-cfg',
   installPath: '/srv/a',
@@ -150,9 +119,6 @@ const SERVER_A = {
   createdAt: new Date(0).toISOString(),
 } as never
 
-// Docker-managed -- hasManagedContainer becomes true for this server, which
-// suppresses its inline Start/Stop card buttons (Docker's own controls take
-// over) so docker.manage can be isolated cleanly from server.control.
 const SERVER_B = {
   ...(SERVER_A as object),
   id: 2,
@@ -188,9 +154,6 @@ async function setUpFixtures() {
     containers: [{ id: 'docker-b', name: 'docker-b', image: 'zomboid', state: 'exited', status: 'Exited' }],
   } as never)
   dockerGetStats.mockResolvedValue({ containers: {} } as never)
-  // Pre-populate steamcmdPath so the Steam dialog's Start Verify/Update
-  // button's OTHER disabled condition (!steamcmdPath.trim()) never masks
-  // the capability gate under test.
   getAppSettings.mockResolvedValue({ settings: { steamcmdPath: '/opt/steamcmd' } } as never)
   updateGetStatus.mockResolvedValue({} as never)
   create.mockResolvedValue({ server: { id: 3 } } as never)
@@ -202,10 +165,6 @@ async function setUpFixtures() {
   getBranches.mockResolvedValue({ branches: [] } as never)
 }
 
-// Radix's DropdownMenuTrigger opens on pointerdown, not click (see
-// Dashboard.capabilityGating.test.tsx's identical helper) -- a plain
-// fireEvent.click never dispatches pointerdown, so the menu would never
-// open.
 async function openCardMenu(serverName: string) {
   const trigger = await screen.findByRole('button', { name: new RegExp(`options for ${serverName}`, 'i') })
   fireEvent.pointerDown(trigger, { button: 0, pointerId: 1 })
@@ -266,28 +225,22 @@ describe('Servers.tsx: capability gating', () => {
     renderServers()
     await screen.findByText('server-a')
 
-    // servers.manage -- "Switch to this server" inline card button.
     const switchButtons = screen.getAllByRole('button', { name: en.card.switchToThisServer })
     switchButtons.forEach(b => expect(b).toBeDisabled())
     switchButtons.forEach(b => fireEvent.click(b))
     expect(activate).not.toHaveBeenCalled()
 
-    // server.control composite (both false here too) -- inline Start.
     const startButtons = screen.getAllByRole('button', { name: en.card.start })
     expect(startButtons.length).toBeGreaterThan(0)
     startButtons.forEach(b => expect(b).toBeDisabled())
     startButtons.forEach(b => fireEvent.click(b))
     await waitFor(() => expect(activate).not.toHaveBeenCalled())
 
-    // docker.manage -- Restart is unconditional on run-state, unlike
-    // Start/Stop, so it isolates the capability check cleanly.
     const restartButton = await screen.findByRole('button', { name: /restart docker-b/i })
     expect(restartButton).toBeDisabled()
     fireEvent.click(restartButton)
     expect(dockerRunAction).not.toHaveBeenCalled()
 
-    // servers.discover -- header scan-mounts button. Clear the mount that
-    // fired automatically on mount before asserting on the click.
     await waitFor(() => expect(discoverMounts).toHaveBeenCalled())
     discoverMounts.mockClear()
     const scanButton = screen.getByRole('button', { name: en.pageHeader.scanAria })
@@ -295,7 +248,6 @@ describe('Servers.tsx: capability gating', () => {
     fireEvent.click(scanButton)
     expect(discoverMounts).not.toHaveBeenCalled()
 
-    // Open Edit dialog for server-a -- servers.manage.
     const menu = await openCardMenu('server-a')
     fireEvent.click(within(menu).getByRole('menuitem', { name: en.card.edit }))
     await screen.findByRole('heading', { name: en.editDialog.title })
@@ -305,8 +257,6 @@ describe('Servers.tsx: capability gating', () => {
     expect(update).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: en.editDialog.cancel }))
 
-    // Open Delete dialog for server-a -- servers.manage on the base button,
-    // server.wipe on the checkbox independently (ruling 2).
     const menu2 = await openCardMenu('server-a')
     fireEvent.click(within(menu2).getByRole('menuitem', { name: en.card.removeFromPanel }))
     await screen.findByRole('heading', { name: en.deleteDialog.title })
@@ -318,8 +268,6 @@ describe('Servers.tsx: capability gating', () => {
     expect(del).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: en.deleteDialog.cancel }))
 
-    // Open Steam dialog for server-a -- server.install on Start Verify, and
-    // the Clear Folder confirm dialog behind it on server.wipe.
     await openSteamDialogForServerA()
     const startUpdateButton = screen.getByRole('button', { name: en.steamDialog.startUpdate })
     expect(startUpdateButton).toBeDisabled()
@@ -327,11 +275,6 @@ describe('Servers.tsx: capability gating', () => {
     expect(steamUpdate).not.toHaveBeenCalled()
     expect(steamVerify).not.toHaveBeenCalled()
 
-    // Fixed 2026-08-27 (stock-role regression): this button used to stay fully
-    // clickable regardless of permission -- only the confirm dialog's own
-    // button checked server.wipe, so an unauthorized role could open the
-    // dialog and just not complete it. Now the opener itself is gated too,
-    // so the dialog never opens at all.
     const clearFolderButton = screen.getByRole('button', { name: en.steamDialog.clearFolderButton })
     expect(clearFolderButton).toBeDisabled()
     fireEvent.click(clearFolderButton)
@@ -378,11 +321,6 @@ describe('Servers.tsx: capability gating', () => {
     fireEvent.click(screen.getByRole('button', { name: en.deleteDialog.cancel }))
 
     await openSteamDialogForServerA()
-    // Clear Folder BEFORE Start Update: once a real steamUpdate resolves,
-    // steamRunning stays true until a 'steam:complete' socket event that
-    // never fires in this test, which correctly (and unrelatedly to
-    // capability gating) disables Clear Folder afterward -- test that
-    // control first, while nothing is running yet.
     fireEvent.click(screen.getByRole('button', { name: en.steamDialog.clearFolderButton }))
     await screen.findByRole('heading', { name: en.clearInstallDialog.title })
     expect(screen.getByRole('button', { name: en.clearInstallDialog.clearFolder })).not.toBeDisabled()
@@ -429,18 +367,13 @@ describe('Servers.tsx: capability gating', () => {
     fireEvent.click(within(menu).getByRole('menuitem', { name: en.card.removeFromPanel }))
     await screen.findByRole('heading', { name: en.deleteDialog.title })
 
-    // The checkbox itself is unreachable...
     const checkbox = screen.getByRole('checkbox', { name: new RegExp(en.deleteDialog.alsoDeleteFilesLabel) })
     expect(checkbox).toBeDisabled()
 
-    // ...but the base Delete button is NOT blocked by the missing
-    // server.wipe -- servers.manage alone is enough for the lower-bar,
-    // panel-record-only deletion.
     const removeButton = screen.getByRole('button', { name: en.deleteDialog.removeFromPanel })
     expect(removeButton).not.toBeDisabled()
     fireEvent.click(removeButton)
     await waitFor(() => expect(del).toHaveBeenCalledTimes(1))
-    // And the file-delete step was never attempted.
     expect(deleteFiles).not.toHaveBeenCalled()
   })
 })

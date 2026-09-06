@@ -1,29 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// user-report-steam-collection-import-fails-success8-filetype2
-//
-// A real user reported "Import Collection" failing 100% of the time, with
-// Steam's own response body naming the cause: {"success":8,"fileType":2}.
-// success=8 is Steam's EResult k_EResultInvalidParam; fileType=2 is Steam's
-// own enum value for k_EWorkshopFileTypeCollection. Read together: Steam is
-// saying "the id you gave me for sharedfiles/addchild IS a collection, not
-// a mod" -- a permanent, cookie-independent rejection.
-//
-// GetCollectionDetails' children[] carries a `filetype` field on every
-// entry (see e.g. the CollectionDetailItem model in SteamWebAPI2), and a
-// direct child can itself be a sub-collection (filetype 2) rather than an
-// ordinary mod -- a real, common curation pattern ("collection of
-// collections"). /import-collection used to read every child's
-// publishedfileid with no regard for its filetype, so a sub-collection got
-// presented to the user as an ordinary importable "mod", tracked, written
-// into the server .ini, and later fed into Steam's addchild call as a
-// childId -- which Steam will refuse forever, for any account, no matter
-// how fresh the session cookies are. This is why the user's collection
-// failed 100% of the time and looked exactly like a cookie/auth problem.
-//
-// FAILS BEFORE THE FIX: the old code has no filetype check at all, so a
-// sub-collection child ends up in `mods` (and never in a `subCollectionIds`
-// field, which didn't exist).
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -83,8 +59,6 @@ describe("POST /mods/import-collection — sub-collection children", () => {
   });
 
   it("excludes a sub-collection child (filetype 2) from the importable mods list", async () => {
-    // Collection "999" has 3 children: two ordinary mods and one
-    // sub-collection (a "collection of collections" pattern).
     const fetchMock = vi.fn(async (url) => {
       if (url.includes("GetCollectionDetails")) {
         return {
@@ -132,16 +106,11 @@ describe("POST /mods/import-collection — sub-collection children", () => {
     const body = res.getBody();
     const importedIds = body.mods.map((m) => m.workshopId);
 
-    // The sub-collection id must never appear as an importable mod.
     expect(importedIds).not.toContain("222");
     expect(importedIds.sort()).toEqual(["111", "333"]);
 
-    // It must be reported back distinctly, not silently dropped.
     expect(body.subCollectionIds).toEqual(["222"]);
 
-    // GetPublishedFileDetails must only have been asked about the 2 real
-    // mods -- proving the filter runs before the second Steam call, not
-    // just on the display list afterwards.
     const publishedFileCall = fetchMock.mock.calls.find(([url]) =>
       url.includes("GetPublishedFileDetails"),
     );

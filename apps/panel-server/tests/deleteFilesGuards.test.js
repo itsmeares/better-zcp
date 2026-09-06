@@ -28,31 +28,17 @@ function getDeleteFilesHandler() {
   return stack[stack.length - 1].handle;
 }
 
-// Same guard shape POST /wipe already has: refuse without confirm, refuse
-// while the server is running, and fail closed (not open) when detection
-// itself can't tell whether the server is running -- see d85fd42, where
-// checkServerRunning() collapsing a failed scan into `false` let several
-// callers treat "cannot tell" as "stopped".
 describe("POST /api/server/delete-files safety guards", () => {
   let installDir;
   let serverManager;
 
   beforeEach(() => {
     installDir = fs.mkdtempSync(path.join(os.tmpdir(), "pz-delete-files-"));
-    // A PZ marker file, so the existing "is this really a PZ install"
-    // check passes and the guards under test are the only thing left
-    // that could refuse the request.
     fs.writeFileSync(path.join(installDir, "ProjectZomboid64.json"), "{}");
     serverManager = {
       loadConfig: async () => {},
       getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
     };
-    // regression: deletePath must now also match a configured
-    // server's own installPath -- the marker-file check alone was
-    // trivially satisfiable. Default every test to a configured server
-    // pointing at installDir, so the existing guard tests (which exercise
-    // everything ELSE about this route) keep exercising just that, not
-    // this new check too; the new check gets its own tests below.
     getServers.mockReset();
     getServers.mockResolvedValue([{ id: 1, installPath: installDir }]);
   });
@@ -74,12 +60,8 @@ describe("POST /api/server/delete-files safety guards", () => {
 
     expect(response.status).toHaveBeenCalledWith(400);
     expect(response.json).toHaveBeenCalledWith(
-      // Own code as of 2026-08-26 regression round 2 -- used to share
-      // WIPE_CONFIRM_REQUIRED with /wipe; split out, see errorCodes.js.
       expect.objectContaining({ code: "DELETE_FILES_CONFIRM_REQUIRED" }),
     );
-    // Refusal must be real, not just the wrong status code with the delete
-    // happening anyway.
     expect(fs.existsSync(installDir)).toBe(true);
   });
 
@@ -95,7 +77,6 @@ describe("POST /api/server/delete-files safety guards", () => {
 
     expect(response.status).toHaveBeenCalledWith(400);
     expect(response.json).toHaveBeenCalledWith(
-      // Same code /wipe uses for the same gap -- see errorCodes.js.
       expect.objectContaining({ code: "WIPE_SERVER_RUNNING" }),
     );
     expect(fs.existsSync(installDir)).toBe(true);
@@ -131,12 +112,6 @@ describe("POST /api/server/delete-files safety guards", () => {
     expect(fs.existsSync(installDir)).toBe(false);
   });
 
-  // regression: hasPzInstallMarker() only checked whether a
-  // marker FILENAME exists in the target directory -- trivially satisfied
-  // by creating an empty file with that name anywhere on the host. This
-  // was never an authorization check, just a "does this look like a PZ
-  // folder" sanity check. deletePath must now also exactly match a
-  // configured server's own installPath.
   describe("refuses a directory with real PZ markers that isn't a configured server's installPath", () => {
     it("refuses when no configured server points at this path (the marker file alone is not enough)", async () => {
       getServers.mockResolvedValue([]);
@@ -149,8 +124,6 @@ describe("POST /api/server/delete-files safety guards", () => {
       expect(response.json).toHaveBeenCalledWith(
         expect.objectContaining({ code: "DELETE_FILES_NOT_CONFIGURED_SERVER" }),
       );
-      // The whole point: a real PZ marker file was present (see beforeEach)
-      // and it must not be enough on its own -- the install must survive.
       expect(fs.existsSync(installDir)).toBe(true);
     });
 
@@ -201,14 +174,6 @@ describe("POST /api/server/delete-files safety guards", () => {
     });
   });
 
-  // 2026-08-26 regression round 2, the finding 2: the entry check happens
-  // once, but everything after it (path/marker validation) is synchronous --
-  // getServerProcessDetails() itself is the only part of this route that
-  // yields, so a server that starts DURING that scan (a second admin
-  // session, a scheduler task, a supervisor auto-restart) would previously
-  // sail through undetected. These simulate exactly that: the first check
-  // (at route entry) sees a stopped server, but the server has started by
-  // the time the SECOND check (immediately before the actual delete) runs.
   describe("re-checks immediately before the delete, not just at entry", () => {
     it("refuses when the server starts between the entry check and the delete", async () => {
       let calls = 0;
@@ -228,7 +193,6 @@ describe("POST /api/server/delete-files safety guards", () => {
       expect(response.json).toHaveBeenCalledWith(
         expect.objectContaining({ code: "WIPE_SERVER_RUNNING" }),
       );
-      // The whole point: refusal must be real, the install must survive.
       expect(fs.existsSync(installDir)).toBe(true);
     });
 
@@ -254,15 +218,6 @@ describe("POST /api/server/delete-files safety guards", () => {
     });
   });
 
-  // 2026-08-26 regression round 2 follow-up, Michelle's UX audit: "Delete
-  // Everything" in Servers.tsx uses this exact endpoint on installPath, with
-  // only a checkbox and one click -- fine for the DEFAULT layout, where
-  // resolveZomboidPaths keeps the Zomboid data folder at a sibling
-  // `<installPath>_Data`, so this delete only costs a SteamCMD reinstall.
-  // But nothing stopped an operator from pointing zomboidDataPath INSIDE the
-  // install folder, in which case this same one-click delete also destroys
-  // the world save with no separate copy -- the actual "delete that doesn't
-  // look like one." These simulate that configuration directly.
   describe("refuses when the active server's Zomboid data folder is inside the folder being deleted", () => {
     it("refuses when zomboidDataPath is a subfolder of the install path being deleted", async () => {
       const dataDir = path.join(installDir, "ZomboidData");

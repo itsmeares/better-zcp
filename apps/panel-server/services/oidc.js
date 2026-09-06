@@ -1,19 +1,3 @@
-// OIDC (OpenID Connect) sign-in — additive to local username/password login,
-// never a replacement for it. Local login MUST keep working when OIDC is
-// unconfigured, misconfigured, or the identity provider is unreachable: an
-// operator locked out of the panel because a third-party IdP is down would
-// mean losing control of their own game server.
-//
-// Uses openid-client (github.com/panva/openid-client), which wraps the
-// lower-level oauth4webapi for all of discovery, PKCE, and — critically —
-// ID token validation (signature via the provider's JWKS, issuer, audience,
-// expiry, nonce). None of that crypto is reimplemented here.
-//
-// Scope, deliberately: ONE standards-compliant OIDC provider, configured by
-// its issuer URL rather than hardcoding Google/Discord/etc. Authorization
-// Code flow with PKCE. Every authorization request also carries and checks a
-// nonce, even though the spec only requires that for the implicit flow —
-// belt-and-braces per the operator's "good security" ask.
 import * as client from "openid-client";
 import { createLogger } from "../utils/logger.js";
 import { getSetting, setSetting } from "../database/init.js";
@@ -23,40 +7,20 @@ import { ErrorCode } from "../utils/errorCodes.js";
 
 const log = createLogger("OIDC");
 
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
 
 function readEnv(name) {
   const value = process.env[name];
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
-// The six non-secret fields, keyed by [envVar, dbSettingKey, defaultValue].
-// clientSecret is handled separately below — it's UI-entered like the
-// Discord bot token/Steam session cookie, so it lives in its own sibling
-// file via utils/uiSecretFile.js rather than db.json (same reasoning as
-// those: not panel-generated like jwt.secret, so it must stay editable
-// through Settings, but a credential all the same).
 const ENV_BACKED_FIELDS = [
   ["PANEL_OIDC_ISSUER_URL", "oidcIssuerUrl", ""],
   ["PANEL_OIDC_CLIENT_ID", "oidcClientId", ""],
   ["PANEL_OIDC_REDIRECT_URI", "oidcRedirectUri", ""],
   ["PANEL_OIDC_SCOPE", "oidcScope", "openid email profile"],
-  // Optional, cosmetic only (e.g. "Sign in with Authentik" on a future
-  // login button) — never used for any security decision.
   ["PANEL_OIDC_PROVIDER_NAME", "oidcProviderName", "SSO"],
 ];
 
-/**
- * Resolves stored + env-backed OIDC settings. An env var, when set, WINS
- * over whatever is stored in the DB/secret file for that specific field —
- * an operator who has set one in the environment (Docker/systemd/compose)
- * is making a deployment-level choice that a UI edit must not silently
- * override. Each of the 7 fields is resolved independently, so an operator
- * can fix everything through the UI except the one field they deliberately
- * pinned via env.
- */
 export async function getOidcSettings() {
   const resolved = {};
   for (const [envVar, settingKey, defaultValue] of ENV_BACKED_FIELDS) {
@@ -75,12 +39,6 @@ export async function getOidcSettings() {
     envClientSecret || readUiSecretFile("oidcClientSecret", log) || "";
 
   const envAllowInsecureHttp = readEnv("PANEL_OIDC_ALLOW_INSECURE_HTTP");
-  // Off by default: openid-client refuses plain HTTP for discovery and
-  // every subsequent request, which is the right default for a panel
-  // exposed to the internet. Only needed for a self-hosted IdP reachable
-  // solely over a private HTTP-only origin (e.g. behind a VPN/reverse
-  // proxy that terminates TLS elsewhere) — and for this module's own
-  // tests, which run a local HTTP mock IdP.
   const allowInsecureHttp = envAllowInsecureHttp
     ? envAllowInsecureHttp === "true"
     : Boolean(await getSetting("oidcAllowInsecureHttp"));
@@ -96,10 +54,6 @@ export async function getOidcSettings() {
   };
 }
 
-/**
- * Return the fields pinned by environment variables so the settings UI can
- * explain why those values are not editable.
- */
 export function getOidcEnvOverrides() {
   const overrides = {};
   for (const [envVar, settingKey] of ENV_BACKED_FIELDS) {
@@ -130,13 +84,6 @@ export function isOidcConfigured(settings) {
   );
 }
 
-// Discovery is a network call to the IdP — never do it at module import time
-// (that would make the whole panel's startup depend on a third-party
-// service being reachable). Memoized so concurrent requests don't each
-// trigger their own discovery round trip, but a FAILED discovery is not
-// cached: an IdP that's down right now and reachable a minute from now
-// should self-heal on the next login attempt rather than staying broken
-// until the panel restarts.
 let _configPromise = null;
 
 export async function getOidcConfig() {
@@ -144,15 +91,6 @@ export async function getOidcConfig() {
   if (!isOidcConfigured(settings)) return null;
 
   if (!_configPromise) {
-    // enableNonRepudiationChecks is REQUIRED here, not optional: by default
-    // openid-client treats the token endpoint's TLS connection itself as
-    // sufficient proof of the ID token's authenticity for the authorization
-    // code flow, and skips verifying its JWS signature against the
-    // provider's JWKS. That default is spec-compliant, but the operator
-    // explicitly asked for "good security", and a wrong or missing check
-    // here is exactly the kind of silent gap that's worse than not having
-    // OIDC at all — so this always verifies the signature independently of
-    // the TLS channel, belt-and-braces.
     const execute = [client.enableNonRepudiationChecks];
     if (settings.allowInsecureHttp) execute.push(client.allowInsecureRequests);
 
@@ -173,26 +111,12 @@ export async function getOidcConfig() {
   return _configPromise;
 }
 
-// Forces the next getOidcConfig() call to re-run discovery instead of
-// reusing a memoized Configuration. MUST be called by the settings save
-// path (see routes/oidc.js's PUT /settings) -- without this, the trap is:
-// an operator corrects a wrong issuer URL or rotates the client secret,
-// the save reports success, and the panel keeps authenticating against
-// the OLD provider config until the process restarts, because a
-// discovery that never fails never re-runs. Previously only a FAILED
-// discovery cleared this cache; a successful SAVE must clear it too.
 export function resetOidcConfigCache() {
   _configPromise = null;
 }
 
-// Same function, kept under its original name so existing tests don't need
-// to change -- this IS the real, non-test-only cache reset now.
 export const _resetOidcConfigCacheForTests = resetOidcConfigCache;
 
-// Reduces a discovered Configuration down to what the Settings screen shows
-// the operator after a successful test -- concrete endpoints and advertised
-// scopes to compare against the provider's own admin screen, rather than a
-// success implied by nothing more than a green checkmark.
 function describeDiscoveredMetadata(config) {
   const metadata = config.serverMetadata();
   return {
@@ -205,34 +129,6 @@ function describeDiscoveredMetadata(config) {
   };
 }
 
-/**
- * Runs discovery against a CANDIDATE config the operator is about to save,
- * without touching the live memoized Configuration and without requiring a
- * full login round trip -- lets Settings offer a "Test Connection" button
- * that answers "is this issuer URL/client reachable and does it look like
- * a real OIDC provider" before the operator commits to it. providerName is
- * irrelevant to discovery/auth itself, so it's not accepted here.
- *
- * Discovery alone is NOT a credential test: it's an unauthenticated GET of
- * /.well-known/openid-configuration that takes clientId/clientSecret only
- * to build a Configuration object and never sends either anywhere. A wrong
- * client secret passes. A wrong client ID passes. An unregistered redirect
- * URI passes. Everything that actually breaks a real login goes untested,
- * and the operator finds out by signing out and landing in a failed
- * redirect. So after discovery succeeds, this also makes ONE token-endpoint
- * round trip with a deliberately bogus authorization code:
- *   - a provider that rejects the CLIENT answers `invalid_client`
- *   - a provider that accepts the client and only rejects the (fabricated)
- *     code answers `invalid_grant` -- so invalid_grant is the SUCCESS
- *     signal here, counter-intuitive enough to deserve this comment.
- * Keyed on the OAuth `error` CODE in the JSON body, never the HTTP status:
- * providers disagree on whether invalid_client is 401 or 400, and matching
- * on status would be flaky across exactly the providers we most want to
- * support. Any third outcome -- network failure, an HTML error page, an
- * OAuth error code we don't recognise -- is reported as `undetermined`,
- * never as success. A test that cannot fail is the bug this exists to fix;
- * this must not become a second one.
- */
 export async function testOidcDiscovery({
   issuerUrl,
   clientId,
@@ -271,10 +167,6 @@ export async function testOidcDiscovery({
       code: bogusCode,
       ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     });
-    // A provider that accepts a code it never issued, without even
-    // rejecting the client, is not spec-compliant -- but credentials still
-    // weren't the reason for the (lack of) failure, so treat it the same
-    // as invalid_grant.
     return { success: true, metadata: describeDiscoveredMetadata(config) };
   } catch (error) {
     if (error instanceof client.ResponseBodyError) {
@@ -311,15 +203,7 @@ export async function testOidcDiscovery({
   }
 }
 
-// ---------------------------------------------------------------------------
-// Authorization request (the "log in with SSO" redirect)
-// ---------------------------------------------------------------------------
 
-/**
- * Builds the URL to send the browser to at the IdP, plus the PKCE/state/
- * nonce values the caller must persist (e.g. in a short-lived cookie) and
- * hand back to `handleOidcCallback` unchanged.
- */
 export async function buildOidcAuthorizationRequest() {
   const config = await getOidcConfig();
   if (!config) {
@@ -344,24 +228,7 @@ export async function buildOidcAuthorizationRequest() {
   return { authorizationUrl: url.href, state, nonce, codeVerifier };
 }
 
-// ---------------------------------------------------------------------------
-// Callback (the redirect back from the IdP)
-// ---------------------------------------------------------------------------
 
-/**
- * `currentUrl` must be a URL whose origin+pathname equal the configured
- * redirect_uri and whose query string is exactly what the IdP sent back
- * (code, state, or error) — see routes/oidc.js for how that's built from
- * the incoming request. `flow` is the { state, nonce, codeVerifier } this
- * module handed back from buildOidcAuthorizationRequest and the caller
- * persisted across the redirect.
- *
- * Resolves to the VALIDATED ID token claims (signature, issuer, audience,
- * expiry, and nonce all already checked by openid-client/oauth4webapi) on
- * success. Throws on any validation failure, including the IdP itself
- * reporting an error (e.g. the user denied consent) — callers must not
- * treat a caught exception here as anything other than "not authenticated".
- */
 export async function handleOidcCallback(currentUrl, flow) {
   const config = await getOidcConfig();
   if (!config) {
@@ -378,9 +245,6 @@ export async function handleOidcCallback(currentUrl, flow) {
     idTokenExpected: true,
   });
 
-  // Already fully validated by authorizationCodeGrant above (signature via
-  // the provider's JWKS, iss, aud, exp, and nonce) — this just reads the
-  // result out, it performs no additional checking of its own.
   const claims = tokens.claims();
   if (!claims || !claims.sub) {
     throw new Error("OIDC provider did not return a subject claim");

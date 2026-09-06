@@ -39,11 +39,6 @@ describe('VehiclePicker', () => {
   it('shows a manual-entry fallback when no catalog is loaded yet', async () => {
     getCatalogVehicles.mockResolvedValue({ vehicles: [], count: 0, scannedAt: null })
     render(<VehiclePicker value="" onChange={vi.fn()} />)
-    // waitFor(toHaveBeenCalled) only proves the API was CALLED, not that the
-    // resulting setState/re-render has committed -- see ItemPicker.test.tsx
-    // for the mechanism and the reproduction. findBy* polls until the
-    // fallback actually appears instead of assuming one microtask tick was
-    // enough.
     expect(await screen.findByPlaceholderText('e.g., Base.CarNormal')).toBeInTheDocument()
   })
 
@@ -84,12 +79,6 @@ describe('VehiclePicker', () => {
     expect(onChange).toHaveBeenCalledWith('')
   })
 
-  // 2026-08-29 issue
-  // api-ts-declares-catalog-weight-mass-seats-non-optional-but-lua-guards-them:
-  // PanelBridge.lua only sets mass/seats on a successful pcall --
-  // getSeatNumber() is a known B42 Kahlua thrower -- so a real catalog
-  // entry can genuinely omit both. Proves the now-optional fields render
-  // without crashing and without a bogus badge.
   it('renders a vehicle with no mass/seats (the real Lua-omission shape) without crashing or showing mass/seat badges', async () => {
     const NO_MECHANICS: CatalogVehicle = { id: 'Base.NoMechanicsVan', name: 'No Mechanics Van' }
     getCatalogVehicles.mockResolvedValue({
@@ -99,15 +88,10 @@ describe('VehiclePicker', () => {
     })
     render(<VehiclePicker value="Base.NoMechanicsVan" onChange={vi.fn()} />)
 
-    // Same race as the manual-entry-fallback test above -- assert on the
-    // settled render via findBy*, not a toHaveBeenCalled() check followed
-    // by a synchronous getBy*.
     expect(await screen.findByText('No Mechanics Van')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Select vehicle' }))
     expect(await screen.findByText('Police Cruiser')).toBeInTheDocument()
-    // The mechanics-bearing vehicles still show their mass badge; only the
-    // missing-data one doesn't -- proves the guard is per-vehicle.
     expect(screen.getByText('1.2t')).toBeInTheDocument()
   })
 

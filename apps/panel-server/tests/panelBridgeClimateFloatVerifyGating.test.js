@@ -3,20 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31 regression: clearing the PROVISIONAL climate/weather block in
-// panelBridgeHandlerVerifyEnforcement.test.js (operator's own snow/rain
-// toggles call setSnow/startRain/stopRain directly).
-//
-// THE KEY FINDING THAT SHAPES EVERY TEST BELOW: getFinalValue() is the
-// WRONG read-back for a plain admin-override write. Confirmed via javap -c
-// against the real jar -- ClimateFloat/ClimateBool.setAdminValue and
-// setEnableAdmin never call the private calculate() that actually
-// propagates adminValue into finalValue; calculate() only runs from
-// ClimateManager's own tick loop. So these stubs model getAdminValue() (a
-// trivial field read of exactly what setAdminValue wrote, including the
-// real min/max clamp) as the safe, immediate signal -- NOT getFinalValue(),
-// which these stubs deliberately do NOT keep in sync with adminValue, the
-// same way the real object wouldn't either within a single Lua call.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -71,7 +57,6 @@ getClimateManager = function() return FakeClimate end
 `;
 }
 
-// name, args-value-field, handler-specific value used in the test
 const DIRECT_SETTER_HANDLERS = [
   { handler: 'setDayLight', value: 0.7 },
   { handler: 'setNightStrength', value: 0.4 },

@@ -1,26 +1,3 @@
-// Verifies a translated page against its locale files, and/or audits every
-// namespace for French string collisions.
-//
-// Two failure modes this catches that the test suite does not:
-//   1. A t('some.key') call in a page with no matching key in en/<ns>.json or
-//      fr/<ns>.json — renders as the raw key string at runtime, silently.
-//   2. Two DIFFERENT English source strings translated to the SAME French
-//      string within one namespace — the "two nav items, one French phrase"
-//      bug that got past a passing parity test. Flagged only when the
-//      underlying English values differ; a French duplicate whose English
-//      source is also identical (e.g. two "Cancel" buttons) is legitimate
-//      reuse, not a bug, and is not reported.
-//
-// Usage:
-//   node scripts/i18n-check.mjs <PageFile.tsx> <namespace>
-//     Checks one page's t() usages against its namespace's en/fr JSON, and
-//     reports suspicious French duplicate values within that namespace.
-//
-//   node scripts/i18n-check.mjs --all
-//     Skips the page/usage check and audits every namespace under
-//     apps/panel-client/src/locales/{en,fr}/*.json for suspicious French duplicates.
-//     Use this to gauge the false-positive rate of the duplicate check
-//     across the whole app, not just one page.
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -30,9 +7,6 @@ const root = path.resolve(__dirname, "..");
 const enDir = path.join(root, "apps/panel-client/src/locales/en");
 const frDir = path.join(root, "apps/panel-client/src/locales/fr");
 
-// The baseline contains reviewed, legitimate duplicate translations. It is
-// keyed by namespace and French value so key renames do not create noise.
-// A missing baseline makes every finding new instead of disabling the check.
 const BASELINE_PATH = path.join(__dirname, "i18n-duplicates.baseline.json");
 let baselineEntries = [];
 if (fs.existsSync(BASELINE_PATH)) {
@@ -69,11 +43,6 @@ function loadNamespace(ns) {
   return { en, fr, enFlat: flatten(en), frFlat: flatten(fr) };
 }
 
-// Normalizes an English source string for the "is this really the same
-// source concept" comparison below: case and whitespace differences alone
-// (e.g. a Title Case button next to a sentence-case label for the same
-// action) are not a translator's invention of two concepts, so they're
-// folded together rather than reported.
 function normalizeEn(v) {
   return (v || "")
     .toLowerCase()
@@ -82,12 +51,6 @@ function normalizeEn(v) {
     .replace(/[.:!?]+$/, "");
 }
 
-// Suspicious French duplicates: same FR string, meaningfully different EN
-// source string (not just case/whitespace/trailing punctuation), both plain
-// strings (arrays like presets.default are exempt — a French preset list can
-// coincidentally share an entry with another key without it meaning
-// anything). This is a heuristic, not a proof — read the flagged pairs
-// yourself; see the false-positive-rate note in the module comment.
 function findSuspiciousDuplicates(ns, { en, frFlat }) {
   const enMap = new Map(flatten(en));
   const byValue = new Map();
@@ -101,9 +64,9 @@ function findSuspiciousDuplicates(ns, { en, frFlat }) {
     if (keys.length < 2) continue;
     const enValues = keys.map((k) => enMap.get(k));
     const distinctRaw = new Set(enValues);
-    if (distinctRaw.size <= 1) continue; // identical EN source too — legitimate reuse
+    if (distinctRaw.size <= 1) continue;
     const distinctNormalized = new Set(enValues.map(normalizeEn));
-    if (distinctNormalized.size <= 1) continue; // case/whitespace-only EN difference
+    if (distinctNormalized.size <= 1) continue;
     suspicious.push({ ns, value, keys, enValues: [...distinctRaw] });
   }
   return suspicious;
@@ -125,8 +88,6 @@ function checkPage(pageFile, ns) {
   const enKeys = new Set(enFlat.map(([k]) => k));
   const frKeys = new Set(frFlat.map(([k]) => k));
 
-  // Collect t('...') usages, and normalize plural bases (foo.bar_one /
-  // foo.bar_other resolve foo.bar at runtime) so they don't false-positive.
   const used = new Set();
   const re = /\bt\(\s*['"`]([a-zA-Z0-9_.]+)['"`]/g;
   let m;
@@ -169,8 +130,6 @@ function reportSuspicious(suspicious) {
 function checkAllNamespaces() {
   const files = fs.readdirSync(enDir).filter((f) => f.endsWith(".json"));
 
-  // `--all` must scan real locale files; an empty directory would make the
-  // no-new-findings check pass vacuously.
   const MIN_NAMESPACES = 30;
   if (files.length < MIN_NAMESPACES) {
     console.error(
@@ -191,7 +150,6 @@ function checkAllNamespaces() {
     const nsData = loadNamespace(ns);
     if (!nsData) continue;
     const suspicious = findSuspiciousDuplicates(ns, nsData);
-    // Re-derive the two benign buckets for context on the overall ratio.
     const enMap = new Map(flatten(nsData.en));
     const byValue = new Map();
     for (const [key, val] of nsData.frFlat) {

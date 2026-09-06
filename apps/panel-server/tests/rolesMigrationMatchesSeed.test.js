@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-// apps/panel-server/services/permissions.js's DEFAULT_ROLE_CAPABILITIES and
-// database/init.js's migration-v2 capability arrays are two independent
-// copies of the same snapshot -- kept separate deliberately to avoid a
-// circular import between the two files (see both files' header comments).
-// Two independent copies drift silently unless something asserts they
-// match; this is that something.
 
 describe("permissions.js DEFAULT_ROLE_CAPABILITIES matches the migration's seed exactly", () => {
   it("admin/technician/moderator capability sets are identical between the two copies", async () => {

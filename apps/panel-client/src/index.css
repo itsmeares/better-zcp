@@ -2,11 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Self-hosted brand display font (was fetched from Google Fonts at runtime
-   in ThemeContext.tsx — broke offline/LAN-only deployments since this panel
-   very often runs on isolated server boxes with no outbound internet, and
-   added a render-blocking third-party request + font-swap layout shift even
-   when online). Latin-subset woff2 only; this UI is English-only. */
 @font-face {
   font-family: 'Bebas Neue';
   font-style: normal;
@@ -15,13 +10,11 @@
   src: url('/fonts/bebas-neue-v16-latin.woff2') format('woff2');
 }
 
-/* Hide native browser password reveal toggle (Edge/Chrome) */
 input::-ms-reveal,
 input::-ms-clear {
   display: none;
 }
 
-/* Hide native number input spinners — values are typed directly */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -31,24 +24,12 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* Safe-center utility: behaves like justify-center, but falls back to
-   start-alignment instead of overflowing symmetrically when content is
-   wider than its container (CSS Box Alignment "safe" fallback keyword).
-   Tailwind's justifyContent core plugin registers a fixed set of 7 classes
-   via addUtilities (not matchUtilities), so justify-[safe_center] compiles
-   to nothing in this Tailwind version -- confirmed by building the actual
-   CSS output and grepping it, zero rules emitted. Hand-written class is the
-   only way to ship this. The plain `justify-content: center;` line is a
-   fallback for browsers without `safe` support: an unsupported value only
-   invalidates the declaration that uses it, so `center` above still holds. */
 .justify-safe-center {
   justify-content: center;
   justify-content: safe center;
 }
 
 @layer base {
-  /* Base tokens: PZ-themed dark fallback (matches survival spirit).
-     The app is always dark — :root inherits from .dark when no theme class is set. */
   :root {
     --background: 30 10% 5%;
     --foreground: 36 16% 85%;
@@ -82,33 +63,19 @@ input[type="number"] {
     --chart-4: 200 36% 42%;
     --chart-5: 30 18% 56%;
 
-    /* PZ-specific font stacks */
     --font-display: 'Arial Narrow', 'Oswald', 'Arial Black', sans-serif;
     --font-mono: 'Consolas', 'SFMono-Regular', 'Liberation Mono', monospace;
 
-    /* Shared ease-out-expo for all motion */
     --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
-    /* Severity tokens (mirror ConflictGraph.tsx SEVERITY_COLORS) */
     --severity-high: var(--destructive);
     --severity-medium: var(--warning);
     --severity-low: var(--primary);
   }
 
-  /* ==========================================
-     THEME: SURVIVAL (Project Zomboid Authentic)
-     Grungy, post-apocalyptic, worn aesthetic
-     ========================================== */
-  /* Survival colors are identical to :root — no overrides needed. */
 
-  /* Fallback: .dark without a theme class inherits :root base tokens.
-     No overrides needed — :root already defines the survival palette. */
 }
 
-/* ==========================================
-   THEME: LIGHT — clean white daylight
-   Outside @layer base so Tailwind won't purge it
-   ========================================== */
 .theme-light {
   --background: 40 6% 88%;
   --foreground: 24 10% 14%;
@@ -146,11 +113,7 @@ input[type="number"] {
   --severity-low: var(--primary);
 }
 
-/* ==============================================
-   SURVIVAL THEME - PROJECT ZOMBOID EFFECTS
-   ============================================== */
 
-/* Noise/grain texture overlay for that post-apocalyptic feel */
 .theme-survival {
   background-color: hsl(30 10% 5%);
   background-image:
@@ -173,7 +136,6 @@ input[type="number"] {
   }
 }
 
-/* Very subtle scanline texture — pointer-events:none keeps it non-interactive */
 .theme-survival::before {
   content: '';
   position: fixed;
@@ -193,7 +155,6 @@ input[type="number"] {
   contain: strict;
 }
 
-/* Header styling - emergency broadcast feel */
 .theme-survival .sidebar-header {
   background: linear-gradient(180deg,
     hsl(var(--accent)) 0%,
@@ -204,7 +165,6 @@ input[type="number"] {
   position: relative;
 }
 
-/* Military/tactical active nav item */
 .theme-survival .nav-item-active {
   background: linear-gradient(90deg,
     hsl(var(--primary) / 0.28) 0%,
@@ -214,10 +174,6 @@ input[type="number"] {
   box-shadow: inset 0 0 14px hsl(var(--primary) / 0.06);
 }
 
-/* linear-gradient() has no logical angle keyword -- these mirror the
-   asymmetric (start-heavy, fading toward the end) fades above and below
-   by hand for RTL. border-inline-start above needs no such override; it
-   resolves from the element's own computed direction automatically. */
 [dir="rtl"] .theme-survival .nav-item-active {
   background: linear-gradient(270deg,
     hsl(var(--primary) / 0.28) 0%,
@@ -225,7 +181,6 @@ input[type="number"] {
   );
 }
 
-/* Custom scrollbar for survival theme */
 .theme-survival ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -246,7 +201,6 @@ input[type="number"] {
   background: linear-gradient(180deg, hsl(var(--primary) / 0.45), hsl(var(--border) / 0.7));
 }
 
-/* Card styling - worn paper/military document */
 .theme-survival .card-zomboid {
   position: relative;
   border: 1px solid hsl(var(--border));
@@ -267,7 +221,6 @@ input[type="number"] {
   border-radius: inherit;
 }
 
-/* Emergency/danger stripe effect */
 .theme-survival .danger-stripe {
   background: repeating-linear-gradient(
     -45deg,
@@ -278,7 +231,6 @@ input[type="number"] {
   );
 }
 
-/* Blood splatter decoration for critical elements */
 .theme-survival .blood-accent::after {
   content: '';
   position: absolute;
@@ -294,7 +246,6 @@ input[type="number"] {
   pointer-events: none;
 }
 
-/* Infection pulse for status indicators */
 @keyframes infection-pulse {
   0%, 100% {
     box-shadow: 0 0 4px hsl(var(--primary) / 0.28), 0 0 10px hsl(var(--primary) / 0.08);
@@ -304,7 +255,6 @@ input[type="number"] {
   }
 }
 
-/* ── OVERDRIVE: Radar sweep for main server status ── */
 @property --sweep-angle {
   syntax: '<angle>';
   initial-value: 0deg;
@@ -330,7 +280,6 @@ input[type="number"] {
   box-shadow: 0 0 4px hsl(var(--destructive) / 0.3);
 }
 
-/* Radar ring that sweeps around the online dot */
 @media (prefers-reduced-motion: no-preference) {
   .server-status-dot--online::after {
     content: '';
@@ -358,7 +307,6 @@ input[type="number"] {
   }
 }
 
-/* ── OVERDRIVE: Connection status breathing glow ── */
 @keyframes conn-breathe {
   0%, 100% {
     box-shadow: 0 0 0 0 hsl(var(--primary) / 0), inset 0 0 0 0 hsl(var(--primary) / 0);
@@ -380,7 +328,6 @@ input[type="number"] {
   background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.7));
 }
 
-/* Warning/alert pulse */
 @keyframes warning-flicker {
   0%, 90%, 100% { opacity: 1; }
   92%, 98% { opacity: 0.7; }
@@ -391,14 +338,12 @@ input[type="number"] {
   animation: warning-flicker 3s ease-in-out infinite;
 }
 
-/* Display/header text (like emergency broadcasts) */
 .theme-survival .text-display {
   font-family: var(--font-display);
   letter-spacing: 2px;
   text-transform: uppercase;
 }
 
-/* Terminal/console styling */
 .theme-survival .terminal-output {
   font-family: var(--font-mono);
   background: linear-gradient(180deg,
@@ -409,7 +354,6 @@ input[type="number"] {
   box-shadow: inset 0 0 30px hsl(var(--background) / 0.7);
 }
 
-/* Biohazard warning badge */
 .theme-survival .badge-biohazard {
   background: linear-gradient(135deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.45));
   color: hsl(var(--foreground));
@@ -433,7 +377,6 @@ input[type="number"] {
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Scoped transitions — only on interactive elements, not every DOM node */
   a, button, input, textarea, select, label,
   [role="button"], [role="tab"], [role="menuitem"],
   .card, .badge, [data-slot="card"],
@@ -464,7 +407,6 @@ input[type="number"] {
     }
   }
 
-/* Modern scrollbar styling */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -489,14 +431,12 @@ input[type="number"] {
   background: transparent;
 }
 
-/* Terminal styling */
 .terminal-output {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.5;
 }
 
-/* Shared shell brand styling */
 .shell-brand-title {
   color: hsl(var(--primary));
   font-family: 'Bebas Neue', var(--font-display);
@@ -508,7 +448,6 @@ input[type="number"] {
   line-height: 1.2;
 }
 
-/* ── OVERDRIVE: Scroll-driven sidebar header compression ── */
 @supports (animation-timeline: scroll()) {
   @media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
     .sidebar-header {
@@ -555,9 +494,6 @@ input[type="number"] {
   letter-spacing: 0.08em;
 }
 
-/* ──────────────────────────────────────────────────────
-   BRAND STRIP — tactical broadcast header
-   ────────────────────────────────────────────────────── */
 .brand-strip {
   background:
     radial-gradient(120% 80% at 100% 0%, hsl(var(--warning) / 0.10), transparent 55%),
@@ -604,10 +540,6 @@ input[type="number"] {
   box-shadow: 0 1px 6px hsl(var(--warning) / 0.18);
 }
 
-/* RTL sweep (2026-09-04): deliberately left physical. A decorative
-   sci-fi-HUD corner bracket on the brand strip, aria-hidden, carrying no
-   reading-direction meaning -- the same "genuinely physical, like a chart
-   axis" exception as a fixed visual flourish, not a fix. */
 .brand-strip__corner {
   position: absolute;
   top: 6px;
@@ -684,17 +616,11 @@ input[type="number"] {
 .brand-strip__version {
   letter-spacing: 0.04em;
   font-size: 9px;
-  /* padding-left: 2px removed 2026-09-04 -- dead: the padding-inline-start
-     below already won this cascade (same rule, later declaration, equal
-     specificity), so the physical line was never actually applied. */
   border-inline-start: 1px solid hsl(var(--border) / 0.6);
   padding-inline-start: 6px;
   margin-inline-start: 2px;
 }
 
-/* ──────────────────────────────────────────────────────
-   ACTIVE SERVER STRIP — tactical status row
-   ────────────────────────────────────────────────────── */
 .active-server-strip {
   background:
     linear-gradient(180deg, hsl(var(--muted) / 0.18), hsl(var(--card)) 100%);
@@ -786,7 +712,6 @@ input[type="number"] {
   50% { opacity: 0.45; }
 }
 
-/* Survival theme overrides — push the broadcast feel further */
 .theme-survival .brand-strip {
   background:
     radial-gradient(120% 80% at 100% 0%, hsl(34 70% 30% / 0.18), transparent 55%),
@@ -808,7 +733,6 @@ input[type="number"] {
   opacity: 0.7;
 }
 
-/* Light theme — calmer broadcast feel */
 .theme-light .brand-strip {
   background:
     linear-gradient(180deg, hsl(var(--accent) / 0.18) 0%, hsl(var(--card)) 70%);
@@ -878,7 +802,6 @@ input[type="number"] {
   color: hsl(var(--muted-foreground));
 }
 
-/* Status indicators with modern glow effects */
 .status-online {
   background-color: hsl(var(--success));
   box-shadow: 0 0 4px hsl(var(--success) / 0.18), inset 0 1px 1px hsl(var(--foreground) / 0.08);
@@ -916,7 +839,6 @@ input[type="number"] {
   }
 }
 
-/* Modern card hover effects */
 .card-interactive {
   transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
 }
@@ -932,7 +854,6 @@ input[type="number"] {
   transition-duration: 75ms;
 }
 
-/* Glass morphism effect for modals and overlays */
 .glass {
   backdrop-filter: blur(8px) saturate(125%);
   background: hsl(var(--background) / 0.88);
@@ -974,13 +895,6 @@ input[type="number"] {
     min-height: 44px;
   }
 
-  /* U13: bare <button>/<a> icon controls (sidebar collapse toggle, footer
-     logout/help/GitHub icon links) weren't covered by the selector
-     above, so they rendered well under the 44px comfortable touch target
-     on coarse-pointer (touch) devices. The Button *component* was already
-     fine (mobile-first h-11); this only affects hand-rolled controls. Scoped
-     separately (not merged into the rule above) so we don't also force
-     min-width onto every input/select. */
   button,
   a[aria-label] {
     min-height: 44px;
@@ -994,16 +908,11 @@ input[type="number"] {
     linear-gradient(180deg, hsl(var(--background)), hsl(var(--background)));
 }
 
-/* Improved focus states for accessibility */
 .focus-ring {
   @apply focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background;
 }
 
-/* ==============================================
-   MICRO-INTERACTIONS & POLISH
-   ============================================== */
 
-/* Button press effect */
 @media (hover: hover) and (pointer: fine) {
   button:not(:disabled):active {
     transform: scale(0.985);
@@ -1011,7 +920,6 @@ input[type="number"] {
   }
 }
 
-/* Row hover effect for lists/tables */
 .row-hover {
   @apply transition-colors duration-150;
 }
@@ -1020,7 +928,6 @@ input[type="number"] {
   @apply bg-accent/50;
 }
 
-/* ── OVERDRIVE: Spring-stagger card entrance ── */
 .stagger-in > * {
   animation: none;
 }
@@ -1051,7 +958,6 @@ input[type="number"] {
   }
 }
 
-/* Keep the old name as alias for any direct references */
 @keyframes staggerFadeIn {
   from {
     opacity: 0;
@@ -1063,7 +969,6 @@ input[type="number"] {
   }
 }
 
-/* Empty state icon float animation */
 .empty-state-icon {
   animation: none;
 }
@@ -1100,7 +1005,6 @@ input[type="number"] {
   }
 }
 
-/* Shimmer loading effect for skeleton */
 .shimmer {
   background: linear-gradient(
     90deg,
@@ -1117,7 +1021,6 @@ input[type="number"] {
   100% { background-position: -200% 0; }
 }
 
-/* Success flash animation */
 .flash-success {
   animation: flashSuccess 0.5s ease-out;
 }
@@ -1128,7 +1031,6 @@ input[type="number"] {
   100% { box-shadow: 0 0 0 0 hsl(var(--success) / 0); }
 }
 
-/* Glow pulse on important elements */
 .glow-pulse {
   animation: glowPulse 2s ease-in-out infinite;
 }
@@ -1138,7 +1040,6 @@ input[type="number"] {
   50% { box-shadow: 0 0 8px hsl(var(--primary) / 0.18); }
 }
 
-/* Tooltip-like popover enter */
 [data-state="open"][data-side] {
   animation: popoverEnter 0.15s ease-out;
 }
@@ -1154,7 +1055,6 @@ input[type="number"] {
   }
 }
 
-/* Scale-in animation for dialogs */
 [role="dialog"][data-state="open"] {
   animation: dialogEnter 0.2s ease-out;
 }
@@ -1170,7 +1070,6 @@ input[type="number"] {
   }
 }
 
-/* Badge count bounce */
 .badge-bounce {
   animation: badgeBounce 0.3s ease-out;
 }
@@ -1181,7 +1080,6 @@ input[type="number"] {
   100% { transform: scale(1); }
 }
 
-/* ── Scan progress sweep ── */
 @keyframes scanSweep {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(200%); }
@@ -1197,20 +1095,14 @@ input[type="number"] {
   position: absolute;
   inset: 0;
   width: 50%;
-  /* RTL sweep (2026-09-04): deliberately left physical -- transparent to
-     color and back to transparent is symmetric, so the 90deg angle reads
-     identically swept from either edge; there's no start/end asymmetry
-     here to get backwards. */
   background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.6), transparent);
   animation: scanSweep 1.5s cubic-bezier(0.25, 1, 0.5, 1) infinite;
 }
 
-/* Pulse variant for scan icon — respects reduced motion */
 .scan-pulse-icon {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* ── Live conflict stream entrance ── */
 @keyframes conflictStreamIn {
   from {
     opacity: 0;
@@ -1222,7 +1114,6 @@ input[type="number"] {
   }
 }
 
-/* ── Indeterminate progress shimmer — used during "Preparing" phase ── */
 @keyframes indeterminateShimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(250%); }
@@ -1252,7 +1143,6 @@ input[type="number"] {
   animation: conflictStreamIn 0.3s var(--ease-out-expo);
 }
 
-/* ── Diff panel entrance ── */
 @keyframes diffPanelEnter {
   from {
     opacity: 0;
@@ -1271,7 +1161,6 @@ input[type="number"] {
   overflow: hidden;
 }
 
-/* ── Diff code styling ── */
 .diff-code {
   font-variant-ligatures: none;
   tab-size: 4;
@@ -1298,7 +1187,6 @@ input[type="number"] {
 @media (prefers-reduced-motion: reduce) {
   .scan-progress-bar::after {
     animation: none;
-    /* Static bar instead of sweep */
     width: 100%;
     background: hsl(var(--primary) / 0.25);
   }
@@ -1358,7 +1246,6 @@ input[type="number"] {
   }
 }
 
-/* ── High-severity danger pulse — slow, subtle, operational ── */
 @keyframes severityPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
@@ -1367,7 +1254,6 @@ input[type="number"] {
   animation: severityPulse 2.5s ease-in-out infinite;
 }
 
-/* ── Scan complete flash — brief success glow on progress bar ── */
 @keyframes scanCompleteFlash {
   0% { box-shadow: 0 0 0 0 hsl(var(--success) / 0.5); }
   40% { box-shadow: 0 0 12px 2px hsl(var(--success) / 0.35); }
@@ -1377,7 +1263,6 @@ input[type="number"] {
   animation: scanCompleteFlash 0.8s var(--ease-out-expo) forwards;
 }
 
-/* ── Graph container fade-in ── */
 @keyframes graphFadeIn {
   from { opacity: 0; transform: scale(0.97); }
   to { opacity: 1; transform: scale(1); }
@@ -1386,7 +1271,6 @@ input[type="number"] {
   animation: graphFadeIn 0.5s var(--ease-out-expo);
 }
 
-/* ── Stat badge entrance — slide up + fade ── */
 @keyframes statBadgeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1399,7 +1283,6 @@ input[type="number"] {
 .stat-badge-enter:nth-child(3) { animation-delay: 120ms; }
 .stat-badge-enter:nth-child(4) { animation-delay: 175ms; }
 
-/* ── Conflict pair accordion stagger entrance ── */
 @keyframes conflictPairIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1408,7 +1291,6 @@ input[type="number"] {
   animation: conflictPairIn 0.3s var(--ease-out-expo) backwards;
 }
 
-/* ── Tooltip smooth fade ── */
 @keyframes tooltipFade {
   from { opacity: 0; transform: translateY(2px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1417,7 +1299,6 @@ input[type="number"] {
   animation: tooltipFade 0.15s var(--ease-out-expo);
 }
 
-/* ── Progress bar glow at leading edge during active scanning ── */
 @keyframes progressEdgeGlow {
   0%, 100% { box-shadow: 4px 0 8px 0 hsl(var(--primary) / 0.4); }
   50% { box-shadow: 4px 0 14px 2px hsl(var(--primary) / 0.6); }
@@ -1437,7 +1318,6 @@ input[type="number"] {
   background: hsl(var(--primary) / 0.7);
 }
 
-/* ── Tab content entrance — fade on mount ── */
 @keyframes tabContentIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -1446,7 +1326,6 @@ input[type="number"] {
   animation: tabContentIn 0.2s var(--ease-out-expo);
 }
 
-/* ── Settings tab trigger effects ── */
 .settings-tab-trigger {
   transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1459,7 +1338,6 @@ input[type="number"] {
   transition: transform 0.2s ease, filter 0.2s ease, color 0.2s ease;
 }
 
-/* ── Sub-tab content crossfade + slide ── */
 @keyframes subTabIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1468,7 +1346,6 @@ input[type="number"] {
   animation: subTabIn 0.2s var(--ease-out-expo);
 }
 
-/* ── Bulk selection bar entrance ── */
 @keyframes bulkBarIn {
   from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1477,7 +1354,6 @@ input[type="number"] {
   animation: bulkBarIn 0.2s var(--ease-out-expo);
 }
 
-/* ── Update badge attention pulse — slow, subtle ── */
 @keyframes updateBadgePulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.65; }
@@ -1486,7 +1362,6 @@ input[type="number"] {
   animation: updateBadgePulse 3s ease-in-out infinite;
 }
 
-/* ── Mod toggle pill press feedback ── */
 @media (hover: hover) and (pointer: fine) {
   .mod-toggle-pill:active {
     transform: scale(0.92);
@@ -1494,7 +1369,6 @@ input[type="number"] {
   }
 }
 
-/* Slide-in from right for panels/drawers */
 .slide-in-right {
   animation: slideInRight 0.25s ease-out;
 }
@@ -1510,7 +1384,6 @@ input[type="number"] {
   }
 }
 
-/* Number counter tick effect */
 .number-tick {
   display: inline-block;
   transition: transform 0.2s ease-out;
@@ -1526,7 +1399,6 @@ input[type="number"] {
   100% { transform: translateY(0); }
 }
 
-/* Toast / notification slide-in from top-right */
 [data-sonner-toaster] [data-sonner-toast] {
   animation: toastSlideIn 0.3s var(--ease-out-expo);
 }
@@ -1542,13 +1414,11 @@ input[type="number"] {
   }
 }
 
-/* Custom text selection */
 ::selection {
   background: hsl(var(--primary) / 0.3);
   color: hsl(var(--foreground));
 }
 
-/* Enhanced focus-visible for keyboard navigation */
 :focus-visible {
   outline: 2px solid hsl(var(--ring) / 0.72);
   outline-offset: 2px;
@@ -1586,19 +1456,16 @@ input[type="number"] {
   background: linear-gradient(180deg, hsl(var(--destructive) / 0.16), hsl(var(--destructive) / 0.08));
 }
 
-/* Smooth scroll for content containers */
 .scroll-smooth {
   scroll-behavior: smooth;
   overscroll-behavior: contain;
 }
 
-/* Subtle hover for table rows */
 tr:hover td {
   background: hsl(var(--muted) / 0.3);
   transition: background 0.15s ease;
 }
 
-/* Switch toggle animation */
 [role="switch"] {
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1607,7 +1474,6 @@ tr:hover td {
   box-shadow: 0 0 8px hsl(var(--primary) / 0.3);
 }
 
-/* Tab indicator slide */
 [role="tab"][data-state="active"] {
   position: relative;
 }
@@ -1628,7 +1494,6 @@ tr:hover td {
   to { transform: scaleX(1); }
 }
 
-/* Skeleton pulse override - smoother than default */
 [data-slot="skeleton"] {
   animation: skeletonPulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -1638,7 +1503,6 @@ tr:hover td {
   50% { opacity: 0.8; }
 }
 
-/* Tooltip animation */
 [role="tooltip"] {
   animation: tooltipEnter 0.15s ease-out;
 }
@@ -1654,11 +1518,7 @@ tr:hover td {
   }
 }
 
-/* ==============================================
-   NAVIGATION MENU STYLING
-   ============================================== */
 
-/* Section collapse/expand animation */
 .nav-section-content {
   animation: nav-section-enter 0.2s ease-out;
 }
@@ -1674,7 +1534,6 @@ tr:hover td {
   }
 }
 
-/* Active nav indicator bar glow */
 .theme-survival .nav-item-active {
   background: linear-gradient(90deg,
     hsl(var(--primary) / 0.22) 0%,
@@ -1691,7 +1550,6 @@ tr:hover td {
   );
 }
 
-/* Nav scroll area — thinner scrollbar */
 .nav-scroll::-webkit-scrollbar {
   width: 4px;
 }
@@ -1701,7 +1559,6 @@ tr:hover td {
   border: none;
 }
 
-/* Smooth page transitions */
 .page-transition {
   animation: pageEnter 0.3s ease-out;
 }
@@ -1717,12 +1574,10 @@ tr:hover td {
   }
 }
 
-/* Fade-in only (no vertical shift) */
 .fade-in {
   animation: fadeInOnly 0.2s ease-out;
 }
 
-/* Performance containment helpers for long admin lists/forms. */
 .perf-content-auto {
   content-visibility: auto;
   contain-intrinsic-size: 120px;
@@ -1948,18 +1803,15 @@ tr:hover td {
   }
 }
 
-/* Stats card number styling */
 .stat-number {
   @apply text-3xl font-bold tracking-tight;
   color: hsl(var(--foreground));
 }
 
-/* Success state number */
 .stat-number-success {
   color: hsl(var(--success));
 }
 
-/* Button group styling */
 .button-group {
   @apply flex flex-wrap gap-2;
 }
@@ -1968,11 +1820,7 @@ tr:hover td {
   @apply flex-shrink-0;
 }
 
-/* ==============================================
-   PROJECT ZOMBOID - ADDITIONAL THEMED ELEMENTS
-   ============================================== */
 
-/* Survival theme stat numbers - military/tactical look */
 .theme-survival .stat-number {
   color: hsl(34 16% 75%);
   font-family: var(--font-display);
@@ -1982,7 +1830,6 @@ tr:hover td {
   color: hsl(145 50% 45%);
 }
 
-/* Worn paper card effect for survival theme */
 .theme-survival .card {
   position: relative;
   border-color: hsl(30 14% 18%);
@@ -1992,26 +1839,19 @@ tr:hover td {
   content: none;
 }
 
-/* Survival theme buttons - military tactical style */
 
-/* ==============================================
-   FORCED-COLORS (Windows High Contrast) SUPPORT
-   ============================================== */
 @media (forced-colors: active) {
-  /* Buttons: ensure visible borders when system colors override backgrounds */
   button,
   [role="button"],
   [data-slot="button"] {
     border: 1px solid ButtonText;
   }
 
-  /* Focus rings: use system Highlight color */
   :focus-visible {
     outline: 2px solid Highlight !important;
     outline-offset: 2px;
   }
 
-  /* Status indicator dots: add borders so they remain visible */
   .status-online,
   .status-offline,
   .status-connecting,
@@ -2021,45 +1861,37 @@ tr:hover td {
     forced-color-adjust: none;
   }
 
-  /* Badges: ensure visible border */
   [data-slot="badge"],
   .badge {
     border: 1px solid ButtonText;
   }
 
-  /* Cards: keep card boundaries visible */
   .card,
   [data-slot="card"] {
     border: 1px solid ButtonText;
   }
 
-  /* Nav active indicator: use system highlight */
   .nav-item-active {
     border-inline-start: 3px solid Highlight;
   }
 
-  /* Alert/toast destructive borders */
   [data-variant="destructive"] {
     border: 1px solid LinkText;
   }
 
-  /* Switch/checkbox: keep toggles distinguishable */
   [role="switch"],
   [role="checkbox"] {
     border: 1px solid ButtonText;
   }
 
-  /* Dialog overlay: let system handle backdrop */
   [data-state="open"] > [data-radix-overlay] {
     forced-color-adjust: none;
   }
 
-  /* Scrollbar: let system handle */
   ::-webkit-scrollbar-thumb {
     forced-color-adjust: auto;
   }
 
-  /* Survival theme decorative overlays: hide in high contrast */
   .theme-survival::before {
     display: none;
   }
@@ -2072,13 +1904,11 @@ tr:hover td {
     inset 0 1px 0 rgba(255,255,255,0.1);
 }
 
-/* Emergency/danger button in survival theme */
 .theme-survival .btn-danger {
   background: linear-gradient(135deg, hsl(0 60% 35%), hsl(0 50% 25%));
   border-color: hsl(0 50% 20%);
 }
 
-/* Zombie count badge */
 .theme-survival .zombie-count {
   background: linear-gradient(135deg, hsl(0 55% 30%), hsl(0 45% 22%));
   color: hsl(0 20% 85%);
@@ -2087,7 +1917,6 @@ tr:hover td {
   letter-spacing: 1px;
 }
 
-/* Player count badge */
 .theme-survival .player-count {
   background: linear-gradient(135deg, hsl(145 45% 28%), hsl(145 38% 20%));
   color: hsl(36 20% 85%);
@@ -2096,7 +1925,6 @@ tr:hover td {
   letter-spacing: 1px;
 }
 
-/* Radio/broadcast styling */
 .theme-survival .broadcast-message {
   background: linear-gradient(180deg, hsl(30 18% 8%), hsl(28 14% 6%));
   border-inline-start: 3px solid hsl(34 72% 45%);
@@ -2104,7 +1932,6 @@ tr:hover td {
   letter-spacing: 0.3px;
 }
 
-/* Map/chunk styling */
 .theme-survival .map-grid {
   background:
     linear-gradient(90deg, hsl(30 16% 15% / 0.3) 1px, transparent 1px),
@@ -2113,7 +1940,6 @@ tr:hover td {
   background-size: 20px 20px;
 }
 
-/* Log entry styling */
 .theme-survival .log-entry {
   border-bottom: 1px dashed hsl(30 12% 15%);
   font-family: var(--font-mono);
@@ -2123,13 +1949,11 @@ tr:hover td {
   background: hsl(30 14% 8% / 0.5);
 }
 
-/* Tab styling for survival */
 .theme-survival [data-state="active"][role="tab"] {
   border-bottom-color: hsl(82 40% 44%);
   color: hsl(36 24% 88%);
 }
 
-/* Input fields - worn/tactical look */
 .theme-survival input,
 .theme-survival textarea,
 .theme-survival select {
@@ -2144,13 +1968,7 @@ tr:hover td {
   box-shadow: 0 0 0 2px hsl(82 42% 35% / 0.2);
 }
 
-/* ==============================================
-   LIGHT THEME OVERRIDES
-   Neutralize survival grit; keep everything
-   readable on a warm light background.
-   ============================================== */
 
-/* Light background — clean, no grain/scanlines */
 .theme-light {
   background-color: hsl(40 6% 88%);
   background-image: none;
@@ -2160,7 +1978,6 @@ tr:hover td {
   display: none;
 }
 
-/* Scrollbar — subtle for light surfaces */
 .theme-light ::-webkit-scrollbar-track {
   background: hsl(var(--background));
 }
@@ -2175,7 +1992,6 @@ tr:hover td {
   background: hsl(var(--muted-foreground) / 0.5);
 }
 
-/* Cards — light surfaces with soft shadow */
 .theme-light .card {
   border-color: hsl(var(--border));
   box-shadow: 0 1px 3px hsl(30 10% 50% / 0.08);
@@ -2185,7 +2001,6 @@ tr:hover td {
   content: none;
 }
 
-/* Buttons */
 .theme-light [data-slot="button"][data-variant="default"] {
   text-shadow: none;
   box-shadow: 0 1px 2px hsl(30 10% 50% / 0.12);
@@ -2206,7 +2021,6 @@ tr:hover td {
   color: hsl(var(--warning-foreground));
 }
 
-/* Alerts */
 .theme-light [role="alert"] {
   border-color: hsl(var(--border));
   background: hsl(var(--card));
@@ -2223,7 +2037,6 @@ tr:hover td {
   background: hsl(var(--destructive) / 0.06);
 }
 
-/* Inputs */
 .theme-light input,
 .theme-light textarea,
 .theme-light select {
@@ -2238,18 +2051,15 @@ tr:hover td {
   box-shadow: 0 0 0 2px hsl(var(--primary) / 0.18);
 }
 
-/* Tabs */
 .theme-light [data-state="active"][role="tab"] {
   border-bottom-color: hsl(var(--primary));
   color: hsl(var(--foreground));
 }
 
-/* Switch checked state */
 .theme-light [role="switch"][data-state="checked"] {
   box-shadow: 0 0 4px hsl(var(--primary) / 0.2);
 }
 
-/* Nav active item */
 .theme-light .nav-item-active {
   background: linear-gradient(90deg,
     hsl(var(--primary) / 0.14) 0%,
@@ -2265,7 +2075,6 @@ tr:hover td {
   );
 }
 
-/* Sidebar header */
 .theme-light .sidebar-header {
   background: linear-gradient(180deg,
     hsl(var(--primary) / 0.08) 0%,
@@ -2274,12 +2083,10 @@ tr:hover td {
   border-bottom: 1px solid hsl(var(--border));
 }
 
-/* Brand title — no text-shadow on light */
 .theme-light .shell-brand-title {
   text-shadow: none;
 }
 
-/* Page headers */
 .theme-light .page-title {
   color: hsl(var(--foreground));
   text-shadow: none;
@@ -2290,36 +2097,29 @@ tr:hover td {
   filter: none;
 }
 
-/* Terminal / console on light */
 .theme-light .terminal-output {
   background: hsl(30 8% 10%);
   color: hsl(36 16% 82%);
   border: 1px solid hsl(var(--border));
 }
 
-/* Table row hover */
 .theme-light tr:hover td {
   background: hsl(var(--primary) / 0.04);
 }
 
-/* Glass morphism for light */
 .theme-light .glass {
   backdrop-filter: blur(8px) saturate(120%);
   background: hsl(var(--background) / 0.85);
   border: 1px solid hsl(var(--border) / 0.6);
 }
 
-/* Auth background */
 .theme-light .auth-bg-gradient {
   background-image: radial-gradient(circle at 84% -12%, hsl(var(--primary) / 0.10), transparent 38%),
     radial-gradient(circle at 12% 108%, hsl(var(--destructive) / 0.08), transparent 42%),
     linear-gradient(180deg, hsl(var(--background)), hsl(var(--background)));
 }
 
-/* Text selection */
 .theme-light ::selection {
   background: hsl(var(--primary) / 0.22);
   color: hsl(var(--foreground));
 }
-
-/* Improved scrollbar styling */

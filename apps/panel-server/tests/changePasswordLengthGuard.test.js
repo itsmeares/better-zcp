@@ -1,17 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// POST /auth/change-password had no MAXIMUM password length check, unlike
-// its three siblings: POST /auth/users (createUser, services/auth.js:401-
-// 402), POST /auth/reset-password (both the route's own check at auth.js
-// and authService.resetPassword's), and services/auth.js's own resetPassword
-// -- all cap at 128 characters. Two real consequences of the gap: (1)
-// bcrypt silently truncates its input at 72 BYTES, so any two passwords
-// sharing the same first 72 bytes become interchangeable for login -- a
-// user setting an arbitrarily long passphrase has no idea only its prefix
-// matters; (2) bcrypt is deliberately slow, so an authenticated caller could
-// spend meaningfully more server CPU per request than every other
-// password-setting path in this file permits (bounded only by the app-wide
-// 1MB JSON body limit, not by anything password-specific).
 
 const authenticateAccessToken = vi.fn();
 const changePassword = vi.fn();

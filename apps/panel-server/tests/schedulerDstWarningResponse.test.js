@@ -1,12 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// 2026-09-05, scheduler-time-audit: scheduleTask() now returns
-// { scheduled: true, dstWarning } instead of a bare `true` on success (still
-// `false` on failure, unchanged) so a sub-hourly schedule in a DST-observing
-// timezone can be surfaced to the operator -- "nothing silent" per the
-// card. These tests prove the two routes that call scheduleTask() (create
-// and update) forward that field into their JSON response, and that a null
-// warning still comes through as null (not dropped, not "undefined").
 
 const ROLES = {
   automation_only: {

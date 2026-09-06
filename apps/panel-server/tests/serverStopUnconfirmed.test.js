@@ -1,23 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 regression: POST /stop's graceful (RCON) path used to report
-// success:true and broadcast server:status {running:false} the instant
-// rconService.quit() returned -- which only proves PZ accepted the "quit"
-// command (a reset RCON connection is the NORMAL symptom of a real
-// shutdown), not that the process has actually exited or that its
-// save-and-exit sequence has finished. An operator who read "Stopped" and
-// then acted outside the panel (copied the save folder, edited an ini,
-// pulled a Docker volume) could be acting against a process still writing.
-//
-// Fixed: the graceful path now reports the request was ACCEPTED
-// (confirmed:false), does NOT emit server:status itself, and asks the
-// status watchdog's checkServerStatusNow (apps/panel-server/index.js, registered on
-// `app`) for a prompt re-check instead -- the SAME function the watchdog's
-// own 10s interval calls, so there is exactly one place that ever decides
-// "did the running state actually change" and emits server:status for it.
-// The managed (Docker) path is untouched: Docker's own stop API already
-// blocks until the container is confirmed stopped before returning
-// success, so that claim was never blind.
 
 vi.mock("../database/init.js", () => ({
   getSetting: vi.fn(async () => null),
@@ -84,8 +66,6 @@ describe("POST /stop -- graceful RCON path no longer claims a confirmed stop", (
         message: "Server shutting down",
       }),
     );
-    // The route itself must not assert the running:false claim anymore --
-    // that's the exact thing that used to desync from reality.
     expect(io.emit).not.toHaveBeenCalledWith("server:status", expect.anything());
   });
 

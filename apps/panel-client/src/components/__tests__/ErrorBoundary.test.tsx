@@ -3,7 +3,6 @@ import { render, screen } from '@testing-library/react'
 import { ErrorBoundary } from '../ErrorBoundary'
 import en from '@/locales/en/errorBoundary.json'
 
-// Suppress React error boundary console noise during tests
 const originalConsoleError = console.error
 beforeEach(() => {
   console.error = vi.fn()

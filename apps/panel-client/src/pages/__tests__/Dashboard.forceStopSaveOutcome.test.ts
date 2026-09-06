@@ -2,14 +2,6 @@ import { describe, expect, it } from 'vitest'
 import i18n from '@/i18n'
 import { getForceStopSaveOutcomeCopy } from '../Dashboard'
 
-// Force Stop now attempts a bounded, fail-open save before killing the
-// server (server.js's attemptBoundedSaveBeforeForceStop) and reports the
-// outcome as saveOutcome -- but Dashboard's success toast used to be a
-// static, response-independent string, so a failed/timed-out/skipped save
-// was reported identically to a genuine one. This is the highest-stakes
-// instance of that class tonight: it's the one thing an operator needs to
-// know after force-stopping a server. Proving the four states render
-// distinctly, not just reviewing the switch statement.
 const t = i18n.getFixedT('en', 'dashboard')
 
 describe('getForceStopSaveOutcomeCopy', () => {

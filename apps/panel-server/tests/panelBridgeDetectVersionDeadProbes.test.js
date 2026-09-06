@@ -3,25 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, regression, item 5 (the own foundation-lens
-// finding). PanelBridge.detectVersion() gated four flags
-// (isB42, isB41, features.blizzard, features.tropical) on
-// PanelBridge.hasMethod, whose own doc comment says "Never gate an action
-// on this; use invoke instead." Both of hasMethod's branches were dead at
-// this call site: the field-test branch is unreliable for a Java-bound
-// method (this file's own recurring lesson), and its capability-cache
-// fallback is EMPTY BY CONSTRUCTION at this point, since detectVersion
-// runs before any handler has ever called PanelBridge.invoke. All four
-// flags were permanently false/unset, presented as if a real check ran.
-//
-// Fix: testPlayer:getTraits() is a safe, side-effect-free getter and IS
-// confirmed real B41 API, so it's now confirmed with a real
-// PanelBridge.invoke() call. desc:getTraitList (the old isB42 probe) is
-// confirmed ABSENT from B42's real jar elsewhere in this file, so it's
-// deleted rather than "fixed" -- it could never have proven B42 either
-// way. features.blizzard/tropical are NOT safe to probe by actually
-// calling them (both trigger a real weather event), so they're left OUT
-// of the response entirely instead of reported as a false "false".
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -68,9 +49,6 @@ getOnlinePlayers = function() return FakeOnlinePlayers end
     bridge.run('__version = PanelBridgeModule.detectVersion()');
     const version = bridge.getGlobal('__version');
 
-    // isB42 must come from the version-string fallback now, never from a
-    // player-descriptor probe -- with no getCore() defined and getTraits()
-    // genuinely absent, neither isB42 nor isB41 should be set.
     expect(version.isB42).toBe(false);
     expect(version.isB41).toBe(false);
   });

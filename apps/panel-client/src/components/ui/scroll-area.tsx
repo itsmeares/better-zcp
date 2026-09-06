@@ -3,21 +3,6 @@ import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
 
 import { cn } from "@/lib/utils"
 
-// Radix's Viewport wraps children in an internal `minWidth:100%; display:table`
-// div (not something we can pass a prop into -- it's private markup owned by
-// Radix). That sizing exists so unwrapped content CAN grow past the viewport
-// when a horizontal scrollbar is mounted to scroll to it. Nothing in this app
-// mounts one: exactly one <ScrollBar> is ever rendered (below, vertical-only),
-// so Radix's own overflowX stays "hidden" on every instance regardless -- the
-// table sizing then just lets content grow past the viewport with nowhere to
-// scroll, which silently clips instead of wrapping/truncating as authored.
-// Every genuine horizontal-scroll need elsewhere in this app already uses a
-// plain `overflow-x-auto` div, never ScrollArea, so this default matches
-// existing practice rather than imposing a new one. Force block layout on that
-// wrapper by default; allowHorizontalOverflow opts back into Radix's native
-// behavior (skips the override AND mounts a real horizontal scrollbar) for a
-// genuine future wide-content case -- never one without the other, since a
-// clamp-free viewport with no scrollbar reproduces the original bug on purpose.
 const SCROLL_AREA_CLAMP_CLASSNAME = "[&_[data-radix-scroll-area-viewport]>div]:!block"
 
 const ScrollArea = React.forwardRef<

@@ -1,17 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// regression 2026-08-31 (tracked low-priority, endorsed as not rising to a
-// full finding since nothing here claims completeness -- see
-// import-collection-silently-drops-failed-member-lookups): POST
-// /import-collection fetches Steam details for every ordinary (non-
-// sub-collection) member, then keeps only entries with result === 1. A
-// member whose lookup fails -- deleted, made private, or simply omitted
-// from Steam's response -- silently disappears from `mods`, with no
-// accounting anywhere in the response. The route already gives an
-// equivalent notice for skipped SUB-collections (`subCollectionIds`); this
-// fix adds the same accounting for individually-failed mod lookups
-// (`skippedModIds`), so a caller can tell "3 were dropped" apart from "the
-// collection only ever had 47".
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -99,7 +87,6 @@ describe("POST /mods/import-collection -- skippedModIds accounts for failed memb
             response: {
               publishedfiledetails: [
                 { publishedfileid: "111", result: 1, title: "Mod A", tags: [] },
-                // 222: Steam still returns an entry but result !== 1 (deleted/private).
                 { publishedfileid: "222", result: 9 },
                 { publishedfileid: "333", result: 1, title: "Mod C", tags: [] },
               ],
@@ -147,7 +134,6 @@ describe("POST /mods/import-collection -- skippedModIds accounts for failed memb
       if (url.includes("GetPublishedFileDetails")) {
         return {
           ok: true,
-          // Steam simply doesn't include an entry for 444 at all.
           json: async () => ({
             response: {
               publishedfiledetails: [

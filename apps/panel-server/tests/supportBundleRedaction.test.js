@@ -8,20 +8,7 @@ import {
   createRedactingLogStream,
 } from "../routes/debug.js";
 
-// support-bundle regression follow-up (decision): the four
-// pre-existing raw-log categories (admin-panel, zomboid-server,
-// zomboid-install, crash-logs) and the two added the same night
-// (docker-container-logs.txt, managed-service-logs.txt) must ALL be
-// redacted for known credential shapes -- uniformly, not a subset -- and
-// the redaction must never be aggressive enough to eat the diagnostic
-// content the bundle exists to preserve. See debug.js's redactRawLogText
-// header for the two-layer design this file exercises.
 
-// The exact line (Discord #bug_report, Rhazun) that made the
-// Docker/systemd log capture feature worth building in the first place --
-// see historical-support-bundle-research If a
-// redaction rule ever touches this line, it has destroyed the one piece of
-// evidence that made tonight's earlier fix possible.
 const ETXTBSY_STACK_TRACE_LINE =
   "System.IO.IOException: Text file busy : '/project-zomboid/jre64/bin/java'";
 
@@ -30,7 +17,6 @@ describe("redactRawLogText() -- must never mangle ordinary diagnostic text", () 
     expect(redactRawLogText(ETXTBSY_STACK_TRACE_LINE, [])).toBe(
       ETXTBSY_STACK_TRACE_LINE,
     );
-    // Also survives with real known secrets loaded, not just an empty list.
     expect(
       redactRawLogText(ETXTBSY_STACK_TRACE_LINE, ["hunter2", "some-token-value"]),
     ).toBe(ETXTBSY_STACK_TRACE_LINE);
@@ -80,19 +66,6 @@ describe("redactRawLogText() -- shape-based patterns for what a known-value scru
   });
 
   it("redacts a Discord-bot-token-shaped string even when it is not in the known-secrets list (e.g. a rotated token)", () => {
-    // Deliberately low-entropy/repeated-character rather than random-looking:
-    // an earlier version of this fixture used a first segment that legitimately
-    // base64-decoded to an 18-digit number (a plausible Discord snowflake ID),
-    // which is realistic enough that GitHub push protection blocked the commit
-    // as a live Discord bot token (verified not real; see the commit history
-    // for this file). GitHub's detector validates structure -- the first
-    // segment decoding to a plausible snowflake -- not just the three-segment
-    // dot shape, so this fixture is chosen to satisfy OUR shape regex (which
-    // only checks charset/length/dot-count) while failing THAT check: 24
-    // repeated 'x' bytes base64-decode to non-numeric garbage, never a
-    // plausible snowflake. Confirmed still exercises the real code path --
-    // this must keep failing if redactRawLogText's Discord-token branch is
-    // ever removed or narrowed.
     const line =
       "Discord login failed for token xxxxxxxxxxxxxxxxxxxxxxxx.yyyyyy.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz";
     const result = redactRawLogText(line, []);

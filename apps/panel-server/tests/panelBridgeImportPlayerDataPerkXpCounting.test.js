@@ -3,19 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, regression, item 3 (the jar-verified spec + the
-// operator's own ruling): handlers.importPlayerData's perk-restore loop used
-// to call `xp:setXP(perk, exactValue)` as the LAST statement inside the
-// per-perk pcall, AFTER player:level0(perk) and the LevelPerk(perk, false)
-// loop had already run as real side effects. xp:setXP(perk, value) does not
-// exist anywhere in the confirmed API -- so that throw took the pcall down
-// WITH IT, and restored.perks (incremented at the very end) never counted a
-// perk whose level change had genuinely already landed. testing could not
-// prove the alternative (getXP(perk) + AddXPNoMultiplier(perk, delta)) safe
-// either -- possible clamping/rounding/level-boundary side effects without
-// decompiling -- so the operator ruled: use setXPToLevel(perk, level)
-// (exact, provable, threshold semantics), and count the restore once the
-// real level change lands, not after an unprovable XP step.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

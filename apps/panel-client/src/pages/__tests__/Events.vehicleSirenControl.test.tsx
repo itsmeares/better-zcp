@@ -7,18 +7,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// 2026-08-30, regression: vehicleSetSiren is a real,
-// working, VERIFY_GATED Lua handler with no caller anywhere in the client --
-// WorldMap.tsx renders live siren state (a flashing map halo) and Events.tsx
-// shows a siren badge in this exact table, but only its two siblings in the
-// same row (vehicleSetAlarm, vehicleSetTrunkLocked) ever had a button. This
-// adds the missing one, matching them exactly (same row, same onInlineAction
-// call shape, same permission/verify path -- no new pattern introduced).
 
-// Same jsdom-Radix-Select workaround as Chat.capabilityGating.test.tsx and
-// Players.capabilityGating.test.tsx: a real pointer interaction on a Radix
-// Select throws in jsdom (hasPointerCapture/scrollIntoView missing). Swap the
-// picker for a native <select>, which drives the exact same onValueChange.
 vi.mock('@/components/ui/select', () => {
   function findAriaLabel(children: React.ReactNode): string | undefined {
     let found: string | undefined
@@ -116,8 +105,6 @@ async function loadVehicleTable() {
   const combo = await screen.findByRole('combobox', { name: 'Select operation' })
   fireEvent.change(combo, { target: { value: 'getVehiclesDetailed' } })
   fireEvent.click(screen.getByRole('button', { name: 'Run Operation' }))
-  // BridgeResultDisplay strips the "Base." prefix from scriptName before
-  // rendering it (Events.tsx: `v.scriptName.replace('Base.', '')`).
   await screen.findByText('PickUpVan')
 }
 

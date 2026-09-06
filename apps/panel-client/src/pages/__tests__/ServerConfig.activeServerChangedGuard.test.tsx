@@ -4,19 +4,6 @@ import { MemoryRouter } from 'react-router-dom'
 import ServerConfig from '../ServerConfig'
 import { serverFilesApi, serversApi } from '@/lib/api'
 
-// regression (overnight sweep, reported by testing as the worst
-// unrouted finding of the night): GET/PUT /server-files/ini and /sandbox
-// both resolve "the active server" fresh on the server per-request rather
-// than taking a server id, and this page never listened for
-// activeServerChanged (unlike Settings.tsx/Dashboard.tsx/Servers.tsx/
-// WorldMap.tsx/Layout.tsx, which all do). Switch the active server after
-// this page has loaded server A's config, hit Save, and the PUT carries
-// server A's full settings object to whichever server is active NOW --
-// server B's real config is silently overwritten. This proves the fix:
-// with no unsaved edits, an activeServerChanged event safely triggers a
-// reload (matching the other five pages' own handlers); with unsaved
-// edits, reloading would silently discard them instead, so Save is
-// blocked and a banner is shown rather than the app choosing for the user.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -36,8 +23,6 @@ vi.mock('@/components/ui/use-toast', () => ({
   useToast: () => ({ toast: toastSpy, dismiss: vi.fn(), toasts: [] }),
 }))
 
-// A fake socket the test can fire activeServerChanged on directly, matching
-// how the real socket.io client hands the app plain on/off/emit.
 const socketHandlers = vi.hoisted(() => new Map<string, Set<() => void>>())
 vi.mock('@/contexts/SocketContext', () => ({
   useSocket: () => ({
@@ -59,10 +44,6 @@ const getIni = vi.spyOn(serverFilesApi, 'getIni')
 const saveIni = vi.spyOn(serverFilesApi, 'saveIni')
 const getRaw = vi.spyOn(serverFilesApi, 'getRaw')
 const getResolvedActive = vi.spyOn(serversApi, 'getResolvedActive')
-// Unrelated to this fix, but polled every 5s by a separate effect
-// (refreshServerState) -- left unmocked it retries 3x against a real
-// network call jsdom can't make, which alone blows past any reasonable
-// test timeout.
 const getActive = vi.spyOn(serversApi, 'getActive')
 
 const emptyPaths = {
@@ -113,9 +94,6 @@ describe('ServerConfig.tsx: activeServerChanged guards the cross-server overwrit
     renderServerConfig()
     await waitFor(() => expect(getIni).toHaveBeenCalledTimes(1))
 
-    // Force an unsaved edit the same way the raw-editor escape hatch does,
-    // without depending on which structured category the schema currently
-    // sorts PVP into: flip to the raw tab and edit the textarea directly.
     const rawToggles = await screen.findAllByRole('button', { name: /raw/i })
     await act(async () => { fireEvent.click(rawToggles[0]) })
     await waitFor(() => expect(getRaw).toHaveBeenCalled())
@@ -127,12 +105,8 @@ describe('ServerConfig.tsx: activeServerChanged guards the cross-server overwrit
     act(() => { emitActiveServerChanged() })
 
     expect(await screen.findByText('Active server changed')).toBeInTheDocument()
-    // getIni must NOT be called again -- a silent reload here would discard
-    // the edit instead of asking the user, which is its own data loss.
     expect(getIni).toHaveBeenCalledTimes(1)
 
-    // "Saved Configs" (the templates nav button) also matches /save/i and is
-    // correctly unaffected -- it doesn't write settings, so exclude it here.
     const saveButtons = screen
       .getAllByRole('button', { name: /save/i })
       .filter((b) => !/saved configs/i.test(b.textContent || ''))

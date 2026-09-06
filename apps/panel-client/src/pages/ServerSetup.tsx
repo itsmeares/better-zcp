@@ -95,9 +95,6 @@ function handleCardKeyDown(
   }
 }
 
-// Generate a random password
-// Game port 65535 is excluded because configure-network derives UDPPort as
-// gamePort + 1; RCON ports may still use the full 1024-65535 range.
 export function isValidInstallPort(port: number): boolean {
   return Number.isInteger(port) && port >= 1024 && port <= 65535;
 }
@@ -106,32 +103,15 @@ export function isValidGamePort(port: number): boolean {
   return Number.isInteger(port) && port >= 1024 && port <= 65534;
 }
 
-// A port field can now genuinely be NaN mid-edit (see NumberInput) -- a
-// summary/review screen must never render the literal text "NaN"; show the
-// same "—" placeholder this app already uses elsewhere for an unset value.
 function formatPort(port: number): string {
   return Number.isFinite(port) ? String(port) : "—";
 }
 
-// Same rationale as formatPort -- minMemory/maxMemory can now genuinely be
-// NaN mid-edit too (NumberInput), and the summary screen must never render it.
 function formatMemory(gb: number): string {
   return Number.isFinite(gb) ? String(gb) : "—";
 }
 
-// POST /install returns as soon as SteamCMD is *launched*, then the real
-// outcome (success or failure) arrives minutes later over install:log /
-// install:complete -- and this component is the ONLY listener for either
-// event anywhere in the client (2026-08-26 install-failure regression, finding
-// #7). If the tab is closed or the page reloads before that arrives, the
-// wizard forgets an install was ever attempted while SteamCMD keeps running
-// server-side regardless. This marker is the client's only memory of that:
-// written right after a real install request is accepted, cleared the
-// instant a real outcome (either one) is heard.
 export const INSTALL_INFLIGHT_KEY = "zcp-install-inflight";
-// A real SteamCMD download finishes in minutes to a couple of hours even on
-// a slow link; past this the marker is almost certainly stale (a crashed
-// panel, an abandoned attempt) rather than something still genuinely running.
 const INSTALL_INFLIGHT_STALE_MS = 6 * 60 * 60 * 1000;
 
 export interface InstallInFlightMarker {
@@ -186,7 +166,6 @@ function generatePassword(length = 12): string {
   return result;
 }
 
-// Format bytes to human readable size
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;
@@ -197,18 +176,6 @@ function formatBytes(bytes: number): string {
 
 const LINUX_SERVICE_INSTALL_PATH = "/opt/zomboid-panel/data/pzserver";
 
-// rawMessage is used ONLY to pattern-match the server's literal English
-// string and, when matched, to embed the exact unwritable path back into the
-// guidance text -- the same "raw text for internal logic, not display"
-// legitimate use errorMessage.ts's own getRecoveryUrl() has (see
-// scripts/eslint-rules/no-raw-error-message.js). displayMessage is what actually
-// reaches the user everywhere else: previously this function returned
-// rawMessage unchanged for every installation error OTHER than the
-// not-writable one, showing fully raw/untranslated text and discarding any
-// registered error code's translation (2026-08-27 lint-rule blind-spot
-// sweep finding -- the raw ternary that used to compute rawMessage was
-// invisible to no-raw-error-message.js because it fed this function, not a
-// toast()/set*() call, directly).
 export function installationErrorGuidance(
   rawMessage: string,
   displayMessage: string,
@@ -218,14 +185,6 @@ export function installationErrorGuidance(
   if (!rawMessage.startsWith("Installation path is not writable:")) {
     return displayMessage;
   }
-  // The suffix tells the user to edit zomboid-panel.service and restart it
-  // via systemd -- meaningless (and unfollowable) advice on Windows/macOS,
-  // where this app is also a first-class supported platform, not an edge
-  // case. Server always returns the identical message regardless of host
-  // OS (apps/panel-server/routes/server.js formatWritablePathError), so the client is
-  // the only place that knows to gate this. Unknown platform (still
-  // loading, or the fetch failed) falls back to the plain message rather
-  // than guessing.
   if (platform !== "linux") {
     return displayMessage;
   }
@@ -242,11 +201,9 @@ export default function ServerSetup() {
   const [setupMode, setSetupMode] = useState<SetupMode>("select");
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Step 1: Prerequisites
   const [steamCmdPath, setSteamCmdPath] = useState("");
   const [hasSteamCmd, setHasSteamCmd] = useState(false);
 
-  // Step 2: Server Config
   const [installPath, setInstallPath] = useState("");
   const [serverName, setServerName] = useState("myserver");
   const [branch, setBranch] = useState("public");
@@ -264,7 +221,6 @@ export default function ServerSetup() {
   const [showRconPassword, setShowRconPassword] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
 
-  // Step 3: Performance
   const [minMemory, setMinMemory] = useState(4);
   const [maxMemory, setMaxMemory] = useState(8);
   const [serverPort, setServerPort] = useState(16261);
@@ -281,16 +237,11 @@ export default function ServerSetup() {
     recommendedMax: number;
   } | null>(null);
   const [detectingRam, setDetectingRam] = useState(false);
-  // Drives installationErrorGuidance's Linux-only remediation suffix --
-  // null until resolved, so we never show wrong-platform advice on a guess.
   const serverPlatform = runtimeInfo?.platform ?? null;
 
-  // Installation state
   const [installing, setInstalling] = useState(false);
   const [logs, setLogs] = useState<InstallLog[]>([]);
   const [installComplete, setInstallComplete] = useState(false);
-  // A leftover marker from a PREVIOUS page load (see readInstallInFlightMarker
-  // above) -- not this session's own install, which uses `installing` above.
   const [resumeMarker, setResumeMarker] = useState<InstallInFlightMarker | null>(null);
   const [installProgress, setInstallProgress] = useState<{
     percent: number;
@@ -299,7 +250,6 @@ export default function ServerSetup() {
     status: string;
   } | null>(null);
 
-  // SteamCMD auto-download state
   const [downloadingSteamCmd, setDownloadingSteamCmd] = useState(false);
   const [steamCmdStatus, setSteamCmdStatus] = useState<string>("");
 
@@ -309,22 +259,12 @@ export default function ServerSetup() {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // POST /server/steamcmd/download, /server/install, /server/quick-setup all
-  // require server.install (server.js:3643/2062/2679); PUT /config/app-settings
-  // requires panel.settings at the route (config.js:256) -- a DIFFERENT
-  // capability from its server.install-gated neighbors, which is exactly why
-  // TECHNICIAN (holds server.install/server.control/servers.manage but not
-  // panel.settings, apps/panel-server/services/permissions.js:299-320) hits a silent
-  // 403 saving the SteamCMD path manually today; POST /server/start requires
-  // server.control (server.js:1045). Open/true when capabilities are
-  // unknown/null, same convention as every other capability check in the app.
   const canInstall = can("server.install");
   const canSaveSteamCmdPath = can("panel.settings");
   const canControlServer = can("server.control");
   const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [startingServer, setStartingServer] = useState(false);
 
-  // Refs for socket handler closure — avoids re-registering socket listeners when form state changes
   const formStateRef = useRef({
     serverName,
     installPath,
@@ -372,7 +312,6 @@ export default function ServerSetup() {
     useUpnp,
   ]);
 
-  // Clean up navigate timer on unmount
   useEffect(
     () => () => {
       if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
@@ -380,10 +319,8 @@ export default function ServerSetup() {
     [],
   );
 
-  // Total steps based on mode
   const totalSteps = setupMode === "quick" ? 3 : 4;
 
-  // Validation for each step
   const stepValidation = useMemo(() => {
     if (setupMode === "quick") {
       return {
@@ -410,21 +347,16 @@ export default function ServerSetup() {
 
   const canProceed = stepValidation[currentStep as keyof typeof stepValidation];
 
-  // Generate random password on mount if empty
   useEffect(() => {
     if (!rconPassword) {
       setRconPassword(generatePassword(12));
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only: only generate once if blank
 
-  // Auto-detect RAM on mount
   useEffect(() => {
     handleAutoDetectRam();
   }, []);
 
-  // Was an install left running by a PREVIOUS page load? (closed tab,
-  // refresh, crash -- see readInstallInFlightMarker above.) Surfaced as a
-  // banner on the mode-select screen rather than silently discarded.
   useEffect(() => {
     const marker = readInstallInFlightMarker();
     if (!marker) return;
@@ -435,7 +367,6 @@ export default function ServerSetup() {
     setResumeMarker(marker);
   }, []);
 
-  // Load saved settings
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -451,8 +382,6 @@ export default function ServerSetup() {
           setZomboidDataPath(settings.zomboidDataPath);
           setUseCustomDataPath(true);
         }
-        // Memory is stored in MB, convert to GB for display
-        // Clamp to reasonable values (2-16 GB) to match slider range
         if (settings.minMemory)
           setMinMemory(
             Math.min(
@@ -475,7 +404,6 @@ export default function ServerSetup() {
     loadSettings();
   }, []);
 
-  // Fetch available Steam branches
   useEffect(() => {
     const fetchBranches = async () => {
       setLoadingBranches(true);
@@ -499,12 +427,10 @@ export default function ServerSetup() {
     }
   }, [hasSteamCmd, steamCmdPath]); // eslint-disable-line react-hooks/exhaustive-deps -- branch intentionally excluded; setBranch('public') inside is a deliberate fallback, not a dep
 
-  // Auto-scroll logs
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  // Socket.IO events for installation
   useEffect(() => {
     if (!socket) return;
 
@@ -521,7 +447,6 @@ export default function ServerSetup() {
         { type: data.type, message: displayText, timestamp: new Date() },
       ]);
 
-      // Parse SteamCMD progress: "Update state (0x61) downloading, progress: 50.00 (1234567890 / 2469135780)"
       const progressMatch = text.match(
         /progress:\s*([\d.]+)\s*\(([\d,]+)\s*\/\s*([\d,]+)\)/,
       );
@@ -538,7 +463,6 @@ export default function ServerSetup() {
           status: t("common.progressDownloading"),
         });
       }
-      // Parse validation: "Validating files... 50%"
       const validateMatch = text.match(/[Vv]alidat\w*[^\d]*(\d+)%/);
       if (validateMatch) {
         setInstallProgress({
@@ -548,7 +472,6 @@ export default function ServerSetup() {
           status: t("common.progressValidating"),
         });
       }
-      // Parse update state
       if (text.includes("Update state") && text.includes("verifying")) {
         setInstallProgress((prev) =>
           prev ? { ...prev, status: t("common.progressVerifying") } : null,
@@ -581,10 +504,6 @@ export default function ServerSetup() {
       params?: Record<string, string | number>;
       warnings?: Array<{ progressCode?: string; message: string; params?: Record<string, string | number> }>;
     }) => {
-      // The socket connection (and this handler) is the ONLY place that ever
-      // learns the true outcome -- clear the in-flight marker on both success
-      // and failure, not just success, so a reload after this point has
-      // nothing stale left to warn about.
       clearInstallInFlightMarker();
       const displayMessage = getInstallProgressMessage(data, data.message);
       try {
@@ -592,13 +511,6 @@ export default function ServerSetup() {
           setLogs((prev) => [
             ...prev,
             { type: "success", message: displayMessage, timestamp: new Date() },
-            // The game files installed -- that's success:true and stays true --
-            // but a self-healing step (RCON .ini pre-create, startup script)
-            // may still have failed underneath it (#6, 2026-08-26 install-
-            // failure hunt). Surfaced here rather than silently dropped: the
-            // operator sees exactly what didn't get written and that it's
-            // retried automatically, instead of either a false "everything is
-            // ready" or a false "the install failed".
             ...(data.warnings ?? []).map((w) => ({
               type: 'warning' as const,
               message: getInstallProgressMessage({ progressCode: w.progressCode, params: w.params }, w.message),
@@ -609,7 +521,6 @@ export default function ServerSetup() {
           const s = formStateRef.current;
           let createResult: Awaited<ReturnType<typeof serversApi.create>>;
           try {
-            // Use data from server response which has computed paths
             createResult = await serversApi.create({
               name: data.serverName || s.serverName,
               serverName: data.serverName || s.serverName,
@@ -654,16 +565,6 @@ export default function ServerSetup() {
             return;
           }
 
-          // Activate the newly created server so "Start Server Now" starts this
-          // one. This is a SEPARATE try/catch from the create() above: the
-          // server entry above already exists at this point, so a failure here
-          // must never be reported as "failed to create server entry" (#2 in
-          // the 2026-08-26 install-failure regression) -- that told a user the whole
-          // registration failed when only the auto-activate step had. Also
-          // deliberately skip setInstallComplete(true)/the success toast on
-          // this path: "Start Server Now" below assumes the server it just
-          // installed is the active one, and offering that shortcut here would
-          // aim it at whatever was active before (or nothing).
           if (createResult.server?.id) {
             try {
               await serversApi.activate(createResult.server.id);
@@ -712,11 +613,6 @@ export default function ServerSetup() {
           });
         }
       } finally {
-        // Only clear once the full outcome (including the create()/activate()
-        // awaits above on the success path) has settled -- clearing this
-        // eagerly re-enabled the Install button while server registration was
-        // still in flight, letting a second click wipe the in-flight logs and
-        // fire a second real SteamCMD install underneath the first.
         setInstalling(false);
       }
     };
@@ -894,10 +790,6 @@ export default function ServerSetup() {
         rconPassword,
         rconPort,
       });
-      // The request above only confirms SteamCMD was launched -- the real
-      // outcome arrives later over the socket (see handleInstallComplete).
-      // Remember that an install is in flight so a reload before then can
-      // still tell the user something was attempted, instead of forgetting.
       writeInstallInFlightMarker({ installPath, serverName, startedAt: Date.now() });
     } catch (error) {
       const rawMessage = rawErrorMessageIntentional(error, t("common.unknownError"));
@@ -954,17 +846,12 @@ export default function ServerSetup() {
 
       if (data) {
         addLog("success", t("toasts.configCreatedLog"));
-        // Same shape as #6 in handleInstallComplete above: the server files
-        // already existed (Quick Setup only registers a config for files
-        // that are verified present) and stay fine even if a self-healing
-        // step underneath failed -- surfaced, not silently dropped.
         for (const w of (data.warnings ?? []) as Array<{ progressCode?: string; message: string; params?: Record<string, string | number> }>) {
           addLog("warning", getInstallProgressMessage({ progressCode: w.progressCode, params: w.params }, w.message));
         }
 
         let createResult: Awaited<ReturnType<typeof serversApi.create>>;
         try {
-          // Use data from server response which has computed paths
           createResult = await serversApi.create({
             name: data.serverName || serverName,
             serverName: data.serverName || serverName,
@@ -994,12 +881,6 @@ export default function ServerSetup() {
           return;
         }
 
-        // Separate try/catch from create() above -- same reasoning as #2 in
-        // handleInstallComplete: the server entry already exists at this
-        // point, so an activate() failure must never be reported as
-        // "failed to create server entry". "Start Server Now" is only
-        // offered once activation genuinely succeeds, since it assumes the
-        // just-configured server is the active one.
         if (createResult.server?.id) {
           try {
             await serversApi.activate(createResult.server.id);
@@ -1060,10 +941,6 @@ export default function ServerSetup() {
     }
   };
 
-  // Shared by both post-install "Start Server Now" buttons (full-wizard and
-  // quick-setup completion screens) -- was duplicated inline at each render
-  // site before this gate; extracted so the server.control guard lives in
-  // one place instead of needing to be copied into two identical blocks.
   const handleStartServerNow = async () => {
     if (!canControlServer) return;
     setStartingServer(true);
@@ -1085,13 +962,12 @@ export default function ServerSetup() {
     }
   };
 
-  // Resume-banner actions -- see resumeMarker/readInstallInFlightMarker above.
   const handleResumeContinue = () => {
     if (!resumeMarker) return;
     setInstallPath(resumeMarker.installPath);
     setServerName(resumeMarker.serverName);
     setSetupMode("full");
-    setCurrentStep(2); // Server Config -- where installPath/serverName live
+    setCurrentStep(2);
     setResumeMarker(null);
   };
 
@@ -1100,7 +976,6 @@ export default function ServerSetup() {
     setResumeMarker(null);
   };
 
-  // Mode selection screen
   if (setupMode === "select") {
     return (
       <div className="max-w-4xl mx-auto space-y-8">
@@ -1144,7 +1019,6 @@ export default function ServerSetup() {
         )}
 
         <div className="grid gap-6 md:grid-cols-2">
-          {/* Full Install Card */}
           {(() => {
             const activate = () => {
               setSetupMode("full");
@@ -1213,7 +1087,6 @@ export default function ServerSetup() {
             );
           })()}
 
-          {/* Quick Setup Card */}
           {(() => {
             const activate = () => {
               setSetupMode("quick");
@@ -1266,7 +1139,6 @@ export default function ServerSetup() {
           })()}
         </div>
 
-        {/* Quick Tips */}
         <Card className="bg-secondary/40 border-border/70 shadow-sm">
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
@@ -1286,7 +1158,6 @@ export default function ServerSetup() {
     );
   }
 
-  // Step indicator
   const renderStepIndicator = () => {
     const steps =
       setupMode === "quick"
@@ -1360,7 +1231,6 @@ export default function ServerSetup() {
     );
   };
 
-  // Full Install Step 1: SteamCMD
   const renderFullStep1 = () => (
     <div className="space-y-6">
       <div className="text-center space-y-2 pb-6 border-b">
@@ -1372,7 +1242,6 @@ export default function ServerSetup() {
 
       {!hasSteamCmd ? (
         <div className="space-y-6">
-          {/* One-Click Setup */}
           <Card className="border-primary/35 bg-card shadow-sm">
             <CardContent className="pt-6">
               <div className="flex items-start gap-4">
@@ -1445,7 +1314,6 @@ export default function ServerSetup() {
             </CardContent>
           </Card>
 
-          {/* Manual Setup Accordion */}
           <Accordion type="single" collapsible className="border rounded-lg">
             <AccordionItem value="manual" className="border-0">
               <AccordionTrigger className="px-4 hover:no-underline">
@@ -1544,7 +1412,6 @@ export default function ServerSetup() {
     </div>
   );
 
-  // Full Install Step 2: Server Location & Name
   const renderFullStep2 = () => (
     <div className="space-y-6">
       <div className="text-center space-y-2 pb-6 border-b">
@@ -1555,7 +1422,6 @@ export default function ServerSetup() {
       </div>
 
       <div className="grid gap-6">
-        {/* Installation Path */}
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <Label className="text-base">{t("full.step2.installFolderLabel")}</Label>
@@ -1627,7 +1493,6 @@ export default function ServerSetup() {
           </p>
         </div>
 
-        {/* Server Name */}
         <div className="space-y-2">
           <Label className="text-base">{t("common.serverNameLabel")}</Label>
           <Input
@@ -1644,7 +1509,6 @@ export default function ServerSetup() {
           </p>
         </div>
 
-        {/* Branch Selection */}
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
             <Label className="text-base">{t("full.step2.gameVersionLabel")}</Label>
@@ -1685,7 +1549,6 @@ export default function ServerSetup() {
           </Select>
         </div>
 
-        {/* Custom Data Path - Collapsed by default */}
         <Accordion type="single" collapsible className="border rounded-lg">
           <AccordionItem value="datapath" className="border-0">
             <AccordionTrigger className="px-4 hover:no-underline">
@@ -1749,7 +1612,6 @@ export default function ServerSetup() {
     </div>
   );
 
-  // Full Install Step 3: RCON & Performance
   const renderFullStep3 = () => (
     <div className="space-y-6">
       <div className="text-center space-y-2 pb-6 border-b">
@@ -1759,7 +1621,6 @@ export default function ServerSetup() {
         </p>
       </div>
 
-      {/* RCON Section - Critical */}
       <Card className="border-primary/35 bg-card shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
@@ -1865,7 +1726,6 @@ export default function ServerSetup() {
         </CardContent>
       </Card>
 
-      {/* Admin Password - Critical */}
       <Card className="border-primary/35 bg-card shadow-sm">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
@@ -1907,7 +1767,6 @@ export default function ServerSetup() {
         </CardContent>
       </Card>
 
-      {/* Memory Settings */}
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
@@ -1994,7 +1853,6 @@ export default function ServerSetup() {
         </CardContent>
       </Card>
 
-      {/* Advanced Options - Collapsed */}
       <Accordion type="single" collapsible className="border rounded-lg">
         <AccordionItem value="advanced" className="border-0">
           <AccordionTrigger className="px-4 hover:no-underline">
@@ -2072,7 +1930,6 @@ export default function ServerSetup() {
     </div>
   );
 
-  // Full Install Step 4: Review & Install
   const renderFullStep4 = () => (
     <div className="space-y-6">
       <div className="text-center space-y-2 pb-6 border-b">
@@ -2082,7 +1939,6 @@ export default function ServerSetup() {
         </p>
       </div>
 
-      {/* Summary */}
       <Card>
         <CardContent className="pt-6">
           <div className="grid gap-3 text-sm">
@@ -2118,7 +1974,6 @@ export default function ServerSetup() {
         </CardContent>
       </Card>
 
-      {/* Port Info */}
       <div className="bg-muted/50 border border-border/60 rounded-lg p-4 text-sm shadow-sm">
         <p className="font-medium flex items-center gap-2">
           <Info className="w-4 h-4 text-primary" />
@@ -2138,7 +1993,6 @@ export default function ServerSetup() {
         </ul>
       </div>
 
-      {/* Install Button */}
       <DisabledReason reason={!canInstall ? t("common.noPermissionInstall") : null}>
         <Button
           onClick={handleInstall}
@@ -2166,7 +2020,6 @@ export default function ServerSetup() {
         </p>
       )}
 
-      {/* Installation Progress Bar */}
       {installing && installProgress && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
@@ -2186,7 +2039,6 @@ export default function ServerSetup() {
         </div>
       )}
 
-      {/* Installation Log */}
       {logs.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -2222,7 +2074,6 @@ export default function ServerSetup() {
         </div>
       )}
 
-      {/* Post-install */}
       {installComplete && (
         <Card className="border-primary/32 bg-card shadow-sm">
           <CardContent className="pt-6 space-y-4">
@@ -2231,7 +2082,6 @@ export default function ServerSetup() {
               <span className="font-medium">{t("full.step4.completeTitle")}</span>
             </div>
 
-            {/* First-run setup notice */}
             <div className="bg-warning/10 border border-warning/40 rounded-lg p-4 text-sm shadow-sm">
               <p className="font-medium flex items-center gap-2 text-warning">
                 <Info className="w-4 h-4" />
@@ -2271,7 +2121,6 @@ export default function ServerSetup() {
     </div>
   );
 
-  // Quick Setup Step 1: Select Files
   const renderQuickStep1 = () => (
     <div className="space-y-6">
       <div className="text-center space-y-2 pb-6 border-b">
@@ -2344,7 +2193,6 @@ export default function ServerSetup() {
     </div>
   );
 
-  // Quick Setup Step 2: Configure
   const renderQuickStep2 = () => (
     <div className="space-y-6">
       <div className="text-center space-y-2 pb-6 border-b">
@@ -2355,7 +2203,6 @@ export default function ServerSetup() {
       </div>
 
       <div className="grid gap-6">
-        {/* Server Name */}
         <div className="space-y-2">
           <Label className="text-base">{t("common.serverNameLabel")}</Label>
           <Input
@@ -2372,7 +2219,6 @@ export default function ServerSetup() {
           </p>
         </div>
 
-        {/* RCON - Critical */}
         <Card className="border-primary/35 bg-card shadow-sm">
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
@@ -2478,7 +2324,6 @@ export default function ServerSetup() {
           </CardContent>
         </Card>
 
-        {/* Admin Password - Critical */}
         <Card className="border-primary/35 bg-card shadow-sm">
           <CardHeader className="pb-4">
             <div className="flex items-center gap-2">
@@ -2520,7 +2365,6 @@ export default function ServerSetup() {
           </CardContent>
         </Card>
 
-        {/* Memory */}
         <Card>
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
@@ -2607,7 +2451,6 @@ export default function ServerSetup() {
           </CardContent>
         </Card>
 
-        {/* Advanced Options */}
         <Accordion type="single" collapsible className="border rounded-lg">
           <AccordionItem value="advanced" className="border-0">
             <AccordionTrigger className="px-4 hover:no-underline">
@@ -2725,7 +2568,6 @@ export default function ServerSetup() {
     </div>
   );
 
-  // Quick Setup Step 3: Create
   const renderQuickStep3 = () => (
     <div className="space-y-6">
       <div className="text-center space-y-2 pb-6 border-b">
@@ -2735,7 +2577,6 @@ export default function ServerSetup() {
         </p>
       </div>
 
-      {/* Summary */}
       <Card>
         <CardContent className="pt-6">
           <div className="grid gap-3 text-sm">
@@ -2767,7 +2608,6 @@ export default function ServerSetup() {
         </CardContent>
       </Card>
 
-      {/* Create Button */}
       <DisabledReason reason={!canInstall ? t("common.noPermissionInstall") : null}>
       <Button
         onClick={handleQuickSetup}
@@ -2795,7 +2635,6 @@ export default function ServerSetup() {
         </p>
       )}
 
-      {/* Log */}
       {logs.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -2826,7 +2665,6 @@ export default function ServerSetup() {
         </div>
       )}
 
-      {/* Post-create */}
       {installComplete && (
         <Card className="border-primary/30 bg-card shadow-sm">
           <CardContent className="pt-6 space-y-4">
@@ -2864,7 +2702,6 @@ export default function ServerSetup() {
     </div>
   );
 
-  // Render current step content
   const renderStepContent = () => {
     if (setupMode === "quick") {
       switch (currentStep) {
@@ -2927,7 +2764,6 @@ export default function ServerSetup() {
   return (
     <>
       <div className="max-w-3xl mx-auto space-y-6 page-transition">
-        {/* Header */}
         <div className="text-center">
           <h1 className="text-3xl font-bold">
             {setupMode === "quick" ? t("quick.pageTitle") : t("full.pageTitle")}
@@ -2939,15 +2775,12 @@ export default function ServerSetup() {
           </p>
         </div>
 
-        {/* Step Indicator */}
         {renderStepIndicator()}
 
-        {/* Main Content Card */}
         <Card>
           <CardContent className="pt-6">{renderStepContent()}</CardContent>
         </Card>
 
-        {/* Navigation */}
         {!isLastStep && (
           <div className="space-y-2">
             <div className="flex justify-between">

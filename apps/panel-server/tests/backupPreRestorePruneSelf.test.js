@@ -4,16 +4,6 @@ import os from "os";
 import path from "path";
 import archiver from "archiver";
 
-// regression 2026-09-05 (backup-restore-round-trip sweep, item #1): the
-// mandatory pre-restore backup's completion runs cleanupOldBackups() --
-// the SAME retention prune a routine scheduled backup runs -- with no
-// awareness that one of the backups on disk right now is the very archive
-// this restore is about to read from. When that archive happens to be
-// among the oldest (exactly the case for a user restoring their OLDEST
-// backup, which is a completely ordinary thing to do), the fresh
-// pre-restore backup pushes the count over maxBackups and the prune
-// deletes the archive being restored, out from under the restore that is
-// still mid-flight.
 
 const logServerEvent = vi.fn(async () => {});
 
@@ -92,10 +82,6 @@ describe("restoreBackup does not let its own pre-restore backup prune the archiv
   it("restoring the single oldest backup with maxBackups=1 must not delete that backup before extraction reads it", async () => {
     const oldPath = path.join(backupsPath, "old.zip");
     await writeValidBackup(oldPath, "OLD");
-    // Real filesystem timestamp ordering matters for backupSortKey's
-    // birthtime fallback -- make sure the pre-restore backup this test
-    // triggers is unambiguously newer than "old.zip" (mtime/birthtime
-    // resolution can be coarse on some filesystems).
     await new Promise((r) => setTimeout(r, 20));
 
     const service = createService(1);
@@ -106,10 +92,6 @@ describe("restoreBackup does not let its own pre-restore backup prune the archiv
       createPreRestoreBackup: true,
     });
 
-    // The archive being restored must still exist after the operation --
-    // whether or not the restore itself reports success, its own
-    // housekeeping must never be the thing that deletes the source archive
-    // out from under it.
     expect(fs.existsSync(oldPath)).toBe(true);
     expect(result.success).toBe(true);
     expect(fs.readFileSync(path.join(savesPath, "map_meta.bin"), "utf8")).toBe(

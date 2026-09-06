@@ -1,17 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 regression: createBackup surfaces skipped files (ones that
-// vanished mid-archive -- a real race on a live PZ directory) rather than
-// deciding policy itself, since the same skip means different things
-// depending on why the backup exists. This is the routine/manual path
-// (POST /backup/create): a skip here is tolerated, not fatal -- almost
-// always a temp/log/lock file the running server rewrote mid-backup -- but
-// it must be visible rather than silently dropped, so it's surfaced as a
-// warnings array, the same reloadWarnings/scriptWarnings convention used
-// elsewhere tonight. Contrast with restoreBackup's pre-restore backup and
-// /wipe's pre-wipe backup, which treat any skip as an outright failure
-// (covered in backupRestoreSafety.test.js and wipeBackup.test.js) because
-// THOSE backups are about to become the world's only copy.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => ({ isRemote: false })),

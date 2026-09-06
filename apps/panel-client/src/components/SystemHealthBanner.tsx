@@ -7,8 +7,6 @@ import { systemApi, type StorageHealth } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const POLL_INTERVAL_MS = 30_000
-// Any threshold crossing DiskMonitor emits — we don't try to merge the
-// partial payload, just treat it as a signal to refetch full storage health.
 const DISK_SOCKET_EVENTS = ['disk:warning', 'disk:critical', 'disk:normal'] as const
 
 type Level = 'warning' | 'critical'
@@ -61,14 +59,6 @@ export function SystemHealthBanner() {
 
   const refresh = useCallback(() => {
     systemApi.getStorageHealth().then((next) => {
-      // ok:false means the server couldn't verify this reading (unreachable
-      // mount, permission error) and forces warning/critical to false on
-      // that path -- diskMonitor.js's own socket-emit path already guards
-      // against treating that as a real all-clear (it holds the last known
-      // level rather than firing "disk:normal"), but this REST poll doesn't
-      // go through that guard. Apply the same "unknown, not cleared" rule
-      // here too: keep whichever reading we last trusted instead of
-      // silently dropping a live banner because one check briefly failed.
       setHealth((prev) => {
         if (!prev) return next
         const saveVolume = next.diskSpace.saveVolume?.ok === false
@@ -96,7 +86,6 @@ export function SystemHealthBanner() {
 
   const banner = deriveBanner(health, t)
 
-  // Reset dismissal once the condition clears so a future warning isn't pre-dismissed.
   useEffect(() => {
     if (!banner) setDismissed(false)
   }, [banner])

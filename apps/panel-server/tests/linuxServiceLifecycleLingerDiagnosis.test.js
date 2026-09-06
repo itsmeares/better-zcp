@@ -5,23 +5,6 @@ import {
   buildLifecycleTemplate,
 } from "../services/linuxServiceLifecycle.js";
 
-// 2026-09-05 overnight regression (install shapes under the privilege lens):
-// a service account created exactly per docs/install/linux.md
-// (`useradd -r -m -s /bin/false pzuser`) has NEVER had a systemd user-manager
-// instance started for it, so /run/user/<uid> does not exist yet. Reproduced
-// live under real systemd/WSL: `systemctl --user status` as such an account
-// fails outright with "Failed to connect to bus: Permission denied", even
-// with XDG_RUNTIME_DIR forced (this file's own defaultExecFile() fallback --
-// that fallback fixes a DIFFERENT gap and does not help here). The only fix
-// is `sudo loginctl enable-linger pzuser`, run once. Two bugs followed from
-// that fact:
-//   1. buildLifecycleTemplate()'s suggested `commands` ran two
-//      `systemctl --user` steps BEFORE the loginctl step that makes
-//      `systemctl --user` work at all on a fresh account.
-//   2. inspect() correctly captures the real stderr in status.error, but
-//      status()/preflightActivation() discarded it behind a fixed generic
-//      "is not installed" message whenever registered came back false --
-//      telling the operator to reinstall a unit that was never the problem.
 const server = {
   id: "alpha-1",
   name: "Alpha Server",
@@ -54,10 +37,6 @@ describe("linuxServiceLifecycle systemd account bootstrap (linger)", () => {
     return new LinuxServiceLifecycle(server, "systemd", {
       platform: "linux",
       containerized: false,
-      // A real "no linger, no session" systemctl --user call: it ran (exit
-      // code 1, a real integer -- execFailed stays false) and printed
-      // nothing to stdout, so LoadState never parses and registered comes
-      // back false, same as a genuinely-never-installed unit.
       execFile: vi.fn(async () => ({ code: 1, stdout: "", stderr: BUS_ERROR })),
     });
   }

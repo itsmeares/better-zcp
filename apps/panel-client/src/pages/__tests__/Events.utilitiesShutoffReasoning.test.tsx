@@ -6,22 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// regression, card utilities-shutoff-reasoning-is-computed-and-
-// discarded (#8/46): PanelBridge.lua's getUtilitiesStatus replicates the
-// game's own power formula (ISButtonPrompt.lua:421) and returns the
-// modifier/day/nights-survived inputs behind powerOn/waterOn -- the server
-// forwards the whole payload unmodified, but Events.tsx only read 3 of the
-// ~7 fields (hydroPowerOn/powerOn/waterOn) and rendered nothing but a
-// binary on/off dot, discarding the rest.
-//
-// Separately: restoreUtilities/shutOffUtilities already return a genuine
-// post-action hydroPowerOn read-back (the b376b2c-family fix -- see
-// panelBridgeUtilitiesHydroPowerOnReporting.test.js), but the client never
-// compared it to the requested state, so a write that silently didn't
-// stick (the Lua's own comments describe exactly this risk: "applySettings
-// can re-roll the modifier") still produced a plain success toast -- the
-// same "action silently does not happen, reason already computed and
-// discarded" shape as the template-apply fix.
 
 const toastSpy = vi.hoisted(() => vi.fn())
 vi.mock('@/components/ui/use-toast', () => ({
@@ -46,8 +30,6 @@ vi.mock('@/lib/api', async () => {
   }
 })
 
-// Radix primitives mounted elsewhere on this page measure via ResizeObserver,
-// which jsdom does not implement -- matches Events.climateFloatRanges.test.tsx.
 class StubResizeObserver {
   observe() {}
   unobserve() {}
@@ -79,8 +61,6 @@ function renderEvents() {
 async function openUtilitiesSection() {
   const nav = await screen.findByText('Power and water')
   nav.click()
-  // Sublabel text unique to the mounted utilities section -- confirms the
-  // panel actually swapped in before proceeding.
   await screen.findByText('power & water grid')
 }
 
@@ -114,10 +94,7 @@ describe('Events -- utilities status surfaces the computed shutoff reasoning, no
     renderEvents()
     await openUtilitiesSection()
 
-    // Power: real modifier value shown as-is.
     await screen.findByText('modifier 15 · world day 3 · 2 nights survived')
-    // Water: 2147483647 is PanelBridge.lua's own documented "never shuts
-    // off" sentinel -- shown as a word, not the raw 32-bit max literal.
     await screen.findByText('modifier never · world day 3 · 2 nights survived')
   })
 })
@@ -136,12 +113,8 @@ describe('Events -- a utilities action that silently does not take effect is rep
     renderEvents()
     await openUtilitiesSection()
 
-    // The utilities Power/Water controls are now a single state-reflecting
-    // Switch each (2026-08-31, paired-buttons operator request), not a
-    // Restore/Shut Off button pair -- both mock powerOn/waterOn true in
-    // beforeEach, so the switches render checked; clicking flips them off.
     const switches = await screen.findAllByRole('switch', { name: /power|water/i })
-    switches[0].click() // power row renders first
+    switches[0].click()
 
     await waitFor(() => expect(shutOffUtilities).toHaveBeenCalledWith(true, false))
     await waitFor(() => {
@@ -189,7 +162,7 @@ describe('Events -- a utilities action that silently does not take effect is rep
     await openUtilitiesSection()
 
     const switches = await screen.findAllByRole('switch', { name: /power|water/i })
-    switches[1].click() // water row renders second
+    switches[1].click()
 
     await waitFor(() => expect(shutOffUtilities).toHaveBeenCalledWith(false, true))
     await waitFor(() => {

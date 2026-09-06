@@ -8,38 +8,24 @@ import { requirePermission } from '../services/permissions.js';
 
 const router = express.Router();
 
-// A setup/verification diagnostic (queries the Steam master server list,
-// pings arbitrary public IPs the caller supplies) rather than a player- or
-// server-operations feature — admin+technician, not moderator, matching
-// this program's default for "operate/configure the server" tooling.
-// Applied once at the router level (4 endpoints).
 router.use(requirePermission('server.install'));
 
-// Block private/reserved IP ranges to prevent SSRF
 export function isPrivateIp(ip) {
   if (typeof ip !== 'string') return true;
-  // Trim whitespace
   ip = ip.trim();
-  // Block non-IPv4 patterns (no IPv6 support in this feature)
   if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return true;
   const parts = ip.split('.').map(Number);
   if (parts.some(p => p < 0 || p > 255 || isNaN(p))) return true;
   const [a, b] = parts;
-  // 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16-31.0.0/12, 192.168.0.0/16, 224-255 (multicast/reserved)
   if (a === 0 || a === 10 || a === 127) return true;
-  // 100.64.0.0/10 (RFC 6598, Carrier-Grade NAT / shared address space) --
-  // increasingly used as an internal routing range by cloud providers and
-  // some Docker/Kubernetes CNI setups, so it needs the same block as the
-  // other private ranges above.
   if (a === 100 && b >= 64 && b <= 127) return true;
   if (a === 169 && b === 254) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;
   if (a === 192 && b === 168) return true;
-  if (a >= 224) return true; // multicast + reserved
+  if (a >= 224) return true;
   return false;
 }
 
-// Validate IP format for query/ping endpoints
 function validateQueryIp(ip) {
   if (!ip || typeof ip !== 'string') return false;
   if (isPrivateIp(ip)) return false;
@@ -57,26 +43,17 @@ export function parseQueryPort(value) {
   return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
-// Project Zomboid App ID on Steam
 const PZ_APP_ID = 108600;
 
-// Steam Master Server addresses
 const MASTER_SERVERS = [
   { host: 'hl2master.steampowered.com', port: 27011 },
 ];
 
-// Timeout for queries (ms)
 const QUERY_TIMEOUT = 10000;
 const SERVER_QUERY_TIMEOUT = 3000;
 
-// Bound the fallback fan-out. The cap is returned as
-// masterDiscovery.truncated so a short result stays distinguishable from an
-// intentionally truncated one.
 const MAX_MASTER_SERVERS_TO_QUERY = 200;
 
-/**
- * Query a single game server for detailed info using A2S_INFO protocol
- */
 export function buildA2SInfoQuery(challenge = null) {
   const base = Buffer.from([
     0xFF, 0xFF, 0xFF, 0xFF, 0x54,
@@ -85,22 +62,12 @@ export function buildA2SInfoQuery(challenge = null) {
   return challenge ? Buffer.concat([base, challenge]) : base;
 }
 
-// Shared between GET /query and GET /ping so both name the same cause the
-// same way. Kept as its own map rather than inlined in either route so a
-// third caller of queryServerInfo's reason gets the same wording for free.
 export const QUERY_FAILURE_MESSAGES = {
   timeout: 'Server did not respond (timed out)',
   'socket-error': 'Could not reach the server (network error)',
   'unparseable-response': 'Server responded with data the panel could not parse',
 };
 
-// onFailureReason, if given, is invoked with 'timeout' | 'socket-error' |
-// 'unparseable-response' right before a null resolve -- optional and
-// side-channel so the resolved value's contract (info object or null) is
-// completely unchanged for the batch caller in GET / and the existing
-// challenge-handling test, both of which only care about truthy-or-null.
-// GET /query and GET /ping pass it to turn one generic "didn't respond"
-// outcome back into the three genuinely different causes it collapsed.
 export async function queryServerInfo(ip, port, onFailureReason) {
   return new Promise((resolve) => {
     const socket = dgram.createSocket('udp4');
@@ -133,14 +100,6 @@ export async function queryServerInfo(ip, port, onFailureReason) {
           onFailureReason?.('timeout');
           resolve(null);
         }, SERVER_QUERY_TIMEOUT);
-        // No destination args -- this socket is connect()-ed, see below.
-        // send() on a connected UDP socket can throw SYNCHRONOUSLY (e.g.
-        // ERR_SOCKET_BAD_PORT) -- this call is inside a 'message' listener,
-        // so a throw here would escape both this Promise's executor and
-        // the socket's own 'error' handler and become a process-crashing
-        // uncaught exception instead of a resolved query failure. See the
-        // matching try/catch on the initial send() below and
-        // serverFinderSocketSendSyncThrow.test.js for why this matters.
         try {
           socket.send(buildA2SInfoQuery(challenge));
         } catch (err) {
@@ -165,16 +124,7 @@ export async function queryServerInfo(ip, port, onFailureReason) {
       }
     });
 
-    // A2S_INFO query packet. A server may answer with a challenge; the
-    // message handler retries once with the challenge appended as required by
-    // the protocol.
-    //
-    // A connected socket accepts replies only from the requested address,
-    // preventing another host from fabricating the response after the SSRF
-    // checks have passed.
     socket.connect(port, ip, () => {
-      // A synchronous send() error inside this callback would otherwise escape
-      // the Promise and terminate the server process.
       try {
         socket.send(buildA2SInfoQuery());
       } catch (err) {
@@ -187,38 +137,28 @@ export async function queryServerInfo(ip, port, onFailureReason) {
   });
 }
 
-/**
- * Parse A2S_INFO response
- */
 function parseA2SInfoResponse(buffer) {
-  let offset = 4; // Skip header (0xFFFFFFFF)
+  let offset = 4;
 
   const header = buffer.readUInt8(offset++);
 
-  // Check for challenge response (0x41 = 'A')
   if (header === 0x41) {
-    // Server sent a challenge, we'd need to resend with the challenge
-    // For simplicity, we'll skip servers that require challenges
     throw new Error('Challenge required');
   }
 
-  // 'I' (0x49) = Source server info response
-  // 'm' (0x6D) = Obsolete GoldSource response
   if (header !== 0x49 && header !== 0x6D) {
     throw new Error('Invalid response header');
   }
 
   const info = {};
 
-  // Protocol version
   info.protocol = buffer.readUInt8(offset++);
 
-  // Read null-terminated strings
   const readString = () => {
     const start = offset;
     while (buffer[offset] !== 0 && offset < buffer.length) offset++;
     const str = buffer.toString('utf8', start, offset);
-    offset++; // Skip null terminator
+    offset++;
     return str;
   };
 
@@ -227,62 +167,47 @@ function parseA2SInfoResponse(buffer) {
   info.folder = readString();
   info.game = readString();
 
-  // Steam App ID (short)
   info.appId = buffer.readUInt16LE(offset);
   offset += 2;
 
-  // Players
   info.players = buffer.readUInt8(offset++);
   info.maxPlayers = buffer.readUInt8(offset++);
   info.bots = buffer.readUInt8(offset++);
 
-  // Server type: 'd' = dedicated, 'l' = listen, 'p' = SourceTV
   info.serverType = String.fromCharCode(buffer.readUInt8(offset++));
 
-  // Environment: 'l' = Linux, 'w' = Windows, 'm'/'o' = Mac
   info.environment = String.fromCharCode(buffer.readUInt8(offset++));
 
-  // Visibility: 0 = public, 1 = private
   info.visibility = buffer.readUInt8(offset++);
   info.isPrivate = info.visibility === 1;
 
-  // VAC: 0 = unsecured, 1 = secured
   info.vac = buffer.readUInt8(offset++);
 
-  // Version
   info.version = readString();
 
-  // Extra data flag (EDF)
   if (offset < buffer.length) {
     const edf = buffer.readUInt8(offset++);
 
-    // Port
     if (edf & 0x80) {
       info.gamePort = buffer.readUInt16LE(offset);
       offset += 2;
     }
 
-    // Steam ID
     if (edf & 0x10) {
-      // 64-bit Steam ID
       offset += 8;
     }
 
-    // SourceTV
     if (edf & 0x40) {
       info.sourceTvPort = buffer.readUInt16LE(offset);
       offset += 2;
       info.sourceTvName = readString();
     }
 
-    // Keywords/Tags
     if (edf & 0x20) {
       info.keywords = readString();
     }
 
-    // Game ID
     if (edf & 0x01) {
-      // 64-bit Game ID
       offset += 8;
     }
   }
@@ -290,14 +215,8 @@ function parseA2SInfoResponse(buffer) {
   return info;
 }
 
-/**
- * Query Steam Master Server for game servers
- */
 export async function queryMasterServer(masterHost, masterPort, region = 0xFF, filters = '') {
   return new Promise((resolve, reject) => {
-    // A connected UDP socket accepts replies only from the resolved master,
-    // preventing a spoofed response from steering the fallback to an internal
-    // address.
     const socket = dgram.createSocket('udp4');
     const servers = [];
     let lastIp = '0.0.0.0';
@@ -315,8 +234,6 @@ export async function queryMasterServer(masterHost, masterPort, region = 0xFF, f
     });
 
     socket.on('message', (msg) => {
-      // Parse response
-      // Header: 0xFF 0xFF 0xFF 0xFF 0x66 0x0A
       if (msg.length < 6) return;
 
       let offset = 6;
@@ -325,7 +242,6 @@ export async function queryMasterServer(masterHost, masterPort, region = 0xFF, f
         const port = msg.readUInt16BE(offset + 4);
         offset += 6;
 
-        // 0.0.0.0:0 marks end of list
         if (ip === '0.0.0.0' && port === 0) {
           clearTimeout(timeout);
           socket.close();
@@ -338,51 +254,27 @@ export async function queryMasterServer(masterHost, masterPort, region = 0xFF, f
         lastPort = port;
       }
 
-      // Request more servers if list continues
       if (servers.length > 0) {
         sendQuery(lastIp, lastPort);
       }
     });
 
     const sendQuery = (seedIp = '0.0.0.0', seedPort = 0) => {
-      // Master Server Query packet
-      // Type: 0x31
-      // Region: 0xFF (all regions)
-      // IP:Port seed
-      // Filter string
       const seedAddr = `${seedIp}:${seedPort}`;
       const filterStr = filters + '\0';
 
       const packet = Buffer.alloc(2 + seedAddr.length + 1 + filterStr.length);
       let offset = 0;
 
-      packet.writeUInt8(0x31, offset++); // Query type
-      packet.writeUInt8(region, offset++); // Region
+      packet.writeUInt8(0x31, offset++);
+      packet.writeUInt8(region, offset++);
 
-      // Seed address
       Buffer.from(seedAddr).copy(packet, offset);
       offset += seedAddr.length;
-      packet.writeUInt8(0, offset++); // Null terminator
+      packet.writeUInt8(0, offset++);
 
-      // Filter
       Buffer.from(filterStr).copy(packet, offset);
 
-      // No destination args -- this socket is connect()-ed, see above.
-      //
-      // send() on a connected UDP socket can throw SYNCHRONOUSLY (observed
-      // in production: RangeError [ERR_SOCKET_BAD_PORT], the connected
-      // socket's own remote port having gone bad after connect()'s
-      // callback already fired -- not a caller passing a bad masterPort,
-      // which fails at connect() itself, before this ever runs). sendQuery
-      // is called from two places, both inside async callbacks (the
-      // connect() callback below, and the 'message' handler above for
-      // pagination) -- NEITHER is inside this function's own Promise
-      // executor, so a throw here would reach neither `reject` above nor
-      // the socket's own 'error' listener. Node's default handling of an
-      // uncaught exception is to kill the whole process, not just this
-      // request -- confirmed the hard way, twice, via
-      // a manual browser smoke test.
-      // Catching it here, once, covers both call sites.
       try {
         socket.send(packet);
       } catch (err) {
@@ -392,42 +284,30 @@ export async function queryMasterServer(masterHost, masterPort, region = 0xFF, f
       }
     };
 
-    // sendQuery() only runs once the connect() actually resolves (the
-    // 'connect' event / this callback) -- a DNS failure or refused
-    // connect fires the 'error' handler above instead, which already
-    // rejects and cleans up.
     socket.connect(masterPort, masterHost, () => {
       sendQuery();
     });
   });
 }
 
-// Simple in-memory cache for server list
 let serverCache = {
   data: null,
   timestamp: 0,
   ttl: 60000, // 1 minute cache
 };
 
-/**
- * Alternative: Use Steam Web API to get server list
- * Requires steamApiKey from settings database
- * Makes parallel requests with different filters to get more servers
- */
 async function getServersFromSteamAPI(apiKey, useCache = true) {
   if (!apiKey) {
     throw new Error('Steam API Key not configured in Settings');
   }
 
-  // Check cache
   if (useCache && serverCache.data && (Date.now() - serverCache.timestamp) < serverCache.ttl) {
     log.debug(`Returning ${serverCache.data.length} servers from cache`);
     return serverCache.data;
   }
 
-  const allServers = new Map(); // Use Map to deduplicate by addr
+  const allServers = new Map();
 
-  // Different filters to maximize server coverage (run in parallel)
   const baseFilters = [
     `\\appid\\${PZ_APP_ID}`, // All servers (up to limit)
     `\\appid\\${PZ_APP_ID}\\white\\1`, // Whitelisted servers
@@ -450,10 +330,8 @@ async function getServersFromSteamAPI(apiKey, useCache = true) {
     }
   };
 
-  // Fetch all filters in parallel
   const results = await Promise.all(baseFilters.map(fetchWithFilter));
 
-  // Merge and deduplicate
   for (const servers of results) {
     for (const server of servers) {
       if (server.addr) {
@@ -464,7 +342,6 @@ async function getServersFromSteamAPI(apiKey, useCache = true) {
 
   log.info(`Steam API returned ${allServers.size} unique servers`);
 
-  // Update cache
   const serverArray = Array.from(allServers.values());
   serverCache = {
     data: serverArray,
@@ -483,13 +360,6 @@ export function mapSteamServer(server) {
   const versionMatch = gametype.match(/VERSION:([0-9.]+)/);
   const gameVersion = versionMatch ? versionMatch[1] : "";
 
-  // port is derived (addr first, then the raw gameport field as a
-  // fallback) rather than read directly, so an unparseable value must stay
-  // null rather than default to a guessed port (16261 is PZ's default, but
-  // guessing it here would be indistinguishable downstream from a port
-  // that was actually read -- a fabricated plausible value is worse than a
-  // null, since null is at least detectable). Matches this file's own
-  // `ping: null` convention for "we don't have this value" elsewhere.
   const addrParts = server.addr?.split(":") || [];
   const portFromAddr = parseQueryPort(addrParts[1]);
   const port =
@@ -517,27 +387,12 @@ export function mapSteamServer(server) {
   };
 }
 
-// The master-server fallback path used to report an identical
-// `servers: []` for three genuinely different outcomes: the master
-// genuinely listed zero PZ servers, the master listed servers but none of
-// them answered the follow-up A2S query, or the master itself could never
-// be reached. Only meaningful for the master_server path with zero results
-// -- undefined otherwise, dropped from the JSON response by JSON.stringify.
 export function deriveEmptyReason({ source, serversFound, mastersReachable, mastersListedCount }) {
   if (source !== 'master_server' || serversFound > 0) return undefined;
   if (!mastersReachable) return 'master-unreachable';
   return mastersListedCount > 0 ? 'no-servers-responded' : 'no-servers-listed';
 }
 
-// Surfaces the master-server fallback's filtering and query cap, so a short
-// result is not ambiguous:
-//   - privateFiltered: entries refused because isPrivateIp() flagged them
-//     (same SSRF guard used by GET /query and GET /ping).
-//   - truncated: the queryable count exceeded MAX_MASTER_SERVERS_TO_QUERY,
-//     so `queried` is a prefix, not the full list.
-// Only meaningful for the master_server path -- undefined otherwise,
-// dropped from the JSON response by JSON.stringify, matching
-// deriveEmptyReason's own convention above.
 export function deriveMasterDiscoveryStats({
   source,
   mastersListedCount,
@@ -554,10 +409,6 @@ export function deriveMasterDiscoveryStats({
   };
 }
 
-// Applies both decisions GET /'s master-server fallback makes about a raw
-// master-listed candidate list before probing any of it: the SSRF filter
-// (isPrivateIp) and the query cap (MAX_MASTER_SERVERS_TO_QUERY). Extracted
-// as its own pure function so the cap can be tested without live UDP calls.
 export function selectMasterServersToQuery(masterServers) {
   const queryable = masterServers.filter((s) => !isPrivateIp(s.ip));
   return {
@@ -567,16 +418,11 @@ export function selectMasterServersToQuery(masterServers) {
   };
 }
 
-// Surface the Steam API error only when the fallback also returns no servers.
-// A successful fallback should not report an earlier, recovered error.
 export function deriveSteamApiFailureReason({ steamApiError, serversFound }) {
   if (!steamApiError || serversFound > 0) return undefined;
   return sanitizeError(steamApiError);
 }
 
-/**
- * Get server list - tries Steam API first, falls back to master server query
- */
 router.get('/', async (req, res) => {
   try {
     log.info(`GET / (server finder): refresh=${req.query.refresh || 'false'}`);
@@ -588,10 +434,8 @@ router.get('/', async (req, res) => {
     let cached = false;
     let steamApiError = null;
 
-    // Try Steam Web API first (more reliable)
     if (steamApiKey) {
       try {
-        // Check if using cache
         if (!forceRefresh && serverCache.data && (Date.now() - serverCache.timestamp) < serverCache.ttl) {
           cached = true;
         }
@@ -606,13 +450,6 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Fallback to master server query (less reliable but works without API key)
-    // emptyReason distinguishes three causes that used to collapse into the
-    // same "servers: []": the master genuinely listed nothing, the master
-    // listed servers but none of them answered the follow-up A2S query, or
-    // the master itself could never be reached. Only computed (and only
-    // included in the response) when this fallback path actually ran and
-    // came up empty -- the common non-empty case is untouched.
     let mastersReachable = false;
     let mastersListedCount = 0;
     let mastersPrivateFilteredCount = 0;
@@ -621,7 +458,6 @@ router.get('/', async (req, res) => {
     if (servers.length === 0) {
       source = 'master_server';
       try {
-        // Query master server for Project Zomboid servers
         const filter = `\\appid\\${PZ_APP_ID}`;
 
         for (const master of MASTER_SERVERS) {
@@ -630,15 +466,12 @@ router.get('/', async (req, res) => {
             mastersReachable = true;
             mastersListedCount += masterServers.length;
 
-            // Apply the same SSRF guard as the direct query routes and expose
-            // both filtering and truncation in the response.
             const { toQuery: serversToQuery, privateFilteredCount, truncated } =
               selectMasterServersToQuery(masterServers);
             mastersPrivateFilteredCount += privateFilteredCount;
             if (truncated) mastersTruncated = true;
             mastersQueriedCount += serversToQuery.length;
 
-            // Query each server for details (limit concurrent queries)
             const batchSize = 50;
             for (let i = 0; i < serversToQuery.length; i += batchSize) {
               const batch = serversToQuery.slice(i, i + batchSize);
@@ -678,10 +511,8 @@ router.get('/', async (req, res) => {
       serversFound: servers.length,
     });
 
-    // Sort by player count (descending)
     servers.sort((a, b) => (b.players || 0) - (a.players || 0));
 
-    // Calculate statistics
     const totalPlayers = servers.reduce((sum, s) => sum + (s.players || 0), 0);
     const activeServers = servers.filter(s => s.players > 0).length;
     const totalCapacity = servers.reduce((sum, s) => sum + (s.maxPlayers || 0), 0);
@@ -709,9 +540,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * Query a specific server for its current info
- */
 router.get('/query', async (req, res) => {
   const { ip, port } = req.query;
   log.info(`GET /query: ip=${ip}, port=${port}`);
@@ -723,7 +551,6 @@ router.get('/query', async (req, res) => {
     });
   }
 
-  // Block private/reserved IPs to prevent SSRF
   if (!validateQueryIp(ip)) {
     return res.status(400).json({
       success: false,
@@ -731,7 +558,6 @@ router.get('/query', async (req, res) => {
     });
   }
 
-  // Validate port is a valid number
   const portNum = parseQueryPort(port);
   if (portNum === null) {
     return res.status(400).json({
@@ -765,9 +591,6 @@ router.get('/query', async (req, res) => {
   }
 });
 
-/**
- * Ping a server to get latency
- */
 router.get('/ping', async (req, res) => {
   const { ip, port } = req.query;
 
@@ -778,7 +601,6 @@ router.get('/ping', async (req, res) => {
     });
   }
 
-  // Block private/reserved IPs to prevent SSRF
   if (!validateQueryIp(ip)) {
     return res.status(400).json({
       success: false,
@@ -786,7 +608,6 @@ router.get('/ping', async (req, res) => {
     });
   }
 
-  // Validate port is a valid number
   const portNum = parseQueryPort(port);
   if (portNum === null) {
     return res.status(400).json({
@@ -825,9 +646,6 @@ router.get('/ping', async (req, res) => {
   }
 });
 
-/**
- * Debug endpoint - get raw Steam API data for a sample of servers
- */
 router.get('/debug', async (req, res) => {
   try {
     const steamApiKey = await getSteamApiKey();
@@ -835,7 +653,6 @@ router.get('/debug', async (req, res) => {
       return res.status(400).json({ error: 'Steam API key not configured' });
     }
 
-    // Get just a few servers with raw data
     const url = `https://api.steampowered.com/IGameServersService/GetServerList/v1/?key=${steamApiKey}&filter=\\appid\\${PZ_APP_ID}\\noplayers\\0&limit=10`;
 
     const response = await fetch(url);

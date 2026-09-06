@@ -8,17 +8,6 @@ import ServerSetup, { INSTALL_INFLIGHT_KEY } from '../ServerSetup'
 import { serversApi } from '@/lib/api'
 import enServerSetup from '../../locales/en/serverSetup.json'
 
-// 2026-08-26 install-failure regression (finding #7) + the follow-up dispatch:
-// install:complete/install:log are heard by exactly one file in the whole
-// client (this one), and a tab closed or reloaded mid-download loses the
-// eventual outcome entirely -- no persisted state, no way back. This file
-// covers the two CLIENT-side fixes from that dispatch:
-//   1. The resume banner: a marker left by a previous page load is surfaced
-//      on remount instead of silently forgotten.
-//   2. The create-vs-activate split (finding #2): a server that WAS created
-//      but failed to auto-activate must never be reported as "failed to
-//      create server entry" -- that told the operator the whole thing failed
-//      when only the auto-switch-active-server step had.
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
@@ -28,11 +17,6 @@ vi.mock('@/lib/api', async () => {
   }
 })
 
-// regression: ServerSetup.tsx gained its first useAuth() call for
-// capability gating -- outside an AuthProvider that throws, which this file
-// never wrapped in one because it never needed one before. can() fails open
-// (returns true) so none of the assertions below, none of which are about
-// capability gating, are affected by it.
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 'u1', username: 'someone', role: 'admin', capabilities: [] },
@@ -46,11 +30,6 @@ vi.mock('@/contexts/AuthContext', () => ({
   }),
 }))
 
-// useToast's own store is a module-level singleton (memoryState, not React
-// state) with no reset hook -- toasts from an earlier test in this same file
-// would otherwise still be sitting in the DOM (TOAST_LIMIT=5) when the next
-// test's <Toaster/> renders, making "the wrong toast did NOT appear"
-// unprovable. Mock it with a plain spy instead, cleared per test.
 const toastSpy = vi.hoisted(() => vi.fn())
 vi.mock('@/components/ui/use-toast', () => ({
   useToast: () => ({ toast: toastSpy, dismiss: vi.fn(), toasts: [] }),
@@ -59,8 +38,6 @@ vi.mock('@/components/ui/use-toast', () => ({
 const create = vi.mocked(serversApi.create)
 const activate = vi.mocked(serversApi.activate)
 
-// Minimal fake matching only what ServerSetup actually calls (on/off) --
-// real socket.io-client is not needed to prove these two behaviors.
 function createFakeSocket() {
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
   const socket = {
@@ -130,8 +107,6 @@ describe('ServerSetup -- resume banner for an install left running by a previous
     )
     renderServerSetup()
 
-    // Give the mount effect a tick, then confirm the banner never appears
-    // and the stale marker was cleaned up rather than left to nag forever.
     await screen.findByText(enServerSetup.modeSelect.title)
     expect(screen.queryByText(enServerSetup.resumeBanner.title)).not.toBeInTheDocument()
     expect(localStorage.getItem(INSTALL_INFLIGHT_KEY)).toBeNull()
@@ -147,8 +122,6 @@ describe('ServerSetup -- resume banner for an install left running by a previous
     await screen.findByText(enServerSetup.resumeBanner.title)
     fireEvent.click(screen.getByRole('button', { name: enServerSetup.resumeBanner.continueButton }))
 
-    // Landed past the mode-select screen (its title is gone) and the install
-    // path field carries the marker's value forward instead of starting blank.
     await waitFor(() => expect(screen.queryByText(enServerSetup.modeSelect.title)).not.toBeInTheDocument())
     expect(screen.getByDisplayValue('/srv/pz-continue')).toBeInTheDocument()
   })
@@ -194,8 +167,6 @@ describe('ServerSetup -- install:complete create-vs-activate messaging (finding 
 
     fake.trigger('install:complete', successPayload)
 
-    // The bug this covers: this used to say "Server files installed, but
-    // registration failed" here, even though the server WAS registered.
     await waitFor(() =>
       expect(toastSpy).toHaveBeenCalledWith(
         expect.objectContaining({ title: enServerSetup.toasts.activateFailedTitle }),

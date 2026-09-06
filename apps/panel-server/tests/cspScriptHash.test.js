@@ -41,25 +41,14 @@ describe("computeInlineScriptCspHash — present and matching", () => {
   });
 
   it("matches the real client/dist/index.html shipped with this repo, if it has been built", (ctx) => {
-    // Not mocked — reads the real built file to prove this isn't just
-    // correct against a hand-crafted fixture. Skips itself if the client
-    // hasn't been built in this environment, rather than failing for an
-    // unrelated reason.
-    //
-    // Reports an actual SKIP (ctx.skip()), not a bare `return`: a bare
-    // return here still counts as a PASS with zero assertions run, which is
-    // exactly what every ubuntu CI checkout produced (client/dist is
-    // gitignored and the server job never builds the client) -- a garbage
-    // hash would have given the same green tick. A real skip shows up as
-    // skipped in the run summary instead of silently inflating the pass count.
     const here = path.dirname(fileURLToPath(import.meta.url));
     const realDistPath = path.join(here, "..", "..", "..", "panel-client", "dist");
     const realIndexPath = path.join(realDistPath, "index.html");
-    if (!fs.existsSync(realIndexPath)) return ctx.skip(); // client not built in this environment
+    if (!fs.existsSync(realIndexPath)) return ctx.skip();
 
     const html = fs.readFileSync(realIndexPath, "utf8");
     const match = /<script>([\s\S]*?)<\/script>/.exec(html);
-    expect(match).not.toBeNull(); // the anti-FOUC script must still be there
+    expect(match).not.toBeNull();
 
     const result = computeInlineScriptCspHash(realDistPath);
     const normalized = match[1].replace(/\r\n?/g, "\n");
@@ -67,10 +56,6 @@ describe("computeInlineScriptCspHash — present and matching", () => {
   });
 
   it("normalizes CRLF/CR line endings before hashing, matching what a real browser computes", () => {
-    // Real CRLF bytes, not a JS "\n" escape (which is always LF and can
-    // never reproduce this) -- this is what a checkout with
-    // core.autocrlf=true actually produces for apps/panel-client/index.html, which has
-    // no .gitattributes rule pinning it to LF.
     const scriptBodyCrlf = "\r\n      console.log('anti-fouc');\r\n    ";
     writeIndexHtml(
       `<!DOCTYPE html><html><head><script>${scriptBodyCrlf}</script></head></html>`,
@@ -78,11 +63,6 @@ describe("computeInlineScriptCspHash — present and matching", () => {
 
     const result = computeInlineScriptCspHash(tmpDir);
 
-    // The browser's CSP engine newline-normalizes CRLF/CR -> LF during HTML
-    // parsing before computing the script hash it enforces (spec-mandated).
-    // Hashing the raw CRLF bytes computes a DIFFERENT hash than what the
-    // browser actually checks against, so the allowed source never matches
-    // and the browser blocks the script with a CSP violation on every load.
     const normalizedBody = scriptBodyCrlf.replace(/\r\n?/g, "\n");
     const expectedHash = sha256Base64(normalizedBody);
     expect(result).toBe(`'sha256-${expectedHash}'`);

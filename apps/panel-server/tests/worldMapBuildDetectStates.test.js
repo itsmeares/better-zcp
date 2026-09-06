@@ -1,16 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// Coverage for worldmap.tiles.buildDetect's two getB42ResolutionStatus()
-// source states (regression). A third 'client' state -- the operator's
-// browser resolving the build the panel host couldn't -- was proposed,
-// built, and then cancelled within the same task: pzmap.org sends no CORS
-// headers on one host, and the CORS-open host challenged every browser
-// tested with an inconsistent bot-detection response. It could not be
-// demonstrated to work, so it does not exist here, not even as a dormant
-// branch or a "not currently produced" comment -- an unreachable branch
-// is dead code, and a note describing it as merely dormant is exactly the
-// kind of thing that goes stale and misleads the next reader.
 
 vi.mock("../database/init.js", async () => {
   const actual = await vi.importActual("../database/init.js");
@@ -27,16 +17,6 @@ vi.mock("../routes/mapProxy.js", async () => {
 
 const { default: debugRouter } = await import("../routes/debug.js");
 
-// The /worldmap handler calls getB42Dir()/getB42TopFormat() for real
-// (unrelated to the buildDetect check these tests target) and then probes
-// three tile URLs with a real fetch(), each under its own 5s timeout.
-// the curl-based discovery in mapProxy.js is correct but genuinely slower
-// than the old fetch-based version, and under a full 132-file suite run
-// (shared CPU/network with everything else) that pushed this test right up
-// against vitest's own per-test timeout -- flaky under load, reliably green
-// in isolation. Stubbing all three removes every source of live network
-// wall-clock time from a test that only asserts on the buildDetect check
-// entry, not on b42Dir/b42TopFormat/the tile probes themselves.
 let originalFetch;
 beforeEach(() => {
   getB42Dir.mockResolvedValue("42.20.0");
@@ -120,12 +100,6 @@ describe("GET /debug/worldmap: worldmap.tiles.buildDetect reports both getB42Res
     expect(check.status).toBe("ok");
     expect(check.message).toContain("42.20.0");
     expect(check.params).toEqual({ build: "42.20.0" });
-    // A cancelled third tier ('client', the browser resolving what the
-    // panel couldn't) was investigated and killed -- upstream sends no CORS
-    // headers on one host and an inconsistent bot-challenge on the other.
-    // Resolution now goes through curl and only works with a realistic
-    // browser user-agent, an upstream heuristic outside the panel's
-    // control. The hint says so plainly rather than reading as solved.
     expect(check.hint).toBeTruthy();
     expect(check.hint.toLowerCase()).toContain("heuristic");
     expect(check.hint.toLowerCase()).toContain("not permanently solved");
@@ -153,8 +127,6 @@ describe("GET /debug/worldmap: worldmap.tiles.buildDetect reports both getB42Res
   });
 
   it("an unrecognized source value fails closed to the warn branch, not the ok branch", async () => {
-    // Defensive: any source value other than the exact string "dynamic"
-    // must not be silently treated as healthy.
     getB42ResolutionStatus.mockReturnValue({
       source: "something-not-in-the-contract",
       directory: "42.19.0",

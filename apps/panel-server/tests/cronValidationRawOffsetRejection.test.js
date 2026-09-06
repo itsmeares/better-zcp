@@ -4,20 +4,6 @@ import {
   isRawOffsetTimezone,
 } from "../utils/cronValidation.js";
 
-// 2026-09-05, scheduler-time-audit: isValidIanaTimezone() used to accept a
-// bare numeric UTC offset ("-05:00") because it only checked whether
-// `new Intl.DateTimeFormat(..., { timeZone: tz })` throws -- true for
-// offsets too, not just real zone names. fd346578 (the timezone-picker
-// feature) deliberately chose that constructor-throws check over the
-// narrower Intl.supportedValuesOf() list specifically to keep accepting
-// legacy ALIAS NAMES a real install might already have saved ("PST", etc.)
-// -- that reasoning never covered a bare offset, which isn't an alias for a
-// place and observes no DST at all. A schedule pinned to one would silently
-// and permanently drift by an hour from the operator's real local time
-// across every DST transition, with nothing to notice it by.
-//
-// These tests prove the fix rejects only the offset shapes, not the alias
-// leniency fd346578 chose on purpose.
 describe("isValidIanaTimezone() / isRawOffsetTimezone() -- reject bare offsets, keep everything else", () => {
   it.each([
     ["-05:00", true],

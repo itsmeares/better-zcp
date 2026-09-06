@@ -1,11 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// requirePermission() must fail closed. Every scenario here is a case
-// where a naive implementation could plausibly fall through to next()
-// instead of refusing: an unknown capability string, a role row with a
-// malformed capabilities array, a user whose role no longer resolves to
-// any row at all. None of these are "is the role checked" (a gate test);
-// each one asks "does the check inside the gate actually refuse."
 
 const rolesById = new Map();
 
@@ -60,9 +54,6 @@ describe("requirePermission() fails closed", () => {
     rolesById.set("role-admin", {
       id: "role-admin",
       name: "admin",
-      // Deliberately grants EVERYTHING real, to prove this isn't a
-      // coincidental refusal from an empty/missing role -- the capability
-      // string itself is what's rejected.
       capabilities: ["server.control", "server.wipe", "roles.manage"],
       isSeeded: true,
     });
@@ -111,7 +102,7 @@ describe("requirePermission() fails closed", () => {
 
   it("refuses when the user's role no longer resolves to any row at all (role renamed or deleted out from under an active session)", async () => {
     const { requirePermission } = await import("../services/permissions.js");
-    rolesById.clear(); // no roles exist at all -- simulates a deleted role
+    rolesById.clear();
 
     const gate = requirePermission("server.control");
     const { res, calledNext } = await runGate(gate, { userId: "u1", role: "moderator" });

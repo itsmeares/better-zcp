@@ -5,15 +5,6 @@ import Players from '../Players'
 import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// 2026-08-30 panelbridge-audit follow-up: PanelBridge.getPlayerDetails
-// (position, health, and the eight stats:get(CharacterStat.X) fields) has
-// been correctly served by the server since the same-day stats-repair fix,
-// but had ZERO client consumers -- api.ts exposed it fully untyped and
-// nothing in apps/panel-client/src ever called it. This is the new UI for it: a
-// "Vitals" tab on the selected player's dossier. Proves the live data
-// actually reaches the screen, that it's gated the same way every other
-// bridge-only feature on this page is (offline player / bridge down), and
-// that it doesn't fire a request it doesn't need to in either gated case.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -107,7 +98,6 @@ async function selectTestPlayerAndOpenVitals() {
   await waitFor(() => expect(screen.getByText('TestPlayer')).toBeInTheDocument(), { timeout: 3000 })
   fireEvent.click(screen.getByText('TestPlayer'))
   await waitFor(() => expect(screen.getAllByText('TestPlayer').length).toBeGreaterThan(1), { timeout: 3000 })
-  // Radix TabsTrigger switches on pointerdown/mousedown, not click.
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Vitals' }), { button: 0 })
 }
 
@@ -138,7 +128,6 @@ describe('Players.tsx Vitals tab: PanelBridge.getPlayerDetails now has a real UI
     expect(screen.getByText('40%')).toBeInTheDocument()
     expect(screen.getByText('Infected')).toBeInTheDocument()
     expect(screen.getByText('10123, 9876, 0')).toBeInTheDocument()
-    // Unverified-scale stats render as raw numbers, not a fabricated bar.
     expect(screen.getByText('0.8')).toBeInTheDocument()
   })
 

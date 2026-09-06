@@ -4,30 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { PanelBridge } from "../services/panelBridge.js";
 
-// 2026-08-31 regression, queue/resync follow-up (the specific ask: "whether
-// a resync can silently drop a pending command rather than failing it").
-//
-// tryResyncOutboxCursor jumps lastConsumedResultSeq straight to the mod's
-// reported high-water mark once it decides a gap is a genuine desync. Before
-// this fix, that jump never looked at what was actually sitting in the gap
-// being skipped -- any result file that still physically existed there
-// (a real, already-written response to a still-pending command) was
-// silently discarded: pollQueueResults() only ever reads forward from
-// lastConsumedResultSeq+1, so once the cursor jumps past a seq, nothing
-// will ever read that file's content again.
-//
-// This matters most over SFTP: commandTimeoutMs there is 60000ms, longer
-// than resyncStuckMs (20000ms) -- so a resync CAN fire and skip past a
-// result before that command's own timeout would have fired on its own.
-// The command doesn't hang forever (its individual setTimeout still fires
-// eventually), but it fails with "no response from mod" when the mod in
-// fact responded successfully -- a misleading failure hiding a real,
-// already-computed answer.
-//
-// recoverSkippedResults scans the gap for files that still exist and
-// processes them (resolving/rejecting the real pending command) before the
-// cursor moves past them, so this class of result is recovered rather than
-// silently thrown away.
 
 function makeTempBridgeDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "panelbridge-outbox-recover-"));
@@ -60,10 +36,6 @@ describe("PanelBridge.tryResyncOutboxCursor -- recovers results skipped by a res
     bridge.configure(tmpDir, true);
     bridge.queueState.lastConsumedResultSeq = 5;
 
-    // A command Node is genuinely still waiting on -- its real result
-    // landed at seq 6, but Node's poll loop is currently stuck looking for
-    // seq 6 and about to resync straight past it to the mod's high-water
-    // mark (10).
     const resolve = vi.fn();
     const reject = vi.fn();
     bridge.pendingCommands.set("cmd-A", {
@@ -81,8 +53,6 @@ describe("PanelBridge.tryResyncOutboxCursor -- recovers results skipped by a res
 
     expect(resynced).toBe(true);
     expect(bridge.queueState.lastConsumedResultSeq).toBe(10);
-    // The real point: cmd-A's promise was resolved with its actual result,
-    // not left to time out as "no response from mod".
     expect(resolve).toHaveBeenCalledWith({ success: true, data: { message: "Player teleported" } });
     expect(reject).not.toHaveBeenCalled();
     expect(bridge.pendingCommands.has("cmd-A")).toBe(false);
@@ -113,19 +83,14 @@ describe("PanelBridge.tryResyncOutboxCursor -- recovers results skipped by a res
     const bridge = new PanelBridge();
     bridge.configure(tmpDir, true);
     bridge.queueState.lastConsumedResultSeq = 0;
-    bridge.queue.retainRecentFiles = 5; // shrink for a fast, deterministic test
+    bridge.queue.retainRecentFiles = 5;
 
-    // A result sitting far back in a huge gap -- older than the retention
-    // window, so intentionally NOT scanned (it's already outside what
-    // cleanupOutboxFiles guarantees keeping around).
     writeResultFile(tmpDir, 2, { id: "cmd-old", success: true, data: {} });
     const resolveOld = vi.fn();
     bridge.pendingCommands.set("cmd-old", {
       resolve: resolveOld, reject: vi.fn(), action: "ping", timeout: setTimeout(() => {}, 0), timestamp: Date.now(),
     });
 
-    // A result within the last retainRecentFiles entries of the gap -- must
-    // still be recovered.
     writeResultFile(tmpDir, 999, { id: "cmd-recent", success: true, data: {} });
     const resolveRecent = vi.fn();
     bridge.pendingCommands.set("cmd-recent", {

@@ -1,23 +1,4 @@
-// A map tile that decodes successfully never reaches this code -- these
-// checks only run when loadViaProxy's <img> element already failed to
-// decode bytes that were otherwise received as a complete, valid HTTP
-// response (see WorldMap.tsx's loadViaProxy). The bytes already in hand at
-// that point can be classified directly instead of guessed at -- no extra
-// request, no operator devtools relay -- which is the exact lesson from
-// waiting on VastayanWings' X-Tile-Cache header: the panel reads the
-// header, the panel does the arithmetic, the human reads a sentence.
-//
-// Deliberately NOT limited to "is this gzip or not" -- a detector that only
-// recognises the cause we happened to guess first can't teach us anything
-// when the real cause is something else, which is exactly what happened
-// here (a compression-middleware theory that turned out to be wrong once
-// tested). Every other recognisable signature is classified too, and
-// anything that matches none of them is reported as raw hex rather than
-// silently rounded into one of the known buckets.
 export type TileByteSignature =
-  // Still gzip-compressed: Content-Encoding was set leaving the server and
-  // lost before the browser decoded the body -- a reverse proxy stripping
-  // or mishandling that header is the leading explanation.
   | { kind: 'gzip' }
   // An HTML document where an image was expected -- a proxy error page, a
   // login/interstitial page, or a captive portal intercepting the request.
@@ -63,19 +44,13 @@ export function classifyTileBytes(bytes: Uint8Array): TileByteSignature {
   if (b0 === 0x1f && b1 === 0x8b) return { kind: 'gzip' }
   if (b0 === 0xff && b1 === 0xd8 && b2 === 0xff) return { kind: 'jpeg' }
   if (b0 === 0x89 && b1 === 0x50 && b2 === 0x4e && b3 === 0x47) return { kind: 'png' }
-  // '<!' (DOCTYPE) or '<h' (<html): the two realistic starts of an HTML
-  // document served by something in front of the panel.
   if (b0 === 0x3c && (b1 === 0x21 || b1 === 0x68)) return { kind: 'html' }
-  // '{' or '[': a JSON document.
   if (b0 === 0x7b || b0 === 0x5b) return { kind: 'json' }
   return { kind: 'unrecognized', hex: bytesToHex(bytes) }
 }
 
 export function parseContentLength(contentLengthHeader: string | null): number | null {
   if (contentLengthHeader == null) return null
-  // Content-Length is defined as a single decimal integer; anything else
-  // (missing, malformed, a list from a misbehaving intermediary) is treated
-  // as "we don't actually know the expected size" rather than guessed at.
   if (!/^\d+$/.test(contentLengthHeader)) return null
   return Number(contentLengthHeader)
 }
@@ -100,12 +75,6 @@ export interface TileFailureCopyKeys {
   descParams?: Record<string, string | number>
 }
 
-// Maps a diagnosis to the i18n keys (worldMap.json's tileFailure.*) that
-// state it in operator language. Kept hedged in proportion to what's
-// actually known: a recognised signature gets a specific, paste-able
-// statement; genuine-but-incomplete image data gets the byte counts that
-// prove it; anything unrecognised says so plainly with the raw bytes
-// rather than forcing a guess into one of the other buckets.
 export function tileFailureCopyKeys(diagnosis: TileFailureDiagnosis): TileFailureCopyKeys {
   switch (diagnosis.signature.kind) {
     case 'gzip':
@@ -119,9 +88,6 @@ export function tileFailureCopyKeys(diagnosis: TileFailureDiagnosis): TileFailur
     case 'empty':
       return { titleKey: 'tileFailure.emptyTitle', descKey: 'tileFailure.emptyDesc' }
     case 'jpeg':
-      // Genuine image data -- a decode failure here is truncation (proven
-      // by the byte counts) or corruption (full size arrived, still bad),
-      // never a wrong-payload guess.
       return diagnosis.looksLikeTruncated
         ? {
             titleKey: 'tileFailure.truncatedTitle',

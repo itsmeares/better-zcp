@@ -28,12 +28,6 @@ export async function getSteamSessionCredentials() {
   return { sessionId, loginSecure };
 }
 
-/**
- * Persist the cookie pair in canonical secret files. An undefined argument
- * means "unchanged", which lets partial Settings saves preserve the other
- * half of the pair. Legacy database copies are removed only after the new
- * pair has been activated and read back through the production reader.
- */
 export async function setSteamSessionCredentials(sessionId, loginSecure) {
   const [legacySessionId, legacyLoginSecure] = await Promise.all([
     getSetting("steamSessionId"),

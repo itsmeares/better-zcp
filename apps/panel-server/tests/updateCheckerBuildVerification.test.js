@@ -3,19 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-09-03, updater-sweep: runAutoUpdate() used to declare success purely
-// because SteamCMD's own process exited with code 0 -- it never re-read the
-// appmanifest it had just asked SteamCMD to rewrite. SteamCMD CAN exit 0
-// without the install actually changing (a stale/corrupt local manifest
-// cache, a branch that silently resolves to what's already installed).
-// reconcilePendingUpdate() (panelUpdateChecker.js) already gets this right
-// for the panel's own binary updater -- it re-checks the running version
-// rather than trusting that staging happened. These tests pin the same
-// discipline here: a success is only reported once the buildId on disk has
-// actually advanced, and the persisted `appliedVersion` reflects what was
-// verified, not the two `.version` lookups (`updateInfo.latest.version` /
-// `updateInfo.installed.version`) that never existed on either object and
-// silently evaluated to `null` on every real run before this fix.
 
 let spawnImpl;
 vi.mock("child_process", () => ({
@@ -105,8 +92,6 @@ describe("runAutoUpdate build-id verification", () => {
   it("reports failure (not success) when SteamCMD exits 0 but the installed buildId did not change", async () => {
     writeManifest(installDir, "1000");
     spawnImpl = () => {
-      // Simulates the real-world failure mode: SteamCMD exits cleanly
-      // without touching the manifest at all.
       const child = fakeChild(0);
       setImmediate(() => child._fireClose());
       return child;
@@ -136,7 +121,6 @@ describe("runAutoUpdate build-id verification", () => {
     spawnImpl = () => {
       const child = fakeChild(0);
       setImmediate(() => {
-        // Simulates SteamCMD actually rewriting the manifest before exiting.
         writeManifest(installDir, "1050");
         child._fireClose();
       });
@@ -165,8 +149,6 @@ describe("runAutoUpdate build-id verification", () => {
     spawnImpl = () => {
       const child = fakeChild(0);
       setImmediate(() => {
-        // Manifest vanishes instead of being rewritten (corrupt write, disk
-        // issue) -- must not be read as "build advanced".
         fs.rmSync(manifestPath(installDir), { force: true });
         child._fireClose();
       });

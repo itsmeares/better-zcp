@@ -10,7 +10,7 @@ function setVisibility(state: 'visible' | 'hidden') {
 
 describe('registerReconnectRecovery', () => {
   afterEach(() => {
-    setVisibility('visible') // restore jsdom's default between tests
+    setVisibility('visible')
   })
 
   it('reconnects when the tab becomes visible again', () => {

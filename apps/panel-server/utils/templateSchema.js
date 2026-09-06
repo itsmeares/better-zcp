@@ -1,15 +1,7 @@
-// Simulation template format: a portable, sparse set of PZ SandboxVars /
-// server.ini overrides that can be applied on top of a server's existing
-// config. "Sparse" means only values that differ from PZ's own defaults are
-// stored — this keeps built-in templates small and readable, and means
-// applying a template never resets a setting the template doesn't mention.
 import crypto from "crypto";
 
 export const TEMPLATE_SCHEMA_VERSION = 1;
 
-// SandboxVars.lua is organized into these top-level blocks (see
-// apps/panel-server/routes/serverFiles.js parseSandboxVars/createSandboxVars). "settings"
-// is the flat top-level table; the rest are nested sub-tables.
 export const SANDBOX_SECTIONS = [
   "settings",
   "ZombieLore",
@@ -19,18 +11,6 @@ export const SANDBOX_SECTIONS = [
   "Basement",
 ];
 
-// Keys that must never appear in a template's serverIni — identity,
-// networking and secrets are per-server/per-deployment, not part of a
-// "ruleset". This is a FLOOR, not a default a caller can replace: see
-// resolveIniExclusions() below, the only correct way to read a template's
-// exclusion set. Reading template.iniExclusions directly (as
-// validateTemplate, diffTemplate and templateService.js's prepareIniChange
-// all once did, independently, via two different predicates that happened
-// to agree) let a template carrying `"iniExclusions": []` disable this
-// protection entirely — the leaked-key check ran against the attacker's own
-// empty list, at both the validate and the apply-time write sites, letting
-// a templates.manage-only role rewrite RCONPassword, the public port and
-// the server name.
 export const DEFAULT_INI_EXCLUSIONS = [
   "RCONPassword",
   "Password",
@@ -42,16 +22,6 @@ export const DEFAULT_INI_EXCLUSIONS = [
   "server_browser_announced_ip",
 ];
 
-// The only correct way to resolve a template's ini exclusion set: always
-// the union of DEFAULT_INI_EXCLUSIONS with whatever additional keys the
-// template supplies. A template may only ADD to the excluded set, never
-// remove from it — template.iniExclusions is attacker-controlled input (it
-// travels with the template through create/import/apply), so treating it as
-// THE exclusion list rather than an addition to a mandatory floor is exactly
-// the bug this function replaces. Used by validateTemplate and diffTemplate
-// here, and by templateService.js's prepareIniChange (the actual .ini write
-// path) — one function, one predicate, so the three sites cannot drift
-// apart from each other again the way they did before.
 export function resolveIniExclusions(template) {
   const extra = Array.isArray(template?.iniExclusions)
     ? template.iniExclusions
@@ -172,20 +142,12 @@ export function validateTemplate(template) {
   return { valid: errors.length === 0, errors };
 }
 
-// Loose equality for comparing a template's typed value (number/boolean)
-// against a value read back from an ini/lua file, which is often a string.
 function valuesEqual(a, b) {
   if (a === b) return true;
   if (a === undefined || b === undefined) return false;
   return String(a).trim() === String(b).trim();
 }
 
-/**
- * Compute what applying `template` would change relative to `currentConfig`,
- * which is shaped as `{ serverIni: {...}, sandboxVars: { settings: {...}, ... } }`.
- * Only keys the template actually specifies are considered — this is a diff
- * of the sparse override set, not a full config comparison.
- */
 export function diffTemplate(template, currentConfig = {}) {
   const exclusions = resolveIniExclusions(template);
 

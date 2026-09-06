@@ -4,15 +4,6 @@ import { MemoryRouter } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Settings from '../Settings'
 
-// impeccable-2026-08-31: found while reshooting settings:updates to verify
-// an unrelated CSS fix -- the status badge showed "Up to date" next to
-// "Latest: Not checked yet" / "Last Check: Never" in the same card. The
-// badge's fallback branch was gated on `!panelUpdateStatus` alone, which
-// only catches a null response. A real, never-checked server returns a
-// truthy status object (currentVersion set, latestVersion/lastCheck still
-// null) -- that object sailed past the `!panelUpdateStatus` guard and fell
-// through to the last branch, "Up to date", which is a claim nothing had
-// actually verified.
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
   return {

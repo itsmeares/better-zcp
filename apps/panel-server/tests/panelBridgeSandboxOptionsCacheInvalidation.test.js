@@ -2,28 +2,6 @@ import { describe, expect, it } from 'vitest';
 import path from 'path';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, regression, item 3 (the own foundation-lens
-// finding). getAllSandboxOptions had a real 300000ms TTL cache entry, but
-// was never in the separate LIVE_STATE_CACHE_KEYS list that
-// invalidateLiveStateCache() walked -- so a successful setSandboxOption
-// write left the panel serving up to 5 minutes of STALE sandbox data. The
-// two lists were hand-maintained separately with nothing enforcing that
-// they agreed; this is the exact class that already bit
-// vehicles/safehouses/players once (see the comment history), surviving
-// here because a 6th cacheable action didn't automatically inherit the
-// same live/static decision.
-//
-// Fixed by merging CACHEABLE_TTL_MS and LIVE_STATE_CACHE_KEYS into one
-// table (CACHEABLE_ACTIONS) where `live` is a required field per entry --
-// getAllSandboxOptions is now `live = true`, so invalidateLiveStateCache()
-// clears it along with the other three.
-//
-// This exercises the REAL dispatcher (PanelBridgeModule.processCommands()),
-// not handlers.* directly -- the caching/invalidation logic lives entirely
-// in the dispatcher, invisible to a bare handler call. getTimestampMs is
-// pinned at 0 by the harness's own base stubs, so TTL expiry never fires on
-// its own here -- the only thing that can clear the cache is the
-// invalidation path this test is proving.
 
 const LUA_PATH = path.resolve('integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
 
@@ -94,8 +72,6 @@ describe('PanelBridge.lua dispatcher -- setSandboxOption invalidates getAllSandb
 
     expect(byId.write.success).toBe(true);
 
-    // The bug: this used to still return 4 (the cached read1 value) because
-    // getAllSandboxOptions was never in the invalidation list.
     expect(byId.read2.success).toBe(true);
     expect(byId.read2.data.options.Vanilla[0].value).toBe(8);
   });
@@ -116,13 +92,9 @@ function FakeWorld:getCell() return FakeCell end
 getWorld = function() return FakeWorld end
 `);
 
-    // Round 1: cache the initial (empty) vehicle count.
     enqueue(bridge, [{ id: 'vread1', action: 'getVehiclesDetailed' }], 1);
     bridge.run('PanelBridgeModule.processCommands()');
 
-    // Change the underlying state, then run an unrelated non-cacheable
-    // action (setSandboxOption) -- this is what must clear the cached
-    // vehicle read, not the vehicle count changing on its own.
     bridge.run('FakeVehicleCount.n = 5');
     enqueue(bridge, [{ id: 'write', action: 'setSandboxOption', args: { name: 'ZombieCount', value: 8 } }], 2);
     bridge.run('PanelBridgeModule.processCommands()');
@@ -136,8 +108,6 @@ getWorld = function() return FakeWorld end
     expect(byId.vread1.success).toBe(true);
     expect(byId.vread1.data.count).toBe(0);
     expect(byId.write.success).toBe(true);
-    // The bug this class already fixed once: without invalidation, this
-    // would still report count=0 (the cached vread1 result).
     expect(byId.vread2.success).toBe(true);
     expect(byId.vread2.data.count).toBe(5);
   });

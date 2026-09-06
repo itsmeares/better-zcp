@@ -3,19 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage for item 3 of the full handler-verification audit:
-// teleportPlayer already computed verifyPosition (the real post-teleport
-// x/y/z) specifically because the code's own comment says "teleportTo alone
-// does not always stick on B42 dedicated servers" -- but never compared it
-// to the requested target before returning ok=true.
-//
-// Per the ruling, the gate is NOT "how close to the target counts as
-// arrived" (ground snap / z-level resolution / tile centring can legitimately
-// shift the landing spot, and gating on that would manufacture false
-// failures). It's "did the player move at all, given how far they were
-// asked to move" -- comparing distance-moved-from-origin against
-// distance-requested. A short teleport (origin and target close together) is
-// explicitly reported unverified rather than guessed at.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -68,11 +55,7 @@ describe('PanelBridge.lua handlers.teleportPlayer -- gate ok on distance actuall
     const bridge = loadPanelBridge(LUA_PATH, playerStub(false));
     const result = bridge.callHandler('teleportPlayer', { username: 'Test', x: 5000, y: 6000, z: 0 });
 
-    // Before the fix, this returned ok=true with verifyPosition sitting at
-    // the untouched origin (100,100,0) while newPosition claimed (5000,6000,0).
     expect(result.ok).toBe(false);
-    // verifyPosition must still be present on failure -- the operator needs
-    // to see where the player actually is regardless of the verdict.
     expect(result.data.verifyPosition).toEqual({ x: 100, y: 100, z: 0 });
   });
 

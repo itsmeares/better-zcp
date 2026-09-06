@@ -3,26 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-26, two real users + a same pass 14-field audit: createServer()
-// (database/init.js) builds the persisted record from an explicit
-// field-by-field object literal. THAT LITERAL HAS SILENTLY DROPPED FOUR
-// FIELDS SO FAR: adminPassword (fixed this session -- the actual crash),
-// dockerContainerName (live: a Docker-managed server created through the
-// Add/Register dialog never got its container name persisted), branch
-// (currently inert -- nothing reads server.branch yet, but a future
-// feature that trusts it would silently get "stable" no matter what was
-// picked), and useUpnp (wasn't even a column, let alone forwarded).
-// updateServer() never had this bug -- it spreads `updates` generically --
-// which is exactly why re-saving a field after the fact was the only
-// workaround for adminPassword.
-//
-// the instruction, verbatim: "A test that asserts every field the create
-// ROUTE forwards is a field createServer actually PERSISTS would catch
-// this entire class forever." This is that test -- it does not hand-copy a
-// field list (which could itself go stale the same way the literal did);
-// it spies on the REAL createServer() call servers.js's POST / route makes
-// and checks the REAL persisted record against exactly what was forwarded,
-// so a fifth dropped field fails this test the day it's introduced.
 
 const { createServerSpy } = vi.hoisted(() => ({ createServerSpy: vi.fn() }));
 vi.mock("../database/init.js", async (importOriginal) => {
@@ -68,13 +48,6 @@ describe("POST /servers -- every field forwarded to createServer() must survive 
 
   beforeEach(() => {
     createServerSpy.mockClear();
-    // Real, existing directories -- normalizeServerMemory() (database/init.js)
-    // legitimately recomputes isRemote from whether the configured path
-    // actually exists locally, unrelated to this test's own concern. Using
-    // real paths means that recomputation agrees with what was forwarded
-    // instead of silently overriding it, so the generic per-field
-    // comparison below stays meaningful for isRemote too, not just every
-    // other field.
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-parity-"));
     installPath = path.join(tmpRoot, "server");
     zomboidDataPath = path.join(tmpRoot, "data");
@@ -115,10 +88,6 @@ describe("POST /servers -- every field forwarded to createServer() must survive 
     expect(createServerSpy).toHaveBeenCalledTimes(1);
     const [forwarded, persisted] = createServerSpy.mock.calls[0];
 
-    // persisted is createServer()'s own real return value -- unsanitized,
-    // unlike res.getBody().server (which masks adminPassword/rconPassword
-    // for the HTTP response and would make this comparison falsely fail
-    // for exactly the two fields this test cares most about).
     for (const [key, value] of Object.entries(forwarded)) {
       if (value === undefined || value === null || value === "") continue;
       expect(

@@ -1,21 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LANGUAGES, SOURCE_LANGUAGE } from '../../i18n/languages'
 
-// Modeled on V2's locales/localeKeys.ts + locale-parity test (read-only
-// reference, not shared code): English is the source of truth, and every
-// other shipped locale must resolve every key English has. Without this, a
-// locale that's missing a key doesn't fail loudly — it silently falls back
-// to i18next's raw dotted key (e.g. "shell:footer.signOut") rendered
-// straight onto the screen for a real user, which is exactly the class of
-// "wrong state presented confidently" bug this floor has spent all day
-// finding elsewhere.
-//
-// Locales and namespaces are BOTH discovered here, not named — adding a
-// third language folder (or a namespace file within an existing one) is
-// picked up automatically, so a half-finished translation fails loudly on
-// its first commit instead of silently shipping English gaps. See
-// apps/panel-client/src/i18n/languages.ts (the one place languages are registered)
-// and apps/panel-client/src/locales/README.md (how to add one).
 const localeModules = import.meta.glob('../*/*.json', {
   eager: true,
   import: 'default',
@@ -52,21 +37,6 @@ function getAtPath(obj: unknown, path: string): unknown {
   }, obj)
 }
 
-// The key-set/empty-string checks below say nothing about what's INSIDE a
-// value that does exist — a translation can drop a {{placeholder}}, invent
-// one English doesn't supply, or have a real <b> tag escaped to &lt;b&gt;
-// by a translation step, and both checks above stay green. That gap was
-// live in shipped French (2026-08-23): a mods.json _one key introduced
-// {{plural}} that English's _one form never supplies, so nothing filled it
-// and an operator saw the literal text "{{plural}}" on screen.
-//
-// A placeholder repeated MORE times in the translation than in English is
-// deliberately NOT flagged — French and Spanish grammatical agreement
-// legitimately reuses one supplied value across a noun and its adjective
-// (e.g. fr mods.json's "{{count}} conflit{{plural}} ignoré{{plural}}",
-// one {{plural}} value marking both words). Only a placeholder's PRESENCE
-// is compared, never its count — see PLACEHOLDER_NAME_RE's sibling in
-// apps/panel-client/src/lib/paramTranslation.ts, which resolves the same way.
 const PLACEHOLDER_NAME_RE = /\{\{\s*(\w+)\s*\}\}/g
 
 function placeholderNames(value: unknown): Set<string> {
@@ -74,13 +44,6 @@ function placeholderNames(value: unknown): Set<string> {
   return new Set([...value.matchAll(PLACEHOLDER_NAME_RE)].map((m) => m[1]))
 }
 
-// Catches react-i18next <Trans> component tags (<1>...</1>, <b>...</b>,
-// <code>...</code>) being escaped into literal &lt;b&gt; text by a
-// translation pass, or a translator dropping/duplicating one. Open and
-// close tokens are kept distinct ("<1>" vs "</1>") so a swapped or
-// unbalanced pair fails too, not just a missing tag name. Order does NOT
-// need to match (a French sentence can reorder the tagged clause), so both
-// sides are sorted before comparing — only the multiset matters.
 const TAG_TOKEN_RE = /<\/?[\w]+>/g
 
 function tagTokens(value: unknown): string[] {
@@ -88,19 +51,6 @@ function tagTokens(value: unknown): string[] {
   return [...value.matchAll(TAG_TOKEN_RE)].map((m) => m[0]).sort()
 }
 
-// Catches a literal "&" (or any other special character) getting escaped to
-// an HTML entity by a translation pass — invisible to every other check
-// here: valid JSON, correct key set, no placeholder involved, no <tag>
-// involved. Live in shipped German (2026-08-23): several fork-generated
-// strings turned "apply time & date" into "Zeit &amp; Datum anwenden",
-// which renders as the literal text "&amp;" on screen since nothing in this
-// app HTML-decodes plain t() output. Matches named entities (&lt; &gt;
-// &amp; &quot; &apos; ...) and numeric forms (&#39; decimal, &#x27; hex).
-// Deliberately does NOT flag a bare "&" itself — only comparing entities
-// against entities means this correctly PASSES scheduler.json's
-// bridgeFormatHint, where English's own example syntax deliberately
-// contains a literal "&lt;action&gt;" and every locale correctly mirrors
-// it verbatim. Order-independent (sorted), same reasoning as tagTokens.
 const HTML_ENTITY_RE = /&(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);/g
 
 function entityTokens(value: unknown): string[] {
@@ -108,29 +58,6 @@ function entityTokens(value: unknown): string[] {
   return [...value.matchAll(HTML_ENTITY_RE)].map((m) => m[0]).sort()
 }
 
-// A narrow, individually-reviewed exception list — NOT a blanket "_one keys
-// may omit {{count}}" rule, which would hide a future _one key that drops
-// {{count}} by accident instead of by design. Each entry here was checked
-// against its English source and its own language's _other sibling before
-// being added (2026-08-23 French placeholder-parity sweep): the count is
-// always 1 on the `_one` branch, and the language's own grammar already
-// marks singular without restating the numeral, so the omission is the
-// deliberately better translation, not a gap. `key` is `lang/namespace:path`.
-//
-//   fr/backups.json mainCard.allSelectedLabel_one
-//     en: "All {{count}} selected · click to clear"
-//     fr: "La sauvegarde sélectionnée · cliquer pour désélectionner"
-//     (fr's own _other: "Les {{count}} sauvegardes sélectionnées · ..." —
-//     English reuses one string for both forms; French correctly does not.)
-//   fr/chunkCleaner.json deleteDialog.title_one
-//     en: "Delete {{count}} selected chunk?"
-//     fr: "Supprimer le chunk sélectionné ?"
-//     (fr's own _other: "Supprimer les {{count}} chunks sélectionnés ?" —
-//     same reasoning.)
-//
-// Add a new entry here only after checking it against the _other sibling
-// the same way — an omission that ISN'T a genuine singular/plural split is
-// exactly the class of bug this whole check exists to catch.
 const ALLOWED_PLACEHOLDER_OMISSIONS = new Set<string>([
   'fr/backups.json:mainCard.allSelectedLabel_one',
   'fr/chunkCleaner.json:deleteDialog.title_one',
@@ -145,19 +72,10 @@ describe(`locale parity (${SOURCE_LANGUAGE} is the source of truth)`, () => {
     }
   })
 
-  // The other half people forget (same shape as debug.json's
-  // diagnosticsCheckRegistry.test.js KNOWN_TRANSLATED_IDS): an allowlist
-  // entry that outlives its reason is a permanent blind spot with a
-  // comment on it, not a documented exception. If fr/backups.json's
-  // mainCard.allSelectedLabel_one is ever edited to include {{count}}
-  // again, this entry must stop existing — otherwise it silently excuses
-  // a genuine future omission on that exact key forever. This makes the
-  // allowlist self-cleaning: the moment an exemption stops being needed,
-  // the test names it and fails instead of staying quiet.
   it('ALLOWED_PLACEHOLDER_OMISSIONS has no stale entries (the key must still omit a placeholder its English source supplies)', () => {
     const stale = [...ALLOWED_PLACEHOLDER_OMISSIONS].filter((entry) => {
       const match = entry.match(ALLOWLIST_ENTRY_RE)
-      if (!match) return true // malformed entry, can't verify it — treat as stale
+      if (!match) return true
       const [, lang, ns, key] = match
       const sourceObj = byLanguageThenNamespace[SOURCE_LANGUAGE]?.[ns] ?? {}
       const targetObj = byLanguageThenNamespace[lang]?.[ns] ?? {}
@@ -193,10 +111,6 @@ describe(`locale parity (${SOURCE_LANGUAGE} is the source of truth)`, () => {
         expect(emptyKeys, `${lang}/${ns}.json has keys with an empty string value`).toEqual([])
       })
 
-      // Only keys present on both sides are checked here — a missing/extra
-      // key is already the first test's failure to report, and comparing a
-      // placeholder/tag set against `undefined` would just be noise on top
-      // of a failure that test already names.
       const sharedKeys = collectKeyPaths(sourceObj).filter((key) => collectKeyPaths(targetObj).includes(key))
 
       const omittedPlaceholders = sharedKeys.flatMap((key) => {

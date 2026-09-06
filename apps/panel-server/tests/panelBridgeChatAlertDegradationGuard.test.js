@@ -1,14 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// 2026-08-30, panelbridge-regression-2026-08-30 (Finding B): chat/admin and
-// chat/general both check `result?.data?.method !== "player:Say"` before
-// accepting a PanelBridge response, falling back to RCON when the alert API
-// silently degrades to per-player overhead text (handlers.sendToServerChat's
-// own fallback: chat.server missing/failing -> Say() to each online player).
-// chat/alert lacked that check -- it accepted any `result?.success`, so a
-// degraded alert (no banner styling at all, visible only over players'
-// heads) was returned to the caller as an ordinary successful alert, with
-// RCON's honest fallback path never even tried.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => null),
@@ -67,9 +58,6 @@ describe("POST /panel-bridge/chat/alert -- a degraded player:Say response must n
       message: "Zombies incoming!",
       alert: true,
     });
-    // The bug this proves: pre-fix, a degraded player:Say result short-circuited
-    // the route via `if (result?.success) return res.json(result)`, so RCON's
-    // honest fallback was never consulted even though it was available.
     expect(serverMessage).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({

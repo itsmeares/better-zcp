@@ -3,10 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Same "declare the mutable state before vi.mock, mutate it in beforeEach"
-// pattern as setupTokenGate.test.js's db/settings mocks — the factory
-// doesn't run until the mocked module is first imported below, by which
-// point tmpDir already has a value.
 let tmpDir;
 
 vi.mock("../utils/paths.js", () => ({
@@ -66,9 +62,6 @@ describe("loadOrCreateJwtSecret", () => {
   });
 
   it("JWT_SECRET env override wins over the file and the file is left untouched", async () => {
-    // 32+ chars -- long enough to clear MIN_JWT_SECRET_LENGTH; this test is
-    // about override precedence, not the length guard (see its own
-    // describe block below).
     process.env.JWT_SECRET = "env-secret-value-that-is-long-enough-32";
     fs.writeFileSync(getJwtSecretPath(), "file-secret-value", {
       mode: 0o600,
@@ -97,9 +90,6 @@ describe("loadOrCreateJwtSecret", () => {
     await expect(loadOrCreateJwtSecret({})).rejects.toThrow(
       /only 1 characters.*at least 32/is,
     );
-    // Never fell through to generate/persist a file-based key either --
-    // the env value is what's wrong; the fix is a better env value, not a
-    // silently-substituted one.
     expect(fs.existsSync(getJwtSecretPath())).toBe(false);
   });
 
@@ -122,7 +112,6 @@ describe("loadOrCreateJwtSecret", () => {
     await expect(loadOrCreateJwtSecret({})).rejects.toThrow(/at least 32/i);
   });
 
-  // the explicit ask: these two must not share a branch.
   it("file ABSENT (no legacy, no env) -> generates", async () => {
     expect(fs.existsSync(getJwtSecretPath())).toBe(false);
     const result = await loadOrCreateJwtSecret({});
@@ -134,8 +123,6 @@ describe("loadOrCreateJwtSecret", () => {
     await expect(loadOrCreateJwtSecret({})).rejects.toThrow(
       /could not be read/i,
     );
-    // Still a directory afterward — nothing silently overwrote it with a
-    // freshly generated key.
     expect(fs.statSync(getJwtSecretPath()).isDirectory()).toBe(true);
   });
 

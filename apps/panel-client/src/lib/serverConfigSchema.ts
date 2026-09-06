@@ -1,5 +1,3 @@
-// Server INI settings schema with descriptions from PZ Wiki
-// https://pzwiki.net/wiki/Server_settings
 
 import { resolveRegisteredTranslation } from './paramTranslation'
 
@@ -12,18 +10,11 @@ export interface IniSetting {
   min?: number
   max?: number
   default?: string | number | boolean
-  /** False when Project Zomboid generates a runtime value rather than using the template default. */
   defaultComparable?: boolean
   category: string
-  /** File extension filter for 'filepath' type, e.g. ['.png', '.jpg'] */
   fileExtensions?: string[]
 }
 
-/**
- * Format a stored configuration value without translating its data meaning.
- * Project Zomboid's boolean literals are part of the INI/sandbox contract and
- * must remain the portable `true` / `false` strings in defaults and reset UI.
- */
 export function formatRawConfigValue(value: unknown): string {
   if (value === true) return 'true'
   if (value === false) return 'false'
@@ -74,7 +65,6 @@ const B42_ANTI_CHEAT_SETTINGS: IniSetting[] = [
   { key: 'AntiCheatChecksum', label: 'Checksum Validation', description: 'Anti-cheat protection for file checksums.', type: 'select', options: ANTI_CHEAT_POLICY_OPTIONS, default: '2', category: 'anticheat' },
 ]
 
-// Super-groups for the rail. Order here drives render order.
 export const INI_CATEGORY_GROUPS = [
   { id: 'identity', label: 'Identity' },
   { id: 'connectivity', label: 'Connectivity' },
@@ -109,7 +99,6 @@ export const INI_CATEGORIES: Array<{ id: string; label: string; icon: string; gr
 ]
 
 export const INI_SCHEMA: IniSetting[] = [
-  // General
   {
     key: 'PublicName',
     label: 'Server Name',
@@ -203,7 +192,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'general'
   },
 
-  // Network & Ports
   {
     key: 'DefaultPort',
     label: 'Game Port',
@@ -279,7 +267,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'network'
   },
 
-  // PvP & Safety
   {
     key: 'PVP',
     label: 'Enable PvP',
@@ -361,7 +348,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'pvp'
   },
 
-  // Chat & Communication
   {
     key: 'GlobalChat',
     label: 'Enable Global Chat',
@@ -427,7 +413,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'chat'
   },
 
-  // Players & Accounts
   {
     key: 'MaxAccountsPerUser',
     label: 'Max Accounts Per User',
@@ -510,7 +495,6 @@ export const INI_SCHEMA: IniSetting[] = [
     default: true,
     category: 'players'
   },
-  // Safehouses
   {
     key: 'PlayerSafehouse',
     label: 'Enable Safehouses',
@@ -588,7 +572,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'safehouse'
   },
 
-  // Loot & Items
   {
     key: 'ItemNumbersLimitPerContainer',
     label: 'Container Item Limit',
@@ -632,7 +615,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'loot'
   },
 
-  // Factions & Trading
   {
     key: 'Faction',
     label: 'Enable Factions',
@@ -670,7 +652,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'players'
   },
 
-  // Mods & Workshop
   {
     key: 'Mods',
     label: 'Mods',
@@ -696,7 +677,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'mods'
   },
 
-  // Steam Integration
   {
     key: 'SteamPort1',
     label: 'Steam Port 1',
@@ -739,7 +719,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'steam'
   },
 
-  // Voice Chat
   {
     key: 'VoiceEnable',
     label: 'Enable Voice Chat',
@@ -777,7 +756,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'voice'
   },
 
-  // Discord
   {
     key: 'DiscordEnable',
     label: 'Enable Discord',
@@ -811,7 +789,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'discord'
   },
 
-  // RCON
   {
     key: 'RCONPort',
     label: 'RCON Port',
@@ -831,7 +808,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'rcon'
   },
 
-  // Advanced
   {
     key: 'ResetID',
     label: 'Reset ID',
@@ -899,9 +875,7 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'advanced'
   },
 
-  // --- Missing settings from live server config ---
 
-  // General
   {
     key: 'AnnounceAnimalDeath',
     label: 'Announce Animal Deaths',
@@ -920,7 +894,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'general'
   },
 
-  // Network
   {
     key: 'UDPPort',
     label: 'UDP Port',
@@ -968,7 +941,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'network'
   },
 
-  // PvP
   {
     key: 'PVPLogToolChat',
     label: 'Log PvP to Chat',
@@ -996,7 +968,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'pvp'
   },
 
-  // Chat
   {
     key: 'UsernameDisguises',
     label: 'Username Disguises',
@@ -1034,7 +1005,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'chat'
   },
 
-  // Players
   {
     key: 'AllowCoop',
     label: 'Allow Co-op',
@@ -1090,7 +1060,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'players'
   },
 
-  // Safehouses
   {
     key: 'SafehouseAllowNonResidential',
     label: 'Allow Non-Residential',
@@ -1118,7 +1087,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'safehouse'
   },
 
-  // Loot
   {
     key: 'SafehousePreventsLootRespawn',
     label: 'Safehouse Blocks Loot Respawn',
@@ -1136,7 +1104,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'loot'
   },
 
-  // Discord (missing channel fields)
   {
     key: 'DiscordChatChannel',
     label: 'Discord Chat Channel',
@@ -1170,7 +1137,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'discord'
   },
 
-  // Faction War
   {
     key: 'War',
     label: 'Enable Faction War',
@@ -1210,7 +1176,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'war'
   },
 
-  // Radio
   {
     key: 'DisableRadioStaff',
     label: 'Disable Radio for Staff',
@@ -1260,7 +1225,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'radio'
   },
 
-  // Backups
   {
     key: 'BackupsCount',
     label: 'Backup Count',
@@ -1298,7 +1262,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'backups'
   },
 
-  // Vehicles
   {
     key: 'DisableVehicleTowing',
     label: 'Disable Vehicle Towing',
@@ -1324,7 +1287,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'vehicles'
   },
 
-  // Moderation
   {
     key: 'BadWordListFile',
     label: 'Bad Word List File',
@@ -1364,10 +1326,8 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'moderation'
   },
 
-  // Anti-Cheat (Build 42.20)
   ...B42_ANTI_CHEAT_SETTINGS,
 
-  // Logging
   {
     key: 'ClientCommandFilter',
     label: 'Command Log Filter',
@@ -1393,7 +1353,6 @@ export const INI_SCHEMA: IniSetting[] = [
     category: 'logging'
   },
 
-  // Advanced (additional)
   {
     key: 'SwitchZombiesOwnershipEachUpdate',
     label: 'Switch Zombie Ownership',
@@ -1420,7 +1379,6 @@ export const INI_SCHEMA: IniSetting[] = [
   },
 ]
 
-// Sandbox settings schema
 export interface SandboxSetting {
   key: string
   label: string
@@ -1463,7 +1421,6 @@ export const SANDBOX_CATEGORIES: Array<{ id: string; label: string; icon: string
 ]
 
 export const SANDBOX_SCHEMA: SandboxSetting[] = [
-  // ==================== Time & Season ====================
   {
     key: 'DayLength',
     label: 'Day Length',
@@ -1568,7 +1525,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== Population & Distribution ====================
   {
     key: 'Zombies',
     label: 'Zombie Count',
@@ -1633,7 +1589,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== Loot & Resources ====================
   {
     key: 'LootItemRemovalList',
     label: 'Loot Item Removal List',
@@ -1957,7 +1912,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== Loot Rarity ====================
   {
     key: 'InsaneLootFactor',
     label: 'Insane Rarity Factor',
@@ -2091,7 +2045,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== Environment & Weather ====================
   {
     key: 'DayNightCycle',
     label: 'Day/Night Cycle',
@@ -2384,7 +2337,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== Survival & Health ====================
   {
     key: 'StatsDecrease',
     label: 'Stats Decrease',
@@ -2793,7 +2745,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== Alarms & Events ====================
   {
     key: 'Alarm',
     label: 'House Alarms',
@@ -3049,7 +3000,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== Combat & Firearms ====================
   {
     key: 'MultiHitZombies',
     label: 'Multi-Hit Zombies',
@@ -3138,7 +3088,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== Vehicles ====================
   {
     key: 'EnableVehicles',
     label: 'Enable Vehicles',
@@ -3405,7 +3354,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
   },
 
 
-  // ==================== Animals & Farming ====================
   {
     key: 'AnimalStatsModifier',
     label: 'Animal Stats Speed',
@@ -3757,7 +3705,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== World & Stories ====================
   {
     key: 'SurvivorHouseChance',
     label: 'Survivor House Chance',
@@ -3811,7 +3758,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'settings'
   },
 
-  // ==================== Zombie Lore (Behavior) ====================
   {
     key: 'Speed',
     label: 'Zombie Speed',
@@ -4185,7 +4131,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'ZombieLore'
   },
 
-  // ==================== Zombie Config (Population) ====================
   {
     key: 'PopulationMultiplier',
     label: 'Population Multiplier',
@@ -4352,7 +4297,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'ZombieConfig'
   },
 
-  // ==================== XP Multipliers ====================
   {
     key: 'Global',
     label: 'Global XP Multiplier',
@@ -4654,7 +4598,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'MultiplierConfig'
   },
 
-  // ==================== Map & Navigation ====================
   {
     key: 'AllowMiniMap',
     label: 'Allow Mini Map',
@@ -4692,7 +4635,6 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
     section: 'Map'
   },
 
-  // ==================== Basements ====================
   {
     key: 'SpawnFrequency',
     label: 'Basement Spawn Frequency',
@@ -4713,20 +4655,10 @@ export const SANDBOX_SCHEMA: SandboxSetting[] = [
   },
 ]
 
-// Helper to get setting by key
 export function getIniSetting(key: string): IniSetting | undefined {
   return INI_SCHEMA.find(s => s.key === key)
 }
 
-// `key` alone is ambiguous for a handful of entries: PZ's own SandboxVars.lua
-// genuinely reuses the same key across two unrelated top-level tables (e.g.
-// `Farming` is both `settings.Farming`, a 1-5 Agriculture-skill-growth
-// select, and `MultiplierConfig.Farming`, a 0.001-1000 XP multiplier;
-// `Strength` collides the same way between `zombieLore` and `xpMultipliers`
-// categories -- see this file's own note above translatedSandboxLabel).
-// `section` (SandboxSetting's own field, e.g. 'settings'/'MultiplierConfig')
-// disambiguates when the caller has it; falling back to the first key match
-// keeps every existing key-only call site's behavior unchanged.
 export function getSandboxSetting(key: string, section?: string): SandboxSetting | undefined {
   if (section !== undefined) {
     const bySection = SANDBOX_SCHEMA.find(s => s.key === key && s.section === section)
@@ -4735,60 +4667,13 @@ export function getSandboxSetting(key: string, section?: string): SandboxSetting
   return SANDBOX_SCHEMA.find(s => s.key === key)
 }
 
-// ---------------------------------------------------------------------------
-// Translated accessors.
-//
-// The schema arrays above are DATA, not JSX -- t() can't be sprinkled into a
-// literal string in a const array the way it can into a template. Every
-// label/description/option-label here doubles as the runtime English fallback.
-// The same strings are mirrored into en/serverconfig.json because localeParity
-// uses English as its source of truth; other locale files carry either an
-// authored translation or an explicit English fallback until one is available.
-//
-// Keys are derived mechanically from data already on each entry:
-//   serverconfig.iniSettings.<category>.<key>.label / .description
-//   serverconfig.iniSettings.<category>.<key>.options.<value>.label
-//   serverconfig.iniCategories.<id>.label
-//   serverconfig.iniCategoryGroups.<id>.label
-// and the sandbox equivalents under sandboxSettings / sandboxCategories /
-// sandboxCategoryGroups. `category` is prefixed onto `key` (not used alone)
-// because a bare `key` collides twice within SANDBOX_SCHEMA (Farming and
-// Strength each name two unrelated settings in different sections) --
-// `category.key` is unique within each schema, verified by script against
-// the live schema data, not asserted. ini/sandbox get separate top-level
-// namespaces rather than sharing one keyed by category.key: `loot` and
-// `vehicles` are category ids in BOTH schemas, and nothing here should rely
-// on no INI setting ever sharing a raw key with a Sandbox one just because
-// today's two schemas happen not to (that invariant lives in
-// serverConfigSchema.test.ts and is about schema ownership, not i18n).
-//
-// A schema-driven extraction pass can walk INI_SCHEMA/SANDBOX_SCHEMA and the
-// category/group arrays with these exact same derivations to audit coverage;
-// nobody should invent a second key shape by hand.
 
 function translatedOrFallback(key: string, fallback: string): string {
   return resolveRegisteredTranslation('serverconfig', key, undefined) ?? fallback
 }
 
-// Sandbox setting/option LABELS ONLY (never descriptions) additionally check
-// the sandboxPz namespace before falling back to the schema's own English
-// string. That namespace holds Project Zomboid's own official translations,
-// extracted verbatim from the game's Sandbox.json language files -- so an
-// operator setting "Meta Events" here sees the exact same word their game
-// client shows, rather than a differently-worded (even if accurate)
-// translation authored independently of PZ's own vocabulary. A hand-authored,
-// non-fallback override placed directly in serverconfig.json still wins --
-// this only fills the gap when no such override exists.
-// Descriptions are deliberately NOT wired to this: PZ's own tooltips were
-// written for its in-game options screen, ours were written for this panel,
-// and they are not automatically the same job.
 function translatedSandboxLabel(key: string, fallback: string): string {
   const serverConfigValue = resolveRegisteredTranslation('serverconfig', `sandboxSettings.${key}`, undefined)
-  // Schema-generated locale entries intentionally keep the English fallback
-  // in languages that have not authored a panel-specific label yet. Treat an
-  // unchanged fallback as absent so the official PZ label remains available
-  // through sandboxPz for those languages (and for zh-TW) without being
-  // shadowed by the parity skeleton.
   if (serverConfigValue !== null && serverConfigValue !== fallback) return serverConfigValue
   return resolveRegisteredTranslation('sandboxPz', key, undefined) ?? serverConfigValue ?? fallback
 }
@@ -4806,12 +4691,6 @@ export function getIniSettingOptionLabel(setting: IniSetting, value: string): st
   return translatedOrFallback(`iniSettings.${setting.category}.${setting.key}.options.${value}.label`, fallback)
 }
 
-/**
- * Search text intentionally includes both schema English and the active
- * locale. Operators often copy the literal key from an INI file, while the
- * translated UI makes Chinese searches much more natural. Keeping this
- * assembled here prevents each page from inventing a different search scope.
- */
 export function getIniSettingSearchText(setting: IniSetting): string {
   const category = INI_CATEGORIES.find(item => item.id === setting.category)
   const group = category && INI_CATEGORY_GROUPS.find(item => item.id === category.group)
@@ -4877,17 +4756,6 @@ export function getSandboxSettingSearchText(setting: SandboxSetting): string {
   ].filter(Boolean).join(' ')
 }
 
-// Runtime belt-and-braces for the class of bug the enum audit found (a live
-// value with no matching option): even a fully-corrected, drift-gated
-// schema can go stale the moment PZ ships a new option before this panel
-// regenerates. The save path never coerces an unrecognized select value
-// (verified during the audit -- it survives untouched unless the operator
-// explicitly re-picks that field), so the value itself is safe; the only
-// thing missing was telling the human. Uses translatedOrFallback's own
-// pattern (no locale-file change required, translatable later exactly like
-// every other string in this file) rather than a bare useTranslation() key,
-// which would need a same-day addition to all six locale files to avoid the
-// gap this file's own translation machinery exists to prevent.
 export function getUnrecognizedSandboxOptionWarning(value: number | string): string {
   return translatedOrFallback(
     'unrecognizedSandboxOptionWarning',
@@ -4903,7 +4771,6 @@ export function getSandboxCategoryGroupLabel(group: { id: string; label: string 
   return translatedOrFallback(`sandboxCategoryGroups.${group.id}.label`, group.label)
 }
 
-// Group settings by category
 export function groupByCategory<T extends { category: string }>(settings: T[]): Record<string, T[]> {
   return settings.reduce((acc, setting) => {
     if (!acc[setting.category]) {

@@ -1,12 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ~30 config-writing routes (mods.js, serverFiles.js) attach `backupWarning`
-// to an otherwise-successful response when the edit landed but the pre-write
-// backup could not be made. Before this fix, apps/panel-client/src had zero references
-// to the field -- the panel knew, said so in the response, and no operator
-// ever saw it. This is a rare-failure display path (backups normally
-// succeed), which is exactly the kind of thing that ships broken and stays
-// unnoticed, so it must be proven to actually fire rather than just reviewed.
 const toastSpy = vi.hoisted(() => vi.fn())
 vi.mock('@/components/ui/use-toast', () => ({
   toast: toastSpy,

@@ -40,15 +40,6 @@ function createRequest(body, rconService) {
   return { body, app: { get: () => rconService } };
 }
 
-// Sibling bug to the one playersBanRecordIntegrity.test.js pins for
-// ban/unban/banid/unbanid/voiceban/adduser: RconService methods resolve
-// {success:false} rather than throwing when RCON is unreachable (server
-// offline / mid-restart). These eight routes wrote to the player activity
-// log (GET /activity, the panel's own audit trail) unconditionally, so an
-// admin reviewing history later would see "kicked PlayerX" or "gave PlayerX
-// 50 XP" entries for actions that never actually reached the server -- the
-// exact moment RCON is most likely to be down is also the moment an admin is
-// most likely to be trying to discipline someone or intervene.
 describe("players routes: activity log only written on RCON/bridge success", () => {
   beforeEach(() => {
     logPlayerAction.mockReset();
@@ -345,7 +336,6 @@ describe("players toggle routes: enabled must remain a boolean", () => {
       expect(response.status).toHaveBeenCalledWith(400);
       expect(response.json).toHaveBeenCalledWith({
         error: "enabled must be a boolean",
-        // 2026-08-26 regression round 2: players.js adopted the ErrorCode registry.
         code: "PLAYERS_INVALID_ENABLED_FLAG",
       });
       expect(rconService[method]).not.toHaveBeenCalled();
@@ -366,7 +356,6 @@ describe("player notes: persisted values must keep their documented shape", () =
     expect(response.status).toHaveBeenCalledWith(400);
     expect(response.json).toHaveBeenCalledWith({
       error: "Note must be text",
-      // 2026-08-26 regression round 2: players.js adopted the ErrorCode registry.
       code: "PLAYERS_NOTE_MUST_BE_TEXT",
     });
     expect(upsert).not.toHaveBeenCalled();

@@ -20,12 +20,6 @@ vi.mock("../services/managedContainer.js", () => ({
 const { UpdateChecker } = await import("../services/updateChecker.js");
 const dbModule = await import("../database/init.js");
 
-// runAutoUpdate() used to call serverManager.checkServerRunning(), which
-// collapses a failed process-detection scan into `false` -- the same value
-// as a confirmed-stopped server. This is the unattended auto-update path
-// (no human reviewing the result before SteamCMD runs), so a silent scan
-// failure here used to skip the RCON save+quit sequence entirely and run
-// `steamcmd ... validate` straight against a possibly-live install.
 describe("UpdateChecker.runAutoUpdate fails closed when process detection can't confirm the server is stopped", () => {
   function buildChecker({ getServerProcessDetails, startServer }) {
     const io = { emit: vi.fn() };
@@ -58,7 +52,6 @@ describe("UpdateChecker.runAutoUpdate fails closed when process detection can't 
       "server:autoUpdateComplete",
       expect.objectContaining({ success: false }),
     );
-    // Never reached the "was running, needs restart after update" path.
     expect(serverManager.startServer).not.toHaveBeenCalled();
   });
 
@@ -67,9 +60,7 @@ describe("UpdateChecker.runAutoUpdate fails closed when process detection can't 
     const { checker, io } = buildChecker({
       getServerProcessDetails: vi.fn(async () => {
         call += 1;
-        // First call: confirmed running (enters the stop sequence).
         if (call === 1) return { running: true, scanFailed: false };
-        // Second call (inside the "wait for stop" loop): detection breaks.
         return { running: false, scanFailed: true };
       }),
     });
@@ -85,11 +76,6 @@ describe("UpdateChecker.runAutoUpdate fails closed when process detection can't 
   });
 });
 
-// 2026-08-26: a live socket event only reaches whoever happens to be
-// watching at the moment it fires -- exactly the operator this unattended
-// feature is for is guaranteed not to be. These pin the persisted
-// lastAutoUpdateResult (phase + a stable reason key, never a raw message)
-// that any page can read cold, long after the run finished.
 describe("UpdateChecker persists lastAutoUpdateResult so it survives past the live event", () => {
   function buildChecker({ getServerProcessDetails, startServer, rconOverrides } = {}) {
     const io = { emit: vi.fn() };
@@ -174,15 +160,11 @@ describe("UpdateChecker persists lastAutoUpdateResult so it survives past the li
     const { checker } = buildChecker({
       getServerProcessDetails: vi.fn(async () => {
         scanCall += 1;
-        if (scanCall === 1) return { running: true, scanFailed: false }; // initial: running
-        return { running: false, scanFailed: false }; // stop-wait loop: confirmed stopped
+        if (scanCall === 1) return { running: true, scanFailed: false };
+        return { running: false, scanFailed: false };
       }),
       startServer: vi.fn(async () => ({ success: true })),
     });
-    // steamcmdPath resolves to /opt/steamcmd, whose steamcmd.sh/steamcmd
-    // binaries won't exist in a test sandbox -- that's fine, it's still a
-    // failure reached AFTER the server was confirmed stopped, which is
-    // exactly the phase this test targets.
 
     await expect(checker.runAutoUpdate({ installed: { branch: "stable" } })).rejects.toThrow(/steamcmd not found/i);
 
@@ -213,10 +195,6 @@ describe("UpdateChecker persists lastAutoUpdateResult so it survives past the li
   });
 
   it("records a success result with the applied version, not just a bare success flag", async () => {
-    // A real success run needs an actual steamcmd binary on disk to spawn,
-    // which this unit test sandbox doesn't have -- exercises
-    // _recordAutoUpdateResult() directly instead, the exact call
-    // runAutoUpdate()'s own success branch makes.
     const { checker } = buildChecker({
       getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })),
     });

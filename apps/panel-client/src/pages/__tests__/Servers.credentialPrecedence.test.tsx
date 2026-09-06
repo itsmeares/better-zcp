@@ -8,50 +8,7 @@ import Servers from '../Servers'
 import { serversApi, serversDetectApi, dockerApi, configApi, updateApi } from '@/lib/api'
 import en from '../../locales/en/servers.json'
 
-// regression: the test flagged that Servers.tsx's Add Existing Server
-// form has an invisible credential-precedence rule -- manual RCON password
-// entry always wins over an auto-detected INI import -- with nothing in the
-// code shape enforcing it and zero test coverage on the page at all. Traced
-// the actual mechanism (Servers.tsx, "Add Existing Server" -> local mode):
-//
-//   - handleSelectServerConfig()/handleDetectServer() set `importIniFrom` to
-//     a {dataPath, serverName} REFERENCE (never the password itself -- the
-//     detect/auto-scan endpoints don't return it) whenever the detected INI
-//     has an RCON password configured (hasRcon).
-//   - Typing into the RCON password field clears importIniFrom immediately
-//     (any keystroke, not just a non-empty one) -- UI-level "manual wins".
-//   - Independently, at submit time: `useIniImport = addMode === 'local' &&
-//     !!importIniFrom && !newServer.rconPassword.trim()`, and the payload
-//     spreads EITHER `{importIniFrom}` OR `{rconPassword}` -- never both,
-//     and `rconPassword` is entirely ABSENT from the request when importing
-//     (not sent as ''). This is the real security boundary: even if the
-//     UI-level clearing above were ever broken, this second, independent
-//     check at the network-request boundary is what actually decides which
-//     credential reaches the server -- so this suite pins the SUBMITTED
-//     PAYLOAD, not just the intermediate state.
-//
-// No rule found here looked wrong -- both the UI-level and submit-level
-// checks default to requiring a real password (fail closed) when no import
-// is available, and there is no path that sends both credentials or an
-// empty rconPassword string. confirmed in testing before writing (see reply
-// to 2026-08-27T04-52-25-949Z-bf9c01): pinning behaviour, not chasing
-// coverage, so only the credential-precedence rule and its immediate
-// siblings (import unavailable -> manual entry required) are covered here.
-//
-// Follow-up (2026-08-27T05-03-43-634Z-098280): the manual-detect path
-// (handleSelectServerConfig) showed a destructive "RCON not configured"
-// toast when the selected config has no RCON password; the auto-scan path
-// (handleSelectScannedConfig) did not, even though the underlying
-// required-password/disabled logic is identical on both paths -- a missing
-// notification, not a missing guard, so no security behaviour changes here.
-// Added the same toast (verbatim copy, reused rather than re-written) to
-// the auto-scan path and pinned it below.
 
-// regression (Tier 3 gating sweep): Servers.tsx never called
-// useAuth() before this sweep, so this suite never needed an AuthProvider.
-// Adding capability gating makes it throw outside one -- can() fails open
-// (true) here since this file's assertions are about credential precedence,
-// not capability gating (that's Servers.capabilityGating.test.tsx).
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 'u1', username: 'someone', role: 'admin', capabilities: [] },
@@ -115,9 +72,6 @@ const dockerGetStatus = vi.mocked(dockerApi.getStatus)
 const getAppSettings = vi.mocked(configApi.getAppSettings)
 const updateGetStatus = vi.mocked(updateApi.getStatus)
 
-// One existing, inactive server -- keeps the page out of its empty-state
-// onboarding view, which renders a second "Add Existing Server" button with
-// the same accessible name as the one in the page header.
 const EXISTING_SERVER = {
   id: 1,
   name: 'existing-server',
@@ -177,9 +131,6 @@ async function detectSingleServerWithRcon() {
   })
   fireEvent.click(screen.getByRole('button', { name: en.localForm.detect }))
 
-  // Only one server was detected, so it is auto-selected and importIniFrom
-  // is set without any further click -- this text is the operator-visible
-  // proof that an import is on offer.
   await screen.findByText(en.localForm.passwordWillImport.split('{{')[0], { exact: false })
 }
 
@@ -208,8 +159,6 @@ describe('Servers -- Add Existing Server credential precedence (manual entry alw
       target: { value: 'my-typed-password' },
     })
 
-    // UI-visible side of the same rule: the "will import" hint is gone and
-    // the ordinary "password set" confirmation takes its place.
     expect(screen.queryByText(en.localForm.passwordWillImport.split('{{')[0], { exact: false })).not.toBeInTheDocument()
     await screen.findByText(en.localForm.passwordSet)
 
@@ -255,8 +204,6 @@ describe('Servers -- Add Existing Server credential precedence (manual entry alw
     })
     fireEvent.click(screen.getByRole('button', { name: en.localForm.detect }))
 
-    // No import is on offer -- the "will import" hint never appears, and Add
-    // Server stays disabled until a real password is typed.
     await screen.findByPlaceholderText(en.localForm.rconPasswordPlaceholder)
     expect(screen.queryByText(en.localForm.passwordWillImport.split('{{')[0], { exact: false })).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: en.addDialog.addServer })).toBeDisabled())
@@ -340,8 +287,6 @@ describe('Servers -- Add Existing Server credential precedence (manual entry alw
     const configButtonName = en.localForm.selectScannedConfigAria.replace('{{name}}', 'No RCON Scanned Server')
     fireEvent.click(await screen.findByRole('button', { name: configButtonName }))
 
-    // Same condition, same operator-facing copy as the manual-detect path --
-    // reused verbatim rather than a second message for the same thing.
     await waitFor(() =>
       expect(toastSpy).toHaveBeenCalledWith(
         expect.objectContaining({

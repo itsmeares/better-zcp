@@ -1,19 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { RconService } from "../services/rcon.js";
 
-// quit()'s own comment says a connection error right after sending "quit" is
-// the EXPECTED outcome (the server closes the socket as it shuts down), and
-// used to special-case that via a try/catch around this.execute(). But
-// execute() has its own catch spanning its entire body that never rethrows
-// -- every failure path, including every connection-error branch, resolves
-// {success:false, ...} instead of rejecting (see execute()'s own comments).
-// That means quit()'s catch could never run: a graceful quit whose
-// connection reset mid-shutdown reported success:false, same as a quit that
-// never reached the server at all. Concretely, scheduler.js's
-// performRestart() reads quit()'s .success to decide whether to fall back to
-// a forced stop -- a clean auto-restart quit was always taking that
-// fallback path and logging "quit command failed" for something that
-// worked.
 describe("RconService.quit(): connection reset during shutdown reports success", () => {
   function makeService(executeResult) {
     const service = new RconService();

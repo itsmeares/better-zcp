@@ -10,18 +10,6 @@ class StubResizeObserver {
 }
 ;(globalThis as unknown as { ResizeObserver: typeof StubResizeObserver }).ResizeObserver = StubResizeObserver
 
-// Radix's own direction hook (@radix-ui/react-direction's useDirection) has
-// NO fallback to document.documentElement.dir -- `localDir || globalDir ||
-// "ltr"`, nothing else. Every RTL-aware Radix primitive used in this app
-// (Slider, Select, Tabs, Accordion, Menu/DropdownMenu, ScrollArea,
-// RovingFocus) silently stays 'ltr' forever unless wrapped in
-// @radix-ui/react-direction's own DirectionProvider -- setting
-// document.documentElement.dir (what i18n/index.ts's applyDocumentDirection
-// does for plain CSS) does nothing for these. App.tsx now wraps the tree in
-// DirectionProvider, reactive to i18n.language via useTranslation(). This
-// test proves the WIRING works using a real consumer (Slider forwards the
-// resolved direction onto its own root element's dir attribute) rather than
-// re-testing Radix's own DirectionProvider/useDirection in isolation.
 
 describe('Radix DirectionProvider wiring (App.tsx)', () => {
   it('a Radix primitive defaults to ltr with no DirectionProvider -- the bug this fixes', () => {

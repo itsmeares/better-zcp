@@ -43,13 +43,6 @@ function createRequest(body = {}, rconService = {}) {
   };
 }
 
-// 2026-08-30, release-runup: access-levels-should-come-from-the-server-not-a-
-// hardcoded-array Phase 2. GET /access-levels used to return the static
-// ACCESS_LEVELS array unconditionally; POST /access-level's own validation
-// gate used the same static array. Both now source from the server's live
-// role table (via listServerRoleNames), falling back to the static list only
-// when the db is unavailable or the server is remote -- matching GET
-// /whitelist's own available/reason fallback shape.
 describe("GET /players/access-levels", () => {
   beforeEach(() => {
     getActiveServer.mockReset();

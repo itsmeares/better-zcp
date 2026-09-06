@@ -1,20 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 regression, scheduler blind-success family: POST /restart-now and
-// POST /tasks/:id/run both used to run their real action fire-and-forget
-// (only a server-side log on failure) and answer {success:true} regardless
-// of what actually happened -- a genuine failure was swallowed, discoverable
-// only by someone who thought to check Schedule History. Both already
-// compute a real {success, message} internally and already log it to
-// Schedule History (logScheduleExecution) on every path; the gap was that
-// nothing surfaced it to the client. Fixed by emitting 'scheduler:action_result'
-// over the socket once the underlying promise resolves, in addition to (not
-// instead of) the immediate "accepted" response.
 
-// "save" (the command every /tasks/:id/run test below uses) requires
-// server.control -- see requiredCapabilityForScheduledCommand in
-// services/scheduler.js -- so the mock role needs it to clear the
-// permission check and reach the socket-emission behavior under test.
 const ROLES = {
   automation_and_control: {
     name: "automation_and_control",
@@ -71,9 +57,6 @@ function createResponse() {
   return response;
 }
 
-// Waits out the microtask queue so a fire-and-forget .then()/.catch() chain
-// (which the route never awaits before responding) has settled before
-// assertions run.
 const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
 
 describe("scheduler:action_result socket emission", () => {
@@ -98,7 +81,6 @@ describe("scheduler:action_result socket emission", () => {
       response,
     );
 
-    // The immediate HTTP response only confirms acceptance -- unchanged.
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true, message: "Restart initiated" }),
     );
@@ -156,12 +138,6 @@ describe("scheduler:action_result socket emission", () => {
     });
   });
 
-  // regression backlog, dispatched 2026-08-27 (the ranked #2):
-  // the operator could type a custom restart-warning time above the
-  // server's 60-minute cap, and the immediate response never said the
-  // value was substituted -- the client's toast just echoed back whatever
-  // was typed. Fixed by reporting the value actually used, not just the
-  // raw request, so the client can tell the operator when/what it clamped.
   it("POST /restart-now reports the clamped value, not the raw request, when the operator's warningMinutes exceeds the 60-minute cap", async () => {
     const emit = vi.fn();
     const performRestart = vi.fn().mockResolvedValue({ success: true, message: "Restarted successfully" });

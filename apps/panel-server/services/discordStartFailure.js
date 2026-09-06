@@ -1,17 +1,6 @@
 import { sanitizeError } from "../utils/sanitize.js";
 
-// Split out of discordBot.js on purpose: this has no dependency on the
-// discord.js package (~4.2MB transformed cold, see routeRoleSweep.test.js's
-// header comment for the timeout that cost caused once already), so any test
-// that only needs the message-selection logic below -- not a real Discord
-// client -- can import it without paying that cost or needing to mock it.
 
-// Turns a start() failure's lastStartError.kind into the specific reason a
-// user should see, instead of a static "check configuration" that fits
-// every cause identically. Shared by routes/discord.js's POST /start (the
-// one-time toast at the moment someone clicks Start) and getStatus() (the
-// persistent record, since a user who navigates away and comes back should
-// still see WHY, not just that it failed).
 export function describeStartFailure(lastStartError) {
   const kind = lastStartError?.kind;
   if (kind === "NoToken") {

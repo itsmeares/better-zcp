@@ -1,29 +1,6 @@
-// Shared resolution engine for the engine-signature checker (scripts/check-engine-signatures.mjs)
-// and its manifest generator (scripts/gen-engine-signatures.mjs). BOTH run this exact code so the
-// checker validates the same call sites, with the same variable-type resolution, that the generator
-// used to decide which classes to javap. They differ only in how `classProvider` answers a
-// (className, methodName) lookup: the generator backs it with live javap output; the checker backs
-// it with the committed JSON manifest. See PanelBridge.lua's own PanelBridge.invoke/hasMethod/
-// safeCall/safeGet/tryGet helpers (~line 605-678) for the call shapes this extracts.
-//
-// WHAT THIS DOES: extracts every (receiver-expression, method-name) pair PanelBridge.lua sends into
-// the Java engine -- both through the five invoke-family helpers (method name is their 2nd argument,
-// a string) and bare Lua `recv:method(...)` syntax used directly (no helper, no pcall) -- and, where
-// the receiver's type can be traced back to a known engine class, checks whether that method exists.
-//
-// WHAT THIS DOES NOT DO: prove a PRESENT method is actually callable through PZ's Kahlua Lua<->Java
-// binding (see the generator's own comment for why), resolve every receiver (dynamic method names,
-// unseeded globals, and multi-branch control flow are left unresolved rather than guessed), or track
-// real Lua scope (a variable name is assumed to hold the same type everywhere in the file -- true for
-// every case observed in this file, false in general Lua).
 
 const LONG_BRACKET_OPEN = /^\[(=*)\[/;
 
-/**
- * Blank out `--` and `--[[ ]]` comments (replacing with spaces/newlines, so offsets and line
- * numbers are unchanged) while leaving string literals untouched -- we need the literal text of
- * string arguments (method-name literals) intact.
- */
 export function stripLuaComments(src) {
   const out = [];
   let i = 0;
@@ -74,15 +51,6 @@ export function stripLuaComments(src) {
   return out.join('');
 }
 
-// Pass 1 must distinguish real Lua assignments from table-constructor fields.
-// Both can match `name = expression`; recording a field as a variable can
-// overwrite a correctly resolved type and hide later call sites. The parser
-// therefore restricts this pass to assignment forms it can identify safely.
-//
-// Fix: track `{}` nesting depth (string-aware, using the same quote-skipping logic
-// stripLuaComments already uses, since a brace inside a string literal must not count) across the
-// whole comment-stripped source, and reject any assignRe match whose identifier sits inside an
-// unclosed brace -- it's a table field, not a statement-level assignment.
 export function computeTableConstructorDepths(src) {
   const depthAtOffset = new Int32Array(src.length + 1);
   let depth = 0;
@@ -117,7 +85,6 @@ export function computeTableConstructorDepths(src) {
   return depthAtOffset;
 }
 
-/** Precomputed newline offsets so line-of-offset lookups are O(log n) instead of re-scanning. */
 export function buildLineIndex(src) {
   const offsets = [0];
   for (let i = 0; i < src.length; i++) {
@@ -141,14 +108,6 @@ const IDENT_START = /[A-Za-z_]/;
 const IDENT_CHAR = /[A-Za-z0-9_]/;
 const WS = /\s/;
 
-/**
- * Parse a postfix chain (Name ('(' args ')' | ':' Name '(' args ')' | '.' Name)*) starting exactly
- * at `startIdx`. Handles arbitrary depth (e.g. `getWorld():getCell():getGridSquare(x,y,z)`,
- * `item:getItem():getFullType()`) by walking forward and skipping balanced parens for call args
- * without parsing their contents (arg contents are re-parsed independently when THEY are visited as
- * their own chain starts, e.g. for helper receiver arguments -- see extractHelperCallSites).
- * Returns null if `startIdx` isn't the start of an identifier.
- */
 export function parseChainAt(src, startIdx) {
   let i = startIdx;
   const n = src.length;
@@ -163,7 +122,6 @@ export function parseChainAt(src, startIdx) {
     return i > s ? src.slice(s, i) : null;
   }
   function skipBalancedParens() {
-    // src[i] === '('
     let depth = 0;
     do {
       if (src[i] === '(') depth++;
@@ -211,7 +169,6 @@ export function parseChainAt(src, startIdx) {
   return { steps, endIndex: i };
 }
 
-/** Scan the whole (comment-stripped) source for every top-level postfix chain. */
 export function findAllChains(src) {
   const chains = [];
   const n = src.length;
@@ -237,7 +194,6 @@ export function findAllChains(src) {
   return chains;
 }
 
-/** Every ':name(' step in a chain is a real Lua method-call site (':' always implies a call). */
 export function directCallStepsFromChain(chain) {
   const sites = [];
   for (let k = 1; k < chain.steps.length; k++) {
@@ -271,7 +227,6 @@ function findMatchingParen(src, openIdx) {
   return -1;
 }
 
-/** Split the text between a call's outer parens into top-level (paren/bracket/brace/string aware) args. */
 function splitTopLevelArgs(text) {
   const args = [];
   let depth = 0;
@@ -305,13 +260,6 @@ function splitTopLevelArgs(text) {
 const HELPER_NAMES = ['invoke', 'hasMethod', 'safeCall', 'safeGet', 'tryGet'];
 const HELPER_CALL_RE = new RegExp(`PanelBridge\\.(${HELPER_NAMES.join('|')})\\s*\\(`, 'g');
 
-/**
- * Extract every PanelBridge.<invoke|hasMethod|safeCall|safeGet|tryGet>(receiver, "methodName", ...)
- * call site. `receiver` is parsed as its own chain (it can itself be a multi-hop expression, though
- * in this file it is always a bare local variable). `methodName` is only captured when it's a
- * string literal -- a dynamic (variable) method-name argument is reported as unresolvable, never
- * guessed.
- */
 export function extractHelperCallSites(src) {
   const sites = [];
   let m;
@@ -341,14 +289,6 @@ export function extractHelperCallSites(src) {
   return sites;
 }
 
-/**
- * Hand-curated map of PZ global accessor functions (bare Lua globals injected by the engine, e.g.
- * `getWorld()`) to the Java class they return. Each entry is a CANDIDATE -- the generator verifies
- * it against the real jar (class exists) AND against a fingerprint of every method name this file
- * actually invokes on a variable assigned from that global (coverage must clear
- * MIN_SEED_FINGERPRINT_COVERAGE, see gen-engine-signatures.mjs) before trusting it. A seed that
- * fails verification is dropped, not forced -- see that script's report for what got rejected.
- */
 export const SEED_GLOBALS = {
   getWorld: { class: 'zombie.iso.IsoWorld' },
   getClimateManager: { class: 'zombie.iso.weather.ClimateManager' },
@@ -362,12 +302,6 @@ export const SEED_GLOBALS = {
   getGameServer: { class: 'zombie.network.GameServer' },
 };
 
-/**
- * A handful of engine singletons are reached via a Java-style static accessor
- * (`GameTime.getInstance()`) rather than a bare Lua global -- same idea as SEED_GLOBALS (a
- * verified candidate, not a guess forced through), but the call syntax is `.` (Lua's plain
- * namespaced call) instead of `:` (self-call sugar), which resolveChainType special-cases for.
- */
 export const STATIC_CLASS_SEEDS = {
   GameTime: 'zombie.GameTime',
 };
@@ -377,36 +311,15 @@ const LUA_KEYWORDS = new Set([
   'nil', 'not', 'or', 'repeat', 'return', 'then', 'true', 'until', 'while',
 ]);
 
-/**
- * Resolve every call site in the file: build a whole-file variable -> engine-class table from
- * `local NAME = EXPR` / `NAME = EXPR` assignments (single forward pass, so a variable's type is
- * whatever its most recent preceding assignment resolved to -- this file reuses names like
- * `player`/`climate`/`item` consistently for the same real type everywhere, so a single flat table
- * is sufficient; see the module doc comment for the known limitation this implies), then walk every
- * helper-wrapped and direct call site's receiver chain through `classProvider` to a final type.
- *
- * `classProvider(className, methodName)` must return either:
- *   - null                                          if className itself is unknown to the provider
- *   - { exists: false }                             if className is known but methodName is not on it
- *   - { exists: true, returnClass, elementClass }    if methodName exists (returnClass/elementClass
- *                                                     may be null when the return type isn't a
- *                                                     resolvable engine class, e.g. boolean/void/String)
- */
 export function resolveAllCallSites(rawSrc, classProvider) {
   const src = stripLuaComments(rawSrc);
   const lineIndex = buildLineIndex(rawSrc);
   const tableDepth = computeTableConstructorDepths(src);
-  const varTypes = new Map(); // name -> { type, elementType }
+  const varTypes = new Map();
 
-  // Every `PanelBridge.<helper>(...)` call site, indexed by the source offset of "PanelBridge" --
-  // lets a chain that STARTS with one of these (e.g. the RHS of `local stats =
-  // PanelBridge.tryGet(player, "getStats")`) be resolved as "whatever that call returns" rather
-  // than as a plain `.`-namespaced field access (which correctly resolves to nothing, since
-  // PanelBridge itself is never a `local` variable with a tracked engine type).
   const helperSites = extractHelperCallSites(src);
   const helperSitesByOffset = new Map(helperSites.map((s) => [s.startOffset, s]));
 
-  /** Continue walking `:name(...)`/`.name` steps from an already-known (type, elementType). */
   function walkStepsFrom(steps, startIndex, currentType, elementType) {
     for (let k = startIndex; k < steps.length; k++) {
       const step = steps[k];
@@ -417,12 +330,6 @@ export function resolveAllCallSites(rawSrc, classProvider) {
       }
       if (step.sep === ':' && step.called) {
         if (currentType == null) continue;
-        // IMPORTANT: `get` is not special-cased into skipping the real lookup. A collection typed
-        // as java.util.Set (no get(int) declared) must still be checked for real -- that is
-        // exactly the class of bug this tool exists to catch (getVehicles() returning a Set with
-        // no get(int), from the audit this tool replaces). The `elementType` hint (only ever set
-        // by a seed or a manifest-derived generic return type, e.g. ArrayList<IsoPlayer>) is
-        // applied ONLY after classProvider confirms the method genuinely exists.
         const info = classProvider(currentType, step.name);
         if (info && info.exists) {
           if (step.name === 'get' && elementType) {
@@ -441,7 +348,6 @@ export function resolveAllCallSites(rawSrc, classProvider) {
     return { type: currentType, elementType, reason: currentType ? null : 'chain-broke-before-end' };
   }
 
-  /** Resolve a `PanelBridge.<helper>(receiver, "method", ...)` call to the type its result holds. */
   function resolveHelperResultType(site) {
     if (!site.methodNameLiteral) return { type: null, elementType: null, reason: 'dynamic method name' };
     const receiverChain = parseChainAt(site.receiverText, 0);
@@ -466,18 +372,12 @@ export function resolveAllCallSites(rawSrc, classProvider) {
   function resolveChainType(steps) {
     if (!steps || steps.length === 0) return { type: null, elementType: null, reason: 'empty-chain' };
     const first = steps[0];
-    // The chain's own first step may itself start a PanelBridge.<helper>(...) call (first.called is
-    // false here -- "PanelBridge" alone has no parens; it's steps[1], the ".helper(...)" access,
-    // that does) -- resolve the helper's result, then keep walking any further steps after it.
     if (!first.called && first.name === 'PanelBridge' && helperSitesByOffset.has(first.offset)) {
       const site = helperSitesByOffset.get(first.offset);
       const helperResult = resolveHelperResultType(site);
       if (!helperResult.type) return helperResult;
       return walkStepsFrom(steps, 2, helperResult.type, helperResult.elementType);
     }
-    // Java-style static singleton accessor, e.g. `GameTime.getInstance()` (steps[1] is the
-    // ".getInstance(...)" call -- Lua's plain namespaced-call syntax, not the `:` self-call sugar
-    // walkStepsFrom otherwise requires, so resolve this one step by hand before falling through).
     if (!first.called && STATIC_CLASS_SEEDS[first.name] && steps[1] && steps[1].sep === '.' && steps[1].called) {
       const info = classProvider(STATIC_CLASS_SEEDS[first.name], steps[1].name);
       if (!info || !info.exists) return { type: null, elementType: null, reason: `${first.name}.${steps[1].name}() not found` };
@@ -492,22 +392,15 @@ export function resolveAllCallSites(rawSrc, classProvider) {
     return walkStepsFrom(steps, 1, ...startState(first));
   }
 
-  // Pass 1: build the variable type table (single forward pass, source order).
   const assignRe = /(?:^|[^.\w])(?:local\s+)?([A-Za-z_]\w*)\s*=(?!=)\s*/gm;
   let m;
   while ((m = assignRe.exec(src))) {
     const name = m[1];
     if (LUA_KEYWORDS.has(name)) continue;
-    // Table-constructor field, not a real assignment -- see computeTableConstructorDepths' own
-    // comment for why this guard exists and what it fixes.
     if (tableDepth[m.index] > 0) continue;
     const exprStart = m.index + m[0].length;
     let chain = parseChainAt(src, exprStart);
     if (!chain) continue;
-    // `local cell = world and PanelBridge.tryGet(world, "getCell")` -- a common Lua guard idiom.
-    // The type-relevant operand is the one after `and` (assuming the guard holds); walk through
-    // as many `and`-joined steps as appear, since the guard chain itself typically resolves to a
-    // truthy/falsy check on the SAME variable and carries no type information of its own.
     for (;;) {
       let after = chain.endIndex;
       while (after < src.length && (src[after] === ' ' || src[after] === '\t')) after++;
@@ -519,9 +412,6 @@ export function resolveAllCallSites(rawSrc, classProvider) {
       }
       break;
     }
-    // Only trust this as a real assignment RHS if the chain is immediately followed by a
-    // statement boundary (newline, ')', ',', end of buffer) -- guards against e.g. `x = a + b`
-    // where `a` alone would otherwise be recorded as if it were the whole RHS.
     let after = chain.endIndex;
     while (after < src.length && (src[after] === ' ' || src[after] === '\t')) after++;
     const nextChar = src[after] || '\n';
@@ -530,7 +420,6 @@ export function resolveAllCallSites(rawSrc, classProvider) {
     varTypes.set(name, { type: resolved.type, elementType: resolved.elementType });
   }
 
-  // Pass 2: helper-wrapped call sites.
   const callSites = [];
   for (const site of helperSites) {
     const line = lineOfOffset(lineIndex, site.offset);
@@ -554,7 +443,6 @@ export function resolveAllCallSites(rawSrc, classProvider) {
     });
   }
 
-  // Pass 3: direct `recv:method(...)` call sites.
   for (const chain of findAllChains(src)) {
     for (const site of directCallStepsFromChain(chain)) {
       const line = lineOfOffset(lineIndex, site.offset);

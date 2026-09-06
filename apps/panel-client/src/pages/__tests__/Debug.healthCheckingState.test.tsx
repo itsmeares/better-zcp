@@ -6,15 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Debug from '../Debug'
 import { apiFetch } from '@/lib/api'
 
-// 2026-08-30 visual sweep: Debug > Health's status headline used
-// `healthStatus?.status === "ok"` to choose between "Healthy" and "Issues
-// Detected" -- but that expression is false both when the check genuinely
-// found issues AND when fetchHealthStatus() simply hasn't resolved yet
-// (healthStatus is still null). Every page load hit a real window, however
-// brief, where the headline read "Issues Detected" next to the subtitle's
-// own "Never checked" -- a page contradicting itself in its own strings,
-// same disease as the Environment tab's bare "-" fixed alongside it in
-// a83c425a.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -72,9 +63,6 @@ function renderDebug() {
 }
 
 async function openHealthTab() {
-  // Radix's TabsTrigger switches on mousedown, not click (see
-  // @radix-ui/react-tabs) -- fireEvent.click alone never flips the tab
-  // (established pattern, e.g. Console.test.tsx's openRconTab).
   const tab = await screen.findByRole('tab', { name: /health/i })
   fireEvent.mouseDown(tab, { button: 0 })
 }

@@ -1,15 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Proves the params-wiring fix for panelBridge.js's 4 previously-PARTIAL
-// error codes (see apps/panel-server/utils/errorCodes.js) actually reaches res.json().
-// Same "check the wire, not the code" discipline as modsErrorParams.test.js
-// and changeUserRoleById.test.js's self-caught ordering bug.
-//
-// Grabs each route's LAST handler directly, skipping the requirePermission
-// gate ahead of it -- same pattern serverFilesBackupFailure.test.js uses.
-// Gate coverage for these routes already exists in
-// panelBridgeRoutesRoleSweep.test.js; this file only exercises the
-// business logic behind the gate.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => null),
@@ -125,7 +115,7 @@ describe("panelBridge.js: previously-PARTIAL error codes now carry params on the
     });
 
     it("PANELBRIDGE_AIRDROP_ITEM_TYPE_INVALID sends the offending, truncated { itemType }", async () => {
-      const badItemType = "not valid! ".repeat(10); // fails ITEM_TYPE_REGEX, exceeds 60 chars
+      const badItemType = "not valid! ".repeat(10);
       const res = await runHandler("/command", "post", {
         body: {
           action: "airdrop",

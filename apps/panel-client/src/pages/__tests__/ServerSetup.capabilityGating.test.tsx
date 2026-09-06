@@ -8,21 +8,7 @@ import ServerSetup from "../ServerSetup";
 import { configApi, serverApi, serversApi } from "@/lib/api";
 import enServerSetup from "../../locales/en/serverSetup.json";
 
-// regression: ServerSetup.tsx mixes THREE capabilities on one page
-// (server.install, panel.settings, server.control) -- the own "may
-// genuinely be page-grain" hypothesis, refuted with the route table. The
-// sharpest case: PUT /config/app-settings (Save Path) needs panel.settings,
-// not server.install like every button around it -- and TECHNICIAN holds
-// server.install/server.control/servers.manage but NOT panel.settings
-// (apps/panel-server/services/permissions.js:299-320), so today that one button
-// 403s silently for the exact stock role every OTHER button on this page
-// works for. This file proves the action is unreachable when denied, not
-// just that a button looks disabled -- fires the mocked API and asserts it
-// was never called, per this hive's floor rule.
 
-// Radix's Slider (RAM sliders on step2/step3) measures its own DOM node via
-// ResizeObserver, which jsdom does not implement -- same stub as
-// Events.climateFloatRanges.test.tsx.
 class StubResizeObserver {
   observe() {}
   unobserve() {}
@@ -30,8 +16,6 @@ class StubResizeObserver {
 }
 (globalThis as unknown as { ResizeObserver: typeof StubResizeObserver }).ResizeObserver = StubResizeObserver;
 
-// jsdom doesn't implement scrollIntoView either -- the install-log
-// auto-scroll effect calls it once install:complete populates `logs`.
 Element.prototype.scrollIntoView = vi.fn();
 
 let mockCan = (_capability: string) => true;
@@ -53,11 +37,6 @@ vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {
     ...actual,
-    // apiFetch("/debug/system") and getAppSettings/getRam all fire on mount
-    // (platform detection, saved-settings load, auto RAM-detect) and, left
-    // real, hit fetchWithRetry's genuine backoff against a server that isn't
-    // there in this test env -- multiplied across effects, that blew past
-    // vitest's default 60s test timeout. Resolve them immediately instead.
     apiFetch: vi.fn().mockResolvedValue({ ok: false } as Response),
     configApi: {
       ...actual.configApi,
@@ -80,8 +59,6 @@ const start = vi.mocked(serverApi.start);
 const create = vi.mocked(serversApi.create);
 const activate = vi.mocked(serversApi.activate);
 
-// Minimal fake matching only what ServerSetup actually calls (on/off/emit) --
-// same shape as ServerSetup.resumeAndActivate.test.tsx's helper.
 function createFakeSocket() {
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
   const socket = {
@@ -162,10 +139,6 @@ describe("ServerSetup.tsx: Save SteamCMD path gates on panel.settings, not serve
 });
 
 describe("ServerSetup.tsx: Start Server Now (shared by both post-install completion screens) gates on server.control", () => {
-  // Both the full-wizard and quick-setup "Start Server Now" buttons call the
-  // same extracted handleStartServerNow (ServerSetup.tsx) -- reaching the
-  // quick-setup completion screen (3 steps) is far less form-filling than
-  // the full wizard's 4, and proves the shared handler's guard either way.
   async function reachQuickPostCreate() {
     const { socket, trigger } = createFakeSocket();
     const { container } = renderServerSetup(socket);
@@ -182,7 +155,7 @@ describe("ServerSetup.tsx: Start Server Now (shared by both post-install complet
       target: { value: "myserver" },
     });
     const passwordInputs = container.querySelectorAll('input[type="password"]');
-    expect(passwordInputs.length).toBe(2); // RCON password, then admin password, in that DOM order
+    expect(passwordInputs.length).toBe(2);
     fireEvent.change(passwordInputs[0], { target: { value: "rconpass123" } });
     fireEvent.change(passwordInputs[1], { target: { value: "adminpass123" } });
     fireEvent.click(screen.getByRole("button", { name: enServerSetup.common.nextStepButton }));

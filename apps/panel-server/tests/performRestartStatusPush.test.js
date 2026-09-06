@@ -1,19 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Phase 1 finding (Oscar, 2026-08-29): scheduler.performRestart() calls
-// runManagedLifecycle()/serverManager.stopServer()/startServer() directly,
-// bypassing apps/panel-server/routes/server.js entirely -- so NONE of the server:status
-// pushes that route already makes for a plain /start or /stop ever fired
-// during a restart's stop-then-start sequence, which the surrounding sleeps
-// show can run 60+ real seconds. The only client-visible event during the
-// whole restart used to be one terminal scheduler:action_result once
-// performRestart() resolved completely.
-//
-// Fixed: performRestart() now pushes server:status itself at its own two
-// VERIFIED transition points (old process confirmed stopped; new instance
-// confirmed started), via a new Scheduler.setIo()/_emitVerifiedTransition()
-// -- see scheduler.js's own comments for why this is safe alongside the
-// index.js status watchdog rather than a second, racing emitter.
 
 const getServer = vi.fn();
 const getActiveServer = vi.fn();
@@ -53,23 +39,16 @@ describe("performRestart() pushes server:status at its own verified transitions"
   });
 
   it("native restart: emits {running:false} once the old process is confirmed stopped, then {running:true} once the new one is confirmed up", async () => {
-    // No serverName on either lookup -- keeps _backupConfigBeforeRestart()
-    // and refreshLaunchTargetBeforeStart() harmless no-ops (see their own
-    // early-return guards) instead of needing a real filesystem fixture,
-    // which is irrelevant to what this test is checking.
     getServer.mockResolvedValue(null);
     getActiveServer.mockResolvedValue(null);
     runManagedLifecycle.mockResolvedValue({ handled: false });
 
     const emit = vi.fn();
     const scheduler = new Scheduler({}, {});
-    scheduler.sleep = async () => {}; // no real countdown/poll delays in a test
+    scheduler.sleep = async () => {};
     scheduler.setIo({ emit });
 
     const rconService = makeRconService();
-    // First call (initial wasRunning check) reports running; every call
-    // after that (inside the "wait for the old process to actually exit"
-    // loop) reports it gone, so that loop exits on its very first check.
     const getServerProcessDetails = vi
       .fn()
       .mockResolvedValueOnce({ running: true, scanFailed: false })
@@ -120,7 +99,6 @@ describe("performRestart() pushes server:status at its own verified transitions"
 
     const scheduler = new Scheduler({}, {});
     scheduler.sleep = async () => {};
-    // Deliberately no scheduler.setIo(...) call.
 
     const rconService = makeRconService();
     const serverManager = {

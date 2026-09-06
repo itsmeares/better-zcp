@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// regression 2026-09-05 (backup-restore-round-trip sweep, item #2): restoring
-// a backup used to take no lock at all against a Start happening in
-// parallel. This route now takes the same process-wide lifecycleCoordinator
-// lock /start, /stop, /force-stop and /restart already use, held for the
-// entire restore -- not just the initial stopped-check restoreBackup() (and
-// this route) still also perform on their own.
 
 vi.mock("../database/init.js", () => ({ getActiveServer: vi.fn() }));
 
@@ -35,9 +29,6 @@ function deferred() {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  // Best-effort: if a test left the process-wide lock held (a failed
-  // assertion mid-test), later tests in this file or others must not
-  // inherit a stuck lock.
   const stray = acquireLifecycleLock("test-cleanup");
   if (stray) stray.release();
 });
@@ -66,13 +57,9 @@ describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
       response,
     );
 
-    // Let the handler run up through acquiring the lock and calling into
-    // restoreBackup() (which is now blocked on restoreGate).
     await vi.waitFor(() => expect(backupService.restoreBackup).toHaveBeenCalled());
     expect(isLifecycleLocked()).toBe(true);
 
-    // A concurrent lifecycle operation (what /start would do) must be
-    // refused while the restore is still in flight.
     const concurrent = acquireLifecycleLock("start", "TestServer");
     expect(concurrent).toBeNull();
 

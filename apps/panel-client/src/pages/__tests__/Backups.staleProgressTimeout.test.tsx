@@ -6,14 +6,6 @@ import type { Socket } from 'socket.io-client'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } from '@/lib/api'
 
-// 2026-08-31 regression: handleCreateBackup's optimistic 'preparing' state
-// (kicked off by clicking Create Backup) never clears any PENDING
-// progressTimeoutRef left over from a PREVIOUS backup's 'complete'/'error'
-// socket event -- only the socket handler itself and the catch branch do
-// that defensive clear. A second "Create Backup" click within the ~2-3s
-// auto-clear window of the FIRST backup's completion starts a fresh
-// progress display that a leftover timer then wipes out from underneath
-// it, mid-operation, well before the second backup is actually done.
 
 const mockCan = (_capability: string) => true
 
@@ -105,43 +97,27 @@ describe('Backups.tsx: stale progress-clear timeout across back-to-back backups'
     listBackups.mockResolvedValue({ backups: [testBackup] })
     getHistory.mockResolvedValue({ records: [] })
     createBackup.mockResolvedValueOnce({ success: true, backup: testBackup, duration: 0.1 })
-    // Second click's createBackup() call deliberately never resolves during
-    // this test -- it stands in for a still-in-flight second backup.
     createBackup.mockReturnValueOnce(new Promise(() => {}))
 
-    // Real timers for mount + the first click's async settling -- mixing
-    // fake timers with RTL's waitFor (which polls on real timers) deadlocks.
     renderBackups(socket)
     const createButton = await screen.findByRole('button', { name: /create backup/i })
     await act(async () => { fireEvent.click(createButton) })
     await waitFor(() => expect(createBackup).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(createButton).not.toBeDisabled())
 
-    // Now take over time explicitly for the race itself.
     vi.useFakeTimers()
     try {
-      // Backup #1's 'complete' socket event arrives, scheduling a 2000ms
-      // auto-clear of the progress card (Backups.tsx's own documented
-      // behavior).
       act(() => { fire('backup:progress', { phase: 'complete', percent: 100, message: 'Backup complete' }) })
 
-      // Still well inside that 2000ms window.
       await vi.advanceTimersByTimeAsync(500)
 
-      // Operator clicks Create again right away -- a second backup starts.
       act(() => { fireEvent.click(createButton) })
       await vi.advanceTimersByTimeAsync(0)
       expect(createBackup).toHaveBeenCalledTimes(2)
       expect(screen.getByText('Starting backup...')).toBeInTheDocument()
 
-      // Cross the ORIGINAL clear deadline from backup #1's completion
-      // (500ms already elapsed + 1600ms more = 2100ms total since that
-      // event).
       await vi.advanceTimersByTimeAsync(1600)
 
-      // The second backup's own createBackup() promise never resolved (it
-      // is still genuinely running), so its progress state must still be
-      // shown.
       expect(screen.getByText('Starting backup...')).toBeInTheDocument()
       expect(screen.queryByText('Creating backup...')).not.toBeInTheDocument()
     } finally {

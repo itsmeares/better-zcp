@@ -1,27 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Force Stop is the escape hatch for a wedged server -- unlike /stop,
-// /restart (scheduler.performRestart) and docker.js's own dedicated
-// container-action route, which all fail CLOSED (a failed save blocks the
-// stop entirely), a failed or slow save here must never block the stop, or
-// the escape hatch stops working. Previously /force-stop attempted no save
-// at all, on either the Docker-managed or native branch -- for a
-// Docker-managed server this meant discarding the world save for zero
-// benefit, since dockerClient.runManagedAction() only ever accepts
-// start/stop/restart (no separate "kill") and Docker's own stop API already
-// escalates SIGTERM to SIGKILL internally regardless of which button was
-// pressed, so Force Stop and Stop issued the identical call to Docker.
-//
-// Fix: attempt a bounded (3s) save on BOTH branches before proceeding,
-// FAIL OPEN regardless of the outcome, and report which of
-// saved/failed/timedOut/skipped happened in the response.
-//
-// These tests prove all four outcomes still let the stop proceed, that the
-// same behaviour applies on both branches (not a smaller version of the
-// same "one button, two meanings" defect), and -- the one that matters
-// most, the same reason the ENOSPC-induced test on the earlier backup work
-// mattered -- that the timeout path is exercised for real with fake timers
-// against a save that genuinely never resolves, not just asserted about.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => ({ isRemote: false })),
@@ -38,8 +16,6 @@ function getHandler(routePath, method) {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
-  // requirePermission is applied inline per-route in server.js, so the real
-  // handler is the LAST entry in this route's middleware stack.
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -143,9 +119,6 @@ describe("POST /server/force-stop -- bounded, fail-open pre-stop save", () => {
       });
       const rconService = {
         connected: true,
-        // A save that hangs forever -- the exact case the bounded timeout
-        // exists for. If the route waited on this, the test itself would
-        // hang; advancing fake time past the bound proves it doesn't.
         save: vi.fn(() => new Promise(() => {})),
       };
       const response = createResponse();
@@ -155,7 +128,7 @@ describe("POST /server/force-stop -- bounded, fail-open pre-stop save", () => {
         response,
       );
 
-      await vi.advanceTimersByTimeAsync(3100); // past the 3s bound
+      await vi.advanceTimersByTimeAsync(3100);
       await handlerPromise;
 
       expect(runManagedLifecycle).toHaveBeenCalledWith("stop", { serverId: null });

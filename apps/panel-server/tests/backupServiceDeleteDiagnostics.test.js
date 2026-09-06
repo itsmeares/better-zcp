@@ -3,18 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression (2026-08-31 services sweep), two related deleteBackup()
-// diagnostics bugs found in the same pass:
-//
-// 1. cleanupOldBackups() read `deleted?.error` to log why a backup could
-//    not be cleaned up, but deleteBackup() only ever sets `.message` on
-//    failure -- every real cleanup failure logged the same "unknown error"
-//    string regardless of what actually went wrong.
-// 2. deleteBackup()'s logServerEvent() call was the only side-effect call
-//    in the function not wrapped in its own try/catch (removeBackupRecord
-//    two lines above it is). A logging failure after the file was already
-//    unlinked and the record already removed used to report success:false
-//    for a backup that was in fact already gone.
 
 let logServerEventShouldThrow = false;
 
@@ -52,10 +40,6 @@ vi.mock("../utils/logger.js", () => ({
   createLogger: () => mockLogger,
 }));
 
-// Same module-load-time seed-directory requirement as
-// backupUploadPruneExemption.test.js -- importing backupService.js pulls in
-// utils/logger.js's real getDataPaths() call at import time, before any
-// beforeEach runs.
 const initDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-backup-delete-diag-seed-"));
 let tmpDir = initDir;
 vi.mock("../utils/paths.js", () => ({
@@ -85,9 +69,6 @@ describe("BackupService.deleteBackup() diagnostics", () => {
   });
 
   it("cleanupOldBackups logs deleteBackup's real failure reason, not a constant 'unknown error'", async () => {
-    // world_backup_1 is real and prunable; ghost_backup is listed but does
-    // not actually exist on disk, forcing deleteBackup() to hit its real
-    // "Backup not found" failure path (not a mock).
     writeBackup(backupsPath, "world_backup_1.zip");
     service.listBackups = async () => [
       { name: "ghost_backup.zip", created: new Date(0).toISOString() },

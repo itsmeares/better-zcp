@@ -37,9 +37,6 @@ describe("computeDiskStatus", () => {
   });
 
   it("returns a zeroed, not-ok status when the disk reading is unavailable", () => {
-    // Regression: this used to be identical in shape to a genuinely healthy
-    // 0%-used disk, so a stat failure (unreachable mount, permission error)
-    // looked exactly like "everything's fine" to every consumer.
     const result = computeDiskStatus("/data", null);
     expect(result.path).toBe("/data");
     expect(result.totalBytes).toBe(0);
@@ -190,10 +187,6 @@ describe("DiskMonitor", () => {
   });
 
   it("does not report disk:normal when a critical disk becomes unreachable", async () => {
-    // Regression: an unreadable stat (mount dropped, disk filled to an I/O
-    // error, permissions changed) used to be structurally indistinguishable
-    // from a genuinely healthy disk to this method, so the critical banner
-    // silently cleared exactly when the disk situation was most dangerous.
     const monitor = makeMonitor([critStatus, unreachableStatus]);
     await monitor.checkNow();
     await monitor.checkNow();

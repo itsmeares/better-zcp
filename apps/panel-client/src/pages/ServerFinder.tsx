@@ -54,9 +54,6 @@ import { copyText } from '@/lib/utils'
 interface GameServer {
   name: string
   ip: string
-  // Can be null: the server derives this from the Steam listing's addr
-  // field, falling back to gameport, and stays honestly unknown (never a
-  // guessed default) when neither is parseable.
   port: number | null
   gamePort?: number | null
   players: number
@@ -76,20 +73,10 @@ interface GameServer {
 type SortField = 'name' | 'players' | 'maxPlayers' | 'ping'
 type SortDirection = 'asc' | 'desc'
 
-// The query port (used for A2S ping/connect diagnostics) is honestly null
-// when the panel couldn't parse one -- never a guessed default. Ping keys
-// off this directly and stay disabled when it's absent, so a fabricated
-// port never gets pinged and no cache entry is ever written under a
-// "port unknown" key (which would otherwise let two portless servers on
-// the same IP collide into one ping result).
 export function pingKey(server: Pick<GameServer, 'ip' | 'port'>): string | null {
   return server.port === null || server.port === undefined ? null : `${server.ip}:${server.port}`
 }
 
-// The human-facing address prefers the raw Steam-reported game port over
-// the derived query port, falling back to the query port only if the game
-// port is missing. Null when neither is known -- the caller must render an
-// IP with no port rather than print the literal string "null".
 export function displayPort(server: Pick<GameServer, 'port' | 'gamePort'>): number | null {
   return server.gamePort || server.port || null
 }
@@ -99,12 +86,6 @@ export function displayAddress(server: Pick<GameServer, 'ip' | 'port' | 'gamePor
   return port === null ? server.ip : `${server.ip}:${port}`
 }
 
-// Which locale key explains an empty server list, from GET /'s emptyReason
-// (see deriveEmptyReason in serverFinder.js) plus the pre-existing
-// apiKeyConfigured flag. 'master-unreachable' / 'no-servers-listed' /
-// 'no-servers-responded' used to all render as the same generic "no
-// servers found" -- three genuinely different next steps for the operator
-// collapsed into one unhelpful message.
 export function emptyServersDescKey(apiKeyConfigured: boolean, emptyReason?: string): string {
   if (!apiKeyConfigured) return 'emptyState.noApiKeyDesc'
   if (emptyReason === 'master-unreachable') return 'emptyState.noServersDescUnreachable'
@@ -113,11 +94,6 @@ export function emptyServersDescKey(apiKeyConfigured: boolean, emptyReason?: str
   return 'emptyState.noServersDesc'
 }
 
-// Which locale key explains a null ping, from GET /ping's reason field (or
-// 'request-failed' for a client-side fetch failure that never reached the
-// server). 'unparseable-response' means the server IS running and
-// reachable, just answered in a form the panel couldn't read -- a
-// completely different next step from "never answered at all".
 export function pingFailDescKey(reason?: string): string {
   return reason === 'unparseable-response' ? 'serverItem.pingFailUnparseable' : 'serverItem.pingFailUnreachable'
 }
@@ -131,17 +107,11 @@ export default function ServerFinder() {
   const [source, setSource] = useState<string>('')
   const [cached, setCached] = useState(false)
   const [apiKeyConfigured, setApiKeyConfigured] = useState<boolean>(true)
-  // 'master-unreachable' | 'no-servers-listed' | 'no-servers-responded' from
-  // GET /'s emptyReason -- undefined outside the empty master_server case.
-  // Distinguishes "we couldn't even ask" from "we asked and it's genuinely
-  // empty" from "we got a list but nothing on it replied", which used to
-  // all render as the same generic "no servers found".
   const [emptyReason, setEmptyReason] = useState<string | undefined>(undefined)
   const [stats, setStats] = useState({ totalPlayers: 0, activeServers: 0, totalCapacity: 0 })
   const [currentPage, setCurrentPage] = useState(1)
   const { toast } = useToast()
 
-  // Filters
   const [searchQuery, setSearchQuery] = useState('')
   const debouncedSearch = useDebouncedValue(searchQuery, 200)
   const [hideEmpty, setHideEmpty] = useState(false)
@@ -151,42 +121,25 @@ export default function ServerFinder() {
   const [versionFilter, setVersionFilter] = useState<string>('all')
   const [filtersOpen, setFiltersOpen] = useState(false)
 
-  // Sorting
   const [sortField, setSortField] = useState<SortField>('players')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
-  // Pinging
   const [pingingServers, setPingingServers] = useState<Set<string>>(new Set())
   const [serverPings, setServerPings] = useState<Record<string, number | null>>({})
-  // Why a null ping happened -- 'timeout' | 'socket-error' | 'unparseable-response'
-  // from GET /ping's reason field, or 'request-failed' for a client-side
-  // fetch failure that never reached the server at all. Server-computed and
-  // previously discarded entirely; a null ping used to render identically
-  // whether the server never answered or answered in a form the panel
-  // couldn't read -- two completely different next steps for the operator.
   const [pingFailReasons, setPingFailReasons] = useState<Record<string, string>>({})
-  
-  // Pagination (client-side)
+
   const ITEMS_PER_PAGE = 50
 
   const fetchServers = useCallback(async (forceRefresh = false) => {
     setLoading(true)
     setError(null)
-    setCurrentPage(1) // Reset to page 1 on refresh
+    setCurrentPage(1)
 
     try {
       const url = forceRefresh ? '/api/server-finder?refresh=true' : '/api/server-finder'
       const response = await apiFetch(url.replace('/api', ''))
       const data = await response.json().catch(() => null)
 
-      // apiFetch() is the raw, unwrapped primitive (unlike xApi.method()
-      // calls elsewhere, which go through lib/api's handleResponse()) --
-      // callers are responsible for their own status/code handling.
-      // GET /server-finder's only failure mode is an uncoded 500 with
-      // success:false (apps/panel-server/routes/serverFinder.js), so a plain
-      // `throw new Error(data.error)` here discarded response.status
-      // before getUserErrorMessage() below could ever translate it via
-      // the generic-500 wrapper used by the other raw-fetch callers.
       if (!response.ok || !data || data.success === false) {
         throw new ApiError(data?.error || `HTTP ${response.status}`, {
           status: response.status,
@@ -222,16 +175,13 @@ export default function ServerFinder() {
     }
   }, [toast, t])
 
-  // Initial fetch
   useEffect(() => {
     fetchServers()
   }, [fetchServers])
 
-  // Apply filters and sorting
   useEffect(() => {
     let result = [...servers]
 
-    // Search filter
     if (debouncedSearch) {
       const query = debouncedSearch.toLowerCase()
       result = result.filter(
@@ -243,7 +193,6 @@ export default function ServerFinder() {
       )
     }
 
-    // Boolean filters
     if (hideEmpty) {
       result = result.filter(s => s.players > 0)
     }
@@ -256,12 +205,10 @@ export default function ServerFinder() {
     if (showVacOnly) {
       result = result.filter(s => s.vac)
     }
-    // Version filter
     if (versionFilter && versionFilter !== 'all') {
       result = result.filter(s => s.version === versionFilter)
     }
 
-    // Sorting
     result.sort((a, b) => {
       let aVal: number | string
       let bVal: number | string
@@ -307,7 +254,6 @@ export default function ServerFinder() {
     setCurrentPage(1)
   }, [debouncedSearch, hideEmpty, hideFull, hidePrivate, showVacOnly, versionFilter, sortField, sortDirection])
 
-  // Re-sort when pings arrive without resetting the current page
   useEffect(() => {
     if (sortField !== 'ping') return
     setFilteredServers(prev => {
@@ -323,14 +269,12 @@ export default function ServerFinder() {
     })
   }, [serverPings, sortField, sortDirection])
 
-  // Compute available versions from servers
   const availableVersions = useMemo(() => {
     const versions = new Set<string>()
     servers.forEach(s => {
       if (s.version) versions.add(s.version)
     })
     return Array.from(versions).sort((a, b) => {
-      // Sort versions descending (newest first)
       const aParts = a.split('.').map(Number)
       const bParts = b.split('.').map(Number)
       for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
@@ -342,7 +286,6 @@ export default function ServerFinder() {
     })
   }, [servers])
 
-  // Calculate pagination from filtered servers
   const totalPages = Math.max(1, Math.ceil(filteredServers.length / ITEMS_PER_PAGE))
 
   useEffect(() => {
@@ -359,10 +302,6 @@ export default function ServerFinder() {
     setCurrentPage(validPage)
   }
 
-  // Goes through copyText (not the raw clipboard API directly) so this
-  // still works over a plain-HTTP LAN deployment -- navigator.clipboard
-  // requires a secure context and is unavailable there; copyText falls
-  // back to execCommand.
   const copyAddress = async (address: string) => {
     const ok = await copyText(address)
     if (ok) {
@@ -376,19 +315,13 @@ export default function ServerFinder() {
   }
 
   const pingServer = async (ip: string, port: number | null) => {
-    if (port === null) return // no known query port -- nothing to ping
+    if (port === null) return
     const key = `${ip}:${port}`
     if (pingingServers.has(key)) return
 
     setPingingServers(prev => new Set([...prev, key]))
 
     try {
-      // Must go through apiFetch, not a bare fetch(): /server-finder is
-      // gated by requirePermission('server.install'), which needs the
-      // Authorization: Bearer header apiFetch attaches. A bare fetch omits
-      // it, so the panel's own auth middleware 401s every ping before it
-      // ever reaches the UDP query -- indistinguishable client-side from a
-      // real "server didn't respond", so every ping silently showed N/A.
       const response = await apiFetch(`/server-finder/ping?ip=${ip}&port=${port}`)
       const data = await response.json()
 
@@ -453,7 +386,6 @@ export default function ServerFinder() {
 
   return (
     <div className="space-y-6 page-transition">
-      {/* Header */}
       <PageHeader
         title={t('pageHeader.title')}
         description={t('pageHeader.description')}
@@ -477,7 +409,6 @@ export default function ServerFinder() {
         }
       />
 
-      {/* API Key Warning */}
       {!apiKeyConfigured && !loading && (
         <Card className="border-warning/40 bg-warning/10 shadow-sm">
           <CardContent className="flex items-start gap-4 py-4">
@@ -512,7 +443,6 @@ export default function ServerFinder() {
         </Card>
       )}
 
-      {/* Stats */}
       {(() => {
         const isFiltered = filteredServers.length !== servers.length
         const tiles = [
@@ -571,7 +501,6 @@ export default function ServerFinder() {
         )
       })()}
 
-      {/* Search and Filters */}
       <Card className="border-border/70 bg-card/92 shadow-sm">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -689,7 +618,6 @@ export default function ServerFinder() {
         </CardContent>
       </Card>
 
-      {/* Error State */}
       {error && (
         <Card className="border-destructive/40 bg-destructive/10 shadow-sm">
           <CardContent className="flex items-center gap-4 py-4">
@@ -705,7 +633,6 @@ export default function ServerFinder() {
         </Card>
       )}
 
-      {/* Server List */}
       <Card className="border-border/70 bg-card/92 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -774,12 +701,10 @@ export default function ServerFinder() {
                       key={`${serverKey}-${index}`}
                       className="flex items-center gap-3 p-3 rounded-lg border border-border/60 bg-card/70 hover:border-primary/30 hover:bg-accent/20 transition-colors"
                     >
-                      {/* Leading status tile */}
                       <div className={`grid place-items-center w-9 h-9 rounded-md border shrink-0 ${statusTone}`} aria-hidden="true">
                         <Server className="h-4 w-4" />
                       </div>
 
-                      {/* Server Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className="font-medium truncate">{server.name}</h3>
@@ -847,7 +772,6 @@ export default function ServerFinder() {
                         )}
                       </div>
 
-                      {/* Players */}
                       <div className="flex items-center gap-2 px-3">
                         <Users className="h-4 w-4 text-muted-foreground" />
                         <span
@@ -863,7 +787,6 @@ export default function ServerFinder() {
                         </span>
                       </div>
 
-                      {/* Ping */}
                       <div className="w-16 text-center">
                         {isPinging ? (
                           <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
@@ -885,11 +808,6 @@ export default function ServerFinder() {
                             </Tooltip>
                           )
                         ) : pKey === null ? (
-                          // No known query port -- pinging would either send
-                          // a request the server rejects or, worse, silently
-                          // share a cache entry with another portless server
-                          // on the same IP. Reuses the existing "N/A" copy
-                          // rather than a new label.
                           <span className="text-sm text-muted-foreground">{t('serverItem.pingNa')}</span>
                         ) : (
                           <Button
@@ -906,7 +824,6 @@ export default function ServerFinder() {
                         )}
                       </div>
 
-                      {/* Actions */}
                       <div className="flex items-center gap-1">
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -933,7 +850,6 @@ export default function ServerFinder() {
           )}
         </CardContent>
 
-        {/* Pagination Controls - Outside CardContent so always visible */}
         {filteredServers.length > ITEMS_PER_PAGE && (
           <div className="flex items-center justify-between p-4 border-t bg-card">
             <div className="text-sm text-muted-foreground">

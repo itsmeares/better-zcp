@@ -3,14 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression coverage for the HTTPS-crash finding: PUT /app-settings used
-// to accept httpsCertPath/httpsKeyPath/httpsPort as any string/number with
-// zero validation -- the only guard against a bad value lived at panel BOOT
-// (apps/panel-server/index.js's setupHttpsServer, see httpsSetup.test.js), which meant
-// a bad value could be saved successfully (200, success toast) and only
-// fail on the next restart. This file exercises the save-time half of the
-// fix: reject a bad value immediately, with a clear reason, before it's
-// ever persisted.
 
 const settingsStore = { panelPort: 3001 };
 
@@ -20,15 +12,6 @@ vi.mock("../database/init.js", () => ({
   setSetting: vi.fn(async (key, value) => {
     settingsStore[key] = value;
   }),
-  // This file bypasses requirePermission("panel.settings") entirely (see
-  // getRouteHandler below -- it invokes only the last handler in the
-  // route's stack, on purpose, since gate coverage lives in
-  // configRoutesRoleSweep.test.js and this file exercises validation logic
-  // directly). The per-key capability partition added in the 2026-08-26
-  // capability-description-sweep fix runs INSIDE that last handler though,
-  // so every save here needs a real, fully-privileged caller behind it --
-  // same shape as any other request this file sends, just one more field
-  // that now matters.
   getRoleByName: vi.fn(async (name) =>
     name === "admin"
       ? {
@@ -66,9 +49,6 @@ function getRouteHandler(router, routePath, method) {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
-  // Last handler in the stack: requirePermission runs first, the real
-  // logic last -- gate coverage lives in configRoutesRoleSweep.test.js,
-  // this file exercises the validation logic directly.
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -97,10 +77,6 @@ afterEach(() => {
   delete settingsStore.httpsPort;
 });
 
-// These all now need httpsEnabled: true in the payload -- as of the
-// 2026-08-26 regression (finding 4, GitHub #118 generalized), httpsCertPath/
-// httpsKeyPath/httpsPort are skipped entirely while HTTPS won't be enabled
-// after this save, the same treatment SFTP's fields got below.
 describe("PUT /app-settings -- httpsCertPath / httpsKeyPath validation (HTTPS enabled)", () => {
   it("rejects a directory as httpsCertPath instead of saving it", async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-appsettings-test-"));
@@ -133,10 +109,6 @@ describe("PUT /app-settings -- httpsCertPath / httpsKeyPath validation (HTTPS en
     expect(res.getBody().success).toBe(true);
   });
 
-  // GitHub #118, the reproducible half of finding 4: Settings.tsx never
-  // clears httpsCertPath/httpsKeyPath when HTTPS is toggled off, so a stale
-  // path (moved file, revoked permissions) sitting there used to block
-  // every unrelated save. HTTPS disabled must exempt it regardless of value.
   it("does not block an unrelated save over a stale/garbage httpsCertPath while HTTPS is disabled", async () => {
     const res = await putAppSettings({
       httpsEnabled: false,
@@ -166,9 +138,6 @@ describe("PUT /app-settings -- httpsPort validation (HTTPS enabled, bind-port ra
     expect(res.getBody().error).toMatch(/HTTPS port must be a whole number/);
   });
 
-  // Now rejected by the BIND_PORT_MIN floor (1024), not just a bare "must
-  // be positive" check -- HTTPS is a bind port like panelPort, joined to
-  // the same shared range in this pass (regression finding 4).
   it("rejects a port below the 1024 bind floor, zero, and negative values", async () => {
     const belowFloor = await putAppSettings({ httpsEnabled: true, httpsPort: 443 });
     expect(belowFloor.getStatusCode()).toBe(400);
@@ -219,13 +188,6 @@ describe("PUT /app-settings -- reconnectInterval validation (same missing-range-
   });
 });
 
-// One table-driven pass covering every field in FEATURE_GATED_FIELDS
-// (config.js) instead of five more hand-written "skips while disabled" /
-// "still validates when turning on" test blocks -- the DO-IT-ONCE
-// instruction (2026-08-26 regression follow-up) applies to the tests too, not
-// just the production code: five nearly-identical copies of this test are
-// exactly as likely to silently miss a sixth field as five copies of the
-// guard itself were.
 describe("PUT /app-settings -- feature-gated fields (FEATURE_GATED_FIELDS), table-driven", () => {
   const cases = [
     ["panelBridgeSftpEnabled", "panelBridgeSftpPort", 0, /SFTP port must be a whole number/],
@@ -256,14 +218,6 @@ describe("PUT /app-settings -- feature-gated fields (FEATURE_GATED_FIELDS), tabl
   );
 });
 
-// Regression coverage for the 2026-08-23 config.js numeric-field audit:
-// panelPort sat in the same allowed-keys list as httpsPort, two lines away,
-// with NO case at all in this loop -- an out-of-range value saved silently
-// (200, no error) and only surfaced at the next restart, after the Restart
-// Panel button had already sent the browser to a port nothing is listening
-// on. This is the lockout case the reconnectInterval comment above named but
-// never enumerated. Range matches auth.js's /setup panelPort check for the
-// same field (SETUP_PANEL_PORT_INVALID): 1024-65535.
 describe("PUT /app-settings -- panelPort validation (the lockout case, not the mild one)", () => {
   it("rejects a non-integer value", async () => {
     const res = await putAppSettings({ panelPort: "not-a-number" });
@@ -294,11 +248,6 @@ describe("PUT /app-settings -- panelPort validation (the lockout case, not the m
   });
 });
 
-// The collision guard httpsPort's block enforces used to be one-directional:
-// a new httpsPort was checked against the stored panelPort, but a new
-// panelPort was never checked against the stored httpsPort. The exact
-// collision the guard exists to prevent was reachable by simply approaching
-// from the other side. See 2026-08-23 config.js numeric-field audit part 2.
 describe("PUT /app-settings -- panelPort/httpsPort collision is bidirectional", () => {
   it("rejects a panelPort equal to the stored httpsPort", async () => {
     settingsStore.httpsPort = 8443;
@@ -321,13 +270,6 @@ describe("PUT /app-settings -- panelPort/httpsPort collision is bidirectional", 
   });
 });
 
-// The "second door" finding: rconPort, serverPort, minMemory and maxMemory
-// are the exact four fields server.js's /install, /quick-setup,
-// /configure-rcon and /configure-network now refuse out-of-range on
-// (2026-08-23 validateInt-coerces audit, commit 39f836f) -- but PUT
-// /app-settings could set every one of them directly with zero validation,
-// undoing that fix's shape through a route none of those checks live in.
-// Same ranges as server.js's checks so the two doors can't disagree.
 describe("PUT /app-settings -- the second door onto server.js's four hardened fields", () => {
   it("rejects an out-of-range rconPort", async () => {
     const res = await putAppSettings({ rconPort: 99 });
@@ -378,13 +320,6 @@ describe("PUT /app-settings -- the second door onto server.js's four hardened fi
   });
 });
 
-// Lower priority: an out-of-range value here doesn't misdirect anything, it
-// self-heals to 3 via `Number(...) || 3` the next time index.js reads it for
-// export rotation -- but an unvalidated garbage value would still sit in the
-// database unreadable by that fallback's intent. Range matches Settings.tsx's
-// own input (min=1 max=50).
-// Gated by autoExportOnLogin as of the 2026-08-26 regression (finding 11) --
-// these need autoExportOnLogin: true in the payload to reach the check.
 describe("PUT /app-settings -- autoExportMaxPerPlayer validation (low priority, self-heals at use; autoExportOnLogin enabled)", () => {
   it("rejects an out-of-range value instead of storing garbage", async () => {
     const res = await putAppSettings({ autoExportOnLogin: true, autoExportMaxPerPlayer: 500 });
@@ -399,10 +334,6 @@ describe("PUT /app-settings -- autoExportMaxPerPlayer validation (low priority, 
   });
 });
 
-// The 8 boolean-shaped keys that accepted any truthy/falsy JS value with no
-// gate at all until this pass -- same treatment as the 6 already checked
-// (corsAllowAll etc.), added here instead of a third future enumeration
-// finding them again.
 describe("PUT /app-settings -- the other 8 boolean settings now reject a non-boolean value", () => {
   const booleanKeys = [
     "modAutoRestart",
@@ -430,16 +361,6 @@ describe("PUT /app-settings -- the other 8 boolean settings now reject a non-boo
   }
 });
 
-// Bound chased from modChecker.js's setRestartOptions
-// (`Math.max(0, Math.min(30, val))`): [0, 30]. Settings.tsx's own input says
-// min=1, a real discrepancy -- ruled in favour of the service's floor, not
-// the client's: the service is the authority on what the system can do, and
-// refusing 0 here while the consumer accepts it fine would create a NEW
-// save-vs-consumer disagreement, the same bug class this thread closed.
-// Settings.tsx keeping min=1 is a UI recommendation, not a capability claim,
-// and is allowed to differ.
-// Gated by modAutoRestart as of the 2026-08-26 regression (finding 9) -- these
-// need modAutoRestart: true in the payload to reach the check.
 describe("PUT /app-settings -- modRestartDelay validation (bound chased, service is the authority; modAutoRestart enabled)", () => {
   it("accepts zero -- the service's own floor, even though Settings.tsx's UI recommends min=1", async () => {
     const res = await putAppSettings({ modAutoRestart: true, modRestartDelay: 0 });
@@ -465,11 +386,6 @@ describe("PUT /app-settings -- modRestartDelay validation (bound chased, service
   });
 });
 
-// Bound chased from updateChecker.js's parseAutoUpdateWarningMinutes
-// (`Math.min(60, Math.max(0, ...))`) -- matches Settings.tsx's own input
-// (min=0 max=60) exactly, no discrepancy for this one. Gated by
-// serverAutoUpdate as of the 2026-08-26 regression (finding 10) -- these need
-// serverAutoUpdate: true in the payload to reach the check.
 describe("PUT /app-settings -- serverAutoUpdateWarningMinutes validation (bound chased, matches client exactly; serverAutoUpdate enabled)", () => {
   it("accepts zero (a real, meaningful choice here: restart with no warning)", async () => {
     const res = await putAppSettings({ serverAutoUpdate: true, serverAutoUpdateWarningMinutes: 0 });
@@ -491,10 +407,6 @@ describe("PUT /app-settings -- serverAutoUpdateWarningMinutes validation (bound 
 });
 
 describe("PUT /app-settings -- SFTP numeric settings validation", () => {
-  // These now need panelBridgeSftpEnabled: true in the payload -- as of
-  // GitHub #118, an SFTP field is only validated when SFTP will actually be
-  // on after this save, so a range check test has to enable the feature it
-  // means to exercise.
   it("rejects an explicit zero SFTP port while SFTP is enabled", async () => {
     const res = await putAppSettings({ panelBridgeSftpEnabled: true, panelBridgeSftpPort: 0 });
     expect(res.getStatusCode()).toBe(400);
@@ -513,20 +425,12 @@ describe("PUT /app-settings -- SFTP numeric settings validation", () => {
     expect(res.getBody().error).toMatch(/SFTP sync interval/);
   });
 
-  // GitHub #118: port 22 is the standard SFTP port and the frontend's own
-  // shipped default (Settings.tsx) -- it must be accepted, not just
-  // tolerated by skipping validation.
   it("accepts port 22 as a valid SFTP port when SFTP is enabled", async () => {
     const res = await putAppSettings({ panelBridgeSftpEnabled: true, panelBridgeSftpPort: 22 });
     expect(res.getStatusCode()).toBe(200);
     expect(res.getBody().success).toBe(true);
   });
 
-  // The exact reported scenario: PanelBridge on local filesystem, SFTP
-  // disabled, the frontend's default port 22 still sitting in the payload
-  // (Settings.tsx always sends the whole settings object) -- saving an
-  // unrelated setting must succeed instead of being blocked by a field
-  // nobody is using.
   it("GitHub #118: SFTP disabled with the default port 22 does not block saving an unrelated setting", async () => {
     const res = await putAppSettings({
       panelBridgeSftpEnabled: false,
@@ -537,10 +441,6 @@ describe("PUT /app-settings -- SFTP numeric settings validation", () => {
     expect(res.getBody().success).toBe(true);
   });
 
-  // Ordering: the effective flag must come from THIS payload, not stored
-  // state, in both directions -- otherwise either an operator turning SFTP
-  // on gets its port silently skipped, or turning it off doesn't actually
-  // exempt the port in the same save.
   it("still validates the SFTP port when this save is what turns SFTP on, even though it was off in storage", async () => {
     const res = await putAppSettings({ panelBridgeSftpEnabled: true, panelBridgeSftpPort: 0 });
     expect(res.getStatusCode()).toBe(400);

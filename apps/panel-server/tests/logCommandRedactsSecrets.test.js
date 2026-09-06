@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fs from "fs";
 
-// regression: proves the redaction actually reaches disk, not just
-// the pure regex in isolation (rconCommandRedaction.test.js covers that).
-// REAL, UNMOCKED database/init.js -- same per-file temp dataDir isolation
-// as debugDatabaseRoutesRealExecution.test.js (vitest.perFileDataDir.setup.mjs,
-// wired via vitest.config.js), so this never touches a real operator's
-// db.json. Checks the FILE on disk, not just logCommand's return value --
-// the whole point of the original defect was that the secret reached disk.
 
 const { logCommand, getCommandHistory, flushWrites } = await import("../database/init.js");
 const { getDataPaths } = await import("../utils/paths.js");
@@ -16,7 +9,7 @@ describe("logCommand redacts RCON secrets before persisting", () => {
   it("never writes an adduser password to db.json on disk", async () => {
     const secret = "hunter2-super-secret";
     await logCommand(`adduser "Bob" "${secret}"`, "User added", true);
-    await flushWrites(); // writes are debounced -- force the real disk write before reading it back
+    await flushWrites();
 
     const { dataDir } = getDataPaths();
     const dbPath = `${dataDir}/db.json`;

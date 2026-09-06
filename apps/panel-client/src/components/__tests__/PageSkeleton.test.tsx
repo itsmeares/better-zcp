@@ -26,7 +26,6 @@ describe('PageSkeleton', () => {
   it('renders a distinct structure for the dashboard variant vs. the console variant', () => {
     const { container: dash } = render(<PageSkeleton variant="dashboard" />)
     const { container: console_ } = render(<PageSkeleton variant="console" />)
-    // Dashboard shows a 4-up stat grid; console does not.
     expect(dash.querySelectorAll('.grid.grid-cols-1.md\\:grid-cols-2.lg\\:grid-cols-4').length).toBe(1)
     expect(console_.querySelectorAll('.grid.grid-cols-1.md\\:grid-cols-2.lg\\:grid-cols-4').length).toBe(0)
   })

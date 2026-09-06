@@ -66,45 +66,30 @@ describe("no-unguarded-capability-menu-item", () => {
       ],
       invalid: [
         {
-          // A bare single-call expression body IS the one-hop delegate
-          // shape, but the callee resolves to a same-file function with no
-          // guard at all -- a CONFIRMED finding (see the two dedicated
-          // one-hop cases further down for the general shape).
           code: "function doThing() { performMutation() } <DropdownMenuItem disabled={!canModerate} onClick={() => doThing()} />;",
           errors: [{ messageId: "unguarded" }],
         },
         {
-          // Two statements -- structurally outside the one-hop "sole call"
-          // delegate shape either way, has no room for a guard statement.
           code: "<DropdownMenuItem disabled={loading || !canGmTools} onClick={() => { doThing(); doOther() }} />",
           errors: [{ messageId: "unguarded" }],
         },
         {
-          // Block body, but the guard isn't the FIRST statement.
           code: "<ContextMenuItem disabled={!canModerate} onClick={() => { doOtherThing(); if (!canModerate) return; doThing() }} />",
           errors: [{ messageId: "unguarded" }],
         },
         {
-          // First statement is an if, but it tests an unrelated condition.
           code: "<MenubarItem disabled={!canModerate} onClick={() => { if (loading) return; doThing() }} />",
           errors: [{ messageId: "unguarded" }],
         },
         {
-          // If-test references the right binding but the consequent doesn't return.
           code: "<CommandItem disabled={!canModerate} onClick={() => { if (!canModerate) { doNothing() } doThing() }} />",
           errors: [{ messageId: "unguarded" }],
         },
         {
-          // No guard at all, function expression form, and the sole-call
-          // body's callee resolves locally with no guard of its own either.
           code: "function doThing() { performMutation() } <SelectItem disabled={!canGmTools} onClick={function () { doThing() }} />;",
           errors: [{ messageId: "unguarded" }],
         },
         {
-          // Native button: guard present, but tests a DIFFERENT capability
-          // than its own disabled prop -- the Debug.tsx break-verify
-          // shape, invisible to any click-through test since disabled
-          // genuinely blocks a real click here.
           code: "<Button disabled={!canModerate} onClick={() => { if (!canGmTools) return; doThing() }} />",
           errors: [{ messageId: "mismatchedGuard" }],
         },
@@ -113,16 +98,10 @@ describe("no-unguarded-capability-menu-item", () => {
           errors: [{ messageId: "mismatchedGuard" }],
         },
         {
-          // One-hop delegate resolves to a same-file function, but that
-          // function genuinely has no guard at all -- a confirmed finding,
-          // not an uncertain one, so it IS flagged (the fallback-skip
-          // policy only applies when resolution itself fails).
           code: "function handleActivate() { doThing(); } <DropdownMenuItem disabled={!canServersManage} onClick={() => handleActivate()} />;",
           errors: [{ messageId: "unguarded" }],
         },
         {
-          // One-hop delegate resolves, and its leading guard run tests the
-          // WRONG capability -- also a confirmed finding.
           code: "function handleActivate() { if (!canGmTools) return; doThing(); } <DropdownMenuItem disabled={!canServersManage} onClick={() => handleActivate()} />;",
           errors: [{ messageId: "unguarded" }],
         },

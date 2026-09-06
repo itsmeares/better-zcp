@@ -62,7 +62,6 @@ export default function Setup() {
   const strength = useMemo(() => scorePassword(password), [password])
 
   const detectCaps = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // getModifierState is supported across all evergreen browsers; guard for safety.
     if (typeof e.getModifierState === 'function') {
       setCapsLockOn(e.getModifierState('CapsLock'))
     }
@@ -122,7 +121,6 @@ export default function Setup() {
         </span>
       }
     >
-      {/* ─── Step indicator ─── */}
       <ol
         className="-mt-1 mb-1 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground"
         aria-label={t('stepsAriaLabel')}
@@ -269,7 +267,6 @@ export default function Setup() {
             </button>
           </div>
 
-          {/* Strength meter — 4 segments */}
           <div id={passwordHintId} className="space-y-1.5">
             <div className="flex items-center gap-1" aria-hidden="true">
               {[1, 2, 3, 4].map((i) => {

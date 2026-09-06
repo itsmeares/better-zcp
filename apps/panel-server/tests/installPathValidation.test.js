@@ -54,14 +54,6 @@ function getUpdateHandler() {
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-// HARDEN (decision 2026-08-27, card
-// custom-launcher-as-a-real-supported-mode-not-an-accident): neither
-// installPath nor serverPath was validated at all before this -- an
-// unvalidated path that silently changes launch behavior (MANAGED vs
-// CUSTOM LAUNCHER -- see serverManager.js's resolveLaunchMode(), the same
-// predicate this validation calls) was the whole bug. Both shapes must
-// keep working: a directory (today's default) and a .bat/.sh/.exe launcher
-// (the operator's own script, real and supported, not an accident).
 describe("installPath/serverPath shape validation (POST / and PUT /:id)", () => {
   let tmpRoot;
 

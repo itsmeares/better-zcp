@@ -31,10 +31,6 @@ function getHandler(path, method = "post") {
   const layer = router.stack.find(
     (entry) => entry.route?.path === path && entry.route.methods[method],
   );
-  // LAST handler, not the first: /add-item now has requirePermission(...)
-  // ahead of the real logic this file exercises (players.js's role split),
-  // so index 0 would grab the gate instead. Matches the pattern already
-  // used by playersBanRecordIntegrity.test.js and whitelistRoute.test.js.
   return layer.route.stack.at(-1).handle;
 }
 
@@ -161,7 +157,6 @@ describe("DELETE /api/players/notes/:playerName", () => {
     expect(response.json).toHaveBeenCalledWith({
       success: false,
       error: "Player note not found",
-      // 2026-08-26 regression round 2: players.js adopted the ErrorCode registry.
       code: "PLAYERS_NOTE_NOT_FOUND",
     });
   });

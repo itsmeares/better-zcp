@@ -9,8 +9,6 @@ const source = fs.readFileSync(
   "utf8",
 );
 
-// serverFiles.js pulls in the whole app graph on import, so lift the two pure
-// helpers out of the source instead of booting the router just to test them.
 function extractFn(name) {
   const start = source.indexOf(`function ${name}(`);
   if (start === -1) throw new Error(`${name} not found in serverFiles.js`);
@@ -58,8 +56,6 @@ describe("SandboxVars Lua string round trip", () => {
     expect(unescapeLuaString(quote(value))).toBe(value);
   });
 
-  // The actual defect: each save re-escaped what the previous save escaped,
-  // doubling every backslash until the file was unusable.
   it("stays byte-stable across 20 save cycles", () => {
     const original = "C:\\path\\to\\sprite,\\other";
     let onDisk = quote(original);

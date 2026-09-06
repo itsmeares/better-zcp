@@ -12,9 +12,6 @@ interface BridgeStatusBadgeProps {
   bridgePath?: string | null
   summary?: string | null
   className?: string
-  // Set to false only where the badge already lives inside the Settings ->
-  // Bridge tab it would link to (a self-link there is dead weight, not a
-  // destination). Every other call site gets a real link for free.
   interactive?: boolean
 }
 
@@ -52,12 +49,6 @@ export function BridgeStatusBadge({ connected, running, loading, bridgePath, sum
     summary || c.hint,
     bridgePath ? t('path', { path: bridgePath }) : null,
   ].filter(Boolean).join('\n')
-  // role="status" does not derive an accessible name from its own visible
-  // text (only interactive/content-naming roles do) -- without this, a
-  // screen reader announces nothing at all when there's no hint/path (e.g.
-  // connected/loading), and when there IS a title it becomes the entire
-  // name via the last-resort title fallback, silently dropping the leading
-  // state word. Building the name explicitly covers every state the same way.
   const accessibleName = [c.label, tooltip].filter(Boolean).join('\n')
 
   const content = (

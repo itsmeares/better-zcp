@@ -1,35 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-// Release-prep dry-run (2026-08-23, v1.2.0 Tower deploy): the operator's
-// real Tower database is a genuine V1 install and we are forbidden from
-// copying it, so this exercises runMigrations() -- a pure function of
-// `data`, no I/O -- against a SYNTHETIC db shaped like a realistic,
-// populated V1 db.json rather than the minimal/empty fixtures
-// rolesMigration.test.js already uses to test the role-seeding mechanics in
-// isolation. This file is deliberately NOT a duplicate of that one: it
-// proves the holistic property ("does upgrading actually preserve this
-// operator's stuff"), not the mechanics of any one migration step.
-//
-// data/db.example.json was checked as the suggested V1 shape reference and
-// found to be stale -- its only commit is the initial one, and it uses
-// field names ("mods", "activity_log") that do not match the real current
-// schema (apps/panel-server/database/init.js's `defaultData`: "tracked_mods", and no
-// "activity_log" field exists anywhere in apps/panel-server/ at all -- confirmed by
-// grep, not assumed). So this fixture is built from the real defaultData
-// field names, PLUS a couple of unrecognized/legacy-shaped extra top-level
-// fields a genuinely older V1 db might still be carrying, to prove the
-// migration doesn't silently drop data it doesn't know about -- which is
-// the actual safety property "does activity_log/mods survive" was reaching
-// for, independent of whether those specific field names turn out to be
-// real.
 
 const { runMigrations } = await import("../database/init.js");
 
 function makeSyntheticV1Db() {
   return {
-    // Real current-schema fields (apps/panel-server/database/init.js `defaultData`),
-    // each populated with realistic, non-empty, non-placeholder content so
-    // a "did the contents survive" check actually means something.
     command_history: [
       { command: "players", response: "3 players online", timestamp: "2026-08-20T10:00:00.000Z" },
       { command: "save", response: "World saved", timestamp: "2026-08-20T11:00:00.000Z" },
@@ -112,14 +87,7 @@ function makeSyntheticV1Db() {
       mod_check_interval: 300000,
       steam_api_key: "FAKE_STEAM_API_KEY",
     },
-    // No _schemaVersion at all -- the actual pre-versioning V1 shape
-    // (runMigrations() treats a missing key as version 0, same as an
-    // explicit 0, which the first `if (version < 2)` block already covers).
 
-    // Unrecognized/legacy-shaped extra fields a genuinely older V1 db might
-    // still carry that the current schema doesn't declare or read anywhere
-    // -- the actual stand-ins for db.example.json's stale "mods" and
-    // "activity_log" names. A migration must never silently drop these.
     activity_log: [
       { type: "login", actor: "admin1", timestamp: "2026-08-19T08:00:00.000Z" },
     ],
@@ -137,25 +105,17 @@ describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cl
     const once = runMigrations(makeSyntheticV1Db());
     const onceJson = JSON.stringify(once);
 
-    // Simulate the documented failure mode runMigrations() itself calls
-    // out: the write after bumping the version failed, so the next boot
-    // re-runs migrations against already-migrated data still marked as an
-    // older version.
     const replayed = { ...once, _schemaVersion: 1 };
     const twice = runMigrations(replayed);
 
     expect(twice._schemaVersion).toBe(3);
-    // Role count and ids stable -- no duplicate seeding.
     expect(twice.roles.map((r) => r.id).sort()).toEqual(
       once.roles.map((r) => r.id).sort(),
     );
-    // No role gained a duplicate backups.download entry.
     for (const role of twice.roles) {
       const downloadCount = role.capabilities.filter((c) => c === "backups.download").length;
       expect(downloadCount).toBeLessThanOrEqual(1);
     }
-    // A genuine second run against ALREADY-current data (the normal boot
-    // path, not the crash-replay path above) changes nothing at all.
     const stillCurrent = runMigrations(once);
     expect(JSON.stringify(stillCurrent)).toBe(onceJson);
   });
@@ -164,9 +124,6 @@ describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cl
     const before = makeSyntheticV1Db();
     const after = runMigrations(makeSyntheticV1Db());
 
-    // Deep-equal on the fields migrations never touch -- proves content
-    // survives, not just key presence (a shallow "toBeDefined" would pass
-    // even if every record inside had been silently emptied).
     expect(after.servers).toEqual(before.servers);
     expect(after.tracked_mods).toEqual(before.tracked_mods);
     expect(after.scheduled_tasks).toEqual(before.scheduled_tasks);
@@ -181,14 +138,9 @@ describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cl
     expect(after.performance_history).toEqual(before.performance_history);
     expect(after.active_server_id).toBe(before.active_server_id);
 
-    // The unrecognized legacy-shaped fields (stand-ins for db.example.json's
-    // stale "activity_log"/"mods" names) survive completely untouched too --
-    // a migration must not silently strip a field it doesn't know about.
     expect(after.activity_log).toEqual(before.activity_log);
     expect(after.mods).toEqual(before.mods);
 
-    // The fields migrations DO own changed exactly as documented: roles
-    // seeded, users dual-written with roleId (role string untouched).
     expect(after.roles.length).toBe(3);
     expect(after.users.map((u) => u.role)).toEqual(before.users.map((u) => u.role));
     for (const user of after.users) {

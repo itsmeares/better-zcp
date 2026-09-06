@@ -5,25 +5,8 @@ import os from "os";
 import path from "path";
 import { cleanupOrphanBackupTemps, isBackupTempOwnerAlive } from "../services/backupService.js";
 
-// regression-2026-08-29 follow-up. the test found this while copying
-// cleanupOrphanBackupTemps as the model for fileWriteQueue.js's own sweep
-// (531dfd8d) -- his copy came out stronger than the original. The original
-// deleted on FILENAME PATTERN ALONE, with no check that the process which
-// created a match is actually gone. Safe TODAY only because backups are
-// effectively single-flight -- an assumption resting OUTSIDE this function
-// rather than a guarantee inside it. This proves the fix applies
-// fileWriteQueue.js's model (process.kill(pid, 0), any outcome other than
-// a confirmed ESRCH treated as "still alive") to the ONE pattern that
-// actually embeds a pid (.central-{pid}-{timestamp}-{random}.tmp,
-// StreamingZipWriter's own construction, apps/panel-server/utils/streamingZip.js),
-// while *.zip.tmp (no pid anywhere in its name) stays exactly as before --
-// two patterns, deliberately not one generalised mechanism.
 
 function makeDeadPid() {
-  // A real pid guaranteed to have exited by the time this returns --
-  // spawnSync only returns once the child is gone, so its pid cannot
-  // legitimately be "alive" a moment later. Same technique as
-  // writeFileAtomicOrphanTempSweep.test.js's makeDeadPid().
   const result = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
   return result.pid;
 }
@@ -63,7 +46,6 @@ describe("cleanupOrphanBackupTemps", () => {
   });
 
   it("NEVER removes a .central-*.tmp file whose pid is still running, even though it matches the exact same name shape -- the bug the test found", () => {
-    // Our own pid -- unambiguously alive for the duration of this test.
     const liveOrphan = path.join(dir, centralName(process.pid));
     fs.writeFileSync(liveOrphan, "a backup genuinely still in flight");
 
@@ -85,10 +67,6 @@ describe("cleanupOrphanBackupTemps", () => {
   });
 
   it("a malformed .central-*.tmp name that doesn't embed a real pid is left alone, not swept on a lenient match -- 'fail toward leave it alone'", () => {
-    // Not shaped like StreamingZipWriter's real output at all (no numeric
-    // pid segment) -- liveness genuinely cannot be determined for this, so
-    // the safe direction is to leave it, not delete it on a loose prefix
-    // match the way the pre-fix regex (/^\.central-.*\.tmp$/) would have.
     const malformed = path.join(dir, ".central-not-a-real-pid.tmp");
     fs.writeFileSync(malformed, "not a real StreamingZipWriter temp");
 

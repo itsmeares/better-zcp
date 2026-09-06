@@ -1,11 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// PUT /discord/config reported success even when the reconnect it triggers
-// (stop() then start()) actually failed -- a prior route audit caught the
-// mismatch, which was still present here.
-// discordBot.start()'s return value was discarded even though the sibling
-// route POST /start (30 lines below) already checks it correctly.
 
 vi.mock("../services/discordBot.js", () => ({
   normalizeChatRelayScope: vi.fn((value) => value),
@@ -80,7 +75,7 @@ describe("discord.js PUT /config: the response must reflect whether the reconnec
 
     expect(discordBot.start).toHaveBeenCalled();
     const payload = res.json.mock.calls[0][0];
-    expect(payload.success).toBe(true); // config really did save
+    expect(payload.success).toBe(true);
     expect(payload.botStarted).toBe(false);
     expect(payload.botStartError).toMatch(/invalid token/i);
   });

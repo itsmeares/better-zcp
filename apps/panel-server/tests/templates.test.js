@@ -9,9 +9,6 @@ import {
   diffTemplate,
 } from "../utils/templateSchema.js";
 
-// In-memory fake for the user_templates collection — mirrors how
-// database/init.js's saveUserTemplate/getUserTemplate/deleteUserTemplate
-// behave, without touching real db.json.
 let userTemplates;
 
 vi.mock("../database/init.js", () => ({
@@ -53,7 +50,6 @@ beforeEach(() => {
   setSetting.mockReset();
 });
 
-// ─── templateSchema.js ──────────────────────────────────────────────────────
 
 describe("createTemplate", () => {
   it("fills in defaults and generates a unique id", () => {
@@ -107,11 +103,6 @@ describe("validateTemplate", () => {
     expect(errors.join(" ")).toMatch(/RCONPassword/);
   });
 
-  // 2026-08-24 regression: validateTemplate used to read
-  // template.iniExclusions AS the exclusion list rather than adding it to
-  // DEFAULT_INI_EXCLUSIONS, so a template supplying its own empty list
-  // disabled the leaked-key check entirely and validated clean with
-  // RCONPassword sitting right in serverIni.
   it("rejects a template that supplies its own empty iniExclusions to try to disable the check", () => {
     const template = {
       ...createTemplate({ name: "Privesc attempt" }),
@@ -191,7 +182,6 @@ describe("diffTemplate", () => {
   });
 });
 
-// ─── Built-in templates ──────────────────────────────────────────────────────
 
 describe("built-in templates", () => {
   it("load every catalog template and each one validates", async () => {
@@ -230,13 +220,6 @@ describe("built-in templates", () => {
     expect(templates.map((template) => template.meta.id)).not.toContain("vanilla-apocalypse");
   });
 
-  // 2026-08-31 regression (templates-builtin-hidden-with-no-restore-path):
-  // deleteTemplate's hide path (above) only ever added an id to the
-  // setting -- nothing ever read the list back out, so a hidden built-in
-  // was invisible everywhere: listTemplates filtered it out, getTemplate
-  // returned null for it, and the operator had no way to even learn its
-  // id, let alone restore it. listHiddenBuiltinTemplates/unhideTemplate are
-  // the other half of the round trip.
   it("listHiddenBuiltinTemplates returns nothing when nothing is hidden", async () => {
     const hidden = await templateService.listHiddenBuiltinTemplates();
     expect(hidden).toEqual([]);
@@ -250,7 +233,6 @@ describe("built-in templates", () => {
     expect(hidden).toHaveLength(1);
     expect(hidden[0].meta.id).toBe("vanilla-apocalypse");
     expect(hidden[0].isBuiltin).toBe(true);
-    // Not present in the normal list at the same time.
     const visible = await templateService.listTemplates();
     expect(visible.map((t) => t.meta.id)).not.toContain("vanilla-apocalypse");
   });
@@ -261,7 +243,6 @@ describe("built-in templates", () => {
     const result = await templateService.unhideTemplate("vanilla-apocalypse");
 
     expect(result).toEqual({ success: true });
-    // Only the target id is removed -- the other hidden one stays hidden.
     expect(setSetting).toHaveBeenCalledWith("hiddenBuiltinTemplateIds", ["pvp-raiding"]);
   });
 
@@ -285,7 +266,6 @@ describe("built-in templates", () => {
   });
 });
 
-// ─── User template CRUD ──────────────────────────────────────────────────────
 
 describe("saveTemplate / deleteTemplate for user templates", () => {
   it("creates a new user template from scratch", async () => {
@@ -317,7 +297,6 @@ describe("saveTemplate / deleteTemplate for user templates", () => {
   });
 });
 
-// ─── Import / export round-trip ─────────────────────────────────────────────
 
 describe("import/export round trip", () => {
   it("exports a built-in template and re-imports it as a new user template", async () => {
@@ -349,7 +328,6 @@ describe("import/export round trip", () => {
   });
 });
 
-// ─── Preview / apply against a server's config files ────────────────────────
 
 describe("previewTemplate / applyTemplate", () => {
   let dir;
@@ -451,14 +429,6 @@ describe("previewTemplate / applyTemplate", () => {
   });
 
   it("applyTemplate never writes an excluded ini key even if one slipped into a stored template", async () => {
-    // Simulate a template that bypassed validateTemplate (e.g. a hand-edited
-    // db.json) to prove applyTemplate defends against this independently.
-    // The ini fixture must already CONTAIN RCONPassword before applying --
-    // prepareIniChange only ever updates a key already present in the file
-    // (mergeIniValues can append a new key, but prepareIniChange's own
-    // `updates` filter never passes it one to append), so a fixture without
-    // a pre-existing RCONPassword line would pass this assertion even with
-    // the exclusion filter completely broken, proving nothing.
     fs.writeFileSync(
       path.join(dir, "TestServer.ini"),
       "PauseEmpty=false\nPVP=true\nRCONPassword=original-secret\n",
@@ -477,16 +447,6 @@ describe("previewTemplate / applyTemplate", () => {
     expect(ini).toContain("PauseEmpty=true");
   });
 
-  // 2026-08-24 regression: the apply-time write path
-  // (prepareIniChange) had its OWN independent read of iniExclusions
-  // (`template.iniExclusions || DEFAULT_INI_EXCLUSIONS`) -- a second,
-  // separately-broken copy of the same mistake validateTemplate made. `[]`
-  // is truthy, so `||` never fell back to the default either. Proving
-  // validateTemplate rejects this (see the validateTemplate suite above)
-  // does NOT prove this layer defends independently -- both sites made the
-  // same mistake on their own, so both need their own test, each with a
-  // pre-existing value in the fixture ini for the same reason as the test
-  // above.
   it("applyTemplate never writes an excluded ini key even when the stored template supplies its own empty iniExclusions", async () => {
     fs.writeFileSync(
       path.join(dir, "TestServer.ini"),

@@ -5,18 +5,9 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("DockerClient");
 const MANAGED_LABEL = "zomboid-panel.managed";
 const REQUEST_TIMEOUT_MS = 5000;
-// Lifecycle calls block until Docker finishes. `POST /containers/{id}/stop`
-// waits out the container's own StopTimeout (Compose's `stop_grace_period`,
-// which a modded B42 world sets to 90s or more) before it answers, so the 5s
-// read timeout would abort the socket and report a failure on every successful
-// stop. Budget the container's shutdown window plus room for the daemon.
 const LIFECYCLE_GRACE_MS = 30000;
 const DEFAULT_STOP_TIMEOUT_SEC = 10;
 const DEFAULT_LOG_TAIL_LINES = 500;
-// Defense in depth under `tail=`: Docker bounds the request by LINE count,
-// not byte count, so one pathological line (a huge unbroken stack trace, or
-// binary-looking output) could still balloon the response. This is a hard
-// ceiling that only ever engages if that happens.
 const MAX_LOG_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 export function isManagedContainer(container) {
@@ -24,16 +15,6 @@ export function isManagedContainer(container) {
   return labels?.[MANAGED_LABEL] === "true";
 }
 
-/**
- * A container created WITHOUT an allocated TTY (the normal case for
- * `docker run -d` / Compose, i.e. every managed container this panel deals
- * with day to day) has its `/logs` response multiplexed: each frame is an
- * 8-byte header (1 byte stream type, 3 reserved, 4-byte big-endian payload
- * length) followed by that many payload bytes. A TTY container's response
- * has no such framing and is already plain text -- callers must check
- * `container.Config?.Tty` themselves before deciding whether to call this.
- * https://docs.docker.com/engine/api/v1.41/#tag/Container/operation/ContainerLogs
- */
 export function demuxDockerLogStream(buffer) {
   const parts = [];
   let offset = 0;
@@ -41,7 +22,7 @@ export function demuxDockerLogStream(buffer) {
     const size = buffer.readUInt32BE(offset + 4);
     const start = offset + 8;
     const end = start + size;
-    if (end > buffer.length) break; // truncated final frame -- stop cleanly, keep what parsed
+    if (end > buffer.length) break;
     parts.push(buffer.subarray(start, end));
     offset = end;
   }
@@ -89,12 +70,6 @@ export function parseContainerStats(stats) {
   };
 }
 
-/**
- * How long to hold the socket open for a lifecycle action. Docker answers only
- * once the action completes, and a stop waits out the container's configured
- * StopTimeout before escalating to SIGKILL. A restart pays that cost and then
- * starts the container again.
- */
 export function lifecycleTimeoutMs(action, container) {
   if (action === "start") return LIFECYCLE_GRACE_MS;
   const configured = Number(container?.Config?.StopTimeout);
@@ -107,10 +82,6 @@ export class DockerClient {
   constructor({ socketPath = "/var/run/docker.sock", enabled = process.env.PANEL_DOCKER_CONTROL_ENABLED === "true" } = {}) {
     this.socketPath = socketPath;
     this.enabled = enabled;
-    // Last discovery failure, surfaced through /api/docker/status. `available`
-    // is only an existsSync check, so a socket the panel can stat but not open
-    // (root:docker 0660 vs. a non-root panel user) otherwise looks identical to
-    // "no managed containers exist".
     this.lastError = null;
   }
 
@@ -171,10 +142,6 @@ export class DockerClient {
       return { success: false, error: `Docker API returned ${statusCode}` };
     } catch (error) {
       log.warn(`Docker ${action} failed for ${containerId}: ${error.message}`);
-      // listManagedContainers() already does this (see this.lastError above) --
-      // this was the one method in the file still collapsing every cause (an
-      // unreachable socket, a permission-denied socket, a timed-out stop) into
-      // one static string, so a slow daemon and a broken socket looked identical.
       return { success: false, error: error.message || "Docker action failed" };
     }
   }
@@ -193,23 +160,6 @@ export class DockerClient {
     }
   }
 
-  /**
-   * The container's own stdout/stderr -- what `docker logs <ref>` shows.
-   * Nothing else this panel collects can see this: it is Docker's log
-   * driver output, not a file on disk, so a support bundle built purely
-   * from filesystem scans (this panel's own logs, the game server's own
-   * log files) never contains it, even when it is the one line that
-   * explains a production report (an early-startup crash from the
-   * container's entrypoint script, a JVM that never got far enough to
-   * write its own log file, etc.).
-   *
-   * Same fail-closed contract as runManagedAction()/inspectManagedContainer()
-   * above: only ever returns data for a container this panel is allowed to
-   * manage (zomboid-panel.managed=true), returns null on any failure
-   * (Docker control off, socket unavailable, invalid ref, container not
-   * managed, request error/timeout) rather than throwing -- callers should
-   * treat null as "could not fetch", not as "empty log".
-   */
   async getContainerLogs(containerId, { tail = DEFAULT_LOG_TAIL_LINES } = {}) {
     if (!this.available) return null;
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(containerId)) return null;
@@ -254,12 +204,6 @@ export class DockerClient {
     });
   }
 
-  // Same shape as _requestJson but for a raw (non-JSON) body -- the logs
-  // endpoint's response is either plain text (TTY container) or Docker's
-  // multiplexed stdout/stderr frame format (see demuxDockerLogStream above),
-  // neither of which is JSON. Enforces MAX_LOG_RESPONSE_BYTES itself, on top
-  // of the caller's `tail=` line cap, since `tail=` bounds line count, not
-  // byte count.
   _requestBuffer(method, requestPath, timeoutMs = REQUEST_TIMEOUT_MS, maxBytes = MAX_LOG_RESPONSE_BYTES) {
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -295,12 +239,6 @@ export class DockerClient {
       request.on("timeout", () => {
         if (settled) return;
         settled = true;
-        // reject() directly rather than relying on the 'error' event
-        // destroy(err) triggers -- that event fires asynchronously, by
-        // which point `settled` is already true, so the error handler's
-        // own guard below silently swallowed it and this promise never
-        // settled at all. destroy() is still called, only for socket
-        // cleanup now, not as the rejection path.
         const timeoutError = new Error("Docker API timed out");
         request.destroy(timeoutError);
         reject(timeoutError);

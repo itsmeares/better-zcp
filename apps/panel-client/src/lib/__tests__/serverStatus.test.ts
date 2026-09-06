@@ -12,10 +12,6 @@ describe('resolveClientProvider', () => {
     expect(resolveClientProvider({ isRemote: true, dockerContainerName: 'pz' })).toBe('remote-sftp')
   })
 
-  // GH#114: isRemote === false does NOT mean "the local process scan can see
-  // this server" -- a docker-managed server's process runs in a different
-  // container. dockerContainerName must be checked before defaulting to
-  // native, or a Docker provider gets misread as a locally-scannable one.
   it('maps a dockerContainerName mapping to docker-local, not native', () => {
     expect(resolveClientProvider({ isRemote: false, dockerContainerName: 'pz-server' })).toBe(
       'docker-local',
@@ -34,14 +30,6 @@ describe('resolveClientProvider', () => {
   })
 })
 
-// A ServerConfig.tsx save-guard's un-hardened sibling (regression,
-// found by testing): ServerConfig.tsx used to trust serverApi.getStatus()
-// (the raw local scan) unconditionally, the same GH#114 root cause, so a
-// live docker container could compute serverRunning=false and silently
-// suppress its "stop the server before editing" guard. resolveServerRunning
-// is the extracted, fetcher-injected fix -- same DI shape as
-// waitForServerState above, so the fail-closed contract can be asserted
-// directly rather than only through a full component render.
 describe('resolveServerRunning', () => {
   const composed = (host: string, server: string, bridge: string) => ({
     host: { status: host },
@@ -67,20 +55,12 @@ describe('resolveServerRunning', () => {
   })
 
   it('native: a scanFailed status is unknown (null), never demoted to confirmed-stopped', async () => {
-    // apps/panel-server/services/serverManager.js's getServerStatus() explicitly
-    // returns { running: false, scanFailed: true } on a hung/erroring OS
-    // scan (AV interference, WMI timeout, ps/pgrep unavailable) -- the
-    // fetch itself succeeds, so this is NOT the same case as the rejected-
-    // promise test above. A caller (ServerConfig.tsx) treats false as
-    // "safe to let a config edit through unwarned," so demoting a scan
-    // failure to false would suppress the "stop the server before editing"
-    // guard while the server might genuinely still be running.
     const fetchNativeStatus = vi.fn().mockResolvedValue({ running: false, scanFailed: true })
     await expect(resolveServerRunning({ isRemote: false }, fetchNativeStatus, vi.fn())).resolves.toBeNull()
   })
 
   it('docker-managed: a running container is detected via the composed status even though the local scan cannot see it', async () => {
-    const fetchNativeStatus = vi.fn().mockResolvedValue({ running: false }) // must NOT be consulted
+    const fetchNativeStatus = vi.fn().mockResolvedValue({ running: false })
     const fetchComposedStatus = vi.fn().mockResolvedValue(composed('running', 'disconnected', 'offline'))
     await expect(
       resolveServerRunning({ isRemote: false, dockerContainerName: 'pz' }, fetchNativeStatus, fetchComposedStatus),
@@ -203,19 +183,6 @@ describe('resolveServerCardRunning', () => {
   })
 })
 
-// LIVE BUG (2026-08-29, Discord report, Linux/native provider): Stop/Force
-// Stop/Restart in Dashboard.tsx were all stuck disabled while RCON was
-// genuinely connected. Root cause: apps/panel-server/services/serverManager.js's
-// getServerStatus() (the plain `/status` endpoint) and the composed-status
-// route both derive `running` from the exact SAME getServerProcessDetails()
-// scan -- so a Linux scan that can't see the process makes `status.running`
-// a definite boolean `false`, not null. Dashboard.tsx's OLD `online` formula
-// re-applied `localProcessStatus ??` at its own outer level even though
-// hostRunning (one of the three OR'd terms one level in) already carries
-// that same preference -- `false ?? X` evaluates to `false` in JS, never
-// falling through to the RCON-inclusive OR. That silently defeated the
-// entire RCON/bridge fallback for any native server whose plain scan had
-// ever returned a definite `false`.
 describe('deriveDashboardStatus', () => {
   const composed = (host: string, server: string, bridge: string) => ({
     host: { status: host },
@@ -230,9 +197,9 @@ describe('deriveDashboardStatus', () => {
       status: { running: false, rcon: { connected: true } },
       composedStatus: composed('stopped', 'connected', 'offline'),
     })
-    expect(result.hostRunning).toBe(false) // the host scan genuinely can't see it -- this part is correct
+    expect(result.hostRunning).toBe(false)
     expect(result.rconConnected).toBe(true)
-    expect(result.online).toBe(true) // but online must trust RCON as independent evidence the server is up
+    expect(result.online).toBe(true)
   })
 
   it('native provider, plain scan says stopped, bridge is active -- online is still true via the bridge signal alone', () => {
@@ -312,12 +279,6 @@ describe('deriveDashboardStatus', () => {
   })
 
   it('native provider, plain scan failed (scanFailed:true) but RCON connected -- hostRunning falls back to composedStatus instead of trusting the failed scan\'s running:false', () => {
-    // apps/panel-server/services/serverManager.js's getServerStatus() explicitly
-    // returns { running: false, scanFailed: true } on a hung/erroring OS
-    // scan. Before this field was consulted here, that shape would win the
-    // `??` chain (false is not null/undefined) and silently discard the
-    // composedStatus fallback -- the exact JS gotcha this file's own header
-    // comment already documents fixing for a different trigger.
     const result = deriveDashboardStatus({
       hasServer: true,
       provider: 'native',

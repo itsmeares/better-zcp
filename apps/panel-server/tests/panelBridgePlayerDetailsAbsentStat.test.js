@@ -3,31 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, panelbridge-audit -- TWO fixes to the same bug, landed as two
-// commits, both covered here:
-//
-// (1) getPlayerDetails/getAllPlayerDetails wrapped their entire player table
-//     in ONE outer pcall with raw colon-calls: the first throw aborted the
-//     whole build, so the caller got NOTHING back -- not even position,
-//     username, and access level, all of which work fine. Fixed by routing
-//     every field through PanelBridge.tryGet (per-field pcall).
-//
-// (2) the FIRST pass concluded zombie.characters.Stats has no
-//     getHunger/getThirst/getFatigue/etc at all. That was correct about the
-//     named getters and WRONG about the capability: Stats works through ONE
-//     generic enum-parameterized getter, stats:get(CharacterStat.HUNGER),
-//     confirmed against the real jar signature AND against real vanilla
-//     SERVER-side Lua that already calls it this exact way
-//     (ClientCommands.lua, XpSystem/XpUpdate.lua, Farming/SFarmingSystem.lua
-//     -- none of them import/require CharacterStat, it's a bare global in
-//     PZ's shared Lua environment). Fixed by statGet() calling
-//     stats:get(CharacterStat.X) instead of a named getter -- the feature
-//     actually works now, not just fails more gracefully.
-//
-// FakeStats below models the REAL shape (one generic :get(enumField)
-// method), and FakeCharacterStat models the real global enum table -- NOT
-// individual named getters, which would silently test the wrong mechanism
-// (exactly the trap the pcall-only fix would have fallen into forever).
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -95,10 +70,6 @@ describe('PanelBridge.lua getPlayerDetails/getAllPlayerDetails -- real stats via
     expect(result.data.x).toBe(100);
     expect(result.data.accessLevel).toBe('admin');
 
-    // Before this fix: hunger/thirst/fatigue/boredom/unhappiness/pain were
-    // believed absent forever (no named getter exists) and were never
-    // populated even with the pcall narrowing alone. They are a real,
-    // working feature once read the right way.
     expect(result.data.stats.hunger).toBe(0.4);
     expect(result.data.stats.thirst).toBe(0.1);
     expect(result.data.stats.fatigue).toBe(0.2);
@@ -125,11 +96,6 @@ describe('PanelBridge.lua getPlayerDetails/getAllPlayerDetails -- real stats via
   });
 
   it('getPlayerDetails: a stat CharacterStat has no member for is honestly OMITTED, not a plausible zero', () => {
-    // FakeStatValues has no PANIC entry -- CharacterStat.PANIC itself is a
-    // real value in the stub, but the underlying Stats object has nothing
-    // for it (models an enum member this handler doesn't ask for, or one
-    // whose value is genuinely unset). Not part of the shipped field list,
-    // but proves a single missing value doesn't corrupt its siblings.
     const bridge = loadPanelBridge(LUA_PATH, STUBS + `
 FakeStatValues.HUNGER = nil
 `);

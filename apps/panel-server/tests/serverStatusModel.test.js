@@ -50,12 +50,6 @@ describe("buildHostSignal", () => {
     expect(signal.label).toBe("Host");
   });
 
-  // GH#114: the host signal for a docker provider must come from the
-  // managed-container lookup, never from the local process scan -- PZ runs
-  // as PID 1 of a *different* container there, so a local scan can never
-  // see it and would always, confidently, wrongly say stopped. isRunning
-  // here is deliberately true and ignored, to prove the docker branch does
-  // not read it.
   it("reports Docker container state from the managed-container lookup, ignoring the local scan", () => {
     expect(
       buildHostSignal("docker-local", true, false, { handled: true, running: true }),
@@ -67,10 +61,6 @@ describe("buildHostSignal", () => {
   });
 
   it("reports docker host state as unknown when Docker control is disabled/unavailable, not stopped", () => {
-    // {handled: false} is resolveManagedContainer()'s shape for "Docker
-    // control is disabled, the socket is unreachable, or the server has no
-    // container mapped" -- must never silently fall back to the local scan,
-    // which is the bug again with extra steps.
     const signal = buildHostSignal("docker-local", false, false, { handled: false });
     expect(signal.status).toBe("unknown");
     expect(signal.label).toBe("Container");
@@ -98,14 +88,6 @@ describe("buildHostSignal", () => {
     });
   });
 
-  // Regression: a native/docker host signal had no way to represent "we
-  // could not determine this" -- isRunning is a plain boolean, so a failed
-  // process-detection scan (isRunning: false, forced by the caller because
-  // that's all a failed scan can return) rendered identically to a
-  // confirmed stop. That is the exact disagreement an operator hit: the
-  // dashboard confidently said "Server stopped" while /wipe's own fresh
-  // check refused because detection itself was failing. Reuses the same
-  // "unknown" status the client already renders correctly for remote-sftp.
   it("reports native host state as unknown when detection itself failed, not stopped", () => {
     const signal = buildHostSignal("native", false, true);
     expect(signal.status).toBe("unknown");
@@ -119,9 +101,6 @@ describe("buildHostSignal", () => {
   });
 
   it("does not let a stale isRunning:true smuggle a confirmed state past a failed scan", () => {
-    // scanFailed must win regardless of what isRunning says -- a caller
-    // should never be able to pass a truthy isRunning alongside scanFailed
-    // and get a confident "running" out the other side.
     expect(buildHostSignal("native", true, true).status).toBe("unknown");
   });
 });
@@ -239,10 +218,6 @@ describe("composeServerStatus", () => {
     expect(result.server.status).toBe("connected");
   });
 
-  // GH#114: PZ in its own container, panel in another. The local process
-  // scan correctly finds nothing (isRunning: false) because it can never see
-  // a process outside its own container -- that must not become a confident
-  // "stopped" now that the managed container itself reports Running: true.
   it("reports a mapped container as running from the Docker lookup, even though the local process scan found nothing", () => {
     const result = composeServerStatus({
       server: { dockerContainerName: "pz-server" },

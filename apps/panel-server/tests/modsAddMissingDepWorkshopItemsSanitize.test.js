@@ -3,22 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-26 regression finding 14: POST /add-missing-dep wrote WorkshopItems=
-// via a bare currentWs.join(";") instead of sanitizeIniList -- inconsistent
-// with the Mods= write six lines below it in the same handler, which already
-// used sanitizeModIdList. Confirmed inert today (workshopId is regex-checked
-// `/^\d{1,15}$/` earlier in this same handler, so only digits can reach the
-// join), but the guard living in a different place than the write it
-// protects is exactly the shape that expires the moment that upstream regex
-// ever loosens -- fixed to match the other 15+ WorkshopItems=/Mods= write
-// sites in this file regardless.
-//
-// This can only be a regression test, not an exploit-pinning one: the route
-// itself rejects anything but pure digits before this code ever runs, so
-// there is no way to drive a dangerous value through the live route to prove
-// the fix blocks it. What's verifiable here is that the fix didn't change
-// normal (digit-only) behavior, and that the code now goes through
-// sanitizeIniList at all.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -104,10 +88,6 @@ describe("POST /add-missing-dep: WorkshopItems= sanitization", () => {
     expect(wsLine.split(";")).toEqual(
       expect.arrayContaining(["1111111111", "2222222222"]),
     );
-    // sanitizeIniList's output never carries these bytes -- proving the call
-    // site is really going through it (not just a coincidentally-identical
-    // join) rather than proving an exploit is blocked, which the route's own
-    // upstream /^\d{1,15}$/ check on workshopId already rules out reaching.
     expect(wsLine).not.toMatch(/[\r\n;=]{2}/);
   });
 });

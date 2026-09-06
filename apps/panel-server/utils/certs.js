@@ -1,10 +1,3 @@
-/**
- * HTTPS Certificate Utility
- * Generates self-signed certificates for HTTPS support.
- * Also supports loading user-provided certificates.
- *
- * Certificates are stored in data/certs/ directory.
- */
 
 import crypto from 'crypto';
 import fs from 'fs';
@@ -19,37 +12,23 @@ const CERT_DIR = path.join(dataDir, 'certs');
 const KEY_FILE = path.join(CERT_DIR, 'server.key');
 const CERT_FILE = path.join(CERT_DIR, 'server.cert');
 
-/**
- * Generate a self-signed certificate using Node.js crypto
- * Uses the X509Certificate API available in Node 15+
- */
 function generateSelfSignedCert() {
   log.info('Generating self-signed certificate...');
 
-  // Generate RSA key pair
   const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
     modulusLength: 2048,
     publicKeyEncoding: { type: 'spki', format: 'pem' },
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
   });
 
-  // Create self-signed certificate using Node's built-in X509 support
-  // Node 18+ has crypto.X509Certificate but not a signing API, so we use
-  // a minimal ASN.1/DER approach via createSign
   const cert = createSelfSignedCertPEM(privateKey, publicKey);
 
   return { key: privateKey, cert };
 }
 
-/**
- * Create a minimal self-signed X.509 certificate in PEM format
- * This uses DER/ASN.1 encoding directly — no OpenSSL dependency needed.
- */
 function createSelfSignedCertPEM(privateKeyPem, publicKeyPem) {
-  // Parse the public key from PEM to DER
   const pubKeyDer = pemToDer(publicKeyPem, 'PUBLIC KEY');
 
-  // Subject/Issuer: CN=Zomboid Control Panel
   const subject = derSequence([
     derSet([
       derSequence([
@@ -59,7 +38,6 @@ function createSelfSignedCertPEM(privateKeyPem, publicKeyPem) {
     ]),
   ]);
 
-  // Validity: now to +365 days
   const now = new Date();
   const notAfter = new Date(now);
   notAfter.setFullYear(notAfter.getFullYear() + 1);
@@ -69,16 +47,13 @@ function createSelfSignedCertPEM(privateKeyPem, publicKeyPem) {
     derUTCTime(notAfter),
   ]);
 
-  // Serial number (random)
   const serial = derInteger(crypto.randomBytes(8));
 
-  // Signature algorithm: SHA-256 with RSA
   const sigAlgo = derSequence([
     derOID([1, 2, 840, 113549, 1, 1, 11]), // sha256WithRSAEncryption
     derNull(),
   ]);
 
-  // TBS (To-Be-Signed) Certificate
   const tbs = derSequence([
     derExplicit(0, derInteger(Buffer.from([2]))), // version v3
     serial,
@@ -89,27 +64,22 @@ function createSelfSignedCertPEM(privateKeyPem, publicKeyPem) {
     pubKeyDer, // subjectPublicKeyInfo (already DER-encoded)
   ]);
 
-  // Sign the TBS with SHA-256 + RSA
   const signer = crypto.createSign('SHA256');
   signer.update(tbs);
   const signature = signer.sign(privateKeyPem);
 
-  // Wrap signature in BIT STRING
   const sigBitString = Buffer.concat([
     Buffer.from([0x03, ...derLength(signature.length + 1), 0x00]),
     signature,
   ]);
 
-  // Full certificate
   const cert = derSequence([tbs, sigAlgo, sigBitString]);
 
-  // Convert to PEM
   const b64 = cert.toString('base64');
   const lines = b64.match(/.{1,64}/g) || [];
   return `-----BEGIN CERTIFICATE-----\n${lines.join('\n')}\n-----END CERTIFICATE-----\n`;
 }
 
-// ── ASN.1 DER encoding helpers ──
 
 function derLength(len) {
   if (len < 128) return [len];
@@ -142,18 +112,6 @@ function derSet(items) {
 
 function derInteger(buf) {
   let b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
-  // Minimal-length DER INTEGER encoding. Two passes are both required:
-  // first strip any REDUNDANT leading 0x00 byte(s) -- crypto.randomBytes()
-  // starting with 0x00 (the serial number here, ~1/256 of the time)
-  // produced a non-minimal encoding that OpenSSL's strict ASN.1 decoder
-  // rejects with "illegal padding" (error:068000DD) whenever the next byte
-  // ALSO didn't need the padding (high bit clear) -- reproduced directly:
-  // Buffer.from([0x00,1,2,3,4,5,6,7]) as a cert's serial makes
-  // https.createServer({key,cert}) throw that exact error, at exactly the
-  // observed ~0.2% rate over 20000 trials. Then re-add exactly one 0x00
-  // iff the remaining leading byte's high bit is set (needed to keep the
-  // value positive) -- this is the ORIGINAL rule, still required for
-  // e.g. Buffer.from([0x80,...]).
   let i = 0;
   while (i < b.length - 1 && b[i] === 0x00 && !(b[i + 1] & 0x80)) {
     i++;
@@ -218,23 +176,8 @@ function pemToDer(pem, label) {
   return Buffer.from(b64, 'base64');
 }
 
-// ── Public API ──
 
-/**
- * Ensure certificates exist (generate if needed) and return paths.
- * Returns null if HTTPS should not be used.
- */
 export function loadOrCreateCerts(customKeyPath, customCertPath) {
-  // Check for custom certs first. Never let a bad custom path (missing,
-  // a directory instead of a file, unreadable) throw out of this
-  // function -- existsSync alone doesn't rule out a directory, and a
-  // path that was a valid file when the setting was saved can still be
-  // moved/deleted/permission-changed before the panel next restarts.
-  // Falling through to the self-signed branch below on ANY problem here
-  // is what keeps a bad custom-cert setting from taking the whole panel
-  // down (see apps/panel-server/routes/config.js's PUT /app-settings for the other
-  // half of this fix -- validating at save time so this path is rarely
-  // hit for real, not a substitute for it).
   if (customKeyPath && customCertPath) {
     try {
       const keyIsFile = fs.statSync(customKeyPath).isFile();
@@ -252,7 +195,6 @@ export function loadOrCreateCerts(customKeyPath, customCertPath) {
     }
   }
 
-  // Check for existing self-signed certs
   if (fs.existsSync(KEY_FILE) && fs.existsSync(CERT_FILE)) {
     log.info('Using existing self-signed certificate');
     return {
@@ -261,7 +203,6 @@ export function loadOrCreateCerts(customKeyPath, customCertPath) {
     };
   }
 
-  // Generate new self-signed cert
   try {
     if (!fs.existsSync(CERT_DIR)) {
       fs.mkdirSync(CERT_DIR, { recursive: true, mode: 0o700 });
@@ -274,13 +215,6 @@ export function loadOrCreateCerts(customKeyPath, customCertPath) {
 
     const { key, cert } = generateSelfSignedCert();
     fs.writeFileSync(KEY_FILE, key, { mode: 0o600 });
-    // mode above only applies when writeFileSync CREATES the file -- if
-    // server.key already existed (e.g. only server.cert was missing, so
-    // this branch regenerates both into a fresh pair) with a looser mode
-    // from some earlier state, the fresh private key just written into it
-    // would otherwise inherit that stale permission. Same explicit
-    // chmodSync-after-write pattern as jwtSecret.js/uiSecretFile.js/
-    // serverRconSecrets.js use for every other secret file.
     try {
       fs.chmodSync(KEY_FILE, 0o600);
     } catch {
@@ -296,9 +230,6 @@ export function loadOrCreateCerts(customKeyPath, customCertPath) {
   }
 }
 
-/**
- * Get cert file paths
- */
 export function getCertPaths() {
   return { keyPath: KEY_FILE, certPath: CERT_FILE, certDir: CERT_DIR };
 }

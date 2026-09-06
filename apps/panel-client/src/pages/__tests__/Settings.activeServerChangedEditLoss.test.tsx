@@ -5,18 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Settings from '../Settings'
 import { configApi, serversApi } from '@/lib/api'
 
-// regression (Settings.tsx edit-loss lead, approved design): the
-// activeServerChanged handler reloaded configApi.getAppSettings()
-// unconditionally, with no isDirty check -- a user mid-edit on this page
-// (Panel Port, HTTPS, CORS, security fields) lost that typing the instant
-// anyone switched the active server anywhere in the app. Unlike
-// ServerConfig's fix, this doesn't need a block-and-warn banner:
-// PUT /app-settings (apps/panel-server/routes/config.js) is a flat GLOBAL key/value
-// store with no server-id resolution, so there is no "wrong target" risk --
-// skipping the reload while dirty is simply safe. The adjacent bug this
-// masked: the thing that DOES go stale on a switch (activeServer's
-// rconHost/rconPort/name, from a separate fetchServers() call) was never
-// refreshed by this listener at all.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -40,11 +28,6 @@ vi.mock('@/lib/api', async () => {
   }
 })
 
-// A fake socket the test can fire activeServerChanged on directly. Must be a
-// STABLE reference (module-level singleton) -- Settings.tsx's own listener
-// effect depends on [socket, ...], and a fresh object identity every render
-// would re-run (and re-fetch) the effect on every single render instead of
-// once, an artifact with no real-Context equivalent.
 const socketHandlers = vi.hoisted(() => new Map<string, Set<() => void>>())
 const fakeSocket = vi.hoisted(() => ({
   connected: true,
@@ -113,8 +96,6 @@ describe('Settings.tsx: activeServerChanged respects unsaved edits, refreshes th
     emitActiveServerChanged()
 
     await waitFor(() => expect(getAllServers).toHaveBeenCalledTimes(2), { timeout: 2000 })
-    // Give fetchSettings a fair chance to have fired if the guard were
-    // missing, then assert it never did.
     await new Promise((r) => setTimeout(r, 50))
     expect(getAppSettings).toHaveBeenCalledTimes(1)
     expect(portInput.value).toBe('9999')

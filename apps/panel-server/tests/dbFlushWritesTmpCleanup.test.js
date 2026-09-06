@@ -2,27 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 
-// 2026-08-29, live-evidence regression: the test found four db.json.<pid>.<rand>.tmp
-// files (~630KB each) accumulating from a single LIVE process in the real
-// data/ directory. flushWrites() computes a brand-new tmpPath on every call
-// and never unlinked it on a failed rename -- the next attempt makes a
-// fresh tmpPath and never revisits the old one, so every failed rename
-// leaked one tmp file, permanently, for as long as the process kept
-// retrying. sweepOrphanedTmpFiles() (dead-pid-only, by design) can never
-// touch these, because the leak isn't from a crash -- it's from a live
-// process's own retry loop.
-//
-// Real module (not mocked), same convention as circuitBreakerStatus.test.js
-// -- getDataPaths() resolves to this FILE's own isolated temp root via
-// vitest.perFileDataDir.setup.mjs (applied to every test file), never the
-// real repo data/ directory. This is the disposable rig; nothing here ever
-// touches the operator's actual data/db.json.
 const { getCircuitBreakerStatus, commitNow, getDb } = await import(
   "../database/init.js"
 );
 const { getDataPaths } = await import("../utils/paths.js");
 
-const MAX_WRITE_RETRIES = 5; // mirrors database/init.js -- not exported, see circuitBreakerStatus.test.js
+const MAX_WRITE_RETRIES = 5;
 
 function listDbTmpFiles() {
   const { dataDir } = getDataPaths();
@@ -51,10 +36,10 @@ describe("flushWrites(): a failed rename cleans up its own tmp file", () => {
       return realRename(...args);
     });
 
-    await commitNow(); // attempt 1: writeFileSync succeeds, renameSync throws -- must clean up
-    expect(listDbTmpFiles()).toHaveLength(0); // THE FIX: no orphan from the failed attempt
+    await commitNow();
+    expect(listDbTmpFiles()).toHaveLength(0);
 
-    await commitNow(); // attempt 2: real success
+    await commitNow();
     expect(listDbTmpFiles()).toHaveLength(0);
     expect(getCircuitBreakerStatus().open).toBe(false);
   });
@@ -68,8 +53,6 @@ describe("flushWrites(): a failed rename cleans up its own tmp file", () => {
 
     for (let i = 0; i < MAX_WRITE_RETRIES; i++) {
       await commitNow();
-      // Each attempt must clean up after itself -- zero accumulation,
-      // never "N attempts so far, N-1 or N leftover tmps".
       expect(listDbTmpFiles()).toHaveLength(0);
     }
 
@@ -82,20 +65,14 @@ describe("flushWrites(): a failed rename cleans up its own tmp file", () => {
       err.code = "ENOSPC";
       throw err;
     });
-    // The cleanup's own unlink also fails -- the exact case the fix's own
-    // try/catch exists for. If the unlink escaped, this would throw out of
-    // flushWrites() and _writeRetries would never increment.
     vi.spyOn(fs, "unlinkSync").mockImplementation(() => {
       throw new Error("EPERM: cannot even remove the tmp file");
     });
 
     for (let i = 0; i < MAX_WRITE_RETRIES; i++) {
-      await expect(commitNow()).resolves.toBeUndefined(); // never throws, exactly as before this fix
+      await expect(commitNow()).resolves.toBeUndefined();
     }
 
-    // Same assertion shape as circuitBreakerStatus.test.js's own
-    // "opens after MAX_WRITE_RETRIES failures" test -- proving this fix
-    // changed nothing about that behavior, including in its own worst case.
     const status = getCircuitBreakerStatus();
     expect(status.open).toBe(true);
     expect(status.lastError).toMatch(/ENOSPC/);
@@ -104,9 +81,6 @@ describe("flushWrites(): a failed rename cleans up its own tmp file", () => {
   });
 
   it("does not touch a real tmp file left by a DIFFERENT (still-live) pid -- only ever unlinks its own attempt's tmp", async () => {
-    // A file that looks exactly like this run's own naming convention but
-    // is stamped with an unrelated pid, simulating another live instance's
-    // in-flight write sharing the same dataDir during a restart overlap.
     const { dataDir } = getDataPaths();
     const foreignTmp = path.join(dataDir, `db.json.999999999.abc123.tmp`);
     fs.writeFileSync(foreignTmp, "not mine");
@@ -119,7 +93,7 @@ describe("flushWrites(): a failed rename cleans up its own tmp file", () => {
 
     await commitNow();
 
-    expect(fs.existsSync(foreignTmp)).toBe(true); // untouched
+    expect(fs.existsSync(foreignTmp)).toBe(true);
     fs.rmSync(foreignTmp);
   });
 });

@@ -1,21 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// PUT /config/app-settings is gated by panel.settings alone, but
-// VALID_SETTINGS_KEYS lets a holder silently rewrite rconPassword/rconHost/
-// rconPort (server.configure's territory), Steam credentials (server.
-// install's), PanelBridge SFTP including its password (bridge.setup's), the
-// Discord guild ID (integrations.manage's), and Workshop session cookies
-// (mods.manage's) -- five other capabilities' worth of reach through one
-// door with a "CORS policy, mod-check interval and other app-level
-// settings" label. Found in the 2026-08-26 capability-description sweep.
-//
-// Fix: a settings key listed in SETTINGS_KEY_CAPABILITY now requires the
-// caller to hold the capability that actually governs it, but ONLY when the
-// submitted value would genuinely CHANGE the stored one -- Settings.tsx's
-// Save button resends the entire settings object on every save (confirmed
-// by reading the client before building this, per standing instruction),
-// so gating on mere presence would refuse every save by anyone who isn't
-// already an admin.
 
 const ROLES = {
   admin: {
@@ -29,8 +13,6 @@ const ROLES = {
       "servers.manage",
     ],
   },
-  // Holds panel.settings (passes the route's own gate) and NOTHING else --
-  // the exact caller this fix exists to stop.
   settings_only: { capabilities: ["panel.settings"] },
   settings_and_configure: {
     capabilities: ["panel.settings", "server.configure"],
@@ -130,12 +112,6 @@ describe("PUT /config/app-settings -- per-key capability partition", () => {
   });
 
   it("re-sending the whole settings object with an UNCHANGED governed value is a no-op for the capability check, not a refusal (whole-object resend must not lock out saves)", async () => {
-    // The capability check is diff-aware; the underlying write loop below it
-    // is not and never was (pre-existing behavior, not this fix's concern)
-    // -- it still writes every filtered entry, including a same-value
-    // no-op. What this fix must guarantee is that resending an unchanged
-    // governed value never trips the 403, which would otherwise refuse
-    // every save by anyone who isn't already an admin.
     const response = await runPut(
       {
         rconPassword: "same-password",
@@ -241,16 +217,6 @@ describe("PUT /config/app-settings -- per-key capability partition", () => {
     );
   });
 
-  // 2026-08-27 follow-up: zomboidDataPath/serverConfigPath/serverPath are
-  // the LEGACY mirror of the exact fields servers.js's own routes write on
-  // the active server record (confirmed by reading every real consumer --
-  // server.js's getServerConfigPath(), chunks.js's getZomboidDataPath(),
-  // modChecker.js -- all of which fall back to this legacy setting even
-  // while an active server exists, whenever that server's own field is
-  // unset). Mapped to servers.manage to match the sibling write path, not
-  // to server.configure, per the "same field two doors" rule rather than
-  // the label. workshopCollectionAutoSync joined mods.manage as the
-  // missing sibling of the three keys already mapped there.
   it("zomboidDataPath requires servers.manage, not server.configure", async () => {
     const blocked = await runPut(
       { zomboidDataPath: "/new/path" },

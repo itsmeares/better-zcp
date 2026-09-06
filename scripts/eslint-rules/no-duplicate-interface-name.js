@@ -1,26 +1,3 @@
-/**
- * TypeScript merges same-named interface declarations in one file into a
- * single type carrying every field from every declaration. If two
- * declarations are meant to describe two DIFFERENT real shapes (rather than
- * deliberately extending one shape across two blocks), the merged type
- * silently claims fields neither producer actually returns, and nothing --
- * not tsc, not a test, not a reviewer skimming a 3000-line file -- notices.
- *
- * Real case (2026-08-27): apps/panel-client/src/lib/api.ts declared `BackupFile` twice
- * -- once for server-files/backups' config-file .bak shape
- * ({filename,size,created}), once for backup.js's full .zip shape
- * ({name,path,size,created}) -- and tsc happily merged them into one type
- * requiring all five fields, non-optional. `tsc -b --noEmit` reported zero
- * errors on it. See ConfigBackupFile/ServerBackupArchive in api.ts for the
- * fix.
- *
- * This rule flags a second top-level exported `interface Name` for a name
- * already declared earlier in the same file. It does not flag `extends`
- * (that's deliberate composition, a different AST shape) or a
- * non-top-level/non-exported interface (declaration merging across scopes
- * is a different, much rarer situation than the flat-file case this rule
- * targets).
- */
 
 export default {
   meta: {

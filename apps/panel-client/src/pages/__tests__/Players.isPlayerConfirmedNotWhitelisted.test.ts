@@ -1,15 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isPlayerConfirmedNotWhitelisted } from '../Players'
 
-// regression: "Remove from whitelist" (dossier dropdown) called
-// playersApi.removeFromWhitelist(selectedPlayer) unconditionally, regardless
-// of whether the selected player was actually on the whitelist -- unlike its
-// sibling on the whitelist tab, which only ever targets a known member of
-// the rendered list. This gate must fail OPEN (leave the control enabled)
-// whenever the whitelist hasn't been confirmed loaded, since a wrong disable
-// costs a real capability (can't remove someone who genuinely is
-// whitelisted) while a wrong enable costs one failed click -- the opposite
-// economics from a fail-closed capability/version check.
 describe('Players -- isPlayerConfirmedNotWhitelisted', () => {
   const accounts = [{ username: 'Alice' }, { username: 'Bob' }]
 

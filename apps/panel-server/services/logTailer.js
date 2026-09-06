@@ -6,10 +6,6 @@ import { createLogger } from '../utils/logger.js';
 const log = createLogger('LogTailer');
 import { getActiveServer, getSetting } from '../database/init.js';
 
-// Build 42 creates its built-in chat rooms in a fixed order, so the Q-shout
-// room is always id 2 (0 = General, 1 = Say). Both the say and the shout room
-// report `chat=Local` in the message payload, so the id is the only thing that
-// separates a yell from ordinary talking.
 const SHOUT_CHAT_ROOM_ID = 2;
 
 const DELIVERY_LINE = /Message ChatMessage\{chat=([^,]+),\s*author='(.*?)',\s*text='(.*)'\} sent to chat \(id = (\d+)\)/;
@@ -18,8 +14,6 @@ export function chatMessageKey(chatType, author, text) {
   return `${chatType}\u0000${author}\u0000${text}`;
 }
 
-// PZ logs a message twice: once on receipt (no room id) and once on delivery
-// (with the room id). Pair them up so the receipt line can be labelled.
 export function collectChatRoomIds(lines) {
   const ids = new Map();
   for (const line of lines) {
@@ -36,47 +30,22 @@ export function collectChatRoomIds(lines) {
 export class LogTailer extends EventEmitter {
   constructor() {
     super();
-    this.logPath = null;       // server-console.txt (legacy B41 chat source)
-    this.chatLogPath = null;   // B42 dedicated chat log file (Logs/*_chat.txt)
+    this.logPath = null;
+    this.chatLogPath = null;
     this.chatLogSize = 0;
     this.currentSize = 0;
-    this.userLogPath = null;   // B42 player event log (Logs/*_user.txt) — only deaths are parsed
+    this.userLogPath = null;
     this.userLogSize = 0;
     this.isWatching = false;
     this.checkTimer = null;
-    this.logsDir = null;       // Path to Logs/ directory for chat/user log discovery
-    this.basePath = null;      // Zomboid data dir, kept so paths can be re-resolved
-    // Files created after this point are new sessions and must be read whole;
-    // files that already existed are skipped to the end so a panel restart
-    // doesn't replay history.
+    this.logsDir = null;
+    this.basePath = null;
     this.watchStartedAt = Date.now();
-    // A poll can land mid-line; the tail of each chunk is held back until the
-    // rest of the line arrives, otherwise the message is dropped by both reads.
     this.consoleRemainder = '';
     this.chatRemainder = '';
     this.userRemainder = '';
   }
 
-  // Where to start reading a newly discovered file. A file born after we
-  // started watching is a fresh session, so every byte in it is unseen.
-  //
-  // 2026-08-29 (Linux gate flake investigation, second case): `born` and
-  // `this.watchStartedAt` come from two different clocks -- the filesystem's
-  // birthtime and the JS process's Date.now() -- which measured up to ~20ms
-  // apart from each other on the same real event on this platform (WSL2),
-  // in either direction, not just jitter around zero. Harmless at the scale
-  // this actually runs at in production: a real prior session's log predates
-  // a fresh watch by however long that session's own downtime was (seconds
-  // at an absolute minimum, since PZ itself takes real time to boot before
-  // it can write anything), which swamps a ~20ms clock disagreement.
-  // Do NOT compare `born` against a Date.now()-derived value at a
-  // deliberately tight timescale (a test, a synthetic benchmark) without
-  // accounting for this -- it will look racy even though production never
-  // operates in the regime where it matters. A prior version of the test
-  // covering this constructed the tailer (capturing watchStartedAt) BEFORE
-  // creating the "already existing" file it was supposed to represent,
-  // which is backwards from how this is ever true in production and is
-  // exactly the tight regime where the clock skew becomes visible.
   startOffsetFor(filePath, firstDiscovery) {
     try {
         const stats = fs.statSync(filePath);
@@ -91,8 +60,6 @@ export class LogTailer extends EventEmitter {
 
   async init() {
     await this.findLogPath();
-    // Watch even when nothing was found yet: on a first boot the Logs/ folder
-    // and server-console.txt only appear once the game server has started.
     this.startWatching();
   }
 
@@ -110,10 +77,8 @@ export class LogTailer extends EventEmitter {
         }
         this.basePath = basePath;
 
-        // server-console.txt (B41 chat via [chat] markers, also general log tailing)
         const consoleLogPath = path.join(basePath, 'server-console.txt');
         if (fs.existsSync(consoleLogPath)) {
-            // Verify we can actually read the file (ownership/permissions may differ on Linux)
             try {
                 fs.accessSync(consoleLogPath, fs.constants.R_OK);
                 this.logPath = consoleLogPath;
@@ -125,7 +90,6 @@ export class LogTailer extends EventEmitter {
             log.warn(`Could not find server-console.txt at ${consoleLogPath}`);
         }
 
-        // B42 dedicated logs: Logs/*_chat.txt + Logs/*_user.txt
         const logsDir = path.join(basePath, 'Logs');
         if (fs.existsSync(logsDir)) {
             this.logsDir = logsDir;
@@ -138,8 +102,6 @@ export class LogTailer extends EventEmitter {
     }
   }
 
-  // The console log and the Logs/ folder are created by the game server, which
-  // may not have started yet when the panel boots.
   reresolvePaths() {
     if (!this.basePath) return;
     if (!this.logPath) {
@@ -162,36 +124,6 @@ export class LogTailer extends EventEmitter {
     }
   }
 
-  // Find the most recently modified *_chat.txt in the Logs/ directory.
-  //
-  // 2026-08-29 (Linux gate flake investigation): two files sharing the exact
-  // same mtimeMs is real, not theoretical -- confirmed on real ext4 with
-  // fs.utimesSync forcing a tie, which is a realistic stand-in for PZ
-  // touching an outgoing session's log and a new session's log within the
-  // same filesystem timestamp tick at a restart boundary. When mtime ties,
-  // `b.mtime - a.mtime` is 0 for that pair, and the sort falls back to
-  // Array.prototype.sort's stability, i.e. whichever order fs.readdirSync
-  // happened to return -- an OS/filesystem implementation detail this code
-  // never decided and cannot rely on, confirmed to pick the OLDER file in
-  // that reproduction. Silently: no error, nothing in the UI, chat/admin
-  // view just stops updating -- the tailer keeps reading the ended session's
-  // file forever, since nothing ever notices the swap should have happened.
-  //
-  // Tiebreak is birthtimeMs, not filename: PZ's real log-naming format
-  // could not be verified against actual game source in this environment
-  // (no PZ install/jar available to check), so a filename-based tiebreak
-  // would be relying on an assumption this investigation could not confirm
-  // is lexicographically sane. birthtimeMs is something this file already
-  // trusts (see startOffsetFor above) and needs no format assumption: it
-  // directly answers "which of these two files came into existence more
-  // recently", which for two different PZ sessions' log files reflects a
-  // real gap (however long that session ran), even on the rarer occasions
-  // their mtimes coincide. Confirmed by reproduction: birthtimeMs alone can
-  // ALSO tie for two files created microseconds apart with no real elapsed
-  // time between them (this platform's timestamp resolution is coarser than
-  // that), but does not tie once even a small (tens-of-ms) real gap
-  // separates the two files' creation -- which is what distinguishes two
-  // genuinely different PZ sessions' logs in practice.
   findLatestChatLog() {
     if (!this.logsDir) return;
     try {
@@ -223,10 +155,6 @@ export class LogTailer extends EventEmitter {
     }
   }
 
-  // Find the most recently modified *_user.txt in the Logs/ directory
-  // (PZ records player join/leave/death events here). Same mtime-tie
-  // tiebreak as findLatestChatLog above -- see its comment for why
-  // birthtimeMs, not filename order.
   findLatestUserLog() {
     if (!this.logsDir) return;
     try {
@@ -299,7 +227,6 @@ export class LogTailer extends EventEmitter {
       }
   }
 
-  // Tail server-console.txt (legacy B41 [chat] lines)
   async checkConsoleLog() {
      if (!this.logPath) return;
      try {
@@ -329,9 +256,7 @@ export class LogTailer extends EventEmitter {
      }
   }
 
-  // Tail the active B42 *_chat.txt file
   async checkChatLog() {
-     // Re-discover latest chat log periodically (PZ creates new ones on restart)
      if (this.logsDir) {
        const prevChatLog = this.chatLogPath;
        this.findLatestChatLog();
@@ -370,8 +295,6 @@ export class LogTailer extends EventEmitter {
 
   readChunk(filePath, start, end) {
     return new Promise((resolve) => {
-        // `end` is inclusive in createReadStream, so read up to end-1 or the
-        // byte at `end` gets replayed as the first byte of the next chunk.
         if (end <= start) return resolve(null);
         const stream = fs.createReadStream(filePath, { start, end: end - 1 });
         let data = '';
@@ -381,9 +304,6 @@ export class LogTailer extends EventEmitter {
     });
   }
 
-  // Splits a chunk into complete lines, holding any trailing partial line back
-  // until the rest of it is written. The cap stops a newline-free file from
-  // growing the buffer without limit.
   _splitLines(data, remainderKey) {
     const lines = (this[remainderKey] + data).split(/\r?\n/);
     let remainder = lines.pop() ?? '';
@@ -392,7 +312,6 @@ export class LogTailer extends EventEmitter {
     return lines;
   }
 
-  // Parse server-console.txt lines (B41-style [chat] markers)
   processConsoleData(data) {
     const lines = this._splitLines(data, 'consoleRemainder');
     for (const line of lines) {
@@ -413,34 +332,23 @@ export class LogTailer extends EventEmitter {
     }
   }
 
-  // Parse B42 dedicated chat log lines
-  // Formats:
-  //   Player msg:  [DD-MM-YY HH:MM:SS.mmm][info] Got message:ChatMessage{chat=General, author='user', text='hello'}.
-  //   Delivery:    [DD-MM-YY HH:MM:SS.mmm][info] Message ChatMessage{chat=Local, author='user', text='HEY!'} sent to chat (id = 2) members.
-  //   Server msg:  [DD-MM-YY HH:MM:SS.mmm] Server alert message: 'text' sent..
   processChatLogData(data) {
     const lines = this._splitLines(data, 'chatRemainder');
     const chatIds = collectChatRoomIds(lines);
     for (const line of lines) {
         if (!line.trim()) continue;
 
-        // Player/admin chat messages
-        // Author is matched lazily rather than as "anything but a quote" so a
-        // name like O'Brien doesn't fail the whole line.
         const msgMatch = line.match(/Got message:ChatMessage\{chat=([^,]+),\s*author='(.*?)',\s*text='(.*)'\}/);
         if (msgMatch) {
             const chatType = msgMatch[1].trim();
             const author = msgMatch[2];
             const text = msgMatch[3];
-            // PZ names both the say and the shout room "Local"; only the room
-            // id on the delivery line tells them apart.
             const roomIds = chatIds.get(chatMessageKey(chatType, author, text));
             const roomId = roomIds && roomIds.length ? roomIds.shift() : null;
             const sourceChatType =
                 chatType === 'Local' && roomId === SHOUT_CHAT_ROOM_ID
                     ? 'Shout'
                     : chatType;
-            // Map PZ chat types to our types
             let type = 'general';
             if (chatType === 'Admin chat') type = 'admin';
             else if (chatType === 'Server Alert' || chatType === 'Server chat') type = 'server';
@@ -457,7 +365,6 @@ export class LogTailer extends EventEmitter {
             continue;
         }
 
-        // Server alert messages (from RCON servermsg)
         const alertMatch = line.match(/Server alert message: '(.+)' sent\.\./);
         if (alertMatch) {
             this.emit('chatMessage', {
@@ -470,8 +377,6 @@ export class LogTailer extends EventEmitter {
     }
   }
 
-    // Tail the active B42 *_user.txt file. It records joins and leaves too,
-    // but only deaths are parsed — presence comes from PanelBridge and RCON.
   async checkUserLog() {
      if (this.logsDir) {
        const prev = this.userLogPath;
@@ -509,11 +414,6 @@ export class LogTailer extends EventEmitter {
      }
   }
 
-  // Parse B42 user.txt lines.
-  // Death format example:
-  //   [29-05-26 17:42:08.123] user Bob died at (2384,5923,0) (non pvp).
-  //   [29-05-26 17:42:08.123] user Bob died at (2384,5923,0) (pvp).
-  // Username may contain spaces; we anchor on the " died at " marker.
   processUserLogData(data) {
     const lines = this._splitLines(data, 'userRemainder');
     for (const line of lines) {

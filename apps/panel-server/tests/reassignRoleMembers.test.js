@@ -1,22 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-// Real database/init.js, not mocked -- the test found reassignRoleMembers only
-// updated user.role when the TARGET role was seeded, leaving it stale for a
-// custom one. That mattered because requirePermission() resolves
-// capabilities via getRoleByName(req.user.role), not roleId (roleId is
-// dual-written but read by nothing yet) -- a stale .role meant every
-// request from a reassigned user kept authorizing against their OLD role
-// indefinitely. A test with only a seeded target proves nothing: that's
-// exactly the branch that was already correct. This one uses a CUSTOM
-// target specifically, the branch the bug was actually in.
-//
-// Exercised against the real, shared getDb() (same pattern as
-// circuitBreakerStatus.test.js / db-tmp-cleanup.test.js) rather than
-// mocked, because the two permissions-service test files' own mocks of
-// this function independently reimplemented the SAME bug (only setting
-// .role for a seeded target) and neither ever asserted on .role after
-// reassignment -- a mocked test cannot catch a bug in the mock's own
-// assumptions about the thing it's replacing.
 
 const { getDb, reassignRoleMembers } = await import("../database/init.js");
 
@@ -62,7 +45,7 @@ describe("reassignRoleMembers", () => {
   it("matches members of a seeded fromRole by name when roleId isn't set (pre-migration-style user record)", async () => {
     const fromRole = { id: "role-moderator", name: "moderator", isSeeded: true };
     const toRole = { id: "role-custom", name: "Trusted Helper", isSeeded: false };
-    db.data.users.push({ id: "u1", role: "moderator" }); // no roleId at all
+    db.data.users.push({ id: "u1", role: "moderator" });
 
     const count = await reassignRoleMembers(fromRole, toRole);
 

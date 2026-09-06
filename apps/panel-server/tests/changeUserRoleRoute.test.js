@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Same shape as changeUserRoleById.test.js — extends the standard
-// database/init.js mock with a roles collection so requirePermission()
-// (services/permissions.js) and changeUserRoleById() (services/auth.js)
-// both resolve against this test's in-memory roles/users.
 const settings = new Map();
 const db = { data: { users: [], roles: [] } };
 
@@ -180,9 +176,6 @@ describe("PATCH /api/auth/users/:id/role — capability gate", () => {
   });
 
   it("the lockout response carries params.action on the wire, not just an unparameterized message", async () => {
-    // Proves the full round trip: services/auth.js's makeRoleError attaches
-    // params, and this route's catch block forwards them (sanitized) in the
-    // response body — the exact thing that was silently dropped before.
     const req = {
       params: { id: "u-admin" },
       body: { roleId: "role-technician" },
@@ -191,9 +184,6 @@ describe("PATCH /api/auth/users/:id/role — capability gate", () => {
     const res = createResponse();
     await runRoute("/users/:id/role", "patch", req, res);
     expect(res.json).toHaveBeenCalledWith(
-      // roles.manage is checked before users.manage (RECOVERY_CAPABILITIES'
-      // fixed order) and u-admin is the sole holder of both, so that's the
-      // capability the lockout trips on first.
       expect.objectContaining({
         code: "ROLE_LOCKOUT_LAST_MANAGER",
         params: { action: "roles.manage" },

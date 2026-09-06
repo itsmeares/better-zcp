@@ -1,17 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Phase 1 finding (Oscar, 2026-08-29): the status watchdog's
-// getObservedServerRunning() (apps/panel-server/index.js) called
-// serverManager.getServerProcessDetails() unconditionally for every
-// provider -- a LOCAL host process scan. For docker-local/docker-managed
-// servers, PZ runs as PID 1 of a *different* container, so that scan can
-// never see it (GH#114, same limitation apps/panel-server/routes/serverStatus.js's
-// dashboard badge already accounts for). Result: Docker deployments got
-// ZERO server-initiated status correction, ever, for any transition
-// (start, stop-outside-the-panel, restart, crash) -- 100% dependent on the
-// client's own 10-15s polling. Fixed by branching on resolveProvider() and
-// consulting resolveDockerHostSignal() (apps/panel-server/services/managedContainer.js)
-// instead of the local scan for those two providers.
 
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", () => ({ getActiveServer }));
@@ -54,9 +42,6 @@ describe("status watchdog -- Docker provider awareness", () => {
       expect.objectContaining({ id: "docker-server", dockerContainerName: "pz-container" }),
       expect.anything(),
     );
-    // The local scan is provider-blind and would confidently (and wrongly)
-    // report this container-hosted process as not running -- must not be
-    // consulted at all for this provider.
     expect(ServerManager.prototype.getServerProcessDetails).not.toHaveBeenCalled();
   });
 

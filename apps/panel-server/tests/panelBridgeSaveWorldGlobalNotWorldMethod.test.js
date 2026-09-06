@@ -3,19 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, regression, item 2 (the jar-verified spec):
-// world:saveWorld() does not exist anywhere in the real B42 jar. The real
-// save call is saveGame(), a bare global -- same LuaManager$GlobalObject
-// binding tier as getWorld()/getCell(), both already called elsewhere in
-// this file with identical bare-call syntax -- zero args, void return.
-//
-// handlers.saveWorld used to gate on `world and world.saveWorld` -- a
-// field-existence test that was ALWAYS false regardless of the server's
-// real state (world.saveWorld genuinely never exists as a field, the same
-// "callable via :method() but reads nil as a field" trap this file warns
-// about elsewhere), so this handler could NEVER succeed. This is one of
-// TWO live sites for the same bug -- the other is setSandboxOption's persist
-// step, covered separately in panelBridgeSaveWorldPersistence.test.js.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

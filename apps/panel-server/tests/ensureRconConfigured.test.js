@@ -14,19 +14,6 @@ vi.mock("../database/init.js", () => ({
 
 const { ensureRconConfigured } = await import("../routes/server.js");
 
-// 2026-08-27 user report (loonE, Discord): "my servertest.ini and server
-// sandbox settings have reverted to default, nothing changed except server
-// restarted". ensureRconConfigured() runs on every POST /start and used to
-// check ONLY serverConfigPath/{serverName}.ini (defaulting to
-// <zomboidDataPath>/Server/{serverName}.ini) before deciding the INI
-// "doesn't exist yet" and pre-creating a bare RCON-only stub with NO
-// backup -- discarding every real setting the moment PZ read that stub
-// instead of the operator's actual, fully-configured INI sitting at one of
-// the other locations serverManager.js's getServerConfig() already knows
-// to check (the legacy layout: directly under zomboidDataPath, or named
-// servertest.ini/serveroptions.ini). This file pins that a real INI at any
-// of those locations is found and patched in place, never wrongly treated
-// as missing and overwritten.
 describe("ensureRconConfigured() -- INI path resolution", () => {
   let root;
 
@@ -71,7 +58,6 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-rcon-"));
     const zomboidDataPath = path.join(root, "Zomboid");
     fs.mkdirSync(zomboidDataPath, { recursive: true });
-    // Deliberately no Server/ subdirectory at all -- only the legacy path.
     const iniPath = path.join(zomboidDataPath, "servertest.ini");
     fs.writeFileSync(
       iniPath,
@@ -84,14 +70,11 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
     const result = await ensureRconConfigured();
     expect(result).toBe(true);
 
-    // The real, custom-configured file must be the one patched...
     const content = fs.readFileSync(iniPath, "utf-8");
     expect(content).toContain("PVP=true");
     expect(content).toContain("MaxPlayers=32");
     expect(content).toContain("RCONPassword=secret123");
 
-    // ...and nothing must have been created at the default Server/ path,
-    // which is what the old code would have done instead.
     const wrongPath = path.join(zomboidDataPath, "Server", "servertest.ini");
     expect(fs.existsSync(wrongPath)).toBe(false);
   });
@@ -120,7 +103,6 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
   it("truly no INI anywhere -- still pre-creates the minimal RCON stub at the default Server/ path (unchanged first-run behavior)", async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-rcon-"));
     const zomboidDataPath = path.join(root, "Zomboid");
-    // Not created at all -- genuine first run, nothing on disk yet.
 
     getActiveServer.mockResolvedValue(baseServer({ zomboidDataPath }));
 
@@ -154,16 +136,9 @@ describe("ensureRconConfigured() -- INI path resolution", () => {
 
     expect(fs.readFileSync(explicitIni, "utf-8")).toContain("FromExplicitPath=true");
     expect(fs.readFileSync(explicitIni, "utf-8")).toContain("RCONPassword=secret123");
-    // The legacy file must be left completely untouched.
     expect(fs.readFileSync(legacyIni, "utf-8")).toBe("FromLegacyPath=true\n");
   });
 
-  // 2026-08-31: ensureRconConfigured() used to check/rewrite RCONPassword=
-  // and RCONPort= with unanchored content.includes()/content.replace(), which
-  // match that substring anywhere in the file -- including inside an
-  // operator's own free-text ServerWelcomeMessage. A test asserting only
-  // "RCONPassword updated" passes on the old code too; the free-text line
-  // has to stay untouched and unduplicated for this to actually prove the fix.
   it("a ServerWelcomeMessage containing the literal text 'RCONPassword=' is left untouched, not rewritten as a second credential line", async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-rcon-"));
     const zomboidDataPath = path.join(root, "Zomboid");

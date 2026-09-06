@@ -1,30 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// 2026-09-04, overnight regression (the fence: update*/panelUpdate*):
-// scheduleAutoUpdate() used to be called only on the RISING EDGE of
-// updateInfo.updateAvailable (checkForUpdates()'s own `if (!wasAvailable)`
-// gate) -- the first check that finds an update transitioning false/null ->
-// true. Once this.updateAvailable.updateAvailable is true, it stays true on
-// every later periodic check until the installed build catches up (a
-// completely separate, unrelated update-check outcome), so `wasAvailable`
-// is permanently true for the whole rest of that update's lifetime. Two real
-// consequences: (1) an operator who enables serverAutoUpdate AFTER an update
-// was already detected while the setting was off gets nothing -- the panel
-// already "saw" the update and will never reconsider scheduling it, only a
-// NEWER build shipping (or a process restart, which resets updateAvailable
-// to null in the constructor) would ever trigger it again; (2) a scheduled
-// auto-update that FAILS (SteamCMD error, stop timeout, build didn't
-// advance) never retries on the next periodic check either, for the exact
-// same reason -- indistinguishable from auto-update being silently broken
-// to an operator watching it fail once and never try again.
-//
-// Fix: checkForUpdates() now calls scheduleAutoUpdate() unconditionally
-// whenever updateInfo.updateAvailable is true, decoupled from the socket
-// notification's own `!wasAvailable || forceEmit` spam-control gate.
-// scheduleAutoUpdate() is already its own re-entrancy guard
-// (this.autoUpdateRunning || this.autoUpdateTimer, both correctly reset once
-// a warning countdown or SteamCMD run finishes, success or failure) so this
-// does not double-schedule or double-announce while one is already pending.
 
 vi.mock("../services/managedContainer.js", () => ({
   resolveManagedContainer: vi.fn(async () => ({ handled: false })),
@@ -53,9 +28,6 @@ function buildChecker() {
   const rconService = { connected: false };
   const serverManager = {};
   const checker = new UpdateChecker(io, { rconService, serverManager });
-  // Bypass real fs/steamcmd access entirely -- this test is about the
-  // scheduling gate in checkForUpdates(), not build-info parsing (already
-  // covered by updateCheckerBuildVerification.test.js).
   vi.spyOn(checker, "getInstalledBuildInfo").mockResolvedValue({
     buildId: "100",
     branch: "public",
@@ -82,14 +54,11 @@ describe("UpdateChecker.checkForUpdates re-considers scheduling on every check w
 
     const first = await checker.checkForUpdates();
     expect(first.updateAvailable).toBe(true);
-    // scheduleAutoUpdate() bailed on the disabled setting -- nothing armed.
     expect(checker.autoUpdateTimer).toBeNull();
     expect(checker.autoUpdateRunning).toBe(false);
 
     autoUpdateEnabled = true;
     const second = await checker.checkForUpdates();
-    // Same outstanding update both times -- this is the exact case the old
-    // `if (!wasAvailable) await this.scheduleAutoUpdate(...)` gate missed.
     expect(second.updateAvailable).toBe(true);
     expect(checker.autoUpdateTimer).not.toBeNull();
 
@@ -104,16 +73,10 @@ describe("UpdateChecker.checkForUpdates re-considers scheduling on every check w
     await checker.checkForUpdates();
     expect(scheduleSpy).toHaveBeenCalledTimes(1);
     clearTimeout(checker.autoUpdateTimer);
-    // Simulate the warning countdown having already fired and the
-    // subsequent SteamCMD run failing -- both guard flags reset, exactly
-    // what runAutoUpdate()'s own `finally` block guarantees.
     checker.autoUpdateTimer = null;
     checker.autoUpdateRunning = false;
 
     await checker.checkForUpdates();
-    // Still the same outstanding update (installed/latest build info are
-    // stubbed identically) -- must be reconsidered, not skipped a second
-    // time just because updateAvailable was already true.
     expect(scheduleSpy).toHaveBeenCalledTimes(2);
     clearTimeout(checker.autoUpdateTimer);
   });

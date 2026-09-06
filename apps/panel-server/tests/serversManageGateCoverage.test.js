@@ -1,32 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// regression card if-your-change-is-in-middleware-a-handler-only-
-// test-is-blind-to-it: servers.js's POST /, PUT /:id and POST /:id/activate
-// are all gated requirePermission("servers.manage") ahead of the real
-// handler, but every existing test that exercises these three routes
-// (serversRoute.test.js's getCreateHandler/getUpdateHandler,
-// createServerFieldParity.test.js, serversRouteEnvFallback.test.js,
-// crossProducerShapeGate.test.js's invokeJson) grabs ONLY the LAST handler
-// in the route's stack (`layer.route.stack[layer.route.stack.length - 1]`)
-// -- structurally skipping the gate middleware ahead of it, same blind spot
-// the test found on POST /panel-bridge/command. serversRoute.test.js even has a
-// comment claiming "see roles.test.js for coverage of that gate itself" --
-// FALSE: roles.test.js only imports routes/auth.js and routes/docker.js,
-// never routes/servers.js at all. So a regression that weakened or removed
-// requirePermission("servers.manage") from any of these three routes would
-// go completely undetected by the existing suite. DELETE /:id is the one
-// sibling mutation route that IS already safely covered (serversRoute.test.js's
-// own runRoute() full-stack helper, used at its DELETE /:id describe block)
-// -- not duplicated here.
-//
-// Same shape as chunksRoutesCapability.test.js / permissionsFailClosed.test.js:
-// call the gate directly (stack[0], the FIRST handler -- requirePermission
-// is always registered first on these routes) and prove both directions, so
-// a test that only proved refusal would pass just as well if the capability
-// key were typo'd into something not in the catalogue, and a test that only
-// proved admission would pass just as well if the gate had been deleted
-// from the route entirely.
 
 vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,

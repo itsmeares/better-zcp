@@ -3,19 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, the foundation-lens follow-up to ce29ee63: that commit fixed
-// handlers.triggerHelicopterEvent to use the one real, zero-arg API
-// (testHelicopter()) but deliberately did not expose its adjacent sibling,
-// endHelicopter() -- an operator could start a server-wide helicopter event
-// and then had no way to end it early except waiting it out. Confirmed
-// directly against the real B42 jar (javap against
-// zombie.Lua.LuaManager$GlobalObject): `public static void endHelicopter()`,
-// zero-arg, same bare-global binding tier as testHelicopter()/getWorld()/
-// getCell()/saveGame(). handlers.stopHelicopterEvent is a new handler, not a
-// fix to an existing one -- these are its first tests, mirroring the shape
-// of panelBridgeTriggerHelicopterEventRealApi.test.js (a new file, per
-// instruction, rather than extending that or any other existing panelBridge
-// test file).
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -65,8 +52,6 @@ describe('PanelBridge.lua handlers.stopHelicopterEvent -- the real zero-arg endH
   });
 
   it('is independent of testHelicopter() -- stopping does not require the trigger global to also be defined', () => {
-    // Deliberately defines ONLY endHelicopter, not testHelicopter -- proves
-    // stopHelicopterEvent doesn't accidentally depend on the trigger side's
     // global (e.g. a copy-paste of the wrong function name).
     const bridge = loadPanelBridge(LUA_PATH, 'endHelicopter = function() end');
     const result = bridge.callHandler('stopHelicopterEvent', {});

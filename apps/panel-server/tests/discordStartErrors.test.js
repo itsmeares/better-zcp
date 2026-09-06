@@ -1,19 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// regression follow-up (regression): a live user's screenshot showed the
-// generic "Failed to start bot - check configuration" banner. Tracing the
-// actual POST /start path (not /test, which discordTestTokenErrors.test.js
-// already covers) found the same "three causes, one message" class, worse
-// here because even the underlying error.message was captured in server
-// logs and then discarded before it ever reached the response. See
-// discordBot.js's start() for lastStartError and its .kind values, taken
-// directly from node_modules/discord.js's own ErrorCodes (TokenInvalid,
-// DisallowedIntents) rather than guessed. Named "kind", not "code" --
-// deliberately outside errorCodeRegistry.test.js's remit, since this never
-// reaches the client as a response code. The kind->message mapping itself
-// lives in services/discordStartFailure.js, split out from discordBot.js so
-// it has no dependency on the discord.js package and this test doesn't need
-// to mock it.
 
 vi.mock("../services/discordBot.js", () => ({
   normalizeChatRelayScope: vi.fn((value) => value),

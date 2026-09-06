@@ -1,6 +1,3 @@
-// Follows /panel-bridge/* routes to the actions they send and verifies those
-// actions against the Lua handler set. Dynamic passthrough actions are listed
-// as unverifiable; the named BRIDGE_ACTION_CAPABILITY keys are checked too.
 import fs from "fs";
 import path from "path";
 
@@ -14,8 +11,6 @@ const luaHandlers = new Set(
 
 const routes = read("apps/panel-server/routes/panelBridge.js");
 
-// Split the route file per router.<verb>("<path>" so each action reference can
-// be attributed to the endpoint that sends it.
 const segments = [];
 const routeRe = /router\.(get|post|put|delete)\(\s*"([^"]+)"/g;
 let match;
@@ -32,14 +27,9 @@ for (let i = 0; i < marks.length; i++) {
 
 const problems = [];
 const verified = [];
-// Every call site whose first argument isn't a plain quoted literal --
-// reported by name, never merged into either count above.
 const unverifiable = [];
 
 for (const segment of segments) {
-  // Captures the raw first-argument EXPRESSION (not just literals), so a
-  // variable/property/template-literal call site is caught here instead of
-  // vanishing from the count entirely.
   const literalActions = new Set();
   for (const m of segment.body.matchAll(/sendCommand\(\s*([^,)]+)/g)) {
     const raw = m[1].trim();
@@ -56,13 +46,6 @@ for (const segment of segments) {
   }
 }
 
-// Extends real coverage to the passthrough: BRIDGE_ACTION_CAPABILITY names
-// every action this codebase gives its own elevated/replacement permission
-// check, and its keys are literal object properties -- checkable the same
-// way a named route's action is, unlike the passthrough's dynamic `action`
-// variable itself. Anchored on the export (not a hardcoded line range) so a
-// reformat doesn't quietly break this the way audit-bridge-actions.mjs's
-// old indent-depth anchor did.
 const capabilityAnchor = "export const BRIDGE_ACTION_CAPABILITY = {";
 const capabilityIdx = routes.indexOf(capabilityAnchor);
 const capabilityActions = [];
@@ -75,7 +58,6 @@ if (capabilityIdx !== -1) {
   }
 }
 
-// Fail loudly if the capability map extraction becomes stale.
 const MIN_CAPABILITY_KEYS = 10;
 if (capabilityIdx === -1) {
   console.error(
@@ -93,8 +75,6 @@ if (capabilityActions.length < MIN_CAPABILITY_KEYS) {
   process.exit(1);
 }
 
-// Keep capability-derived hits separate so a stale route extractor cannot be
-// hidden by a healthy capability map.
 const capabilityVerified = [];
 const capabilityMissingHandler = [];
 for (const action of capabilityActions) {
@@ -102,8 +82,6 @@ for (const action of capabilityActions) {
   else capabilityMissingHandler.push(action);
 }
 
-// Keep a minimum route count so a changed route declaration shape cannot
-// silently turn the audit into a no-op.
 const MIN_ROUTE_ACTION_PAIRS = 20;
 const routeActionPairs = verified.length + problems.length;
 if (routeActionPairs < MIN_ROUTE_ACTION_PAIRS) {

@@ -54,12 +54,6 @@ afterEach(() => {
 
 describe("POST /api/server/wipe invalidates chunks.js's cached map/ folder scan", () => {
   it("invalidates the map/ scan cache after wiping the map target", async () => {
-    // Regression: chunks.js's /chunks and /stats routes cache a scan of a
-    // save's map/ folder for a few seconds (getMapFolderScan()'s TTL
-    // backstop). /wipe deletes map/ outright but has no path to call into
-    // chunks.js's own explicit invalidation -- without this, a page reload
-    // within the TTL window after a wipe would show chunk counts for a
-    // map/ folder that no longer exists.
     const serverManager = {
       loadConfig: async () => {},
       getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
@@ -72,10 +66,6 @@ describe("POST /api/server/wipe invalidates chunks.js's cached map/ folder scan"
     await handler(
       {
         app: { get: () => serverManager },
-        // createBackup: false -- this test is about the map/ scan cache,
-        // not about the pre-wipe backup step; the shared `app.get` mock
-        // above has no real backupService to hand back, and reaching that
-        // code here would just be testing a different route's plumbing.
         body: { targets: ["map"], confirm: true, createBackup: false },
       },
       response,

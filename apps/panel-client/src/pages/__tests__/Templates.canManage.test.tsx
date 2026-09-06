@@ -4,15 +4,6 @@ import { MemoryRouter } from 'react-router-dom'
 import Templates from '../Templates'
 import { templatesApi } from '@/lib/api'
 
-// regression: canManage used to be `!authEnabled || user?.role ===
-// 'admin'` -- a hardcoded role literal where the server actually checks the
-// templates.manage CAPABILITY (requirePermission("templates.manage") on
-// POST/import/apply/delete in routes/templates.js). A default-seeded
-// Technician role holds templates.manage and the server would honor it, but
-// the old check hid every manage control from them anyway because their
-// role string wasn't literally "admin". This pins the fix: a non-admin role
-// WITH the capability now sees the manage controls, and a role without it
-// still doesn't.
 
 let mockCan = (_capability: string) => false
 

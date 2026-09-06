@@ -1,11 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Same in-memory stand-in pattern as userRoleManagement.test.js — real
-// service logic runs (bcrypt, JWT, the setup-token gate itself) against a
-// plain object instead of the panel's actual database. setupToken.js reads
-// and writes through this same mock, so getOrCreateSetupToken()/
-// verifySetupToken()/clearSetupToken() all observe the same state the
-// route handlers and authService see.
 const settings = new Map();
 const db = { data: { users: [] } };
 
@@ -18,11 +12,6 @@ vi.mock("../database/init.js", () => ({
   commitNow: async () => {},
 }));
 
-// Rate limiting itself isn't what this file tests, and express-rate-limit's
-// real middleware expects a fuller request/response shape (req.socket,
-// standard header methods, etc.) than these route-level tests construct.
-// Replaced with a pass-through so setupLimiter never gets in the way of
-// exercising the actual setup-token gate below it in the stack.
 vi.mock("express-rate-limit", () => ({
   default: () => (_req, _res, next) => next(),
 }));
@@ -32,8 +21,6 @@ const { getOrCreateSetupToken } = await import("../utils/setupToken.js");
 const { default: authRouter } = await import("../routes/auth.js");
 
 function createResponse() {
-  // /setup runs behind setupLimiter (express-rate-limit), which needs a
-  // fuller response shape than the route handler itself does.
   const response = {
     status: vi.fn(),
     json: vi.fn(),
@@ -54,8 +41,6 @@ function getLayer(routePath, method) {
   );
 }
 
-// Runs a route through its FULL declared middleware stack (e.g. setupLimiter
-// ahead of the /setup handler itself), the same shape a real request takes.
 async function runRoute(routePath, method, req, res) {
   const layer = getLayer(routePath, method);
   const handlers = layer.route.stack.map((s) => s.handle);
@@ -139,8 +124,6 @@ describe("POST /api/auth/setup — the setup-token gate", () => {
   beforeEach(async () => {
     settings.clear();
     db.data.users = [];
-    // The real app calls this once at startup; the /setup route's
-    // auto-login step needs a jwtSecret to sign tokens with.
     await authService.init();
   });
 
@@ -159,7 +142,7 @@ describe("POST /api/auth/setup — the setup-token gate", () => {
   });
 
   it("refuses a wrong token", async () => {
-    await getOrCreateSetupToken(); // establish the real token first
+    await getOrCreateSetupToken();
     const req = makeReq(
       {
         username: "op",
@@ -185,15 +168,8 @@ describe("POST /api/auth/setup — the setup-token gate", () => {
     await runRoute("/setup", "post", firstReq, firstRes);
     expect(firstRes.status).toHaveBeenCalledWith(201);
     expect(db.data.users.length).toBe(1);
-    // The token itself is now cleared — reusing it is not what blocks the
-    // second attempt below on its own, but it must not still validate.
     expect(settings.get("setupToken")).toBeNull();
 
-    // Second attempt with the SAME (now-stale) token: needsSetup() is false
-    // once a user exists, so /setup's own existing "already completed"
-    // guard is what actually stops it — proving the gate doesn't get in
-    // the way of that pre-existing behavior, and that a captured token
-    // can't be replayed to create a second admin account.
     const secondReq = makeReq(
       { username: "second", password: "another password", setupToken: token },
       "10.0.0.3",

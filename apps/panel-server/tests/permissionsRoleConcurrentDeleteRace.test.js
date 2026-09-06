@@ -1,20 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// updateRole()/deleteRole() each look up the role once at the top (getRoles/
-// getRoleById), then write via replaceRoleById()/removeRoleById() much
-// later, after capability validation and lockout-rule checks. Those two
-// database/init.js functions re-check existence at write time against a
-// fresh getDb() read and return null/false if the role is gone by then --
-// database/init.js:1962-1970 and :1972-1980 -- independent of what the
-// earlier lookup in this same request saw. A second, concurrent request
-// deleting the same role in that window used to be silently discarded: the
-// caller still reported "role updated"/"role deleted" even though the write
-// found nothing to change. These tests force exactly that: the role is still
-// present for the initial lookup (so every earlier check in updateRole/
-// deleteRole passes normally), but the write call is made to report a miss,
-// as a genuinely concurrent second request's write would. They fail against
-// the pre-fix code (which discarded the write's return value) and pass now
-// that updateRole/deleteRole check it.
 
 const rolesById = new Map();
 
@@ -49,9 +34,6 @@ const { updateRole, deleteRole } = await import("../services/permissions.js");
 
 beforeEach(() => {
   rolesById.clear();
-  // Default: real database/init.js semantics (write succeeds and returns
-  // the new value / true) so tests that aren't exercising the race still
-  // behave normally without repeating this wiring in each one.
   replaceRoleById.mockReset().mockImplementation(async (id, role) => {
     rolesById.set(String(id), role);
     return role;
@@ -62,9 +44,6 @@ beforeEach(() => {
 describe("updateRole vs. concurrent delete of the same role", () => {
   it("throws ROLE_NOT_FOUND instead of reporting success when the write finds the role already gone", async () => {
     seedRole("role-a", "Custom", ["players.view"]);
-    // Role is still present for updateRole's own lookup -- every check up to
-    // the write passes normally -- but the write itself reports the
-    // real-world "someone else deleted it first" outcome.
     replaceRoleById.mockResolvedValueOnce(null);
 
     await expect(
