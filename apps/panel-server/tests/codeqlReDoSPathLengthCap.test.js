@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateRemoteConfigTransport } from '../services/remoteConfigFiles.js';
+import { validateRemoteConfigTransport } from '../services/remoteConfigFiles.ts';
 import { validateSftpBridgeConfig } from '../services/panelBridgeSftp.js';
 
 describe('remote/bridge path length cap (CodeQL js/polynomial-redos #3, #1)', () => {

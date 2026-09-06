@@ -21,7 +21,7 @@ import {
   getAllSettings,
   setSetting,
 } from "../database/init.js";
-import { isRemoteConfigConfigured } from "../services/remoteConfigFiles.js";
+import { isRemoteConfigConfigured } from "../services/remoteConfigFiles.ts";
 import { normalizeUserPath, inspectZomboidPath } from "../utils/zomboidPaths.ts";
 import { requirePermission } from "../services/permissions.js";
 import {

@@ -32,7 +32,7 @@ import {
   isRemoteConfigConfigured,
   pushRemoteConfigFiles,
   validateRemoteConfigTransport,
-} from "../services/remoteConfigFiles.js";
+} from "../services/remoteConfigFiles.ts";
 import {
   requireStoppedForLocalConfigMutation,
   warnRunningForLocalConfigEdit,

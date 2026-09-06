@@ -18,7 +18,35 @@ const MIRROR_FRESH_MS = 5000;
 
 const MAX_REMOTE_PATH_LENGTH = 500;
 
-function safeRemoteDir(value) {
+interface RemoteConfigInput {
+  host?: unknown;
+  username?: unknown;
+  port?: unknown;
+  password?: unknown;
+  configPath?: unknown;
+}
+
+interface RemoteConfig {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  configPath: string;
+}
+
+interface RemoteSession {
+  mirrorDir: string;
+  manifest: Record<string, string | null>;
+  pulledAt: number;
+  serverName: string;
+  transportKey: string;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function safeRemoteDir(value: unknown): string {
   if (
     typeof value !== "string" ||
     value.length > MAX_REMOTE_PATH_LENGTH ||
@@ -33,7 +61,7 @@ function safeRemoteDir(value) {
   return value.replace(/\/+$/, "") || "/";
 }
 
-function assertConfigFileName(name) {
+function assertConfigFileName(name: string): string {
   if (typeof name !== "string" || !CONFIG_NAME_PATTERN.test(name)) {
     throw new Error("Invalid server config file name");
   }
@@ -43,7 +71,9 @@ function assertConfigFileName(name) {
   return name;
 }
 
-export function validateRemoteConfigTransport(config) {
+export function validateRemoteConfigTransport(
+  config: RemoteConfigInput | null | undefined,
+): RemoteConfig {
   const host = typeof config?.host === "string" ? config.host.trim() : "";
   const username =
     typeof config?.username === "string" ? config.username.trim() : "";
@@ -69,11 +99,13 @@ export function validateRemoteConfigTransport(config) {
   };
 }
 
-export function isRemoteConfigConfigured(settings) {
+export function isRemoteConfigConfigured(
+  settings: Record<string, unknown> | null | undefined,
+): boolean {
   return Boolean(settings?.panelBridgeSftpHost && settings?.[SFTP_CONFIG_PATH_KEY]);
 }
 
-export function getMirrorPath(config, serverName) {
+export function getMirrorPath(config: RemoteConfig, serverName: string): string {
   const key = crypto
     .createHash("sha256")
     .update(`${config.host}:${config.port}:${config.username}:${config.configPath}:${serverName}`)
@@ -82,7 +114,7 @@ export function getMirrorPath(config, serverName) {
   return path.join(getDataPaths().dataDir, "remote-config", key);
 }
 
-export function mirroredFileNames(serverName) {
+export function mirroredFileNames(serverName: unknown): string[] {
   const base = String(serverName || "").trim();
   if (!base || !CONFIG_NAME_PATTERN.test(base)) {
     throw new Error("Server name is not usable as a config file name");
@@ -95,7 +127,10 @@ export function mirroredFileNames(serverName) {
   ].map(assertConfigFileName);
 }
 
-async function withClient(config, handler) {
+async function withClient<T>(
+  config: RemoteConfig,
+  handler: (client: SftpClient) => Promise<T>,
+): Promise<T> {
   const client = new SftpClient("RemoteConfigFiles");
   try {
     await client.connect({
@@ -111,7 +146,7 @@ async function withClient(config, handler) {
   }
 }
 
-function hashFile(filePath) {
+function hashFile(filePath: string): string | null {
   if (!fs.existsSync(filePath)) return null;
   return crypto
     .createHash("sha256")
@@ -119,7 +154,9 @@ function hashFile(filePath) {
     .digest("hex");
 }
 
-export async function listRemoteConfigFiles(rawConfig) {
+export async function listRemoteConfigFiles(
+  rawConfig: RemoteConfigInput | null | undefined,
+) {
   const config = validateRemoteConfigTransport(rawConfig);
   return withClient(config, async (client) => {
     const entries = await client.list(config.configPath);
@@ -141,7 +178,10 @@ export async function listRemoteConfigFiles(rawConfig) {
   });
 }
 
-export async function pullRemoteConfigFiles(rawConfig, serverName) {
+export async function pullRemoteConfigFiles(
+  rawConfig: RemoteConfigInput | null | undefined,
+  serverName: string,
+) {
   const config = validateRemoteConfigTransport(rawConfig);
   const names = mirroredFileNames(serverName);
   const mirrorDir = getMirrorPath(config, serverName);
@@ -152,7 +192,7 @@ export async function pullRemoteConfigFiles(rawConfig, serverName) {
     /* best-effort: Windows / network shares */
   }
 
-  const manifest = {};
+  const manifest: Record<string, string | null> = {};
   await withClient(config, async (client) => {
     for (const name of names) {
       const remotePath = `${config.configPath}/${name}`;
@@ -188,7 +228,11 @@ export async function pullRemoteConfigFiles(rawConfig, serverName) {
   return { mirrorDir, manifest, pulledAt: Date.now() };
 }
 
-export async function pushRemoteConfigFiles(rawConfig, serverName, session) {
+export async function pushRemoteConfigFiles(
+  rawConfig: RemoteConfigInput | null | undefined,
+  serverName: string,
+  session?: Pick<RemoteSession, "mirrorDir" | "manifest"> | null,
+) {
   const config = validateRemoteConfigTransport(rawConfig);
   const names = mirroredFileNames(serverName);
   const mirrorDir = session?.mirrorDir || getMirrorPath(config, serverName);
@@ -223,11 +267,11 @@ export async function pushRemoteConfigFiles(rawConfig, serverName, session) {
   return { pushed: changed };
 }
 
-let lockChain = Promise.resolve();
+let lockChain: Promise<void> = Promise.resolve();
 
-export function acquireMirrorLock() {
-  let release;
-  const held = new Promise((resolve) => {
+export function acquireMirrorLock(): Promise<() => void> {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
     release = resolve;
   });
   const waitFor = lockChain;
@@ -235,13 +279,17 @@ export function acquireMirrorLock() {
   return waitFor.then(() => release);
 }
 
-let lastSession = null;
+let lastSession: RemoteSession | null = null;
 
-function transportFingerprint(config) {
+function transportFingerprint(config: RemoteConfig): string {
   return `${config.host}:${config.port}:${config.username}:${config.configPath}`;
 }
 
-export async function beginRemoteConfigSession(config, serverName, { fresh }) {
+export async function beginRemoteConfigSession(
+  config: RemoteConfig,
+  serverName: string,
+  { fresh }: { fresh: boolean },
+): Promise<RemoteSession> {
   const transportKey = transportFingerprint(config);
   if (
     !fresh &&

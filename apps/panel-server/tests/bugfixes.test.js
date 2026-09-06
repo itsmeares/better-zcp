@@ -1501,7 +1501,7 @@ describe("Discord /start", () => {
 });
 
 describe("Remote server config over SFTP", () => {
-  const load = () => import("../services/remoteConfigFiles.js");
+  const load = () => import("../services/remoteConfigFiles.ts");
 
   it("refuses a remote folder that is relative or escapes upward", async () => {
     const { validateRemoteConfigTransport } = await load();

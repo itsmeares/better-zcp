@@ -49,7 +49,7 @@ import {
   listRemoteConfigFiles,
   resetRemoteConfigSession,
   validateRemoteConfigTransport,
-} from "../services/remoteConfigFiles.js";
+} from "../services/remoteConfigFiles.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 const log = createLogger("API:PanelBridge");
 

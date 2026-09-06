@@ -27,7 +27,7 @@ vi.mock('ssh2-sftp-client', () => {
   };
 });
 
-const { pushRemoteConfigFiles } = await import('../services/remoteConfigFiles.js');
+const { pushRemoteConfigFiles } = await import('../services/remoteConfigFiles.ts');
 
 const config = {
   host: 'pz.example.net',

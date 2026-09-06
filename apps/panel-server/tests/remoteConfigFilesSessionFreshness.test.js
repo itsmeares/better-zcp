@@ -25,7 +25,7 @@ vi.mock("ssh2-sftp-client", () => {
 });
 
 const { beginRemoteConfigSession, resetRemoteConfigSession } = await import(
-  "../services/remoteConfigFiles.js"
+  "../services/remoteConfigFiles.ts"
 );
 
 const baseConfig = {

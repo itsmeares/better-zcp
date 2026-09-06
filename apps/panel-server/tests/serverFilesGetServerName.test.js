@@ -11,7 +11,7 @@ vi.mock("../database/init.js", () => ({
   getAllSettings,
 }));
 
-vi.mock("../services/remoteConfigFiles.js", () => ({
+vi.mock("../services/remoteConfigFiles.ts", () => ({
   SFTP_CONFIG_PATH_KEY: "panelBridgeSftpConfigPath",
   acquireMirrorLock: vi.fn(),
   beginRemoteConfigSession: vi.fn(),
