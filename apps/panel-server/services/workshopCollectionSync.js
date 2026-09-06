@@ -4,7 +4,7 @@ import { getSetting } from '../database/init.js';
 import {
   getSteamSessionCredentials,
   setSteamSessionCredentials,
-} from './steamSessionCredentials.js';
+} from './steamSessionCredentials.ts';
 
 export { getSteamSessionCredentials, setSteamSessionCredentials };
 

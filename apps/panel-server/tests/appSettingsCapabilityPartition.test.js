@@ -36,7 +36,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName,
 }));
 
-vi.mock("../services/steamSessionCredentials.js", () => ({
+vi.mock("../services/steamSessionCredentials.ts", () => ({
   setSteamSessionCredentials,
 }));
 

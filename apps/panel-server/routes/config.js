@@ -36,7 +36,7 @@ import {
   MAX_MEMORY_GB_MAX,
 } from "./server.js";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
-import { setSteamSessionCredentials } from "../services/steamSessionCredentials.js";
+import { setSteamSessionCredentials } from "../services/steamSessionCredentials.ts";
 
 const AUTO_EXPORT_MAX_PER_PLAYER_MIN = 1;
 const AUTO_EXPORT_MAX_PER_PLAYER_MAX = 50;

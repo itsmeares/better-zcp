@@ -8,7 +8,12 @@ import {
 
 const log = createLogger("SteamSessionCredentials");
 
-export async function getSteamSessionCredentials() {
+export interface SteamSessionCredentials {
+  sessionId: string | null;
+  loginSecure: string | null;
+}
+
+export async function getSteamSessionCredentials(): Promise<SteamSessionCredentials> {
   const [legacySessionId, legacyLoginSecure] = await Promise.all([
     getSetting("steamSessionId"),
     getSetting("steamLoginSecure"),
@@ -25,10 +30,16 @@ export async function getSteamSessionCredentials() {
       log,
     }),
   ]);
-  return { sessionId, loginSecure };
+  return {
+    sessionId: (sessionId as string | null) ?? null,
+    loginSecure: (loginSecure as string | null) ?? null,
+  };
 }
 
-export async function setSteamSessionCredentials(sessionId, loginSecure) {
+export async function setSteamSessionCredentials(
+  sessionId?: string | null,
+  loginSecure?: string | null,
+): Promise<void> {
   const [legacySessionId, legacyLoginSecure] = await Promise.all([
     getSetting("steamSessionId"),
     getSetting("steamLoginSecure"),
@@ -47,7 +58,7 @@ export async function setSteamSessionCredentials(sessionId, loginSecure) {
       ["steamSessionId", nextSessionId],
       ["steamLoginSecure", nextLoginSecure],
     ]);
-    const normalize = (value) => {
+    const normalize = (value: unknown): string | null => {
       if (value == null || value === "") return null;
       return String(value).trim() || null;
     };
@@ -61,9 +72,8 @@ export async function setSteamSessionCredentials(sessionId, loginSecure) {
       setSetting("steamSessionId", null),
       setSetting("steamLoginSecure", null),
     ]);
-  } catch (err) {
-    throw new Error(
-      `Could not persist Steam session credentials: ${err.message}`,
-    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not persist Steam session credentials: ${message}`);
   }
 }
