@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
+    "db:import": "node scripts/import-legacy-db.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings=0",
@@ -24,6 +25,7 @@
     "cors": "^2.8.6",
     "discord.js": "^14.26.4",
     "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
