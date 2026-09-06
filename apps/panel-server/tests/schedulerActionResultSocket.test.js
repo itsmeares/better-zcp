@@ -18,7 +18,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { getScheduledTasks, getActiveServer } = await import("../database/init.js");
-const { default: router } = await import("../routes/scheduler.js");
+const { default: router } = await import("../routes/scheduler.ts");
 const { Scheduler } = await import("../services/scheduler.js");
 
 describe("Scheduler.runTaskNow return value", () => {

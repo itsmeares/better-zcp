@@ -20,7 +20,7 @@ vi.mock("../database/init.js", () => ({
 
 const { createScheduledTask, updateScheduledTask, getScheduledTasks } =
   await import("../database/init.js");
-const { default: router } = await import("../routes/scheduler.js");
+const { default: router } = await import("../routes/scheduler.ts");
 
 function getHandler(routePath, method) {
   const layer = router.stack.find(

@@ -33,7 +33,7 @@ vi.mock("../database/init.js", () => ({
 const { Scheduler } = await import("../services/scheduler.js");
 const { getScheduledTasks, createScheduledTask, logScheduleExecution } =
   await import("../database/init.js");
-const { default: router, parseTaskId } = await import("../routes/scheduler.js");
+const { default: router, parseTaskId } = await import("../routes/scheduler.ts");
 
 function makeScheduler() {
   const rconService = {

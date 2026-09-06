@@ -19,7 +19,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { createScheduledTask, updateScheduledTask } = await import("../database/init.js");
-const { default: router, hasUnsupportedCronFieldCount } = await import("../routes/scheduler.js");
+const { default: router, hasUnsupportedCronFieldCount } = await import("../routes/scheduler.ts");
 
 function getHandler(routePath, method) {
   const layer = router.stack.find(

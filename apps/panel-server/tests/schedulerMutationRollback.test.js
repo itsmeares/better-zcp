@@ -14,7 +14,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-const { default: router } = await import("../routes/scheduler.js");
+const { default: router } = await import("../routes/scheduler.ts");
 
 function getUpdateHandler() {
   const layer = router.stack.find(

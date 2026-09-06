@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import cron from 'node-cron';
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Scheduler');
@@ -25,11 +25,29 @@ import { parseBoundedInteger, parseClampedInteger } from '../utils/queryNumbers.
 
 export { hasUnsupportedCronFieldCount };
 
-export function parseTaskId(value) {
+interface ScheduledTask {
+  id: number;
+  name: string;
+  cron_expression: string;
+  command: string;
+  server_id: number | string | null;
+  enabled: number;
+}
+
+interface SchedulerActionResult {
+  success?: boolean;
+  message?: string;
+  dstWarning?: string | null;
+}
+
+export function parseTaskId(value: unknown): number | null {
   return parseBoundedInteger(value, null, 1, Number.MAX_SAFE_INTEGER);
 }
 
-export function emitActionResult(io, payload) {
+export function emitActionResult(
+  io: { emit?: (event: string, payload: unknown) => unknown } | null | undefined,
+  payload: unknown,
+): void {
   if (typeof io?.emit === 'function') io.emit('scheduler:action_result', payload);
 }
 
@@ -37,7 +55,15 @@ const router = express.Router();
 
 router.use(requirePermission('automation.manage'));
 
-async function requireCapabilityInline(capability, req, res) {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function requireCapabilityInline(
+  capability: string,
+  req: Request,
+  res: Response,
+): Promise<boolean> {
   let passed = false;
   await requirePermission(capability)(req, res, () => {
     passed = true;
@@ -51,8 +77,8 @@ router.get('/status', async (req, res) => {
     const status = scheduler.getStatus();
     res.json(status);
   } catch (error) {
-    log.error(`Failed to get scheduler status: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to get scheduler status: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -77,8 +103,8 @@ router.put('/timezone', async (req, res) => {
     const status = await scheduler.setTimezone(timezone);
     res.json({ success: true, ...status });
   } catch (error) {
-    log.error(`Failed to update scheduler timezone: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to update scheduler timezone: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -88,8 +114,8 @@ router.put('/restart-warning', async (req, res) => {
     const restartWarning = await scheduler.setRestartWarning(req.body);
     res.json({ success: true, restartWarning });
   } catch (error) {
-    log.error(`Failed to update restart warning: ${error.message}`);
-    res.status(400).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to update restart warning: ${errorMessage(error)}`);
+    res.status(400).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -98,8 +124,8 @@ router.get('/tasks', async (req, res) => {
     const tasks = await getScheduledTasks();
     res.json({ tasks });
   } catch (error) {
-    log.error(`Failed to get scheduled tasks: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to get scheduled tasks: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -133,7 +159,7 @@ router.post('/validate-cron', async (req, res) => {
 
     res.json({ valid: true });
   } catch (error) {
-    res.status(500).json({ valid: false, error: sanitizeError(error.message) });
+    res.status(500).json({ valid: false, error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -209,19 +235,19 @@ router.post('/tasks', async (req, res) => {
         throw new Error("Scheduler rejected the task");
       }
     } catch (schedErr) {
-      log.error(`Failed to schedule task, rolling back DB entry: ${schedErr.message}`);
+      log.error(`Failed to schedule task, rolling back DB entry: ${errorMessage(schedErr)}`);
       await deleteScheduledTask(result.id);
       return res.status(500).json({
-        error: 'Failed to schedule task: ' + sanitizeError(schedErr.message),
+        error: 'Failed to schedule task: ' + sanitizeError(errorMessage(schedErr)),
         code: ErrorCode.SCHEDULER_TASK_SCHEDULING_FAILED,
-        params: sanitizeErrorParams({ reason: schedErr.message }),
+        params: sanitizeErrorParams({ reason: errorMessage(schedErr) }),
       });
     }
 
     res.json({ success: true, task, dstWarning: scheduleResult?.dstWarning || null });
   } catch (error) {
-    log.error(`Failed to create scheduled task: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to create scheduled task: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -311,7 +337,7 @@ router.put('/tasks/:id', async (req, res) => {
         }
         dstWarning = scheduled?.dstWarning || null;
       } catch (schedErr) {
-        log.error(`Failed to reschedule task ${taskId}, reverting DB: ${schedErr.message}`);
+        log.error(`Failed to reschedule task ${taskId}, reverting DB: ${errorMessage(schedErr)}`);
         if (previousTask) {
           try {
             await updateScheduledTask(
@@ -329,16 +355,16 @@ router.put('/tasks/:id', async (req, res) => {
             }
           } catch (rollbackError) {
             log.error(
-              `Failed to restore scheduled task ${taskId} after reschedule failure: ${rollbackError.message}`,
+              `Failed to restore scheduled task ${taskId} after reschedule failure: ${errorMessage(rollbackError)}`,
             );
           }
         } else {
           log.warn(`Could not restore scheduled task ${taskId}: previous record was unavailable`);
         }
         return res.status(500).json({
-          error: 'Failed to reschedule task: ' + sanitizeError(schedErr.message),
+          error: 'Failed to reschedule task: ' + sanitizeError(errorMessage(schedErr)),
           code: ErrorCode.SCHEDULER_TASK_RESCHEDULE_FAILED,
-          params: sanitizeErrorParams({ reason: schedErr.message }),
+          params: sanitizeErrorParams({ reason: errorMessage(schedErr) }),
         });
       }
     } else {
@@ -347,8 +373,8 @@ router.put('/tasks/:id', async (req, res) => {
 
     res.json({ success: true, message: 'Task updated', dstWarning });
   } catch (error) {
-    log.error(`Failed to update scheduled task: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to update scheduled task: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -371,8 +397,8 @@ router.delete('/tasks/:id', async (req, res) => {
 
     res.json({ success: true, message: 'Task deleted' });
   } catch (error) {
-    log.error(`Failed to delete scheduled task: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to delete scheduled task: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -385,8 +411,8 @@ router.post('/tasks/:id/run', async (req, res) => {
       return res.status(400).json({ error: 'Invalid task ID', code: ErrorCode.SCHEDULER_INVALID_TASK_ID });
     }
 
-    const tasks = await getScheduledTasks();
-    const task = tasks.find(t => t.id === taskId);
+    const tasks = (await getScheduledTasks()) as ScheduledTask[];
+    const task = tasks.find((candidate) => candidate.id === taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found', code: ErrorCode.SCHEDULER_TASK_NOT_FOUND });
     }
@@ -403,7 +429,7 @@ router.post('/tasks/:id/run', async (req, res) => {
     log.info(`POST /tasks/${taskId}/run: ${task.name}`);
     const io = req.app.get('io');
     scheduler.runTaskNow(task)
-      .then((result) => {
+      .then((result: SchedulerActionResult) => {
         emitActionResult(io, {
           kind: 'task',
           taskName: task.name,
@@ -411,20 +437,20 @@ router.post('/tasks/:id/run', async (req, res) => {
           message: result?.message || (result?.success ? 'Task completed' : 'Task failed'),
         });
       })
-      .catch(err => {
-        log.error(`Manual run of task ${taskId} failed: ${err.message}`);
+      .catch((err: unknown) => {
+        log.error(`Manual run of task ${taskId} failed: ${errorMessage(err)}`);
         emitActionResult(io, {
           kind: 'task',
           taskName: task.name,
           success: false,
-          message: err.message,
+          message: errorMessage(err),
         });
       });
 
     res.json({ success: true, message: 'Task triggered' });
   } catch (error) {
-    log.error(`Failed to run scheduled task: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to run scheduled task: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -454,26 +480,26 @@ router.post('/restart-now', async (req, res) => {
     }
 
     scheduler.performRestart(parsedWarningMinutes, { label: 'Manual restart' })
-      .then((result) => {
+      .then((result: SchedulerActionResult) => {
         emitActionResult(io, {
           kind: 'restart',
           success: !!result?.success,
           message: result?.message || (result?.success ? 'Restart completed' : 'Restart failed'),
         });
       })
-      .catch(err => {
-        log.error(`Restart failed: ${err.message}`);
+      .catch((err: unknown) => {
+        log.error(`Restart failed: ${errorMessage(err)}`);
         emitActionResult(io, {
           kind: 'restart',
           success: false,
-          message: err.message,
+          message: errorMessage(err),
         });
       });
 
     res.json({ success: true, message: 'Restart initiated', warningMinutes: parsedWarningMinutes });
   } catch (error) {
-    log.error(`Failed to trigger restart: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to trigger restart: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -505,11 +531,15 @@ router.get('/history', async (req, res) => {
     if (req.query.taskId !== undefined && taskId === null) {
       return res.status(400).json({ error: 'Invalid task ID', code: ErrorCode.SCHEDULER_INVALID_TASK_ID });
     }
-    const history = await getScheduleHistory(limit, taskId);
+    const getHistory = getScheduleHistory as unknown as (
+      historyLimit: number,
+      scheduledTaskId: number | null,
+    ) => Promise<unknown[]>;
+    const history = await getHistory(limit, taskId);
     res.json({ history });
   } catch (error) {
-    log.error(`Failed to get schedule history: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to get schedule history: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -518,8 +548,8 @@ router.delete('/history', async (req, res) => {
     await clearScheduleHistory();
     res.json({ success: true, message: 'History cleared' });
   } catch (error) {
-    log.error(`Failed to clear schedule history: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to clear schedule history: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 

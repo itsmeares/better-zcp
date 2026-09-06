@@ -225,7 +225,7 @@ import serverFilesRoutes from "./routes/serverFiles.js";
 import playerRoutes from "./routes/players.js";
 import rconRoutes from "./routes/rcon.ts";
 import configRoutes from "./routes/config.js";
-import schedulerRoutes from "./routes/scheduler.js";
+import schedulerRoutes from "./routes/scheduler.ts";
 import modsRoutes from "./routes/mods.js";
 import chunksRoutes from "./routes/chunks.js";
 import discordRoutes from "./routes/discord.js";
