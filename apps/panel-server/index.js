@@ -65,7 +65,7 @@ import {
   PANEL_API_CONTRACT_VERSION as DEFAULT_API_CONTRACT_VERSION,
   recoverInterruptedUpdateBundle,
 } from "./services/updateBundle.js";
-import { LogTailer } from "./services/logTailer.js";
+import { LogTailer } from "./services/logTailer.ts";
 import { DiskMonitor } from "./services/diskMonitor.ts";
 import authService from "./services/auth.js";
 import { getRoleByName } from "./services/permissions.js";

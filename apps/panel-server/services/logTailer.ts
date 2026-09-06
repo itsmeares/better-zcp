@@ -10,12 +10,28 @@ const SHOUT_CHAT_ROOM_ID = 2;
 
 const DELIVERY_LINE = /Message ChatMessage\{chat=([^,]+),\s*author='(.*?)',\s*text='(.*)'\} sent to chat \(id = (\d+)\)/;
 
-export function chatMessageKey(chatType, author, text) {
+interface LogFile {
+  path: string;
+  mtime: number;
+  birthtime: number;
+}
+
+type RemainderKey = "consoleRemainder" | "chatRemainder" | "userRemainder";
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function chatMessageKey(
+  chatType: string,
+  author: string,
+  text: string,
+): string {
   return `${chatType}\u0000${author}\u0000${text}`;
 }
 
-export function collectChatRoomIds(lines) {
-  const ids = new Map();
+export function collectChatRoomIds(lines: string[]): Map<string, number[]> {
+  const ids = new Map<string, number[]>();
   for (const line of lines) {
     const m = line.match(DELIVERY_LINE);
     if (!m) continue;
@@ -28,6 +44,21 @@ export function collectChatRoomIds(lines) {
 }
 
 export class LogTailer extends EventEmitter {
+  logPath: string | null;
+  chatLogPath: string | null;
+  chatLogSize: number;
+  currentSize: number;
+  userLogPath: string | null;
+  userLogSize: number;
+  isWatching: boolean;
+  checkTimer: NodeJS.Timeout | null;
+  logsDir: string | null;
+  basePath: string | null;
+  watchStartedAt: number;
+  consoleRemainder: string;
+  chatRemainder: string;
+  userRemainder: string;
+
   constructor() {
     super();
     this.logPath = null;
@@ -46,24 +77,24 @@ export class LogTailer extends EventEmitter {
     this.userRemainder = '';
   }
 
-  startOffsetFor(filePath, firstDiscovery) {
+  startOffsetFor(filePath: string, firstDiscovery: boolean): number {
     try {
         const stats = fs.statSync(filePath);
         const born = stats.birthtimeMs || 0;
         if (!firstDiscovery || (born > 0 && born >= this.watchStartedAt)) return 0;
         return stats.size;
     } catch (e) {
-        log.debug(`LogTailer: stat failed for ${filePath}: ${e.message}`);
+        log.debug(`LogTailer: stat failed for ${filePath}: ${errorMessage(e)}`);
         return 0;
     }
   }
 
-  async init() {
+  async init(): Promise<void> {
     await this.findLogPath();
     this.startWatching();
   }
 
-  async findLogPath() {
+  async findLogPath(): Promise<void> {
     try {
         const activeServer = await getActiveServer();
         const homeDir = os.homedir();
@@ -98,11 +129,11 @@ export class LogTailer extends EventEmitter {
         }
 
     } catch (e) {
-        log.error(`Error finding log path: ${e.stack || e.message}`);
+        log.error(`Error finding log path: ${errorMessage(e)}`);
     }
   }
 
-  reresolvePaths() {
+  reresolvePaths(): void {
     if (!this.basePath) return;
     if (!this.logPath) {
         const consoleLogPath = path.join(this.basePath, 'server-console.txt');
@@ -124,20 +155,21 @@ export class LogTailer extends EventEmitter {
     }
   }
 
-  findLatestChatLog() {
-    if (!this.logsDir) return;
+  findLatestChatLog(): void {
+    const logsDir = this.logsDir;
+    if (!logsDir) return;
     try {
-        const files = fs.readdirSync(this.logsDir)
+        const files = fs.readdirSync(logsDir)
             .filter(f => f.endsWith('_chat.txt'))
             .map(f => {
-                const full = path.join(this.logsDir, f);
+                const full = path.join(logsDir, f);
                 try {
                     const stats = fs.statSync(full);
                     return { path: full, mtime: stats.mtimeMs, birthtime: stats.birthtimeMs };
                 }
                 catch { return null; }
             })
-            .filter(Boolean)
+            .filter((file): file is LogFile => file !== null)
             .sort((a, b) => (b.mtime - a.mtime) || (b.birthtime - a.birthtime));
 
         if (files.length > 0) {
@@ -151,24 +183,25 @@ export class LogTailer extends EventEmitter {
             }
         }
     } catch (e) {
-        log.debug(`Error scanning chat logs: ${e.message}`);
+        log.debug(`Error scanning chat logs: ${errorMessage(e)}`);
     }
   }
 
-  findLatestUserLog() {
-    if (!this.logsDir) return;
+  findLatestUserLog(): void {
+    const logsDir = this.logsDir;
+    if (!logsDir) return;
     try {
-        const files = fs.readdirSync(this.logsDir)
+        const files = fs.readdirSync(logsDir)
             .filter(f => f.endsWith('_user.txt'))
             .map(f => {
-                const full = path.join(this.logsDir, f);
+                const full = path.join(logsDir, f);
                 try {
                     const stats = fs.statSync(full);
                     return { path: full, mtime: stats.mtimeMs, birthtime: stats.birthtimeMs };
                 }
                 catch { return null; }
             })
-            .filter(Boolean)
+            .filter((file): file is LogFile => file !== null)
             .sort((a, b) => (b.mtime - a.mtime) || (b.birthtime - a.birthtime));
 
         if (files.length > 0) {
@@ -182,11 +215,11 @@ export class LogTailer extends EventEmitter {
             }
         }
     } catch (e) {
-        log.debug(`Error scanning user logs: ${e.message}`);
+        log.debug(`Error scanning user logs: ${errorMessage(e)}`);
     }
   }
 
-  async startWatching() {
+  async startWatching(): Promise<void> {
     if (this.isWatching) return;
 
     try {
@@ -200,12 +233,12 @@ export class LogTailer extends EventEmitter {
         this.isWatching = true;
         this.checkLoop();
     } catch (e) {
-        log.error(`Failed to start watching: ${e.message}`);
+        log.error(`Failed to start watching: ${errorMessage(e)}`);
         this.isWatching = false;
     }
   }
 
-  stopWatching() {
+  stopWatching(): void {
      log.info('LogTailer stopping...');
      if (this.checkTimer) {
          clearTimeout(this.checkTimer);
@@ -214,7 +247,7 @@ export class LogTailer extends EventEmitter {
      this.isWatching = false;
   }
 
-  async checkLoop() {
+  async checkLoop(): Promise<void> {
       if (!this.isWatching) return;
 
       this.reresolvePaths();
@@ -227,12 +260,12 @@ export class LogTailer extends EventEmitter {
       }
   }
 
-  async checkConsoleLog() {
+  async checkConsoleLog(): Promise<void> {
      if (!this.logPath) return;
      try {
          let stats;
          try { stats = await fs.promises.stat(this.logPath); } catch (e) {
-           log.debug(`LogTailer: console log stat failed: ${e.message}`);
+           log.debug(`LogTailer: console log stat failed: ${errorMessage(e)}`);
            return;
          }
 
@@ -252,11 +285,11 @@ export class LogTailer extends EventEmitter {
              this.consoleRemainder = '';
          }
      } catch (e) {
-       log.debug(`LogTailer: console log polling error: ${e.message}`);
+       log.debug(`LogTailer: console log polling error: ${errorMessage(e)}`);
      }
   }
 
-  async checkChatLog() {
+  async checkChatLog(): Promise<void> {
      if (this.logsDir) {
        const prevChatLog = this.chatLogPath;
        this.findLatestChatLog();
@@ -269,7 +302,7 @@ export class LogTailer extends EventEmitter {
      try {
          let stats;
          try { stats = await fs.promises.stat(this.chatLogPath); } catch (e) {
-           log.debug(`LogTailer: chat log stat failed: ${e.message}`);
+           log.debug(`LogTailer: chat log stat failed: ${errorMessage(e)}`);
            return;
          }
 
@@ -289,22 +322,22 @@ export class LogTailer extends EventEmitter {
              this.chatRemainder = '';
          }
      } catch (e) {
-       log.debug(`LogTailer: chat log polling error: ${e.message}`);
+       log.debug(`LogTailer: chat log polling error: ${errorMessage(e)}`);
      }
   }
 
-  readChunk(filePath, start, end) {
-    return new Promise((resolve) => {
+  readChunk(filePath: string, start: number, end: number): Promise<string | null> {
+    return new Promise<string | null>((resolve) => {
         if (end <= start) return resolve(null);
         const stream = fs.createReadStream(filePath, { start, end: end - 1 });
         let data = '';
-        stream.on('data', chunk => data += chunk);
+        stream.on('data', (chunk: Buffer | string) => data += chunk.toString());
         stream.on('end', () => resolve(data));
         stream.on('error', () => resolve(null));
     });
   }
 
-  _splitLines(data, remainderKey) {
+  _splitLines(data: string, remainderKey: RemainderKey): string[] {
     const lines = (this[remainderKey] + data).split(/\r?\n/);
     let remainder = lines.pop() ?? '';
     if (remainder.length > 64 * 1024) remainder = '';
@@ -312,7 +345,7 @@ export class LogTailer extends EventEmitter {
     return lines;
   }
 
-  processConsoleData(data) {
+  processConsoleData(data: string): void {
     const lines = this._splitLines(data, 'consoleRemainder');
     for (const line of lines) {
         if (!line.trim()) continue;
@@ -332,7 +365,7 @@ export class LogTailer extends EventEmitter {
     }
   }
 
-  processChatLogData(data) {
+  processChatLogData(data: string): void {
     const lines = this._splitLines(data, 'chatRemainder');
     const chatIds = collectChatRoomIds(lines);
     for (const line of lines) {
@@ -377,7 +410,7 @@ export class LogTailer extends EventEmitter {
     }
   }
 
-  async checkUserLog() {
+  async checkUserLog(): Promise<void> {
      if (this.logsDir) {
        const prev = this.userLogPath;
        this.findLatestUserLog();
@@ -390,7 +423,7 @@ export class LogTailer extends EventEmitter {
      try {
          let stats;
          try { stats = await fs.promises.stat(this.userLogPath); } catch (e) {
-           log.debug(`LogTailer: user log stat failed: ${e.message}`);
+           log.debug(`LogTailer: user log stat failed: ${errorMessage(e)}`);
            return;
          }
 
@@ -410,11 +443,11 @@ export class LogTailer extends EventEmitter {
              this.userRemainder = '';
          }
      } catch (e) {
-       log.debug(`LogTailer: user log polling error: ${e.message}`);
+       log.debug(`LogTailer: user log polling error: ${errorMessage(e)}`);
      }
   }
 
-  processUserLogData(data) {
+  processUserLogData(data: string): void {
     const lines = this._splitLines(data, 'userRemainder');
     for (const line of lines) {
         const trimmed = line.trim();

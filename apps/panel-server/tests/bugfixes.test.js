@@ -867,7 +867,7 @@ describe("PZ shout detection from the chat log", () => {
     line("Message ", chat, author, text, ` sent to chat (id = ${id}) members.`);
 
   const parse = async (lines) => {
-    const { LogTailer } = await import("../services/logTailer.js");
+    const { LogTailer } = await import("../services/logTailer.ts");
     const tailer = Object.create(LogTailer.prototype);
     tailer.chatRemainder = "";
     const seen = [];
@@ -956,7 +956,7 @@ describe("Discord circuit breaker is per channel", () => {
 
 describe("LogTailer chunk boundaries", () => {
   const makeTailer = async () => {
-    const { LogTailer } = await import("../services/logTailer.js");
+    const { LogTailer } = await import("../services/logTailer.ts");
     const tailer = new LogTailer();
     const seen = [];
     tailer.on("chatMessage", (m) => seen.push(m));
@@ -1000,7 +1000,7 @@ describe("LogTailer chunk boundaries", () => {
     const fs = await import("fs");
     const os = await import("os");
     const path = await import("path");
-    const { LogTailer } = await import("../services/logTailer.js");
+    const { LogTailer } = await import("../services/logTailer.ts");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pz-tail-"));
     const file = path.join(dir, "chunk.txt");
     fs.writeFileSync(file, "abcdefghij");
@@ -1016,7 +1016,7 @@ describe("LogTailer chunk boundaries", () => {
     const fs = await import("fs");
     const os = await import("os");
     const path = await import("path");
-    const { LogTailer } = await import("../services/logTailer.js");
+    const { LogTailer } = await import("../services/logTailer.ts");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pz-tail-"));
 
     const old = path.join(dir, "old.txt");
@@ -1370,7 +1370,7 @@ describe("Discord chat relay escaping", () => {
 
 describe("LogTailer chat parsing", () => {
   const parse = async (line) => {
-    const { LogTailer } = await import("../services/logTailer.js");
+    const { LogTailer } = await import("../services/logTailer.ts");
     const tailer = Object.create(LogTailer.prototype);
     tailer.chatRemainder = "";
     const seen = [];
