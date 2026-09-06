@@ -46,7 +46,7 @@ import {
 } from "./database/init.js";
 import { RconService } from "./services/rcon.js";
 import { ServerManager } from "./services/serverManager.js";
-import { DockerClient } from "./services/dockerClient.js";
+import { DockerClient } from "./services/dockerClient.ts";
 import { setDockerClient } from "./services/managedContainer.js";
 import { ModChecker } from "./services/modChecker.js";
 import { Scheduler } from "./services/scheduler.js";

@@ -9,7 +9,7 @@ import {
   isManagedContainer,
   lifecycleTimeoutMs,
   parseContainerStats,
-} from "../services/dockerClient.js";
+} from "../services/dockerClient.ts";
 
 function frame(streamType, text) {
   const payload = Buffer.from(text, "utf-8");
