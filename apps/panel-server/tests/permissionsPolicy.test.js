@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { permissionsPolicy } from "../middleware/permissionsPolicy.js";
+import { permissionsPolicy } from "../middleware/permissionsPolicy.ts";
 
 function makeRes() {
   const headers = {};

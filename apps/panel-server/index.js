@@ -4,7 +4,7 @@ import compression from "compression";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { permissionsPolicy } from "./middleware/permissionsPolicy.js";
+import { permissionsPolicy } from "./middleware/permissionsPolicy.ts";
 import { logSetupTokenIfNeeded } from "./utils/setupToken.ts";
 import { computeInlineScriptCspHash } from "./utils/cspScriptHash.ts";
 import { parseTrustProxySetting } from "./utils/trustProxy.ts";
