@@ -13,9 +13,6 @@ import {
   resolveSourcePath,
 } from '../services/panelBridgeInstaller.js';
 
-// These tests exercise the real integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua
-// source shipped with the repo (never modified — only ever copied) against a
-// throwaway server install directory under the OS temp dir.
 let tmpDir;
 
 beforeEach(() => {
@@ -58,8 +55,8 @@ describe('canAutoInstall', () => {
   });
 
   it('is false when the install directory is not writable', () => {
-    if (process.platform === 'win32') return; // chmod does not enforce POSIX mode bits
-    if (process.getuid && process.getuid() === 0) return; // root bypasses permission bits
+    if (process.platform === 'win32') return;
+    if (process.getuid && process.getuid() === 0) return;
     fs.chmodSync(tmpDir, 0o555);
     try {
       expect(canAutoInstall(localServer())).toBe(false);
@@ -111,11 +108,6 @@ describe('checkBridgeInstalled', () => {
     expect(status.needsUpdate).toBe(true);
   });
 
-  // 2026-08-31, operator-fix-the-three: three consecutive real bridge fixes
-  // shipped without a VERSION bump. A VERSION-only comparison reports "up
-  // to date" here even though the installed content is stale -- the exact
-  // gap that let those fixes go undelivered to every server this function
-  // gates.
   it('flags an update when content differs but VERSION is unchanged', () => {
     const sourceContent = fs.readFileSync(resolveSourcePath(), 'utf8');
     const sourceVersion = sourceContent.match(/VERSION\s*=\s*"([^"]+)"/)[1];
@@ -157,7 +149,6 @@ describe('installBridge', () => {
   });
 
   it('fails cleanly instead of throwing when the target cannot be created', () => {
-    // Make "media" a plain file so mkdirSync('media/lua/server') fails with ENOTDIR.
     fs.writeFileSync(path.join(tmpDir, 'media'), 'not a directory');
     const result = installBridge(localServer());
     expect(result.success).toBe(false);
@@ -177,9 +168,6 @@ describe('installBridge', () => {
     expect(fs.readFileSync(targetPath, 'utf8')).toContain('99.0.0');
   });
 
-  // 2026-08-31, operator-fix-the-three: same VERSION label as the bundled
-  // source, but stale content underneath (a real fix that never bumped the
-  // version) -- must still be overwritten with the bundled content.
   it('overwrites a stale install whose VERSION matches the bundled source', () => {
     const sourceContent = fs.readFileSync(resolveSourcePath(), 'utf8');
     const sourceVersion = sourceContent.match(/VERSION\s*=\s*"([^"]+)"/)[1];
@@ -198,8 +186,6 @@ describe('installBridge', () => {
     expect(fs.readFileSync(targetPath, 'utf8')).toBe(sourceContent);
   });
 
-  // Content-identical installs (the common case: nothing changed since the
-  // last install) must remain a true no-op, not an unconditional rewrite.
   it('leaves a byte-identical install untouched and reports updated: false', () => {
     installBridge(localServer());
     const result = installBridge(localServer());
@@ -209,19 +195,6 @@ describe('installBridge', () => {
   });
 });
 
-// bughunt-2026-08-31-c, launcher-extension-case-sensitivity: index.js's
-// PanelBridge auto-update and routes/panelBridge.js's mod auto-install both
-// used to reimplement this same launcher-extension check inline, without the
-// lowercasing below -- a launcher saved as e.g. "Launch.BAT" resolved its
-// install dir as the literal launcher file's own (nonexistent as a
-// directory) path instead of its parent folder, silently breaking both
-// features for any launcher whose extension wasn't already lowercase. Both
-// call sites now share this one implementation instead of each carrying
-// their own copy.
-// 2026-09-02, bridge-enforcement: the pre-spawn call routes/server.js's
-// /start and /restart now make. Route-level ordering (install-before-spawn)
-// is covered by serverStartRestartBridgeAutoInstall.test.js; these just
-// pin the function's own behavior in isolation.
 describe('autoInstallBridgeIfNeeded', () => {
   it('installs a stale bridge', () => {
     const targetDir = path.join(tmpDir, 'media', 'lua', 'server');
@@ -253,8 +226,6 @@ describe('getBundledBridgeVersion / isBridgeVersionBehindBundled', () => {
     expect(getBundledBridgeVersion()).toBe(status.version);
   });
 
-  // The only signal a remote/SFTP server can ever produce: no local file to
-  // content-compare, so this is the whole check for that topology.
   it('flags a live version older than what this panel bundles', () => {
     expect(isBridgeVersionBehindBundled('0.0.1')).toBe(true);
   });

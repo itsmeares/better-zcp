@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { conservativeRenderedMaxLevel, resolveFallbackTile } from "../worldMapTileFallback";
 
-// GH#109 / conv-gh109-worldmap-black: a requested tile level can be inside
-// the map's theoretical maxLevel yet have no tile actually rendered
-// upstream (404) -- WorldMap's drawMap used to just skip drawing anything
-// for that rect, which reads as solid black over the dark canvas
-// background while player/vehicle markers (drawn separately) keep working.
-// These tests exercise the pure fallback-selection logic pulled out of
-// drawMap so it doesn't need a mounted canvas.
 
 function fakeImg(naturalWidth = 1024, naturalHeight = 1024) {
   return { naturalWidth, naturalHeight } as unknown as HTMLImageElement;
@@ -42,9 +35,6 @@ describe("resolveFallbackTile", () => {
   });
 
   it("computes the correct source sub-rectangle within the coarser tile's own image", () => {
-    // level 13, col 101, row 57 -> parent (12, 50, 28); fracCol=1, fracRow=1
-    // out of a 2x2 block, so the target occupies the bottom-right quarter
-    // of the 1024x1024 parent image.
     const parentImg = fakeImg(1024, 1024);
     const lookup = vi.fn(() => parentImg);
     const request = vi.fn();
@@ -64,7 +54,7 @@ describe("resolveFallbackTile", () => {
   it("skips a confirmed-empty ancestor and keeps searching a coarser level", () => {
     const grandparentImg = fakeImg();
     const lookup = vi.fn((level: number) => {
-      if (level === 12) return "empty" as const; // confirmed 404, not just uncached
+      if (level === 12) return "empty" as const;
       if (level === 11) return grandparentImg;
       return undefined;
     });
@@ -82,7 +72,6 @@ describe("resolveFallbackTile", () => {
 
     resolveFallbackTile(5, 10, 6, lookup, request, 8);
 
-    // level 5 -> only k=1..5 are valid (Math.min(level, maxFallbackLevels))
     expect(request).toHaveBeenCalledTimes(5);
     expect(request).toHaveBeenNthCalledWith(1, 4, 5, 3);
     expect(request).toHaveBeenNthCalledWith(5, 0, 0, 0);
@@ -103,18 +92,11 @@ describe("resolveFallbackTile", () => {
 
     resolveFallbackTile(2, 3, 1, lookup, request, 8);
 
-    // level 2 -> only k=1,2 make sense (parentLevel 1, then 0)
     expect(request).toHaveBeenCalledTimes(2);
     expect(request).toHaveBeenNthCalledWith(2, 0, 0, 0);
   });
 });
 
-// GH#109 follow-up (god's review of 3d09d94): B42's static placeholder and
-// the `??` fallbacks used to default renderedMaxLevel to the raw maxLevel --
-// exactly the inflated ceiling this whole fix exists to stop trusting --
-// while B41's static default already used a conservative floor. Pinning
-// this here so "discovery unknown -> conservative, not maxLevel" can't
-// silently regress back to the inconsistency.
 describe("conservativeRenderedMaxLevel", () => {
   it("subtracts the known-safe offset from maxLevel", () => {
     expect(conservativeRenderedMaxLevel(21)).toBe(15);
@@ -127,8 +109,6 @@ describe("conservativeRenderedMaxLevel", () => {
   });
 
   it("is always strictly less than maxLevel for any real build depth, never equal to it", () => {
-    // The whole point: a caller that falls back to this value must never
-    // land back on the untrusted raw ceiling.
     for (const maxLevel of [10, 15, 21, 22, 30]) {
       expect(conservativeRenderedMaxLevel(maxLevel)).toBeLessThan(maxLevel);
     }

@@ -1,16 +1,4 @@
-/**
- * Several services in this codebase report failure by returning
- * `{ success: false, error }` rather than by throwing. A call whose result is
- * discarded therefore swallows the failure silently — the pattern behind a
- * third of the bugs found in the August 2026 audit (a `/stop` that quit after a
- * failed save, a `/restart` that always claimed success, a `/test-message` that
- * always reported it was sent).
- *
- * This rule flags such a call when its result is thrown away. To ignore a
- * result deliberately, prefix the call with `void`.
- */
 
-// Methods that answer with a result object instead of raising on failure.
 const RESULT_RETURNING_METHODS = [
   // backupService
   "createBackup",
@@ -113,8 +101,6 @@ export default {
           return;
         }
 
-        // A discarded result is a bare expression statement, optionally awaited.
-        // Anything else — assignment, return, .then(), void — is a use.
         let current = node;
         let parent = current.parent;
         if (parent?.type === "AwaitExpression") {

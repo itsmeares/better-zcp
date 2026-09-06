@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// API surface for Angela's matrix UI: list capabilities grouped, list
-// roles with capabilities, create/update/delete a role. Every route sits
-// behind requirePermission("roles.manage") -- this is the matrix itself,
-// not a tool the matrix grants access to.
 
 const rolesById = new Map();
 let users = [];
@@ -29,8 +25,6 @@ vi.mock("../database/init.js", () => ({
   getUsersForRole: async (role) =>
     users.filter((u) => u.roleId === role.id || (role.isSeeded && u.role === role.name)),
   getUsersForRoleAccounting: async () => users,
-  // Must set .role unconditionally (no isSeeded check) -- see
-  // reassignRoleMembers.test.js for why.
   reassignRoleMembers: async (fromRole, toRole) => {
     let count = 0;
     for (const u of users) {
@@ -63,18 +57,10 @@ function createResponse() {
   return response;
 }
 
-// Walks the WHOLE router.stack in order, the way Express actually
-// dispatches -- not just the matched route's own handler stack. A
-// router.use(requirePermission(...)) gate is a separate, path-less layer
-// that never appears inside any individual route's layer.route.stack, so a
-// helper that only looked at the matched route would silently skip it and
-// every "refuses without the capability" test would pass for the wrong
-// reason (never having run the gate at all).
 function collectHandlers(routePath, method) {
   const handlers = [];
   for (const entry of router.stack) {
     if (!entry.route) {
-      // router.use(fn) layer with no path -- applies to every request.
       handlers.push(entry.handle);
       continue;
     }
@@ -215,17 +201,10 @@ describe("DELETE /roles/:id", () => {
     expect(res.getBody().params).toEqual({ count: expect.any(Number) });
   });
 
-  // Regression coverage for a seeded
-  // role used to be deletable via this exact route (no isSeeded check
-  // anywhere in the stack) as long as it had zero members. Confirms the
-  // service-level refusal actually reaches an HTTP caller as a 403 with
-  // the named code, not just that deleteRole() itself throws.
   it("surfaces ROLE_IS_SEEDED as a 403 for a seeded role with ZERO members -- the exact gap that was reachable before this fix", async () => {
     const seededId = "role-seeded-technician";
     seedRole(seededId, "technician", ["server.control"]);
-    rolesById.get(seededId).isSeeded = true; // seedRole() always sets false; flip it for this one role
-    // No users hold it -- this was the reachable case: ROLE_HAS_MEMBERS
-    // never fired, so nothing else stood between the request and deletion.
+    rolesById.get(seededId).isSeeded = true;
 
     const res = await runRoute("/roles/:id", "delete", {
       user: { userId: "u-admin", role: "admin" },
@@ -235,6 +214,6 @@ describe("DELETE /roles/:id", () => {
 
     expect(res.getStatusCode()).toBe(403);
     expect(res.getBody().code).toBe("ROLE_IS_SEEDED");
-    expect(rolesById.has(seededId)).toBe(true); // untouched
+    expect(rolesById.has(seededId)).toBe(true);
   });
 });

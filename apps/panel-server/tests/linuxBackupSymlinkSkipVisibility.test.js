@@ -3,31 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29 hunt (god): backup-and-restore, suspects 2 (what's excluded)
-// and 3 (symlinks through the archive round trip).
-//
-// walkDirectory() deliberately never follows a symbolic link into the
-// archive (confirmed still correct and unchanged by
-// apps/panel-server/tests/backupRestoreSafety.test.js's own "does not follow symbolic
-// links outside the save directory" test -- a symlink pointing outside the
-// save tree must never leak arbitrary filesystem content into a backup).
-// But that decision used to be invisible: it was a plain `continue` inside
-// the generator, so the symlink never reached appendDirectoryToArchive()
-// at all, and the ONLY existing tracking mechanism -- the skippedFiles
-// array createBackup() already builds for files that vanish mid-archive
-// (ENOENT) -- never saw it either. Two exclusion reasons the same subsystem
-// already treats identically at every consumer (the "any skip is a
-// failure" policy at restoreBackup()'s pre-restore backup, and the same at
-// /wipe's pre-wipe backup) were tracked completely asymmetrically: one
-// surfaced, one silent. A save tree containing a symlink could produce an
-// "incomplete" pre-restore backup that read success:true with an EMPTY
-// skippedFiles, defeating the exact safety net that policy exists to
-// provide.
-//
-// This pins both: the symlink is still excluded (unchanged, still proven
-// by the sibling test in backupRestoreSafety.test.js), AND it now shows up
-// in skippedFiles like any other excluded entry, AND that visibility
-// actually changes restoreBackup()'s pre-restore-backup safety decision.
 
 const logServerEvent = vi.fn(async () => {});
 
@@ -98,9 +73,6 @@ describe("createBackup(): a symbolic link inside the save tree is tracked as a s
       );
 
       const service = createService();
-      // Seed a restorable backup first so restoreBackup() gets past its
-      // own file-lookup step and actually reaches the pre-restore-backup
-      // step under test.
       const seedService = createService();
       const seeded = await seedService.createBackup({ createPreRestoreBackup: false });
       expect(seeded.success).toBe(true);
@@ -113,8 +85,6 @@ describe("createBackup(): a symbolic link inside the save tree is tracked as a s
       expect(restoreResult.message).toMatch(/pre-restore backup failed/i);
       expect(restoreResult.message).toMatch(/could not include/i);
 
-      // And the live save must be completely untouched -- the whole point
-      // of refusing before ever extracting anything.
       expect(fs.existsSync(path.join(savesPath, "map_meta.bin"))).toBe(true);
     },
   );

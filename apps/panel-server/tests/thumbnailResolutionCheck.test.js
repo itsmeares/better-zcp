@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-// GET /diagnostics's mods.thumbnailResolution check -- spec from Jim (via
-// god, conv-debugjs-diagnostics): mod thumbnails silently fail (the
-// endpoint returns HTTP 200 with a 1x1 transparent GIF on every failure
-// path), so this is the only place a failed resolution is ever surfaced.
-// Tests the extracted pure function directly (buildThumbnailResolutionCheck)
-// rather than the whole GET /diagnostics handler, matching how the
-// support-bundle collectors are tested.
 
 const { buildThumbnailResolutionCheck } = await import("../routes/debug.js");
 

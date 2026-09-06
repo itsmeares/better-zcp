@@ -4,28 +4,6 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// bughunt-2026-08-31-c: POST /restore/:filename's primary `filename` var IS
-// safe -- path.basename() + a mandatory ".bak" extension check, and neither
-// "." nor ".." ends in ".bak" so both are rejected incidentally. But the
-// ORIGINAL filename recovered by stripping the ".bak"+timestamp suffix
-// (`originalName`, via lastIndexOf/substring) was never independently
-// re-validated before this fix, despite being the value actually joined
-// into a WRITE target:
-//
-//   const targetPath = path.join(configPath, originalName);
-//   ...
-//   await fs.promises.copyFile(backupPath, targetPath);
-//
-// A crafted (but real -- must exist in the backups dir) filename of
-// "....bak" (4 literal dots + "bak") makes the lastIndexOf/substring math
-// land on originalName === ".." exactly, so targetPath resolves to
-// configPath's PARENT directory. Before this fix, the only thing standing
-// between that and an actual traversal was fs.copyFile refusing a directory
-// as source or destination -- confirmed by an isolated repro outside this
-// repo to fail with EPERM on Windows (expected EISDIR on Linux, not
-// independently verified there). This file asserts the FIXED (explicit
-// ".", "..", and separator rejection) behavior instead of depending on that
-// platform-specific incidental protection.
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", () => ({
   getActiveServer,
@@ -78,7 +56,7 @@ function postRestore(filename) {
 }
 
 const SERVER_NAME = "servertest";
-let configDir; // <parentDir>/config -- the restore target's own directory
+let configDir;
 let parentDir;
 let backupDir;
 
@@ -101,9 +79,6 @@ afterEach(() => {
 describe("POST /restore/:filename -- originalName must be rejected when it resolves to '.' or '..'", () => {
   it("a crafted '....bak' backup (originalName strips to '..') is rejected, not restored", async () => {
     fs.writeFileSync(path.join(backupDir, "....bak"), "MALICIOUS-PARENT-OVERWRITE");
-    // Sentinel one level ABOVE configDir -- exactly what targetPath would
-    // resolve to (path.join(configDir, "..") === parentDir). If the
-    // traversal were live, this is what an attacker's copyFile would target.
     const sentinelPath = path.join(parentDir, "sentinel.txt");
     fs.writeFileSync(sentinelPath, "untouched");
 

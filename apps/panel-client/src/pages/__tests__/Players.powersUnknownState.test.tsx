@@ -5,20 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Players from '../Players'
 import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
 
-// 2026-08-31 impeccable pass, ruling from god: God Mode/Invisible/Noclip had
-// no fetch that ever populates their real current state (playerPowers only
-// gets an entry AFTER the operator has toggled one of the three this
-// session, via the optimistic update in handleGodMode/handleInvisible/
-// handleNoclip) -- so selectedPlayerPowers?.godMode is undefined on every
-// page load, for every player, until the operator's first click. Before this
-// fix, "never reported" and a confirmed "off" rendered identically: no
-// badge, and the button always read "Enable". That's irritant 1 in its
-// purest form -- the operator can't tell "confirmed off" from "we don't
-// know" -- and it isn't a rare edge case, it's the default state.
-// Fix: a third badge state (UNKNOWN, distinct from ON/OFF), and instead of
-// one toggle button silently assuming "currently off", two explicit buttons
-// (Enable / Disable) so each offered action's own outcome stays predictable
-// rather than the UI guessing a direction on the operator's behalf.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -122,10 +108,6 @@ describe('Players.tsx: Powers tab distinguishes "confirmed off" from "state neve
     await selectTestPlayerAndOpenPowers()
 
     expect(screen.getAllByText('UNKNOWN')).toHaveLength(3)
-    // "Enable" appears once per row (God Mode, Invisible, Noclip) -- same
-    // count the pre-fix single-button UI already had, so this alone
-    // wouldn't have caught the regression; the UNKNOWN badge assertion
-    // above and the Disable-button assertion below are what do.
     expect(screen.getAllByRole('button', { name: 'Enable' })).toHaveLength(3)
     expect(screen.getAllByRole('button', { name: 'Disable' })).toHaveLength(3)
   })

@@ -5,16 +5,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { serverApi, serversApi, rconApi, configApi, type ServerInstance } from '@/lib/api'
 
-// bug-hunt-2026-09-04: this page loaded the active server once on mount and
-// never again -- unlike Settings.tsx/Dashboard.tsx/Servers.tsx/WorldMap.tsx/
-// Layout.tsx, which all listen for activeServerChanged. Switching servers
-// elsewhere left Console showing the PREVIOUS server's name and RCON/
-// log-source gating while RCON commands (resolved against whichever server
-// is active now, same per-request pattern as ServerConfig's ini/sandbox
-// routes) would reach the NEW one -- UI and real target silently diverging.
-// This proves the fix reaches the real target, not just that it compiles:
-// two distinct servers, fire activeServerChanged, assert the displayed name
-// changes from the first to the second.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -45,12 +35,6 @@ vi.mock('@/lib/api', async () => {
   }
 })
 
-// A fake socket the test can fire activeServerChanged on directly. Must be a
-// STABLE reference (module-level singleton, not a fresh object literal per
-// useSocket() call) -- Console.tsx's activeServerChanged effect depends on
-// [socket], so a new identity every render would re-run (and re-fetch) the
-// effect on every single render instead of once, exactly the kind of
-// self-inflicted effect-thrashing a real Context value never produces.
 const socketHandlers = vi.hoisted(() => new Map<string, Set<() => void>>())
 const fakeSocket = vi.hoisted(() => ({
   connected: true,
@@ -86,11 +70,6 @@ function makeServer(overrides: Partial<ServerInstance>): ServerInstance {
   }
 }
 
-// serverA has a log source configured (installPath set) -- no "not
-// configured" banner. serverB has neither installPath nor zomboidDataPath --
-// hasServerLogSource flips false, surfacing the "Server log path not
-// configured" banner. This is the observable signal that Console actually
-// picked up the NEW server's data, not just re-rendered the old one.
 const serverA = makeServer({ id: 1, name: 'Ashenwood', serverName: 'Ashenwood', installPath: 'C:/servers/ashenwood' })
 const serverB = makeServer({ id: 2, name: 'Brightmoor', serverName: 'Brightmoor', installPath: null, zomboidDataPath: null })
 

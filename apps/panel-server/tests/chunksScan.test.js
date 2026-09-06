@@ -3,15 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// GET /chunks/:saveName and GET /stats/:saveName have no test coverage of
-// their own scan logic (chunksBrowse/chunksDeletionLogic/
-// chunksRoutesCapability cover other routes). This pins the counts, sizes,
-// and folder shape of a small deterministic B42 fixture so a future change
-// to the directory walk (bounded concurrency, the combined getDirStats
-// helper, or the /stats totalSize reuse) fails loudly instead of silently
-// under- or over-counting. /chunks feeds the list a user selects chunks to
-// delete from — a wrong count here is not a slow page, it is a user
-// deleting the wrong thing.
 const getActiveServer = vi.fn();
 const getSetting = vi.fn();
 const getServers = vi.fn();
@@ -36,16 +27,9 @@ function getHandler(routePath, method = "get") {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
-  // Some routes are registered with middleware ahead of the handler
-  // (permission checks, multer, etc.) — the actual route logic is always
-  // the last function in the stack.
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-// Builds:
-//   <root>/Saves/Multiplayer/<saveName>/map/{0,1,2}/{0,1}.bin   (6 chunks, B42)
-//   <root>/Saves/Multiplayer/<saveName>/chunkdata/0_0.bin       (1 chunkdata entry)
-// All zero-byte, so sizes are stable across machines/runs.
 function buildFixture(root, saveName) {
   const savePath = path.join(root, "Saves", "Multiplayer", saveName);
   const mapPath = path.join(savePath, "map");
@@ -63,8 +47,6 @@ function buildFixture(root, saveName) {
 }
 
 describe("GET /api/chunks/chunks/:saveName and /api/chunks/stats/:saveName", () => {
-  // Named with "Zomboid" so inspectZomboidPath() (used to validate
-  // ?customPath=) accepts it without needing real save-artifact files.
   let dataRoot;
   const saveName = "PinnedTestSave";
 
@@ -91,10 +73,6 @@ describe("GET /api/chunks/chunks/:saveName and /api/chunks/stats/:saveName", () 
     const body = response.json.mock.calls[0][0];
 
     expect(body.isB42).toBe(true);
-    // 6 map/ chunks + 1 chunkdata entry — chunkdata is tracked in its own
-    // dedup namespace (see the comment in the route above the chunkdata
-    // block) so it adds to totalChunks on top of, not instead of, the map
-    // chunks.
     expect(body.totalChunks).toBe(7);
     expect(body.bounds).toEqual({ minX: 0, maxX: 2, minY: 0, maxY: 1 });
 
@@ -108,7 +86,6 @@ describe("GET /api/chunks/chunks/:saveName and /api/chunks/stats/:saveName", () 
       "2,0", "2,1",
     ].sort());
     expect(body.chunks.some((c) => c.source === "chunkdata" && c.x === 0 && c.y === 0)).toBe(true);
-    // All fixture files are zero-byte.
     expect(body.chunks.every((c) => c.size === 0)).toBe(true);
   });
 
@@ -129,21 +106,10 @@ describe("GET /api/chunks/chunks/:saveName and /api/chunks/stats/:saveName", () 
     expect(body.folders.chunkdata).toEqual(
       expect.objectContaining({ fileCount: 1, size: 0 }),
     );
-    // All fixture files are zero-byte, so this also confirms totalSize
-    // isn't silently double- or under-counting the folders it reuses.
     expect(body.totalSize).toBe(0);
   });
 });
 
-// getMapFolderScan()'s short TTL cache (conv-operator-scale) bridges the gap
-// between /saves and the /chunks+/stats that follows it on the same page
-// mount, since they aren't concurrent and pure in-flight sharing can't help.
-// That TTL is explicitly a BACKSTOP, not the primary correctness mechanism —
-// this pins both halves: the cache really is reused within the window (or
-// /saves+/chunks+/stats gain nothing from it), and delete-chunks/
-// delete-region really do invalidate it immediately rather than leaving a
-// stale chunk count visible after the exact action a user takes to change
-// that count.
 describe("map/ scan caching: TTL backstop + explicit invalidation on delete", () => {
   let dataRoot;
   const saveName = "PinnedTestSave";
@@ -172,10 +138,6 @@ describe("map/ scan caching: TTL backstop + explicit invalidation on delete", ()
     getSetting.mockReset();
     dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chunks-scan-ttl-FakeZomboidData-"));
     buildFixture(dataRoot, saveName);
-    // bug-hunt-2026-08-27: delete-chunks now requires a customPath to
-    // match a configured server's zomboidDataPath -- register dataRoot as
-    // one so this describe block's own delete-chunks call (line ~204
-    // below) keeps exercising cache invalidation, not this unrelated gate.
     getServers.mockReset().mockResolvedValue([{ id: "s1", zomboidDataPath: dataRoot }]);
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -188,16 +150,14 @@ describe("map/ scan caching: TTL backstop + explicit invalidation on delete", ()
 
   it("serves a cached scan within the TTL even though a file was deleted directly on disk (simulating a writer this cache can't see, e.g. /wipe or a backup restore), then re-scans once the TTL elapses", async () => {
     const first = await getChunks();
-    expect(first.totalChunks).toBe(7); // 6 map/ chunks + 1 chunkdata entry
+    expect(first.totalChunks).toBe(7);
 
-    // A write this module has no way to intercept -- not routed through
-    // delete-chunks/delete-region, so nothing calls invalidateMapFolderScan().
     fs.rmSync(path.join(dataRoot, "Saves", "Multiplayer", saveName, "map", "0", "0.bin"));
 
     const withinTtl = await getChunks();
-    expect(withinTtl.totalChunks).toBe(7); // still the cached, now-stale count
+    expect(withinTtl.totalChunks).toBe(7);
 
-    vi.setSystemTime(3001); // MAP_SCAN_TTL_MS is 3000
+    vi.setSystemTime(3001);
     const afterTtl = await getChunks();
     expect(afterTtl.totalChunks).toBe(6);
   });
@@ -212,8 +172,6 @@ describe("map/ scan caching: TTL backstop + explicit invalidation on delete", ()
       chunks: [{ file: "0/0.bin", x: 0, y: 0 }],
     });
 
-    // No time has passed (still t=0) -- if the TTL were the only mechanism
-    // this would still return the stale cached 7.
     const afterDelete = await getChunks();
     expect(afterDelete.totalChunks).toBe(6);
   });

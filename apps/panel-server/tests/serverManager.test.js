@@ -82,7 +82,6 @@ describe('ServerManager process ownership', () => {
 });
 
 describe('ServerManager detection with two servers on one host', () => {
-  // Only Server A is running.
   const running = [
     {
       pid: '111',
@@ -240,17 +239,9 @@ describe('ServerManager status state', () => {
   });
 
   it('does not corrupt the tracked running state when a scan fails to determine anything', async () => {
-    // Regression: getServerProcessDetails() unconditionally set
-    // `this.isRunning = resolved.length > 0` after every scan, including a
-    // failed one (scan.matched is always [] on failure, so resolved.length
-    // is always 0) -- silently latching a confident "not running" onto the
-    // one cached field other code paths (apps/panel-server/routes/serverStatus.js, the
-    // dashboard's host signal) trust directly, even though the scan itself
-    // could not tell. A server that WAS running a moment ago looked
-    // confidently stopped the instant detection started failing.
     const manager = new ServerManager();
     manager.configLoaded = true;
-    manager.isRunning = true; // last known state, from a scan that succeeded
+    manager.isRunning = true;
     manager._scanDedicatedServerProcesses = async () => ({
       running: false,
       matched: [],
@@ -264,10 +255,6 @@ describe('ServerManager status state', () => {
   });
 
   it('surfaces scanFailed so callers can tell a failed scan from a confirmed stop', async () => {
-    // Regression: getServerStatus() used to compute scanFailed internally
-    // (to decide whether to clear run state) but never include it in the
-    // object returned to callers -- so a hung/erroring process scan looked
-    // identical to a real "server is stopped" to every consumer of /status.
     const manager = new ServerManager();
     manager.configLoaded = true;
     manager.configLoadedFor = null;
@@ -287,8 +274,6 @@ describe('ServerManager status state', () => {
 
     expect(status.running).toBe(false);
     expect(status.scanFailed).toBe(true);
-    // A failed scan must not be treated as a confirmed stop: startTime is
-    // preserved rather than wiped, matching the existing _clearRunState guard.
     expect(status.startTime).not.toBeNull();
   });
 });

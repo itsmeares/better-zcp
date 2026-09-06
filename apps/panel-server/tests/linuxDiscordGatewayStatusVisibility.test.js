@@ -1,20 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// hunt-wave6-2026-08-29 follow-up 2 (operator-visible signal): getStatus()
-// used to have no field at all for gateway health -- a real, self-healing
-// heartbeat black hole (suspect 4) and a permanent, unrecoverable shard
-// disconnect both left `running` reporting true throughout, so an operator
-// watching the page saw a healthy bot while alerting was actually down.
-//
-// This file tests getStatus()'s DEBOUNCE MATH directly and fast, by
-// manipulating the internal _gatewayDegradedSince field the same way
-// existing tests poke _channelBreakers -- no real network needed for this
-// half. The event WIRING (does a real shardReconnecting/shardResume/
-// shardDisconnect from an actual discord.js Client actually drive that
-// field) is proven separately, against a real gateway mock, in
-// linuxDiscordGatewayResilience.test.js -- that file also confirms a real,
-// fast (~2-3s) RESUME never crosses this threshold, so this file's job is
-// only to prove the threshold arithmetic itself is correct.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: async () => null,
@@ -38,7 +23,7 @@ describe("DiscordBot.getStatus() -- gatewayIssue debounce", () => {
 
   it("degraded but well under the threshold (a routine blip in progress): still reports healthy", () => {
     const bot = makeBot();
-    bot._gatewayDegradedSince = Date.now() - 5_000; // 5s in -- suspect 4 measured real RESUME at ~2-3s
+    bot._gatewayDegradedSince = Date.now() - 5_000;
     const status = bot.getStatus();
     expect(status.gatewayIssue).toBe(false);
     expect(status.gatewayDegradedSince).toBeNull();
@@ -46,7 +31,7 @@ describe("DiscordBot.getStatus() -- gatewayIssue debounce", () => {
 
   it("degraded past the threshold: gatewayIssue true, gatewayDegradedSince is the real episode-start timestamp", () => {
     const bot = makeBot();
-    const since = Date.now() - 31_000; // just past GATEWAY_DEGRADED_THRESHOLD_MS (30s)
+    const since = Date.now() - 31_000;
     bot._gatewayDegradedSince = since;
     const status = bot.getStatus();
     expect(status.gatewayIssue).toBe(true);
@@ -61,8 +46,8 @@ describe("DiscordBot.getStatus() -- gatewayIssue debounce", () => {
 
   it("recovering (a resume/ready handler cleared the field) immediately reports healthy again, even moments after a long degraded stretch", () => {
     const bot = makeBot();
-    bot._gatewayDegradedSince = Date.now() - 120_000; // was degraded for 2 real minutes
-    bot._gatewayDegradedSince = null; // ...then a shardResume/shardReady handler fired
+    bot._gatewayDegradedSince = Date.now() - 120_000;
+    bot._gatewayDegradedSince = null;
     const status = bot.getStatus();
     expect(status.gatewayIssue).toBe(false);
     expect(status.gatewayDegradedSince).toBeNull();

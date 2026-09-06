@@ -101,7 +101,6 @@ describe('getCandidateZomboidPaths', () => {
   it('caches results between calls', () => {
     const a = getCandidateZomboidPaths();
     const b = getCandidateZomboidPaths();
-    // Same reference = cached
     expect(a).toBe(b);
   });
 
@@ -109,9 +108,7 @@ describe('getCandidateZomboidPaths', () => {
     const a = getCandidateZomboidPaths();
     invalidateCandidatePathsCache();
     const b = getCandidateZomboidPaths();
-    // Different reference = fresh
     expect(a).not.toBe(b);
-    // But same content shape
     expect(a.map(c => c.path)).toEqual(b.map(c => c.path));
   });
 });
@@ -181,9 +178,6 @@ describe('inspectZomboidPath', () => {
     const saves = path.join(parent, 'Saves');
     fs.mkdirSync(saves, { recursive: true });
     const v = inspectZomboidPath(saves);
-    // /saves/ matches isInsideSavesDir so the path is technically accepted,
-    // but parentSuggestion is still populated so the UI can offer "did you
-    // mean the parent?" as a one-click alternative.
     expect(v.parentSuggestion).toBe(parent);
   });
 

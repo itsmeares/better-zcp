@@ -16,8 +16,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { CONFLICT_FILE_LIMIT, useLocalStorageState, type DepSearchState } from '@/lib/modsShared'
 
 export interface ConflictsPanelProps {
-  /* scan lifecycle — owned by the Mods page because the rail and the Active
-     view both read scan results */
   conflicts: ConflictScanResult | null
   conflictsLoading: boolean
   conflictsError: string | null
@@ -29,17 +27,14 @@ export interface ConflictsPanelProps {
   scanModsScanned: number
   scanTotalMods: number
   streamConflicts: ScanStreamConflictFound[]
-  /** Deep link from the dashboard's "review unresolved deps" action. */
   focusDependencies?: boolean
 
-  /* page context */
   fetchData: () => void | Promise<void>
   busyRef: MutableRefObject<boolean>
   savingModOrder: boolean
   promoteModOverOpponent: (winnerModId: string, winnerName: string, loserModId: string, loserName: string) => Promise<void>
   toast: (opts: any) => void
 
-  /* Workshop dependency search — shared with the Active-on-server inspector */
   depSearchOpen: Set<string>
   setDepSearchOpen: Dispatch<SetStateAction<Set<string>>>
   depSearchData: Record<string, DepSearchState>
@@ -69,7 +64,6 @@ export function ConflictsPanel({
   const [modDetailsId, setModDetailsId] = useState<string | null>(null)
   const [fixingAllDeps, setFixingAllDeps] = useState(false)
 
-  // A fresh scan invalidates the mod filter and the expanded-pair set.
   useEffect(() => {
     if (!conflictsLoading) return
     setGraphFilterMod(null)
@@ -81,7 +75,6 @@ export function ConflictsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusDependencies])
 
-  // ── Severity filter: memoized conflict pair counts ──
   const severityCounts = useMemo(() => {
     if (!conflicts?.pairs?.length) return { all: 0, high: 0, medium: 0, low: 0 }
     const allPairs = graphFilterMod
@@ -96,7 +89,6 @@ export function ConflictsPanel({
     }
   }, [conflicts?.pairs, graphFilterMod])
 
-  // ── Dependencies sub-tab: memoized unified row list ──
   const depRows = useMemo(() => {
     const missingDeps = conflicts?.missingDeps || []
     const steamDeps = conflicts?.steamDeps || []
@@ -127,7 +119,6 @@ export function ConflictsPanel({
     return rows
   }, [conflicts?.missingDeps, conflicts?.steamDeps])
 
-  // Deduped dependency count — steam deps take priority, local deps skip if already covered
   const dedupedDepCount = useMemo(() => {
     const missingDeps = conflicts?.missingDeps || []
     const steamDeps = conflicts?.steamDeps || []
@@ -141,7 +132,6 @@ export function ConflictsPanel({
     return count
   }, [conflicts?.missingDeps, conflicts?.steamDeps])
 
-  // Memoize conflict-pairs derived data to avoid recalc on every render
   const loadOrderMap = useMemo(() => {
     const entries: [string, number][] = (conflicts?.modLoadOrder ?? []).map((id, i) => [id, i + 1] as [string, number])
     return new Map(entries)
@@ -173,7 +163,6 @@ export function ConflictsPanel({
     return pairs
   }, [conflicts?.pairs, graphFilterMod, pairSeverityFilter, pairSearchQuery])
 
-  // Top conflicting mods — ranked by number of pairs and severity
   const topConflictingMods = useMemo(() => {
     if (!conflicts?.pairs?.length) return []
     const modStats = new Map<string, { modId: string; modName: string; pairs: number; high: number; medium: number; low: number; files: number }>()
@@ -193,11 +182,6 @@ export function ConflictsPanel({
     return Array.from(modStats.values()).sort((a, b) => (b.high - a.high) || (b.medium - a.medium) || (b.pairs - a.pairs)).slice(0, 15)
   }, [conflicts?.pairs])
 
-  // Group pairs by their winning mod. A pair is grouped under whoever takes
-  // every overlapping file at runtime (mod A, mod B, or a third mod). Pairs
-  // with no clear winner (split / unknown) collapse into one "Mixed" bucket.
-  // This dramatically de-duplicates rows when one mod (e.g. TchernoLib) wins
-  // against many others.
   const groupedPairs = useMemo(() => {
     if (!filteredPairs.length) return [] as Array<{ key: string; name: string; modId: string | null; pairs: typeof filteredPairs }>
     const groups = new Map<string, { key: string; name: string; modId: string | null; pairs: typeof filteredPairs }>()
@@ -215,7 +199,6 @@ export function ConflictsPanel({
         name = tpMod?.modName ?? t('otherMod')
         modId = tpMod?.modId ?? null
       } else if (aw === 0 && bw === 0 && tp === 0 && uk === 0) {
-        // No overlap winner data — fall back to load order
         const posA = loadOrderMap.get(pair.modA.modId)
         const posB = loadOrderMap.get(pair.modB.modId)
         if (posA != null && posB != null && posA !== posB) {
@@ -237,9 +220,6 @@ export function ConflictsPanel({
     })
   }, [filteredPairs, loadOrderMap, t])
 
-  // After a scan completes, if the user is on the "Real" view but there are
-  // no high/medium conflicts, fall back to "Low" so they see something instead
-  // of an empty filter.
   useEffect(() => {
     if (!conflicts) return
     if (pairSeverityFilter === 'real' && severityCounts.real === 0 && severityCounts.low > 0) {
@@ -278,11 +258,9 @@ export function ConflictsPanel({
         </div>
       </CardHeader>
       <CardContent>
-        {/* Loading state — streaming scan */}
         {conflictsLoading && !conflicts ? (
           <div className="py-6">
             <div className="max-w-md mx-auto space-y-4">
-              {/* Real progress bar */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-muted-foreground" aria-live="polite">
                   <span>{scanCurrentMod || t('preparingToScan')}</span>
@@ -303,7 +281,6 @@ export function ConflictsPanel({
                 )}
               </div>
 
-              {/* Live conflict feed */}
               {streamConflicts.length > 0 && (
                 <div className="rounded-lg border border-border/30 bg-muted/10 overflow-hidden" aria-live="polite">
                   <div className="px-3 py-1.5 text-[11px] font-medium text-warning/80 border-b border-border/30 bg-warning/5">
@@ -328,7 +305,6 @@ export function ConflictsPanel({
             </div>
           </div>
         ) : conflictsError && !conflicts ? (
-          /* Error state — scan failed with no prior results */
           <div className="flex items-center justify-center py-8 text-muted-foreground">
             <div className="text-center max-w-xs space-y-3">
               <ShieldAlert className="w-10 h-10 mx-auto text-destructive/60" aria-hidden="true" />
@@ -347,7 +323,6 @@ export function ConflictsPanel({
         ) : !conflicts ? (
           <div className="py-6">
             <div className="mx-auto max-w-2xl">
-              {/* Hero */}
               <div className="flex flex-col items-center text-center mb-6">
                 <div className="relative mb-4" aria-hidden="true">
                   <div className="absolute inset-0 rounded-2xl bg-primary/15 blur-xl" />
@@ -361,7 +336,6 @@ export function ConflictsPanel({
                 </p>
               </div>
 
-              {/* What gets checked — 3 columns */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5">
                 <div className="rounded-lg border border-border/50 bg-muted/15 px-3 py-3">
                   <div className="flex items-center gap-2 mb-1.5">
@@ -392,7 +366,6 @@ export function ConflictsPanel({
                 </div>
               </div>
 
-              {/* CTA + meta */}
               <div className="flex flex-col items-center gap-2">
                 <Button onClick={scanConflicts} disabled={conflictsLoading} className="min-w-[200px]">
                   <Shield className="w-4 h-4 me-2" aria-hidden="true" />
@@ -407,7 +380,6 @@ export function ConflictsPanel({
           </div>
         ) : (
           <div className={`space-y-3 stagger-in relative ${conflictsLoading ? 'pointer-events-none' : ''}`}>
-            {/* Re-scan overlay */}
             {conflictsLoading && (
               <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-lg transition-opacity duration-200 animate-in fade-in" role="status" aria-busy="true">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -417,9 +389,6 @@ export function ConflictsPanel({
               </div>
             )}
 
-            {/* Error or fallback banner on re-scan. Tone depends on whether
-                we still have results to show: with results = soft warning
-                ("showing cached"), without = destructive ("scan failed"). */}
             {conflictsError && (() => {
               const recovered = !!conflicts
               const isCacheFallback = /cached results/i.test(conflictsError)
@@ -437,7 +406,6 @@ export function ConflictsPanel({
               )
             })()}
 
-            {/* Stale results banner — INI changed since last scan */}
             {conflictsStale && !conflictsLoading && (
               <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 flex items-center gap-2 text-xs">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-warning" aria-hidden="true" />
@@ -448,7 +416,6 @@ export function ConflictsPanel({
               </div>
             )}
 
-            {/* Mod ID collisions — multiple workshop items declare the same internal mod id */}
             {(conflicts.idCollisions?.filter(c => c.active).length ?? 0) > 0 && (
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-2">
                 <div className="flex items-start gap-2 text-xs">
@@ -487,11 +454,6 @@ export function ConflictsPanel({
               </div>
             )}
 
-            {/* ─── Verdict hero ───
-                Headline number must match the active severity tab so
-                users don't see "6 conflicts found" while a tab labelled
-                "Real 1" is selected. We derive `headlineCount` from the
-                active filter and pick a label that fits. */}
             {(() => {
               const f = pairSeverityFilter
               const headlineCount = (
@@ -525,11 +487,9 @@ export function ConflictsPanel({
                 role="status"
                 aria-live="polite"
               >
-                {/* Severity stripe — left edge accent */}
                 <div className={`absolute inset-y-0 left-0 w-1 ${isWarn ? 'bg-warning/60' : isSuccess ? 'bg-success/60' : 'bg-muted-foreground/40'}`} aria-hidden="true" />
 
                 <div className="flex items-stretch">
-                  {/* Headline — big number + label */}
                   <div className="flex items-center gap-3.5 px-4 py-3 flex-1 min-w-0">
                     {isWarn ? (
                       <FileWarning className="w-5 h-5 text-warning shrink-0" aria-hidden="true" />
@@ -584,7 +544,6 @@ export function ConflictsPanel({
                     )}
                   </div>
 
-                  {/* Scan stats strip — right side */}
                   <div className="flex items-center gap-4 border-s border-border/30 px-4 py-3 text-[11px] bg-background/30">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -671,7 +630,6 @@ export function ConflictsPanel({
             )
             })()}
 
-            {/* No conflicts — only when scanned and nothing found */}
             {conflicts.modsScanned > 0 && conflicts.totalConflicts === 0 && dedupedDepCount === 0 && (
               <div className="flex items-center justify-center py-8 text-muted-foreground scan-complete-flash">
                 <div className="text-center max-w-xs">
@@ -699,10 +657,8 @@ export function ConflictsPanel({
               </div>
             )}
 
-            {/* ─── Inner sub-tabs: Network / Dependencies ─── */}
             {(conflicts.totalConflicts > 0 || dedupedDepCount > 0) && (
               <div>
-                {/* Sub-tab bar */}
                 <div className="flex items-center gap-1 border-b border-border/30 mb-3">
                   <button
                     onClick={() => setConflictSubTab('network')}
@@ -734,11 +690,9 @@ export function ConflictsPanel({
                   </button>
                 </div>
 
-                {/* ═══ NETWORK SUB-TAB ═══ */}
                 {conflictSubTab === 'network' && (
                   <div className="space-y-3">
 
-                    {/* Severity filter tabs + pairs header */}
                     {(conflicts.pairs?.length ?? 0) > 0 && (() => {
                       const allPairKeys = filteredPairs.map(p => `${p.modA.modId}--${p.modB.modId}`)
                       const allExpanded = openPairs.length === allPairKeys.length && allPairKeys.length > 0
@@ -883,7 +837,6 @@ export function ConflictsPanel({
                           </details>
                           </div>
 
-                          {/* Pairs list */}
                           {filteredPairs.length > 0 ? (
                             <div className="max-h-[min(calc(100vh-420px),70vh)] min-h-[200px] overflow-y-auto rounded-lg border border-border/20 pe-1">
                               <div className="p-1.5 space-y-2">
@@ -938,7 +891,6 @@ export function ConflictsPanel({
                                               : null
                                             const fallbackWinnerSide = aw === 0 && bw === 0 && tp === 0 && uk === 0 ? winner : null
 
-                                            // Mod name pill — gets a subtle "winner" highlight when this mod wins all files
                                             const modPill = (mod: typeof pair.modA, pos: number | undefined, isWinner: boolean, isLoser: boolean) => (
                                               <div className={`flex flex-col min-w-0 max-w-[44%] flex-1 px-2 py-1 rounded transition-colors ${
                                                 isWinner ? 'bg-success/10 border border-success/25' : isLoser ? 'opacity-60' : ''
@@ -962,9 +914,7 @@ export function ConflictsPanel({
                                                 } hidden sm:block`} aria-hidden="true" />
                                                 {modPill(pair.modB, posB, bWinsAll || fallbackWinnerSide === 'B', aWinsAll || fallbackWinnerSide === 'A')}
 
-                                                {/* Verdict pill on the right */}
                                                 <div className="flex shrink-0 flex-wrap items-center gap-2 sm:ms-auto sm:flex-nowrap">
-                                                  {/* File count + severity dots */}
                                                   <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-muted/30 border border-border/30">
                                                     <span className="text-[11px] tabular-nums font-medium text-foreground/80">
                                                       {totalFiles}
@@ -994,7 +944,6 @@ export function ConflictsPanel({
                                                     )}
                                                   </div>
 
-                                                  {/* Verdict badge */}
                                                   {tpWinsAll ? (
                                                     <Tooltip>
                                                       <TooltipTrigger asChild>
@@ -1047,7 +996,6 @@ export function ConflictsPanel({
                                       </AccordionTrigger>
                                       <AccordionContent>
                                         <div className="px-4 pb-3 pt-1 space-y-1">
-                                          {/* Severity breakdown — shown in expanded detail */}
                                           <div className="flex items-center gap-2 mb-2 flex-wrap">
                                             {pair.highCount > 0 && (
                                               <Badge variant="destructive" className="text-[11px] leading-none h-[18px] px-1.5">{t('severityHighBadge', { count: pair.highCount })}</Badge>
@@ -1060,7 +1008,6 @@ export function ConflictsPanel({
                                             )}
                                             <span className="text-[11px] text-muted-foreground/70">{t('shownCount', { count: visibleFiles.length })}{hiddenCount > 0 ? ` · ${t('hiddenCount', { count: hiddenCount })}` : ''}</span>
 
-                                            {/* Fix-it actions: promote one mod over the other in load order. */}
                                             {posA != null && posB != null && (
                                               <div className="ms-auto flex items-center gap-1.5 flex-wrap">
                                                 <DisabledReason reason={posA > posB ? t('alreadyLoadsLast', { name: pair.modA.modName }) : null}>
@@ -1181,7 +1128,6 @@ export function ConflictsPanel({
                   </div>
                 )}
 
-                {/* ═══ DEPENDENCIES SUB-TAB ═══ */}
                 {conflictSubTab === 'dependencies' && (() => {
                   const rows = depRows
                   const missingRaw = conflicts?.missingDeps || []
@@ -1205,14 +1151,6 @@ export function ConflictsPanel({
                     setDepAdding(prev => [...prev, key]);
                     try {
                       const result = await modsApi.addMissingDep(workshopId, modId);
-                      // modId, not the request having resolved without
-                      // throwing, is the per-item success signal (see
-                      // apps/panel-server/routes/mods.js's own comment) -- a
-                      // steam-sourced row's modId starts null, and if the
-                      // server's best-effort description scrape still can't
-                      // resolve one, the workshop item is now subscribed but
-                      // not enabled. That must not read as fixed here any
-                      // more than it does in handleFixAll below.
                       setDepAddResults(prev => ({ ...prev, [key]: result.modId !== null ? 'added' as const : 'error' as const }));
                     } catch {
                       setDepAddResults(prev => ({ ...prev, [key]: 'error' as const }));
@@ -1222,10 +1160,6 @@ export function ConflictsPanel({
                     }
                   };
 
-                  // Undo a recently-added dependency — removes the mod
-                  // from tracking + server config and flips the row back
-                  // to its actionable state. Useful when Add Resolved
-                  // was clicked by accident.
                   const handleUndoDep = async (workshopId: string, key: string) => {
                     if (busyRef.current) return
                     busyRef.current = true
@@ -1251,9 +1185,6 @@ export function ConflictsPanel({
                     }
                   };
 
-                  // Inline Workshop search for unresolved deps. Runs the
-                  // smart server-side search (variant expansion + Steam
-                  // QueryFiles) and caches results so re-opening is instant.
                   const runDepSearch = async (row: typeof rows[number], force = false) => {
                     const key = row.key
                     if (!force && depSearchData[key] && !depSearchData[key].error) return
@@ -1289,18 +1220,6 @@ export function ConflictsPanel({
                       const response = await modsApi.addAllResolvedDeps(
                         addableRows.map(r => ({ workshopId: r.depWorkshopId!, modId: r.depModId || undefined }))
                       )
-                      // The aggregate wsAdded/modIdsAdded counts (and the
-                      // request having resolved without throwing at all)
-                      // can't tell us WHICH row, if any, only got its
-                      // workshop ID subscribed without a real Mod ID ever
-                      // resolving -- that row is left subscribed but never
-                      // loads, the exact conflict this panel exists to
-                      // catch, so it must not turn green here. Match each
-                      // requested row back to its own results[] entry by
-                      // workshopId and gate on THAT entry's modId, not on
-                      // the batch call having succeeded overall (see
-                      // apps/panel-server/routes/mods.js's own comment on why modId,
-                      // not wsAdded, is the per-item signal).
                       const resultByWorkshopId = new Map(
                         (response.results || []).map(r => [r.workshopId, r])
                       )
@@ -1323,7 +1242,6 @@ export function ConflictsPanel({
 
                   return (
                     <div className="space-y-3">
-                      {/* Header with Fix All */}
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">
                           {t('missingCount', { count: rows.length })}
@@ -1350,9 +1268,6 @@ export function ConflictsPanel({
                         )}
                       </div>
 
-                      {/* Flat list — one row per dependency. Added rows
-                          stay visible (with strikethrough) so users can
-                          undo an accidental add via the Remove button. */}
                       <div className="rounded-lg border border-border/30 overflow-hidden divide-y divide-border/20 max-h-[min(calc(100vh-380px),70vh)] min-h-[200px] overflow-y-auto">
                         {rows.map((row) => {
                           const added = depAddResults[row.key] === 'added'
@@ -1364,12 +1279,10 @@ export function ConflictsPanel({
                           return (
                             <div key={row.key} className={`transition-colors ${added ? 'bg-success/5' : 'bg-background/30 hover:bg-muted/10'}`}>
                               <div className="flex items-center gap-3 px-4 py-2.5">
-                              {/* Status dot */}
                               <span className={`w-2 h-2 rounded-full shrink-0 ${
                                 added ? 'bg-success' : row.depWorkshopId ? 'bg-warning' : 'bg-destructive'
                               }`} />
 
-                              {/* Dep name + required-by (two-line) */}
                               <div className="flex-1 min-w-0">
                                 <span className={`text-sm font-medium block truncate ${added ? 'text-success/80 line-through' : 'text-foreground/90'}`}>
                                   {row.depName}
@@ -1384,7 +1297,6 @@ export function ConflictsPanel({
                                 </span>
                               </div>
 
-                              {/* Action */}
                               <div className="shrink-0 flex items-center gap-1.5">
                                 {added ? (
                                   <>
@@ -1442,7 +1354,6 @@ export function ConflictsPanel({
                               </div>
                               </div>
 
-                              {/* Inline candidate finder for unresolved deps */}
                               {searchOpen && !row.depWorkshopId && !added && (
                                 <div id={`dep-search-${row.key}`} className="border-t border-border/20 bg-muted/20 px-4 py-3">
                                   {searchState?.loading ? (
@@ -1562,7 +1473,6 @@ export function ConflictsPanel({
       </CardContent>
     </Card>
 
-    {/* ─── Per-mod conflict details drawer ─── */}
     <Dialog open={modDetailsId != null} onOpenChange={(open) => { if (!open) setModDetailsId(null) }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto sm:max-h-[80vh]">
         {(() => {
@@ -1579,11 +1489,9 @@ export function ConflictsPanel({
               </>
             )
           }
-          // Resolve display name from first pair we find
           const firstHit = myPairs[0]
           const modName = firstHit.modA.modId === modDetailsId ? firstHit.modA.modName : firstHit.modB.modName
           const pos = loadOrderMap.get(modDetailsId)
-          // Tally wins/losses across pairs (based on load order)
           let winsPairs = 0, losesPairs = 0, tiedPairs = 0
           let totalFiles = 0
           const extCounts = new Map<string, number>()
@@ -1612,7 +1520,6 @@ export function ConflictsPanel({
             const key = `${pair.modA.modId}--${pair.modB.modId}`
             setOpenPairs(prev => prev.includes(key) ? prev : [...prev, key])
             setModDetailsId(null)
-            // Defer scroll until accordion has opened
             setTimeout(() => {
               const el = document.querySelector(`[data-state][value="${CSS.escape(key)}"]`) as HTMLElement | null
               el?.scrollIntoView({ behavior: 'smooth', block: 'center' })

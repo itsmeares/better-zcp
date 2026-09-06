@@ -3,23 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-27, revert decision on d490410 (Pam removed "view the mod debug log
-// and stats" from bridge.diagnostics and "database maintenance tools" from
-// diagnostics.manage on a UI-caller test alone, without checking whether the
-// handlers behind bridge.diagnostics actually work -- her own gap, flagged
-// in her own commit). god's instruction: run the same real-execution method
-// 01a5bc7 used on the visual-settings handlers, per-handler, each with a
-// negative control proving a genuine failure is detectable.
-//
-// NINE Lua handlers are gated by bridge.diagnostics, not seven -- the count
-// moved once already (four to seven) per god's own framing, and it moved
-// again: POST /catalog/scan-items and POST /catalog/scan-vehicles are ALSO
-// gated by bridge.diagnostics and ALSO call a Lua handler (getItemCatalog,
-// getVehicleCatalog) that Pam's revert decision did not name. Included here;
-// reported as "found more" rather than silently expanding the scope.
-//
-// Does NOT touch /database, /database/backup, /database/compact -- those are
-// Node/Express, not Lua, explicitly routed to a different check.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -34,9 +17,6 @@ const LUA_PATH = path.join(
   'PanelBridge.lua',
 );
 
-// Builds a Lua snippet for a fake Java-list-shaped object (:size(), :get(i)
-// 0-based), matching how every handler here consumes ScriptManager's real
-// return values (allItems:size(), allItems:get(i)).
 function luaJavaList(varName, itemsLuaLiteral) {
   return `
 local ${varName}_items = ${itemsLuaLiteral}
@@ -76,8 +56,6 @@ describe('bridge.diagnostics Lua handlers -- do something real if called (real L
     bridge.run('__DM_ON = PanelBridgeModule.DEBUG_MODE');
     expect(bridge.getGlobal('__DM_ON')).toBe(true);
 
-    // Negative control: a string "true" is not the Lua boolean true --
-    // args.enabled == true must reject it, not truthy-coerce it.
     const stringTrue = bridge.callHandler('setDebugMode', { enabled: 'true' });
     expect(stringTrue.data.debugMode).toBe(false);
     bridge.run('__DM_STR = PanelBridgeModule.DEBUG_MODE');
@@ -100,8 +78,6 @@ describe('bridge.diagnostics Lua handlers -- do something real if called (real L
     expect(result.data.commandsSucceeded).toBe(3);
     expect(result.data.commandsFailed).toBe(2);
     expect(result.data.lastError).toBe('boom');
-    // (4000 - 1000) / 1000 -- proves this is computed from the two real
-    // inputs, not a hardcoded or always-zero value.
     expect(result.data.uptime).toBe(3);
   });
 
@@ -119,8 +95,6 @@ describe('bridge.diagnostics Lua handlers -- do something real if called (real L
     const missingMethod = bridge.callHandler('checkAPI', { object: 'ClimateManager', method: 'noSuchMethod' });
     expect(missingMethod.data.methodAvailable).toBe(false);
 
-    // Negative control: no getGameTime stub exists in this Lua state at
-    // all -- must honestly report unavailable, not claim success anyway.
     const absent = bridge.callHandler('checkAPI', { object: 'GameTime' });
     expect(absent.data.available).toBe(false);
   });

@@ -26,13 +26,6 @@ vi.mock("../database/init.js", () => ({
 
 const { ModChecker } = await import("../services/modChecker.js");
 
-// Regression (2026-08-31 services sweep): init()'s restored auto-restart
-// callback was block-bodied and never returned handleModUpdate()'s result,
-// so checkForUpdates()'s `callbackResult?.markProcessed === true` dedup
-// check always saw undefined for a normal (non-player-delayed) restart --
-// the same update could retrigger another restart on the next check cycle.
-// routes/config.js's bulk-save callback (an implicit-return arrow) was the
-// one call site that already got this right.
 describe("ModChecker.init(): restored auto-restart callback propagates handleModUpdate's result", () => {
   beforeEach(() => {
     getSetting.mockClear();

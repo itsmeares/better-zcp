@@ -5,19 +5,6 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-// config.js: 15 routes, only PUT /app-settings had a requireRole call.
-// PUT / (writes the server's .ini config), PUT /rcon (writes the RCON
-// password/host/port) and /cors-debug (diagnostics that can also clear
-// blocked-origin state) were reachable by any signed-in account. Same
-// both-directions standard as the rest of the sweep.
-//
-// bug-hunt-2026-08-26: GET/PUT /, POST /reload, GET /options, POST /option,
-// GET/PUT /paths and GET/PUT /rcon were removed as dead code (no client
-// caller anywhere, undocumented, superseded by serverFilesApi's ini/sandbox
-// endpoints and server.js's /configure-rcon) -- see errorCodes.js's removed
-// CONFIG_* entries for the sites that used to guard them. The sweep below
-// is narrower now because there is genuinely less surface, not because
-// coverage was dropped.
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

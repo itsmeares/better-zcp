@@ -3,16 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 2, item 1 (the highest of the three
-// pcall-boundary-width findings). handlers.getClimateFloats' loop over its
-// 13 known ClimateFloat ids had NO pcall protection at all -- not merely a
-// wide boundary shared across all 13 (the getWeather/getPlayerDetails
-// shape already fixed elsewhere), an absent catch entirely. One float
-// object's accessor throwing crashed the WHOLE handler uncaught, straight
-// past to the dispatcher's outer pcall as a generic "Handler crashed: ..."
-// instead of a clean ok=false -- and took every OTHER float down with it,
-// even ones that would have read fine. Events.tsx polls this handler every
-// 10s, making it the most-invoked handler this fix touches.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

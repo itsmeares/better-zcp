@@ -6,13 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// 2026-08-31 quality pass, operator-approved aesthetic fix: below `lg` the
-// sidebar/content grid collapses to one column, so picking a control from
-// the ~18-item nav left the selected section's own panel below everything
-// else on the page -- reaching it cost a full scroll past the whole nav (and
-// Recent Actions) every time. Scoped narrowly to that case: on a narrow
-// viewport, picking a section now scrolls the content panel into view;
-// desktop (where nav and content are already both visible) is untouched.
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')

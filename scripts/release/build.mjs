@@ -12,14 +12,6 @@ const releaseDir = "./release";
 const linuxArchiveStagingPath = "./ZomboidControlPanel-linux.tar.gz";
 const linuxArchivePath = "./release/ZomboidControlPanel-linux.tar.gz";
 
-// Files in the Linux release tree that must carry the executable bit. NTFS
-// has no POSIX exec bit, so a Windows host's own fs.chmodSync()/writeFileSync
-// mode option is a real no-op here -- whatever ad hoc tool later turns
-// release/ into a .tar.gz would have to guess, and every one we tried
-// guessed differently (bsdtar strips all exec bits; MSYS tar restores them
-// by file-extension heuristic, missing the extensionless binary; a DrvFs
-// mount over-grants everything). Packaging in-process with explicit
-// per-entry modes removes the guess entirely, on any host.
 const LINUX_ARCHIVE_EXECUTABLE_NAMES = new Set([
   "ZomboidControlPanel",
   "start.sh",
@@ -328,23 +320,6 @@ server-side drop-in, NOT a Workshop mod — there is no client component.
 }
 
 export function generateStartBat() {
-  // Generate the Windows update supervisor. It swaps the executable and
-  // frontend between panel runs, so the running process never replaces itself.
-  //
-  // The panel sets PANEL_SUPERVISOR_V=2, writes .update-pending, and exits
-  // with code 75 when an update is ready. The supervisor validates the
-  // journal and staged hashes, backs up the live files, activates both staged
-  // artifacts, and records the operation in logs\\supervisor.log.
-  //
-  // A staged binary is selected only after its matching frontend is active.
-  // Unexpected exits use bounded backoff and stop after MAX_RAPID_CRASHES;
-  // MIN_STABLE_SECONDS resets the crash counter after a healthy run.
-  //
-  // Pending updates may be retried on the next full restart. Rollback of an
-  // already-applied update is bounded by MAX_ROLLBACK_RETRIES because the
-  // panel is down and repeating the same restore operation cannot recover a
-  // missing backup. EXE_BACKUP_MADE and CLIENT_BACKUP_MADE distinguish a
-  // backup that was never created from one that was lost during rollback.
   return `@echo off
 setlocal ENABLEDELAYEDEXPANSION
 title Zomboid Control Panel
@@ -923,11 +898,6 @@ async function main() {
     `Version: ${panelVersion} (build ${buildSha}, API contract ${apiContractVersion})`,
   );
 
-  // Read PanelBridge.lua and inline it as a base64 define so it lives INSIDE
-  // server.cjs (and therefore inside the pkg binary). pkg's `assets` glob was
-  // silently skipping the file, leaving the on-disk pz-mod/ folder as the only
-  // source — which goes stale after a binary-only auto-update and is the root
-  // cause of the "worldmap blank on Linux / mod version mismatch" bug.
   const luaSourcePath = "./integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua";
   let panelBridgeLuaB64 = "";
   if (fs.existsSync(luaSourcePath)) {
@@ -952,9 +922,6 @@ async function main() {
     target: "node22",
     format: "cjs",
     outfile: "./dist-exe/server.cjs",
-    // ssh2's optional native addons are loaded behind try/catch and have
-    // JavaScript fallbacks. Keeping .node files external avoids esbuild trying
-    // to bundle architecture-specific binaries for the standalone packages.
     external: ["@aws-sdk/client-s3", "*.node"],
     define: {
       "import.meta.url": "import_meta_url",
@@ -989,10 +956,6 @@ async function main() {
 
   console.log(`Creating executables for: ${targets.join(", ")}`);
   try {
-    // @yao-pkg/pkg is the actively maintained fork of vercel/pkg (which is
-    // stuck on Node 18.5). Its CLI is also named `pkg`.
-    // Build without embedded V8 bytecode cache so binaries remain portable
-    // across Linux hosts and don't fail with "V8 rejected the bytecode cache".
     execSync('pnpm exec pkg . --compress GZip --public --public-packages "*"', {
       cwd: distDir,
       stdio: "inherit",
@@ -1040,12 +1003,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Ship the install guides IN the archive, not just as GitHub pointers.
-  // README.txt's own "Where To Go Next" section names these paths -- on a
-  // LAN-only box with no outbound internet, a github.com link is dead
-  // weight, so the files themselves have to be sitting right here for that
-  // section to be true. The release pipeline zips release/* as-is, so anything
-  // copied into release/ ships automatically with no workflow change.
   const installDocsSrc = "./docs/install";
   const installDocsDest = "./release/docs/install";
   if (fs.existsSync(installDocsSrc)) {
@@ -1065,25 +1022,12 @@ async function main() {
     );
   }
 
-  // IMPORTANT: do NOT ship a real `data/db.json` in the release tarball.
-  //
-  // Users who extract a new release over an existing install (e.g. `tar xzf`
-  // or unzipping into the install directory) would have their live database
-  // — admin account, server configs, scheduled tasks, all settings —
-  // overwritten by an empty stub. We learned this the hard way from issue #5
-  // where a user lost everything on a manual upgrade to v1.0.15.
-  //
-  // The server creates `data/db.json` automatically on first run via LowDB's
-  // `defaultData` (see server/database/init.js). We only ship a reference
-  // example file and a README warning so users see what shape the file takes
-  // without risking their real data.
   fs.mkdirSync("./release/data", { recursive: true });
 
   const exampleDbSrc = "./apps/panel-server/fixtures/db.example.json";
   if (fs.existsSync(exampleDbSrc)) {
     fs.copyFileSync(exampleDbSrc, "./release/data/db.example.json");
   } else {
-    // Fallback if the example file isn't present in dev — write a minimal one.
     const defaultDb = {
       settings: {
         serverPath: "",
@@ -1109,8 +1053,6 @@ async function main() {
     );
   }
 
-  // Drop a clear upgrade warning next to the example so anyone poking around
-  // the data folder during a manual upgrade understands what NOT to overwrite.
   const dataReadme = `data/ — Panel runtime database
 =================================
 
@@ -1151,10 +1093,6 @@ Recommended safe-upgrade commands:
     fs.cpSync("./integrations/panelbridge", "./release/pz-mod", { recursive: true });
   }
 
-  // Ship the sql.js WASM blob next to the executable. vehiclesDb.js loads it
-  // at runtime to delete rows from the save's vehicles.db. The file is tiny
-  // (~660 KB) and pkg can't introspect sql.js's dynamic require, so we copy
-  // it manually.
   const wasmSrc = "./node_modules/sql.js/dist/sql-wasm.wasm";
   if (fs.existsSync(wasmSrc)) {
     fs.copyFileSync(wasmSrc, "./release/sql-wasm.wasm");
@@ -1256,8 +1194,6 @@ Recommended safe-upgrade commands:
 
   if (targets.includes("linux")) {
     console.log("Packaging Linux release archive...");
-    // The archive must be created outside sourceDir: placing it inside the
-    // tree being archived makes tar include its own output indefinitely.
     await createLinuxReleaseArchive(releaseDir, linuxArchiveStagingPath);
     fs.renameSync(linuxArchiveStagingPath, linuxArchivePath);
     console.log(`Wrote ${linuxArchivePath}`);

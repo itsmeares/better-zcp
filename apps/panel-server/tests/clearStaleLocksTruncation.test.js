@@ -3,16 +3,6 @@ import fs from "fs";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// POST /debug/clear-stale-locks walks the active save folder deleting
-// stale *.lock files, bounded by MAX_FILES=50,000 and (as of this fix) a
-// wall-clock deadline, using the same safeReaddir/safeStat primitives as
-// scanSaveStats (see scanSaveStatsDeadline.test.js) instead of raw
-// fs.promises calls with no per-op timeout. Unlike GET /diagnostics's
-// scanSaveStats, this route already returned a `truncated` boolean in its
-// JSON body before this fix -- but the human-readable `message` field never
-// mentioned it, so a caller reading just the toast text (which is what the
-// client actually renders, per Debug.tsx) had no way to know the scan
-// stopped early. These tests prove the message now says so.
 
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", async () => {
@@ -75,7 +65,7 @@ function postClearStaleLocks() {
 
 const ZOMBOID_DATA_PATH = path.join("C:", "zdata");
 const SAVE_DIR = path.join(ZOMBOID_DATA_PATH, "Saves", "Multiplayer", "MyServer");
-const STALE_MTIME = () => Date.now() - 2 * 60 * 60 * 1000; // 2h old, past the 1h threshold
+const STALE_MTIME = () => Date.now() - 2 * 60 * 60 * 1000;
 
 beforeEach(() => {
   getActiveServer.mockReset().mockResolvedValue({
@@ -97,8 +87,6 @@ describe("POST /clear-stale-locks: honest truncation reporting", () => {
       if (p === SAVE_DIR) {
         return { isDirectory: () => true, isFile: () => false };
       }
-      // 20s "cost" per file -- the 30s walk budget only fits ~1 before the
-      // deadline check trips on the next iteration.
       vi.setSystemTime(new Date(Date.now() + 20_000));
       return { isDirectory: () => false, isFile: () => true, mtimeMs: STALE_MTIME() };
     });

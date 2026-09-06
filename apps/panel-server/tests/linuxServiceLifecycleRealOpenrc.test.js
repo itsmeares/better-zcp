@@ -1,35 +1,3 @@
-// linuxServiceLifecycleRealSystemd.test.js's sibling for the OpenRC provider.
-// Every other test in this suite stubs execFile and never hands the
-// generated content to a real init system -- exactly how the original
-// directory=/command_args= word-splitting bug (a literal space in
-// installPath breaking the supervised command outright) and the OpenRC
-// command-injection bug ($(...) executing through openrc-run.sh's second,
-// effectively unquoted re-evaluation of those two declarative variables)
-// both shipped undetected. This file is the one place that is not allowed
-// to stub it: it installs the generated init script into /etc/init.d/ and
-// drives it through the real `rc-service`/`supervise-daemon` toolchain.
-//
-// Unlike `systemd-analyze verify`, OpenRC has no side-effect-free static
-// verifier -- running this test for real ACTUALLY STARTS AND STOPS A
-// SUPERVISED PROCESS AS ROOT under a real system service name. That is not
-// something to run against a developer's real machine or a shared CI
-// runner's real root. It is gated on both real OpenRC tooling AND root, and
-// is written to be safe to run inside a disposable container (Alpine +
-// `apk add openrc` is what this was built and verified against) -- it is
-// NOT written to be safe anywhere else, and the skip banner below says so
-// loudly rather than letting a quiet skipped-count bury that distinction.
-//
-// A second, container-specific trap: OpenRC's supervise-daemon forks a
-// long-lived supervisor process that gets reparented to PID 1 on exit. A
-// container whose PID 1 does not reap zombies (a bare `CMD ["sleep",
-// "infinity"]`, with no `docker run --init`) leaves that supervisor as an
-// unreaped zombie forever -- `rc-service stop` then hangs indefinitely
-// polling for a PID that technically still exists. This was chased down
-// live and confirmed to be a test-container artifact, not a product bug:
-// the exact same generated script starts, respawns, and stops cleanly in
-// well under a second once the container's PID 1 reaps properly. Every
-// `execFileSync` below carries an explicit `timeout` so a host missing that
-// reaping fails this test loudly and fast instead of hanging CI.
 import { execFileSync } from "child_process";
 import fs from "fs";
 import os from "os";
@@ -51,8 +19,6 @@ function hasRealOpenrc() {
     });
     return true;
   } catch (error) {
-    // supervise-daemon with no other args exits non-zero (it needs a real
-    // command); that failure still proves the binary exists and ran.
     return error.code !== "ENOENT";
   }
 }
@@ -81,16 +47,6 @@ if (!CAN_RUN) {
 
 function writeFakeLauncher(dir) {
   const launcherPath = path.join(dir, "start-server.sh");
-  // Deliberately does NOT interpolate `dir` (which for the injection CASE
-  // below literally contains "$(...)") into this script's own bash source --
-  // doing that with a JS template literal was tried first and produced a
-  // self-inflicted false positive: bash correctly evaluates $(...) inside
-  // its OWN double-quoted strings, so a fixture that bakes an attacker-
-  // shaped path into its source is exploitable regardless of anything
-  // buildLifecycleTemplate does. `pwd` is exactly what --chdir already
-  // guarantees, and marker.log lives next to the script via $0, both
-  // resolved by bash at RUN time, never by string-substituting untrusted
-  // content into source text.
   fs.writeFileSync(
     launcherPath,
     "#!/bin/bash\n" +
@@ -102,16 +58,6 @@ function writeFakeLauncher(dir) {
   return launcherPath;
 }
 
-// Each case gets its own server id, and therefore its own service name and
-// pidfile -- deliberately, so no two cases ever share a pidfile. An earlier
-// version of this file reused one hardcoded service name for every case and
-// produced a spurious, non-reproducing "injection executed" result under
-// vitest that a from-scratch manual reproduction (same generated content,
-// isolated container, distinct service name) could not reproduce even once.
-// Sharing one pidfile across rapid successive start/stop cycles is a known
-// footgun independent of anything this file is trying to verify -- giving
-// every case a fully isolated identity removes that variable entirely
-// instead of leaving an ambiguous result on record.
 let caseCounter = 0;
 function makeServer(overrides = {}) {
   caseCounter += 1;
@@ -124,10 +70,6 @@ function install(serviceName, content) {
   return target;
 }
 
-// Avoids pgrep -f entirely: some of the CASES below embed shell
-// metacharacters ("$(...)") in the path we search for, which pgrep would
-// interpret as ERE syntax, not a literal substring. Reading /proc directly
-// and doing a plain string match sidesteps that.
 function pidsWithCmdlineContaining(substring) {
   const matches = [];
   for (const entry of fs.readdirSync("/proc")) {
@@ -162,10 +104,6 @@ function rcService(serviceName, action) {
   }
 }
 
-// Every service name this file has installed in this run, so afterEach can
-// unconditionally tear all of them down regardless of which test is
-// current -- a test that fails before recording its own name must not leak
-// a running service into the next one.
 const installedServiceNames = new Set();
 
 function cleanupAll() {
@@ -198,15 +136,6 @@ describeRealOpenrc(
       cleanupAll();
     });
 
-    // The three shapes that actually mattered: the plain case proves the
-    // redesign didn't regress the common path, the space is the exact
-    // reported bug ("supervise-daemon: server does not exist"), and the
-    // $(...) payload is the exact injection payload that executed through
-    // the old directory=/command_args= second-pass re-evaluation despite
-    // being correctly POSIX-single-quoted for the first pass. Each case uses
-    // a distinct marker file name too, so a case run out of order (or a
-    // leftover from a prior failed run) can't produce a false positive by
-    // finding a stale file this case didn't itself create.
     const CASES = [
       { label: "plain path, no special characters", dirName: "plain", pwnedMarker: null },
       { label: "path containing a space", dirName: "pz server", pwnedMarker: null },
@@ -239,15 +168,11 @@ describeRealOpenrc(
         expect(start.timedOut, `rc-service start hung: ${start.output}`).toBe(false);
         expect(start.code, `rc-service start failed: ${start.output}`).toBe(0);
 
-        // The injection payload must never have executed.
         if (pwnedMarker) expect(fs.existsSync(pwnedMarker)).toBe(false);
 
         const markerLog = path.join(workDir, "marker.log");
         expect(fs.existsSync(markerLog)).toBe(true);
         const marker = fs.readFileSync(markerLog, "utf8");
-        // The launcher's own $(pwd) must equal the literal working
-        // directory, byte for byte -- proves --chdir received the value
-        // unmangled, not word-split.
         expect(marker).toContain(`cwd=${workDir}`);
         expect(marker).toContain(`marker_env=${server.id}`);
 
@@ -282,10 +207,6 @@ describeRealOpenrc(
 
       execFileSync("kill", ["-9", firstPid], { timeout: EXEC_TIMEOUT_MS });
 
-      // respawn_delay=5 means the respawned process cannot appear before
-      // ~5s; poll instead of a single fixed sleep so this isn't flaky on a
-      // slower host, but fail well before the outer test timeout if it
-      // never comes back.
       let secondPid;
       const deadline = Date.now() + 12_000;
       while (Date.now() < deadline) {
@@ -305,12 +226,6 @@ describeRealOpenrc(
     }, 20_000);
 
     it("does not corrupt a description containing a literal $ with a spurious backslash", () => {
-      // name=/description= were never part of openrc-run.sh's declarative
-      // command line and so were never subject to its second-pass
-      // re-evaluation -- but the old quoteShell() escaped "$" anyway (it was
-      // needed only for directory=/command_args=), producing a real,
-      // reproduced bug: `rc-service start` echoed the literal text
-      // "\$CoolServer" instead of "$CoolServer".
       const workDir = path.join(tmpDir, "dollar-name");
       fs.mkdirSync(workDir, { recursive: true });
       writeFakeLauncher(workDir);

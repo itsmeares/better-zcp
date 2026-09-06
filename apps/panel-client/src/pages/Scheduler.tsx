@@ -106,8 +106,6 @@ function getCommonCommands(t: TFunction) {
     { label: t('commands.saveWorld'), value: 'save' },
     { label: t('commands.serverMessage'), value: 'servermsg Server maintenance in progress' },
     { label: t('commands.checkModUpdates'), value: 'checkModsNeedUpdate' },
-    // PanelBridge actions \u2014 routed through the Lua mod via `bridge:<action>`.
-    // JSON args after the action name are validated server-side.
     { label: t('commands.triggerBlizzard'), value: 'bridge:triggerBlizzard {"duration":2}' },
     { label: t('commands.triggerStorm'), value: 'bridge:triggerStorm {"duration":1}' },
     { label: t('commands.triggerTropicalStorm'), value: 'bridge:triggerTropicalStorm {"duration":1}' },
@@ -121,31 +119,8 @@ function getCommonCommands(t: TFunction) {
   ]
 }
 
-// No pagination on this panel -- when a fetch returns exactly this many
-// rows, older executions may exist and be silently excluded (server
-// retains up to 500, see apps/panel-server/database/init.js). A hint, not a hard
-// truth: hitting the limit exactly by coincidence is possible too.
 const EXECUTION_HISTORY_FETCH_LIMIT = 50
 
-// Timezone picker's candidate pool (2026-08-31, whitespace/picker card).
-// Intl.supportedValuesOf('timeZone') is deliberately NOT the sole source of
-// truth here -- apps/panel-server/utils/cronValidation.js's isValidIanaTimezone()
-// already documents that this canonical list is narrower than what
-// Intl.DateTimeFormat (and therefore node-cron) actually accepts, and
-// omits some valid legacy/alias names real installs use. Confirmed
-// concretely: 'UTC' itself -- the exact fallback value this page's own
-// status object reports and the server's own invalid-timezone error message
-// cites as an example -- is NOT in supportedValuesOf()'s output. Prepended
-// by hand rather than pulled from a second Intl call so the gap is explicit
-// and doesn't silently reappear if ICU data changes again. Computed once at
-// module load, not per-render or per-mount.
-//
-// Typed via a local cast, not a tsconfig "lib" bump: this project's ts
-// target (ES2020) predates the ES2022 Intl types that declare
-// supportedValuesOf, but the method itself has shipped in every real engine
-// (Node 18+, all evergreen browsers) since well before that -- a runtime
-// feature gap, not a real absence, so a narrow cast here is more honest than
-// widening "lib" project-wide for one call site.
 type IntlWithSupportedValuesOf = typeof Intl & {
   supportedValuesOf?: (key: 'timeZone') => string[]
 }
@@ -164,9 +139,6 @@ const TIMEZONE_POOL: string[] = (() => {
   return Array.from(new Set(['UTC', ...canonical]))
 })()
 
-// Groups by the IANA area prefix ("America/New_York" -> "America"). A zone
-// with no "/" (currently only the hand-added 'UTC') becomes its own
-// single-entry group labeled with the zone name itself.
 function timezoneGroup(zone: string): string {
   const slash = zone.indexOf('/')
   return slash === -1 ? zone : zone.slice(0, slash).replace(/_/g, ' ')
@@ -179,13 +151,6 @@ interface TimezonePickerProps {
   disabled?: boolean
 }
 
-// Searchable timezone combobox. Deliberately built on a single always-
-// present <input> (not a separate closed-trigger + hidden-search-input
-// split like ItemPicker/VehiclePicker) so the input's value IS the
-// committed value at every moment -- typing both filters the dropdown AND
-// sets the real value, so a saved zone that isn't in TIMEZONE_POOL (a
-// dropped legacy name, or this panel restored from another machine) is
-// still shown verbatim rather than getting silently blanked or reset.
 function TimezonePicker({ id, value, onChange, disabled }: TimezonePickerProps) {
   const { t } = useTranslation('scheduler')
   const [open, setOpen] = useState(false)
@@ -193,12 +158,6 @@ function TimezonePicker({ id, value, onChange, disabled }: TimezonePickerProps) 
   const containerRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [dropUp, setDropUp] = useState(false)
-  // Opening on a field that already has a saved value (the normal case --
-  // this field is seeded from the operator's current zone) must NOT filter
-  // the dropdown down to just that one self-match; a "choice picker" needs
-  // to show every choice on open. Only real typing narrows the list --
-  // false again on every fresh open, so clicking away and back re-browses
-  // the full set instead of staying pinned to whatever was last typed.
   const [searching, setSearching] = useState(false)
 
   useEffect(() => {
@@ -260,10 +219,6 @@ function TimezonePicker({ id, value, onChange, disabled }: TimezonePickerProps) 
         setHighlightIndex((prev) => Math.max(prev - 1, 0))
         break
       case 'Enter':
-        // No fallback to "select the first visible item" on a bare Enter --
-        // unlike ItemPicker/VehiclePicker, a value that isn't in the pool is
-        // a legitimate outcome here, so an un-highlighted Enter just keeps
-        // whatever was typed instead of silently substituting a guess.
         if (highlightIndex >= 0 && highlightIndex < visible.length) {
           e.preventDefault()
           handleSelect(visible[highlightIndex])
@@ -357,10 +312,6 @@ function TimezonePicker({ id, value, onChange, disabled }: TimezonePickerProps) 
             ) : grouped ? (
               grouped.map(([group, zones]) => (
                 <div key={group}>
-                  {/* Skip the header for a single-entry group whose only
-                      zone IS the group label (currently just 'UTC') --
-                      showing "UTC" as both a section header and the one
-                      option under it is a redundant, not a clarifying, line. */}
                   {!(zones.length === 1 && zones[0] === group) && (
                     <div className="sticky top-0 z-10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 bg-muted/70 backdrop-blur-sm">
                       {group}
@@ -391,9 +342,6 @@ export default function Scheduler() {
     activeTasks: number
     autoRestartEnabled: boolean
     modUpdateRestartPending: boolean
-    // `timezone` is the effective zone. `configuredTimezone` is the saved
-    // value; `timezoneFallback` describes an invalid saved zone and its
-    // replacement.
     timezone?: string
     configuredTimezone?: string | null
     timezoneFallback?: { configured: string; effective: string } | null
@@ -413,16 +361,8 @@ export default function Scheduler() {
   const [fetchError, setFetchError] = useState<string | null>(null)
   const { toast } = useToast()
   const { can } = useAuth()
-  // POST /scheduler/restart-now is an immediate, direct restart -- it
-  // requires server.control on the server (apps/panel-server/routes/scheduler.js),
-  // the same capability POST /server/restart requires, not just
-  // automation.manage (which merely gates this whole page). can() fails
-  // OPEN when capabilities are unknown/null, same convention as every
-  // other capability check in the app -- this only ever disables the
-  // button when the answer is a confirmed no.
   const canRestartNow = can('server.control')
 
-  // New task form
   const [newTaskName, setNewTaskName] = useState('')
   const [newTaskCron, setNewTaskCron] = useState('')
   const [newTaskCommand, setNewTaskCommand] = useState('')
@@ -430,14 +370,9 @@ export default function Scheduler() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null)
 
-  // Advisory-only preview of the custom cron field via POST /validate-cron --
-  // never gates Save. The server re-validates independently and is the real
-  // source of truth, so a failed/slow preview call must never block or
-  // second-guess what create/update will actually decide.
   const [cronValidation, setCronValidation] = useState<{ valid: boolean; error?: string; code?: string } | null>(null)
   const cronValidationIdRef = useRef(0)
 
-  // Simple Scheduler State
   const [scheduleMode, setScheduleMode] = useState<'simple' | 'advanced'>('simple')
   const [simpleIntervalType, setSimpleIntervalType] = useState<'hourly' | 'daily' | 'weekly' | 'interval'>('daily')
   const [simpleHour, setSimpleHour] = useState('06')
@@ -445,19 +380,12 @@ export default function Scheduler() {
   const [simpleHoursInterval, setSimpleHoursInterval] = useState('4')
   const [simpleWeekday, setSimpleWeekday] = useState('1')
 
-  // Restart form
   const [restartMinutes, setRestartMinutes] = useState(5)
   const [serverRunning, setServerRunning] = useState<boolean>(false)
 
   const fetchData = useCallback(async () => {
     setFetchError(null)
     try {
-      // Only getTasks() is allowed to fail the whole load -- it's the one
-      // thing this page can't function without. The other three used to have
-      // no catch of their own, so an unrelated hiccup (e.g. the presets or
-      // history endpoint 500ing) rejected the entire Promise.all and threw
-      // away a perfectly good task list, replacing it with an empty-state
-      // "no tasks scheduled" even though real tasks existed and loaded fine.
       const [tasksData, presetsData, statusData, historyData, serversData] = await Promise.all([
         schedulerApi.getTasks(),
         schedulerApi.getCronPresets().catch(() => ({ presets: [] as CronPreset[] })),
@@ -471,8 +399,6 @@ export default function Scheduler() {
       setHistory(historyData.history || [])
       const serverList: ServerInstance[] = serversData.servers || []
       setServers(serverList)
-      // Default the create-task dialog's target server to the active one,
-      // but only on first load — don't clobber an in-progress selection.
       setNewTaskServerId((prev) => {
         if (prev) return prev
         const active = serverList.find((s) => s.isActive)
@@ -490,9 +416,6 @@ export default function Scheduler() {
     fetchData()
   }, [fetchData])
 
-  // Seeds the timezone picker's input from the operator's saved choice --
-  // only while untouched, so an explicit refetch after an unrelated action
-  // (creating a task, etc.) can't clobber an edit still in progress.
   useEffect(() => {
     if (timezoneInput === '' && status?.configuredTimezone) {
       setTimezoneInput(status.configuredTimezone)
@@ -569,8 +492,6 @@ export default function Scheduler() {
     }
   }
 
-  // Validate custom cron input after a debounce. The generation counter keeps
-  // an older response from overwriting a newer validation result.
   useEffect(() => {
     if (scheduleMode !== 'advanced' || !newTaskCron.trim()) {
       setCronValidation(null)
@@ -595,8 +516,6 @@ export default function Scheduler() {
     return () => clearTimeout(timer)
   }, [newTaskCron, scheduleMode])
 
-  // Poll server status so Manual Restart / Quick Broadcasts stay accurate.
-  // Skipped while the tab is hidden to avoid pointless work in background tabs.
   useEffect(() => {
     let cancelled = false
     const pull = async () => {
@@ -613,17 +532,12 @@ export default function Scheduler() {
     return () => { cancelled = true; clearInterval(id) }
   }, [])
 
-  // Resolve a task's target server name for display — "Unknown server" if
-  // it was deleted since the task was created, "This server" (no badge
-  // shown, just falls back cleanly) if server_id is unset (legacy/no
-  // multi-server setup yet).
   const getServerLabel = (serverId: string | number | null): string | null => {
     if (!serverId) return null
     const match = servers.find((s) => String(s.id) === String(serverId))
     return match ? (match.name || match.serverName || `Server ${serverId}`) : t('scheduledTasks.unknownServer')
   }
 
-  // Shared by the submit path and the preview so they cannot disagree.
   const buildSimpleCron = (): string => {
     const clamp = (raw: string, min: number, max: number, fallback: number) => {
       const parsed = parseInt(raw, 10)
@@ -643,7 +557,6 @@ export default function Scheduler() {
   const handleCreateTask = async () => {
     let cronToUse = newTaskCron
 
-    // Calculate cron if in simple mode
     if (scheduleMode === 'simple') {
       cronToUse = buildSimpleCron()
     }
@@ -657,16 +570,6 @@ export default function Scheduler() {
       return
     }
 
-    // Validate the cron expression against the server's own validator
-    // (scheduler-cron-client-validator-weaker-than-server) -- a local regex
-    // here used to diverge from node-cron's real rules in both directions:
-    // it accepted out-of-range/too-frequent/impossible-date expressions the
-    // server rejects (a green tick that fails one round-trip later), and it
-    // rejected named months/weekdays and L/W/#-token expressions the server
-    // happily accepts (denying the operator a schedule they were entitled
-    // to). Delegating to the same /validate-cron endpoint the live preview
-    // above already calls gets exact parity by construction instead of
-    // hand-porting node-cron's bounds/name tables and keeping them in sync.
     try {
       const cronCheck = await schedulerApi.validateCron(cronToUse)
       if (!cronCheck.valid) {
@@ -724,10 +627,6 @@ export default function Scheduler() {
     setNewTaskName('')
     setNewTaskCron('')
     setNewTaskCommand('')
-    // Re-default to the active server rather than blanking the field — otherwise
-    // every task after the first requires a manual reselect, and a task created
-    // with no target silently follows whichever server is active when it fires
-    // instead of the one the operator was looking at.
     setNewTaskServerId(() => {
       const active = servers.find((s) => s.isActive)
       return active ? String(active.id) : (servers[0] ? String(servers[0].id) : '')
@@ -740,8 +639,6 @@ export default function Scheduler() {
     setSimpleWeekday('1')
   }
 
-  // Reopen an existing schedule in the builder when its cron matches one the
-  // simple tab can express; anything else falls back to the raw cron field.
   const applyCronToForm = (cronExpression: string) => {
     setNewTaskCron(cronExpression)
     const daily = /^(\d{1,2}) (\d{1,2}) \* \* \*$/.exec(cronExpression)
@@ -835,18 +732,16 @@ export default function Scheduler() {
   }
 
   const handleRunNow = async (task: ScheduledTask) => {
-    if (runningTaskId !== null) return // Prevent double-click
+    if (runningTaskId !== null) return
     setRunningTaskId(task.id)
     try {
-      // Goes through the same restart/save/servermsg/bridge: dispatch as a
-      // cron fire, instead of sending task.command to RCON as a raw string.
       await schedulerApi.runTask(task.id)
       toast({
         title: t('toasts.taskTriggeredTitle'),
         description: t('toasts.taskTriggeredDesc', { name: task.name }),
         variant: 'success' as const,
       })
-      fetchData() // Refresh to update history
+      fetchData()
     } catch (error) {
       toast({
         title: t('toasts.errorTitle'),
@@ -863,12 +758,6 @@ export default function Scheduler() {
     try {
       const result = await schedulerApi.restartNow(restartMinutes)
       const applied = result.warningMinutes
-      // The NumberInput's min/max are decorative (native <input> attrs
-      // only, no client-side clamp function passed) -- an operator can type
-      // past them, and the server silently caps at 60. Compare what was
-      // requested against what the server actually used instead of just
-      // echoing back the client's own state, which used to say e.g. "500
-      // minutes" when the real countdown was 60.
       if (applied !== restartMinutes) {
         toast({
           title: t('toasts.restartInitiatedTitle'),
@@ -878,12 +767,6 @@ export default function Scheduler() {
       } else {
         toast({
           title: t('toasts.restartInitiatedTitle'),
-          // Pre-existing bug, caught while touching this code (2026-08-27):
-          // restartInitiatedDesc/_WithWarningsDesc are pluralized keys
-          // (_one/_other), which i18next only resolves via a `count` param
-          // -- passing `minutes` alone silently returned the raw key
-          // string, invisible until something actually asserted on the
-          // rendered toast text.
           description: t('toasts.restartInitiatedDesc', { count: applied, minutes: applied }),
           variant: 'success' as const,
         })
@@ -1241,7 +1124,6 @@ export default function Scheduler() {
           </DialogContent>
       </Dialog>
 
-      {/* The install-wide timezone used by all schedules. */}
       <Card>
         <CardHeader className="p-4 pb-3">
           <div className="flex items-center gap-1.5">
@@ -1348,7 +1230,6 @@ export default function Scheduler() {
         </CardContent>
       </Card>
 
-      {/* Status Cards — only when tasks exist */}
       {tasks.length > 0 && (() => {
         const activeCount = tasks.filter(t => t.enabled).length
         const totalCount = tasks.length
@@ -1406,9 +1287,7 @@ export default function Scheduler() {
         )
       })()}
 
-      {/* Quick Actions — 2-col grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Manual Restart */}
         <Card>
         <CardHeader className="p-4 pb-3">
           <CardTitle>{t('manualRestart.title')}</CardTitle>
@@ -1419,7 +1298,6 @@ export default function Scheduler() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-0 space-y-3">
-          {/* Quick Restart Buttons — each triggers an immediate restart with that warning length */}
           <div className="flex flex-wrap gap-2">
             <DisabledReason reason={!canRestartNow ? t('manualRestart.noPermission') : null}>
               <Button
@@ -1495,7 +1373,6 @@ export default function Scheduler() {
             </DisabledReason>
           </div>
 
-          {/* Custom Time */}
           <div className="flex items-end gap-4">
             <div className="flex-1 max-w-xs">
               <Label>{t('manualRestart.customCountdownLabel')}</Label>
@@ -1550,7 +1427,6 @@ export default function Scheduler() {
         </CardContent>
       </Card>
 
-      {/* Maintenance Mode */}
       <Card>
         <CardHeader className="p-4 pb-3">
           <CardTitle>{t('quickBroadcasts.title')}</CardTitle>
@@ -1607,7 +1483,6 @@ export default function Scheduler() {
       </Card>
       </div>
 
-      {/* Scheduled Tasks */}
       <Card>
         <CardHeader className="p-4 pb-3">
           <CardTitle>{t('scheduledTasks.title')}</CardTitle>
@@ -1631,7 +1506,6 @@ export default function Scheduler() {
                     }`}
                   >
                     <div className="flex flex-1 min-w-0 items-center gap-3">
-                      {/* Leading status pip — solid + ping when active, hollow when disabled */}
                       <div className="shrink-0 self-stretch flex items-center" aria-hidden="true">
                         {task.enabled ? (
                           <span className="relative inline-flex">
@@ -1738,7 +1612,6 @@ export default function Scheduler() {
         </CardContent>
       </Card>
 
-      {/* Execution History */}
       <Card>
         <CardHeader className="p-4 pb-3">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
@@ -1850,7 +1723,6 @@ export default function Scheduler() {
         </CardContent>
       </Card>
 
-      {/* Cron Help — collapsible reference */}
       <Collapsible>
         <div className="rounded-xl border border-border/40 bg-card/40">
           <CollapsibleTrigger className="flex w-full items-center justify-between px-5 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">

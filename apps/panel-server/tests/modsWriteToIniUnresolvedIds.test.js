@@ -3,13 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression: POST /write-to-ini put every workshopId into WorkshopItems=
-// unconditionally, but silently dropped a mod from Mods= whenever its modId
-// couldn't be auto-detected (local file scan + Steam Workshop page lookup
-// both failing -- a real, reachable condition, not hypothetical). The
-// response still said `success: true` with no field listing which mods
-// ended up subscribed-but-not-enabled, so a caller had no way to tell
-// "all N mods configured" from "N mods subscribed, fewer actually enabled".
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -82,8 +75,6 @@ describe("POST /write-to-ini: unresolved modId reporting", () => {
     const configPath = path.join(dataRoot, "Server");
     fs.mkdirSync(configPath, { recursive: true });
     fs.writeFileSync(path.join(configPath, "TestServer.ini"), "Mods=\nWorkshopItems=\n");
-    // No installPath -- skips local-file modId detection entirely so only
-    // the Steam Workshop page lookup (fetch, mocked below) resolves modId.
     getActiveServer.mockReset().mockResolvedValue({
       id: "server-1",
       serverConfigPath: configPath,
@@ -91,8 +82,6 @@ describe("POST /write-to-ini: unresolved modId reporting", () => {
       isRemote: false,
     });
     originalFetch = global.fetch;
-    // Steam API unreachable/erroring for every workshop ID -- forces modId
-    // auto-detection to fail deterministically, without a real network call.
     global.fetch = vi.fn(async () => ({ ok: false, status: 503 }));
   });
 
@@ -118,9 +107,7 @@ describe("POST /write-to-ini: unresolved modId reporting", () => {
     expect(body.message).toContain("2222222222");
     expect(body.message).toMatch(/could not be auto-detected/i);
 
-    // The unresolved workshop ID is still subscribed (WorkshopItems=)...
     expect(body.workshopItems).toContain("2222222222");
-    // ...but never made it into Mods=, so PZ won't actually load it.
     const iniContent = fs.readFileSync(
       path.join(dataRoot, "Server", "TestServer.ini"),
       "utf-8",

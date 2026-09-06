@@ -13,8 +13,6 @@ export interface DashboardPerformancePoint {
   hostMemTotalGB?: number
   hostDiskUsedGB?: number
   hostDiskTotalGB?: number
-  /** Host swap/pagefile, GB. undefined means "could not be determined" --
-   * NOT the same as 0, which means swap is genuinely not configured. */
   hostSwapUsedGB?: number
   hostSwapTotalGB?: number
 }
@@ -35,10 +33,8 @@ interface Metric {
   dataKey: string
   alert?: boolean
   tone?: MetricTone
-  /** 0..1 of capacity. Present only where the metric is genuinely a fraction. */
   ratio?: number | null
 }
-/** Colour is a reading of the number, not a slot in a palette. */
 function loadTone(ratio: number | null | undefined): MetricTone {
   if (ratio == null || Number.isNaN(ratio)) return 'neutral'
   if (ratio >= 0.9) return 'bad'
@@ -74,9 +70,6 @@ function DashboardPerformanceCharts({
 }: DashboardPerformanceChartsProps) {
   const { t } = useTranslation('dashboardPerformanceCharts')
 
-  // Every hook must run on every render. Returning before the useMemo below
-  // changed the hook count from 0 to 1 the moment history arrived, which React
-  // rejects with "Rendered more hooks than during the previous render".
   const latest = performanceHistory[performanceHistory.length - 1]
 
   const pzMem = latest?.pzMemMB ?? latest?.memoryMB ?? 0
@@ -92,8 +85,6 @@ function DashboardPerformanceCharts({
   const pzRatio = maxMemoryGB != null ? pzMemoryGB / maxMemoryGB : null
   const hostRatio = hostUsed != null && hostTotal != null ? hostUsed / hostTotal : null
   const diskRatio = diskUsed != null && diskTotal != null && diskTotal > 0 ? diskUsed / diskTotal : null
-  // total === 0 (swap genuinely not configured) deliberately leaves this
-  // null -- a real, calm reading, not a ratio to alert on.
   const swapRatio = swapUsed != null && swapTotal != null && swapTotal > 0 ? swapUsed / swapTotal : null
   const cpuAlert = cpu >= 90
   const hostRamAlert = hostRatio != null && hostRatio > 0.9
@@ -118,7 +109,6 @@ function DashboardPerformanceCharts({
         ratio: pzRatio,
       })
 
-      // A flat line at zero is a dead cell. Who is online is answered in the verdict band.
       if (performanceHistory.some(point => point.playerCount > 0)) {
         m.push({
           key: 'players',
@@ -155,13 +145,6 @@ function DashboardPerformanceCharts({
       })
     }
 
-    // Answers "is that host-memory percentage fine or an emergency" -- if
-    // swap is absorbing the pressure, high RAM usage is normal; if swap is
-    // also exhausted (or there simply isn't any), the next allocation has
-    // nowhere left to go. Placed right after Host memory since it exists to
-    // interpret that number. Shown whenever a reading exists, including a
-    // real total===0 ("no swap configured" IS the answer here) -- hidden
-    // only when the lookup could not determine an answer at all (undefined).
     if (swapUsed != null && swapTotal != null) {
       m.push({
         key: 'swap',
@@ -175,8 +158,6 @@ function DashboardPerformanceCharts({
       })
     }
 
-    // A full disk corrupts saves and kills backups silently, so it earns a row
-    // even though it barely moves from one sample to the next.
     if (diskUsed != null && diskTotal != null) {
       m.push({
         key: 'disk',
@@ -195,10 +176,6 @@ function DashboardPerformanceCharts({
 
   if (!latest) return null
 
-  /* Collapsed: every metric is a fraction of a ceiling, so the bar is the
-     reading and the number is the detail. Rows use the full width. */
-  /* One row shape in both modes. Expanding traces swaps the bar for the shape
-     over time, it does not change the size of anything. */
   return (
     <div className="divide-y divide-border/20">
       {metrics.map(m => {

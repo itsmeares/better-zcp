@@ -6,10 +6,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 const workshopUrl = (wsId: string) => `https://steamcommunity.com/sharedfiles/filedetails/?id=${wsId}`
 
-/**
- * Copyable Workshop-ID chip. The bare number reads as noise, so it is always
- * prefixed with "WS" and doubles as a copy button.
- */
 export function WorkshopIdChip({
   wsId,
   onCopied,
@@ -41,7 +37,6 @@ export function WorkshopIdChip({
   )
 }
 
-/** "Open on Steam Workshop" action, sized to sit in a row's action cluster. */
 export function WorkshopLinkAction({ wsId, label, hint }: { wsId: string; label: string; hint?: string }) {
   const { t } = useTranslation('modRow')
   return (
@@ -63,7 +58,6 @@ export function WorkshopLinkAction({ wsId, label, hint }: { wsId: string; label:
   )
 }
 
-/** Square thumbnail tile that links to the Workshop page. */
 export function WorkshopThumb({
   wsId,
   label,
@@ -101,29 +95,18 @@ export function WorkshopThumb({
 }
 
 export interface ModRowProps {
-  /** Checkbox, status dot or thumbnail — whatever anchors the row. */
   leading?: ReactNode
   title: ReactNode
-  /** Chips rendered inline after the title. */
   titleBadges?: ReactNode
-  /** Second line: workshop ID chip, timestamps, state pills. */
   meta?: ReactNode
-  /** Right-hand action cluster. */
   actions?: ReactNode
-  /** Full-width area under the row — ID chips, warnings, missing deps. */
   footer?: ReactNode
   selected?: boolean
-  /** Rendered at 60% opacity, for items the server is not loading. */
   dimmed?: boolean
   onClick?: () => void
   className?: string
 }
 
-/**
- * Shared row shell for both mod lists. "Installed" tracks Workshop items for
- * updates; "Active on server" reflects the server INI — different data, same
- * anatomy: leading slot, title + meta, action cluster, optional footer.
- */
 export function ModRow({
   leading,
   title,

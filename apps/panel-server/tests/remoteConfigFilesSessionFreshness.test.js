@@ -1,11 +1,6 @@
 import fs from "fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Regression: beginRemoteConfigSession()'s freshness cache (MIRROR_FRESH_MS,
-// 5s) was keyed only on serverName. A credential/host change on Settings
-// followed by a config read/push within that window would reuse a mirror
-// pulled under the PREVIOUS transport -- mismatched against the new one --
-// because the cache had no way to tell the transport had changed.
 
 const mockDataPaths = vi.hoisted(() => {
   const base = (process.env.TEMP || process.env.TMPDIR || "/tmp") + "/remote-config-freshness-test";
@@ -56,9 +51,6 @@ describe("beginRemoteConfigSession transport-aware freshness", () => {
     const newHostConfig = { ...baseConfig, host: "new-host.example.net" };
     await beginRemoteConfigSession(newHostConfig, "servertest", { fresh: false });
 
-    // Before the fix: this reused lastSession (same serverName, still within
-    // MIRROR_FRESH_MS) without ever connecting to new-host -- a real pull
-    // against the new transport never happened.
     expect(sftpInstances.current).toHaveLength(2);
   });
 
@@ -76,9 +68,6 @@ describe("beginRemoteConfigSession transport-aware freshness", () => {
     await beginRemoteConfigSession(baseConfig, "servertest", { fresh: false });
     expect(sftpInstances.current).toHaveLength(1);
 
-    // Same transport, just re-authenticating with a rotated password --
-    // doesn't change which remote files this points at, so the cache should
-    // still apply.
     const samePasswordRotated = { ...baseConfig, password: "new-secret" };
     await beginRemoteConfigSession(samePasswordRotated, "servertest", { fresh: false });
 

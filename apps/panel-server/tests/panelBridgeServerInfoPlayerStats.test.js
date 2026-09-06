@@ -3,19 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, panelbridge-audit follow-up: WorldMap.tsx's player dossier
-// panel (and its MapPlayer/RawBridgePlayer types) already reads
-// p.hunger/p.thirst/p.fatigue off getServerInfo's players array -- that
-// plumbing existed on the client with nothing on the server ever filling
-// it in. handlers.getServerInfo built its player row from a fixed field
-// list that never included hunger/thirst/fatigue, so the dossier always
-// showed nothing for them, permanently and silently.
-//
-// Fixed by reading them off the same stats:get(CharacterStat.X) mechanism
-// used by getPlayerDetails/getAllPlayerDetails, via the shared statGet()
-// helper (now hoisted above PanelBridge.tryGet so it's in scope for
-// getServerInfo, which is defined earlier in the file than
-// getPlayerDetails was).
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

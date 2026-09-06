@@ -5,16 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus } from '@/lib/api'
 
-// 2026-08-30 visual sweep (fix-backups-dead-spinner-and-debug-environment):
-// the main "Backup Files" card showed an infinite spinner whenever
-// savesExists was false, even after backupStatus (a DIFFERENT one of
-// refreshAll()'s three concurrent fetches) had already resolved to that
-// exact fact -- visible in the page's own header at the same moment. These
-// tests pin the fix: the card now shows an informative, actionable empty
-// state (matching Chunks/Mods' existing pattern for this identical
-// condition) as soon as it's known, and never hides a real, pre-existing
-// backup list behind it just because the LIVE saves folder is currently
-// missing.
 
 let mockCan = (_capability: string) => true
 
@@ -126,8 +116,6 @@ describe('Backups: no-saves-folder empty state', () => {
 
     renderBackups()
 
-    // The header-level fact resolves (backupStatus is fetched independently)
-    // while the backup list is deliberately held pending.
     await waitFor(() => expect(screen.getByText('Saves folder not found')).toBeInTheDocument())
     expect(screen.queryByText('No saves folder found')).not.toBeInTheDocument()
 

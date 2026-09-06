@@ -3,23 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage for item 5 of the full handler-verification audit:
-// setSandboxOption already read back `confirmed` after setValue() but never
-// compared it to the requested value before returning ok=true -- the
-// persistence half of this same handler (world save) already verified for
-// real (b376b2c), leaving the value half as the one remaining inconsistency.
-//
-// The fix compares on MEANING, not identity, per god's caveat: a value
-// crossing the Lua/JSON boundary can legitimately come back as a different
-// Lua type than what was sent (a boolean's own engine-side string
-// representation, "8" vs 8) without the write having actually failed.
-//
-// This field was originally called `matched` -- renamed to `verified` per
-// the 2026-08-23 ruling that unified every handler on one field name and one
-// value shape: a string, always present when ok=true ("confirmed" or
-// "unverifiable"), never a boolean and never omitted (an omitted key means
-// exactly one thing -- a bridge mod older than this contract). Nothing had
-// shipped carrying either field name at the time of the rename.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -93,8 +76,6 @@ describe('PanelBridge.lua handlers.setSandboxOption -- gate ok on verified, comp
     const bridge = loadPanelBridge(LUA_PATH, integerOptionStub(false));
     const result = bridge.callHandler('setSandboxOption', { name: 'ZombieCount', value: '8' });
 
-    // Before the fix, `confirmed` (still 4) was returned in the payload but
-    // never compared against what was requested -- ok stayed true regardless.
     expect(result.ok).toBe(false);
   });
 
@@ -102,10 +83,6 @@ describe('PanelBridge.lua handlers.setSandboxOption -- gate ok on verified, comp
     const bridge = loadPanelBridge(LUA_PATH, BOOL_TYPE_QUIRK_STUBS);
     const result = bridge.callHandler('setSandboxOption', { name: 'SleepAllowed', value: true });
 
-    // confirmed comes back as the Lua string "true", not the Lua boolean
-    // true -- a naive `confirmed == appliedValue` would call this a
-    // mismatch (different Lua types are never ==) even though the write
-    // genuinely worked. Comparing on meaning must treat this as a match.
     expect(result.ok).toBe(true);
     expect(result.data.verified).toBe('confirmed');
   });

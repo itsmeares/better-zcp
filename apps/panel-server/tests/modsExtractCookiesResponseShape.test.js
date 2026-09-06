@@ -1,14 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 bug hunt: POST /collection/extract-cookies used to return the
-// raw, live Steam sessionid/steamLoginSecure directly in the response body.
-// Traced the client and found the values were never displayed -- they were
-// immediately POSTed straight back to a save endpoint. Fixed by having the
-// route save the credentials itself and report only success, so a
-// technician-tier caller (this router's own permission floor) can no
-// longer ask this one endpoint for the panel host's live Steam login
-// token. This pins the response shape on both branches, and that the save
-// actually happens server-side rather than being left to the caller.
 
 const { extractSteamCookies, listAvailableBrowsers } = vi.hoisted(() => ({
   extractSteamCookies: vi.fn(),

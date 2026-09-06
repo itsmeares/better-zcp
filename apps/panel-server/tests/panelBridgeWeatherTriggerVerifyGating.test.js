@@ -3,24 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31 bug hunt follow-up (operator: "fix them" -- this is the finding
-// from the stopWeather pass, reported then, fixed now). triggerCustomWeatherStage
-// and triggerCustomWeather both return a real boolean on the real B42 jar --
-// confirmed via javap -c: both early-return false when weatherPeriod:isRunning()
-// is already true. But `if PanelBridge.invoke(...) then` only checks invoke()'s
-// FIRST return (whether the pcall threw), discarding the SECOND (the callee's
-// own result) -- so triggering a second storm/blizzard/tropical-storm/weather-
-// period while one is already running reported success and did nothing. This
-// models that mechanism, NOT the real Java class -- see panelBridgeLua.js's
-// own honest-limit header.
-//
-// generateWeather had a WORSE version of the same shape: transmitGenerateWeather
-// (a void, ClientOnly-packet method -- confirmed via the same bytecode read,
-// same class as transmitStopWeather) was tried FIRST and never throws, so
-// triggerCustomWeather -- the real, boolean-returning, verifiable method --
-// was NEVER reached, for any frontType, ever. Fixed by trying
-// triggerCustomWeather first whenever the front type can represent it
-// (frontType ~= 0 -- stationary has no boolean equivalent).
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

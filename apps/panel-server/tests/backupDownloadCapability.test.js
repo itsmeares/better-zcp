@@ -1,15 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// GET /api/backup/download/:name used to have NO gate at all -- any
-// authenticated role (or, per authMiddlewarePublicPaths-style history,
-// anyone req.user resolves for) could exfiltrate a full backup archive.
-// It is now requirePermission("backups.download"), a capability distinct
-// from backups.manage (create/delete/restore/configure). This file proves
-// that distinction with custom roles that hold ONE but not the other --
-// backupRestoreRole.test.js's admin/technician/moderator sweep would pass
-// just as well if this route had been (mis)gated on backups.manage
-// instead, since technician holds both by default. Only a role that
-// splits the two capabilities apart can prove the correct one is checked.
 const db = { data: { roles: [] } };
 
 vi.mock("../database/init.js", () => ({

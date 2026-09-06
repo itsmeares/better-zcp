@@ -39,7 +39,6 @@ function parseBackupMaxCount(value) {
     : undefined;
 }
 
-// Get backup status and settings
 router.get("/status", async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
@@ -51,7 +50,6 @@ router.get("/status", async (req, res) => {
   }
 });
 
-// Get info about what backups contain
 router.get("/info", async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
@@ -63,7 +61,6 @@ router.get("/info", async (req, res) => {
   }
 });
 
-// Get list of backups
 router.get("/list", async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
@@ -107,7 +104,6 @@ router.get("/:name/snapshot", requirePermission("backups.manage"), async (req, r
   }
 });
 
-// Update backup settings
 router.post("/settings", requirePermission("backups.manage"), async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
@@ -120,7 +116,6 @@ router.post("/settings", requirePermission("backups.manage"), async (req, res) =
       });
     }
 
-    // Whitelist allowed backup settings to prevent prototype pollution
     const allowed = {};
     if (req.body.enabled !== undefined) {
       const enabled = parseBackupBoolean(req.body.enabled);
@@ -168,7 +163,6 @@ router.post("/settings", requirePermission("backups.manage"), async (req, res) =
 
     const settings = await backupService.updateSettings(allowed);
 
-    // Update scheduler with new backup settings
     if (scheduler && scheduler.setupBackupSchedule) {
       await scheduler.setupBackupSchedule();
     }
@@ -180,7 +174,6 @@ router.post("/settings", requirePermission("backups.manage"), async (req, res) =
   }
 });
 
-// Create a manual backup
 router.post("/create", requirePermission("backups.manage"), async (req, res) => {
   try {
     log.info("POST /create — creating manual backup");
@@ -198,13 +191,9 @@ router.post("/create", requirePermission("backups.manage"), async (req, res) => 
     const backupService = req.app.get("backupService");
     const io = req.app.get("io");
 
-    // Pass io for progress updates
     const result = await backupService.createBackup({ ...req.body, io });
 
     if (result.success) {
-      // Manual backups tolerate files that disappear during the scan or
-      // symbolic links that are deliberately not followed. Return those
-      // skips as warnings instead of hiding them.
       if (result.skippedFiles?.length > 0) {
         res.json({
           ...result,
@@ -224,7 +213,6 @@ router.post("/create", requirePermission("backups.manage"), async (req, res) => 
   }
 });
 
-// Delete a backup
 router.delete("/:name", requirePermission("backups.manage"), async (req, res) => {
   try {
     log.info(`DELETE /${req.params.name}`);
@@ -242,17 +230,6 @@ router.delete("/:name", requirePermission("backups.manage"), async (req, res) =>
   }
 });
 
-// Download a backup archive off the machine. Its own capability, not
-// folded into backups.manage: creating, deleting or restoring a backup
-// manipulates data on this machine, but downloading EXFILTRATES a full
-// copy of it -- world save data, and if includeDb was ever turned on,
-// db.json's bcrypt password hashes too. A role trusted to manage backups
-// day-to-day is not automatically a role that should be able to walk
-// away with an offline copy of everything.
-// /list and /history stay deliberately ungated (read-only status routes
-// are outside the matrix on purpose), but that pair is what makes this
-// exposure trivially reachable without the gate below: enumerate the
-// filenames, then download.
 router.get("/download/:name", requirePermission("backups.download"), async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
@@ -262,7 +239,6 @@ router.get("/download/:name", requirePermission("backups.download"), async (req,
       return res.status(404).json({ error: "Backups folder not found", code: ErrorCode.BACKUPS_FOLDER_NOT_FOUND });
     }
 
-    // Sanitize filename to prevent path traversal
     const safeName = path.basename(req.params.name);
     if (!safeName.endsWith(".zip")) {
       return res.status(400).json({ error: "Invalid backup file", code: ErrorCode.BACKUP_INVALID_FILE });
@@ -281,18 +257,8 @@ router.get("/download/:name", requirePermission("backups.download"), async (req,
   }
 });
 
-// Restore a backup. Admin-only, deliberately narrower than the other backup
-// routes: deleting a backup destroys the operator's safety net (housekeeping),
-// but restoring one rolls the live world back over every player currently
-// standing in it -- a decision about other people's time, not routine server
-// operation, and invisible to the admin until someone complains.
 router.post("/restore/:name", requirePermission("backups.restore"), async (req, res) => {
-  // Fetched before acquiring the lock (a pure DB read, no lock needed for
-  // it) purely so a refusal from a concurrent operation can name which
-  // server it's for -- see lifecycleCoordinator.js's comment.
   const activeServerForLock = await getActiveServer();
-  // Hold the lifecycle lock for the whole restore. A stopped check alone
-  // leaves a race between validation and the destructive rename.
   const lifecycleLock = acquireLifecycleLock(
     "restore",
     activeServerForLock?.name || activeServerForLock?.serverName || null,
@@ -315,20 +281,11 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
     const backupService = req.app.get("backupService");
     const serverManager = req.app.get("serverManager");
 
-    // Sanitize filename to prevent path traversal
     const safeName = path.basename(req.params.name);
     if (!safeName.endsWith(".zip")) {
       return res.status(400).json({ error: "Invalid backup file", code: ErrorCode.BACKUP_INVALID_FILE });
     }
 
-    // Check if server is running. checkServerRunning() collapses a FAILED
-    // detection scan into a plain `false` -- indistinguishable from a
-    // confirmed-stopped server -- which would let this restore silently
-    // overwrite the live world save while the server might still be running
-    // and holding those files open. getServerProcessDetails() exposes that
-    // distinction via scanFailed, so use it directly and fail closed when
-    // detection itself failed, same as /wipe, /delete-files and
-    // chunks.js's delete-chunks/delete-region.
     const processDetails = await serverManager.getServerProcessDetails();
     if (processDetails.scanFailed) {
       return res.status(503).json({
@@ -347,29 +304,11 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
     }
 
     const io = req.app.get("io");
-    // Pass io for progress updates -- see createBackup's identical pattern above.
     const result = await backupService.restoreBackup(safeName, { ...req.body, io });
 
     if (result.success) {
       res.json(result);
     } else {
-      // restoreBackup()'s failure messages are almost all short and
-      // pathless -- but the outer catch's own error.message is NOT: an
-      // unexpected raw fs exception (ENOENT/EACCES) carries Node's default
-      // message, which includes a full absolute path, and every other
-      // error site in this codebase redacts that via sanitizeError()
-      // (see the catch three lines below). This route was the one
-      // exception, passing `result` straight through unsanitized.
-      //
-      // A blanket sanitizeError() here would fix that leak but ALSO
-      // redact the one message that deliberately needs its path visible:
-      // the rollback-failure branch, which names the exact path the
-      // preserved original save is sitting at -- the single most
-      // important string in the whole restore flow when it fires, and
-      // the operator's only way to find their data back. So this is
-      // surgical, not blanket: sanitize everything except that one
-      // deliberately-informative message. 2026-08-26 partial-failure-
-      // state hunt.
       const isRollbackFailureMessage =
         typeof result.message === "string" &&
         result.message.startsWith(
@@ -389,20 +328,10 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
   }
 });
 
-// Delete backups older than X days
 router.post("/delete-older-than", requirePermission("backups.manage"), async (req, res) => {
   try {
     const days = req.body?.days;
 
-    // Number.isInteger, not just finite: a fractional value used to reach
-    // deleteBackupsOlderThan()'s setDate(getDate() - days) uncaught, where
-    // JS Date arithmetic silently reinterprets it (e.g. 1.5 behaves like 2,
-    // not a genuine half-day cutoff) -- confusing, not a safety issue in
-    // itself (rounding observed toward an EARLIER cutoff, i.e. fewer
-    // deletions), but a value the client had no way to warn about and the
-    // operator never actually typed. Was unreachable in practice only
-    // because the client-side field clamped to whole numbers; that clamp
-    // is gone (apps/panel-client/src/pages/Backups.tsx now lets the server refuse).
     if (
       typeof days !== "number" ||
       !Number.isInteger(days) ||
@@ -424,13 +353,7 @@ router.post("/delete-older-than", requirePermission("backups.manage"), async (re
   }
 });
 
-// Upload a backup .zip from the user's machine into the backups folder.
-// The body is the raw zip bytes; the filename is read from the
-// X-Backup-Filename header. The stored filename is prefixed with
-// "uploaded-" so external archives are visually separated from the
-// panel's own scheduled backups, and never collide with them when the
-// auto-prune logic looks for the oldest panel-created backup to drop.
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024; // 4 GB ceiling
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024;
 router.post(
   "/upload",
   requirePermission("backups.manage"),
@@ -457,9 +380,6 @@ router.post(
           });
       }
 
-      // Quick sanity check: zip files start with the local-file-header
-      // signature 0x504B0304 ("PK\x03\x04"). Catches accidental uploads
-      // of completely different file types early.
       if (req.body.length < 4 || req.body[0] !== 0x50 || req.body[1] !== 0x4b) {
         return res
           .status(400)
@@ -469,8 +389,6 @@ router.post(
       const rawName = String(
         req.headers["x-backup-filename"] || "uploaded-backup.zip",
       );
-      // Strip any path components and limit to filesystem-safe characters.
-      // path.basename() handles both / and \ separators on all platforms.
       const baseName = path
         .basename(rawName)
         .replace(/[^A-Za-z0-9_.\- ]/g, "_")
@@ -495,13 +413,11 @@ router.post(
         fs.mkdirSync(backupsPath, { recursive: true });
       }
 
-      // Always prefix to distinguish from auto-named backups (world_backup_*).
       const finalName = baseName.startsWith("uploaded-")
         ? baseName
         : `uploaded-${baseName}`;
       const targetPath = path.join(backupsPath, finalName);
 
-      // Refuse silent overwrite — a user would lose the previous upload.
       if (fs.existsSync(targetPath)) {
         return res
           .status(409)
@@ -512,8 +428,6 @@ router.post(
           });
       }
 
-      // Atomic write: write to .tmp first, then rename. A crash during
-      // upload won't leave a half-written .zip in the listing.
       const tmpPath = `${targetPath}.tmp`;
       fs.writeFileSync(tmpPath, req.body);
       fs.renameSync(tmpPath, targetPath);

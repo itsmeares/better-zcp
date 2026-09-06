@@ -3,15 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage from the deferred safehouse/faction/moderation class
-// of the full handler-verification audit. All four SafeHouse mutators used
-// here (addPlayer, removePlayer, setOwner, setRespawnInSafehouse) are
-// declared `void` in the real B42 jar (zombie/iso/areas/SafeHouse.class,
-// confirmed 2026-08-23) -- there is no direct return value. But real getters
-// DO exist and were already being used elsewhere in this same file
-// (handlers.getSafehouses already reads getPlayers()/getOwner()):
-// getPlayers(), getOwner(), isRespawnInSafehouse(username). These fixes read
-// those back and gate on them instead of assuming the void call worked.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

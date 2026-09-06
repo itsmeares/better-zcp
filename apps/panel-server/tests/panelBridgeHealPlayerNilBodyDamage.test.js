@@ -3,12 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage for one of the two "not verification gaps at all --
-// they are lies" rulings from the full handler audit: when player:getBodyDamage()
-// returns nil, the entire healing block used to never execute, yet the handler
-// still returned ok=true with no error at all. Code that does nothing and
-// reports success is the purest form of the b376b2c defect family -- this
-// isn't a missing read-back, it's a guaranteed no-op reported as a success.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -62,8 +56,6 @@ describe('PanelBridge.lua handlers.healPlayer -- nil bodyDamage must not report 
     const bridge = loadPanelBridge(LUA_PATH, stubsWithBodyDamage(false));
     const result = bridge.callHandler('healPlayer', { username: 'Test' });
 
-    // Before the fix this returned ok=true, data={message:"Player healed", healed:{}},
-    // with no indication anything had failed to happen.
     expect(result.ok).toBe(false);
     expect(typeof result.err).toBe('string');
     expect(result.err.length).toBeGreaterThan(0);

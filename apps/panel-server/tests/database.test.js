@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock the db module to test updateScheduledTask logic in isolation
-// We replicate the function logic here since the real module requires LowDB init
 describe('updateScheduledTask logic', () => {
   let tasks;
 

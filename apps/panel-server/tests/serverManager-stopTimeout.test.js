@@ -2,20 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { execFile } from 'child_process';
 import { ServerManager } from '../services/serverManager.js';
 
-// Covers the fix for: _killPids()/_genericForceStop() (both used by
-// stopServer()) had no timeout on their taskkill/kill/pkill exec calls,
-// unlike the process-scan exec calls elsewhere in the same file. If the OS
-// kill wedged (AV interference, a hung syscall), the exec callback never
-// fired, so `await this._killPids(...)` never returned, so stopServer()'s
-// `finally { this._stopping = false; }` never ran, so the server became
-// permanently un-start/stop/restartable until the whole panel was
-// restarted -- a permanent lie about transient state.
-//
-// The fix bounds every taskkill/kill/pkill exec call with the same timeout
-// convention the process-scan calls already use, and surfaces to the
-// caller (via a `{ timedOut }` result) when that's what happened, so
-// stopServer() can report an honest "couldn't confirm" message instead of
-// silently asserting "Server stopped" as fact.
 
 function makeManager(overrides = {}) {
   const manager = new ServerManager();
@@ -53,19 +39,12 @@ describe('stopServer: kill timeout cannot leave the server permanently stuck', (
       owned: [{ pid: '4242', cmd: 'java zombie.network.GameServer -servername StopTimeoutTest' }],
       scanFailed: false,
     });
-    // Simulates exactly what the exec-level timeout now guarantees: the
-    // promise still resolves (unlike the old code, where a hung exec
-    // callback meant this await never returned at all), but flags that it
-    // had to give up waiting rather than confirming the kill.
     manager._killPids = async () => ({ timedOut: true });
 
     const result = await stopServerWithGuard(manager);
 
     expect(result.success).toBe(true);
     expect(result.message.toLowerCase()).toContain('timed out');
-    // This is the exact condition startServer() gates on
-    // (`if (this._stopping) throw ...`) -- proving it's false is proving
-    // the operator is NOT locked out of starting/stopping/restarting.
     expect(manager._stopping).toBe(false);
   });
 
@@ -140,9 +119,6 @@ describe('stopServer: kill timeout cannot leave the server permanently stuck', (
   });
 });
 
-// Runs stopServer(false) under a hard test-level watchdog so a REGRESSION
-// back to "the exec never calls back" hangs this test with a clear timeout
-// failure instead of hanging the whole suite indefinitely.
 async function stopServerWithGuard(manager) {
   return Promise.race([
     manager.stopServer(false),
@@ -152,13 +128,6 @@ async function stopServerWithGuard(manager) {
   ]);
 }
 
-// Validates the actual platform contract the fix depends on, not just this
-// codebase's own logic: Node's child_process timeout option really does
-// abort a genuinely long-running child and invoke the callback with
-// err.killed === true, rather than hanging forever. This is what makes
-// checking `killErr.killed` in _killPids/_genericForceStop a safe way to
-// tell "we gave up waiting" apart from an ordinary fast kill error like
-// "process already exited".
 describe('underlying platform contract: execFile timeout aborts a hung child', () => {
   it.runIf(process.platform === 'win32')(
     'on Windows, a slow command is aborted within the configured timeout and the callback fires with killed=true',

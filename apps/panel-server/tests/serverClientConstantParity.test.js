@@ -8,18 +8,6 @@ import { USER_ROLES } from "../services/auth.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..", "..");
 
-// hunt-wave14-2026-08-30: generalizes accessLevelsListParity.test.js's
-// technique after that survey found two MORE server/client constant pairs
-// that are hand-duplicated (a different array, by hand, in a different
-// language, because server code isn't in the client bundle) with nothing
-// enforcing agreement -- exactly the shape ACCESS_LEVELS had drifted into
-// before that fix. Both pairs are confirmed IN SYNC as of this commit; this
-// is pure guard installation, no behavior change.
-//
-// Same text-extraction technique as panelBridgeSendCommandLiteralsMatchValidActions.test.js
-// and accessLevelsListParity.test.js: the client file is TS/TSX, not
-// importable into this server-side vitest run without a build step, so its
-// array literal is read as text and regex-extracted instead.
 function extractArrayLiteral(relativePath, constName) {
   const content = fs.readFileSync(path.join(ROOT, relativePath), "utf-8");
   const re = new RegExp(`const ${constName}\\s*=\\s*\\[([^\\]]*)\\]`);
@@ -33,21 +21,6 @@ function extractArrayLiteral(relativePath, constName) {
 }
 
 describe("TEMPLATE_INI_EXCLUSIONS (client) vs DEFAULT_INI_EXCLUSIONS (server): parity", () => {
-  // DEFAULT_INI_EXCLUSIONS's own comment (apps/panel-server/utils/templateSchema.js)
-  // documents a real past incident in this exact domain (2026-08-24
-  // conv-template-privesc): a template's own (attacker-controlled)
-  // iniExclusions list was once trusted as authoritative at the apply-time
-  // write site, letting an empty list disable the RCONPassword/port/
-  // ServerName protection entirely. Fixed there by resolveIniExclusions()
-  // always unioning in DEFAULT_INI_EXCLUSIONS unconditionally -- confirmed
-  // (hunt-wave14) that the SAME unconditional union backs
-  // validateTemplate()'s check on every saveTemplate()/importTemplate()
-  // call, so a drifted CLIENT copy cannot itself leak a secret into a
-  // saved/exported template: the server independently rejects (400,
-  // SIM_TEMPLATE_VALIDATION_FAILED) any excluded key present in
-  // template.serverIni, regardless of what the client stripped first. A
-  // drift here is a confusing validation-error UX, not a secret leak --
-  // still worth guarding so that error never happens, just not urgent.
   const CLIENT_PATH = "apps/panel-client/src/lib/templateBuilder.ts";
 
   it(`${CLIENT_PATH}'s TEMPLATE_INI_EXCLUSIONS matches server's DEFAULT_INI_EXCLUSIONS exactly`, () => {
@@ -64,10 +37,6 @@ describe("TEMPLATE_INI_EXCLUSIONS (client) vs DEFAULT_INI_EXCLUSIONS (server): p
 });
 
 describe("LEGACY_USER_ROLES (client) vs USER_ROLES (server): parity", () => {
-  // apps/panel-client/src/pages/Users.tsx's own comment already explains why this
-  // exists: POST /api/auth/users only accepts one of these three legacy
-  // names (no roleId param at creation time). Nothing enforced the two
-  // staying in sync before this.
   const CLIENT_PATH = "apps/panel-client/src/pages/Users.tsx";
 
   it(`${CLIENT_PATH}'s LEGACY_USER_ROLES matches server's USER_ROLES exactly`, () => {
@@ -83,21 +52,8 @@ describe("LEGACY_USER_ROLES (client) vs USER_ROLES (server): parity", () => {
   });
 });
 
-// hunt-wave16-2026-08-30: closes out duplication-survey-uncovered-remainder
-// (the not-covered list hunt-wave14's survey named rather than glossing
-// over). Two more real pairs found by finally scanning apps/panel-server/routes/*.js
-// and apps/panel-server/index.js (never checked before) and opening the remaining
-// name-scanned-but-unopened client constants. Both confirmed IN SYNC as of
-// this commit -- pure guard installation, no behavior change. Everything
-// else on that not-covered list was checked and rejected with a reason (see
-// the survey report), not silently dropped.
 
 describe("AIRDROP_PRESETS (client) vs airdrop's VALID_PRESETS (server): parity", () => {
-  // apps/panel-client/src/pages/WorldMap.tsx's AIRDROP_PRESETS is `[{ id, icon }, ...]`,
-  // not a flat string array -- extract just the id field. apps/panel-server/routes/
-  // panelBridge.js's VALID_PRESETS lives INSIDE the POST /command handler
-  // (not a module-level export), so it's regex-extracted too rather than
-  // imported, same reasoning as the client side.
   const CLIENT_PATH = "apps/panel-client/src/pages/WorldMap.tsx";
   const SERVER_PATH = "apps/panel-server/routes/panelBridge.js";
 
@@ -138,13 +94,6 @@ describe("AIRDROP_PRESETS (client) vs airdrop's VALID_PRESETS (server): parity",
 });
 
 describe("DISK_SOCKET_EVENTS (client) vs diskMonitor's io.emit() calls (server): parity", () => {
-  // apps/panel-client/src/components/SystemHealthBanner.tsx literally iterates this
-  // array to bind/unbind socket listeners (DISK_SOCKET_EVENTS.forEach((evt)
-  // => socket.on(evt, refresh))) -- not just a UI label list, a real event
-  // subscription contract. apps/panel-server/services/diskMonitor.js has no single
-  // named export enumerating its event names; it emits them at three
-  // separate call sites, so the server side is reconstructed from those
-  // call sites rather than imported.
   const CLIENT_PATH = "apps/panel-client/src/components/SystemHealthBanner.tsx";
   const SERVER_PATH = "apps/panel-server/services/diskMonitor.js";
 

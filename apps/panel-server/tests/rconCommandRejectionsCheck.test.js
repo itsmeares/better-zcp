@@ -1,20 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-// GET /diagnostics's rcon.commandRejections check -- spec from Kevin (via
-// god, conv-hunt-routes): windowed inspection of the panel's own RCON
-// command history for a real refusal FROM THE GAME, deliberately excluding
-// connection/timeout failures (rcon.connected already covers those).
-// A real classifyRconResponse (or a faithful stand-in matching the same 4
-// known shapes) is injected so this stays testable without a live RconService.
 
 const { summarizeRconRejections, buildRconCommandRejectionsCheck } = await import(
   "../routes/debug.js"
 );
 
-// Mirrors apps/panel-server/services/rcon.js's real classifyRconResponse contract:
-// returns {error, response} for one of the 4 known rejection shapes, null
-// otherwise (this is what a real RconService instance would also return
-// when re-classifying the ALREADY-persisted, describe()-transformed text).
 function classify(response) {
   if (typeof response !== "string" || !response) return null;
   if (/^Unknown command\b/i.test(response)) return { error: response, response };
@@ -40,9 +30,7 @@ describe("summarizeRconRejections", () => {
   it("counts only success:0 entries whose stored text re-classifies as a real game rejection", () => {
     const history = [
       entry({ command: "kickuser", response: "Not enough rights. The RCON account's role does not have permission to run this command.", success: false, hoursAgo: 1 }),
-      // success:0 but NOT a game rejection -- a connection failure, must be excluded
       entry({ command: "godmodplayer", response: "Server is starting...", success: false, hoursAgo: 1 }),
-      // success:1 -- never even a candidate
       entry({ command: "players", response: "Players connected (2)", success: true, hoursAgo: 1 }),
     ];
     const summary = summarizeRconRejections(history, classify, { now: NOW });
@@ -81,7 +69,7 @@ describe("summarizeRconRejections", () => {
       entry({ command: "somecmd", response: "Unknown command. Not available.", success: false, hoursAgo: 3 }),
     ];
     const summary = summarizeRconRejections(history, classify, { now: NOW });
-    expect(summary.reasonHints).toHaveLength(2); // "Not enough rights" hint once, "Unknown command" hint once
+    expect(summary.reasonHints).toHaveLength(2);
   });
 
   it("returns null (fail-closed input) when no classify function is available", () => {
@@ -96,7 +84,6 @@ describe("buildRconCommandRejectionsCheck", () => {
     expect(check.status).toBe("ok");
     expect(check.id).toBe("rcon.commandRejections");
     expect(check.message).toMatch(/no rcon commands have been rejected/i);
-    // Closing line present in BOTH states, per spec.
     expect(check.hint).toMatch(/Console page's command history/);
   });
 

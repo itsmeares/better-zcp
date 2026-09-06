@@ -3,19 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 1, item 1 (operator ruling + Kevin's
-// jar-verified spec): handlers.getSandboxOptions used to read 11 hand-picked
-// getters (getZombieCount, getZombieSpeed, getDayLength, ...) that do not
-// exist ANYWHERE on SandboxOptions in the real B42 jar. Each was wrapped in
-// its own pcall, so every failure was swallowed and `options` stayed `{}` --
-// a clean `true, { options = {} }` success reporting nothing, on every call.
-//
-// getSandboxOptions has an api.ts wrapper but zero UI callers (confirmed by
-// god before this fix), so there was no flat-shape compatibility to
-// preserve. The fix makes it a thin delegate to handlers.getAllSandboxOptions
-// -- whose primary enumeration path (getNumOptions()+getOptionByIndex(i)) is
-// jar-confirmed real on the same sandbox object -- instead of hand-picking a
-// second, narrower, broken enumeration.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -30,11 +17,6 @@ const LUA_PATH = path.join(
   'PanelBridge.lua',
 );
 
-// Deliberately does NOT define getZombieCount/getZombieSpeed/etc. -- models
-// the real jar, where those 11 methods genuinely do not exist. Only defines
-// what getAllSandboxOptions' own jar-confirmed primary path actually uses:
-// getNumOptions()/getOptionByIndex(i) on the sandbox, and
-// getName()/getShortName()/getTableName()/getValue() on each option.
 const STUBS = `
 FakeOption1 = { name = "ZombieCount", short = "ZombieCount", tbl = "Zombies", value = 4 }
 function FakeOption1:getName() return self.name end

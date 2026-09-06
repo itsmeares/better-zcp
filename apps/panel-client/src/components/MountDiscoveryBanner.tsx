@@ -23,11 +23,6 @@ interface MountDiscoveryBannerProps {
   onConnect: (mount: DiscoveredMount) => void
 }
 
-// Shown when the panel found PZ server files at a common bind-mount path
-// but no server profile has been created for it yet — lets the user skip
-// typing paths and RCON settings by hand. Dismissal is remembered per
-// install path so re-scans don't keep re-surfacing a mount the user
-// already declined.
 export function MountDiscoveryBanner({ mount, onConnect }: MountDiscoveryBannerProps) {
   const { t } = useTranslation('mountDiscoveryBanner')
   const [dismissed, setDismissed] = useState(() => isDismissed(mount))

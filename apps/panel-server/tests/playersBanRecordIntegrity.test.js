@@ -42,13 +42,6 @@ function createRequest(body, rconService) {
   return { body, app: { get: () => rconService } };
 }
 
-// Root cause (Angela): RconService.execute() resolves {success:false} rather
-// than throwing when RCON is unreachable (server offline / mid-restart) — the
-// exact moment an operator is most likely to be banning someone. Every route
-// below used to write its persistent record (the SteamID ban list, or the
-// player activity log) unconditionally, regardless of whether the RCON call
-// that record describes actually happened. A ban list or activity log that
-// disagrees with the real server state never self-corrects.
 describe("players routes: persistent records only written on RCON success", () => {
   beforeEach(() => {
     logPlayerAction.mockReset();
@@ -91,9 +84,6 @@ describe("players routes: persistent records only written on RCON success", () =
 
       expect(addSteamIdBan).not.toHaveBeenCalled();
       expect(logPlayerAction).not.toHaveBeenCalled();
-      // The response is untouched and already carries success:false through
-      // to the caller -- proving the record is not written is meaningless if
-      // the caller can't also see that nothing happened.
       expect(response.json).toHaveBeenCalledWith({
         success: false,
         error: "Server is not running",
@@ -135,12 +125,6 @@ describe("players routes: persistent records only written on RCON success", () =
 
       expect(removeSteamIdBan).not.toHaveBeenCalled();
       expect(logPlayerAction).not.toHaveBeenCalled();
-      // bug hunt 2026-08-31-c (under-coverage sweep): the title's own second
-      // clause -- "the panel must not claim someone is unbanned" -- is a
-      // claim about the HTTP response, which nothing above checks. Same
-      // shape as the /banid failure test above, and the same reason:
-      // proving the record is not written is meaningless if the caller
-      // can't also see that nothing happened.
       expect(response.json).toHaveBeenCalledWith({
         success: false,
         error: "Server is not running",
@@ -204,14 +188,6 @@ describe("players routes: persistent records only written on RCON success", () =
       });
     });
 
-    // Regression for the mismatch god verified directly: banPlayer() (see
-    // services/rcon.js) folds/transliterates the reason before it reaches
-    // RCON and returns what actually went out as `sentReason` -- this route
-    // used to log the raw, pre-fold `reason` instead, so an accented French
-    // reason like "répété" ("repeated") would be recorded in the panel's
-    // own activity log even though RCON actually received the folded
-    // "repete". The operator reading their own log would believe that's
-    // what was sent when it wasn't.
     it("logs sentReason (what RCON actually received), not the raw requested reason, when they differ", async () => {
       const rconService = {
         banPlayer: vi.fn(async () => ({
@@ -313,10 +289,6 @@ describe("players routes: persistent records only written on RCON success", () =
     });
   });
 
-  // Already correct before this fix -- gated on result.success and returns
-  // 400 rather than 200 on failure. Locked in here as a regression guard,
-  // not touched, since Angela confirmed all five routes share the same
-  // client-side wrapper and this one was the one that already got it right.
   describe("POST /adduser (already correct — regression guard only)", () => {
     it("logs the action when RCON succeeds", async () => {
       const rconService = {

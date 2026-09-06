@@ -252,7 +252,6 @@ describe('translateDiagnosticCheck', () => {
     expect(none.message).toBe('Aucune sauvegarde de db.json trouvée. Une sauvegarde manuelle est recommandée avant des changements risqués.')
     expect(old.message).toBe('Dernière sauvegarde 3d ago. Envisagez d\'en créer une nouvelle.')
     expect(error.message).toBe('Impossible d\'inspecter les sauvegardes : disk full')
-    // All four are genuinely distinct -- prove none of them collapsed onto another.
     const messages = [unreadable.message, none.message, old.message, error.message]
     expect(new Set(messages).size).toBe(4)
   })
@@ -310,8 +309,6 @@ describe('translateDiagnosticCheck', () => {
     }
     const message = translateDiagnosticCheck(check).message
     expect(message).toBe('Tas à 80 % de sa limite. 400 MB utilisés sur 500 MB de limite (480 MB actuellement alloués).')
-    // The whole point: no leftover English fragment ("used of", "limit",
-    // "currently allocated") should ever appear in the French output.
     expect(message).not.toMatch(/used of|currently allocated/i)
   })
 
@@ -563,9 +560,6 @@ describe('translateDiagnosticCheck', () => {
     })
     expect(withOutput.message).toBe('java -version a échoué : exit code 1. Sortie : error loading libjvm.so')
     expect(withoutOutput.message).toBe('java -version a échoué : timeout.')
-    // withoutOutput must never render a literal {{output}} placeholder --
-    // proves the variant genuinely omits the clause rather than leaving a
-    // blank hole in a shared template.
     expect(withoutOutput.message).not.toMatch(/\{\{/)
   })
 
@@ -577,9 +571,6 @@ describe('translateDiagnosticCheck', () => {
       message: '3 .lock files older than 1 hour in [path]. PZ will refuse to load the save until they are removed.',
       params: { count: 3, dir: '[path]' },
     }
-    // Confirms interpolation still works even when the param VALUE is
-    // itself the server's redaction placeholder -- the guard only cares
-    // whether a param is present and is a string/number, not its content.
     expect(translateDiagnosticCheck(check).message).toBe(
       "3 fichier(s) .lock de plus d'une heure dans [path]. PZ refusera de charger la sauvegarde tant qu'ils ne sont pas supprimés.",
     )

@@ -36,7 +36,6 @@ describe('OIDC: unconfigured (the non-negotiable property)', () => {
   it('reports not configured when only some env vars are set', async () => {
     process.env.PANEL_OIDC_ISSUER_URL = 'https://idp.example.com';
     process.env.PANEL_OIDC_CLIENT_ID = 'panel';
-    // client secret and redirect URI intentionally left unset
     expect(isOidcConfigured(await getOidcSettings())).toBe(false);
   });
 
@@ -59,10 +58,6 @@ describe('OIDC: unconfigured (the non-negotiable property)', () => {
   });
 
   it('module import itself never touches the network — settings are read lazily per call, not cached at import time', async () => {
-    // If this module made a network call (or read env vars) at import time,
-    // it would have already happened by the time this test file's imports
-    // resolved, long before any env var was set above. Re-reading settings
-    // here and getting the CURRENT env proves reads are lazy per call.
     process.env.PANEL_OIDC_PROVIDER_NAME = 'Just Set This';
     expect((await getOidcSettings()).providerName).toBe('Just Set This');
   });
@@ -70,7 +65,7 @@ describe('OIDC: unconfigured (the non-negotiable property)', () => {
 
 describe('OIDC: ID token validation (each rejection reason tested separately)', () => {
   let provider;
-  let unpublishedKey; // NOT published in JWKS -- signatures with this key must fail.
+  let unpublishedKey;
 
   const CLIENT_ID = 'panel-test-client';
   const CLIENT_SECRET = 'panel-test-secret';
@@ -90,15 +85,13 @@ describe('OIDC: ID token validation (each rejection reason tested separately)', 
     process.env.PANEL_OIDC_CLIENT_ID = CLIENT_ID;
     process.env.PANEL_OIDC_CLIENT_SECRET = CLIENT_SECRET;
     process.env.PANEL_OIDC_REDIRECT_URI = `${provider.baseUrl}${REDIRECT_URI_PATH}`;
-    process.env.PANEL_OIDC_ALLOW_INSECURE_HTTP = 'true'; // local mock IdP is plain HTTP
+    process.env.PANEL_OIDC_ALLOW_INSECURE_HTTP = 'true';
     _resetOidcConfigCacheForTests();
     provider.setNextIdToken({});
   });
 
   afterEach(clearOidcEnv);
 
-  // Drives a callback exactly the way routes/oidc.js does: a flow (state,
-  // nonce, codeVerifier) plus a currentUrl carrying ?code=...&state=....
   async function runCallback({ state = 'flow-state', nonce = 'flow-nonce' } = {}) {
     const flow = { state, nonce, codeVerifier: 'flow-code-verifier' };
     const currentUrl = new URL(`${provider.baseUrl}${REDIRECT_URI_PATH}`);
@@ -144,7 +137,7 @@ describe('OIDC: ID token validation (each rejection reason tested separately)', 
   });
 
   it('rejects a token with no nonce at all when a nonce was required', async () => {
-    provider.setNextIdToken({}); // no `nonce` override -- the base claims object has none either
+    provider.setNextIdToken({});
     await expect(runCallback()).rejects.toThrow();
   });
 
@@ -177,7 +170,6 @@ describe('OIDC: discovery failure does not stick around forever', () => {
   afterEach(clearOidcEnv);
 
   it('a failed discovery is retried (not permanently cached) once the issuer is reachable again', async () => {
-    // Point at a port nothing is listening on.
     process.env.PANEL_OIDC_ISSUER_URL = 'http://127.0.0.1:1';
     process.env.PANEL_OIDC_CLIENT_ID = 'panel';
     process.env.PANEL_OIDC_CLIENT_SECRET = 'secret';
@@ -186,8 +178,6 @@ describe('OIDC: discovery failure does not stick around forever', () => {
 
     await expect(getOidcConfig()).rejects.toThrow();
 
-    // Now point at a real, working discovery document and confirm the
-    // module doesn't keep returning the old failure forever.
     const server = http.createServer((req, res) => {
       res.setHeader('content-type', 'application/json');
       res.end(

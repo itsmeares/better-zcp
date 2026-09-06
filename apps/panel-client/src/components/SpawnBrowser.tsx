@@ -28,9 +28,7 @@ interface SpawnBrowserProps {
   mode: SpawnMode
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Player receiving the spawn. Empty string = no player selected (disables spawn for items; vehicles allow it). */
   playerName: string
-  /** Perform the spawn. Throws on failure. */
   onSpawn: (id: string, qty?: number) => Promise<void>
 }
 
@@ -45,7 +43,6 @@ const MAX_VISIBLE = 220
 const MAX_RECENT = 8
 const RECENT_KEY_PREFIX = 'pz-spawn-recent-'
 
-/* ---------- shared helpers ---------- */
 
 function loadRecent(mode: SpawnMode): RecentEntry[] {
   try {
@@ -75,14 +72,12 @@ function clearRecent(mode: SpawnMode) {
   }
 }
 
-/* ================================================================ */
 
 export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: SpawnBrowserProps) {
   const isItems = mode === 'items'
   const { t, i18n } = useTranslation(['spawnBrowser', 'itemPicker', 'vehiclePicker'])
   const { toast } = useToast()
 
-  // Catalog state
   const [items, setItems] = useState<CatalogItem[]>([])
   const [vehicles, setVehicles] = useState<CatalogVehicle[]>([])
   const [initialLoad, setInitialLoad] = useState(true)
@@ -90,7 +85,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
   const [scanError, setScanError] = useState<string | null>(null)
   const [scannedAt, setScannedAt] = useState<string | null>(null)
 
-  // UI state
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -104,7 +98,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
   const listRef = useRef<HTMLDivElement>(null)
   const flashTimer = useRef<NodeJS.Timeout | null>(null)
 
-  /* ---------- Data load ---------- */
 
   const loadCatalog = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -126,7 +119,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     }
   }, [isItems])
 
-  // Lazy load on first open; also reset ephemeral state each open
   useEffect(() => {
     if (!open) return
     const ctrl = new AbortController()
@@ -142,7 +134,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     return () => ctrl.abort()
   }, [open, mode, loadCatalog])
 
-  // Autofocus search on open (slight delay so Radix mounts first)
   useEffect(() => {
     if (!open) return
     const timer = setTimeout(() => searchRef.current?.focus(), 80)
@@ -155,7 +146,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
 
   useEffect(() => { setHighlightIndex(-1) }, [search, activeCategory])
 
-  /* ---------- Scan ---------- */
 
   const handleScan = useCallback(async () => {
     if (scanning) return
@@ -188,7 +178,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     }
   }, [scanning, isItems, toast, t])
 
-  /* ---------- Derived: non-vehicle items / category summary / filter ---------- */
 
   const nonVehicleItems = useMemo(
     () => items.filter(it => !VEHICLE_CATEGORIES.has(it.category)),
@@ -254,7 +243,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     }
   }, [isItems, nonVehicleItems, vehicles, search, activeCategory])
 
-  /* ---------- Selection lookups ---------- */
 
   const selectedRow = useMemo(() => {
     if (!selectedId) return null
@@ -266,7 +254,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     return v ? { kind: 'veh' as const, v } : null
   }, [selectedId, isItems, items, vehicles])
 
-  /* ---------- Keyboard ---------- */
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -275,7 +262,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
         setSearch('')
         return
       }
-      // otherwise let Radix close
       return
     }
     if (e.key === 'ArrowDown') {
@@ -285,7 +271,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
       e.preventDefault()
       setHighlightIndex(prev => Math.max(prev - 1, 0))
     } else if (e.key === 'Enter' && !e.shiftKey) {
-      // If a selection is locked in and nothing is highlighted, spawn it directly
       if (highlightIndex < 0 && selectedId) {
         e.preventDefault()
         void handleSpawn(selectedId, isItems ? qty : undefined)
@@ -296,7 +281,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
         e.preventDefault()
         const id = row.kind === 'item' ? row.it.id : row.v.id
         setSelectedId(id)
-        // Enter-enter to spawn: if already selected and nothing new, spawn
         if (selectedId === id) void handleSpawn(id, isItems ? qty : undefined)
       }
     } else if (e.key === 'Home') {
@@ -314,10 +298,9 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     el?.scrollIntoView({ block: 'nearest' })
   }, [highlightIndex])
 
-  /* ---------- Spawn action ---------- */
 
   const canSpawnItem = isItems && !!playerName
-  const canSpawnVehicle = !isItems // vehicles don't strictly require playerName in current API
+  const canSpawnVehicle = !isItems
   const canSpawn = (isItems ? canSpawnItem : canSpawnVehicle) && !!selectedId && !spawning
 
   const handleSpawn = async (overrideId?: string, overrideQty?: number) => {
@@ -329,7 +312,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     setSpawning(true)
     try {
       await onSpawn(id, effectiveQty)
-      // success — keep dialog open, pulse the row, clear selection, refocus search
       const name = (() => {
         if (isItems) {
           const it = items.find(x => x.id === id)
@@ -339,18 +321,15 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
         return v ? formatVehicleName(v) : id
       })()
 
-      // flash the spawned row
       setFlashId(id)
       if (flashTimer.current) clearTimeout(flashTimer.current)
       flashTimer.current = setTimeout(() => setFlashId(null), 900)
 
-      // update recents
       const entry: RecentEntry = { id, name, qty: effectiveQty || 1, at: Date.now() }
       const next = [entry, ...recent.filter(r => r.id !== id)].slice(0, MAX_RECENT)
       setRecent(next)
       saveRecent(mode, next)
 
-      // clear selection so user can pick next — but keep qty so repeat giveaways are fast
       setSelectedId(null)
       searchRef.current?.focus()
       searchRef.current?.select()
@@ -361,7 +340,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     }
   }
 
-  /* ---------- Render ---------- */
 
   const Hero = isItems ? Package : Car
   const modeLabel = isItems ? t('giveItemsTitle') : t('spawnVehicleTitle')
@@ -383,7 +361,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
         )}
         onKeyDown={handleKeyDown}
       >
-        {/* ========== HEADER ========== */}
         <header className="flex items-center gap-3 border-b border-border/70 bg-card/60 px-5 h-14 shrink-0">
           <div className="flex items-center justify-center w-9 h-9 rounded-md border border-primary/25 bg-primary/10 text-primary shrink-0">
             <Hero className="w-4 h-4" />
@@ -410,7 +387,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
           </div>
         </header>
 
-        {/* ========== SEARCH BAR ========== */}
         <div className="flex items-center gap-2 border-b border-border/70 px-4 h-12 shrink-0 bg-background/50">
           <Search className="w-4 h-4 text-muted-foreground/60 shrink-0" />
           <input
@@ -454,9 +430,7 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
           </Button>
         </div>
 
-        {/* ========== BODY ========== */}
         <div className="grid grid-cols-[220px_1fr] min-h-0 min-w-0">
-          {/* ----- Category sidebar ----- */}
           <aside className="border-e border-border/70 bg-card/40 overflow-y-auto overscroll-contain">
             <div className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm px-3 pt-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] font-semibold text-muted-foreground/60">
               {t('categories')}
@@ -508,9 +482,7 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
             })}
           </aside>
 
-          {/* ----- Results ----- */}
           <section className="flex flex-col min-h-0 min-w-0">
-            {/* Active category ribbon */}
             <div className="flex items-center gap-2 border-b border-border/50 px-4 h-9 bg-muted/30 shrink-0">
               <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-muted-foreground/60">
                 {activeLabel}
@@ -525,7 +497,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
               )}
             </div>
 
-            {/* Body scroll region */}
             <div
               ref={listRef}
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
@@ -590,9 +561,7 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
           </section>
         </div>
 
-        {/* ========== FOOTER / ACTION BAR ========== */}
         <footer className="min-w-0 border-t border-border/70 bg-card/50 shrink-0">
-          {/* Recent rail */}
           {recent.length > 0 && (
             <div
               role="group"
@@ -650,9 +619,7 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
             </div>
           )}
 
-          {/* Action row */}
           <div className="flex min-w-0 items-center gap-3 px-4 py-3">
-            {/* Selection summary */}
             <div className="flex-1 min-w-0">
               {selectedRow ? (
                 <div className="flex flex-col gap-0.5 min-w-0">
@@ -677,7 +644,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
               )}
             </div>
 
-            {/* Quantity stepper (items only) */}
             {isItems && (
               <div className="flex items-center gap-0 border border-border/70 rounded-md overflow-hidden shrink-0 bg-background/60">
                 <button
@@ -713,7 +679,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
               </div>
             )}
 
-            {/* Spawn CTA */}
             <Button
               onClick={() => void handleSpawn()}
               disabled={!canSpawn}
@@ -734,7 +699,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
             </Button>
           </div>
 
-          {/* Hint row */}
           <div className="flex items-center justify-between gap-3 px-4 pb-2 text-[10px] text-muted-foreground/50">
             <span>
               {isItems && !playerName
@@ -751,7 +715,6 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
   )
 }
 
-/* ================================================================ */
 
 interface ResultRowProps {
   row:
@@ -774,7 +737,6 @@ function ResultRow({
   const isItem = row.kind === 'item'
   const id = isItem ? row.it.id : row.v.id
 
-  // Icon for the row (item group icon, or vehicle type icon)
   const Icon = isItem
     ? (GROUP_META[getItemGroup(row.it.category)]?.icon || HelpCircle)
     : (TYPE_ICON[getVehicleType(row.v)] || Car)
@@ -838,7 +800,6 @@ function ResultRow({
   )
 }
 
-/* ================================================================ */
 
 interface EmptyCatalogProps {
   mode: SpawnMode

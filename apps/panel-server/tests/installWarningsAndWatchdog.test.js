@@ -5,19 +5,6 @@ import path from "path";
 import { EventEmitter } from "events";
 import { setSetting } from "../database/init.js";
 
-// 2026-08-26 install-failure hunt findings #6 and #1. #6: the game files
-// installing is the expensive, hard-to-redo part -- a failure in an
-// auxiliary write AFTER that (the RCON .ini pre-create, the startup
-// script) used to only log.warn() server-side while install:complete still
-// said success:true with no trace of it anywhere the operator could see.
-// Now collected into a `warnings` array on the same success:true payload
-// instead of either a false flat failure or silence. #1: a watchdog-killed
-// SteamCMD process reports code=null to Node's close handler, which used
-// to render the literal word "null" in "Installation failed with exit code
-// null" -- now its own distinct, accurate message.
-//
-// spawn() is mocked at module scope, matching unvalidatedPathFixes.test.js's
-// established pattern -- server.js binds it as a live import at load time.
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 vi.mock("child_process", async (importOriginal) => {
   const actual = await importOriginal();
@@ -31,11 +18,6 @@ vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => null),
 }));
 
-// Real writeFileAtomic by default (writes to real temp-directory paths
-// below) -- each test overrides it only for the one call it wants to fail,
-// by inspecting the target path, rather than mocking the whole filesystem.
-// `realHolder` is populated from the mock factory's own importOriginal(),
-// the only way to reach the real implementation once the module is mocked.
 const { writeFileAtomicMock, realHolder } = vi.hoisted(() => ({
   writeFileAtomicMock: vi.fn(),
   realHolder: { fn: null },
@@ -73,8 +55,6 @@ function getRouteHandler(router, routePath, method) {
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-// Resolves with the install:complete payload the route handler eventually
-// emits, however many ticks that takes -- deterministic, no arbitrary waits.
 function fakeIoCapturingComplete() {
   let resolveComplete;
   const completePromise = new Promise((resolve) => {
@@ -104,28 +84,13 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     fs.mkdirSync(installPath, { recursive: true });
     fs.mkdirSync(zomboidDataPath, { recursive: true });
     fs.mkdirSync(steamcmdPath, { recursive: true });
-    // getSteamCmdExe() does a real fs.existsSync check -- give it a real
-    // file rather than mocking fs globally (ensureWritableDirectory below
-    // needs real fs behavior against the real temp dirs above).
     const steamcmdExeName = process.platform === "win32" ? "steamcmd.exe" : "steamcmd.sh";
     fs.writeFileSync(path.join(steamcmdPath, steamcmdExeName), "");
-    // spawnMock below fakes a successful SteamCMD run by firing close(0)
-    // directly -- it never actually writes game files into installPath the
-    // way a real steamcmd process would. Since 2026-08-26's
-    // INSTALL_MISSING_GAME_FILES check, a "successful" install with none of
-    // the real PZ markers present would otherwise (correctly) collect that
-    // warning in every test in this file, including the ones deliberately
-    // testing a DIFFERENT warning. Writing one marker here is what a real
-    // install would have left behind at this point.
     fs.writeFileSync(path.join(installPath, "ProjectZomboid64.json"), "{}");
 
     spawnMock.mockReset();
     writeFileAtomicMock.mockReset();
     writeFileAtomicMock.mockImplementation((...args) => realHolder.fn(...args));
-    // Reset to the shared no-op default before each test -- individual
-    // tests below override this with a key-conditional implementation to
-    // fail one specific setSetting call; without a reset here, that
-    // override would leak into whichever test runs next.
     vi.mocked(setSetting).mockReset();
     vi.mocked(setSetting).mockImplementation(async () => {});
   });
@@ -174,14 +139,6 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     expect(payload.warnings).toEqual([]);
   });
 
-  // 2026-08-26 partial-failure-state hunt: these setSetting() calls were
-  // bare awaits with nothing catching a throw, and this app's
-  // process.on("unhandledRejection") handler (apps/panel-server/index.js) calls
-  // fatalExit(), which exits the WHOLE PANEL PROCESS. Before the fix, a
-  // rejection here would never resolve completePromise at all -- this test
-  // would time out (or the real process would simply die) rather than see
-  // an install:complete event. Reaching the assertions below is itself
-  // proof the crash path is closed, independent of what they check.
   it("collects an INSTALL_SETTINGS_SAVE_FAILED warning instead of crashing the panel when saving settings throws, and still reports success:true", async () => {
     const fakeProc = new EventEmitter();
     fakeProc.stdout = new EventEmitter();
@@ -190,13 +147,6 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       queueMicrotask(() => fakeProc.emit("close", 0));
       return fakeProc;
     });
-    // Keyed on "serverPath" rather than "the next call regardless of args":
-    // saveAndResolveSteamCmdExe() (CodeQL js/command-line-injection fix,
-    // 2026-08-27) now saves steamcmdPath earlier in this same route, before
-    // this block's own setSetting calls even start -- a bare
-    // mockRejectedValueOnce() would silently reject THAT call instead of
-    // the one this test is actually about, the same fragility a call-count
-    // assumption always has once an earlier call is added upstream.
     vi.mocked(setSetting).mockImplementation(async (key) => {
       if (key === "serverPath") throw new Error("EBUSY: database locked");
     });
@@ -227,13 +177,6 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       queueMicrotask(() => fakeProc.emit("close", 0));
       return fakeProc;
     });
-    // Keyed on "rconPassword" rather than a call-count sequence -- a count
-    // assumption breaks the moment any earlier setSetting call is added
-    // upstream (as saveAndResolveSteamCmdExe's steamcmdPath save now is,
-    // CodeQL js/command-line-injection fix 2026-08-27), and would then
-    // silently fail a DIFFERENT settings block while this test still passes
-    // (both blocks report the same INSTALL_SETTINGS_SAVE_FAILED
-    // progressCode, so a wrong-block failure isn't even visible here).
     vi.mocked(setSetting).mockImplementation(async (key) => {
       if (key === "rconPassword") throw new Error("EBUSY: database locked");
     });
@@ -317,12 +260,6 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     });
   });
 
-  // 2026-08-26 bug hunt: SteamCMD exiting 0 was trusted as sufficient proof
-  // the game files were actually installed -- it can exit 0 after a
-  // rate-limited, interrupted, or otherwise incomplete download. This test
-  // removes the marker beforeEach wrote (simulating exactly that: SteamCMD
-  // "succeeded" but the install directory has no real PZ files in it) and
-  // proves the gap that report was about no longer exists.
   it("collects an INSTALL_MISSING_GAME_FILES warning when SteamCMD exits 0 but no PZ marker file exists at the install path", async () => {
     fs.rmSync(path.join(installPath, "ProjectZomboid64.json"));
 
@@ -343,9 +280,6 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     );
 
     const payload = await completePromise;
-    // Still success:true -- the marker check is a warning, not a hard
-    // failure, matching the sibling INI/startup-script checks above rather
-    // than inventing a new, harsher failure mode for this one.
     expect(payload.success).toBe(true);
     expect(payload.warnings).toHaveLength(1);
     expect(payload.warnings[0]).toMatchObject({
@@ -383,12 +317,10 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const fakeProc = new EventEmitter();
     fakeProc.stdout = new EventEmitter();
     fakeProc.stderr = new EventEmitter();
-    // Real child_process behavior: a signal-killed process reports
-    // code=null to the close handler, not an exit code.
     fakeProc.kill = vi.fn(() => {
       queueMicrotask(() => fakeProc.emit("close", null));
     });
-    spawnMock.mockImplementation(() => fakeProc); // never emits close on its own -- only the watchdog's kill() does
+    spawnMock.mockImplementation(() => fakeProc);
 
     const { default: router } = await import("../routes/server.js");
     const { io, completePromise } = fakeIoCapturingComplete();
@@ -398,8 +330,6 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       res,
     );
 
-    // Past the 10-minute idle threshold plus one 30s watchdog tick, with the
-    // fake process never having produced any stdout/stderr in between.
     await vi.advanceTimersByTimeAsync(11 * 60 * 1000);
     await handlerDone;
 
@@ -412,14 +342,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
   });
 });
 
-// 2026-08-26, same-night follow-up: the wizard's UPnP checkbox saved a
 // global legacy setting (setSetting("useUpnp", ...)) that nothing ever
-// read -- the actual mechanism, a real UPnP= line in the server's own
-// .ini, only ever got written by the separate /configure-network endpoint,
-// which /install never called. Fixed by decoupling the ini pre-create from
-// rconPassword (previously the whole block, ini included, was gated on a
-// password being set) so a server's UPnP choice reaches its .ini
-// regardless of whether RCON was configured at install time.
 describe("POST /api/server/install -- UPnP reaches the server's own .ini, not just a global setting nothing reads", () => {
   let tmpRoot;
   let installPath;
@@ -440,8 +363,6 @@ describe("POST /api/server/install -- UPnP reaches the server's own .ini, not ju
     spawnMock.mockReset();
     writeFileAtomicMock.mockReset();
     writeFileAtomicMock.mockImplementation((...args) => realHolder.fn(...args));
-    // See the sibling describe block's beforeEach for why this reset is
-    // needed now that saveAndResolveSteamCmdExe() also calls setSetting.
     vi.mocked(setSetting).mockReset();
     vi.mocked(setSetting).mockImplementation(async () => {});
   });

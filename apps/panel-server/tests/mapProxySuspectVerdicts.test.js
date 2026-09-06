@@ -1,55 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// hunt-wave10-2026-08-29: verdicts for the remaining 4 suspects on god's
-// mapProxy.js card (suspect 4 -- tile Cache-Control staleness -- was REAL
-// and is fixed + break-verified separately in
-// mapProxyTileBrowserCacheStaleness.test.js). All four verdicts here are
-// DEAD, each proven against the real route handlers (not just read), per
-// "prove it, do not read it."
-//
-// Suspect 1 (path traversal / containment): DEAD. All three tile routes
-// validate :level and :floor via parseBoundedInteger (strict digit regex,
-// range-bounded, returns null -> 400 for anything else) and :tile via a
-// fully-anchored ^...$ regex requiring the ENTIRE decoded param to be
-// digits/underscore/extension -- no `/`, `..`, or null byte can survive
-// that regex, encoded-slash bypass included (Express decodes %2f into a
-// literal `/` in req.params BEFORE the handler runs, but the regex still
-// rejects the decoded result). The upstream-controlled `dir` value
-// (getB42Dir()) is separately constrained by isB42PlusCandidate's
-// ^4[2-9][\w.\-]*$, which also forbids `/`, so it cannot be used to escape
-// TILE_CACHE_DIR via path.join either.
-//
-// Suspect 2 (B41/B42 split asymmetry): DEAD as a defect. /b41tiles hardcodes
-// build "41.78.16" and layer0 (no :floor handling) while /tiles resolves
-// dir dynamically and accepts a floor query -- but this is a real,
-// understood asymmetry: B41 has no multi-floor tile set at all, and
-// WorldMap.tsx (client, read-only for this card) explicitly forces floor
-// back to 0 and hides the floor selector whenever the active build is B41
-// (see the "B41 has no multi-floor tiles" comment ~line 820). The backend
-// asymmetry matches a client-side asymmetry the client already knows about
-// and accounts for -- not a departed sibling, a correctly-modeled one.
-//
-// Suspect 3 (missing tile handling): DEAD. serveTile() passes a genuine
-// upstream 404 straight through with X-Tile-Cache: miss and no log entry
-// (quiet -- sparse coverage is normal, not an error), while a 5xx or a
-// thrown network error is mapped to 502 and logged at debug (not error)
-// level, so a dead upstream still can't flood the log. WorldMap.tsx
-// (client) already has a matching, deliberate split: a bare 404 is tracked
-// as an 'empty' tile (renders blank, never counts toward the failure
-// banner) while anything else counts toward it, keyed off exactly the
-// distinction this file's status-code handling makes.
-//
-// Suspect 5 (path/secret leak via /resolve and /vehicles): DEAD. /resolve's
-// response body is built entirely from hardcoded remote hostnames, the
-// resolved (regex-constrained) B42 build directory string, and plain
-// numeric geometry -- no local filesystem path ever enters it. /vehicles'
-// response is `{ vehicles: listPersistedVehicles(savePath) }`, and
-// listPersistedVehicles (apps/panel-server/utils/vehiclesDb.js) selects only
-// `id, x, y` from the sqlite table -- savePath itself (which DOES embed the
-// operator's local zomboidDataPath and server/save name) is used only to
-// build a query, never returned. Both the not-found/error paths in
-// /vehicles quietly fall back to `{ vehicles: [] }`, so a filesystem error
-// message never reaches the client either.
 
 const mockExecFile = vi.fn();
 vi.mock("child_process", () => ({
@@ -66,12 +16,6 @@ vi.mock("../utils/vehiclesDb.js", () => ({
   listPersistedVehicles: (...args) => mockListPersistedVehicles(...args),
 }));
 
-// createLogger() returns a fresh winston child logger object per call (see
-// apps/panel-server/utils/logger.js), so spying on a separately-obtained instance
-// never observes calls made on mapProxy.js's own module-level `log` --
-// mocking the whole module, closed over these same fns across
-// vi.resetModules(), is the only way to reliably assert "was log.error
-// ever called" against the REAL call site.
 const mockLogError = vi.fn();
 const mockLogWarn = vi.fn();
 const mockLogInfo = vi.fn();
@@ -182,7 +126,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("suspect 1 (DEAD): path traversal / containment on tile params", () => {
+describe("case 1 (DEAD): path traversal / containment on tile params", () => {
   const TRAVERSAL_TILE_PAYLOADS = [
     "../../../etc/passwd.jpg",
     "..%2f..%2f..%2fetc%2fpasswd.jpg", // pre-decoded form, as req.params would already contain after Express's own decode
@@ -254,8 +198,6 @@ describe("suspect 1 (DEAD): path traversal / containment on tile params", () => 
   });
 
   it("a directory value from upstream that fails isB42PlusCandidate's regex is never adopted, so it can never reach path.join/fetch for a tile", async () => {
-    // Simulates a compromised/misbehaving upstream trying to hand back a
-    // traversal-shaped directory via /api/builds/default.
     mockCurlRouter((url) => {
       if (url.endsWith("/api/builds/default")) {
         return curlResult(200, JSON.stringify({ directory: "../../../etc", default: true }));
@@ -267,14 +209,12 @@ describe("suspect 1 (DEAD): path traversal / containment on tile params", () => 
     });
     const { getB42Dir, getB42ResolutionStatus } = await freshModule();
     const dir = await getB42Dir();
-    // Falls back to the hardcoded, known-safe directory instead of ever
-    // adopting the malicious-shaped one.
     expect(dir).toBe("42.20.0");
     expect(getB42ResolutionStatus().source).toBe("fallback");
   });
 });
 
-describe("suspect 2 (DEAD as a defect): B41/B42 floor asymmetry is intentional and matches the client", () => {
+describe("case 2 (DEAD as a defect): B41/B42 floor asymmetry is intentional and matches the client", () => {
   it("/b41tiles ignores a floor query entirely rather than erroring or misrouting -- confirms the asymmetry is a deliberate omission, not a crash", async () => {
     const originalFetch = global.fetch;
     global.fetch = vi.fn(async () => ({
@@ -291,8 +231,6 @@ describe("suspect 2 (DEAD as a defect): B41/B42 floor asymmetry is intentional a
         res,
       );
       expect(res.statusCode).toBe(200);
-      // The URL fetched must still be the fixed 41.78.16/layer0 path --
-      // floor=3 must not have been interpolated in anywhere.
       const fetchedUrl = String(global.fetch.mock.calls[0][0]);
       expect(fetchedUrl).toBe(
         "https://tiles.pzmap.org/41.78.16/base/layer0_files/5/5_5.jpg",
@@ -330,7 +268,7 @@ describe("suspect 2 (DEAD as a defect): B41/B42 floor asymmetry is intentional a
   });
 });
 
-describe("suspect 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, and is distinguished from a real upstream failure", () => {
+describe("case 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, and is distinguished from a real upstream failure", () => {
   it("upstream 404 (sparse/edge tile) passes through as 404 with X-Tile-Cache: miss, never 500", async () => {
     const originalFetch = global.fetch;
     global.fetch = vi.fn(async () => ({ ok: false, status: 404 }));
@@ -348,18 +286,11 @@ describe("suspect 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, 
 
   it("a genuine upstream 5xx is mapped to 502 (never passed through as-is, never a bare 500)", async () => {
     const originalFetch = global.fetch;
-    // Circuit breaker requires 8 consecutive failures to open; a single 503
-    // (with one internal retry, both failing) stays well under that, so
-    // this exercises the per-request mapping, not the breaker.
     global.fetch = vi.fn(async () => ({ ok: false, status: 503 }));
     try {
       const { default: router } = await freshModule();
       const handler = findRoute(router, "/b41tiles/:level/:tile", "get");
       const res = makeRes();
-      // Distinct coordinates from every other test in this file -- the
-      // per-file dataDir's on-disk tile cache persists across tests, and a
-      // colliding coordinate here would let a PRIOR test's successful fetch
-      // serve this one from disk before this mock ever runs.
       await handler({ params: { level: "9", tile: "9_1.jpg" }, query: {} }, res);
       expect(res.statusCode).toBe(502);
     } finally {
@@ -384,7 +315,7 @@ describe("suspect 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, 
   });
 });
 
-describe("suspect 5 (DEAD): /resolve and /vehicles never leak local filesystem paths or save names", () => {
+describe("case 5 (DEAD): /resolve and /vehicles never leak local filesystem paths or save names", () => {
   it("/resolve's body contains no local path (no drive letter, no /home, no /data segment)", async () => {
     mockCurlForB42_20_0();
     const originalFetch = global.fetch;
@@ -423,18 +354,6 @@ describe("suspect 5 (DEAD): /resolve and /vehicles never leak local filesystem p
     });
     const serialized = JSON.stringify(res.jsonBody);
     expect(serialized).not.toMatch(/SomeOperator|Zomboid|servertest|Saves|Multiplayer/i);
-    // Confirms the sensitive path DID reach the internal lookup call (so
-    // this isn't a false-DEAD from the mock just not exercising it) --
-    // it's just never echoed back to the client. Deliberately NOT built by
-    // path.join()-ing the same segments here: that would share a code path
-    // with the thing under test and could only ever confirm that path's own
-    // assumptions. Instead assert on substrings only -- the route's actual
-    // join separator is `path.join`, which is path.posix.join on Linux and
-    // path.win32.join on Windows; a Windows-shaped fixture prefix joined via
-    // path.posix.join produces a MIXED-separator string that a hardcoded
-    // backslash literal can never match on Linux (caught by god's gate on
-    // 00bfa2b7 -- this is the fix). Checking for the distinguishing
-    // substrings is separator-agnostic and still rules out the false-DEAD.
     expect(mockListPersistedVehicles).toHaveBeenCalledTimes(1);
     const calledWith = mockListPersistedVehicles.mock.calls[0][0];
     expect(calledWith).toContain("SomeOperator");

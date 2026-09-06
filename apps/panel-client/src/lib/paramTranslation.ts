@@ -12,10 +12,6 @@ function requiredParamNames(template: string): string[] {
   return [...names]
 }
 
-// Strict by design: any params shape other than a flat string|number map is
-// treated as entirely absent, never partially trusted. A param that's
-// present but wrong-typed must behave exactly like a missing one — see
-// resolveRegisteredTranslation for why.
 export function extractTranslationParams(candidate: unknown): TranslationParams | undefined {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return undefined
 
@@ -26,19 +22,6 @@ export function extractTranslationParams(candidate: unknown): TranslationParams 
   return out
 }
 
-// Only trust a registered translation when it needs no interpolation data
-// we don't have. Several locale entries carry a {{placeholder}} for data
-// the server doesn't always send as structured params — translating one
-// without a value would put the literal text "{{name}}" in front of a
-// user, which is worse than the untranslated passthrough it would replace.
-// This is the backstop shared by every consumer of this module: a key with
-// no placeholders translates unconditionally; a key with placeholders only
-// translates once every required name is present in `params` with a
-// usable (string|number) value, and returns null (the caller's fallback)
-// otherwise. `resolveParamValue`, when given, lets a caller translate a
-// param's VALUE through a second lookup before interpolating (see
-// errorMessage.ts's capability-key resolution) — it must return the raw
-// value unchanged for anything it doesn't specifically know how to resolve.
 export function resolveRegisteredTranslation(
   ns: string,
   key: string,

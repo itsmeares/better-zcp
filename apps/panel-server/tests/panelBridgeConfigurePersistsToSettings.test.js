@@ -1,15 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// index.js's findPanelBridgePath() restores a saved bridge path from
-// settings.panelBridge.bridgePath at startup and on RCON reconnect
-// (apps/panel-server/index.js:970-976) -- but nothing ever wrote that setting. Both
-// /configure and /configure-direct only called bridge.configure() and
-// responded, so a manually-configured bridge (or one configured via
-// /configure) never survived a panel restart; the process fell back to
-// auto-detect, which usually re-finds it -- except /configure-direct is the
-// escape hatch for exactly the case where auto-detect CAN'T find it, so that
-// one input silently never persisted at all (2026-08-30, live-fire dispatch).
-// This exercises that both routes now write the setting the restore reads.
 
 const setSettingMock = vi.fn(async () => {});
 

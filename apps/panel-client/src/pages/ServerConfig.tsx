@@ -90,7 +90,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-// AlertDialog imports available if needed for save confirmation
 import {
   Tooltip,
   TooltipContent,
@@ -99,7 +98,6 @@ import {
 } from '@/components/ui/tooltip'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { PageHeader } from '@/components/PageHeader'
-// DropdownMenu imports available if needed
 import { serverApi, serverFilesApi, serversApi, panelBridgeApi, ApiError, SpawnPointsByProfession, SpawnRegion, SandboxData, ConfigTemplate } from '@/lib/api'
 import { resolveServerRunning } from '@/lib/serverStatus'
 import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
@@ -142,8 +140,6 @@ type FilterMode = 'all' | 'modified' | 'nondefault'
 type SandboxScalar = string | number | boolean | null | undefined
 type SandboxRecord = Record<string, SandboxScalar>
 
-// PanelBridge enumerates every sandbox option. These are Project Zomboid's
-// built-in groups, which belong in the Sandbox editor rather than Mod Settings.
 const VANILLA_SANDBOX_GROUPS = new Set([
   'Vanilla',
   'Map',
@@ -153,16 +149,12 @@ const VANILLA_SANDBOX_GROUPS = new Set([
   'Basement',
 ])
 
-// These were shown by older panel releases but Build 42 does not support them.
 const UNSUPPORTED_INI_KEYS = new Set([
   'ServerImageLoginScreen',
   'ServerImageLoadingScreen',
   'ServerImageIcon',
 ])
 
-/** Merge schema defaults into parsed INI settings so schema-defined keys always exist.
- *  Also warns to the console when a stored value doesn't parse for the schema type — helps
- *  catch a corrupted INI without changing behaviour. */
 function mergeSchemaDefaults(parsed: Record<string, string>): Record<string, string> {
   const merged = { ...parsed }
   for (const setting of INI_SCHEMA) {
@@ -203,29 +195,10 @@ function createSandboxDefaults(): SandboxData {
   return sandbox
 }
 
-// PanelBridge.lua's setSandboxOption handler calls world:saveWorld() to make
-// a live sandbox-option change durable, and reports the result as
-// `persisted`/`saveError` (commit b376b2c) -- added specifically because a
-// bare pcall used to swallow a failed world save and report success either
-// way. persisted===false is a real failure the mod already detected and
-// logged server-side; `undefined` means an older bridge build that never
-// sends this field at all and must NOT be read as a failure -- same
-// old-bridge-safe contract as getBridgeVerifiedState (lib/bridgeVerify.ts)
-// applies to `verified`. Exported as a pure predicate so this exact
-// contract (only an explicit false warns) is unit-testable without
-// mounting the whole page.
 export function isWorldSaveFailure(data: { persisted?: unknown } | null | undefined): boolean {
   return data?.persisted === false
 }
 
-// apps/panel-server/routes/serverFiles.js's PUT /sandbox reads the SandboxVars.lua file
-// back after writing it specifically because a key with no matching line to
-// update was silently dropped while the route still reported success --
-// attached as `unpersistedKeys` when that happens. The route still returns
-// success:true (most of the save DID land), so this is a warning to surface
-// alongside the normal saved toast, not a replacement for it. Exported as a
-// pure predicate so the decision to warn is unit-testable without mounting
-// the whole page.
 export function getUnpersistedSandboxKeys(
   data: { unpersistedKeys?: unknown } | null | undefined,
 ): string[] | null {
@@ -233,26 +206,6 @@ export function getUnpersistedSandboxKeys(
   return Array.isArray(keys) && keys.length > 0 ? (keys as string[]) : null
 }
 
-// apps/panel-server/routes/serverFiles.js's POST /templates/:id/apply tracks each write
-// as it actually lands, and attaches that as `partiallyApplied` on the 500
-// body when INI succeeded before Sandbox threw (the two settings groups are
-// written independently, so one can land while the other fails).
-// ApiError.data carries the raw response payload -- read it here rather than
-// showing a generic failure that would read as "nothing happened" when part
-// of the template is now live on disk. Exported as a pure predicate so the
-// decision (partial-apply toast vs. generic failure toast) is unit-testable
-// without mounting the whole page.
-// apps/panel-server/routes/serverFiles.js's POST /templates/:id/apply can write BOTH
-// the INI and the Sandbox file in one call, and attaches a `backupWarnings`
-// ARRAY when either write's own backup failed -- one entry per file, so
-// both can fail independently and still both be reported. The globally-
-// handled `backupWarning` field (singular, a string; see api.ts's shared
-// response handler) is a DIFFERENT shape used by ~30 other config-writing
-// routes that only ever touch one file per call; that handler does not
-// know to look for this route's plural array, so without reading it here
-// explicitly, applying a template could overwrite both config files with
-// no safety copy and no warning at all. Exported as a pure predicate so
-// the decision to warn is unit-testable without mounting the whole page.
 export function getApplyTemplateBackupWarnings(
   data: { backupWarnings?: unknown } | null | undefined,
 ): string[] | null {
@@ -273,7 +226,6 @@ export function getPartiallyAppliedFromApplyTemplateError(error: unknown): strin
   return null
 }
 
-// Auth-aware image preview (img tags can't send Bearer tokens)
 function AuthImage({ filePath, alt, className }: { filePath: string; alt?: string; className?: string }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const blobRef = useRef<string | null>(null)
@@ -295,7 +247,6 @@ function AuthImage({ filePath, alt, className }: { filePath: string; alt?: strin
   return <img src={blobUrl} alt={alt || 'Preview'} className={className} />
 }
 
-// --- Optimized Row Components ---
 
 const IniSettingRow = memo(({
   setting,
@@ -317,7 +268,6 @@ const IniSettingRow = memo(({
   const isDifferentFromDefault = setting.default !== undefined && String(value) !== String(setting.default)
   const numberIsInvalid = setting.type === 'number' && String(value ?? '').trim() !== '' && parseNumericSettingValue(value, setting) === null
 
-  // Multiline settings
   if (setting.type === 'multiline') {
     return (
       <div className={`perf-content-auto grid gap-2 rounded-md border-b py-3 ps-3 pe-4 transition-colors last:border-0 ${
@@ -349,7 +299,6 @@ const IniSettingRow = memo(({
     )
   }
 
-  // Standard settings
   return (
     <div className={`perf-content-auto grid gap-2 rounded-md border-b py-3 ps-3 pe-4 transition-colors last:border-0 ${
       isModified ? 'border-s-2 border-s-warning bg-warning/5' : 'border-s-2 border-s-transparent hover:bg-muted/20'
@@ -506,11 +455,6 @@ export const SandboxSettingRow = memo(({
   const isModified = originalValue !== undefined && JSON.stringify(value) !== JSON.stringify(originalValue)
   const isDifferentFromDefault = setting.default !== undefined && JSON.stringify(value) !== JSON.stringify(setting.default)
   const numberIsInvalid = setting.type === 'number' && String(value ?? '').trim() !== '' && parseNumericSettingValue(value, setting) === null
-  // A live value with no matching option -- PZ shipped a value this panel's
-  // schema doesn't know (the class of bug the enum audit found: MetaEvent=3
-  // when the panel only offered 1-2). The save path never coerces this (see
-  // the audit report), so the value itself is safe -- this is purely making
-  // that visible instead of rendering a blank Select.
   const hasUnrecognizedValue =
     setting.type === 'select' &&
     !!setting.options &&
@@ -587,15 +531,6 @@ export const SandboxSettingRow = memo(({
                 )}
               </div>
             ) : setting.type === 'string' ? (
-              // GH#143: a plain text input, no numeric coercion. This used
-              // to fall into the numeric branch below (the catch-all had no
-              // type === 'string' gate), so every comma the user typed into
-              // a comma-separated list (WorldItemRemovalList,
-              // LootItemRemovalList -- the only two sandbox settings with
-              // type: 'string') got silently turned into a period by
-              // normalizeNumericInput(), including on paste. A third string
-              // setting added later lands here too rather than silently
-              // inheriting the numeric branch.
               <Input
                 type="text"
                 value={value !== undefined ? String(value) : ''}
@@ -666,11 +601,7 @@ function StatChip({
   )
 }
 
-// Map of icon names used by INI/Sandbox category schemas to lucide components.
-// Each entry also has a hue token used to subtly tint the sidebar icon so categories
-// are scannable by shape+color without going neon.
 const CATEGORY_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
-  // INI categories
   Settings: { icon: Settings, tone: 'text-primary/80' },
   Globe: { icon: Globe, tone: 'text-sky-400/80' },
   Swords: { icon: Swords, tone: 'text-rose-400/80' },
@@ -690,7 +621,6 @@ const CATEGORY_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
   Radio: { icon: Radio, tone: 'text-fuchsia-300/80' },
   FileText: { icon: FileText, tone: 'text-zinc-300/80' },
   Wrench: { icon: Wrench, tone: 'text-stone-300/80' },
-  // Sandbox categories
   Clock: { icon: Clock, tone: 'text-amber-300/80' },
   Gem: { icon: Gem, tone: 'text-fuchsia-300/80' },
   Heart: { icon: Heart, tone: 'text-rose-300/80' },
@@ -710,10 +640,6 @@ function CategoryIcon({ name, isActive, className }: { name?: string; isActive?:
   return <Icon className={`${className ?? 'h-4 w-4'} ${isActive ? 'text-primary' : entry?.tone ?? 'text-muted-foreground/70'}`} />
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Visual primitives — mirror the Events page so the whole control surface
-// reads with the same cadence.
-// ──────────────────────────────────────────────────────────────────────────
 type PanelTone = 'primary' | 'warning' | 'destructive' | 'info' | 'success' | 'muted'
 
 function toneBorder(tone: PanelTone): string {
@@ -790,10 +716,6 @@ export function SectionHeader({
 
 const SERVER_CONFIG_TABS = new Set(['ini', 'sandbox', 'spawnpoints', 'spawnregions', 'modsettings'])
 
-// Closed enum matching apps/panel-server/routes/debug.js's triageUnresolvedMods -- an
-// unrecognized cause (an older diagnostics fetch predating this, or a value
-// this build doesn't know yet) is dropped rather than trusted, same
-// defensive stance Debug.tsx takes reading the same querystring value.
 export type UnresolvedModCause = 'typo' | 'stillDownloading' | 'workshopNotOnDisk' | 'absent'
 const UNRESOLVED_MOD_CAUSES = new Set<UnresolvedModCause>(['typo', 'stillDownloading', 'workshopNotOnDisk', 'absent'])
 
@@ -804,13 +726,6 @@ export function resolveServerConfigDeepLink(searchParams: URLSearchParams) {
     .filter(Boolean)
     .slice(0, 20)
   const unresolvedIds = new Set(unresolved)
-  // One `modId|cause|suggestion` entry per triaged ID (Debug.tsx's own
-  // transport, see getDiagnosticsFixAction's mods.resolved case) -- only
-  // trust an entry whose modId is actually in `unresolved` above, so a
-  // hand-edited URL can't attach an arbitrary cause to an ID the diagnostics
-  // check never flagged.
-  // `Map` above 20 lines up is lucide-react's icon component, not the
-  // built-in collection -- globalThis.Map dodges that shadowing.
   const unresolvedTriage = new globalThis.Map<string, { cause: UnresolvedModCause; suggestion?: string }>()
   for (const raw of searchParams.getAll('unresolvedCause').slice(0, 20)) {
     const [modId, cause, suggestion] = raw.split('|')
@@ -834,26 +749,18 @@ export default function ServerConfig() {
   const searchLocale = i18n.resolvedLanguage || i18n.language
   const [searchParams] = useSearchParams()
   const initialDeepLink = resolveServerConfigDeepLink(searchParams)
-  // List separator is a language property, not something a joined list of
-  // translated setting labels can be assumed to want a Latin ", " for --
-  // zh-CN / zh-TW enumerates nouns with the ideographic comma instead.
   const listSep = i18n.language.startsWith('zh') ? '、' : ', '
   const [activeTab, setActiveTab] = useState(initialDeepLink.tab)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [serverRunning, setServerRunning] = useState<boolean | null>(null)
   const [searchQuery, setSearchQuery] = useState(initialDeepLink.search)
-  // Defer the search value so each keystroke doesn't re-filter the full schema
-  // synchronously — keeps the input snappy on slower machines.
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const [editorMode, setEditorMode] = useState<EditorMode>('structured')
-  // Filter mode: 'all' = every schema setting, 'modified' = differs from the PZ default,
-  // 'nondefault' = local edits not yet saved.
   const [filterMode, setFilterMode] = useState<FilterMode>(() => {
     if (initialDeepLink.search) return 'all'
     try {
       const stored = localStorage.getItem('serverconfig-filter-mode')
-      // Before this migration, "nondefault" represented settings changed from PZ defaults.
       if (stored === 'nondefault') return 'modified'
       if (stored === 'modified' || stored === 'nondefault' || stored === 'all') return stored
     } catch { /* ignore */ }
@@ -861,30 +768,20 @@ export default function ServerConfig() {
   })
   useEffect(() => { try { localStorage.setItem('serverconfig-filter-mode', filterMode) } catch { /* ignore */ } }, [filterMode])
 
-  // File paths info
   const [pathsInfo, setPathsInfo] = useState<{
     configPath: string
     serverName: string
     exists: { ini: boolean; sandbox: boolean; spawnpoints: boolean; spawnregions: boolean }
   } | null>(null)
 
-  // Data states
   const [iniSettings, setIniSettings] = useState<Record<string, string>>({})
   const [sandboxData, setSandboxData] = useState<SandboxData | null>(null)
   const [spawnPoints, setSpawnPoints] = useState<SpawnPointsByProfession>({})
   const [spawnRegions, setSpawnRegions] = useState<SpawnRegion[]>([])
-  // GET /server-files/ini already detects this server-side (utils/
-  // iniDuplicateKeys.js) -- same signal Mods.tsx's own duplicateKeys
-  // warning reads from GET /mods/current-config, just never wired up here.
-  // parseIni()'s line-by-line loop lets the LAST occurrence win, so
-  // iniSettings above silently reflects that one; this state is only for
-  // telling the operator the file has more than one candidate value.
   const [duplicateKeys, setDuplicateKeys] = useState<Array<{ key: string; count: number }>>([])
 
-  // Raw content for raw editing mode
   const [rawContent, setRawContent] = useState('')
 
-  // Active category in the vertical rail (one-at-a-time, tab-style)
   const [activeIniCategory, setActiveIniCategory] = useState<string>(() => {
     try { return localStorage.getItem('serverconfig-ini-cat') || 'general' } catch { return 'general' }
   })
@@ -894,7 +791,6 @@ export default function ServerConfig() {
   useEffect(() => { try { localStorage.setItem('serverconfig-ini-cat', activeIniCategory) } catch { /* ignore */ } }, [activeIniCategory])
   useEffect(() => { try { localStorage.setItem('serverconfig-sandbox-cat', activeSandboxCategory) } catch { /* ignore */ } }, [activeSandboxCategory])
 
-  // Collapsible rail groups — keyed as "ini:<groupId>" / "sandbox:<groupId>"
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
     try {
       const stored = localStorage.getItem('serverconfig-collapsed-groups')
@@ -909,7 +805,6 @@ export default function ServerConfig() {
     setCollapsedGroups(prev => ({ ...prev, [key]: !prev[key] }))
   }, [])
 
-  // Bulk collapse/expand for a tab's rail (prefix "ini" or "sandbox").
   const setAllGroupsCollapsed = useCallback((prefix: 'ini' | 'sandbox', collapsed: boolean) => {
     const groups = prefix === 'ini' ? INI_CATEGORY_GROUPS : SANDBOX_CATEGORY_GROUPS
     setCollapsedGroups(prev => {
@@ -929,12 +824,10 @@ export default function ServerConfig() {
     [collapsedGroups]
   )
 
-  // Backups dialog
   const [showBackups, setShowBackups] = useState(false)
   const [backups, setBackups] = useState<{ filename: string; size: number; created: string }[]>([])
   const [backupFilter, setBackupFilter] = useState<'all' | 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions'>('all')
 
-  // Templates dialog
   const [showTemplates, setShowTemplates] = useState(false)
   const [templates, setTemplates] = useState<ConfigTemplate[]>([])
   const [templateLoading, setTemplateLoading] = useState(false)
@@ -944,7 +837,6 @@ export default function ServerConfig() {
   const [saveTemplateIni, setSaveTemplateIni] = useState(true)
   const [saveTemplateSandbox, setSaveTemplateSandbox] = useState(true)
 
-  // Track original data for change detection
   const [originalIniSettings, setOriginalIniSettings] = useState<Record<string, string>>({})
   const [originalSandboxData, setOriginalSandboxData] = useState<SandboxData | null>(null)
   const [originalRawContent, setOriginalRawContent] = useState('')
@@ -968,7 +860,6 @@ export default function ServerConfig() {
     })
   }, [sandboxData])
 
-  // Mod Settings (live from PanelBridge)
   const [modSettings, setModSettings] = useState<Record<string, Array<{
     name?: string; shortName?: string; tableName?: string; value?: unknown;
     type?: string; min?: number; max?: number; default?: unknown;
@@ -982,18 +873,12 @@ export default function ServerConfig() {
   const [modSettingsModifiedOnly, setModSettingsModifiedOnly] = useState(false)
   const [expandedModGroups, setExpandedModGroups] = useState<Set<string>>(new Set())
   const [modSettingsLastLoaded, setModSettingsLastLoaded] = useState<Date | null>(null)
-  // Generation counter, not an AbortController -- panelBridgeApi.sendCommand
-  // has no signal option to cancel the in-flight request, so the previous
-  // AbortController here aborted nothing and its signal was never even
-  // passed to sendCommand. Two Refresh clicks close together used to race:
-  // whichever response landed last (not last-requested) won, silently.
   const modSettingsLoadIdRef = useRef(0)
   const modSettingsSearchRef = useRef<HTMLInputElement | null>(null)
   const iniSearchRef = useRef<HTMLInputElement | null>(null)
   const sandboxSearchRef = useRef<HTMLInputElement | null>(null)
   const [savingOptions, setSavingOptions] = useState<Set<string>>(new Set())
 
-  // Shared helper: is this mod option modified from its default?
   const isOptModified = useCallback((opt: { default?: unknown; value?: unknown }) => {
     if (opt.default === undefined || opt.default === null) return false
     const d = opt.default, v = opt.value
@@ -1001,7 +886,6 @@ export default function ServerConfig() {
     return String(d) !== String(v)
   }, [])
 
-  // Total count of modified mod options across all groups
   const modifiedModSettingsCount = useMemo(() => {
     if (!modSettings) return 0
     let c = 0
@@ -1011,7 +895,6 @@ export default function ServerConfig() {
     return c
   }, [modSettings, isOptModified])
 
-  // Memoize filtered mod settings groups to avoid duplicate filter logic
   const filteredModGroups = useMemo(() => {
     if (!modSettings || !modSettingsGroups.length) return []
     const q = modSettingsSearch.toLowerCase().trim()
@@ -1038,34 +921,16 @@ export default function ServerConfig() {
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [modSettings, modSettingsGroups, modSettingsSearch, modSettingsModifiedOnly, isOptModified])
 
-  // Copy state
   const [copied, setCopied] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Active server context, read independently of the (possibly-failed) paths
-  // load below -- apps/panel-server/routes/serverFiles.js's getServerConfigPath() falls
-  // through a remote server with no SFTP transport configured to the same
-  // ServerNotConfiguredError a genuinely-unconfigured panel throws, so the
-  // wire error code alone can't tell "no active server" apart from "active
-  // server is remote and isn't set up for config editing". Same
-  // isRemote-flag-fetched-independently pattern as Backups.tsx.
   const [activeServerRemote, setActiveServerRemote] = useState(false)
   const [activeServerName, setActiveServerName] = useState<string | null>(null)
-  // Set when activeServerChanged fires while this page has unsaved edits --
-  // GET/PUT /server-files/ini and /sandbox both resolve "the active server"
-  // fresh on the server per-request rather than taking a server id, so
-  // Save always writes to whichever server is active NOW, not whichever
-  // server's data is actually sitting in iniSettings/sandboxData. Loading
-  // fresh data on every activeServerChanged (like Settings.tsx does) would
-  // silently discard those edits instead; this blocks Save until the user
-  // explicitly reloads, so the choice to lose the edit is theirs, not a
-  // race between two browser tabs.
   const [serverChangedSinceLoad, setServerChangedSinceLoad] = useState(false)
 
-  // File browser state (for image path fields)
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false)
-  const [fileBrowserKey, setFileBrowserKey] = useState('')  // which INI key we're picking a file for
+  const [fileBrowserKey, setFileBrowserKey] = useState('')
   const [fileBrowserPath, setFileBrowserPath] = useState('')
   const [fileBrowserDirs, setFileBrowserDirs] = useState<string[]>([])
   const [fileBrowserFiles, setFileBrowserFiles] = useState<{ name: string; ext: string }[]>([])
@@ -1078,17 +943,8 @@ export default function ServerConfig() {
   const confirm = useConfirm()
   const socket = useSocket()
   const { can } = useAuth()
-  // Whole-router gate on the server: apps/panel-server/routes/serverFiles.js applies
-  // requirePermission("serverfiles.manage") to every route in the file, GET
-  // included -- there's no partial-access tier, so a page-level gate here is
-  // the correct grain, not a compromise (Settings.tsx's precedent gates
-  // whole TABS the same way, because that's the grain ITS capabilities come
-  // in). can() fails OPEN when capabilities are unknown/null -- see
-  // AuthContext's own doc comment -- so this only ever hides the page when
-  // the answer is a confirmed no, never while unsure.
   const canManageServerFiles = can('serverfiles.manage')
 
-  // Load initial data
   useEffect(() => {
     if (canManageServerFiles) loadData()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only init
@@ -1109,11 +965,9 @@ export default function ServerConfig() {
     setActiveServerRemote(isRemote)
     setActiveServerName(active.server?.name || active.server?.serverName || null)
     try {
-      // Load paths info first
       const paths = await serverFilesApi.getPaths()
       setPathsInfo(paths)
 
-      // Load files that exist
       if (paths.exists.ini) {
         const iniData = await serverFilesApi.getIni()
         const merged = mergeSchemaDefaults(iniData.settings)
@@ -1140,26 +994,10 @@ export default function ServerConfig() {
       setLoadError(null)
     } catch (error) {
       reportClientError('Failed to load config.', error)
-      // getServerConfigPath() (apps/panel-server/routes/serverFiles.js) throws the same
-      // "no active server" error for a genuinely-unconfigured panel AND for
-      // a remote server with no SFTP transport set up -- the wire code can't
-      // be trusted to tell those apart here. When we independently know the
-      // active server IS set and IS remote, say that instead of repeating
-      // the server's misleading "no active server" text: reuse the exact
-      // copy errors.json already ships for this condition everywhere else
-      // remote config access is gated (apps/panel-server/routes/serverFiles.js's own
-      // second-stage SFTP-transport gate), rather than inventing new copy.
       const message = isRemote
         ? i18n.t('REMOTE_CONFIG_NOT_CONFIGURED', { ns: 'errors' })
         : getUserErrorMessage(error, t('toasts.loadConfigFailed'))
       setLoadError(message)
-      // The remote case renders as a persistent warning banner below (no
-      // Retry button -- this is a setup step, not a failure), deliberately
-      // not the destructive framing a toast titled "Error" would give it.
-      // Firing that toast anyway said the opposite of what the banner right
-      // under it says, and duplicated the same sentence a second time on
-      // screen for a standing fact that isn't going away on its own, unlike
-      // a genuine one-off fetch failure below, which still gets the toast.
       if (!isRemote) {
         toast({
           title: t('toasts.error'),
@@ -1172,18 +1010,6 @@ export default function ServerConfig() {
     }
   }
 
-  // GH#118-adjacent (2026-08-26, "the sibling that was never hardened"):
-  // serverApi.getStatus() is the raw local process scan -- correct for a
-  // native server, but blind to a docker-managed server's process, which
-  // runs in a different container this scan can never see (same root cause
-  // as GH#114). Trusting it unconditionally here meant a live docker
-  // container could read serverRunning=false, which suppresses BOTH the
-  // "stop the server before editing" banner and the sticky-bar Discard
-  // guard below. resolveServerRunning() (apps/panel-client/src/lib/serverStatus.ts)
-  // shares resolveClientProvider() and the same 3-signal composed-status
-  // read Layout.tsx/Dashboard.tsx already use (54cf13a/2d5745e), rather
-  // than re-deriving a fourth implementation of the same idea -- see that
-  // function's own doc comment for the fail-closed contract it guarantees.
   const refreshServerState = useCallback(async () => {
     try {
       const { server } = await serversApi.getActive()
@@ -1194,11 +1020,6 @@ export default function ServerConfig() {
     }
   }, [])
 
-  // Only a CONFIRMED-stopped server (serverRunning === false) is safe to
-  // let through unwarned. true (confirmed running) and null (unknown --
-  // lookup failed, no active server, or an indeterminate composed signal)
-  // both must behave as "it might be running": unknown is the safe answer
-  // here, never the permissive one.
   const serverMayBeRunning = serverRunning !== false
 
   useEffect(() => {
@@ -1207,10 +1028,8 @@ export default function ServerConfig() {
     return () => clearInterval(interval)
   }, [refreshServerState])
 
-  // Track if raw content is loading
   const [_loadingRaw, setLoadingRaw] = useState(false)
 
-  // Load raw content when switching to raw mode
   const loadRawContent = async (type: 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions') => {
     setLoadingRaw(true)
     try {
@@ -1223,14 +1042,12 @@ export default function ServerConfig() {
         description: getUserErrorMessage(error, t('toasts.loadRawFailed')),
         variant: 'destructive'
       })
-      // Reset to structured mode on error
       setEditorMode('structured')
     } finally {
       setLoadingRaw(false)
     }
   }
 
-  // Check for unsaved changes
   const hasIniChanges = useMemo(() => {
     if (editorMode === 'raw' && activeTab === 'ini') {
       return rawContent !== originalRawContent
@@ -1245,15 +1062,6 @@ export default function ServerConfig() {
     return JSON.stringify(sandboxData) !== JSON.stringify(originalSandboxData)
   }, [editorMode, activeTab, rawContent, originalRawContent, sandboxData, originalSandboxData])
 
-  // GET/PUT /server-files/ini and /sandbox both resolve "the active server"
-  // fresh per-request rather than taking a server id (see loadData() and
-  // handleSaveIni/handleSaveSandbox), so if the active server changes while
-  // this page is open, Save would silently write the loaded server's data
-  // onto whichever server is active now. With no unsaved edits it's safe to
-  // just reload, matching every other page's activeServerChanged handler
-  // (Settings.tsx, Dashboard.tsx, Servers.tsx, WorldMap.tsx, Layout.tsx);
-  // with unsaved edits, reloading would silently discard them instead, so
-  // this blocks Save and surfaces a banner instead of choosing for the user.
   useEffect(() => {
     if (!socket) return
     const handleActiveServerChanged = () => {
@@ -1269,7 +1077,6 @@ export default function ServerConfig() {
     }
   }, [socket, hasIniChanges, hasSandboxChanges]) // eslint-disable-line react-hooks/exhaustive-deps -- loadData is mount-stable, not a dep
 
-  // Warn before leaving with unsaved changes
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault() }
     if (hasIniChanges || hasSandboxChanges) {
@@ -1278,7 +1085,6 @@ export default function ServerConfig() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [hasIniChanges, hasSandboxChanges])
 
-  // Create manual backup
   const handleCreateBackup = async (type: 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions') => {
     try {
       const data = await serverFilesApi.getRaw(type)
@@ -1299,7 +1105,6 @@ export default function ServerConfig() {
     }
   }
 
-  // Copy raw content to clipboard
   const handleCopyRaw = async () => {
     try {
       await copyText(rawContent)
@@ -1318,9 +1123,7 @@ export default function ServerConfig() {
     }
   }
 
-  // Save handlers
 
-  // Load mod sandbox options from PanelBridge
   const loadModSettings = useCallback(async () => {
     const loadId = ++modSettingsLoadIdRef.current
     setModSettingsLoading(true)
@@ -1362,16 +1165,12 @@ export default function ServerConfig() {
     }
   }, [t])
 
-  // Auto-load mod settings the first time the user opens the tab.
-  // After an error, we don't auto-retry — the user can click "Retry".
   useEffect(() => {
     if (activeTab === 'modsettings' && !modSettings && !modSettingsLoading && !modSettingsError) {
       loadModSettings()
     }
   }, [activeTab, modSettings, modSettingsLoading, modSettingsError, loadModSettings])
 
-  // Keyboard shortcut: '/' focuses the mod settings search when the tab is active.
-  // Skip when the user is already typing in a field or has a modifier held.
   useEffect(() => {
     if (activeTab !== 'modsettings') return
     const onKey = (e: KeyboardEvent) => {
@@ -1390,7 +1189,6 @@ export default function ServerConfig() {
   }, [activeTab])
 
   const handleOptionChange = useCallback(async (optName: string, newValue: unknown, groupName: string) => {
-    // Prevent duplicate inflight requests for the same option
     setSavingOptions(prev => {
       if (prev.has(optName)) return prev
       const next = new Set(prev)
@@ -1413,7 +1211,6 @@ export default function ServerConfig() {
             updated[groupName] = groupOpts.map(o => {
               if (o.name !== optName) return o
               const patched = { ...o, value: confirmedVal }
-              // Sync selectedIndex for enums so the dropdown reflects the new value
               if (o.type === 'enum' && typeof confirmedVal === 'number') {
                 patched.selectedIndex = confirmedVal
               }
@@ -1422,13 +1219,6 @@ export default function ServerConfig() {
           }
           return updated
         })
-        // setSandboxOption's Lua handler reports this under `verified` as of
-        // the matched->verified rename (2026-08-23, same pass as the shared
-        // verify-gating helper) -- a mod still running the pre-rename build
-        // reports the identical check under `matched` instead, which reads
-        // here as 'old-bridge' (no `verified` key) until the operator
-        // updates. That's the correct signal either way: an un-migrated mod
-        // genuinely IS an old bridge relative to this contract.
         const verifyState = getBridgeVerifiedState('setSandboxOption', response.data)
         toast(
           verifyState === 'unverifiable'
@@ -1438,13 +1228,6 @@ export default function ServerConfig() {
               : { title: t('toasts.optionUpdatedTitle'), description: t('toasts.optionUpdatedDesc', { option: optName }) },
         )
 
-        // See isWorldSaveFailure()'s own comment for the persisted/saveError
-        // contract. This is a DIFFERENT persistence layer from the
-        // SandboxVars.lua file write checked just below -- the two calls
-        // hit different processes and different failure modes (e.g. "world
-        // already saving" has nothing to do with whether the panel can
-        // write a text file), so either can fail independently of the
-        // other and each is worth telling the operator about on its own.
         if (isWorldSaveFailure(response.data)) {
           toast({
             title: t('toasts.appliedNotSavedTitle'),
@@ -1456,8 +1239,6 @@ export default function ServerConfig() {
           })
         }
 
-        // The bridge only changes the live value. Without this the option
-        // reverts to whatever SandboxVars.lua still says on the next restart.
         try {
           const saved = await serverFilesApi.saveSandboxOption(
             optName,
@@ -1471,21 +1252,6 @@ export default function ServerConfig() {
             })
           }
         } catch (error) {
-          // PUT /sandbox-option used to be gated behind "stop the server
-          // first" (LOCAL_CONFIG_MUTATIONS in serverFiles.js), and since the
-          // live edit above only ever succeeds while the server IS running,
-          // this persistence attempt was guaranteed to 409 on every single
-          // edit -- with getUserErrorMessage resolving that SERVER_RUNNING
-          // code to "Stop the server before editing configuration" before it
-          // ever looked at our fallback, actively bad advice since stopping
-          // the server only locked the operator out of this tab. Measured
-          // 2026-08-23 that a clean shutdown never rewrites this file at all,
-          // so that gate was removed for this one route (apps/panel-server/routes/
-          // serverFiles.js's LOCAL_CONFIG_MUTATIONS comment has the evidence)
-          // and this call should no longer 409 in normal operation. Kept as
-          // a defensive fallback in case SERVER_RUNNING is ever reached here
-          // some other way -- still shows the accurate message instead of
-          // letting the generic code lookup bury it.
           const isServerRunningRefusal = error instanceof ApiError && error.code === 'SERVER_RUNNING'
           toast({
             title: t('toasts.appliedNotSavedTitle'),
@@ -1509,7 +1275,6 @@ export default function ServerConfig() {
     }
   }, [toast, t])
 
-  // File browser: open the dialog for a specific INI key
   const openFileBrowser = useCallback(async (key: string, extensions?: string[]) => {
     setFileBrowserKey(key)
     setFileBrowserExtensions(extensions || ['.png', '.jpg', '.jpeg'])
@@ -1517,11 +1282,9 @@ export default function ServerConfig() {
     setFileBrowserOpen(true)
     setFileBrowserLoading(true)
     try {
-      // Start browsing from server config path (or current value's directory)
       const currentValue = iniSettings[key]
       let startPath: string | undefined
       if (currentValue) {
-        // Try the directory of the current value
         const lastSlash = Math.max(currentValue.lastIndexOf('/'), currentValue.lastIndexOf('\\'))
         if (lastSlash > 0) startPath = currentValue.substring(0, lastSlash)
       }
@@ -1537,7 +1300,6 @@ export default function ServerConfig() {
     }
   }, [iniSettings, toast, t])
 
-  // File browser: navigate to a directory
   const browseTo = useCallback(async (dirPath: string) => {
     setFileBrowserLoading(true)
     setFileBrowserSelected(null)
@@ -1554,7 +1316,6 @@ export default function ServerConfig() {
     }
   }, [fileBrowserExtensions, toast, t])
 
-  // File browser: confirm selection
   const confirmFileBrowserSelection = useCallback(() => {
     if (fileBrowserSelected && fileBrowserKey) {
       setIniSettings(prev => ({ ...prev, [fileBrowserKey]: fileBrowserSelected }))
@@ -1589,16 +1350,13 @@ export default function ServerConfig() {
         setOriginalIniSettings({ ...iniSettings })
       }
 
-      // Try to reload via RCON, but don't fail if RCON is not connected
       try {
         await serverFilesApi.saveAndReload()
         toast({ title: t('toasts.savedAndReloadedTitle'), description: t('toasts.savedIniReloadedDesc') })
       } catch {
-        // File was saved, but RCON reload failed - that's okay
         toast({ title: t('toasts.savedTitle'), description: t('toasts.savedRestartToApply') })
       }
 
-      // Refresh from server to ensure frontend matches the saved file
       try {
         if (editorMode === 'raw') {
           loadData()
@@ -1639,20 +1397,12 @@ export default function ServerConfig() {
         })
         return
       }
-      // Sandbox settings have no RCON live-reload path: PZ's own /reloadoptions
-      // command only re-reads ServerOptions.ini, never SandboxVars.lua (see
-      // PanelBridge.lua's own comment to that effect). Unlike the INI save
-      // below, a sandbox change always needs a restart to reach the running
-      // game -- whether the server is stopped right now or running -- so
-      // this never attempts a live reload and never claims one succeeded.
       if (editorMode === 'raw') {
         await serverFilesApi.saveRaw('sandbox', rawContent)
         setOriginalRawContent(rawContent)
       } else if (sandboxData) {
-        // Create a deep copy to sanitize numbers
         const cleanData = JSON.parse(JSON.stringify(sandboxData)) as SandboxData
 
-        // Ensure numbers are finite, canonical numbers before writing Lua.
         SANDBOX_SCHEMA.forEach(setting => {
           if (setting.type === 'number') {
             const section = (setting.section || 'settings') as keyof SandboxData
@@ -1669,16 +1419,9 @@ export default function ServerConfig() {
         })
 
         const sandboxSaveResult = await serverFilesApi.saveSandbox(cleanData)
-        // Update local state to match sanitized data
         setSandboxData(cleanData)
         setOriginalSandboxData(cleanData)
 
-        // The server verifies this write by reading the file back (see its
-        // own comment on this route) specifically because a key with no
-        // matching line to update is silently dropped otherwise -- that
-        // read-back is inert unless something on this end actually surfaces
-        // it, so without this the operator still saw a plain "Saved" toast
-        // for a save that partially failed.
         const unpersistedKeys = getUnpersistedSandboxKeys(sandboxSaveResult)
         if (unpersistedKeys) {
           toast({
@@ -1693,7 +1436,6 @@ export default function ServerConfig() {
 
       toast({ title: t('toasts.savedTitle'), description: t('toasts.savedRestartToApply') })
 
-      // Refresh from server to ensure frontend matches the saved file
       try {
         if (editorMode === 'raw') {
           loadData()
@@ -1763,7 +1505,6 @@ export default function ServerConfig() {
   }
 
 
-  // Per-setting modified / non-default predicates (centralized so filter + badges use the same logic)
   const isIniModified = useCallback((s: IniSetting) => {
     const curr = iniSettings[s.key]
     const orig = originalIniSettings[s.key]
@@ -1793,7 +1534,6 @@ export default function ServerConfig() {
     return String(curr) !== String(s.default ?? '')
   }, [sandboxData])
 
-  // Filter settings by search + filter mode
   const filteredIniSettings = useMemo(() => {
     const lower = deferredSearchQuery.toLocaleLowerCase(searchLocale)
     const filtered = INI_SCHEMA.filter(s => {
@@ -1816,7 +1556,6 @@ export default function ServerConfig() {
     return groupByCategory(filtered)
   }, [deferredSearchQuery, filterMode, isSandboxModified, isSandboxNonDefault, searchLocale])
 
-  // Modified-count per category for rail badges
   const iniModifiedByCategory = useMemo(() => {
     const out: Record<string, number> = {}
     for (const s of INI_SCHEMA) if (isIniModified(s)) out[s.category] = (out[s.category] || 0) + 1
@@ -1829,8 +1568,6 @@ export default function ServerConfig() {
     return out
   }, [isSandboxModified])
 
-  // Unknown INI keys — keys present in the loaded file but not in the schema.
-  // Mirrors the sandbox `uncategorized` pattern so mod-injected / new-vanilla keys remain editable.
   const uncategorizedIniKeys = useMemo(() => {
     const schemaKeys = new Set(INI_SCHEMA.map(s => s.key))
     const lower = deferredSearchQuery.toLowerCase()
@@ -1846,7 +1583,6 @@ export default function ServerConfig() {
     return out.sort((a, b) => a.key.localeCompare(b.key))
   }, [iniSettings, deferredSearchQuery])
 
-  // Find sandbox settings not covered by the schema (mod settings, etc.)
   const uncategorizedSandboxKeys = useMemo(() => {
     if (!sandboxData) return []
     const schemaKeys = new Set(SANDBOX_SCHEMA.map(s => `${s.section || 'settings'}.${s.key}`))
@@ -1857,7 +1593,7 @@ export default function ServerConfig() {
       const sectionData = sandboxData[sectionName as keyof SandboxData]
       if (typeof sectionData !== 'object' || sectionData === null) continue
       for (const [key, value] of Object.entries(sectionData as Record<string, string | number | boolean>)) {
-        if (key === 'VERSION') continue // file-format marker, not an editable setting
+        if (key === 'VERSION') continue
         if (!schemaKeys.has(`${sectionName}.${key}`)) {
           const lower = deferredSearchQuery?.toLowerCase() || ''
           if (!deferredSearchQuery || key.toLowerCase().includes(lower) || String(value).toLowerCase().includes(lower)) {
@@ -1881,7 +1617,6 @@ export default function ServerConfig() {
     return groups
   }, [uncategorizedSandboxKeys])
 
-  // Load backups
   const loadBackups = async () => {
     try {
       const data = await serverFilesApi.getBackups()
@@ -1896,7 +1631,6 @@ export default function ServerConfig() {
     }
   }
 
-  // Restore backup
   const handleRestoreBackup = async (filename: string) => {
     const ok = await confirm({
       title: t('restoreBackupConfirm.title'),
@@ -1919,7 +1653,6 @@ export default function ServerConfig() {
     }
   }
 
-  // Load templates
   const loadTemplates = async () => {
     setTemplateLoading(true)
     try {
@@ -1937,7 +1670,6 @@ export default function ServerConfig() {
     }
   }
 
-  // Save current config as template
   const handleSaveTemplate = async () => {
     if (!newTemplateName.trim()) {
       toast({ title: t('toasts.error'), description: t('toasts.templateNameRequired'), variant: 'destructive' })
@@ -1956,7 +1688,6 @@ export default function ServerConfig() {
       setShowSaveTemplate(false)
       setNewTemplateName('')
       setNewTemplateDesc('')
-      // Refresh template list if dialog is open
       if (showTemplates) {
         const data = await serverFilesApi.getTemplates()
         setTemplates(data.templates)
@@ -1972,13 +1703,7 @@ export default function ServerConfig() {
     }
   }
 
-  // Apply template
   const handleApplyTemplate = async (template: ConfigTemplate) => {
-    // Templates never store the RCON/join password (POST /templates strips
-    // it at save time -- see stripSensitiveIniLines() in serverFiles.js), so
-    // applying an INI section always removes it from the live config rather
-    // than leaving it untouched. That's an accident-shaped surprise unless
-    // it's said out loud before the click, not after.
     const ok = await confirm({
       title: t('applyTemplateConfirm.title', { name: template.name }),
       description: template.hasIni
@@ -2006,7 +1731,7 @@ export default function ServerConfig() {
         })
       }
       setShowTemplates(false)
-      loadData() // Reload the config data
+      loadData()
     } catch (error) {
       const partiallyApplied = getPartiallyAppliedFromApplyTemplateError(error)
       if (partiallyApplied) {
@@ -2018,9 +1743,6 @@ export default function ServerConfig() {
           }),
           variant: 'destructive'
         })
-        // The part that landed is now the live config -- reload so the
-        // editor reflects disk instead of showing what was there before
-        // the apply, which would silently disagree with the real file.
         loadData()
       } else {
         toast({
@@ -2034,7 +1756,6 @@ export default function ServerConfig() {
     }
   }
 
-  // Delete template
   const handleDeleteTemplate = async (id: string, name: string) => {
     const ok = await confirm({
       title: t('deleteTemplateConfirm.title'),
@@ -2056,17 +1777,10 @@ export default function ServerConfig() {
     }
   }
 
-  // Optimized update handlers
   const updateIniValue = useCallback((key: string, value: string) => {
     setIniSettings(prev => ({ ...prev, [key]: value }))
   }, [])
 
-  // Unresolved Mods= triage actions (mods-unresolved-2026-08-31) -- both
-  // stage an edit into the SAME unsaved iniSettings state as manually typing
-  // in the field below would; nothing reaches disk until the operator hits
-  // Save, same as every other edit on this page. That's what makes these
-  // safe to offer without the bulk-disable the mods.resolved check's own
-  // comment (Debug.tsx) deliberately avoids.
   const applyUnresolvedModCorrection = useCallback((modId: string, suggestion: string) => {
     setIniSettings(prev => {
       const tokens = (prev.Mods || '').split(';').map(v => v.trim()).filter(Boolean)
@@ -2107,24 +1821,20 @@ export default function ServerConfig() {
     })
   }, [])
 
-  // Reset individual INI setting to original loaded value
   const resetIniValue = useCallback((key: string) => {
     if (originalIniSettings[key] !== undefined) {
       setIniSettings(prev => ({ ...prev, [key]: originalIniSettings[key] }))
     }
   }, [originalIniSettings])
 
-  // Discard all unsaved INI changes (sticky save bar)
   const discardIniChanges = useCallback(() => {
     setIniSettings({ ...originalIniSettings })
   }, [originalIniSettings])
 
-  // Discard all unsaved Sandbox changes (sticky save bar)
   const discardSandboxChanges = useCallback(() => {
     if (originalSandboxData) setSandboxData(JSON.parse(JSON.stringify(originalSandboxData)))
   }, [originalSandboxData])
 
-  // Reset individual Sandbox setting to original loaded value
   const resetSandboxValue = useCallback((setting: SandboxSetting) => {
     if (!originalSandboxData || !sandboxData) return
     const section = (setting.section || 'settings') as keyof SandboxData
@@ -2143,7 +1853,6 @@ export default function ServerConfig() {
     }
   }, [originalSandboxData, sandboxData])
 
-  // Count changed INI settings
   const changedIniCount = useMemo(() => {
     let count = 0
     for (const key of Object.keys(iniSettings)) {
@@ -2152,7 +1861,6 @@ export default function ServerConfig() {
     return count
   }, [iniSettings, originalIniSettings])
 
-  // Count changed Sandbox settings
   const changedSandboxCount = useMemo(() => {
     if (!sandboxData || !originalSandboxData) return 0
     let count = 0
@@ -2165,7 +1873,6 @@ export default function ServerConfig() {
     return count
   }, [sandboxData, originalSandboxData])
 
-  // Search results count
   const searchResultsCount = useMemo(() => {
     if (!deferredSearchQuery) return 0
     if (activeTab === 'ini') {
@@ -2177,10 +1884,8 @@ export default function ServerConfig() {
     return 0
   }, [deferredSearchQuery, activeTab, filteredIniSettings, filteredSandboxSettings])
 
-  // Ctrl+S keyboard shortcut — use refs to avoid stale closure
   const handleSaveIniRef = useRef(handleSaveIni)
   const handleSaveSandboxRef = useRef(handleSaveSandbox)
-  // Sync refs on every render so keyboard shortcut always calls latest version
   handleSaveIniRef.current = handleSaveIni
   handleSaveSandboxRef.current = handleSaveSandbox
   useEffect(() => {
@@ -2239,7 +1944,6 @@ export default function ServerConfig() {
     )
   }
 
-  // Stats calculations
   const iniSettingsCount = Object.keys(iniSettings).length
   const sandboxSettingsCount = sandboxData ? Object.keys(sandboxData.settings || {}).length : 0
   const spawnPointsCount = Object.values(spawnPoints).reduce((acc, points) => acc + points.length, 0)
@@ -2249,12 +1953,6 @@ export default function ServerConfig() {
     <div className="space-y-4 page-transition pb-24">
       {loadError && (
         activeServerRemote ? (
-          // Remote-with-no-SFTP-transport isn't a failure to retry -- it's a
-          // configuration step the operator hasn't done yet (same class as
-          // Backups.tsx's/ChunkCleaner's own remote-server alerts), so this
-          // uses their warning styling instead of a destructive one, and
-          // drops the Retry button: retrying can't turn a remote server into
-          // a local one, or add SFTP details on its own.
           <Alert className="border-warning/40 bg-warning/10">
             <AlertTriangle className="h-4 w-4 text-warning" />
             <AlertTitle>{t('loadErrorTitle')}</AlertTitle>
@@ -2276,14 +1974,6 @@ export default function ServerConfig() {
         )
       )}
 
-      {/* Duplicate-key warning: a setting appears more than once as its own
-          line in the raw INI. This editor's parseIni() (a line-by-line
-          `result[key] = value` loop) lets the LAST occurrence win, while the
-          Mods page's own reads/writes only ever see the FIRST -- two screens
-          the operator can both have open at once, showing different values
-          for the same nominal setting. Same idiom as Mods.tsx's own
-          duplicateKeysWarning (d725dbe) on purpose: one condition, one
-          visual language, not two. See apps/panel-server/utils/iniDuplicateKeys.js. */}
       {duplicateKeys.length > 0 && (
         <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3 sm:items-center">
@@ -2345,7 +2035,6 @@ export default function ServerConfig() {
         }
       />
 
-      {/* ACTIVE SERVER STRIP */}
       <TacticalPanel tone="primary">
         <div className="px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3 min-w-0">
@@ -2368,11 +2057,6 @@ export default function ServerConfig() {
                 </span>
               </div>
             ) : activeServerName ? (
-              // pathsInfo is null here because the load failed -- but a
-              // remote-without-SFTP-transport failure (see loadData) still
-              // means a real server is active, just not this one, so say so
-              // instead of "No server selected", which the sidebar right
-              // next to this strip already contradicts.
               <span className="text-sm font-semibold text-foreground">{activeServerName}</span>
             ) : (
               <span className="text-xs text-muted-foreground/60">{t('activeServerStrip.noServerSelected')}</span>
@@ -2408,7 +2092,6 @@ export default function ServerConfig() {
         </div>
       </TacticalPanel>
 
-      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => {
         setActiveTab(v)
         if (editorMode === 'raw') {
@@ -2423,14 +2106,6 @@ export default function ServerConfig() {
       }}>
         <TabsList className="flex h-auto flex-wrap gap-1 bg-muted/30 border border-border/50 p-1 rounded-md w-full">
           {([
-            // pathsInfo is null both for a genuinely-unconfigured panel (where
-            // "missing" is correct -- there is no file) and for a remote
-            // server with no SFTP transport set up (loadData, ~line 1050),
-            // where nothing is actually confirmed missing, only unreachable.
-            // The banner above already explains the real reason for the
-            // remote case with its own copy -- don't also claim these two
-            // specific files are missing, which the sidebar's REMOTE badge
-            // two rows up already contradicts.
             { value: 'ini', label: t('tabs.serverSettings'), icon: Settings, dirty: hasIniChanges, count: changedIniCount, missing: !activeServerRemote && !pathsInfo?.exists.ini },
             { value: 'sandbox', label: t('tabs.sandbox'), icon: FileText, dirty: hasSandboxChanges, count: changedSandboxCount, missing: !activeServerRemote && !pathsInfo?.exists.sandbox },
             { value: 'spawnpoints', label: t('tabs.spawnPoints'), icon: MapPin, dirty: false, count: 0, missing: false },
@@ -2465,10 +2140,6 @@ export default function ServerConfig() {
             <AlertDescription className="mt-2 space-y-3">
               {initialDeepLink.unresolved.map((modId) => {
                 const triage = initialDeepLink.unresolvedTriage.get(modId)
-                // Chip + action button share one line (both short, never wrap
-                // badly); the explanation is its own line below so a long
-                // sentence (workshopNotOnDisk especially) can wrap freely
-                // without dragging the button out of line with the chip.
                 return (
                   <div key={modId}>
                     <div className="flex flex-wrap items-center gap-2">
@@ -2542,7 +2213,6 @@ export default function ServerConfig() {
           </Alert>
         )}
 
-        {/* INI Settings Tab */}
         <TabsContent value="ini" className="mt-4">
           <TacticalPanel tone={hasIniChanges ? 'warning' : 'primary'}>
             <SectionHeader
@@ -2662,7 +2332,6 @@ export default function ServerConfig() {
                 </div>
               ) : (
                 <div className="min-h-[400px]">
-                  {/* Scoped search + filter mode — applies to all categories on this tab */}
                   <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div className="relative min-w-0 flex-1 sm:max-w-md">
                       <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -2712,7 +2381,6 @@ export default function ServerConfig() {
                     </div>
                   </div>
                   {searchQuery ? (
-                    // Search mode: flat results across all categories, grouped by category label
                     <ScrollArea className="h-[calc(100vh-420px)] min-h-[360px] pe-4">
                       {INI_CATEGORIES.map(category => {
                         const settings = filteredIniSettings[category.id] || []
@@ -2750,7 +2418,6 @@ export default function ServerConfig() {
                       )}
                     </ScrollArea>
                   ) : (
-                    // Rail mode: vertical category nav (grouped) + single active category content
                     <div className="grid gap-0 md:grid-cols-[252px_minmax(0,1fr)]">
                       <nav
                         aria-label={t('categoriesNav.iniAria')}
@@ -2775,7 +2442,6 @@ export default function ServerConfig() {
                         {INI_CATEGORY_GROUPS.map((group, gIdx) => {
                           const groupLabel = getIniCategoryGroupLabel(group)
                           const cats = INI_CATEGORIES.filter(c => c.group === group.id)
-                          // Hide whole group if every category is empty under current filter
                           const totalInGroup = cats.reduce((acc, c) => acc + (filteredIniSettings[c.id] || []).length, 0)
                           if (totalInGroup === 0 && filterMode !== 'all') return null
                           const groupKey = `ini:${group.id}`
@@ -2963,7 +2629,6 @@ export default function ServerConfig() {
           </TacticalPanel>
         </TabsContent>
 
-        {/* Sandbox Tab */}
         <TabsContent value="sandbox" className="mt-4">
           <TacticalPanel tone={hasSandboxChanges ? 'warning' : 'primary'}>
             <SectionHeader
@@ -3069,7 +2734,6 @@ export default function ServerConfig() {
                 </div>
               ) : (
                 <div className="min-h-[400px]">
-                  {/* Scoped search — applies to all categories on this tab */}
                   <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div className="relative min-w-0 flex-1 sm:max-w-md">
                       <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -3119,7 +2783,6 @@ export default function ServerConfig() {
                     </div>
                   </div>
                   {searchQuery ? (
-                    // Search mode: flat, grouped by category label
                     <ScrollArea className="h-[calc(100vh-420px)] min-h-[360px] pe-4">
                       {SANDBOX_CATEGORIES.map(category => {
                         const settings = filteredSandboxSettings[category.id] || []
@@ -3156,7 +2819,6 @@ export default function ServerConfig() {
                       )}
                     </ScrollArea>
                   ) : (
-                    // Rail mode: vertical category nav (grouped) + single active category content
                     <div className="grid gap-0 md:grid-cols-[252px_minmax(0,1fr)]">
                       <nav
                         aria-label={t('categoriesNav.sandboxAria')}
@@ -3401,7 +3063,6 @@ export default function ServerConfig() {
           </TacticalPanel>
         </TabsContent>
 
-        {/* Spawn Points Tab */}
         <TabsContent value="spawnpoints" className="mt-4">
           <TacticalPanel tone="muted">
             <SectionHeader
@@ -3521,7 +3182,6 @@ export default function ServerConfig() {
           </TacticalPanel>
         </TabsContent>
 
-        {/* Spawn Regions Tab */}
         <TabsContent value="spawnregions" className="mt-4">
           <TacticalPanel tone="primary">
             <SectionHeader
@@ -3588,7 +3248,6 @@ export default function ServerConfig() {
                     <EmptyState type="noData" title={t('spawnRegionsTab.noRegionsTitle')} description={t('spawnRegionsTab.noRegionsDesc')} compact />
                   ) : (
                     <div className="overflow-hidden rounded-lg border">
-                      {/* Column headers (sm+ only) */}
                       <div className="hidden sm:grid grid-cols-[2rem_minmax(180px,260px)_minmax(0,1fr)_2.25rem] items-center gap-3 border-b bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         <span className="text-center">#</span>
                         <span>{t('spawnRegionsTab.columnDisplayName')}</span>
@@ -3680,7 +3339,6 @@ export default function ServerConfig() {
           </TacticalPanel>
         </TabsContent>
 
-        {/* Mod Settings Tab (Live from PanelBridge) */}
         <TabsContent value="modsettings" className="mt-4">
           <TacticalPanel tone={modifiedModSettingsCount > 0 ? 'warning' : 'info'}>
             <SectionHeader
@@ -3847,12 +3505,9 @@ export default function ServerConfig() {
                   </div>
                   {filteredModGroups
                     .map(group => {
-                      // When the user is actively filtering, force groups open so matches
-                      // are immediately visible (otherwise hits hide behind collapsed headers).
                       const isFiltering = !!modSettingsSearch.trim() || modSettingsModifiedOnly
                       const isExpanded = isFiltering || expandedModGroups.has(group.name)
                       const filteredOpts = group.filteredOpts
-                      // Modified count for this whole group (not just visible/filtered)
                       const groupAllOpts = modSettings[group.name] || []
                       const groupModifiedCount = groupAllOpts.reduce((c, o) => c + (isOptModified(o) ? 1 : 0), 0)
 
@@ -3895,14 +3550,11 @@ export default function ServerConfig() {
                           {isExpanded && (
                             <div className="mt-3 ms-4 space-y-1 ps-4">
                               {filteredOpts.map((opt, idx) => {
-                                // Mods often expose an internal sandbox key as their
-                                // "translated" name. Format it before displaying it.
                                 const rawDisplayName = opt.shortName || opt.name || `Option ${idx}`
                                 const displayName = formatModSettingLabel(
                                   opt.translatedName && opt.translatedName !== rawDisplayName ? opt.translatedName : rawDisplayName,
                                   group.name,
                                 ) || `Option ${idx + 1}`
-                                // Keep player-facing help, but hide untranslated tooltip keys.
                                 const rawTooltip = opt.tooltipText || opt.tooltip || ''
                                 const description = formatModSettingDescription(rawTooltip.replace(/\n?Default\s*=\s*.*/i, ''))
                                 const rawVal = opt.value
@@ -3982,9 +3634,6 @@ export default function ServerConfig() {
                                           defaultValue={displayValue}
                                           min={opt.min}
                                           max={opt.max}
-                                          // The browser counts valid values up from `min` in `step`
-                                          // increments, so a fractional min like 0.001 with step 1
-                                          // rejects every whole number the user types.
                                           step={typeLabel === 'integer' && Number.isInteger(opt.min ?? 0) ? 1 : 'any'}
                                           disabled={isSaving}
                                           aria-label={displayName}
@@ -4095,7 +3744,6 @@ export default function ServerConfig() {
         </TabsContent>
       </Tabs>
 
-      {/* Sticky save bar — appears when there are unsaved changes on the active tab */}
       {((activeTab === 'ini' && hasIniChanges) || (activeTab === 'sandbox' && hasSandboxChanges)) && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-4 sm:px-6 sm:pb-5">
           <div
@@ -4148,7 +3796,6 @@ export default function ServerConfig() {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Filter tabs */}
           <div className="flex items-center gap-2 border-b pb-3">
             <span className="text-sm text-muted-foreground me-2">
               <Filter className="w-4 h-4 inline me-1" />
@@ -4183,7 +3830,6 @@ export default function ServerConfig() {
                     return true
                   })
                   .map((backup) => {
-                    // Determine file type from filename
                     const filename = backup.filename.toLowerCase()
                     let fileType = t('backupsDialog.typeConfig')
                     let typeColor = 'bg-muted-foreground'
@@ -4263,7 +3909,6 @@ export default function ServerConfig() {
         </DialogContent>
       </Dialog>
 
-      {/* Templates Dialog */}
       <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -4279,7 +3924,6 @@ export default function ServerConfig() {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Save as Template button */}
           <div className="flex items-center justify-between border-b pb-3">
             <span className="text-sm text-muted-foreground">
               {t('templatesDialog.savedCount', { count: templates.length })}
@@ -4377,7 +4021,6 @@ export default function ServerConfig() {
         </DialogContent>
       </Dialog>
 
-      {/* Save Template Dialog */}
       <Dialog open={showSaveTemplate} onOpenChange={setShowSaveTemplate}>
         <DialogContent>
           <DialogHeader>
@@ -4462,7 +4105,6 @@ export default function ServerConfig() {
         </DialogContent>
       </Dialog>
 
-      {/* File Browser Dialog */}
       <Dialog open={fileBrowserOpen} onOpenChange={setFileBrowserOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
@@ -4475,12 +4117,10 @@ export default function ServerConfig() {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Current path breadcrumb */}
           <div className="flex items-center gap-1.5 text-xs font-mono bg-muted/50 rounded-md px-3 py-2 overflow-x-auto">
             <span className="text-muted-foreground truncate" title={fileBrowserPath}>{fileBrowserPath || t('fileBrowserDialog.loadingPath')}</span>
           </div>
 
-          {/* File listing */}
           <ScrollArea className="flex-1 min-h-[300px] max-h-[400px] border rounded-md">
             {fileBrowserLoading ? (
               <div className="flex items-center justify-center py-12">
@@ -4488,7 +4128,6 @@ export default function ServerConfig() {
               </div>
             ) : (
               <div className="p-2 space-y-0.5">
-                {/* Parent directory */}
                 {fileBrowserParent && (
                   <button
                     onClick={() => browseTo(fileBrowserParent!)}
@@ -4499,7 +4138,6 @@ export default function ServerConfig() {
                   </button>
                 )}
 
-                {/* Directories */}
                 {fileBrowserDirs.map(dir => (
                   <button
                     key={`d-${dir}`}
@@ -4511,7 +4149,6 @@ export default function ServerConfig() {
                   </button>
                 ))}
 
-                {/* Files */}
                 {fileBrowserFiles.map(file => {
                   const fullPath = fileBrowserPath + (fileBrowserPath.endsWith('/') || fileBrowserPath.endsWith('\\') ? '' : (fileBrowserPath.includes('/') ? '/' : '\\')) + file.name
                   const isSelected = fileBrowserSelected === fullPath
@@ -4535,7 +4172,6 @@ export default function ServerConfig() {
                   )
                 })}
 
-                {/* Empty state */}
                 {fileBrowserDirs.length === 0 && fileBrowserFiles.length === 0 && !fileBrowserParent && (
                   <div className="text-center py-8 text-sm text-muted-foreground">
                     {t('fileBrowserDialog.emptyNoParent')}
@@ -4550,7 +4186,6 @@ export default function ServerConfig() {
             )}
           </ScrollArea>
 
-          {/* Preview + selection info */}
           {fileBrowserSelected && (
             <div className="flex items-start gap-3 bg-muted/30 rounded-md p-3 border">
               <div className="rounded-md border bg-background p-1 shrink-0">

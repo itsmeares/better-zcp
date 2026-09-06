@@ -3,17 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression/coverage for conv-modthumbnails: GET /thumbnail/:workshopId never
-// wrote a FAILED resolution to its disk cache, so a host where resolution is
-// broken (missing preview_url + an unreachable/failing Steam) re-ran a full
-// Steam round trip for EVERY tracked mod on EVERY page load, forever --
-// needless third-party load and a self-inflicted slow page, discovered while
-// investigating a "thumbnails never render" report that turned out NOT to be
-// the removed-markup bug it first looked like (see conv-modthumbnails).
-// THUMB_FAIL_CACHE now remembers a failure for a bounded TTL so it can be
-// skipped cheaply -- these tests prove it actually short-circuits, actually
-// expires, and actually clears on a later success, plus the diagnostics shape
-// getThumbnailResolutionStatus() exposes for the Debug support bundle.
 
 vi.mock("../database/init.js", () => ({
   getTrackedMods: vi.fn(async () => []),
@@ -24,22 +13,6 @@ vi.mock("../utils/paths.js", () => ({
   getDataPaths: vi.fn(),
 }));
 
-// 2026-08-29, ENOTEMPTY class fix: this file mocked getDataPaths() to point
-// at its own mkdtemp'd tempRoot without also mocking the logger, so the
-// REAL winston logger (createLogger() is not mocked elsewhere in this file)
-// resolved its logsDir into that same tempRoot and wrote real, asynchronous
-// combined.log/error.log files into it -- confirmed live (a two-line
-// diagnostic listing tempRoot's contents at the end of a test body found
-// them there, before afterEach ever runs). afterEach's fs.rmSync is
-// synchronous and unconditional; a real, un-awaited winston write still in
-// flight when it walks the directory is an ENOTEMPTY waiting to happen
-// under load, independent of whether this specific run ever caught it.
-// Matches the SAME logger-mocking shape already established elsewhere in
-// this suite (see e.g. linuxLaunchExtensionlessCustomCommand.test.js,
-// linuxScanAmbiguousProcessDetection.test.js) -- adopting an existing
-// convention this file simply never had a reason to reach for, not
-// inventing a new one. This test doesn't assert on anything the logger
-// does, so there is nothing to lose by removing the real one.
 vi.mock("../utils/logger.js", () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -141,19 +114,10 @@ describe("GET /thumbnail/:workshopId — negative caching", () => {
     expect(status.total).toBe(1);
     expect(status.lastError).toMatchObject({ workshopId: "111" });
 
-    // Second request, same mod, well within the TTL: must not touch the
-    // network at all -- that's the entire point of the negative cache.
     const second = await runThumbnailRoute(router, "111");
     expect(second.getHeaders()["Content-Type"]).toBe("image/gif");
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // Regression proof for the ENOTEMPTY class (2026-08-29): before the
-    // logger.js mock above, a real winston logger wrote combined.log/
-    // error.log into this exact tempRoot -- confirmed live via a one-off
-    // diagnostic. Nothing this route does legitimately produces a *.log
-    // file (the mod-thumbnails cache writes an image, never a log), so
-    // this stays a meaningful, permanent assertion rather than a diagnostic
-    // that gets deleted after proving the point once.
     expect(fs.readdirSync(tempRoot).filter((f) => f.endsWith(".log"))).toHaveLength(0);
   });
 
@@ -171,19 +135,16 @@ describe("GET /thumbnail/:workshopId — negative caching", () => {
     await runThumbnailRoute(router, "222");
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // Still well inside the TTL: short-circuited, no second network call.
     nowSpy.mockReturnValue(1_000_000 + 60_000);
     await runThumbnailRoute(router, "222");
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // Past the TTL (5 minutes): a transient outage must not blank the
-    // thumbnail forever, so this must retry for real.
     nowSpy.mockReturnValue(1_000_000 + 5 * 60 * 1000 + 1);
     await runThumbnailRoute(router, "222");
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     const status = await getThumbnailResolutionStatus();
-    expect(status.failing).toBe(1); // the retry failed too (fetch always ok:false)
+    expect(status.failing).toBe(1);
   });
 
   it("clears the failure on a later successful resolution", async () => {
@@ -203,7 +164,6 @@ describe("GET /thumbnail/:workshopId — negative caching", () => {
           }),
         };
       }
-      // Image download from the (allow-listed) CDN host.
       return {
         ok: true,
         headers: { get: (h) => (h === "content-type" ? "image/jpeg" : "40") },
@@ -218,7 +178,6 @@ describe("GET /thumbnail/:workshopId — negative caching", () => {
     await runThumbnailRoute(router, "333");
     expect((await getThumbnailResolutionStatus()).failing).toBe(1);
 
-    // Past the TTL, and Steam now resolves successfully.
     steamShouldSucceed = true;
     nowSpy.mockReturnValue(2_000_000 + 5 * 60 * 1000 + 1);
     const retried = await runThumbnailRoute(router, "333");

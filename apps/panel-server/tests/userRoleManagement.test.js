@@ -1,13 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { TEST_ROLES } from "./helpers/mockPermissionsDb.js";
 
-// Same in-memory stand-in pattern as recoveryCodes.test.js — the real
-// service logic (bcrypt, role rules) runs, without touching the panel's
-// actual database. changeUserRole() now resolves its target through the
-// real roles collection (see its own comment in services/auth.js for why),
-// so this needs the same seeded admin/technician/moderator rows every
-// other roles-aware test file uses — TEST_ROLES from mockPermissionsDb.js,
-// not a fourth copy of the same three arrays.
 const settings = new Map();
 const db = { data: { users: [], roles: Object.values(TEST_ROLES).map((r) => ({ ...r })) } };
 
@@ -107,10 +100,6 @@ describe("changeUserRole", () => {
   });
 
   it("refuses to demote the last user holding roles.manage/users.manage even when they aren't literally role 'admin' -- the gap this fix closed", async () => {
-    // A custom role, not the seeded "admin", holding the same two recovery
-    // capabilities. Before the fix, changeUserRole()'s own lockout check
-    // only ever looked at the literal string "admin", so moving this user
-    // off their custom role sailed through with no check at all.
     db.data.roles.push({
       id: "role-root-ops",
       name: "Root Ops",

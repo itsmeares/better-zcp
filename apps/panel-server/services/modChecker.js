@@ -86,8 +86,6 @@ export async function refreshWorkshopChecker(modChecker) {
   return workshopAcfPath;
 }
 
-// Older API endpoints stored milliseconds while Settings stored minutes.
-// Accept both on startup, then rewrite legacy milliseconds as minutes.
 export function normalizeStoredCheckInterval(value) {
   const minutesInterval = minutesToCheckIntervalMs(value);
   if (minutesInterval !== null)
@@ -109,8 +107,6 @@ export function normalizeStoredCheckInterval(value) {
   return null;
 }
 
-// Legacy mod-restart settings were persisted with mixed types (real booleans
-// alongside strings like "5"), so migration has to accept both shapes.
 export function parseLegacyBoolean(value) {
   if (typeof value === "boolean") return value;
   if (typeof value !== "string") return null;
@@ -120,8 +116,6 @@ export function parseLegacyBoolean(value) {
   return null;
 }
 
-// Number(null) and Number("") are both 0, which would silently migrate an
-// unset warning delay into "restart with no countdown".
 export function parseLegacyMinutes(value) {
   if (value === null || value === undefined) return null;
   if (typeof value === "string" && value.trim() === "") return null;
@@ -163,76 +157,46 @@ export class ModChecker extends EventEmitter {
     this.intervalId = null;
     this.initialCheckTimeout = null;
     this.lastCheck = null;
-    // Whether the most recent checkForUpdates() actually got data back from
-    // the Steam Web API, vs. silently degrading to the smaller, less
-    // complete ACF-only comparison (see the `steamData.size === 0` branch
-    // below). Without this, a Steam outage/rate-limit/network block looks
-    // identical to "checked, 0 updates" everywhere getStatus() is read.
     this.steamApiHealthy = true;
     this.lastSteamApiFailureAt = null;
     this.modsNeedingUpdate = [];
     this.onUpdateCallback = null;
-    this.autoRestartEnabled = false; // Track auto-restart state
-    this.scheduler = null; // Will be set by init()
-    this.serverManager = null; // Will be set by init()
-    this.io = null; // Socket.io instance for emitting events
-    this.workshopAcfPath = null; // Path to appworkshop_108600.acf
+    this.autoRestartEnabled = false;
+    this.scheduler = null;
+    this.serverManager = null;
+    this.io = null;
+    this.workshopAcfPath = null;
 
-    // Track the last reported set of mods needing updates so we don't
-    // re-emit the same news on every 5-minute poll. Without this, a stale
-    // backlog of 3 mods quietly logs ~288 duplicate events per day and
-    // floods socket clients with redundant `mods:updates_available` blasts.
     this._lastReportedUpdateKey = "";
 
-    // Advanced options
-    this.restartWarningMinutes = 5; // Minutes to warn before restart
-    this.delayIfPlayersOnline = false; // Wait for players to leave before restart
-    this.maxDelayMinutes = 30; // Maximum wait time if delaying for players
-    this.lastUpdateDetected = null; // Timestamp of last update detection
-    this.pendingRestart = false; // Whether a restart is pending (waiting for players)
-    this.playerCheckInterval = null; // Interval for checking player count
+    this.restartWarningMinutes = 5;
+    this.delayIfPlayersOnline = false;
+    this.maxDelayMinutes = 30;
+    this.lastUpdateDetected = null;
+    this.pendingRestart = false;
+    this.playerCheckInterval = null;
 
-    // Performance: Cache mod names to avoid repeated disk reads
-    this.modNameCache = new Map(); // WorkshopID -> { name, timestamp }
-    this.checkInProgress = false; // Prevent concurrent update checks
-    this.lastSteamTimestamps = new Map(); // Cache Steam API results between checks
-    // workshopId -> { resultCode, reason } for the most recent fetchSteamTimestamps()
-    // call, for every id Steam answered with a NON-1 result (item.result !== 1).
-    // Populated alongside lastSteamTimestamps so a caller can tell "Steam
-    // confirmed this item is gone" (reason: "removed", Steam EResult 9 --
-    // FileNotFound, the documented code for a deleted/private workshop item)
-    // apart from "this batch got no answer at all" (absent from BOTH maps --
-    // a network failure, timeout, or rate-limit; see steamApiHealthy).
-    // Anything else non-1 is recorded with reason: "unknown" and its raw
-    // code preserved rather than silently dropped, so the denominator of
-    // codes this class recognizes stays honest as Steam's API evolves.
+    this.modNameCache = new Map();
+    this.checkInProgress = false;
+    this.lastSteamTimestamps = new Map();
     this.lastUnavailableWorkshopIds = new Map();
 
-    // Startup grace period — skip auto-restart triggers for the first N seconds after start()
-    this.startupGraceMs = 120000; // 2 minutes grace period after start()
-    this.startedAt = null; // Set when start() is called
+    this.startupGraceMs = 120000;
+    this.startedAt = null;
 
-    // Update dedup — track which mod+timestamp combos have already triggered a restart
-    // Prevents the same stale update from re-triggering every poll cycle
-    this.processedUpdates = new Map(); // workshopId -> steamTimestamp that was already handled
+    this.processedUpdates = new Map();
   }
 
-  // Initialize with scheduler and restore saved settings
   async init(scheduler, serverManager = null, io = null) {
     this.scheduler = scheduler;
     this.serverManager = serverManager;
     this.io = io;
 
-    // Find the workshop ACF file path
     await this.findWorkshopAcfPath();
 
-    // Restore all saved settings from database
     try {
       let savedAutoRestart = await getSetting("modAutoRestartEnabled");
       let savedWarningMinutes = await getSetting("modRestartWarningMinutes");
-      // Settings.tsx historically persisted these values under shorter names.
-      // Accept and migrate them so existing installs do not silently lose
-      // mod-update restart behavior after a panel restart.
       if (savedAutoRestart === null) {
         const legacyAutoRestart = parseLegacyBoolean(
           await getSetting("modAutoRestart"),
@@ -292,13 +256,6 @@ export class ModChecker extends EventEmitter {
                 `Mod update handling failed: ${handled?.error || handled?.message || "unknown error"}`,
               );
             }
-            // Without this, checkForUpdates()'s markProcessed dedup check
-            // always sees undefined here (a block-bodied async function
-            // resolves undefined unless it explicitly returns), so a
-            // successful immediate restart was never recorded as processed
-            // and the same update could retrigger another restart on the
-            // next check cycle. routes/config.js's bulk-save path already
-            // gets this right with an implicit-return arrow.
             return handled;
           };
           log.info("Auto-restart on mod update restored from settings");
@@ -308,16 +265,13 @@ export class ModChecker extends EventEmitter {
       log.warn(`Failed to restore mod checker settings: ${error.message}`);
     }
 
-    // Auto-sync mods from workshop ACF file
     await this.autoSyncModsOnStartup();
   }
 
-  // Find the workshop ACF file path from server config
   async findWorkshopAcfPath() {
     try {
       this.workshopAcfPath = null;
 
-      // Allow manual override from settings
       const manualPath = await getSetting("modWorkshopAcfPath");
       if (manualPath && fs.existsSync(manualPath)) {
         this.workshopAcfPath = manualPath;
@@ -332,8 +286,6 @@ export class ModChecker extends EventEmitter {
         installPath = await getSetting("serverPath");
       }
 
-      // The all-in-one Docker image has a fixed server path before the
-      // first panel server record is created.
       if (!installPath) {
         installPath = process.env.PZ_SERVER_PATH;
       }
@@ -359,7 +311,6 @@ export class ModChecker extends EventEmitter {
     }
   }
 
-  // Parse Steam's VDF/ACF format (robust stack-based parser)
   parseAcfFile(content) {
     const result = {
       installedMods: {},
@@ -369,18 +320,16 @@ export class ModChecker extends EventEmitter {
     if (!content) return result;
 
     try {
-      // VDF Parser — handles both "Key" { (same line) and "Key"\n{ (separate lines)
       const lines = content.split(/\r?\n/);
       const stack = [];
       let current = {};
       const root = current;
-      let pendingKey = null; // Key waiting for opening brace on next line
+      let pendingKey = null;
 
       for (let line of lines) {
         line = line.trim();
         if (!line || line.startsWith("//")) continue;
 
-        // Lone opening brace — use pending key from previous line
         if (line === "{") {
           const key = pendingKey || "unknown";
           pendingKey = null;
@@ -391,7 +340,6 @@ export class ModChecker extends EventEmitter {
           continue;
         }
 
-        // "Key" { on the same line
         if (line.endsWith("{")) {
           pendingKey = null;
           const keyMatch = line.match(/"([^"]+)"/);
@@ -403,7 +351,6 @@ export class ModChecker extends EventEmitter {
           continue;
         }
 
-        // Closing brace
         if (line === "}") {
           pendingKey = null;
           if (stack.length > 0) {
@@ -412,7 +359,6 @@ export class ModChecker extends EventEmitter {
           continue;
         }
 
-        // Key-Value pair: "Key" "Value"
         const kvMatch = line.match(/"([^"]+)"\s+"([^"]*)"/);
         if (kvMatch) {
           pendingKey = null;
@@ -420,24 +366,19 @@ export class ModChecker extends EventEmitter {
           continue;
         }
 
-        // Standalone quoted key — opening brace expected on next line
         const keyOnly = line.match(/^"([^"]+)"$/);
         if (keyOnly) {
           pendingKey = keyOnly[1];
         }
       }
 
-      // Navigate structure to find relevant sections
-      // The root usually contains "AppState" or "AppWorkshop"
       const appState = root.AppState || root.AppWorkshop || root;
 
       if (appState) {
-        // Extract WorkshopItemsInstalled
         if (appState.WorkshopItemsInstalled) {
           for (const [id, data] of Object.entries(
             appState.WorkshopItemsInstalled,
           )) {
-            // In some VDF formats, the ID is the key, in others it might be indexed
             if (typeof data === "object") {
               result.installedMods[id] = {
                 size: parseInt(data.size || 0, 10),
@@ -447,7 +388,6 @@ export class ModChecker extends EventEmitter {
           }
         }
 
-        // Extract WorkshopItemDetails
         if (appState.WorkshopItemDetails) {
           for (const [id, data] of Object.entries(
             appState.WorkshopItemDetails,
@@ -468,14 +408,11 @@ export class ModChecker extends EventEmitter {
     return result;
   }
 
-  // Helper: Try to resolve mod name from disk
   resolveModNameFromDisk(workshopId, skipCache = false) {
-    // Check cache first (with size limit)
     if (!skipCache && this.modNameCache.has(workshopId)) {
       return this.modNameCache.get(workshopId).name;
     }
 
-    // Evict oldest entries if cache exceeds limit
     if (this.modNameCache.size > 500) {
       const firstKey = this.modNameCache.keys().next().value;
       this.modNameCache.delete(firstKey);
@@ -484,8 +421,6 @@ export class ModChecker extends EventEmitter {
     try {
       if (!this.workshopAcfPath) return null;
 
-      // ACF path: .../steamapps/workshop/appworkshop_108600.acf
-      // Content path: .../steamapps/workshop/content/108600/<ID>
       const workshopDir = path.dirname(this.workshopAcfPath);
       const contentDir = path.join(
         workshopDir,
@@ -496,11 +431,6 @@ export class ModChecker extends EventEmitter {
 
       if (!fs.existsSync(contentDir)) return null;
 
-      // Inside workshop folder, there is usually 'mods/ModName/mod.info'
-      // OR sometimes just 'mods/ModName'. B42 mods may also put mod.info
-      // under a versioned subdirectory: 'mods/ModName/common/mod.info',
-      // 'mods/ModName/42/mod.info', 'mods/ModName/42.0/mod.info', etc.
-      // We probe the mod root and every direct subdirectory.
       const modsDir = path.join(contentDir, "mods");
       if (fs.existsSync(modsDir)) {
         const modFolders = fs
@@ -513,7 +443,6 @@ export class ModChecker extends EventEmitter {
               sensitivity: "base",
             }),
           );
-        // Just take the first valid mod found in the package
         for (const folder of modFolders) {
           const modFolderPath = path.join(modsDir, folder);
           const candidatePaths = [
@@ -553,7 +482,6 @@ export class ModChecker extends EventEmitter {
             const nameMatch = content.match(/^\s*name\s*=\s*(.+)$/m);
             if (nameMatch && nameMatch[1]) {
               const name = nameMatch[1].trim();
-              // Update cache
               this.modNameCache.set(workshopId, {
                 name,
                 timestamp: Date.now(),
@@ -562,7 +490,6 @@ export class ModChecker extends EventEmitter {
             }
           }
         }
-        // Fallback: If no mod.info found but folder exists, use folder name
         if (modFolders.length > 0) {
           const name = modFolders[0];
           this.modNameCache.set(workshopId, { name, timestamp: Date.now() });
@@ -585,7 +512,6 @@ export class ModChecker extends EventEmitter {
     }
   }
 
-  // Auto-sync mods from workshop ACF file on startup
   async autoSyncModsOnStartup() {
     try {
       if (!this.workshopAcfPath || !fs.existsSync(this.workshopAcfPath)) {
@@ -595,7 +521,6 @@ export class ModChecker extends EventEmitter {
 
       const trackedMods = (await getTrackedMods()) || [];
 
-      // Only auto-sync if no mods are tracked
       if (trackedMods.length > 0) {
         log.debug(
           `${trackedMods.length} mods already tracked, skipping auto-sync`,
@@ -603,7 +528,6 @@ export class ModChecker extends EventEmitter {
         return;
       }
 
-      // Read and parse the ACF file
       let content = fs.readFileSync(this.workshopAcfPath, "utf-8");
       if (content.charCodeAt(0) === 0xfeff) content = content.slice(1);
       const parsed = this.parseAcfFile(content);
@@ -615,15 +539,12 @@ export class ModChecker extends EventEmitter {
         return;
       }
 
-      // Add all mods to tracking
       let synced = 0;
       for (const id of workshopIds) {
-        // Skip mods the user previously ignored
         if (await isModIgnored(id)) {
           log.debug(`Skipping ignored mod ${id} during auto-sync`);
           continue;
         }
-        // Try to get name from disk
         const nameFromDisk = this.resolveModNameFromDisk(id);
         const name = nameFromDisk || `Workshop Mod ${id}`;
 
@@ -639,15 +560,11 @@ export class ModChecker extends EventEmitter {
     }
   }
 
-  // Diagnostic helper used by /api/debug — true when polling is active.
-  // Without this getter the debug page always reported "Mod update checker stopped"
-  // because no field named isRunning existed on this class.
   get isRunning() {
     return !!this.intervalId;
   }
 
   start({ resetGracePeriod = true } = {}) {
-    // Check if we have the workshop ACF file
     if (!this.workshopAcfPath) {
       log.warn(
         "Workshop ACF file not configured - mod update checking disabled. Configure server install path first.",
@@ -660,7 +577,6 @@ export class ModChecker extends EventEmitter {
       return false;
     }
 
-    // Clear existing timers to prevent double-start leaks and stale delayed checks.
     if (this.intervalId) {
       clearInterval(this.intervalId);
     }
@@ -677,8 +593,6 @@ export class ModChecker extends EventEmitter {
       `Mod checker started - checking every ${Math.round(this.checkInterval / 1000)}s (grace period: ${this.startupGraceMs / 1000}s)`,
     );
 
-    // Run initial check after a short delay (30s) to let RCON connect first
-    // The grace period still prevents auto-restart triggers during the first 2 minutes
     this.initialCheckTimeout = setTimeout(() => {
       this.initialCheckTimeout = null;
       this.runScheduledCheck();
@@ -714,11 +628,9 @@ export class ModChecker extends EventEmitter {
     log.info(
       `Mod auto-restart ${this.autoRestartEnabled ? "enabled" : "disabled"}`,
     );
-    // Persist to database
     await setSetting("modAutoRestartEnabled", this.autoRestartEnabled);
   }
 
-  // Configure restart options
   async setRestartOptions(options) {
     if (options.warningMinutes !== undefined) {
       const val = Number(options.warningMinutes);
@@ -749,9 +661,7 @@ export class ModChecker extends EventEmitter {
     );
   }
 
-  // Handle mod update detection
   async handleModUpdate(updatedMods) {
-    // Guard against re-entry — don't start duplicate restarts
     if (this.pendingRestart) {
       log.info("Restart already pending, ignoring handleModUpdate");
       return;
@@ -761,12 +671,10 @@ export class ModChecker extends EventEmitter {
       `handleModUpdate called with ${updatedMods.length} mod(s): ${updatedMods.map((m) => m.name).join(", ")}`,
     );
 
-    // Set flag immediately to prevent concurrent calls from slipping through
     this.pendingRestart = true;
 
     this.lastUpdateDetected = new Date();
 
-    // Emit socket event
     if (this.io) {
       this.io.emit("mods:update_detected", {
         mods: updatedMods,
@@ -783,7 +691,6 @@ export class ModChecker extends EventEmitter {
       return { success: false, retry: true, reason: "scheduler_unavailable" };
     }
 
-    // Check if we should delay for players
     if (this.delayIfPlayersOnline && this.serverManager) {
       try {
         const playerCount = await this.getOnlinePlayerCount();
@@ -804,7 +711,6 @@ export class ModChecker extends EventEmitter {
             });
           }
 
-          // Start player count monitoring
           this.startPlayerMonitoring(updatedMods);
           return {
             success: true,
@@ -818,7 +724,6 @@ export class ModChecker extends EventEmitter {
       }
     }
 
-    // No delay, trigger restart immediately
     try {
       return await this.triggerModRestart(updatedMods);
     } catch (e) {
@@ -828,8 +733,6 @@ export class ModChecker extends EventEmitter {
     }
   }
 
-  // Get online player count. Returns null when the count is unknown, which is
-  // NOT the same as an empty server.
   async getOnlinePlayerCount() {
     if (!this.scheduler?.rconService) return null;
 
@@ -844,7 +747,6 @@ export class ModChecker extends EventEmitter {
     return null;
   }
 
-  // Monitor player count and restart when empty
   startPlayerMonitoring(updatedMods) {
     if (this.playerCheckInterval) {
       clearInterval(this.playerCheckInterval);
@@ -858,15 +760,12 @@ export class ModChecker extends EventEmitter {
       try {
         const elapsed = Date.now() - startTime;
 
-        // Check if max delay exceeded
         if (elapsed >= maxWaitMs) {
           log.info("Max delay exceeded, forcing restart");
           clearInterval(this.playerCheckInterval);
           this.playerCheckInterval = null;
           try {
             const result = await this.triggerModRestart(updatedMods);
-            // A refusal comes back as a result, and leaving pendingRestart set
-            // would block every later mod-update restart.
             if (!result?.success) {
               log.error(
                 `Player monitor: mod restart did not run: ${result?.error || result?.message || "unknown error"}`,
@@ -880,7 +779,6 @@ export class ModChecker extends EventEmitter {
           return;
         }
 
-        // Check player count
         const playerCount = await this.getOnlinePlayerCount();
 
         if (playerCount === null) {
@@ -916,22 +814,14 @@ export class ModChecker extends EventEmitter {
         this.playerCheckInterval = null;
         this.pendingRestart = false;
       }
-    }, 120000); // Check every 2 minutes
+    }, 120000);
   }
 
-  // Trigger the actual restart
   async triggerModRestart(updatedMods) {
     log.info(`Triggering restart for ${updatedMods.length} updated mod(s)`);
 
-    // RCON readiness gate — verify RCON is connected before attempting restart
     const rconService = this.scheduler?.rconService;
     if (!rconService || !rconService.connected) {
-      // Default to "running" (the safe assumption: don't silently drop a
-      // pending restart) unless detection positively confirms the server is
-      // stopped. checkServerRunning() used to collapse a failed detection
-      // scan into `false` -- indistinguishable from a confirmed-stopped
-      // server -- which meant a scan failure while the server was actually
-      // running would mark this mod update "processed" and never retry it.
       let confirmedOffline = false;
       if (
         this.serverManager &&
@@ -963,7 +853,6 @@ export class ModChecker extends EventEmitter {
       log.warn(
         "RCON not connected while server appears to be running — cannot trigger mod restart safely. Will retry on next check cycle.",
       );
-      // Clear processed updates so they'll be re-detected on next cycle when RCON may be ready
       for (const m of updatedMods) {
         this.processedUpdates.delete(m.workshopId);
       }
@@ -983,9 +872,6 @@ export class ModChecker extends EventEmitter {
     }
 
     try {
-      // Send warning message — use both PanelBridge (rich, UTF-8 safe) and RCON
-      // (always-on global broadcast). PZ's RCON does not handle non-ASCII so the
-      // RCON path strips emoji/unicode automatically inside serverMessage().
       const trimmedNames =
         modNames.length > 100 ? `${modNames.substring(0, 100)}...` : modNames;
       const warningMessage = `🔧 Mod updates detected: ${trimmedNames}. Server will restart in ${this.restartWarningMinutes} minute(s).`;
@@ -1008,8 +894,6 @@ export class ModChecker extends EventEmitter {
         log.warn(`RCON serverMessage failed: ${rconErr?.message || rconErr}`);
       }
 
-      // Always also try PanelBridge if available — it can render the full
-      // unicode message in chat and acts as a fallback if RCON was rejected.
       try {
         if (panelBridge?.isRunning && panelBridge?.isModConnected?.()) {
           await panelBridge.sendCommand("sendToServerChat", {
@@ -1027,7 +911,6 @@ export class ModChecker extends EventEmitter {
         );
       }
 
-      // Perform restart with configured warning time
       log.info(
         `Calling scheduler.performRestart(${this.restartWarningMinutes})`,
       );
@@ -1044,7 +927,6 @@ export class ModChecker extends EventEmitter {
             error: result.message || "Restart did not complete",
           });
         }
-        // Clear processed updates so we can retry on next cycle
         for (const m of updatedMods) {
           this.processedUpdates.delete(m.workshopId);
         }
@@ -1070,20 +952,15 @@ export class ModChecker extends EventEmitter {
           error: sanitizeError(error.message),
         });
       }
-      // Clear processed updates so we can retry on next cycle
       for (const m of updatedMods) {
         this.processedUpdates.delete(m.workshopId);
       }
       return { success: false, retry: true, reason: "restart_error" };
     } finally {
-      // Always clear pendingRestart when triggerModRestart finishes
       this.pendingRestart = false;
     }
   }
 
-  // Read the active server's INI WorkshopItems list as a Set of strings.
-  // Returns null if the config can't be loaded so callers can choose to
-  // fail open (don't filter) rather than fail closed (drop everything).
   async getConfiguredWorkshopIds() {
     if (
       !this.serverManager ||
@@ -1105,24 +982,15 @@ export class ModChecker extends EventEmitter {
     }
   }
 
-  // Check for mod updates using local workshop ACF file
-  // This compares timeupdated vs latest_timeupdated in Steam's cache
-  // Query Steam Web API for latest workshop item timestamps
-  // Uses ISteamRemoteStorage/GetPublishedFileDetails (no API key required)
   async fetchSteamTimestamps(workshopIds) {
-    const result = new Map(); // workshopId -> { time_updated, title }
-    // workshopId -> { resultCode, reason }, for every id Steam answered with
-    // a non-1 result this call. See the field's own comment on the
-    // constructor for what "reason" values mean and why this exists.
+    const result = new Map();
     const unavailable = new Map();
     if (!workshopIds.length) {
       this.lastUnavailableWorkshopIds = unavailable;
       return result;
     }
 
-    // Steam API accepts batches — process in chunks of 100
     const BATCH = 100;
-    // Backoff between batches if Steam rate-limits us. Reset on success.
     let backoffMs = 0;
     const MAX_BACKOFF_MS = 60_000;
     for (let i = 0; i < workshopIds.length; i += BATCH) {
@@ -1153,7 +1021,6 @@ export class ModChecker extends EventEmitter {
           log.warn(
             `Steam API returned ${res.status} for batch ${i / BATCH + 1}`,
           );
-          // Honor Retry-After on 429/503; otherwise exponential backoff up to MAX_BACKOFF_MS.
           if (res.status === 429 || res.status === 503) {
             const retryAfter = parseInt(
               res.headers.get("retry-after") || "",
@@ -1171,7 +1038,6 @@ export class ModChecker extends EventEmitter {
           continue;
         }
 
-        // Successful response — reset backoff.
         backoffMs = 0;
 
         const data = await res.json();
@@ -1188,15 +1054,6 @@ export class ModChecker extends EventEmitter {
                 typeof item.preview_url === "string" ? item.preview_url : null,
             });
           } else {
-            // Steam answered FOR this specific item -- this is not a batch-
-            // level failure (that path never reaches here at all; see !res.ok
-            // and the catch block below, neither of which touch `unavailable`).
-            // EResult 9 (k_EResultFileNotFound) is Steam's documented code
-            // for a deleted or made-private workshop item -- the one case
-            // this class currently distinguishes by name. Any other non-1
-            // code is still recorded (not silently dropped), tagged
-            // "unknown" with its raw code kept, rather than assumed to mean
-            // the same thing as 9.
             unavailable.set(item.publishedfileid, {
               resultCode: item.result,
               reason: item.result === 9 ? "removed" : "unknown",
@@ -1235,7 +1092,6 @@ export class ModChecker extends EventEmitter {
   }
 
   async checkForUpdates() {
-    // Prevent concurrent checks (interval can fire while API call is in flight)
     if (this.checkInProgress) {
       log.debug("Update check already in progress, skipping");
       return { updated: false, mods: [], skipped: true };
@@ -1243,7 +1099,6 @@ export class ModChecker extends EventEmitter {
     this.checkInProgress = true;
 
     try {
-      // Make sure we have the ACF path
       if (!this.workshopAcfPath) {
         await this.findWorkshopAcfPath();
       }
@@ -1257,14 +1112,11 @@ export class ModChecker extends EventEmitter {
         };
       }
 
-      // Read and parse the ACF file for local timestamps
       let content = fs.readFileSync(this.workshopAcfPath, "utf-8");
       if (content.charCodeAt(0) === 0xfeff) content = content.slice(1);
       const parsed = this.parseAcfFile(content);
 
-      // Build local timestamp map from WorkshopItemsInstalled (most complete section)
-      // Fall back to WorkshopItemDetails if a mod only exists there
-      const localTimestamps = new Map(); // workshopId -> timeupdated (local)
+      const localTimestamps = new Map();
       for (const [id, data] of Object.entries(parsed.installedMods)) {
         localTimestamps.set(id, data.timeupdated);
       }
@@ -1291,11 +1143,6 @@ export class ModChecker extends EventEmitter {
         trackedMap.set(mod.workshop_id, mod);
       }
 
-      // Query Steam Web API for latest timestamps.
-      // Include tracked mods that aren't in the ACF (e.g. INI lists the ID
-      // but the file isn't downloaded yet, or the ACF entry is missing).
-      // Without this, those mods stay "Never checked" forever because the
-      // checked-set below is built from this same query list.
       const queryIds = new Set(localTimestamps.keys());
       for (const mod of trackedMods) {
         if (mod.workshop_id && /^\d{1,15}$/.test(mod.workshop_id)) {
@@ -1305,11 +1152,9 @@ export class ModChecker extends EventEmitter {
       const workshopIds = [...queryIds];
       const steamData = await this.fetchSteamTimestamps(workshopIds);
 
-      // Cache steam data for getStatus() / getWorkshopInfo()
       if (steamData.size > 0) {
         this.lastSteamTimestamps = steamData;
 
-        // Persist preview_url on tracked mods (lazy import to avoid cycles).
         try {
           const { setModPreviewUrl } = await import("../database/init.js");
           for (const mod of trackedMods) {
@@ -1327,15 +1172,6 @@ export class ModChecker extends EventEmitter {
         }
       }
 
-      // Empty result with nothing queried isn't a failure -- there was
-      // nothing to ask Steam about. Empty result with IDs queried AND no
-      // confirmed-unavailable answers either means the API call itself
-      // failed (see fetchSteamTimestamps): every batch network-errored,
-      // timed out, or got rate-limited. A non-empty lastUnavailableWorkshopIds
-      // means Steam DID answer -- just that every queried item happened to
-      // come back non-1 (e.g. everything tracked got removed upstream at
-      // once) -- which is a real answer, not an outage, and must not be
-      // conflated with one.
       this.steamApiHealthy =
         steamData.size > 0 ||
         this.lastUnavailableWorkshopIds.size > 0 ||
@@ -1345,12 +1181,10 @@ export class ModChecker extends EventEmitter {
         : new Date();
 
       if (steamData.size === 0) {
-        // API failed entirely — fall back to ACF-only comparison
         log.warn("Steam API returned no data, falling back to ACF-only check");
         for (const [workshopId, details] of Object.entries(parsed.modDetails)) {
           const { timeupdated, latest_timeupdated } = details;
           if (latest_timeupdated > timeupdated) {
-            // Skip mods the user explicitly removed from tracking
             if (
               !trackedMap.has(workshopId) &&
               (await isModIgnored(workshopId))
@@ -1374,15 +1208,13 @@ export class ModChecker extends EventEmitter {
           }
         }
       } else {
-        // Compare local timestamps against Steam API timestamps
         for (const [workshopId, localTime] of localTimestamps) {
           const steam = steamData.get(workshopId);
-          if (!steam) continue; // Not found on Steam (deleted/hidden)
+          if (!steam) continue;
 
           if (steam.time_updated > localTime) {
             const trackedMod = trackedMap.get(workshopId);
 
-            // Skip mods the user explicitly removed from tracking
             if (!trackedMod && (await isModIgnored(workshopId))) {
               log.debug(
                 `Skipping ignored mod ${workshopId} during update check`,
@@ -1397,7 +1229,6 @@ export class ModChecker extends EventEmitter {
               trackedMod?.name ||
               `Workshop Mod ${workshopId}`;
 
-            // Update tracked mod name if we resolved a better one
             if (
               trackedMod &&
               nameFromDisk &&
@@ -1435,11 +1266,6 @@ export class ModChecker extends EventEmitter {
 
       this.lastCheck = new Date();
 
-      // Drop "phantom" updates for tracked mods that are no longer listed in
-      // the server's INI (WorkshopItems). They can't be applied — restarting
-      // won't pull a mod the server isn't subscribed to — so flagging them
-      // creates a permanent "Restart Pending" loop (see issue: removed-from-INI
-      // mod gets stuck in update-restart cycle and never resolves).
       try {
         const iniWorkshopIds = await this.getConfiguredWorkshopIds();
         if (iniWorkshopIds && iniWorkshopIds.size > 0) {
@@ -1472,19 +1298,12 @@ export class ModChecker extends EventEmitter {
 
       this.modsNeedingUpdate = updatedMods;
 
-      // Batch-mark every mod we successfully queried as "just checked".
-      // Without this, individual rows in the UI keep showing "Never checked"
-      // even after the global timestamp updates, making the button feel broken.
       try {
         const updatesById = new Map(updatedMods.map((m) => [m.workshopId, 1]));
         let checkedIds;
         if (steamData.size > 0) {
-          // Steam API succeeded — every queried id was definitively checked
           checkedIds = new Set(steamData.keys());
         } else {
-          // ACF-only fallback — every locally-installed mod was compared.
-          // Also mark tracked-but-not-in-ACF mods as checked so the row
-          // doesn't stick on "Never checked" through ACF-only runs.
           checkedIds = new Set([
             ...localTimestamps.keys(),
             ...trackedMap.keys(),
@@ -1496,9 +1315,6 @@ export class ModChecker extends EventEmitter {
       }
 
       if (updatedMods.length > 0) {
-        // Build a stable key from the current set of needs-update mods so we
-        // can dedupe across polls. Key = sorted (workshopId, latestTimestamp)
-        // pairs — so a NEWER update to the same mod still re-fires.
         const updateKey = updatedMods
           .map((m) => `${m.workshopId}@${m.latestTimestamp?.getTime?.() || 0}`)
           .sort()
@@ -1525,7 +1341,6 @@ export class ModChecker extends EventEmitter {
           );
         }
 
-        // Filter out mods whose exact steam timestamp was already processed (dedup)
         const newUpdates = updatedMods.filter((m) => {
           const steamTs = m.latestTimestamp?.getTime?.() || 0;
           const prevTs = this.processedUpdates.get(m.workshopId);
@@ -1544,7 +1359,6 @@ export class ModChecker extends EventEmitter {
           );
         }
 
-        // Check startup grace period — don't trigger auto-restart too soon after startup
         const inGracePeriod =
           this.startedAt && Date.now() - this.startedAt < this.startupGraceMs;
         if (inGracePeriod && newUpdates.length > 0) {
@@ -1554,10 +1368,9 @@ export class ModChecker extends EventEmitter {
           log.info(
             `Startup grace period active (${remaining}s remaining) — skipping auto-restart for ${newUpdates.length} update(s)`,
           );
-          newUpdates.length = 0; // Clear — don't trigger callback during grace
+          newUpdates.length = 0;
         }
 
-        // Only trigger callback if NOT already pending a restart AND there are genuinely new updates
         if (
           this.onUpdateCallback &&
           !this.pendingRestart &&
@@ -1568,8 +1381,6 @@ export class ModChecker extends EventEmitter {
               `Triggering auto-restart callback for ${newUpdates.length} new update(s)`,
             );
             const callbackResult = await this.onUpdateCallback(newUpdates);
-            // Mark updates only when work actually happened or no restart is needed.
-            // Transient aborts, such as a running server with disconnected RCON, retry.
             if (this.pendingRestart || callbackResult?.markProcessed === true) {
               for (const m of newUpdates) {
                 const steamTs = m.latestTimestamp?.getTime?.() || 0;
@@ -1594,16 +1405,8 @@ export class ModChecker extends EventEmitter {
           log.debug("Restart already pending, skipping callback");
         }
       } else {
-        // Set is empty — clear the dedupe key so the next non-empty set
-        // re-fires the notification (e.g. user updated mods, then a new
-        // update appears later).
         if (this._lastReportedUpdateKey !== "") {
           this._lastReportedUpdateKey = "";
-          // A previously-nonzero count just dropped to zero. Nothing else
-          // tells subscribed clients this -- the nav badge only refetches
-          // on mods:updates_available/mods:update_detected, so without an
-          // explicit emit here it stays stuck at its last nonzero count
-          // for the rest of the session.
           if (this.io) {
             this.io.emit("mods:updates_available", { count: 0, mods: [] });
           }
@@ -1624,7 +1427,6 @@ export class ModChecker extends EventEmitter {
     }
   }
 
-  // Get workshop info from ACF file, enriched with cached Steam API data
   async getWorkshopInfo() {
     if (!this.workshopAcfPath || !fs.existsSync(this.workshopAcfPath)) {
       return {};
@@ -1641,7 +1443,6 @@ export class ModChecker extends EventEmitter {
       )) {
         const details = parsed.modDetails[workshopId] || {};
         const steamInfo = this.lastSteamTimestamps.get(workshopId);
-        // Prefer Steam API timestamp, fall back to ACF latest_timeupdated
         const latestTime =
           steamInfo?.time_updated ||
           details.latest_timeupdated ||
@@ -1665,11 +1466,9 @@ export class ModChecker extends EventEmitter {
     try {
       const { addTrackedMod } = await import("../database/init.js");
 
-      // Try to resolve the real name from mod.info on disk
       const nameFromDisk = this.resolveModNameFromDisk(workshopId);
       const modName = nameFromDisk || `Workshop Mod ${workshopId}`;
 
-      // Try to get mod info from local ACF file
       const allInfo = await this.getWorkshopInfo();
       const modInfo = allInfo[workshopId];
 
@@ -1687,7 +1486,6 @@ export class ModChecker extends EventEmitter {
           needsUpdate: modInfo.needsUpdate,
         };
       } else {
-        // Mod not in ACF (not subscribed on this server) - still add to tracking
         await addTrackedMod(workshopId, modName);
         return {
           success: true,
@@ -1708,11 +1506,6 @@ export class ModChecker extends EventEmitter {
         .filter(Boolean),
     );
     const workshopInfo = await this.getWorkshopInfo();
-    // Only count updates for mods that are actually listed in the server INI.
-    // Mods downloaded into the Workshop folder but absent from WorkshopItems=
-    // can't be applied by a restart, so reporting them here triggers the
-    // "flags out of sync" banner in the UI (see the phantom-update filter
-    // applied in checkForUpdates).
     let iniWorkshopIds = null;
     try {
       iniWorkshopIds = await this.getConfiguredWorkshopIds();
@@ -1750,31 +1543,16 @@ export class ModChecker extends EventEmitter {
       totalModsInWorkshop: Object.keys(workshopInfo).length,
       totalModsTracked: Array.isArray(trackedMods) ? trackedMods.length : 0,
       updatesAvailable: modsWithUpdates,
-      // False only after a check that actually queried Steam and got
-      // nothing back (outage/rate-limit/network block) -- true before the
-      // first check ever runs, so this isn't itself a false alarm on a
-      // freshly-started panel.
       steamApiHealthy: this.steamApiHealthy,
       lastSteamApiFailureAt: this.lastSteamApiFailureAt
         ? this.lastSteamApiFailureAt.toISOString()
         : null,
-      // Only surface IDs that are still tracked. The ACF can retain a dead
-      // subscription after the operator removes it, so exposing the raw
-      // Steam-result cache here would keep the warning alive forever.
       removedWorkshopIds: [...this.lastUnavailableWorkshopIds.entries()]
         .filter(
           ([id, info]) =>
             info.reason === "removed" && trackedWorkshopIds.has(String(id)),
         )
         .map(([id]) => id),
-      // Workshop IDs Steam answered with a non-1, non-9 result -- neither
-      // confirmed working nor confirmed removed. Deliberately not folded
-      // into either of the other two categories: a surface that shows a
-      // healthy indicator plus a removed-mods list implies those are the
-      // only two outcomes, so an id stuck here would otherwise read as
-      // fine by omission rather than as unclassified. Keeps the raw
-      // resultCode rather than just the id -- "unknown" isn't answerable
-      // from a support ticket, "result code 15" is.
       unknownWorkshopIds: [...this.lastUnavailableWorkshopIds.entries()]
         .filter(
           ([id, info]) =>
@@ -1782,7 +1560,6 @@ export class ModChecker extends EventEmitter {
         )
         .map(([id, info]) => ({ id, resultCode: info.resultCode })),
       autoRestartEnabled: this.autoRestartEnabled,
-      // Restart options
       restartWarningMinutes: this.restartWarningMinutes,
       delayIfPlayersOnline: this.delayIfPlayersOnline,
       maxDelayMinutes: this.maxDelayMinutes,
@@ -1816,19 +1593,13 @@ export class ModChecker extends EventEmitter {
     return this.setCheckInterval(intervalMs);
   }
 
-  // Cancel pending restart (if waiting for players)
   cancelPendingRestart() {
     if (this.playerCheckInterval) {
       clearInterval(this.playerCheckInterval);
       this.playerCheckInterval = null;
     }
     this.pendingRestart = false;
-    // Clear the dedup map so the same mod updates can re-trigger a restart
-    // on the next check cycle. Without this, cancelling marks every pending
-    // mod as "already processed" forever, so auto-restart silently stays
-    // dormant until Steam republishes a newer version of each mod.
     this.processedUpdates.clear();
-    // Also cancel any in-progress scheduler countdown
     this.scheduler?.cancelRestart();
     log.info("Pending restart cancelled");
 

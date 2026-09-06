@@ -7,19 +7,12 @@ import { Link } from 'react-router-dom'
 import { reportClientError } from '@/lib/client-errors'
 import { getRecoveryUrl, rawErrorMessageIntentional } from '@/lib/errorMessage'
 
-// ============================================================================
-// Base Error Boundary with customizable props
-// ============================================================================
 
 interface FeatureErrorBoundaryProps extends WithTranslation {
   children: React.ReactNode
-  /** Feature name for context in error message */
   featureName?: string
-  /** Custom fallback component */
   fallback?: React.ReactNode
-  /** Callback when error occurs */
   onError?: (error: Error, errorInfo: React.ErrorInfo) => void
-  /** Show compact version */
   compact?: boolean
 }
 
@@ -28,8 +21,6 @@ interface FeatureErrorBoundaryState {
   error: Error | null
 }
 
-// Class component -- same withTranslation() pattern as ErrorBoundary.tsx,
-// deliberately kept identical between the two boundaries.
 class FeatureErrorBoundaryBase extends React.Component<FeatureErrorBoundaryProps, FeatureErrorBoundaryState> {
   constructor(props: FeatureErrorBoundaryProps) {
     super(props)
@@ -57,9 +48,6 @@ class FeatureErrorBoundaryBase extends React.Component<FeatureErrorBoundaryProps
 
       const { t } = this.props
       const { featureName = t('defaultFeatureName'), compact = false } = this.props
-      // See ErrorBoundary.tsx's identical comment -- usually null for a
-      // render-logic crash, worth attempting anyway for the occasional
-      // case caused by an already-failed request's error object.
       const recoveryUrl = this.state.error ? getRecoveryUrl(this.state.error) : null
 
       if (compact) {
@@ -94,9 +82,6 @@ class FeatureErrorBoundaryBase extends React.Component<FeatureErrorBoundaryProps
                 <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
                   {t('showDetails')}
                 </summary>
-                {/* rawErrorMessageIntentional(), see ErrorBoundary.tsx's
-                    identical comment -- the named, deliberate escape hatch,
-                    not an oversight. */}
                 <pre className="mt-2 p-3 bg-muted rounded-lg overflow-auto max-h-24 text-muted-foreground">
                   {rawErrorMessageIntentional(this.state.error, String(this.state.error))}
                 </pre>

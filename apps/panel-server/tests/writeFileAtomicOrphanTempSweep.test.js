@@ -4,21 +4,9 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29, config hunt follow-up. Pam found writeFileAtomic's own
-// .{filename}.{pid}.{random}.tmp orphans (left behind only when the
-// process dies between the write and the rename/unlink that normally
-// follows) have no sweep anywhere -- cosmetic, correctly not fixed there
-// since it was outside her grant. This proves the sweep added to
-// writeFileAtomic in fileWriteQueue.js: a dead pid's orphan is removed on
-// the next write into the SAME directory; a live pid's is never touched,
-// even though it matches the exact same filename shape.
 const { writeFileAtomic } = await import("../utils/fileWriteQueue.js");
 
 function makeDeadPid() {
-  // A real pid guaranteed to have exited by the time this returns --
-  // spawnSync only returns once the child is gone, so its pid cannot
-  // legitimately be "alive" a moment later. Far more honest than guessing
-  // a large unused number, which the OS could coincidentally reuse.
   const result = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
   return result.pid;
 }
@@ -53,7 +41,6 @@ describe("writeFileAtomic: sweeps its own orphaned temps, but only ones nobody c
   });
 
   it("never removes a temp whose pid is still running, even though it matches the exact same name shape", () => {
-    // Our own pid -- unambiguously alive for the duration of this test.
     const liveOrphan = path.join(dir, orphanName("config.ini", process.pid));
     fs.writeFileSync(liveOrphan, "a write genuinely still in flight");
 

@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-// The migration is the deliverable, not the code (per the brief): an
-// existing install must come up with every account able to do exactly
-// what it could yesterday, with no operator action. runMigrations() is a
-// pure function of `data` -- no I/O -- exercised directly against a plain
-// object shaped like a real pre-migration (schema v1) db.json, rather than
-// through getDb()'s dataDir, which is resolved once from paths.config.json
-// and memoized process-wide for the whole suite, so it isn't practical to
-// redirect through getDb() from an individual test file.
 
 const { runMigrations } = await import("../database/init.js");
 
@@ -43,7 +35,6 @@ describe("database/init.js schema v2 migration: roles collection + user.roleId",
     expect(technician.isSeeded).toBe(true);
     expect(moderator.isSeeded).toBe(true);
 
-    // admin: everything technician and moderator have, plus admin-only ones.
     expect(admin.capabilities).toEqual(expect.arrayContaining(technician.capabilities));
     expect(admin.capabilities).toEqual(expect.arrayContaining(moderator.capabilities));
     expect(admin.capabilities).toEqual(
@@ -59,7 +50,6 @@ describe("database/init.js schema v2 migration: roles collection + user.roleId",
       ]),
     );
 
-    // technician: operational capabilities, none of the admin-only ones.
     expect(technician.capabilities).toEqual(
       expect.arrayContaining([
         "server.control",
@@ -77,13 +67,6 @@ describe("database/init.js schema v2 migration: roles collection + user.roleId",
       ]),
     );
 
-    // moderator: the players.* trio (matches the single blanket
-    // router.use(requireRole(admin,tech,mod)) players.js had before its
-    // three-way split) plus server.world_events -- the ~150 routes that
-    // were reachable by any signed-in role with NO gate at all (weather,
-    // zombie hordes, broadcast messages) were folded in and granted to all
-    // three default roles by explicit ruling ("adding a capability is not
-    // restricting it"), not narrowed to admin+technician only.
     expect(moderator.capabilities.slice().sort()).toEqual(
       ["players.gm_tools", "players.moderate", "players.view", "server.world_events"].sort(),
     );
@@ -117,12 +100,8 @@ describe("database/init.js schema v2 migration: roles collection + user.roleId",
   });
 
   it("re-running the v1->v2 step against already-seeded roles does not duplicate them (idempotent by role id)", () => {
-    // Simulates a crash after the in-memory transform but before the
-    // version bump was durably written -- the exact scenario the
-    // function's own docstring calls out ("safe to re-run if the write
-    // after bumping the version failed").
     const partiallyMigrated = runMigrations(makeV1Data());
-    partiallyMigrated._schemaVersion = 1; // as if the version bump never made it to disk
+    partiallyMigrated._schemaVersion = 1;
 
     const data = runMigrations(partiallyMigrated);
 
@@ -149,15 +128,6 @@ describe("database/init.js schema v2 migration: roles collection + user.roleId",
 });
 
 describe("database/init.js schema v3 migration: backups.download backfill", () => {
-  // The exact regression this exists to prevent: an install that already
-  // migrated to v2 -- i.e. every real install upgrading to this build --
-  // has its roles frozen at whatever v2 seeded them with. GET /download
-  // went from ungated to requiring backups.download in the same release;
-  // without this migration, an existing technician role would silently
-  // lose an ability it already had (the route was unguarded), with no
-  // explanation. Fixtures here start at _schemaVersion: 2 on purpose --
-  // that is the real-world starting point this migration has to handle,
-  // not a fresh v1 install (which the v2 seed already covers directly).
 
   it("grants backups.download to an existing role that already holds backups.manage", () => {
     const data = runMigrations({
@@ -228,7 +198,7 @@ describe("database/init.js schema v3 migration: backups.download backfill", () =
       settings: {},
       _schemaVersion: 2,
     });
-    once._schemaVersion = 2; // as if the version bump never made it to disk
+    once._schemaVersion = 2;
     const twice = runMigrations(once);
 
     const technician = twice.roles.find((r) => r.id === "role-technician");

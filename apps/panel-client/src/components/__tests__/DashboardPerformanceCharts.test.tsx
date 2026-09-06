@@ -60,8 +60,6 @@ describe('DashboardPerformanceCharts', () => {
       />
     )
     const row = screen.getByText('Host memory').closest('div')!
-    // loadTone uses >= 0.9 -> 'bad' for the bar colour regardless of the alert
-    // flag's stricter '> 0.9' threshold, so the bar is still destructive here.
     expect(row.querySelector('.bg-destructive')).toBeInTheDocument()
   })
 
@@ -91,11 +89,6 @@ describe('DashboardPerformanceCharts', () => {
   })
 })
 
-// Tonin96's Discord report (2026-08-26): HOST MEMORY 7.4/7.8 GB, 95%, red --
-// and no way to tell whether swap is absorbing that (fine) or also
-// exhausted (not fine). "Absent is not zero" is the rule this whole row
-// exists to satisfy: a lookup that could not determine swap must never
-// render the same as a host that genuinely has none configured.
 describe('DashboardPerformanceCharts -- swap row', () => {
   it('does not show a Swap row when the lookup could not determine an answer (undefined, not zero)', () => {
     render(<DashboardPerformanceCharts performanceHistory={[point({ hostSwapUsedGB: undefined, hostSwapTotalGB: undefined })]} />)
@@ -106,7 +99,6 @@ describe('DashboardPerformanceCharts -- swap row', () => {
     render(<DashboardPerformanceCharts performanceHistory={[point({ hostSwapUsedGB: 0, hostSwapTotalGB: 0 })]} />)
     const row = screen.getByText('Host swap').closest('div')!
     expect(row).toHaveTextContent('0.0 / 0')
-    // Zero total means no ratio to alert on -- neutral, not destructive.
     expect(row.querySelector('.bg-destructive')).not.toBeInTheDocument()
   })
 

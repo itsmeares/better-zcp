@@ -1,15 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// POST /backup/restore/:name is the highest-stakes route in this file (see
-// its own comment in backup.js: it "rolls the live world back over every
-// player currently standing in it -- invisible to the admin until someone
-// complains"). It gates on serverManager.checkServerRunning(), which
-// collapses a FAILED detection scan into a plain `false` -- the exact
-// "cannot tell" == "safe to proceed" bug already fixed at /wipe,
-// /delete-files, and chunks.js's delete-chunks/delete-region via
-// getServerProcessDetails()'s scanFailed flag. This route was never
-// migrated to that pattern.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => ({ isRemote: false })),
@@ -80,8 +71,6 @@ function postRestore(serverManager) {
 describe("backup.js POST /restore/:name: an undetermined server state must refuse, not be read as 'stopped'", () => {
   it("refuses with SERVER_STATE_UNKNOWN and never calls restoreBackup when the running-scan itself failed (scanFailed:true)", async () => {
     const res = await postRestore({
-      // Old method the route used to call directly -- collapses the failed
-      // scan into a plain `false`, which is exactly the bug.
       checkServerRunning: async () => false,
       getServerProcessDetails: async () => ({ running: false, scanFailed: true }),
     });
@@ -113,17 +102,6 @@ describe("backup.js POST /restore/:name: an undetermined server state must refus
   });
 });
 
-// 2026-08-26 partial-failure-state hunt: this route used to pass
-// restoreBackup()'s failure `result` straight through unsanitized, unlike
-// every other error site in the codebase (including the generic catch 3
-// lines below it in this same route). The fix is deliberately NOT a
-// blanket sanitizeError(): the rollback-failure message is the one
-// exception that MUST keep its path visible -- it names exactly where the
-// preserved original save is sitting, the operator's only way to find
-// their data back if an already-bad restore fails to roll back cleanly.
-// Pinning both directions so a future edit can't silently regress either
-// one: an unexpected raw fs-style message gets redacted, the deliberate
-// recovery message does not.
 const STOPPED_SERVER_MANAGER = {
   checkServerRunning: async () => false,
   getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
@@ -133,18 +111,18 @@ describe("backup.js POST /restore/:name: failure messages are sanitized surgical
   it("redacts a filesystem path out of an ordinary/unexpected failure message", async () => {
     restoreBackup.mockResolvedValueOnce({
       success: false,
-      message: "ENOENT: no such file or directory, rename 'C:\\Users\\Sacha\\AppData\\Local\\ZomboidPanel\\Saves' -> 'C:\\Users\\Sacha\\AppData\\Local\\ZomboidPanel\\Saves.replaced-123'",
+      message: "ENOENT: no such file or directory, rename 'C:\\Users\\test-user\\AppData\\Local\\ZomboidPanel\\Saves' -> 'C:\\Users\\test-user\\AppData\\Local\\ZomboidPanel\\Saves.replaced-123'",
     });
 
     const res = await postRestore(STOPPED_SERVER_MANAGER);
 
     expect(res.getStatusCode()).toBe(400);
-    expect(res.getBody().message).not.toContain("C:\\Users\\Sacha");
+    expect(res.getBody().message).not.toContain("C:\\Users\\test-user");
     expect(res.getBody().message).toContain("[path]");
   });
 
   it("does NOT redact the rollback-failure message -- the recovery path must survive intact", async () => {
-    const recoveryPath = "C:\\Users\\Sacha\\AppData\\Local\\ZomboidPanel\\Saves.replaced-1735500000000";
+    const recoveryPath = "C:\\Users\\test-user\\AppData\\Local\\ZomboidPanel\\Saves.replaced-1735500000000";
     restoreBackup.mockResolvedValueOnce({
       success: false,
       message: `Restore failed and the previous save could not be put back automatically. It is preserved at ${recoveryPath}.`,

@@ -1,13 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PanelBridge } from '../services/panelBridge.js';
 
-// 2026-08-30, panelbridge-total-audit-2026-08-30 (Finding A): processResult's
-// failure branch discarded result.data entirely, for all 101 actions -- a
-// transport bug, not a handler bug. killPlayer's not-dead path returns no
-// error string at all (only data.message), so callers saw the generic
-// "Command failed" instead of the handler's own crafted text, and lost
-// isDead/debug. teleportPlayer's verify-false path kept its message but lost
-// {oldPosition, newPosition, verifyPosition, debug} entirely.
 
 function makePendingBridge(action) {
   const bridge = new PanelBridge();

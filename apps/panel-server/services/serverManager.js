@@ -24,18 +24,8 @@ import {
 import { hasActiveSteamOperation } from "./activeSteamOperations.js";
 
 const isWindows = process.platform === "win32";
-// How long a live-looked-up public IP is trusted before re-checking.
-// Residential ISPs rotate dynamic WAN IPs periodically; without a TTL the
-// dashboard would show a stale, no-longer-yours address indefinitely.
-const PUBLIC_IP_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const PUBLIC_IP_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
-// Matches the timeout already used by the process-scan exec calls in
-// _scanDedicatedServerProcesses below. taskkill/kill/pkill must never be
-// allowed to hang indefinitely (AV interference, a wedged syscall): if they
-// do, the awaiting stopServer() never returns, so its `finally` never runs,
-// so this._stopping never clears, and the server becomes permanently
-// un-start/stop/restartable until the whole panel is restarted. See
-// stopServer()'s handling of the { timedOut } result below.
 const KILL_EXEC_TIMEOUT_MS = 8000;
 
 export function resolveConfiguredRconPort(value, fallback = 27015) {
@@ -72,7 +62,6 @@ export function classifyProcessKillError(error) {
   return "failed";
 }
 
-// Build LD_LIBRARY_PATH from server directory, filtering to only existing paths
 function buildLdLibraryPath(serverDir) {
   log.debug(
     `buildLdLibraryPath: scanning candidates for serverDir=${serverDir}`,
@@ -101,9 +90,6 @@ function buildLdLibraryPath(serverDir) {
   return result;
 }
 
-// Quote each command part before wrapping the complete line for `cmd.exe /c`.
-// `windowsVerbatimArguments` keeps Node from adding another quoting layer.
-// Include cmd.exe metacharacters that would otherwise split or alter a path.
 export function windowsQuoteArgIfNeeded(value) {
   return /[\s"&<>()^|,;=]/.test(value) ? `"${value}"` : value;
 }
@@ -119,8 +105,6 @@ export function buildWindowsCmdLine(exePath, args, launchLogPath) {
   return `"${parts.join(" ")}"`;
 }
 
-// Splits a custom start command into a path and arguments. Adjacent quoted and
-// unquoted runs stay in one token, then grouping quotes are removed.
 export function parseCustomStartCommand(startCommand) {
   const parts = startCommand.match(/(?:[^\s"]+|"[^"]*")+/g) || [
     startCommand,
@@ -130,11 +114,6 @@ export function parseCustomStartCommand(startCommand) {
   return { cmd, args };
 }
 
-// Locates the actual JVM executable inside a PZ install directory (jre64 for
-// 64-bit installs, jre for older/32-bit ones -- same directories buildLdLibraryPath
-// already knows about). Returns null if neither exists so callers can treat
-// "can't find it" as "nothing to check" rather than failing outright -- this
-// check is best-effort, not a hard requirement of every install layout.
 function findJvmExecutable(serverDir) {
   const candidates = [
     path.join(serverDir, "jre64", "bin", "java"),
@@ -150,26 +129,15 @@ function findJvmExecutable(serverDir) {
   return null;
 }
 
-// Allowed extensions for custom start commands
 const ALLOWED_CMD_EXTENSIONS = isWindows
   ? [".bat", ".cmd", ".exe"]
   : [".sh", ""];
 
-// Validate a custom start command string for safety
 function validateStartCommand(cmd) {
   if (!cmd || typeof cmd !== "string")
     return { valid: false, reason: "Command is empty" };
   if (cmd.length > 1024)
     return { valid: false, reason: "Command exceeds 1024 characters" };
-  // Block obvious shell metacharacters that enable chaining/injection
-  // Allow quotes, spaces, hyphens, equals, slashes, dots, colons (drive letters)
-  // `$` (POSIX variable expansion) was already blocked here; `%` is its
-  // cmd.exe equivalent and was missing -- on the one spawn target this
-  // guard actually protects (Windows .bat/.cmd via cmd.exe /c), an
-  // unblocked `%VAR%` still expands into the resolved command line, which
-  // is then visible in a process listing. Not chaining on its own (that
-  // still needs & | ; or a newline, all blocked below), but the same
-  // author-intent that blocked `$` clearly meant to block this too.
   if (/[&|;<>`${}()!%\[\]\n\r]/.test(cmd)) {
     return {
       valid: false,
@@ -180,7 +148,6 @@ function validateStartCommand(cmd) {
   return { valid: true };
 }
 
-// Get the default startup script name for the current platform
 function getDefaultStartupScript() {
   return isWindows ? "StartServer64.bat" : "start-server.sh";
 }
@@ -190,12 +157,10 @@ export function isWindowsDedicatedServerCommandLine(commandLine) {
     typeof commandLine === "string" ? commandLine.toLowerCase() : "";
   if (!normalized) return false;
 
-  // 1. Direct Java execution
   if (normalized.includes("zombie.network.gameserver")) {
     return true;
   }
 
-  // 2. Native Launcher (Wrappers like WinGSM often call these with specific flags)
   if (
     normalized.includes("projectzomboid64.exe") ||
     normalized.includes("projectzomboid32.exe")
@@ -209,7 +174,6 @@ export function isWindowsDedicatedServerCommandLine(commandLine) {
     }
   }
 
-  // 3. Fallback for custom generic setups (must explicitly name Zomboid)
   if (
     normalized.includes("zomboid") &&
     (normalized.includes("-server") || normalized.includes("startserver"))
@@ -220,11 +184,6 @@ export function isWindowsDedicatedServerCommandLine(commandLine) {
   return false;
 }
 
-// Linux/macOS equivalent of isWindowsDedicatedServerCommandLine above. Kept
-// as a standalone module-level function (not just inline in the scan) so
-// the pidfile fast path can classify a single live command line with the
-// exact same rule the full OS scan uses, instead of a second copy that
-// could drift out of sync.
 function isLinuxDedicatedServerCommandLine(commandLine) {
   const lower = String(commandLine || "").toLowerCase();
   if (!lower) return false;
@@ -251,32 +210,17 @@ function isLinuxDedicatedServerCommandLine(commandLine) {
   return false;
 }
 
-// Deliberately BROADER than isLinuxDedicatedServerCommandLine above, and used
-// for a different purpose: not to decide ownership, but to decide whether a
-// zero-match scan is entitled to claim "definitely not running" at all.
-//
-// isLinuxDedicatedServerCommandLine requires a specific launch shape. A
-// wrapper script, renamed binary, or -jar launcher can be a real server while
-// failing that narrow match, so this broader check detects uncertainty.
-//
-// A candidate that matches this broader check but not the narrow matcher is
-// uncertain, not automatically running. The JVM check below filters out
-// unrelated processes whose working directory merely contains "zomboid".
 function looksZomboidAdjacent(commandLine) {
   const lower = String(commandLine || "").toLowerCase();
   return lower.includes("zomboid") || lower.includes("zombie.network");
 }
 
-// Paths can mention "zomboid" because of the checkout directory alone. A
-// plausible unknown server must also look like a JVM process.
 function looksLikeUndeterminedJvmCandidate(commandLine) {
   const lower = String(commandLine || "").toLowerCase();
   if (!looksZomboidAdjacent(lower)) return false;
   return /\bjava\b|\bjavaw\b|\/java$/.test(lower);
 }
 
-// Pull the value of a PZ launch argument (`-servername X`, `-cachedir="Y"`)
-// out of a raw command line.
 function extractLaunchArgValue(commandLine, flag) {
   const pattern = new RegExp(
     `(?:^|\\s)-${flag}(?:\\s*=\\s*|\\s+)("[^"]*"|'[^']*'|\\S+)`,
@@ -297,9 +241,6 @@ function normalizePathForCompare(value) {
   return isWindows ? normalized.toLowerCase() : normalized;
 }
 
-// A managed profile stores a directory and uses a generated launcher. A
-// custom profile stores a .bat, .sh, or .exe path and launches it unchanged.
-// Keep this predicate shared by config loading, start/restart, and validation.
 export function resolveLaunchMode(server) {
   const raw = server?.serverPath || server?.installPath;
   if (!raw || typeof raw !== "string") {
@@ -312,16 +253,6 @@ export function resolveLaunchMode(server) {
   return { mode: "managed", launcherPath: null };
 }
 
-/**
- * How strongly a running process looks like it belongs to a given server.
- * Returns -1 when a launch argument proves it belongs to a DIFFERENT server,
- * 0 when the command line carries no identifying argument at all (so it
- * can't be attributed either way), and a positive score when it matches.
- *
- * This is what lets one host run several dedicated servers: the panel writes
- * `-servername` (and usually `-cachedir`) into every startup script it
- * generates, so each process names the server it belongs to.
- */
 export function scoreServerProcessOwnership(commandLine, descriptor = {}) {
   const cmd = String(commandLine || "");
   if (!cmd) return 0;
@@ -368,30 +299,18 @@ export class ServerManager {
     this.isRunning = false;
     this.startTime = null;
     this.configLoaded = false;
-    // "managed" (the panel owns and regenerates the launch script) or
-    // "custom" (the operator's own .bat/.sh/.exe -- see resolveLaunchMode()).
     this.launchMode = "managed";
     this.lifecycleProvider = "direct";
     this._serverRecord = null;
     this._lifecycleFactory = lifecycleFactory;
-    // Which server this instance's currently-loaded config belongs to (null
-    // = "the active server", the shared-singleton default). Recorded so
-    // internal reload points (e.g. startServer()'s "settings may have
-    // changed" refresh) reload the SAME target instead of silently
-    // snapping a throwaway instance back to whatever is active.
     this._serverId = null;
     this.publicIp = null;
     this.gamePort = null;
     this.fetchingIp = false;
-    // Instance field (not just the module constant) so tests can exercise
-    // the real timeout wiring in _killPids/_genericForceStop without
-    // waiting out the full production value.
     this._killTimeoutMs = KILL_EXEC_TIMEOUT_MS;
   }
 
-  // Reload config (called when active server changes)
   async reloadConfig(serverId = null) {
-    // Reset all config to defaults before reloading
     this.serverPath = process.env.PZ_SERVER_PATH || "";
     this.serverBat = process.env.PZ_SERVER_BAT || getDefaultStartupScript();
     this.savePath = process.env.PZ_SAVE_PATH || "";
@@ -406,30 +325,18 @@ export class ServerManager {
     await this.loadConfig(serverId);
   }
 
-  // Load settings from a specific server (serverId), the active server, or
-  // legacy database settings. `serverId` lets the Scheduler point a
-  // throwaway ServerManager instance at a server that isn't the
-  // currently-active one — the shared singleton (called with no args, as
-  // everywhere else in the app) keeps following the active server exactly
-  // as before.
   async loadConfig(serverId = null) {
     if (this.configLoaded) return;
     this._serverId = serverId;
     try {
-      // First, try to load from a specific server or the active server
-      // (multi-server support)
       const activeServer = serverId
         ? await getServer(serverId)
         : await getActiveServer();
       if (activeServer) {
         this._serverRecord = activeServer;
         this.lifecycleProvider = activeServer.lifecycleProvider || "direct";
-        // Use serverPath if available, otherwise extract from installPath
         let serverDir = activeServer.serverPath || activeServer.installPath;
 
-        // CUSTOM LAUNCHER mode: the stored path points at the operator's own
-        // .bat/.sh/.exe, not a directory the panel manages. Extract the
-        // directory to run in and the launcher file to run.
         const launchMode = resolveLaunchMode(activeServer);
         this.launchMode = launchMode.mode;
         if (launchMode.mode === "custom") {
@@ -446,7 +353,6 @@ export class ServerManager {
 
         if (activeServer.serverName) {
           this.serverName = activeServer.serverName;
-          // Only look for custom batch file if we didn't already get one from installPath
           if (!this.serverBat || this.serverBat === getDefaultStartupScript()) {
             if (isWindows) {
               const customBat = `StartServer_${activeServer.serverName}.bat`;
@@ -478,8 +384,6 @@ export class ServerManager {
           this.startCommand = activeServer.startCommand;
           log.debug(`Using custom start command: ${this.startCommand}`);
         }
-        // Kept per-server so the "is the port already taken?" preflight can
-        // check THIS server's port instead of the global default.
         this.rconHost = activeServer.rconHost || this.rconHost;
         this.rconPort = activeServer.rconPort || this.rconPort;
         this.configLoaded = true;
@@ -487,10 +391,6 @@ export class ServerManager {
         return;
       }
 
-      // Fallback: load from legacy (global) settings — only meaningful when
-      // no specific serverId was requested. Falling back to the global
-      // settings for a targeted serverId lookup would silently point at
-      // the wrong server instead of failing loudly on a bad/deleted id.
       if (!serverId) {
         const dbServerPath = await getSetting("serverPath");
         const dbServerName = await getSetting("serverName");
@@ -500,25 +400,10 @@ export class ServerManager {
           this.serverPath = dbServerPath;
           log.debug(`Loaded serverPath from database: ${dbServerPath}`);
         }
-        // Defense in depth: config.js's PUT /app-settings now rejects an
-        // unsafe serverName before it can be stored (the real fix), but an
-        // install that already has one saved from before that validation
-        // existed would otherwise carry it straight into this.serverName /
-        // this.serverBat, which getServerConfig()/saveServerConfig() below
-        // and the .bat/.sh launch path both interpolate into a filesystem
-        // path unguarded. path.basename() unchanged is the same "safe or
-        // reject" test serverFiles.js's getServerName() uses -- here a
-        // reject just means "treat as if no legacy name were configured"
-        // (this.serverName/this.serverBat stay at their prior/default
-        // values, exactly like the `if (dbServerName)` false case already
-        // did) rather than throwing, since this is a broad state-loading
-        // method with many non-request callers, not a single-purpose
-        // accessor a route handler can turn straight into a 400.
         if (dbServerName) {
           const safeServerName = path.basename(dbServerName);
           if (safeServerName === dbServerName && safeServerName) {
             this.serverName = dbServerName;
-            // Use custom startup script if server was set up through the app
             if (isWindows) {
               this.serverBat = `StartServer_${dbServerName}.bat`;
             } else {
@@ -549,13 +434,6 @@ export class ServerManager {
     return details.running;
   }
 
-  /**
-   * Checks whether the JVM binary is open for writing (ETXTBSY).
-   *
-   * This probes the file directly because process scans may miss servers in a
-   * different PID namespace. It is best effort and returns false for missing
-   * files or unrelated errors; Windows does not use this check.
-   */
   isJvmExecutableBusy() {
     if (isWindows) return false;
 
@@ -575,7 +453,6 @@ export class ServerManager {
     }
   }
 
-  // The identifying traits of the server this instance represents.
   _getOwnershipDescriptor() {
     return {
       serverName: this.serverName,
@@ -584,20 +461,6 @@ export class ServerManager {
     };
   }
 
-  /**
-   * Like `checkServerRunning` but returns *which* processes the OS scan
-   * matched, narrowed to the processes belonging to THIS server. Used by
-   * chunk-cleanup endpoints (issue #5) so the UI can show the user exactly
-   * which process the panel thinks is the dedicated server, and offer a
-   * "force delete anyway" override when the detection is a false positive
-   * (e.g. an unrelated java process matched, or a custom launcher script the
-   * panel doesn't recognise).
-   *
-   * Resolves to `{ running, matched, owned, scanFailed }`. `matched` is
-   * truncated to the first 3 entries with each cmd capped at 240 chars to
-   * keep the JSON payload sane; `owned` is the untruncated list force-stop
-   * uses to pick which PIDs it may kill.
-   */
   async getServerProcessDetails() {
     await this.loadConfig(this._serverId);
 
@@ -630,13 +493,6 @@ export class ServerManager {
       }
     }
 
-    // Fast path: if we recorded the PID we spawned and it's still alive
-    // with a command line that still looks like (and is attributable to)
-    // this server, skip the full host-wide OS scan. On ANY doubt at all —
-    // no pidfile, dead PID, or a live PID whose command line no longer
-    // matches (including PID reuse by an unrelated process) — this
-    // resolves to null and falls through to the exact same scan as before,
-    // which remains the ground truth for every uncertain case.
     const fastPath = await this._tryPidFileFastPath();
     if (fastPath) return fastPath;
 
@@ -651,10 +507,6 @@ export class ServerManager {
       else if (score === 0) unattributable.push(candidate);
     }
 
-    // A command line carrying no -servername/-cachedir can't be attributed to
-    // any particular server, so only claim those when nothing positively
-    // matched this one — that keeps detection working for single-server
-    // installs launched from a stock StartServer64.bat.
     const resolved = owned.length > 0 ? owned : unattributable;
     if (scan.matched.length !== resolved.length) {
       log.debug(
@@ -662,10 +514,6 @@ export class ServerManager {
       );
     }
 
-    // A confirmed process for another server does not make an ambiguous JVM
-    // candidate safe to ignore. If this manager has no positively owned
-    // process, an unrecognized JVM-shaped candidate still means this server
-    // may be running under a launch shape the narrow matcher missed.
     if (!scan.scanFailed && owned.length === 0 && scan.ambiguous?.length > 0) {
       log.warn(
         `getServerProcessDetails: found ${scan.ambiguous.length} ambiguous JVM-shaped process(es) while no process could be attributed to "${this.serverName}" -- cannot confirm the server is stopped`,
@@ -678,16 +526,6 @@ export class ServerManager {
       };
     }
 
-    // A failed scan always resolves to an empty `matched` list, so
-    // `resolved.length > 0` is unconditionally false here whenever
-    // scanFailed is true -- writing it into the cached this.isRunning would
-    // silently overwrite the last known-good state with a confident "not
-    // running" the moment detection starts failing, which is exactly the
-    // false confidence scanFailed exists to prevent elsewhere. Every reader
-    // of this cached field (apps/panel-server/routes/serverStatus.js, the dashboard's
-    // host signal) gets the SAME wrong "stopped" a failed detection scan
-    // gives it, instead of "we don't know." Leave it at its previous value
-    // when the scan couldn't tell.
     if (!scan.scanFailed) {
       this.isRunning = resolved.length > 0;
     }
@@ -702,8 +540,6 @@ export class ServerManager {
     };
   }
 
-  // Raw OS scan: every Project Zomboid dedicated server process on this host,
-  // regardless of which configured server it belongs to.
   async _scanDedicatedServerProcesses() {
     return new Promise((resolve) => {
       log.debug(
@@ -711,8 +547,6 @@ export class ServerManager {
       );
       const matched = [];
       const pushMatch = (cmd, pid) => {
-        // Keep the command line intact: ownership matching needs the
-        // -servername / -cachedir arguments, which sit well past 240 chars.
         const full = String(cmd || "");
         matched.push(pid ? { pid: String(pid), cmd: full } : { cmd: full });
       };
@@ -763,32 +597,12 @@ export class ServerManager {
               return;
             }
 
-            // ConvertTo-Csv emits no header when the filtered process list is
-            // empty, so empty stdout with no error means the server is stopped.
             if (!psStdout) {
               this.isRunning = false;
               resolve({ running: false, matched: [] });
               return;
             }
 
-            // Same three-bucket classification the Linux branch below uses
-            // (CONFIRMED / AMBIGUOUS / noise), and for the same reason: the
-            // WMI filter above already narrows candidates to
-            // java.exe/ProjectZomboid64.exe/ProjectZomboid32.exe, but a real
-            // dedicated server can still be launched in a shape
-            // isWindowsDedicatedServerCommandLine doesn't recognize (a
-            // generic `java -jar` invocation with no "zomboid" in the jar
-            // path and no -server/startserver flag -- plausible for a
-            // custom/shaded jar launcher). Reusing
-            // looksLikeUndeterminedJvmCandidate (java/javaw-in-its-own-
-            // command-line AND zomboid-adjacent) rather than inventing a
-            // Windows-specific check also gets the right answer for
-            // ProjectZomboid64.exe/32.exe candidates for free: that helper's
-            // java/javaw regex never matches a native .exe's own command
-            // line (no "java" substring in it), so a plain client launch
-            // with no server flags is correctly left as noise, not flagged
-            // ambiguous -- an operator playing the game locally on the same
-            // host must not flip every scan to "can't confirm stopped".
             const ambiguous = [];
             const pushAmbiguous = (cmd) => {
               ambiguous.push(String(cmd || "").slice(0, 240));
@@ -797,7 +611,6 @@ export class ServerManager {
             for (let raw of lines) {
               raw = raw.trim();
               if (!raw || raw.startsWith('"ProcessId"')) continue;
-              // CSV: "<pid>","<cmd>" — strip outer quotes / un-double internal "" pairs.
               const csvMatch = raw.match(/^"([^"]*)","((?:[^"]|"")*)"$/);
               if (!csvMatch) continue;
               const pid = csvMatch[1];
@@ -817,10 +630,6 @@ export class ServerManager {
             }
 
             if (matched.length === 0 && ambiguous.length > 0) {
-              // Leave this.isRunning untouched -- same "a scan that couldn't
-              // tell must not overwrite the last known-good state" rule as
-              // every other uncertain case (see getServerProcessDetails()'s
-              // own comment).
               log.warn(
                 `getServerProcessDetails: found ${ambiguous.length} JVM-shaped process(es) mentioning zomboid/zombie.network that don't match a known dedicated-server launch shape -- cannot confirm the server is stopped (first: ${ambiguous[0]})`,
               );
@@ -833,42 +642,11 @@ export class ServerManager {
           },
         );
       } else {
-        // Linux/macOS: pgrep first (faster, more reliable), fall back to ps aux -ww.
-        // Use the same dedicated-server heuristics as Windows (module-level
-        // isLinuxDedicatedServerCommandLine above) so a player running the
-        // *game* (ProjectZomboid64) on the same box doesn't false-positive
-        // as a running dedicated server. Direct `zombie.network.GameServer`
-        // java invocations always qualify.
-        //
-        // The search itself is deliberately BROADER than
-        // isLinuxDedicatedServerCommandLine -- see looksZomboidAdjacent's
-        // own comment. Every candidate this turns up is classified into one
-        // of three buckets: CONFIRMED (matches the narrow launch-shape
-        // pattern -- pushed into `matched`, unchanged behavior), AMBIGUOUS
-        // (fails the narrow pattern but ALSO looks like an unidentified JVM
-        // -- see looksLikeUndeterminedJvmCandidate's own comment for why
-        // this second filter, not just "mentions zomboid", is required), or
-        // discarded as noise (mentions zomboid/zombie.network for a reason
-        // that has nothing to do with a game server -- a checkout path, a
-        // sibling test-runner process, a shell sitting in this repo). Zero
-        // confirmed AND zero ambiguous is a genuinely idle host: confidently
-        // not running, exactly as before. Zero confirmed but at least one
-        // ambiguous candidate is the case this fix exists for: real
-        // JVM-shaped evidence we can't rule out, so the scan reports
-        // scanFailed:true (renders as "unknown" downstream) instead of a
-        // confident, possibly wrong, "not running".
         log.debug("getServerProcessDetails: trying pgrep -af first...");
         const ambiguous = [];
         const pushAmbiguous = (cmd) => {
           ambiguous.push(String(cmd || "").slice(0, 240));
         };
-        // Bracket-obfuscated (matches the narrow pattern's own existing
-        // convention below, NOT a plain -i flag): exec() runs this through
-        // `sh -c "<command>"`, and that wrapper's OWN argv, read back by
-        // this very scan, literally contains the pattern text -- a plain
-        // "zomboid|zombie.network" search string self-matches its own
-        // invocation. "[Zz]omboid" in the wrapper's own argv does not
-        // contain the bare substring "zomboid", so it doesn't self-trigger.
         exec(
           'pgrep -af "[Zz]omboid|[Zz]ombie\\.network"',
           { timeout: 8000 },
@@ -877,16 +655,9 @@ export class ServerManager {
               for (const line of pgrepOut.split(/\r?\n/)) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
-                // pgrep -af format: "<pid> <cmdline>"
                 const m = trimmed.match(/^(\d+)\s+(.*)$/);
                 const pid = m ? m[1] : undefined;
                 const cmd = m ? m[2] : trimmed;
-                // Belt-and-braces: exclude the panel's own process. Not the
-                // load-bearing fix (a `node` process never matches
-                // looksLikeUndeterminedJvmCandidate's java requirement
-                // anyway), but cheap and makes the intent explicit even in
-                // some future edge case where a panel process's own args
-                // happen to contain "java" as a substring.
                 if (pid && Number(pid) === process.pid) continue;
                 if (isLinuxDedicatedServerCommandLine(cmd)) {
                   pushMatch(cmd, pid);
@@ -906,12 +677,6 @@ export class ServerManager {
               );
               clearTimeout(timeout);
               if (matched.length === 0 && ambiguous.length > 0) {
-                // Leave this.isRunning at its previous value -- exactly the
-                // same "a scan that couldn't tell must not overwrite the
-                // last known-good state" rule getServerProcessDetails()
-                // already applies via scanFailed for every OTHER uncertain
-                // case (see its own comment). Only a scan that ran clean
-                // and found nothing at all is entitled to claim false.
                 log.warn(
                   `getServerProcessDetails: found ${ambiguous.length} JVM-shaped process(es) mentioning zomboid/zombie.network that don't match a known dedicated-server launch shape -- cannot confirm the server is stopped (first: ${ambiguous[0]})`,
                 );
@@ -922,7 +687,6 @@ export class ServerManager {
               resolve({ running: matched.length > 0, matched, ambiguous });
               return;
             }
-            // Fallback: ps aux
             log.debug(
               "getServerProcessDetails: pgrep failed or empty, falling back to ps aux -ww",
             );
@@ -938,7 +702,6 @@ export class ServerManager {
               for (const line of stdout.split(/\r?\n/)) {
                 const lower = line.toLowerCase();
                 if (!looksZomboidAdjacent(lower)) continue;
-                // Skip our own grep / pgrep / ps invocations
                 if (
                   /\b(ps|pgrep|grep)\b.*\b(zombie|zomboid|projectzomboid)/.test(
                     lower,
@@ -948,7 +711,6 @@ export class ServerManager {
                 ) {
                   continue;
                 }
-                // ps aux columns: USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
                 const m = line
                   .trim()
                   .match(
@@ -979,11 +741,6 @@ export class ServerManager {
     });
   }
 
-  // Pidfile path is scoped by server name, not a single shared file — this
-  // host can run several dedicated servers (see the two-server tests above),
-  // and a shared pidfile would let one server's start/stop clobber another's
-  // fast-path record. Sanitized because serverName can come from user-edited
-  // settings.
   _pidFilePath() {
     const safeName = String(this.serverName || "default").replace(
       /[^a-zA-Z0-9_-]/g,
@@ -992,9 +749,6 @@ export class ServerManager {
     return path.join(getDataPaths().dataDir, `server-process-${safeName}.json`);
   }
 
-  // Best-effort — a failure to persist the pidfile never blocks a start; it
-  // only means the next reacquisition falls through to the full OS scan,
-  // which is the existing, already-safe behavior.
   _writePidFile(pid) {
     try {
       const data = {
@@ -1015,7 +769,7 @@ export class ServerManager {
       if (!data || !/^\d+$/.test(String(data.pid))) return null;
       return data;
     } catch {
-      return null; // Missing, corrupt, or unreadable — treated the same as "no pidfile".
+      return null;
     }
   }
 
@@ -1027,10 +781,6 @@ export class ServerManager {
     }
   }
 
-  // Single-PID command-line lookup used only by the pidfile fast path — far
-  // cheaper than the full host-wide scan. Resolves to null (never throws)
-  // when the PID isn't alive or the lookup fails/times out, which the fast
-  // path treats identically to "no usable pidfile".
   _getLiveCommandLine(pid) {
     if (!/^\d+$/.test(String(pid || ""))) return Promise.resolve(null);
 
@@ -1044,9 +794,6 @@ export class ServerManager {
       const timeout = setTimeout(() => finish(null), 3000);
 
       if (isWindows) {
-        // Single quotes inside -Filter avoid the nested-double-quote
-        // escaping the full scan's exec calls need elsewhere; pid is
-        // pre-validated as digits-only above so this interpolation is safe.
         const psCmd = `powershell -Command "Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}' | Select-Object -ExpandProperty CommandLine"`;
         exec(psCmd, { timeout: 2500 }, (err, stdout) => {
           clearTimeout(timeout);
@@ -1066,15 +813,6 @@ export class ServerManager {
     });
   }
 
-  // Resolves to a getServerProcessDetails()-shaped result if the recorded
-  // pidfile checks out, or null on any doubt (caller then runs the full
-  // scan). Deliberately reuses the SAME classification
-  // (isWindowsDedicatedServerCommandLine / isLinuxDedicatedServerCommandLine)
-  // and the SAME ownership scoring (scoreServerProcessOwnership) as the full
-  // scan, rather than a second set of rules — a live PID whose command line
-  // no longer matches (e.g. reused by an unrelated process, or now belongs
-  // to a different configured server) is exactly the case this must not
-  // trust, which is why it falls through instead of reporting "not running".
   async _tryPidFileFastPath() {
     const recorded = this._readPidFile();
     if (!recorded) return null;
@@ -1091,20 +829,6 @@ export class ServerManager {
       cmd,
       this._getOwnershipDescriptor(),
     );
-    // Deliberately stricter than the full scan's `owned` bucket threshold
-    // (score > 0), not merely "not proven wrong" (score !== -1). The full
-    // scan can fall back to an unattributable (score === 0) candidate
-    // because it has visibility into every PZ-looking process on the host
-    // and only does so when NOTHING else positively matched -- exactly the
-    // comparison this single-PID lookup cannot make. Accepting score === 0
-    // here would mean: a live PID whose command line merely "looks like a
-    // dedicated server" but carries no -servername/-cachedir (or carries
-    // one that matches neither this server's name nor its install path) is
-    // trusted as confirmed to BE this server -- which is precisely the PID-
-    // reuse doubt this fast path exists to fall through on, per its own
-    // doc comment above. Falling through here costs one full scan; wrongly
-    // accepting it can misreport another server's process as this one's,
-    // including to stopServer()'s kill path.
     if (score <= 0) return null;
 
     log.debug(
@@ -1138,31 +862,18 @@ export class ServerManager {
   }
 
   async startServer({ skipRunningCheck = false, serverId = this._serverId } = {}) {
-    // Prevent concurrent start attempts
     if (this._starting) {
       throw new Error("Server start already in progress");
     }
-    // Prevent start while a stop is still in flight. Without this guard, a
-    // start() during a 1-second stop window can have its freshly-set state
-    // wiped by the pending stop-timeout callback, leaving a live process
-    // orphaned while the manager reports running:false.
     if (this._stopping) {
       throw new Error("Server stop in progress, try again in a moment");
     }
     this._starting = true;
 
     try {
-      // Force reload config from database before starting (settings may have
-      // changed). Reload the SAME server this instance was scoped to
-      // (this._serverId — null means "the active server", unchanged from
-      // before) instead of always snapping back to whichever server is
-      // active, which would break a throwaway instance mid-restart.
       if (serverId !== this._serverId) this.configLoaded = false;
       await this.loadConfig(serverId);
 
-      // SteamCMD writes game files into this directory. Check for an active
-      // install/update before every start path, including managed services
-      // and restarts, so the JVM cannot load a partial install.
       const installPathForSteamCheck =
         this._serverRecord?.installPath || this.serverPath;
       if (installPathForSteamCheck) {
@@ -1205,12 +916,6 @@ export class ServerManager {
           throw new Error("Server is already running");
         }
 
-        // Defense in depth: even if process detection failed (WMI timeout),
-        // check if the RCON port is already occupied. If something is listening
-        // on it, a PZ server is almost certainly running and starting another
-        // would crash on port conflict (RakNet Code 5).
-        // Uses THIS server's RCON port — checking the global default would
-        // abort a second server's start just because the first one is up.
         const configuredRconPort =
           this.rconPort ?? (await getSetting("rconPort"));
         const rconPort = resolveConfiguredRconPort(configuredRconPort);
@@ -1247,31 +952,25 @@ export class ServerManager {
         }
       }
 
-      // A shared install may legitimately be in use by another server. Wait
-      // briefly for a previous process, then continue once the bound expires.
       if (this.isJvmExecutableBusy()) {
         for (let attempt = 0; attempt < 10 && this.isJvmExecutableBusy(); attempt++) {
           await this.sleep(300);
         }
       }
 
-      // Start the server process
       log.info(
         `Starting server process (platform=${process.platform}, serverPath=${this.serverPath}, startCommand=${this.startCommand || "none"}, serverBat=${this.serverBat})`,
       );
 
       if (this.startCommand) {
-        // Validate the custom command before executing
         const validation = validateStartCommand(this.startCommand);
         if (!validation.valid) {
           throw new Error(`Invalid start command: ${validation.reason}`);
         }
 
-        // Split the custom start command into its executable and arguments.
         const { cmd, args } = parseCustomStartCommand(this.startCommand);
         const cwd = this.serverPath || path.dirname(path.resolve(cmd));
 
-        // Validate the command file extension is allowed
         const ext = path.extname(cmd).toLowerCase();
         if (!ALLOWED_CMD_EXTENSIONS.includes(ext)) {
           throw new Error(
@@ -1279,7 +978,6 @@ export class ServerManager {
           );
         }
 
-        // Resolve to absolute path and verify it exists
         const resolvedCmd = path.isAbsolute(cmd) ? cmd : path.resolve(cwd, cmd);
         if (!fs.existsSync(resolvedCmd)) {
           throw new Error(`Start command not found: ${resolvedCmd}`);
@@ -1289,17 +987,10 @@ export class ServerManager {
           `Using custom start command: ${resolvedCmd} ${args.join(" ")} (ext=${ext}, cwd=${cwd})`,
         );
 
-        // Redirect stdout/stderr to a log file (instead of discarding them)
-        // so an immediate startup failure can be captured and reported right
-        // away, rather than only surfacing as an opaque 30s "polling timed
-        // out" (see GitHub issue #14). A file descriptor keeps the child
-        // fully detached from this process's own stdio.
         const launchLogPath = this._openLaunchLog();
         const launchStdio = ["ignore", this._launchLogFd, this._launchLogFd];
 
         if (isWindows && (ext === ".bat" || ext === ".cmd")) {
-          // Let cmd.exe own redirection for detached batch files. Build the
-          // /c command line ourselves so paths with spaces remain intact.
           this._closeLaunchLogFd();
           const commandLine = buildWindowsCmdLine(
             resolvedCmd,
@@ -1330,15 +1021,6 @@ export class ServerManager {
             env: { ...process.env, LD_LIBRARY_PATH: ldPath },
           });
         } else {
-          // Reached on Linux only for a no-extension custom command (the
-          // other allowed non-Windows extension besides .sh -- a compiled
-          // launcher binary or extensionless wrapper script, both common on
-          // Linux). Unlike the ".sh" branch above, this spawns resolvedCmd
-          // DIRECTLY rather than via `bash`, so the OS itself enforces the
-          // execute bit -- a freshly downloaded/copied/SteamCMD-installed
-          // file commonly lacks it, and without this chmod the spawn fails
-          // with EACCES every time, exactly the class of "worked on my
-          // Windows box, dead on Linux" bug this hunt exists to catch.
           if (!isWindows) {
             try {
               fs.chmodSync(resolvedCmd, 0o750);
@@ -1364,7 +1046,6 @@ export class ServerManager {
         }
         this._closeLaunchLogFd();
 
-        // Handle spawn errors (e.g., invalid path, permissions)
         this.serverProcess.on("error", (error) => {
           log.error(`Server process error: ${error.message}`);
           this.isRunning = false;
@@ -1401,9 +1082,6 @@ export class ServerManager {
       const launchStdio = ["ignore", this._launchLogFd, this._launchLogFd];
 
       if (isWindows) {
-        // Use the resolved batch path rather than relying on cmd.exe's search
-        // path. Redirect through cmd.exe because detached child processes do
-        // not reliably inherit Node's file descriptor on Windows.
         this._closeLaunchLogFd();
         const commandLine = buildWindowsCmdLine(batPath, [], launchLogPath);
         this.serverProcess = spawn("cmd.exe", ["/c", commandLine], {
@@ -1413,15 +1091,11 @@ export class ServerManager {
           windowsVerbatimArguments: true,
         });
       } else {
-        // Ensure the script is executable
         try {
           fs.chmodSync(batPath, 0o750);
         } catch (e) {
           log.warn(`Could not chmod startup script: ${e.message}`);
         }
-        // On Linux, ensure LD_LIBRARY_PATH includes the server's native library dirs
-        // so the JVM can find libsteam_api.so and its transitive dependencies.
-        // Without this, services/non-login shells won't have the paths set.
         const serverAbsPath = path.resolve(this.serverPath);
         const ldPath = buildLdLibraryPath(serverAbsPath);
         log.debug(
@@ -1437,7 +1111,6 @@ export class ServerManager {
       }
       this._closeLaunchLogFd();
 
-      // Handle spawn errors (e.g., invalid path, permissions)
       this.serverProcess.on("error", (error) => {
         log.error(`Server process error: ${error.message}`);
         this.isRunning = false;
@@ -1448,13 +1121,6 @@ export class ServerManager {
       this.isRunning = true;
       this.startTime = new Date();
 
-      // Give the process a brief grace period to catch immediate startup
-      // failures (bad classpath, missing native libs, etc.) so we can report
-      // the real error instead of a generic 30s "polling timed out" (see
-      // GitHub issue #14). This also keeps `_starting` true for the duration,
-      // which naturally rejects duplicate start requests (e.g. auto-start
-      // racing a manual click) that would otherwise slip through before OS
-      // process-detection catches up.
       const crash = await this._waitForImmediateCrash(launchLogPath);
       if (crash) {
         this.isRunning = false;
@@ -1474,9 +1140,6 @@ export class ServerManager {
     }
   }
 
-  // Open a fresh launch log file and stash its fd on `this._launchLogFd` for
-  // use as spawn() stdio. Returns the log file path (or null if it couldn't
-  // be opened, in which case stdio falls back to "ignore" via the fd value).
   _openLaunchLog() {
     const launchLogPath = path.join(
       getDataPaths().logsDir,
@@ -1492,8 +1155,6 @@ export class ServerManager {
     }
   }
 
-  // Close our copy of the launch-log fd. The child keeps its own duplicated
-  // handle to the file (passed via stdio), so this doesn't affect it.
   _closeLaunchLogFd() {
     if (typeof this._launchLogFd === "number") {
       try {
@@ -1505,9 +1166,6 @@ export class ServerManager {
     this._launchLogFd = null;
   }
 
-  // Wait briefly to see if the just-spawned process exits immediately
-  // (crash on startup). Resolves to `{ exitCode, signal, tail }` if it did,
-  // or `null` if it's still alive after the grace period.
   _waitForImmediateCrash(launchLogPath) {
     const proc = this.serverProcess;
     if (!proc) return Promise.resolve(null);
@@ -1553,8 +1211,6 @@ export class ServerManager {
     { serverId = this._serverId } = {},
   ) {
     if (graceful) {
-      // This should be done via RCON 'quit' command
-      // This method is for force stopping
       log.info("Graceful stop requested - use RCON quit command");
       return {
         success: true,
@@ -1562,18 +1218,6 @@ export class ServerManager {
       };
     }
 
-    // startServer() already refuses outright when this._stopping is true
-    // (see "Prevent start while a stop is still in flight" above) -- this
-    // function only ever SET the flag, it never checked it on its OWN
-    // entry, so two overlapping force-stop calls (two Force Stops, or a
-    // Force Stop racing the service-managed branch of a plain Stop) both
-    // ran past every guard: both scanned, both found the same PID, both
-    // issued a kill for it (apps/panel-server/tests/stopServerConcurrentForceStop.test.js
-    // proves this deterministically). Harmless on a stock Linux/Windows
-    // config (a second kill on an already-reaped PID is a no-op), but
-    // still redundant work with no user-visible signal that a stop was
-    // already underway -- refusing here instead mirrors startServer()'s
-    // own guard, one direction earlier.
     if (this._stopping) {
       return {
         success: false,
@@ -1584,7 +1228,6 @@ export class ServerManager {
       };
     }
 
-    // Block overlapping starts while kill/state-clear is pending.
     this._stopping = true;
     try {
       if (serverId !== this._serverId) this.configLoaded = false;
@@ -1600,8 +1243,6 @@ export class ServerManager {
         }
         return result;
       }
-      // Only PIDs this server owns: a host can run several dedicated servers
-      // and killing every PZ process would take the others down with it.
       const details = await this.getServerProcessDetails();
       const pids = (details.owned || [])
         .map((entry) => entry.pid)
@@ -1681,9 +1322,6 @@ export class ServerManager {
         return { success: true, message: "Server was not running" };
       }
 
-      // Detection itself failed, so this server's process can't be told apart
-      // from any other. Only fall back to the blunt kill-everything path when
-      // there is no other local server that could be caught in the blast.
       if (!(await this._isOnlyLocalServer())) {
         throw new Error(
           "Process detection failed and more than one server is configured on this host — force stop aborted rather than risk killing the wrong server. Stop it from its own console window.",
@@ -1740,8 +1378,6 @@ export class ServerManager {
     }
   }
 
-  // Clear state fields so getServerStatus doesn't report a stale startTime /
-  // old serverProcess handle after a kill.
   markServerStopped() {
     this._clearRunState();
   }
@@ -1763,14 +1399,6 @@ export class ServerManager {
     }
   }
 
-  // Resolves to { timedOut }. `timedOut` is true when at least one
-  // taskkill/kill call didn't finish on its own and had to be aborted by
-  // the exec timeout below -- meaning we could NOT confirm the process
-  // actually exited, only that we stopped waiting. Distinguished from an
-  // ordinary fast kill error (e.g. "process already exited", already
-  // treated as harmless) via killErr.killed, which Node sets specifically
-  // when its own timeout is what ended the child -- not on a normal
-  // nonzero-exit failure.
   _killPids(pids) {
     return new Promise((resolve) => {
       if (isWindows) {
@@ -1853,7 +1481,6 @@ export class ServerManager {
     }
   }
 
-  // Resolves to { timedOut }, same meaning as _killPids above.
   _genericForceStop() {
     return new Promise((resolve) => {
       if (isWindows) {
@@ -1898,7 +1525,6 @@ export class ServerManager {
 
   async restartServer(rconService, warningMinutes = 5) {
     try {
-      // Helper to send message with timeout (don't let RCON failures block restart)
       const sendWarning = async (msg) => {
         try {
           let timeoutId;
@@ -1915,20 +1541,17 @@ export class ServerManager {
         }
       };
 
-      // Send warning messages
       const warnings = [5, 4, 3, 2, 1];
       for (const minutes of warnings) {
         if (minutes <= warningMinutes) {
           await sendWarning(`Server restarting in ${minutes} minute(s)!`);
-          await this.sleep(60000); // Wait 1 minute between each warning
+          await this.sleep(60000);
         }
       }
 
-      // Final warning
       await sendWarning("Server restarting NOW!");
       await this.sleep(5000);
 
-      // Save the world (with timeout)
       try {
         let saveTimeoutId;
         const saveTimeout = new Promise((_, reject) => {
@@ -1972,7 +1595,6 @@ export class ServerManager {
         };
       }
 
-      // Quit the server (with timeout)
       try {
         let quitTimeoutId;
         const quitTimeout = new Promise((_, reject) => {
@@ -1988,17 +1610,12 @@ export class ServerManager {
       }
       await this.sleep(10000);
 
-      // Wait for server to fully stop
       let processDetails = await this.getServerProcessDetails();
       if (!processDetails || processDetails.scanFailed) {
         throw new Error(
           "Could not confirm the old server stopped because process detection failed",
         );
       }
-      // The process-table check above is blind whenever PZ runs outside the
-      // panel's own PID namespace (see isJvmExecutableBusy()'s doc comment)
-      // -- checked alongside it, not instead of it, so this only ever ADDS a
-      // wait condition on setups where it can find the binary at all.
       let jvmBusy = this.isJvmExecutableBusy();
       let attempts = 0;
       while ((processDetails.running || jvmBusy) && attempts < 30) {
@@ -2013,7 +1630,6 @@ export class ServerManager {
         jvmBusy = this.isJvmExecutableBusy();
       }
 
-      // Force stop if still running
       if (processDetails.running) {
         const forced = await this.stopServer(false);
         if (!forced?.success || forced.confirmed === false) {
@@ -2022,28 +1638,17 @@ export class ServerManager {
           );
         }
         await this.sleep(5000);
-        // Re-check: a successful force-stop through the process table says
-        // nothing about whether the kernel has finished releasing the
-        // binary yet (this is the exact gap isJvmExecutableBusy exists to
-        // catch -- ETXTBSY is about the file, not the PID).
         jvmBusy = this.isJvmExecutableBusy();
       }
 
-      // The process table (even force-stop) has no way to act on this --
-      // ETXTBSY clears on its own once the kernel finishes tearing the old
-      // process down. If it's still busy after everything above, refuse
-      // rather than start a new JVM against a binary that may still be
-      // rewritten out from under it.
       if (jvmBusy) {
         throw new Error(
           "The previous server process appears to have exited, but its Java executable is still locked by the kernel (\"Text file busy\") -- refusing to start a new one until it clears, to avoid a corrupted install",
         );
       }
 
-      // Extra delay to let OS reap the process
       await this.sleep(3000);
 
-      // Start the server — skip running check, we just confirmed it stopped
       const started = await this.startServer({ skipRunningCheck: true });
       if (!started?.success) {
         return {
@@ -2061,10 +1666,8 @@ export class ServerManager {
   }
 
   async getServerStatus() {
-    // Ensure config is loaded before returning status
     await this.loadConfig();
 
-    // Lazy load port and IP
     if (!this.gamePort) {
       this.loadGamePort().catch((err) =>
         log.debug(`Failed to load game port: ${err.message}`),
@@ -2074,16 +1677,6 @@ export class ServerManager {
     if (configuredWanIp) {
       this.publicIp = configuredWanIp;
     } else if (!this.fetchingIp) {
-      // Opt-in only: this used to unconditionally call out to a third party
-      // (api.ipify.org) on every status check for a LAN-only panel, which is
-      // an unnecessary external dependency and a small privacy leak
-      // (announces the panel to ipify) for installs that never display or
-      // need their public IP. Requires `enablePublicIpLookup` to be set to
-      // true (e.g. via a future Settings toggle, or directly in the DB).
-      //
-      // The cache has a TTL (PUBLIC_IP_CACHE_TTL_MS) so a residential ISP
-      // rotating the WAN IP gets picked up automatically instead of the
-      // dashboard silently showing a stale, no-longer-yours address forever.
       try {
         const enabled = await getSetting("enablePublicIpLookup");
         if (enabled === true || enabled === "true") {
@@ -2117,23 +1710,15 @@ export class ServerManager {
       }
     }
 
-    // Calculate uptime in seconds (not milliseconds)
     const uptimeMs = this.startTime ? Date.now() - this.startTime.getTime() : 0;
     const uptimeSeconds = Math.floor(uptimeMs / 1000);
 
     return {
       running: isRunning,
-      // Distinguishes a confirmed-stopped server from "the process scan
-      // itself failed" -- both used to collapse to running: false here,
-      // so a hung/erroring OS scan (AV interference, WMI timeout,
-      // ps/pgrep unavailable) looked identical to a real stop. Callers
-      // that only checked .running had no way to tell.
       scanFailed: Boolean(processDetails.scanFailed),
       startTime: this.startTime,
       uptime: uptimeSeconds,
       serverPath: this.serverPath,
-      // This describes the local launch path only; remote profiles do not
-      // need a local server directory.
       serverPathConfigured: !!this.serverPath,
       publicIp: this.publicIp,
       localIp: await this.getLocalIp(),
@@ -2158,9 +1743,6 @@ export class ServerManager {
     );
   }
 
-  // All non-internal IPv4 addresses currently present on the host, e.g. one
-  // per VPN mesh (Tailscale, ZeroTier) plus the real LAN adapter — so the
-  // Settings UI can offer a choice instead of the panel guessing.
   listNetworkInterfaces() {
     const interfaces = os.networkInterfaces();
     const result = [];
@@ -2177,10 +1759,6 @@ export class ServerManager {
   async getLocalIp() {
     const interfaces = this.listNetworkInterfaces();
 
-    // A user-picked interface (Settings > Network) wins over the env var:
-    // it's the more recent, explicit choice. But only while that address is
-    // still actually present, so an unplugged VPN doesn't leave the
-    // dashboard stuck showing a dead IP forever.
     try {
       const selected = await getSetting("lanIpAddress");
       if (selected && interfaces.some((iface) => iface.address === selected)) {
@@ -2222,9 +1800,6 @@ export class ServerManager {
       if (response.ok) {
         const data = await response.json();
         this.publicIp = data.ip;
-        // Cache to DB so we don't need to call out to ipify again on every
-        // restart — only when the cached value is missing or stale (see
-        // getServerStatus's PUBLIC_IP_CACHE_TTL_MS check).
         try {
           await setSetting("cachedPublicIp", data.ip);
           await setSetting("cachedPublicIpAt", String(Date.now()));
@@ -2240,13 +1815,12 @@ export class ServerManager {
   }
 
   async getServerConfig() {
-    await this.loadConfig(); // Ensure config is loaded
+    await this.loadConfig();
 
     if (!this.savePath) {
       return null;
     }
 
-    // Try the actual server name first (proper path: savePath/Server/{serverName}.ini)
     const serverConfigDir = path.join(this.savePath, "Server");
     const serverNameIniPath = path.join(
       serverConfigDir,
@@ -2258,21 +1832,18 @@ export class ServerManager {
       return this.parseIniFile(serverNameIniPath);
     }
 
-    // Fallback: try old path directly in savePath (for backwards compatibility)
     const configPath = path.join(this.savePath, `${this.serverName}.ini`);
     if (fs.existsSync(configPath)) {
       log.debug(`Reading config from fallback ${configPath}`);
       return this.parseIniFile(configPath);
     }
 
-    // Legacy fallback: servertest.ini
     const legacyPath = path.join(this.savePath, "servertest.ini");
     if (fs.existsSync(legacyPath)) {
       log.debug(`Reading config from legacy ${legacyPath}`);
       return this.parseIniFile(legacyPath);
     }
 
-    // Try alternative path
     const altPath = path.join(this.savePath, "serveroptions.ini");
     if (fs.existsSync(altPath)) {
       return this.parseIniFile(altPath);
@@ -2312,7 +1883,6 @@ export class ServerManager {
       throw new Error("Save path not configured");
     }
 
-    // Match getServerConfig logic: check Server/ subdirectory first, then fallback paths
     const serverIni = this.serverName
       ? `${this.serverName}.ini`
       : "servertest.ini";
@@ -2328,27 +1898,19 @@ export class ServerManager {
     }
 
     try {
-      // Read existing file to preserve comments and structure. Locked per-path
-      // so an overlapping save can't interleave its read-modify-write with
-      // this one and clobber part of the change.
       await withFileLock(configPath, async () => {
         let content = "";
         if (fs.existsSync(configPath)) {
           content = fs.readFileSync(configPath, "utf-8");
         }
 
-        // Update values
         for (const [key, value] of Object.entries(config)) {
-          // Validate key is a valid identifier (alphanumeric and underscore only)
           if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
             log.warn(`Invalid config key skipped: ${key}`);
             continue;
           }
           const escapedKey = escapeRegExp(key);
-          // Allow spaces around "=" so hand-edited INI lines are replaced
-          // instead of causing duplicate keys.
           const regex = new RegExp(`^[ \\t]*${escapedKey}[ \\t]*=.*$`, "m");
-          // Strip newlines from values to prevent INI injection
           const safeValue = String(value).replace(/[\r\n]/g, "");
           if (content.match(regex)) {
             content = content.replace(regex, `${key}=${safeValue}`);
@@ -2359,8 +1921,6 @@ export class ServerManager {
 
         writeFileAtomic(configPath, content, "utf-8");
 
-        // Verify the atomic write so a truncated or mismatched file is not
-        // reported as successfully saved.
         const writtenBack = fs.readFileSync(configPath, "utf-8");
         if (writtenBack !== content) {
           throw new Error(

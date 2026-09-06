@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// Regression coverage for three identical dead-check fixes found during
-// tonight's route hunt: `path.isAbsolute(path.resolve(x))`
-// is structurally always true (resolve() always returns an absolute path,
-// resolved against cwd when given a relative input), so the check must run
-// on the RAW input before resolving. None of these three call sites had a
-// test before this fix -- exactly why the bug was invisible for as long as
-// it was: a relative path silently passed as if it had been rejected.
 vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));

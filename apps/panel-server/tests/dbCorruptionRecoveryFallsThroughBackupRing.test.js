@@ -3,27 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-09-03, destructive-paths-sweep: getDb()'s corruption-recovery path
-// used to try exactly ONE backup -- getLatestBackup() -- and, if THAT one
-// also failed to read, gave up and reset straight to defaultData: every
-// setting, server and user discarded, even when older backups (pruneBackups
-// only evicts past MAX_BACKUPS=5, so several usually exist) were sitting
-// right next to it, untried. Concrete trigger: any event that corrupts more
-// than one file close in time (an ENOSPC hit mid-write on db.json AND the
-// backup written moments before it, a bad sector, a botched fsck) -- not
-// far-fetched given createBackup() runs right alongside flushWrites().
-//
-// Fix: recovery now walks the backup ring newest-to-oldest
-// (listBackupsNewestFirst()) and only falls to defaultData once every
-// candidate has failed to read, not after the first one.
-//
-// This suite talks to the real getDb()/database module, not a mock --
-// gives each scenario its own throwaway dataDir via PANEL_PATHS_CONFIG_PATH
-// (mirrors linuxDataDirModeGate.test.js's pattern) so scenarios never share
-// state, and vi.resetModules() so the module-level `db` singleton and
-// paths.js's cached currentPaths are both genuinely fresh per scenario --
-// otherwise every scenario after the first would silently no-op against an
-// already-initialized db from a previous one.
 
 const originalConfigPathEnv = process.env.PANEL_PATHS_CONFIG_PATH;
 const tempRoots = [];
@@ -53,8 +32,6 @@ async function freshDbModule() {
   );
   process.env.PANEL_PATHS_CONFIG_PATH = configPath;
   vi.resetModules();
-  // Importing the module creates dataDir/backups as a side effect, so the
-  // caller can write seed files into them right after this resolves.
   const mod = await import("../database/init.js");
   return { ...mod, dataDir };
 }
@@ -78,10 +55,7 @@ describe("getDb() corruption recovery: falls through the whole backup ring", () 
     const { getDb, dataDir } = await freshDbModule();
 
     writeCorruptDbJson(dataDir);
-    // Newest by filename sort -- also corrupt, simulating the double-
-    // corruption trigger (e.g. an ENOSPC hit around the same time as db.json).
     writeBackup(dataDir, "2026-09-02T00-00-00-000Z", "{ also not valid json");
-    // Older, but structurally valid and distinguishable.
     writeBackup(
       dataDir,
       "2026-09-01T00-00-00-000Z",
@@ -106,8 +80,6 @@ describe("getDb() corruption recovery: falls through the whole backup ring", () 
     const db = await getDb();
 
     expect(db.data.servers).toEqual([]);
-    // Migrated on load, same as any fresh-default init -- not 1 (defaultData's
-    // literal) any more.
     expect(db.data._schemaVersion).toBe(3);
   });
 

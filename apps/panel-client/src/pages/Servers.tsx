@@ -190,9 +190,6 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
 }
 
-// Mirrors the server's own range check (apps/panel-server/routes/servers.js POST /,
-// "Invalid RCON port" / "Invalid server port") so the client can reject
-// out-of-range ports before a round trip instead of after one.
 export function isValidPort(port: number): boolean {
   return Number.isInteger(port) && port >= 1 && port <= 65535
 }
@@ -201,26 +198,10 @@ export function isValidGamePort(port: number): boolean {
   return Number.isInteger(port) && port >= 1 && port <= 65534
 }
 
-// Client-side mirror of apps/panel-server/services/serverManager.js's resolveLaunchMode()
-// -- a serverPath/installPath ending in .bat/.sh/.exe is CUSTOM LAUNCHER mode
-// (operator ruling 2026-08-27, card
-// custom-launcher-as-a-real-supported-mode-not-an-accident): the operator's
-// own script, real and supported. Display-only, matching the server's own
-// authoritative check (serverManager.js) rather than gating anything here --
-// used to decide when to show the "the panel will not manage this script"
-// notice, and by getInstallFolder() below (which used to duplicate this
-// same regex inline).
 export function isCustomLauncherPath(installPath: string | null | undefined): boolean {
   return !!installPath && /\.(bat|sh|exe)$/i.test(installPath)
 }
 
-// Client-side mirror of server.js's /delete-files nested-path check (via
-// confineToRoots) -- informational only, so the delete dialog can warn
-// BEFORE the request round-trips instead of the operator only finding out
-// from a refusal after clicking. The server re-checks authoritatively on
-// every call; this can't be trusted as the actual safety boundary on its
-// own (no attempt at symlink resolution, case-folding is a Windows-only
-// approximation of what the OS actually does).
 export function isZomboidDataNestedInInstall(
   zomboidDataPath: string | null | undefined,
   installPath: string | null | undefined,
@@ -232,12 +213,6 @@ export function isZomboidDataNestedInInstall(
   return data === install || data.startsWith(`${install}/`) || data.startsWith(`${install}\\`)
 }
 
-// Host status for a non-active docker-mapped server's card, from the
-// already-fetched managed-container list -- never from the local process
-// scan (serverStatuses), which can't see a process in a DIFFERENT container
-// (GH#114). Mirrors apps/panel-server/utils/serverStatusModel.js's buildHostSignal
-// fail-closed pattern: no container found, or Docker control itself
-// unavailable, degrades to 'unknown', never a confident 'stopped'.
 export function resolveDockerCardHostStatus(
   dockerAvailable: boolean,
   container: { state: string } | undefined,
@@ -251,23 +226,13 @@ export default function Servers() {
   const runtimeInfo = useRuntimeInfo()
   const confirm = useConfirm()
   const { can } = useAuth()
-  // Each privileged action uses the capability enforced by its server route.
   const canDockerManage = can('docker.manage')
   const canServersManage = can('servers.manage')
   const canServerControl = can('server.control')
   const canServerWipe = can('server.wipe')
   const canServerInstall = can('server.install')
   const canServersDiscover = can('servers.discover')
-  // Inline Start/Stop fires activate (servers.manage) THEN start/stop
-  // (server.control) in sequence -- a role holding only one gets a PARTIAL
-  // execution today (activate succeeds and the server record changes state,
-  // then start/stop 403s), not a clean refusal. Gate on both present.
   const canInlineStartStop = canServersManage && canServerControl
-  // null = we don't yet know (still loading, or the last fetch failed) --
-  // distinct from [] (fetch succeeded and confirmed there really are zero
-  // servers). See fetchServers() below: on failure `servers` is deliberately
-  // left untouched rather than reset to [], so this stays accurate across
-  // background refetches too, not just the first mount.
   const [servers, setServers] = useState<ServerInstance[] | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const serversConfirmedEmpty = servers !== null && servers.length === 0
@@ -277,16 +242,6 @@ export default function Servers() {
   const [dockerContainers, setDockerContainers] = useState<DockerContainerSummary[]>([])
   const [dockerStats, setDockerStats] = useState<Record<string, DockerContainerStats>>({})
   const [dockerActionPending, setDockerActionPending] = useState<string | null>(null)
-  // Full 3-signal status (host/RCON/bridge) for the active server only. Every
-  // other card gets a host-only signal instead, sourced per provider: a
-  // native server's card reads serverStatuses (the raw local process scan);
-  // a docker-mapped server's card reads dockerContainers/dockerAvailable
-  // (the managed-container list fetchDockerState() already fetches once for
-  // every card on this page, not a per-card lookup) -- the scan can never
-  // see a process in a DIFFERENT container, so it must never be the source
-  // for those (GH#114). A remote-sftp card gets no host signal at all
-  // (nothing here can verify it without SFTP access). There is no bridge
-  // signal on any non-active card, docker or otherwise.
   const [activeStatus, setActiveStatus] = useState<ComposedServerStatus | null>(null)
   const [activeStatusServerId, setActiveStatusServerId] = useState<string | number | null>(null)
   const activeStatusRequestRef = useRef(0)
@@ -300,22 +255,14 @@ export default function Servers() {
   const [deleting, setDeleting] = useState(false)
   const [deleteProgress, setDeleteProgress] = useState(0)
   const deleteProgressRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Generation counter for the branch-fetch effect below -- steamcmdPath is a
-  // live-typed text input, so a keystroke can re-fire the effect before the
-  // previous fetchBranches() call resolves; without this, a slower response
-  // from an earlier keystroke can land after a newer one and overwrite the
-  // branch list / selected branch with stale data.
   const branchFetchIdRef = useRef(0)
   const [activating, setActivating] = useState<string | number | null>(null)
 
-  // Add server dialog
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [newServer, setNewServer] = useState<NewServerForm>(defaultNewServer)
   const [addingServer, setAddingServer] = useState(false)
   const [addMode, setAddMode] = useState<'local' | 'remote'>('local')
 
-  // Two PZ servers on one host must not share a save folder, a server name or
-  // a port. PZ binds serverPort and serverPort+1, so adjacent ports collide.
   const samePath = (a?: string | null, b?: string | null) =>
     !!a && !!b && a.replace(/[\\/]+$/, '').toLowerCase() === b.replace(/[\\/]+$/, '').toLowerCase()
 
@@ -344,8 +291,6 @@ export default function Servers() {
     return found
   }, [addMode, servers, newServer.serverName, newServer.serverPort, newServer.rconPort, newServer.zomboidDataPath, newServer.installPath, t])
 
-  // Keep the duplicate fields invalid after the save-time toast disappears.
-  // Deriving this from current values clears the marker automatically.
   const editDuplicateRemoteConflict = useMemo(() => {
     if (!editingServer || !editingServer.isRemote) return false
     const normalizedName = (editingServer.name || '').trim().toLowerCase()
@@ -359,24 +304,17 @@ export default function Servers() {
     )
   }, [editingServer, servers])
 
-  // Detection state
   const [detecting, setDetecting] = useState(false)
   const [detectResult, setDetectResult] = useState<DetectResult | null>(null)
   const [detectError, setDetectError] = useState<string | null>(null)
   const [selectedServerConfig, setSelectedServerConfig] = useState<string>('')
-  // Set when the selected detected config has a password (hasRcon) that was
-  // never sent to the browser -- POST /servers re-reads it server-side from
-  // this exact reference instead. Cleared whenever the operator types their
-  // own password, so a manual value always wins.
   const [importIniFrom, setImportIniFrom] = useState<{ dataPath: string; serverName: string } | null>(null)
 
-  // Auto-scan state
   const [autoScanning, setAutoScanning] = useState(false)
   const [autoScanPath, setAutoScanPath] = useState('')
   const [autoScanResult, setAutoScanResult] = useState<AutoScanResult | null>(null)
   const [showAutoScan, setShowAutoScan] = useState(false)
 
-  // Steam update/verify state
   const [steamOperation, setSteamOperation] = useState<{ server: ServerInstance; type: 'update' | 'verify'; branch: string } | null>(null)
   const [steamLogs, setSteamLogs] = useState<string[]>([])
   const [steamRunning, setSteamRunning] = useState(false)
@@ -392,9 +330,6 @@ export default function Servers() {
   ])
   const [loadingBranches, setLoadingBranches] = useState(false)
 
-  // Mount discovery — offers a one-click "connect this" profile when PZ
-  // server files are found at a common bind-mount path and no profile
-  // uses them yet.
   const [discoveredMounts, setDiscoveredMounts] = useState<DiscoveredMount[]>([])
   const [scanningMounts, setScanningMounts] = useState(false)
   const [discoverySetupMount, setDiscoverySetupMount] = useState<DiscoveredMount | null>(null)
@@ -414,7 +349,6 @@ export default function Servers() {
 
 
 
-  // Fetch servers
   const fetchServers = useCallback(async () => {
     setFetchError(null)
     try {
@@ -423,21 +357,12 @@ export default function Servers() {
       setManagedLifecycleSupported(data.lifecycleCapabilities?.supported === true)
     } catch (error) {
       reportClientError('Failed to fetch servers.', error)
-      // Leave `servers` untouched -- a failed fetch must not read as "you
-      // have no servers" (see the state's own comment above). The alert
-      // below is the single, retry-able error affordance for this page's
-      // load, same shape as Scheduler's fetchError.
       setFetchError(getUserErrorMessage(error, t('fetchError.fallback')))
     } finally {
       setLoading(false)
     }
   }, [t])
 
-  // Per-server running status — scans host processes once and attributes
-  // matches to each configured server's install path. Refreshes on a slow
-  // 15s cadence (process detection is heavyweight) and on socket events.
-  // Skipped while the tab is hidden so background tabs don't keep firing
-  // a heavyweight host-process scan.
   const fetchServerStatuses = useCallback(async () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     try {
@@ -448,7 +373,6 @@ export default function Servers() {
       }
       setServerStatuses(next)
     } catch (error) {
-      // Non-fatal: status is supplemental info, not the source of truth.
       reportClientWarning('Failed to fetch per-server status.', error)
     }
   }, [])
@@ -524,9 +448,6 @@ export default function Servers() {
     }
   }, [fetchServers, navigate, toast, t, canServersManage])
 
-  // Provider-aware host/RCON/bridge status for whichever server is active —
-  // shown on its card via ServerStatusBadge instead of a single Running/
-  // Stopped flag that hides RCON/bridge trouble behind a "running" container.
   const fetchActiveStatus = useCallback(async (serverId: string | number) => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     const requestId = ++activeStatusRequestRef.current
@@ -543,7 +464,6 @@ export default function Servers() {
     }
   }, [])
 
-  // Load steamcmd path and servers on mount
   useEffect(() => {
     fetchServers()
     fetchServerStatuses()
@@ -552,13 +472,11 @@ export default function Servers() {
     const statusInterval = setInterval(fetchServerStatuses, 15000)
     const rconStatusInterval = setInterval(fetchRconStatuses, 30000)
     const dockerInterval = setInterval(fetchDockerState, 10000)
-    // Load steamcmd path from settings
     configApi.getAppSettings().then(data => {
       if (data.settings?.steamcmdPath) {
         setSteamcmdPath(data.settings.steamcmdPath)
       }
     }).catch(e => reportClientWarning('Failed to load settings.', e))
-    // Load update status
     updateApi.getStatus().then(status => {
       if (status.updateAvailable?.updateAvailable) {
         setUpdateInfo(status.updateAvailable)
@@ -605,8 +523,6 @@ export default function Servers() {
     return () => { socket.off('server:status', handleServerStatus) }
   }, [socket, activeServerId, fetchActiveStatus])
 
-  // Silently probe for common bind-mount PZ installs — non-fatal since the
-  // banner is a convenience, not a requirement.
   useEffect(() => {
     serversApi.discoverMounts()
       .then(data => setDiscoveredMounts(data.mounts || []))
@@ -639,7 +555,6 @@ export default function Servers() {
     }
   }
 
-  // Listen for update status changes (clears banner after successful update)
   useEffect(() => {
     if (!socket) return
 
@@ -658,7 +573,6 @@ export default function Servers() {
     }
   }, [socket])
 
-  // Fetch available Steam branches when steam operation dialog opens
   useEffect(() => {
     if (!steamOperation) return
 
@@ -671,8 +585,6 @@ export default function Servers() {
         if (thisFetchId !== branchFetchIdRef.current) return
         const resolvedSteamcmdPath = detection.found && detection.path ? detection.path : steamcmdPath
         if (resolvedSteamcmdPath) {
-          // Detection is asynchronous. Do not replace a path the operator
-          // typed after the dialog opened but before detection completed.
           setSteamcmdPath((currentPath) => currentPath.trim() || resolvedSteamcmdPath)
         }
         const data = await serverApi.getBranches(resolvedSteamcmdPath)
@@ -680,9 +592,6 @@ export default function Servers() {
         if (data.branches && Array.isArray(data.branches)) {
           setAvailableBranches(() => {
             const fetched = data.branches as Array<{ name: string; description: string; buildId?: string | null }>
-            // SteamCMD's anonymous branch listing usually only returns `public`.
-            // Make sure the installed branch, the server's branch, and the currently
-            // selected branch all remain pickable so we never silently drop the user's choice.
             const extras: typeof fetched = []
             const have = new Set(fetched.map(b => b.name))
             const normalize = (v: string | undefined | null) => (v || '').trim().toLowerCase()
@@ -704,8 +613,6 @@ export default function Servers() {
             }
             return [...fetched, ...extras]
           })
-          // Only reconcile the selected branch if it's truly unknown and not the
-          // installed/server branch. Never override what the server is actually running.
           setSteamOperation((prev) => {
             if (!prev) return prev
             const names = new Set(data.branches.map((b: { name: string }) => b.name))
@@ -729,7 +636,6 @@ export default function Servers() {
     fetchBranches()
   }, [steamOperation, steamcmdPath, updateInfo?.installed?.branch, t])
 
-  // Listen for server changes
   useEffect(() => {
     if (!socket) return
 
@@ -746,7 +652,6 @@ export default function Servers() {
     }
   }, [socket, fetchServers])
 
-  // Listen for Steam update/verify events
   useEffect(() => {
     if (!socket) return
 
@@ -756,7 +661,7 @@ export default function Servers() {
     }
 
     const handleSteamLog = (data: { type: string; text: string; progressCode?: string; params?: Record<string, string | number> }) => {
-      setSteamLogs(prev => [...prev.slice(-200), getInstallProgressMessage(data, data.text)]) // Keep last 200 lines
+      setSteamLogs(prev => [...prev.slice(-200), getInstallProgressMessage(data, data.text)])
     }
 
     const handleSteamComplete = (data: { success: boolean; message: string; progressCode?: string; params?: Record<string, string | number> }) => {
@@ -782,7 +687,6 @@ export default function Servers() {
     }
   }, [socket, toast, t])
 
-  // Detect server settings from data path
   const handleDetectServer = async () => {
     if (!canServersDiscover) return
     if (!newServer.zomboidDataPath.trim()) {
@@ -809,7 +713,6 @@ export default function Servers() {
 
       setDetectResult(data)
 
-      // Auto-select first server if only one
       if (data.detectedServers.length === 1) {
         handleSelectServerConfig(data.detectedServers[0], data)
       } else if (data.detectedServers.length > 1) {
@@ -819,7 +722,6 @@ export default function Servers() {
         })
       }
 
-      // Update useNoSteam based on detection
       if (data.hasNoSteam) {
         setNewServer(prev => ({ ...prev, useNoSteam: true }))
       }
@@ -831,7 +733,6 @@ export default function Servers() {
     }
   }
 
-  // Auto-scan a folder to find all PZ server paths
   const handleAutoScan = async () => {
     if (!canServersDiscover) return
     if (!autoScanPath.trim()) {
@@ -875,9 +776,7 @@ export default function Servers() {
     }
   }
 
-  // Select a scanned server config and populate the form
   const handleSelectScannedConfig = (config: DetectedServerConfig, installPath?: string) => {
-    // Use matched bat file if available, otherwise use provided installPath
     const effectiveInstallPath = config.matchedBatFile || installPath || ''
 
     setNewServer({
@@ -893,7 +792,6 @@ export default function Servers() {
     setImportIniFrom(config.hasRcon ? { dataPath: config.dataPath, serverName: config.serverName } : null)
     setShowAutoScan(false)
 
-    // Also set the detect result for consistency
     setDetectResult({
       valid: true,
       dataPath: config.dataPath,
@@ -920,7 +818,6 @@ export default function Servers() {
     }
   }
 
-  // Select a detected server config
   const handleSelectServerConfig = (config: DetectedServer, result?: DetectResult) => {
     const res = result || detectResult
     setSelectedServerConfig(config.serverName)
@@ -972,10 +869,6 @@ export default function Servers() {
     }
   }, [toast, fetchServers, t, canServersManage])
 
-  // Inline Start/Stop on server cards. The Node side `serverApi.start/stop`
-  // operate on the currently-active instance only, so for inactive servers
-  // we activate first, wait for the switch to land, then issue start. This
-  // mirrors what users would otherwise do manually from the dropdown.
   const [serverActionPending, setServerActionPending] = useState<string | null>(null)
   const waitForActionState = useCallback(async (serverId: string | number, expectedRunning: boolean) => {
     return waitForServerState(
@@ -998,9 +891,6 @@ export default function Servers() {
       if (!server.isActive) {
         await serversApi.activate(server.id)
       }
-      // /server/start always responds non-2xx on failure, so
-      // handleResponse() throws into the catch below -- this never sees
-      // result.success === false.
       await serverApi.start()
       const confirmed = await waitForActionState(server.id, true)
       toast({
@@ -1022,11 +912,6 @@ export default function Servers() {
 
   const handleInlineStop = useCallback(async (server: ServerInstance) => {
     if (!canInlineStartStop) return
-    // Unlike the Dashboard's Stop button (which gates behind a confirm
-    // dialog), this inline card button ran the stop immediately on click --
-    // a single misclick disconnects everyone on the server with no chance
-    // to back out. Reversible (start it again anytime), so this stays a
-    // plain, non-destructive-styled confirm rather than full alarm styling.
     const ok = await confirm({
       title: t('card.stopConfirmTitle'),
       description: t('card.stopConfirmDescription'),
@@ -1039,9 +924,6 @@ export default function Servers() {
       if (!server.isActive) {
         await serversApi.activate(server.id)
       }
-      // Same shape as handleInlineStart above: /server/stop's failures all
-      // throw via handleResponse(), so this never sees
-      // result.success === false.
       await serverApi.stop()
       const confirmed = await waitForActionState(server.id, false)
       toast({
@@ -1068,7 +950,6 @@ export default function Servers() {
     setDeleting(true)
     setDeleteProgress(0)
 
-    // Animate progress: fast to ~70%, then slow crawl to ~90%
     let prog = 0
     deleteProgressRef.current = setInterval(() => {
       prog += prog < 70 ? 8 : 1
@@ -1076,21 +957,9 @@ export default function Servers() {
       setDeleteProgress(prog)
     }, 200)
 
-    // Whether the files were ACTUALLY deleted, not just requested -- a
-    // refusal (wrong folder, or the new nested-data-path guard) or a
-    // thrown network error both leave the files untouched even though the
-    // panel record removal below still proceeds either way (existing
-    // behavior, unchanged: the "removingFromPanelAnyway" copy already says
-    // so explicitly for the thrown-error case). The final toast must not
-    // claim files were deleted when they were not -- that was true even
-    // before the nested-path guard existed, just less likely to fire.
     let filesActuallyDeleted = false
 
     try {
-      // If deleteFiles is checked and server has an installPath, delete the files first.
-      // The checkbox itself is gated on server.wipe (can't be checked without it) --
-      // Re-check the capability at the action boundary; a disabled control is
-      // only an affordance. Without it, still remove the panel record.
       if (deleteFiles && deleteServer.installPath && canServerWipe) {
         try {
           const result = await serversDetectApi.deleteFiles(deleteServer.installPath) as { error?: string }
@@ -1115,7 +984,6 @@ export default function Servers() {
 
       await serversApi.delete(deleteServer.id)
 
-      // Complete the progress bar before closing
       if (deleteProgressRef.current) clearInterval(deleteProgressRef.current)
       setDeleteProgress(100)
       await new Promise(r => setTimeout(r, 350))
@@ -1156,7 +1024,6 @@ export default function Servers() {
       return
     }
 
-    // Validate port range
     if (!isValidPort(editingServer.rconPort)) {
       toast({ title: t('toasts.error'), description: t('toasts.rconPortRangeError'), variant: 'destructive' })
       return
@@ -1170,19 +1037,11 @@ export default function Servers() {
       return
     }
 
-    // The dialog already shows this as a red warning under the field (see
-    // customStartCommandDisallowed below) but was never wired to block Save --
-    // the server rejects the same characters at start time (validateStartCommand
-    // in serverManager.js), so an unblocked save looked successful and only
-    // failed later, on the next start attempt, with no link back to this dialog.
     if (editingServer.startCommand && /[&|;<>`${}()!\[\]]/.test(editingServer.startCommand)) {
       toast({ title: t('toasts.error'), description: t('editDialog.customStartCommandDisallowed'), variant: 'destructive' })
       return
     }
 
-    // The server does not enforce uniqueness for remote records, so apply the
-    // same collision check when editing as when adding. The current record is
-    // excluded by editDuplicateRemoteConflict.
     if (editDuplicateRemoteConflict) {
       toast({
         title: t('toasts.error'),
@@ -1283,7 +1142,6 @@ export default function Servers() {
     }
   }
 
-  // Start Steam update/verify operation
   const handleStartSteamOperation = async () => {
     if (!canServerInstall) return
     if (!steamOperation || !steamcmdPath.trim()) {
@@ -1297,7 +1155,6 @@ export default function Servers() {
       return
     }
 
-    // Save steamcmd path to settings for future use
     try {
       await configApi.updateAppSettings({ steamcmdPath })
     } catch (e) {
@@ -1324,12 +1181,6 @@ export default function Servers() {
     }
   }
 
-  // Wipe the install folder so a stuck/corrupted SteamCMD state (partial
-  // download, mismatched appmanifest, "Missing configuration" etc.) can be
-  // fixed by reinstalling from scratch, without needing shell access.
-  // Reuses the same guarded /delete-files endpoint the "Remove Server ->
-  // Delete Everything" flow uses (requires PZ marker files to be present,
-  // refuses to delete folders it doesn't recognize as a PZ install).
   const handleClearInstallFolder = async () => {
     if (!canServerWipe) return
     if (!steamOperation) return
@@ -1364,11 +1215,7 @@ export default function Servers() {
     }
   }
 
-  // Open steam operation dialog
   const openSteamOperation = async (server: ServerInstance, type: 'update' | 'verify') => {
-    // Prefer the branch that's actually installed on disk (from steamcmd appmanifest),
-    // then fall back to the server's stored branch, then to Steam's default 'public'.
-    // Steam's stable branch is named 'public'; map legacy 'stable' to it so it matches the fetched list.
     const normalize = (v: string | undefined | null) => (v || '').trim().toLowerCase()
     const installed = normalize(updateInfo?.installed?.branch)
     const stored = normalize(server.branch)
@@ -1379,7 +1226,6 @@ export default function Servers() {
     setSteamRunning(false)
     setSteamCompleted(null)
 
-    // Load steamcmd path from settings if not already set
     if (!steamcmdPath) {
       try {
         const data = await configApi.getAppSettings()
@@ -1392,10 +1238,8 @@ export default function Servers() {
     }
   }
 
-  // Get clean install path (folder only, not batch file)
   const getInstallFolder = (installPath: string | undefined): string => {
     if (!installPath) return ''
-    // If path ends with a script/executable, get the parent folder
     if (isCustomLauncherPath(installPath)) {
       const lastSlash = Math.max(installPath.lastIndexOf('\\'), installPath.lastIndexOf('/'))
       return lastSlash > 0 ? installPath.substring(0, lastSlash) : installPath
@@ -1405,7 +1249,6 @@ export default function Servers() {
 
   const handleAddExistingServer = async () => {
     if (!canServersManage) return
-    // For remote servers, only need name, rcon credentials
     if (addMode === 'remote') {
       if (!newServer.name.trim()) {
         toast({ title: t('toasts.error'), description: t('toasts.serverNameRequired'), variant: 'destructive' })
@@ -1420,7 +1263,6 @@ export default function Servers() {
         return
       }
     } else {
-      // Local server validation
       if (!selectedServerConfig) {
         toast({ title: t('toasts.error'), description: t('toasts.detectFirst'), variant: 'destructive' })
         return
@@ -1444,15 +1286,6 @@ export default function Servers() {
       return
     }
 
-    // 2026-08-31 quality-pass finding: Add Remote Server had no duplicate
-    // detection at all -- resubmitting the identical name+host+port (a
-    // double-click, or retrying after a page that looked unresponsive)
-    // silently added another card indistinguishable from the first except
-    // by an Inactive/Selected badge. Scoped to remote servers specifically
-    // (where the finding was observed and where "same name, same host+port"
-    // unambiguously means "the same server, registered twice") -- local
-    // servers already validate against real install paths on the server
-    // side and aren't part of this finding.
     if (addMode === 'remote') {
       const normalizedName = newServer.name.trim().toLowerCase()
       const normalizedHost = newServer.rconHost.trim().toLowerCase()
@@ -1474,11 +1307,6 @@ export default function Servers() {
 
     setAddingServer(true)
     try {
-      // Local mode with a detected config that has an ini password and no
-      // typed override: send a reference and let the server re-read the
-      // password itself, instead of round-tripping it through this form
-      // (which never held it in the first place -- /auto-scan and /detect
-      // don't return it).
       const useIniImport =
         addMode === 'local' && !!importIniFrom && !newServer.rconPassword.trim()
 
@@ -1546,7 +1374,6 @@ export default function Servers() {
 
   return (
     <div className="space-y-6 page-transition">
-      {/* Header */}
       <PageHeader
         title={t('pageHeader.title')}
         description={t('pageHeader.description')}
@@ -1599,7 +1426,6 @@ export default function Servers() {
         </Alert>
       )}
 
-      {/* Discovered mounts — offer a one-click connect when no server profile uses them yet */}
       {serversConfirmedEmpty && connectableMounts.length > 0 && (
         <div className="space-y-2">
           {connectableMounts.map(mount => (
@@ -1612,10 +1438,6 @@ export default function Servers() {
         </div>
       )}
 
-      {/* Server Grid — a confirmed-empty roster gets the onboarding card; an
-          unknown roster (still loading past the initial spinner, or the last
-          fetch failed) renders neither that nor a stale grid, only the alert
-          above. */}
       {serversConfirmedEmpty ? (
         <Card className="mission-brief overflow-hidden border-primary/20 bg-card">
           <CardContent className="py-10">
@@ -1704,7 +1526,6 @@ export default function Servers() {
                   : 'hover:border-primary/30'
               } ${hasUpdate ? 'border-warning/60' : ''}`}
             >
-              {/* Active indicator bar — thicker gradient stripe when active */}
               {server.isActive && (
                 <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-primary via-primary/80 to-primary/40" aria-hidden="true" />
               )}
@@ -1727,10 +1548,6 @@ export default function Servers() {
                         </Badge>
                       )}
                       {(() => {
-                        // The selected server has real RCON/bridge signals from the
-                        // composed status endpoint; every other card only knows
-                        // whatever its own provider-appropriate source found for it
-                        // (see the comment on serverStatuses above this component).
                         if (server.isActive && currentActiveStatus) {
                           return (
                             <ServerStatusBadge
@@ -1746,11 +1563,6 @@ export default function Servers() {
                         if (server.isRemote) {
                           host = { status: 'unknown', label: t('card.statusHost') }
                         } else if (provider === 'docker-local') {
-                          // GH#114: never read serverStatuses (the local process
-                          // scan) for a docker-mapped server -- it can't see a
-                          // process in a different container. dockerContainers is
-                          // already fetched in bulk for the whole page, so this is
-                          // a lookup against existing state, not a per-card fetch.
                           const container = dockerContainers.find(
                             (item) => item.name === server.dockerContainerName || item.id === server.dockerContainerName,
                           )
@@ -1831,7 +1643,6 @@ export default function Servers() {
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {/* Paths Section */}
                 {!server.isRemote && (server.installPath || server.zomboidDataPath) && (
                   <div className="rounded-md border border-border/40 bg-muted/15 divide-y divide-border/30">
                     {server.installPath && (
@@ -1888,8 +1699,6 @@ export default function Servers() {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button size="iconDense" variant="ghost" disabled={pending || !isRunning || !canDockerManage} onClick={async () => {
-                                // Container stop may terminate forcefully after the
-                                // optional RCON save, so require confirmation.
                                 const ok = await confirm({
                                   title: t('card.stopContainerConfirmTitle'),
                                   description: t('card.stopContainerConfirmDescription', { name: container.name }),
@@ -1928,7 +1737,6 @@ export default function Servers() {
                   )
                 })()}
 
-                {/* Network & Config Grid */}
                 <div className={`grid ${server.isRemote ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'} gap-2`}>
                   <div className="flex items-center gap-2.5 rounded-md border border-border/50 bg-muted/20 px-2.5 py-2">
                     <div className="grid place-items-center w-7 h-7 rounded-md border border-primary/25 bg-primary/[0.06] text-primary shrink-0" aria-hidden="true">
@@ -1961,7 +1769,6 @@ export default function Servers() {
                   )}
                 </div>
 
-                {/* Branch & Build Info (if update info available for active server) */}
                 {server.isActive && (updateInfo || gameVersion) && (
                   <div className="p-2.5 rounded-md bg-muted/50 border border-border/50">
                     <div className="flex items-center justify-between flex-wrap gap-y-1">
@@ -1992,7 +1799,6 @@ export default function Servers() {
                   </div>
                 )}
 
-                {/* Server branch badge for non-active */}
                 {!server.isActive && server.branch && (
                   <div className="flex items-center gap-2">
                     <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
@@ -2001,7 +1807,6 @@ export default function Servers() {
                   </div>
                 )}
 
-                {/* Action Buttons */}
                 <div className="flex flex-wrap gap-2 pt-1">
                   {(() => {
                     const status = serverStatuses[String(server.id)]
@@ -2105,7 +1910,6 @@ export default function Servers() {
                   )}
                 </div>
 
-                {/* Created date */}
                 {server.createdAt && (
                   <p className="text-[11px] text-muted-foreground/60 pt-1">
                     {t('card.added', { date: new Date(server.createdAt).toLocaleDateString(i18n.language) })}
@@ -2117,7 +1921,6 @@ export default function Servers() {
         </div>
       ) : null}
 
-      {/* Add Existing Server Dialog */}
       <Dialog open={showAddDialog} onOpenChange={(open) => !open && resetAddDialog()}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -2150,7 +1953,6 @@ export default function Servers() {
             </div>
           )}
 
-          {/* Mode Selector */}
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => { setAddMode('local'); setNewServer(defaultNewServer); setDetectResult(null); setDetectError(null); setSelectedServerConfig(''); setImportIniFrom(null) }}
@@ -2182,7 +1984,6 @@ export default function Servers() {
             </button>
           </div>
 
-          {/* Remote Server Info Banner */}
           {addMode === 'remote' && (
             <Alert className="border-primary/20 bg-primary/5">
               <Wifi className="h-4 w-4 text-primary" />
@@ -2195,7 +1996,6 @@ export default function Servers() {
 
           <div className="space-y-4 py-2">
             {addMode === 'remote' ? (
-              /* ========== REMOTE SERVER FORM ========== */
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>{t('remoteForm.displayNameLabel')}</Label>
@@ -2254,9 +2054,7 @@ export default function Servers() {
                 </div>
               </div>
             ) : (
-              /* ========== LOCAL SERVER FORM ========== */
               <>
-            {/* Auto Scan Section */}
             <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -2295,7 +2093,6 @@ export default function Servers() {
                     </DisabledReason>
                   </div>
 
-                  {/* Auto Scan Results */}
                   {autoScanResult && autoScanResult.detectedConfigs.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground">
@@ -2336,7 +2133,6 @@ export default function Servers() {
                         ))}
                       </div>
 
-                      {/* Show available paths summary */}
                       <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
                         {autoScanResult.installPaths.length > 0 && (
                           <p>{t('localForm.installPathsFound', { count: autoScanResult.installPaths.length })}</p>
@@ -2351,7 +2147,6 @@ export default function Servers() {
               )}
             </div>
 
-            {/* Manual Entry Section */}
             {!showAutoScan && (
             <div className="space-y-4">
               <div className="space-y-2">
@@ -2408,7 +2203,6 @@ export default function Servers() {
             </div>
             )}
 
-            {/* Detection Error */}
             {detectError && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive">
                 <AlertCircle className="w-4 h-4" />
@@ -2416,7 +2210,6 @@ export default function Servers() {
               </div>
             )}
 
-            {/* Detection Result */}
             {detectResult && (
               <div className="space-y-4">
                 {detectResult.detectedServers.length === 0 ? (
@@ -2427,7 +2220,6 @@ export default function Servers() {
                   </Alert>
                 ) : (
                   <>
-                    {/* Server Selection (if multiple) */}
                     {detectResult.detectedServers.length > 1 && (
                       <div className="space-y-2">
                         <Label>{t('localForm.selectConfigLabel')}</Label>
@@ -2452,7 +2244,6 @@ export default function Servers() {
                       </div>
                     )}
 
-                    {/* Detected Settings Summary */}
                     {selectedServerConfig && (
                       <div className="space-y-3 rounded-lg border bg-muted/50 p-4">
                         <div className="mb-3 flex items-center gap-2 text-primary">
@@ -2495,7 +2286,6 @@ export default function Servers() {
                           </div>
                         )}
 
-                        {/* RCON Password Section */}
                         <div className="space-y-2 mt-2">
                           <Label>{t('localForm.rconPasswordLabel')}</Label>
                           <PasswordInput
@@ -2533,7 +2323,6 @@ export default function Servers() {
                           />
                         </div>
 
-                        {/* Memory Configuration */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
                           <div className="space-y-2">
                             <Label>{t('localForm.minMemoryLabel')}</Label>
@@ -2588,7 +2377,6 @@ export default function Servers() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
       <Dialog open={!!editingServer} onOpenChange={() => setEditingServer(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -2600,7 +2388,6 @@ export default function Servers() {
 
           {editingServer && (
             <div className="space-y-4">
-              {/* Remote server indicator */}
               {editingServer.isRemote && (
                 <Alert className="border-primary/20 bg-primary/5">
                   <Globe className="h-4 w-4 text-primary" />
@@ -2909,7 +2696,6 @@ export default function Servers() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteServer} onOpenChange={(open) => { if (!open && !deleting) { setDeleteServer(null); setDeleteFiles(false); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -2920,12 +2706,6 @@ export default function Servers() {
 
                 {deleteServer?.installPath && (
                   <div className="flex items-start gap-3 p-3 rounded-lg border bg-muted/50">
-                    {/* Gated on server.wipe independently of the base Delete
-                        button (servers.manage) -- panel-record-only deletion
-                        is a legitimately lower bar, so a role missing
-                        server.wipe can still delete the record, just not
-                        check this box. The granularity goes where the
-                        capability boundary is, not where the button is. */}
                     <DisabledReason reason={!canServerWipe ? t('deleteDialog.deleteFilesNoPermission') : null}>
                       <Checkbox
                         id="deleteFiles"
@@ -2945,16 +2725,6 @@ export default function Servers() {
                   </div>
                 )}
 
-                {/* Most installs keep the Zomboid data folder (world save)
-                    separate from the install folder above, so checking the
-                    box only means "reinstall via the Setup Wizard later" --
-                    annoying, not catastrophic. When the data path is nested
-                    inside the install path instead, this same delete also
-                    destroys the world save with no separate copy, and the
-                    panel will refuse to run it (see server.js's
-                    DELETE_FILES_DATA_PATH_NESTED check) until the data path
-                    is moved or backed up by hand. Surfaced here so that
-                    refusal isn't the first the operator hears of it. */}
                 {deleteFiles && isZomboidDataNestedInInstall(deleteServer?.zomboidDataPath, deleteServer?.installPath) && (
                   <div className="rounded-lg border border-destructive/25 bg-destructive/8 p-3 text-sm">
                     <p className="font-medium text-destructive">{t('deleteDialog.dataPathNestedWarningTitle')}</p>
@@ -3000,7 +2770,6 @@ export default function Servers() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Steam Update/Verify Dialog */}
       <Dialog open={!!steamOperation} onOpenChange={(open) => !open && !steamRunning && setSteamOperation(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -3168,7 +2937,6 @@ export default function Servers() {
         </DialogContent>
       </Dialog>
 
-      {/* Clear Installation Folder confirmation */}
       <AlertDialog open={confirmClearInstall} onOpenChange={(open) => !open && !clearingInstall && setConfirmClearInstall(false)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -3200,7 +2968,6 @@ export default function Servers() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Discovery Setup — "Connect" from the mount discovery banner */}
       <DiscoverySetup
         open={!!discoverySetupMount}
         onOpenChange={(open) => !open && setDiscoverySetupMount(null)}

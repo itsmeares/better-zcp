@@ -42,9 +42,6 @@ const {
 } = await import(
   "../routes/server.js"
 );
-// Moved out of routes/server.js into its own module (hunt-wave5-2026-08-29)
-// so serverManager.js can check the same tracked state before spawning the
-// PZ JVM -- see services/activeSteamOperations.js's header comment.
 const { isSteamOperationIdle } = await import("../services/activeSteamOperations.js");
 
 function createResponse() {
@@ -62,21 +59,6 @@ function getLayer(routePath, method) {
   );
 }
 
-// POST / and PUT /:id (below) both have requirePermission("servers.manage")
-// ahead of the real handler -- grab the last stack entry rather than the
-// first, so this keeps working regardless of how many gating middlewares
-// precede the handler. This intentionally SKIPS that gate: it's testing the
-// handler's own business logic, not authorization. The stale claim that
-// used to sit here ("see roles.test.js for coverage of that gate itself")
-// was WRONG -- roles.test.js only ever imported routes/auth.js and
-// routes/docker.js, never routes/servers.js -- so nothing tested the
-// servers.manage gate on these two routes (or POST /:id/activate) at all
-// until apps/panel-server/tests/serversManageGateCoverage.test.js was added
-// (bug-hunt-2026-08-27, if-your-change-is-in-middleware-a-handler-only-
-// test-is-blind-to-it): confirmed by break-verify that stripping
-// requirePermission from all three routes left every test in THIS file
-// green, while that dedicated file caught it immediately. See that file
-// for the actual gate coverage.
 function getCreateHandler() {
   const layer = getLayer("/", "post");
   return layer.route.stack[layer.route.stack.length - 1].handle;
@@ -87,8 +69,6 @@ function getUpdateHandler() {
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-// Runs every middleware in a route's stack (in order), so admin-gating
-// middleware like requireRole is exercised too, not just the final handler.
 async function runRoute(routePath, method, req, res) {
   const layer = getLayer(routePath, method);
   const handlers = layer.route.stack.map((s) => s.handle);
@@ -305,16 +285,6 @@ describe("server discovery port parsing", () => {
   );
 
   it("agrees with mountDiscovery.js's readServerIniSettings on a signed port -- the real bug this proves", async () => {
-    // 2026-08-27, two-implementations-of-server-ini-parsing: on
-    // "RCONPort=+27015", pre-fix parseDiscoveredPort returned 27015 (a
-    // valid server) while mountDiscovery.js's parsePort -- reading the
-    // exact same ini field for create-from-discovery -- rejected it,
-    // because parseBoundedInteger's regex allows a leading sign and
-    // parsePort's does not. This test fails on the pre-fix code (asserts
-    // null, would have received 27015) and cross-checks against the real
-    // readServerIniSettings function (not a copy) on a real temp ini, so
-    // it can't drift back out of sync with mountDiscovery.js's actual
-    // behaviour the way a hand-copied fixture could.
     expect(parseDiscoveredPort("+27015", 27015)).toBeNull();
 
     const { readServerIniSettings } = await import("../services/mountDiscovery.js");
@@ -493,16 +463,6 @@ describe("PUT /api/servers/:id", () => {
     );
   });
 
-  // 2026-08-29 backlog card savepath-needs-existence-validation-at-set-time:
-  // this was the SECOND, unguarded setter for zomboidDataPath -- POST
-  // /save-path (chunks.js) already required existence + directory +
-  // inspectZomboidPath() for the exact same DB column via
-  // resolveCustomOrDefaultDataPath(), but this route wrote it straight
-  // through with zero checks. A wrong-but-structurally-valid value saved
-  // here while the server is stopped could later misdirect POST /wipe
-  // (server.js), which only checks fs.existsSync on
-  // path.join(savePath, "Saves", "Multiplayer", serverName) -- silently
-  // passing if the wrong path happens to have a matching subtree.
   describe("zomboidDataPath existence validation", () => {
     let realDataDir;
     let installLikeDir;
@@ -731,11 +691,6 @@ describe("GET /api/servers", () => {
     expect(payload.servers[1].rconPassword).not.toBe("secret-b");
   });
 
-  // The Layout.tsx sidebar nav only ever reads remoteConfigConfigured off
-  // the entry it finds in THIS list's response (see GET /active, which sets
-  // the same field, is a dead end for that consumer -- nothing calls it).
-  // A regression here silently re-locks Server Configuration/Templates for
-  // every remote-server operator, with no error and no failed request.
   it("marks a remote server as remoteConfigConfigured when SFTP-based remote config is set up", async () => {
     getAllSettings.mockResolvedValue({
       panelBridgeSftpHost: "192.168.1.50",
@@ -808,14 +763,6 @@ describe("Admin-gated server discovery routes", () => {
   });
 });
 
-// DELETE /:id silently reassigns which server the DATABASE calls active
-// (deleteServer()'s own fallback: promote db.data.servers[0]) when the
-// deleted server was active. Unlike the sibling POST /:id/activate route,
-// which explicitly reloads serverManager, disconnects/reconnects RCON, and
-// re-installs PanelBridge for the newly-active server, DELETE /:id used to
-// do none of that -- the live in-memory services stayed pointed at the
-// just-deleted server's stale config (old paths, old RCON credentials)
-// until something else happened to reload them.
 describe("DELETE /api/servers/:id: deleting the active server must reload live services for whichever server becomes active, same as POST /:id/activate does", () => {
   let serverManager;
   let rconService;
@@ -862,9 +809,6 @@ describe("DELETE /api/servers/:id: deleting the active server must reload live s
     expect(serverManager.reloadConfig).toHaveBeenCalled();
     expect(rconService.reloadConfig).toHaveBeenCalled();
     expect(rconService.connect).toHaveBeenCalled();
-    // The client-facing event must carry the NEW active server, same shape
-    // POST /:id/activate emits -- not the old {deleted: id}-only payload,
-    // which told listeners nothing about who is active now.
     expect(io.emit).toHaveBeenCalledWith(
       "activeServerChanged",
       expect.objectContaining({ server: expect.objectContaining({ id: "promoted-2" }) }),
@@ -898,14 +842,6 @@ describe("DELETE /api/servers/:id: deleting the active server must reload live s
   });
 });
 
-// POST /:id/activate's HTTP response correctly runs the server record
-// through sanitizeServerResponse() before res.json() -- but the Socket.IO
-// broadcast a few lines earlier emitted the raw `server` object instead,
-// leaking rconPassword (and any other SENSITIVE_FIELD_RE-matching field) to
-// every connected socket, not just the requester. activeServerChanged is
-// subscribed app-shell-wide (Layout.tsx) for every logged-in role, so a
-// moderator with no servers.manage capability received an admin's plaintext
-// RCON password the instant anyone else activated a server.
 describe("POST /api/servers/:id/activate: the activeServerChanged broadcast must not leak credentials", () => {
   let io;
 
@@ -943,15 +879,6 @@ describe("POST /api/servers/:id/activate: the activeServerChanged broadcast must
   });
 });
 
-// setActiveServer() already succeeded (the database record IS active) by
-// the time reloadServicesForNewActiveServer() runs -- a failure in that
-// best-effort reload must not turn a successful activation into a 500, the
-// same posture DELETE /:id already has for this exact shared function (see
-// that describe block above). Before this fix, POST /:id/activate called
-// it unguarded: a throw there skipped both the success response AND the
-// activeServerChanged broadcast, even though the server was already active
-// in the database -- a client watching for that event would never learn
-// the active server changed at all.
 describe("POST /api/servers/:id/activate: a live-service reload failure must not turn a successful activation into an error", () => {
   let serverManager;
   let rconService;

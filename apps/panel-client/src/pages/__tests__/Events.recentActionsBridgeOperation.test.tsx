@@ -6,18 +6,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// 2026-08-31 quality pass: runBridgeOperation (the general Bridge Tools "Run
-// Operation" button -- distinct from handleAction/handleBridgeAction/
-// runInlineAction, which all already called pushActivity) toasted a success
-// message and populated the results table, but never touched the activity
-// log. Same-frame proof it was a real bug, not a loading race: the sidebar
-// "Recent actions" panel read "No recent actions -- actions triggered from
-// this page will be logged here" at the exact moment the main panel showed a
-// completed, timestamped "List Vehicles" result -- two demonstrably-resolved
-// pieces of one screenshot disagreeing about whether an action ran.
 
-// Same jsdom-Radix-Select workaround as Events.vehicleSirenControl.test.tsx /
-// Chat.capabilityGating.test.tsx / Players.capabilityGating.test.tsx.
 vi.mock('@/components/ui/select', async () => {
   const React = await vi.importActual<typeof import('react')>('react')
   function findAriaLabel(children: React.ReactNode): string | undefined {
@@ -151,8 +140,6 @@ describe('Events -- Bridge Tools "Run Operation" now logs to Recent Actions', ()
     await waitFor(() => {
       expect(screen.queryByText(/no recent actions/i)).not.toBeInTheDocument()
     })
-    // "List Vehicles" appears twice once run (the dropdown's selected option
-    // and the new Recent Actions entry) -- assert presence, not uniqueness.
     expect(screen.getAllByText('List Vehicles').length).toBeGreaterThan(0)
   })
 

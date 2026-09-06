@@ -46,7 +46,6 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
 
   const hasPzData = performanceHistory.some(p => p.pzMemMB != null)
 
-  // Shared tooltip styling so values match the panel surface in both themes
   const tooltipStyle = {
     contentStyle: {
       background: colors.bg,
@@ -78,7 +77,6 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {/* PZ Server Memory */}
       {hasPzData && (
         <Card>
           <CardHeader className="pb-3">
@@ -103,7 +101,6 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
         </Card>
       )}
 
-      {/* Host Memory */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
@@ -124,7 +121,6 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
         </CardContent>
       </Card>
 
-      {/* CPU */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
@@ -147,7 +143,6 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
         </CardContent>
       </Card>
 
-      {/* Player Count */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">

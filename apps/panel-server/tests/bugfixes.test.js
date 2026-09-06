@@ -2,11 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-// FND-007 / RISK-001: imported STATICALLY, not with `await import()` inside a test body.
-// discord.js is ~4.2 MB across 478 files. A dynamic import is memoised per specifier, so the
-// FIRST test to call it absorbed the whole cold transform cost inside its own 5000 ms
-// testTimeout - which made "forwards ordinary Say chat" fail on a cold run and pass warm.
-// A collection-time import is not gated by testTimeout at all. Do not move this back inline.
 import { DiscordBot } from "../services/discordBot.js";
 import {
   createLocalResetResponse,
@@ -35,31 +30,11 @@ import authService from "../services/auth.js";
 import { parsePlayerExportFile } from "../routes/players.js";
 import { requireStoppedForLocalConfigMutation } from "../services/configMutationGuard.js";
 
-// Test the restart timeout pattern fix
-// Verifies that the Promise.race + clearTimeout pattern doesn't leak unhandled rejections
 
 describe("Restart timeout pattern", () => {
-  // bughunt-2026-08-31-c (Jim's title-contradicts-assertion sweep, this one
-  // outside his file list): the old body below only ever proved the race
-  // resolved with "done" -- Promise.resolve("done") settles synchronously,
-  // so `clearTimeout` fires within microseconds either way, long before the
-  // real 5000ms timer could ever reject. Sleeping 10ms afterward "to ensure
-  // no unhandled rejection" checked nothing: the losing timeoutPromise was
-  // never even close to its own deadline, cleared or not. Broke this
-  // exactly to confirm: removed the clearTimeout call (the regression this
-  // title claims to guard against) and the old test still passed.
-  //
-  // Fixed with fake timers so the real claim -- clearTimeout genuinely
-  // prevents the timeout promise from ever settling -- can be checked fast
-  // and deterministically: attach a private .catch() to observe the losing
-  // promise's own fate (this also marks it handled to Node, so advancing
-  // past its deadline never risks a real process-level unhandledRejection
-  // regardless of which branch is under test), then fast-forward PAST the
-  // real 5000ms deadline and assert it never settled.
   it("should not leave dangling rejections when operation wins the race", async () => {
     vi.useFakeTimers();
     try {
-      // This is the FIXED pattern: setTimeout + clearTimeout
       let timeoutId;
       let timeoutSettled = false;
       const timeoutPromise = new Promise((_, reject) => {
@@ -72,13 +47,10 @@ describe("Restart timeout pattern", () => {
       const operationPromise = Promise.resolve("done");
 
       const result = await Promise.race([operationPromise, timeoutPromise]);
-      clearTimeout(timeoutId); // Prevents the timeout from firing
+      clearTimeout(timeoutId);
 
       expect(result).toBe("done");
 
-      // Fast-forward past the real 5000ms deadline the timer was set for --
-      // if clearTimeout above had been a no-op (or omitted), this is
-      // exactly where the dangling rejection would surface.
       await vi.advanceTimersByTimeAsync(5000);
 
       expect(timeoutSettled).toBe(false);
@@ -122,10 +94,8 @@ describe("Restart timeout pattern", () => {
       }
     };
 
-    // Success case
     expect(await sendWarning("test", true)).toBe("ok");
 
-    // Timeout case
     expect(await sendWarning("test", false)).toBe("RCON timeout");
   });
 });
@@ -146,7 +116,6 @@ describe("automatic update warning parsing", () => {
   });
 });
 
-// Test modChecker interval error handling
 describe("modChecker interval error handling", () => {
   it("should catch errors in async interval callback", async () => {
     let errorCaught = false;
@@ -280,16 +249,6 @@ describe("logout and export trust boundaries", () => {
 });
 
 describe("config mutation guard", () => {
-  // requireStoppedForLocalConfigMutation's FIRST line reads the real,
-  // process-shared database via getActiveServer() -- this test used to
-  // never control it (same dynamic-import + vi.spyOn pattern already used
-  // above for getDb, chosen over a file-level vi.mock so it can't affect
-  // this file's other, unrelated describe blocks). It states its
-  // precondition explicitly now instead of silently inheriting whatever
-  // another test file left active in the shared DB: it passed in isolation
-  // and failed in the full suite specifically because a remote server left
-  // active by another test file made the isRemote short-circuit fire
-  // before the no-serverManager branch below it ever ran.
   it("fails closed when server state cannot be verified", async () => {
     const dbModule = await import("../database/init.js");
     const getActiveServerSpy = vi
@@ -313,11 +272,6 @@ describe("config mutation guard", () => {
     }
   });
 
-  // The remote short-circuit itself was, until now, exercised only by
-  // accident -- by whichever other test file happened to leave a remote
-  // server active in the shared DB when this file's test ran after it.
-  // Pinned deliberately: a remote server's config is edited over SFTP, so
-  // local process detection must never even be attempted for it.
   it("lets a remote server's config mutation through without probing local process state", async () => {
     const dbModule = await import("../database/init.js");
     const getActiveServerSpy = vi
@@ -340,20 +294,6 @@ describe("config mutation guard", () => {
     }
   });
 
-  // 2026-08-26: activeServer.isRemote is COMPUTED by normalizeServerMemory
-  // from whether the configured path resolves on THIS filesystem right now
-  // -- not a stored fact. A genuinely local, genuinely RUNNING server whose
-  // path is transiently unreachable (a disconnected network mount, a slow-
-  // mounting drive, an AV lock) would normalize to isRemote:true exactly
-  // like a real remote server, and the short-circuit above would let a
-  // wholesale config overwrite proceed against it unverified -- discovered
-  // by accident via upnpEditAppliesLive.test.js leaving an orphaned local
-  // server active with its temp install path deleted (fixed separately,
-  // 5fc722e). The guard now re-checks path reachability itself and treats
-  // "configured but unreachable" as unverifiable, matching backup.js's
-  // POST /restore/:name posture (refuse rather than proceed) instead of
-  // trusting the computed isRemote in the one direction that's unsafe to
-  // get wrong.
   it("treats a configured-but-unreachable local path as unverifiable, not as remote", async () => {
     const missingPath = path.join(os.tmpdir(), "zcp-guard-test-missing-path-does-not-exist");
     expect(fs.existsSync(missingPath)).toBe(false);
@@ -429,11 +369,6 @@ describe("mod update auto-restart dedupe", () => {
   });
 
   it("retries instead of marking processed when detection can't confirm the server is offline", async () => {
-    // Regression: getServerProcessDetails() resolving scanFailed:true used
-    // to come through checkServerRunning() as a plain `false` -- identical
-    // to a confirmed-stopped server -- so a scan failure while the server
-    // was actually running would mark the mod update "processed" and it
-    // would never be retried.
     const checker = new ModChecker();
     checker.scheduler = { rconService: { connected: false } };
     checker.serverManager = {
@@ -640,8 +575,6 @@ describe("conflict pair grouping", () => {
   }
 
   it("never pairs a mod with itself when it ships the same path twice", () => {
-    // A mod shipping both media/ and 42/media/ used to appear twice in
-    // conflict.mods, producing an "A vs A" pair.
     const { pairs, truncated } = groupIntoPairs([
       conflict(["ModA", "ModA", "ModB"]),
     ]);
@@ -809,13 +742,6 @@ describe("online player count when RCON is unavailable", () => {
 describe("backup restore guards against a running server", () => {
   it("refuses to restore while the server is running", async () => {
     const service = new BackupService();
-    // getServerProcessDetails, not checkServerRunning: the latter is no
-    // longer consulted at all (it used to be a fallback that collapsed a
-    // failed scan into a plain `false`, indistinguishable from a
-    // confirmed-stopped server -- see the comment above the check in
-    // backupService.js). A serverManager offering only checkServerRunning
-    // now refuses with "process detection is unavailable" instead of
-    // silently trusting it either way.
     service.setServerManager({
       getServerProcessDetails: async () => ({ running: true, scanFailed: false }),
     });
@@ -1008,7 +934,6 @@ describe("Discord circuit breaker is per channel", () => {
   it("does not let a broken relay channel silence notifications", async () => {
     const { bot, sent } = await makeBot("111");
 
-    // Three failures on the relay channel trip its breaker.
     for (let i = 0; i < 3; i++) {
       expect(await bot._sendToChannel("111", "chat")).toBe(false);
     }
@@ -1016,7 +941,6 @@ describe("Discord circuit breaker is per channel", () => {
       Date.now(),
     );
 
-    // The healthy notification channel must still go through.
     expect(await bot._sendToChannel("222", "server started")).toBe(true);
     expect(sent).toEqual(["222:server started"]);
   });
@@ -1048,7 +972,7 @@ describe("LogTailer chunk boundaries", () => {
     const cut = 60;
 
     tailer.processChatLogData(line.slice(0, cut));
-    expect(seen).toEqual([]); // incomplete, must be held back
+    expect(seen).toEqual([]);
 
     tailer.processChatLogData(line.slice(cut));
     expect(seen).toHaveLength(1);
@@ -1095,20 +1019,17 @@ describe("LogTailer chunk boundaries", () => {
     const { LogTailer } = await import("../services/logTailer.js");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pz-tail-"));
 
-    // Pre-existing file: skip its history so a panel restart doesn't replay.
     const old = path.join(dir, "old.txt");
     fs.writeFileSync(old, "history\n");
     const tailer = new LogTailer();
-    tailer.watchStartedAt = Date.now() + 1000; // pretend we start later
+    tailer.watchStartedAt = Date.now() + 1000;
     expect(tailer.startOffsetFor(old, true)).toBe(8);
 
-    // A file born after we started watching is all new.
     tailer.watchStartedAt = 0;
     const fresh = path.join(dir, "fresh.txt");
     fs.writeFileSync(fresh, "new session\n");
     expect(tailer.startOffsetFor(fresh, true)).toBe(0);
 
-    // A rotation always starts at zero.
     expect(tailer.startOffsetFor(old, false)).toBe(0);
 
     fs.rmSync(dir, { recursive: true, force: true });
@@ -1128,7 +1049,6 @@ describe("Discord chat relay queue", () => {
     const bot = await makeBot();
     const seen = [];
     bot.handleGameChat = async (data) => {
-      // Earlier messages resolve slower, which is what reorders parallel sends.
       await new Promise((r) => setTimeout(r, 10 - data.n));
       seen.push(data.n);
     };

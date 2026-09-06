@@ -1,21 +1,3 @@
-// Minimal Java .class file parser: walks the constant pool and the methods
-// table STRUCTURALLY, per the JVM class file format (JVMS 4), rather than
-// treating the file as an opaque blob to grep. This is what makes it
-// trustworthy where a flat "extract printable strings" pass is not -- a
-// strings dump mixes real method names in with every other UTF8 constant in
-// the file (log messages, exception text, field names), and there is no way
-// to tell them apart after the fact. Reading the methods_count/method_info
-// table properly means every name returned here is a genuine declared
-// method on the class, nothing else.
-//
-// Deliberately narrow: this reads just enough of the format to answer "what
-// methods (name + descriptor) does this class declare, and what is its
-// superclass/interfaces" -- attribute bodies (bytecode, line numbers, etc.)
-// are skipped, not parsed. It cannot tell you whether a method is actually
-// CALLED correctly (argument types, overload resolution) -- only whether a
-// method with that exact name is declared on that exact class.
-//
-// See scripts/jar-audit/README.md for the technique's limitations.
 
 export function parseClass(buf) {
   let p = 0;
@@ -36,15 +18,14 @@ export function parseClass(buf) {
     throw new Error("not a Java class file (bad magic number)");
   }
   u2();
-  u2(); // minor, major version -- not needed here
+  u2();
 
   const cpCount = u2();
-  const cp = new Array(cpCount); // 1-indexed; cp[0] is unused
+  const cp = new Array(cpCount);
   for (let i = 1; i < cpCount; i++) {
     const tag = u1();
     switch (tag) {
       case 1: {
-        // CONSTANT_Utf8
         const len = u2();
         const bytes = buf.slice(p, p + len);
         p += len;
@@ -56,11 +37,9 @@ export function parseClass(buf) {
       case 16:
       case 19:
       case 20:
-        // Class, String, MethodType, Module, Package -- all a single u2 ref
         cp[i] = { tag, ref: u2() };
         break;
       case 15:
-        // MethodHandle
         cp[i] = { tag, refKind: u1(), ref: u2() };
         break;
       case 9:
@@ -69,17 +48,14 @@ export function parseClass(buf) {
       case 12:
       case 17:
       case 18:
-        // Fieldref, Methodref, InterfaceMethodref, NameAndType, Dynamic, InvokeDynamic
         cp[i] = { tag, ref1: u2(), ref2: u2() };
         break;
       case 3:
       case 4:
-        // Integer, Float
         cp[i] = { tag, val: u4() };
         break;
       case 5:
       case 6:
-        // Long, Double -- these take TWO constant pool slots
         cp[i] = { tag, val: u4() * 2 ** 32 + u4() };
         i++;
         break;
@@ -91,7 +67,7 @@ export function parseClass(buf) {
   const utf8 = (idx) => (cp[idx] && cp[idx].tag === 1 ? cp[idx].value : null);
   const className = (idx) => (cp[idx] && cp[idx].tag === 7 ? utf8(cp[idx].ref) : null);
 
-  u2(); // access_flags
+  u2();
   const thisClass = className(u2());
   const superClass = className(u2());
 
@@ -102,16 +78,16 @@ export function parseClass(buf) {
   function skipAttributes() {
     const count = u2();
     for (let i = 0; i < count; i++) {
-      u2(); // attribute_name_index
+      u2();
       const len = u4();
-      p += len; // attribute body -- not needed for this tool's purpose
+      p += len;
     }
   }
 
   const fieldsCount = u2();
   const fields = [];
   for (let i = 0; i < fieldsCount; i++) {
-    u2(); // access_flags
+    u2();
     const nameIdx = u2();
     const descIdx = u2();
     fields.push({ name: utf8(nameIdx), descriptor: utf8(descIdx) });
@@ -128,12 +104,6 @@ export function parseClass(buf) {
     skipAttributes();
   }
 
-  // Class-level RuntimeVisibleAnnotations (used by the RCON command classes:
-  // @CommandName, @CommandArgs, @AltCommandArgs, @DisabledCommand,
-  // @RequiredCapability). Parsed opportunistically as a flat list of
-  // {type, elements} -- element_value parsing covers the shapes this
-  // codebase's command classes actually use (const string/enum, and
-  // arrays of those); it is not a complete annotation-value parser.
   const classAnnotations = [];
   {
     const attrCount = u2();
@@ -160,7 +130,6 @@ export function parseClass(buf) {
       case "s": // String
         return utf8(u2());
       case "e": {
-        // enum_const_value: type_name_index, const_name_index
         u2();
         return utf8(u2());
       }
@@ -189,9 +158,6 @@ export function parseClass(buf) {
         return cp[idx] ? cp[idx].val : null;
       }
       default:
-        // Unknown/unsupported element tag -- skip its index and move on
-        // rather than throwing, since this parser only needs to survive
-        // the specific annotations this codebase's command classes use.
         u2();
         return null;
     }
@@ -217,13 +183,6 @@ export function hasMethod(classInfo, methodName) {
   return classInfo.methods.some((m) => m.name === methodName);
 }
 
-// Resolves every Methodref/InterfaceMethodref constant pool entry into
-// {ownerClass, name, descriptor} -- i.e. every method this class's bytecode
-// CALLS OUT to (a different question from classInfo.methods, which is what
-// the class itself DECLARES). Constant-pool level, so it does not know
-// which call sites are actually reachable or how many times each runs --
-// see README.md's "what this cannot tell you" section before drawing
-// conclusions from presence/absence of a particular call.
 export function listMethodRefs(classInfo) {
   const cp = classInfo.constantPool;
   const utf8 = (idx) => (cp[idx] && cp[idx].tag === 1 ? cp[idx].value : null);

@@ -3,19 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage for items 4/5 of the full handler-verification audit:
-// setGodMode/setInvisible already computed a `verified` read-back and threw
-// it away (always returned ok=true regardless); setNoclip didn't compute one
-// at all. Per god's ruling: these already had (or needed) the read-back --
-// the fix is gating `ok` on it, not adding new capability.
-//
-// Also covers a correctness bug found while making this fix: the original
-// `verified = state ~= nil and (state == enabled) or nil` used Lua's
-// `a and b or c` idiom, which silently breaks when b (a genuine mismatch) is
-// `false` -- `true and false` short-circuits to `false`, which is falsy, so
-// it falls through to c (nil). That made a CONFIRMED failure indistinguishable
-// from "couldn't verify", which would have made gating on verified==false
-// never actually fire. Rewritten with explicit if/then.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -53,9 +40,6 @@ getOnlinePlayers = function() return FakePlayerList end
 `;
 }
 
-// A setter that "succeeds" (doesn't throw) but never actually flips the
-// underlying state -- e.g. a build where the setter is a documented no-op
-// in some game state. The getter reports the real (unchanged) value.
 function noOpPlayerStub(setterName, getterName, initial) {
   return `
 FakePlayer = { username = "Test", state = ${initial} }
@@ -82,8 +66,6 @@ describe('PanelBridge.lua handlers.setGodMode/setInvisible/setNoclip -- gate ok 
     const bridge = loadPanelBridge(LUA_PATH, noOpPlayerStub('setGodMod', 'isGodMod', false));
     const result = bridge.callHandler('setGodMode', { username: 'Test', enabled: true });
 
-    // Before the fix this returned ok=true with verified=nil (the and/or bug
-    // masked the mismatch as "unverifiable" instead of "confirmed wrong").
     expect(result.err).not.toMatch(/Player not found/);
     expect(result.ok).toBe(false);
   });

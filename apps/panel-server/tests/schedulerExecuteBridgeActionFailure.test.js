@@ -1,22 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// bug-hunt-2026-08-27 (hunt: scheduler execution path, not validation):
-// Scheduler.executeBridgeAction() used to end with
-//   const result = await panelBridge.sendCommand(action, args);
-//   if (result && result.success === false) throw new Error(...);
-//   return result;
-// That `if` was dead code. panelBridge.js's processResult() (the only place
-// a pending sendCommand() promise ever settles) has exactly two outcomes:
-// pending.resolve({ success: true, data }) on success, or pending.reject(new
-// Error(...)) on failure -- it never resolves an explicit
-// { success: false }. So the removed branch could never fire through this
-// path; the real failure signal was always the promise rejecting, which
-// this function already let propagate via `await` with no try/catch of its
-// own. No existing test called the real executeBridgeAction() with a
-// mocked panelBridge.sendCommand (schedulerRunTask.test.js always stubs
-// executeBridgeAction itself out entirely), so this dead branch had zero
-// coverage in either direction -- this file adds it, exercising the real
-// function against the two shapes sendCommand can actually produce.
 vi.mock("../database/init.js", () => ({
   getScheduledTasks: vi.fn(),
   updateTaskLastRun: vi.fn().mockResolvedValue(),

@@ -4,51 +4,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { KNOWN_RCON_REJECTIONS } from "../services/rcon.js";
 
-// The drift gate for KNOWN_RCON_REJECTIONS: its whole job is telling a real
-// command success apart from a silent rejection (see its own comment in
-// rcon.js). A pattern that stops matching anything is invisible everywhere
-// else -- the code compiles, every other test passes, the regex is
-// syntactically perfect, it just silently never fires again. This is what
-// makes that state visible, the same architecture as the sandbox schema's
-// pzGroundTruth gate (apps/panel-client/src/lib/__tests__/serverConfigSchema.
-// pzGroundTruth.test.ts): a committed, jar-derived fixture (the jar is not
-// available in CI) with provenance, asserted against on every run.
-//
-// Regenerate the fixture with:
-//   node scripts/jar-audit/extract-rcon-rejection-strings.mjs <path-to-projectzomboid.jar>
-//
-// THIS TEST MUST NEVER PASS VACUOUSLY. A fixture that's missing, empty,
-// unparseable, or that scanned zero classes is a broken gate, not a clean
-// sweep.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = path.resolve(__dirname, "../__fixtures__/pzRconRejectionStrings.json");
 
-// Confirmed missing from the live jar, not guessed -- see the fixture's own
-// _provenance.note and the extractor script's header comment for the full
-// story. The 2026-08-23 B42 jar audit
-// verbatim-confirmed "...can be executed only from the game" in
-// ReleaseSafehouseCommand.class via isCommandComeFromServerConsole().
-// Re-extracted 2026-08-27 against build 24909800: the string is gone from
-// EVERY class in the jar, and ReleaseSafehouseCommand.class now carries
-// @RequiredCapability(CanSetupSafehouses) instead -- the check moved to the
-// generic capability system PZ uses for other commands. Whether
-// releasesafehouse can now succeed over RCON with that capability, or is
-// still refused under different wording this extraction didn't find, is
-// NOT something static string extraction can settle -- it needs a live B42
-// server test, which this floor doesn't have tonight.
-//
-// Self-cleaning, same shape as localeParity.test.ts's
-// ALLOWED_PLACEHOLDER_OMISSIONS: the "still matches nothing" test below
-// FAILS the instant this pattern starts matching something again (a future
-// re-extraction against a newer build, or someone finding the actual
-// current text) -- that failure is the signal to remove this entry and move
-// the pattern back into the main assertion, not evidence the entry is safe
-// to leave here forever.
 const KNOWN_BROKEN_PATTERNS = new Map([
   [
     "can be executed only from the game",
-    "Verbatim-confirmed by Kevin 2026-08-23, absent from the entire jar as of this extraction (2026-08-27, build 24909800). See this file's own comment block above.",
+    "Confirmed absent from the entire jar as of this extraction (2026-08-27, build 24909800). See this file's own comment block above.",
   ],
 ]);
 
@@ -66,18 +29,6 @@ function loadFixture() {
 const fixture = loadFixture();
 const allStrings = fixture ? Object.values(fixture.classes).flat() : [];
 
-// The known, resolved denominator: 72 classes (every zombie/commands/
-// serverCommands/*.class, the GameServer.class dispatcher, plus
-// BanSystem.class and ServerWorldDatabase.class + its LogonResult inner
-// class) as of the 2026-08-29 (hunt-wave11) extraction, same build
-// (24909800) as the prior 2026-08-27/69-class extraction -- this jump from
-// 69 is a DELIBERATE scope widening (banuser/unbanuser/adduser/
-// removeuserfromwhitelist's own command classes carry no rejection text of
-// their own; it lives in these two classes, see
-// the audit's "Pass 4"), NOT a PZ patch artifact. If
-// this changes again, a PZ patch added/removed command classes -- or the
-// scope changed again -- investigate before updating it, don't just bump it
-// to match.
 const EXPECTED_CLASS_COUNT = 72;
 
 describe("KNOWN_RCON_REJECTIONS vs the real PZ server jar (drift gate)", () => {

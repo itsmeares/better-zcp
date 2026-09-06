@@ -1,21 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// GET /debug/activity merges RCON/bridge/server history with full player
-// moderation history (getPlayerLogs) into one feed, gated ONLY by
-// diagnostics.manage. Found in the 2026-08-26 capability-description sweep:
-// diagnostics.manage's label ("View logs, performance history, database
-// maintenance tools and CORS diagnostics") never mentions player history --
-// that's players.view's own territory ("Read player details, status and
-// history"). Among the three SEEDED roles this was moot (diagnostics.manage
-// is admin-only), but a custom role built from the label alone (any admin
-// can make one via roles.manage) could hold diagnostics.manage without
-// players.view and still read every player's ban/kick/teleport/item-spawn
-// history through this door.
-//
-// Fix: an inline players.view check, resolved only when a player source
-// could actually appear. source=player without it is a refusal (the caller
-// asked for something they don't hold); source=all without it silently
-// omits the player entries rather than refusing the whole feed.
 
 const getCommandHistory = vi.fn(async () => []);
 const getBridgeLogs = vi.fn(async () => []);
@@ -26,8 +10,6 @@ const getDb = vi.fn(async () => ({ data: { server_events: [] } }));
 
 const ROLES = {
   admin: { capabilities: ["diagnostics.manage", "players.view"] },
-  // Holds diagnostics.manage (passes the route's own gate) and NOTHING
-  // else -- the exact custom-role shape this fix exists to stop.
   diagnostics_only: { capabilities: ["diagnostics.manage"] },
 };
 const getRoleByName = vi.fn(async (name) => ROLES[name] || null);

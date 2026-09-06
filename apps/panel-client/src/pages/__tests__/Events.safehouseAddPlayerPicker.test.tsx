@@ -7,16 +7,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// 2026-08-30, panelbridge-total-audit-2026-08-30 (Finding D): the safehouse
-// "Add Player" button read `players[0]?.name` -- the first entry of the
-// whole server's online-player list, not a player the admin chose for this
-// safehouse. It silently added whoever happened to be first, disclosed only
-// after the fact in the toast. This test asserts the admin must pick a
-// player before the button does anything.
 
-// Same jsdom-Radix-Select workaround as Events.vehicleSirenControl.test.tsx:
-// a real pointer interaction on a Radix Select throws in jsdom. Swap the
-// picker for a native <select>, which drives the exact same onValueChange.
 vi.mock('@/components/ui/select', () => {
   function findAriaLabel(children: React.ReactNode): string | undefined {
     let found: string | undefined
@@ -140,7 +131,6 @@ describe('Events -- safehouse Add Player requires an explicit selection (Finding
     const addButton = screen.getByRole('button', { name: '+ Player' })
     fireEvent.click(addButton)
 
-    // Give any accidental async call a chance to fire before asserting it didn't.
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(sendCommand).not.toHaveBeenCalledWith('safehouseAddPlayer', expect.anything())
   })
@@ -156,7 +146,6 @@ describe('Events -- safehouse Add Player requires an explicit selection (Finding
     await waitFor(() => {
       expect(sendCommand).toHaveBeenCalledWith('safehouseAddPlayer', { safehouseRef: 'sh-1', username: 'Carol' })
     })
-    // Zed is players[0] in ONLINE_PLAYERS -- the old bug would have added him regardless of selection.
     expect(sendCommand).not.toHaveBeenCalledWith('safehouseAddPlayer', { safehouseRef: 'sh-1', username: 'Zed' })
   })
 })

@@ -21,13 +21,6 @@ function createResponse() {
   return response;
 }
 
-// bughunt-2026-08-31-c: identical bug to modChecker.js's init() restore-path
-// callback (e76cade9) -- POST /auto-restart's block-bodied callback never
-// returned handleModUpdate()'s result, so checkForUpdates()'s markProcessed
-// dedup check always saw undefined for a normal restart and the same update
-// could retrigger another restart on the next check cycle. routes/config.js's
-// bulk-save path (an implicit-return arrow) was the one call site that
-// already got this right.
 describe("POST /mods/auto-restart", () => {
   beforeEach(() => vi.clearAllMocks());
 

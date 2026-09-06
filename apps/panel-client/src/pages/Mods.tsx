@@ -136,7 +136,6 @@ interface IniConfig {
   duplicateKeys?: Array<{ key: string; count: number }>
 }
 
-// ── Pure helper — parse workshop ID from URL or numeric input ──
 function parseWorkshopId(input: string): string | null {
   const trimmed = input.trim()
   if (!trimmed) return null
@@ -147,11 +146,6 @@ function parseWorkshopId(input: string): string | null {
   return null
 }
 
-/**
- * One flat set of destinations. The page previously nested five "Advanced"
- * sub-tabs inside a top-level tab, which hid half the features a level deep
- * and gave two different mod lists names that did not distinguish them.
- */
 type ModsView =
   | 'installed'
   | 'active'
@@ -197,15 +191,6 @@ function getModsNav(t: (key: string) => string): Array<{
   ]
 }
 
-// Stores the exact lastSteamApiFailureAt value that was dismissed, not a
-// boolean. That field is re-stamped to now() on EVERY consecutive failed
-// check cycle (not just the first one of an outage -- see modChecker.js),
-// so this isn't a stable "outage started at" episode key the way Discord's
-// gatewayDegradedSince is; it's "most recent failure seen". A dismiss here
-// re-surfaces the indicator once the NEXT failed cycle re-stamps the value
-// -- a gentle periodic reminder for a still-unresolved outage, not a
-// permanent one-time silence, which is the right tradeoff given the field
-// actually available (no server-side episode id to build a tighter key on).
 const STEAM_API_ISSUE_DISMISSED_KEY = 'pz-mods-steam-api-issue-dismissed'
 
 export default function Mods() {
@@ -233,17 +218,9 @@ export default function Mods() {
   const { toast } = useToast()
   const confirm = useConfirm()
   const { can } = useAuth()
-  // mods.js gates every route (including reads) behind mods.manage via a
-  // whole-file router.use, except GET /thumbnail/:workshopId -- every
-  // mutating action below needs mods.manage. The one outlier is the
-  // Workshop install-path save, which goes through serversApi.update (PUT
-  // /servers/:id, servers.manage) instead -- a different route file
-  // entirely, not mods.js. OPEN when capabilities are unknown/null, same
-  // convention as every other capability check in the app.
   const canManageMods = can('mods.manage')
   const canManageServers = can('servers.manage')
 
-  // Search and filters
   const [searchQuery, setSearchQuery] = useState('')
   const [deferredSearchQuery, setDeferredSearchQuery] = useState('')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -252,19 +229,14 @@ export default function Mods() {
   const [showUpdatesOnly, setShowUpdatesOnly] = useState(false)
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set())
 
-  // Disabled-mods reveal (mods downloaded into the Steam workshop folder but
-  // not present in the server INI's WorkshopItems= list). Off by default to
-  // keep the page focused on what's actually loaded by the server.
   const [showDisabled, setShowDisabled] = useState(false)
   const [disabledMods, setDisabledMods] = useState<Array<{ workshop_id: string; name: string }>>([])
   const [disabledLoading, setDisabledLoading] = useState(false)
   const [enablingId, setEnablingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  // Ctrl+K = focus search
   usePageShortcut('k', () => { searchInputRef.current?.focus() }, { ctrl: true })
 
-  // Advanced Add Mod dialog (with multi-ID selection)
   const [advancedAddOpen, setAdvancedAddOpen] = useState(false)
   const [advancedModInput, setAdvancedModInput] = useState('')
   const [discoveringMod, setDiscoveringMod] = useState(false)
@@ -284,7 +256,6 @@ export default function Mods() {
   } | null>(null)
   const [selectedModIds, setSelectedModIds] = useState<Set<string>>(new Set())
 
-  // Collection import
   const [collectionUrl, setCollectionUrl] = useState('')
   const [collectionDialogOpen, setCollectionDialogOpen] = useState(false)
   const [collectionMods, setCollectionMods] = useState<CollectionMod[]>([])
@@ -292,7 +263,6 @@ export default function Mods() {
   const [collectionImported, setCollectionImported] = useState(false)
   const [showCollectionAdvanced, setShowCollectionAdvanced] = useState(false)
 
-  // INI configuration
   const [iniConfig, setIniConfig] = useState<IniConfig | null>(null)
   const [modsToInstall, setModsToInstall] = useState<CollectionMod[]>([])
   const [orderedModIds, setOrderedModIds] = useState<string[]>([])
@@ -300,21 +270,17 @@ export default function Mods() {
   const [savingModOrder, setSavingModOrder] = useState(false)
   const [autoSortPreview, setAutoSortPreview] = useState<AutoSortResult | null>(null)
   const [draggedModIndex, setDraggedModIndex] = useState<number | null>(null)
-  // Expand/collapse states
   const [repairingMaps, setRepairingMaps] = useState(false)
   const [mapRepairResult, setMapRepairResult] = useState<{ removed: string[]; added?: string[]; remaining: string[]; message: string } | null>(null)
-  const [confirmRemoveMod, setConfirmRemoveMod] = useState<string | null>(null) // workshopId to confirm single remove
+  const [confirmRemoveMod, setConfirmRemoveMod] = useState<string | null>(null)
   const [confirmBulkRemove, setConfirmBulkRemove] = useState(false)
   const [ignoredMods, setIgnoredMods] = useState<Array<{ workshop_id: string; name: string | null; ignored_at: string }>>([])
   const [ignoredModsOpen, setIgnoredModsOpen] = useState(false)
-  // Conflict pairs the user has explicitly dismissed as false positives.
   const [ignoredPairs, setIgnoredPairs] = useState<Array<{ mod_a: string; mod_b: string; reason?: string | null }>>([])
-  const [confirmRemoveWorkshop, setConfirmRemoveWorkshop] = useState<{ wsId: string; knownModIds: string[] } | null>(null) // wsId for config tab remove
+  const [confirmRemoveWorkshop, setConfirmRemoveWorkshop] = useState<{ wsId: string; knownModIds: string[] } | null>(null)
   const [deduplicating, setDeduplicating] = useState(false)
   const [deduplicateResult, setDeduplicateResult] = useState<string | null>(null)
   const [filterMultiId, setFilterMultiId] = useState(true)
-  // "Active on server" list shape. Compact hides the per-ID chip grid (still
-  // reachable in the inspector); warnings render in both densities.
   const [filterAttention, setFilterAttention] = useLocalStorageState<boolean>('zcp:mods:active:attentionOnly', false)
   const [activeDensity, setActiveDensity] = useLocalStorageState<'compact' | 'detailed'>('zcp:mods:active:density', 'compact')
   const [modManagerSearch, setModManagerSearch] = useState('')
@@ -323,22 +289,19 @@ export default function Mods() {
   const [configSubTab, setConfigSubTab] = useState<'active' | 'order' | 'add' | 'presets' | 'tools'>('active')
   const [lastSavedMod, setLastSavedMod] = useState<string | null>(null)
   const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const busyRef = useRef(false) // Synchronous guard against double-submission
+  const busyRef = useRef(false)
   const discoverAbortRef = useRef<AbortController | null>(null)
 
-  // Restart settings dialog
   const [restartSettingsOpen, setRestartSettingsOpen] = useState(false)
   const [restartWarningMinutes, setRestartWarningMinutes] = useState(5)
   const [delayIfPlayersOnline, setDelayIfPlayersOnline] = useState(false)
   const [maxDelayMinutes, setMaxDelayMinutes] = useState(30)
 
-  // Conflict scanner
   const [conflicts, setConflicts] = useState<ConflictScanResult | null>(null)
   const [conflictsLoading, setConflictsLoading] = useState(false)
   const [conflictsError, setConflictsError] = useState<string | null>(null)
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null)
   const [scanIniSnapshot, setScanIniSnapshot] = useState<string | null>(null)
-  // SSE streaming scan state
   const [scanProgress, setScanProgress] = useState(0)
   const [scanCurrentMod, setScanCurrentMod] = useState<string | null>(null)
   const [scanModsScanned, setScanModsScanned] = useState(0)
@@ -347,24 +310,15 @@ export default function Mods() {
   const eventSourceRef = useRef<EventSource | null>(null)
   const closingIntentionallyRef = useRef(false)
   const sseIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Batched scan-progress ref — flush via rAF to coalesce rapid SSE updates into 1 render
   const scanBatchRef = useRef<{ progress: number; modName: string | null; modsScanned: number; dirty: boolean; raf: number }>({ progress: 0, modName: null, modsScanned: 0, dirty: false, raf: 0 })
 
-  // Inner sub-tab within Conflicts: 'network' or 'dependencies'
-  const [activeTab, setActiveTab] = useState<ModsView>(reviewUnresolved ? 'conflicts' : 'installed')  // Severity filter for pairs list: 'all' | 'high' | 'medium' | 'low'
-  // Graph filter state (used for pair filtering in the conflict list)
+  const [activeTab, setActiveTab] = useState<ModsView>(reviewUnresolved ? 'conflicts' : 'installed')
 
-  // Track which conflict pairs have "show all files" expanded
-  // Mod-details drawer — when set, opens a Dialog showing every conflict that mod is in.
-  // Missing deps state
   const [depAdding, setDepAdding] = useState<string[]>([])
   const [depAddResults, setDepAddResults] = useState<Record<string, 'added' | 'error'>>({})
-  // Inline Workshop search per unresolved dep row (key → state)
   const [depSearchOpen, setDepSearchOpen] = useState<Set<string>>(new Set())
   const [depSearchData, setDepSearchData] = useState<Record<string, DepSearchState>>({})
 
-  // Workshop collection sync status — lightweight read of the diff endpoint.
-  // Only fetched when a collection ID is configured server-side.
   const [collectionStatus, setCollectionStatus] = useState<{
     configured: boolean
     autoSync: boolean
@@ -375,7 +329,6 @@ export default function Mods() {
     loading: boolean
   }>({ configured: false, autoSync: false, inSync: false, drift: 0, title: null, error: null, loading: false })
   const [collectionSyncing, setCollectionSyncing] = useState(false)
-  // Clean up SSE connection on unmount or page navigation
   useEffect(() => {
     return () => {
       closingIntentionallyRef.current = true
@@ -387,18 +340,15 @@ export default function Mods() {
     }
   }, [])
 
-  // Detect stale conflict results when INI config changes
   const conflictsStale = useMemo(() => {
     if (!conflicts || !scanIniSnapshot) return false
     const currentSnapshot = createConflictScanSnapshot(iniConfig?.workshopIds, iniConfig?.modIds)
     return currentSnapshot !== scanIniSnapshot
   }, [conflicts, scanIniSnapshot, iniConfig?.workshopIds, iniConfig?.modIds])
 
-  // Track if auto-discover is pending (moved here for cleanup)
   const autoDiscoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastAutoDiscoverIdRef = useRef<string | null>(null)
 
-  // Mod Presets
   interface ModPreset {
     id: number
     name: string
@@ -411,8 +361,6 @@ export default function Mods() {
   const [presets, setPresets] = useState<ModPreset[]>([])
   const [presetsLoading, setPresetsLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
-  // The router requires mods.manage for reads and writes. Track a server 403
-  // separately so permission denial is not shown as a network failure.
   const [permissionDenied, setPermissionDenied] = useState(false)
   const [savePresetOpen, setSavePresetOpen] = useState(false)
   const [presetName, setPresetName] = useState('')
@@ -422,7 +370,6 @@ export default function Mods() {
   const [confirmApplyPreset, setConfirmApplyPreset] = useState<{ id: number; name: string; modCount: number } | null>(null)
   const [confirmDeletePreset, setConfirmDeletePreset] = useState<{ id: number; name: string } | null>(null)
 
-  // Mod conflict detection
   interface ModConflict {
     type: 'duplicate' | 'missing_modid' | 'outdated_dependency'
     severity: 'warning' | 'info'
@@ -430,12 +377,10 @@ export default function Mods() {
     modIds?: string[]
   }
 
-  // Detect conflicts in current configuration
   const detectedConflicts = useMemo((): ModConflict[] => {
     if (!iniConfig?.configured) return []
     const conflicts: ModConflict[] = []
 
-    // Check for duplicate mod IDs
     const modIdCounts: Record<string, number> = {}
     for (const modId of iniConfig.modIds) {
       modIdCounts[modId] = (modIdCounts[modId] || 0) + 1
@@ -450,8 +395,6 @@ export default function Mods() {
       })
     }
 
-    // Check for workshop items without corresponding mod IDs
-    // This is normal for mods not yet downloaded, so just info level
     const workshopCount = iniConfig.workshopIds?.length || 0
     const modIdCount = iniConfig.modIds?.length || 0
     if (workshopCount > 0 && modIdCount === 0) {
@@ -465,7 +408,6 @@ export default function Mods() {
     return conflicts
   }, [iniConfig, t])
 
-  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (autoDiscoverTimeoutRef.current) {
@@ -485,12 +427,10 @@ export default function Mods() {
       }
       discoverAbortRef.current?.abort()
       discoverAbortRef.current = null
-      // Cancel any in-flight conflict scan
       eventSourceRef.current?.close()
     }
   }, [])
 
-  // Debounced search handlers (300ms)
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value)
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
@@ -506,7 +446,6 @@ export default function Mods() {
   const fetchData = useCallback(async () => {
     setFetchError(null)
     try {
-      // Use allSettled so one failure doesn't break everything
       const results = await Promise.allSettled([
         modsApi.getTrackedMods(),
         modsApi.getStatus(),
@@ -515,13 +454,6 @@ export default function Mods() {
         modsApi.getIgnoredModPairs()
       ])
 
-      // mods.js gates every one of these five behind mods.manage as a
-      // whole-file router.use -- so a role that lacks it gets ALL FIVE
-      // rejecting with a real 403, not a mix of failures. That's the one
-      // shape "the backend may be unreachable" is actively wrong for: the
-      // backend answered every request and said no. Checked before any
-      // per-result processing (including the retry-timer below, which
-      // would otherwise keep re-requesting a 403 every 1.5s forever).
       const allRejected403 = results.every(
         (r) => r.status === 'rejected' && r.reason instanceof ApiError && r.reason.status === 403,
       )
@@ -531,7 +463,6 @@ export default function Mods() {
       }
       setPermissionDenied(false)
 
-      // Extract successful results
       if (results[0].status === 'fulfilled') {
         setMods(results[0].value.mods || [])
       } else {
@@ -552,7 +483,6 @@ export default function Mods() {
       if (results[1].status === 'fulfilled') {
         const statusData = results[1].value
         setStatus(statusData)
-        // Update restart settings from status
         if (statusData) {
           setRestartWarningMinutes(statusData.restartWarningMinutes || 5)
           setDelayIfPlayersOnline(statusData.delayIfPlayersOnline || false)
@@ -561,7 +491,6 @@ export default function Mods() {
       }
       if (results[2].status === 'fulfilled') {
         setIniConfig(results[2].value)
-        // Initialize ordered mod IDs when iniConfig is loaded
         if (results[2].value?.modIds) {
           setOrderedModIds(results[2].value.modIds)
         }
@@ -573,7 +502,6 @@ export default function Mods() {
         setIgnoredPairs(Array.isArray(results[4].value) ? results[4].value : [])
       }
 
-      // Check for failures and show persistent error
       const failures = results.filter(r => r.status === 'rejected')
       if (failures.length > 0) {
         failures.forEach((result, index) => {
@@ -587,9 +515,6 @@ export default function Mods() {
       reportClientError('Failed to fetch mods data.', error)
       setFetchError('Failed to load mod data. The backend may be unreachable.')
     }
-    // After any tracked-mod refresh, re-check the collection chip in the
-    // background. The status hook short-circuits if no collection is wired,
-    // so this is a no-op for users who don't use the feature.
     fetchCollectionStatusRef.current?.().catch(() => {})
   }, [])
 
@@ -649,8 +574,6 @@ export default function Mods() {
     }
   }, [fetchData, savingWorkshopPath, toast, t, canManageServers])
 
-  // Fetch mods that exist on disk but are NOT in the server INI.
-  // Lazy: only called when the user opens the "Show disabled" panel.
   const fetchDisabled = useCallback(async () => {
     setDisabledLoading(true)
     try {
@@ -677,7 +600,6 @@ export default function Mods() {
         title: t('toasts.modEnabledTitle'),
         description: t('toasts.modEnabledDesc', { count: r.modIdsAdded }),
       })
-      // Refresh both lists so the row moves from disabled → tracked.
       await Promise.allSettled([fetchData(), fetchDisabled()])
     } catch (error) {
       toast({
@@ -690,8 +612,6 @@ export default function Mods() {
     }
   }, [enablingId, toast, fetchData, fetchDisabled, t, canManageMods])
 
-  // Delete a single mod's files from disk (and strip it from the INI).
-  // Used by the "Disabled mods on disk" and "Ignored mods" panels.
   const handleDeleteDiskMod = useCallback(async (workshopId: string, modName?: string) => {
     if (deletingId || !canManageMods) return
     const label = modName ? `"${modName}" (${workshopId})` : workshopId
@@ -724,7 +644,6 @@ export default function Mods() {
     }
   }, [deletingId, toast, fetchData, fetchDisabled, t, canManageMods])
 
-  // Bulk delete all currently shown disabled-on-disk mods.
   const handleDeleteAllDisabled = useCallback(async () => {
     if (deletingId || disabledMods.length === 0 || !canManageMods) return
     const ok = await confirm({
@@ -757,7 +676,6 @@ export default function Mods() {
     }
   }, [deletingId, disabledMods, toast, fetchData, fetchDisabled, t, canManageMods])
 
-  // Bulk delete all ignored mods from disk.
   const handleDeleteAllIgnoredFromDisk = useCallback(async () => {
     if (deletingId || ignoredMods.length === 0 || !canManageMods) return
     const ok = await confirm({
@@ -790,17 +708,7 @@ export default function Mods() {
     }
   }, [deletingId, ignoredMods, toast, fetchData, fetchDisabled, t, canManageMods])
 
-  // Fetch the workshop-collection diff. Cheap one-shot read; only updates the
-  // header indicator. Errors are stored on state so the user can see why
-  // sync isn't reflecting their changes.
-  //
-  // We use a ref to break the dependency cycle between fetchData and
-  // fetchCollectionStatus: every fetchData() call schedules a status refresh
-  // (so adding/removing a tracked mod auto-refreshes the chip) without
-  // re-creating fetchData on every render.
   const fetchCollectionStatusRef = useRef<() => Promise<void>>(async () => {})
-  // Guard so we stop re-fetching if the user has no collection wired up
-  // (avoids hammering the diff endpoint on every fetchData()).
   const collectionEverConfiguredRef = useRef(true)
   const fetchCollectionStatus = useCallback(async () => {
     if (!collectionEverConfiguredRef.current) return
@@ -822,16 +730,10 @@ export default function Mods() {
     }
   }, [])
 
-  // Keep the ref pointing at the latest implementation so fetchData can
-  // call it without taking it as a dependency.
   useEffect(() => {
     fetchCollectionStatusRef.current = fetchCollectionStatus
   }, [fetchCollectionStatus])
 
-  // If the user wires up a collection in Settings *after* opening the Mods
-  // page, the gate above (collectionEverConfiguredRef = false) would keep
-  // the chip hidden until full reload. Re-arm the gate when the tab gains
-  // focus so a freshly-saved config gets discovered.
   useEffect(() => {
     const onFocus = () => {
       if (!collectionEverConfiguredRef.current) {
@@ -865,7 +767,6 @@ export default function Mods() {
     }
   }, [collectionSyncing, fetchCollectionStatus, toast, t, canManageMods])
 
-  // Fetch mod presets
   const fetchPresets = useCallback(async () => {
     setPresetsLoading(true)
     try {
@@ -879,8 +780,6 @@ export default function Mods() {
     }
   }, [])
 
-  // Initial data fetch + auto sync from server
-  // Subscribe to Socket.IO mod events for real-time status updates
   const socket = useSocket()
   useEffect(() => {
     if (!socket) return
@@ -908,15 +807,13 @@ export default function Mods() {
     const initializeData = async () => {
       await Promise.allSettled([fetchData(), fetchPresets(), fetchCollectionStatus()])
       if (!mounted) return
-      // Load cached conflict scan results (if any) so the Conflicts tab isn't blank
       try {
         const cached = await modsApi.getCachedConflicts()
         if (!mounted) return
         if (cached) {
           setConflicts(cached)
-          setConflictsError(null) // clear any stale error from a previous session
-          setLastScanTime(new Date()) // approximate — exact time isn't stored
-          // Set a snapshot so stale detection works when modIds change after cached load
+          setConflictsError(null)
+          setLastScanTime(new Date())
           setScanIniSnapshot(createConflictScanSnapshot(cached._workshopIdsSnapshot, cached._modIdsSnapshot))
           if (cached.stale) {
             // Config changed since last scan — the stale banner will show
@@ -971,11 +868,6 @@ export default function Mods() {
       })
     } finally {
       setApplyingPreset(null)
-      // Always resync — not because the apply can partially succeed (the
-      // server route merges both INI lines in memory and writes them in one
-      // fs.writeFileSync call, so it's all-or-nothing), but so the UI
-      // reflects the confirmed server-side config rather than a local guess,
-      // even after a failed attempt.
       fetchData()
     }
   }
@@ -999,7 +891,6 @@ export default function Mods() {
     }
   }
 
-  // Filtered mods based on search and filters
   const filteredMods = useMemo(() => {
     let result = [...mods]
 
@@ -1023,10 +914,6 @@ export default function Mods() {
     })
   }, [mods, deferredSearchQuery, showUpdatesOnly])
 
-  // Group mods by status for scannable display.
-  // Mods that are tracked but no longer present in the server INI's
-  // WorkshopItems= list are routed to a separate "Deactivated" bucket so
-  // they don't pollute the active server view.
   const configuredWorkshopIds = useMemo(() => new Set(iniConfig?.workshopIds || []), [iniConfig?.workshopIds])
   const groupedMods = useMemo(() => {
     const updateAvailable: TrackedMod[] = []
@@ -1051,9 +938,6 @@ export default function Mods() {
     [groupedMods]
   )
 
-  // status.removedWorkshopIds contains Workshop IDs still present in tracking
-  // after Steam confirmed EResult 9 (FileNotFound); removed subscriptions are
-  // filtered server-side so this warning disappears after the X action.
   const removedWorkshopMods = useMemo(() => {
     const byId = new Map(mods.map((m) => [m.workshop_id, m]))
     return (status?.removedWorkshopIds || []).map((id) => ({
@@ -1062,11 +946,8 @@ export default function Mods() {
     }))
   }, [status?.removedWorkshopIds, mods])
 
-  // Collapse "up-to-date" by default, expand when searching
   const [upToDateExpanded, setUpToDateExpanded] = useState(false)
-  // Collapse "never checked" by default — it's an alphabetical dump until a check has run
   const [neverCheckedExpanded, setNeverCheckedExpanded] = useState(false)
-  // Reset collapse when search changes
   useEffect(() => {
     if (deferredSearchQuery) {
       setUpToDateExpanded(true)
@@ -1077,10 +958,6 @@ export default function Mods() {
     }
   }, [deferredSearchQuery])
 
-  // If "Never Checked" is the only non-empty bucket (e.g. fresh server, first
-  // load before any update check has run), auto-expand it. Otherwise the user
-  // sees an empty-looking list with just a collapsed header — the mods ARE
-  // tracked, they just aren't visible.
   useEffect(() => {
     if (deferredSearchQuery) return
     if (
@@ -1098,8 +975,6 @@ export default function Mods() {
     setChecking(true)
     try {
       const result = await modsApi.checkUpdates()
-      // Backend returns `{ updated, mods, error?, skipped? }`. Older code read
-      // `result.updatesFound` which never existed → always reported 0.
       const count =
         (Array.isArray(result?.mods) ? result.mods.length : 0) ||
         (typeof result?.updatesFound === 'number' ? result.updatesFound : 0)
@@ -1137,15 +1012,12 @@ export default function Mods() {
   }
 
   const discoverWorkshopMod = useCallback(async (workshopId: string) => {
-    // Prevent double-triggering
     if (discoveringMod || !canManageMods) return
 
-    // Abort any previous discovery request
     discoverAbortRef.current?.abort()
     const controller = new AbortController()
     discoverAbortRef.current = controller
 
-    // Check if already configured
     if (iniConfig?.workshopIds?.includes(workshopId)) {
       toast({
         title: t('toasts.alreadyAddedTitle'),
@@ -1162,7 +1034,6 @@ export default function Mods() {
     try {
       const result = await modsApi.discoverModIds(workshopId, undefined, { signal: controller.signal })
 
-      // Filter out duplicate mod IDs (case-insensitive)
       const seenIds = new Set<string>()
       const uniqueModIds = result.modIds.filter(id => {
         const lower = id.toLowerCase()
@@ -1171,7 +1042,6 @@ export default function Mods() {
         return true
       })
 
-      // Check which mod IDs are already in config
       const alreadyConfigured = uniqueModIds.filter(id =>
         iniConfig?.modIds?.includes(id)
       )
@@ -1186,7 +1056,6 @@ export default function Mods() {
 
       setDiscoveredMod(newResult)
 
-      // Pre-select only NEW mod IDs (not already configured)
       const newModIds = uniqueModIds.filter(id => !alreadyConfigured.includes(id))
       setSelectedModIds(new Set(newModIds))
 
@@ -1211,7 +1080,7 @@ export default function Mods() {
         })
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return // Superseded by newer request
+      if (error instanceof DOMException && error.name === 'AbortError') return
       toast({
         title: t('toasts.discoveryFailedTitle'),
         description: getUserErrorMessage(error, t('toasts.discoveryFailedFallback')),
@@ -1222,7 +1091,6 @@ export default function Mods() {
     }
   }, [discoveringMod, iniConfig?.modIds, iniConfig?.workshopIds, toast, t, canManageMods])
 
-  // Auto-discover on paste (debounced)
   const handleModInputChange = useCallback((value: string) => {
     setAdvancedModInput(value)
 
@@ -1243,7 +1111,6 @@ export default function Mods() {
     }
   }, [discoverWorkshopMod])
 
-  // Discover mod IDs from workshop URL/ID
   const handleDiscoverMod = async () => {
     if (!canManageMods) return
     const workshopId = parseWorkshopId(advancedModInput)
@@ -1260,7 +1127,6 @@ export default function Mods() {
     await discoverWorkshopMod(workshopId)
   }
 
-  // Add mod with selected mod IDs
   const handleAddModAdvanced = async () => {
     if (!discoveredMod || busyRef.current || !canManageMods) return
     busyRef.current = true
@@ -1269,14 +1135,12 @@ export default function Mods() {
     try {
       const modIdsArray = Array.from(selectedModIds)
 
-      // Track the mod first
       await modsApi.trackMod(discoveredMod.workshopId)
 
-      // Add with selected mod IDs
       const result = await modsApi.addModAdvanced(
         discoveredMod.workshopId,
         modIdsArray.length > 0 ? modIdsArray : undefined,
-        modIdsArray.length === 0 // If no mod IDs selected, try to include all
+        modIdsArray.length === 0
       )
 
       if (result.addedModIds.length > 0) {
@@ -1302,7 +1166,6 @@ export default function Mods() {
         })
       }
 
-      // Reset and close
       setAdvancedModInput('')
       setDiscoveredMod(null)
       setSelectedModIds(new Set())
@@ -1320,7 +1183,6 @@ export default function Mods() {
     }
   }
 
-  // Toggle mod ID selection
   const toggleModIdSelection = (modId: string) => {
     setSelectedModIds(prev => {
       const next = new Set(prev)
@@ -1355,9 +1217,6 @@ export default function Mods() {
     }
   }
 
-  // Re-enable a deactivated tracked mod by appending its workshop ID to the
-  // server INI's WorkshopItems= list. SteamCMD will (re)download it on next
-  // server start if the workshop folder isn't already on disk.
   const handleEnableMod = async (workshopId: string) => {
     if (busyRef.current || !canManageMods) return
     busyRef.current = true
@@ -1382,9 +1241,6 @@ export default function Mods() {
     }
   }
 
-  // Bulk: re-enable every selected deactivated mod. Falls back to sequential
-  // addToIni calls because there's no dedicated batch endpoint and the volume
-  // is expected to be small (handful of leftovers).
   const handleBulkEnable = async (workshopIds: string[]) => {
     if (workshopIds.length === 0 || busyRef.current || !canManageMods) return
     busyRef.current = true
@@ -1560,10 +1416,6 @@ export default function Mods() {
       const parts: string[] = [t('toasts.syncedFromServer', { count: result.synced || 0 })]
       if (result.skippedNonMod > 0) parts.push(t('toasts.skippedNonMod', { count: result.skippedNonMod }))
       if (result.skippedIgnored > 0) parts.push(t('toasts.skippedIgnored', { count: result.skippedIgnored }))
-      // Sentence separator/terminator is a language property, not something
-      // every locale's untranslated fragment can be assumed to want a Latin
-      // ". " for -- zh-CN / zh-TW's own fragments carry no punctuation and expect a
-      // full-width terminator instead.
       const sentenceEnd = i18n.language.startsWith('zh') ? '。' : '. '
       toast({
         title: t('toasts.modsSyncedTitle'),
@@ -1592,7 +1444,6 @@ export default function Mods() {
       })
       return
     }
-    // Validate format before sending to API
     const trimmed = collectionUrl.trim()
     if (!/^\d{1,15}$/.test(trimmed) && !trimmed.includes('steamcommunity.com')) {
       toast({
@@ -1614,9 +1465,6 @@ export default function Mods() {
         ...m,
         selected: !existingWorkshopIds.has(m.workshopId),
         modId: '',
-        // Do not guess the folder from the Steam title: the real folder lives
-        // in the mod's media/maps directory and rarely matches. A wrong value
-        // written to Map= stops the world from loading.
         mapFolder: undefined
       })))
       setCollectionImported(true)
@@ -1686,7 +1534,6 @@ export default function Mods() {
     try {
       const results = await Promise.allSettled(
         selectedModsList.map(async (mod) => {
-          // Write each mod directly to the server .ini (workshopId + mod IDs + map folders)
           const selectedModIds = mod.modId ? [mod.modId] : undefined
           await modsApi.addModAdvanced(
             mod.workshopId,
@@ -1754,11 +1601,6 @@ export default function Mods() {
 
       const result = await modsApi.writeToIni(modsData, mapFolders)
 
-      // The server's `message` already spells out which workshop IDs were
-      // subscribed but couldn't be enabled (see unresolvedModIds in
-      // apps/panel-server/routes/mods.js) -- reuse it as-is instead of composing a new
-      // (English-only, untranslated) sentence here. Append resolved mod
-      // names in parens so the warning names mods, not just numeric IDs.
       const unresolvedIds: string[] = result.unresolvedModIds || []
       const nameByWorkshopId = new Map(modsToInstall.map(m => [m.workshopId, m.name]))
       const unresolvedNames = unresolvedIds.map(id => nameByWorkshopId.get(id) || id)
@@ -1785,7 +1627,6 @@ export default function Mods() {
     }
   }
 
-  // Sync mod IDs from downloaded workshop mods to the Mods= line in server.ini
   const handleSyncModIds = async () => {
     if (!canManageMods) return
     setSyncing(true)
@@ -1807,7 +1648,6 @@ export default function Mods() {
         })
       }
 
-      // Refresh ini config display
       fetchData()
     } catch (error) {
       toast({
@@ -1820,7 +1660,6 @@ export default function Mods() {
     }
   }
 
-  // Drag & drop handlers for mod load order
   const handleDragStart = (index: number) => {
     setDraggedModIndex(index)
   }
@@ -1830,7 +1669,6 @@ export default function Mods() {
     if (draggedModIndex === null || draggedModIndex === index) return
     if (draggedModIndex < 0 || draggedModIndex >= orderedModIds.length) return
 
-    // Reorder the mods
     const newOrder = [...orderedModIds]
     const [draggedItem] = newOrder.splice(draggedModIndex, 1)
     newOrder.splice(index, 0, draggedItem)
@@ -1856,8 +1694,6 @@ export default function Mods() {
     setOrderedModIds(newOrder)
   }
 
-  // Dependency-aware auto-sort. Computes a proposal only; nothing is written
-  // until the user applies it and then saves the order.
   const handleAutoSort = () => {
     const requiresByModId = buildRequiresMap(iniConfig?.workshopModMap)
     const result = computeAutoSortedOrder(orderedModIds, requiresByModId)
@@ -1923,10 +1759,6 @@ export default function Mods() {
     }
   }
 
-  // Move winnerModId in the load order so it loads AFTER loserModId.
-  // Used by the inline "Make X win" buttons inside each conflict pair card.
-  // Saves immediately and optimistically updates the conflict scan's load-order map
-  // so the winner indicators flip without a full rescan.
   const promoteModOverOpponent = async (winnerModId: string, winnerName: string, loserModId: string, loserName: string) => {
     if (busyRef.current || !canManageMods) return
     const source = (iniConfig?.modIds && iniConfig.modIds.length > 0) ? iniConfig.modIds : orderedModIds
@@ -1970,7 +1802,7 @@ export default function Mods() {
 
   const hasModOrderChanged = useMemo(() => {
     if (!iniConfig?.modIds) return false
-    if (orderedModIds.length !== iniConfig.modIds.length) return true // Different count = changed
+    if (orderedModIds.length !== iniConfig.modIds.length) return true
     return orderedModIds.some((id, i) => id !== iniConfig.modIds[i])
   }, [orderedModIds, iniConfig?.modIds])
 
@@ -2053,14 +1885,9 @@ export default function Mods() {
     }
   }
 
-  // Memoized list of mods with updates available
   const modsWithUpdates = useMemo(() => mods.filter(m => m.update_available), [mods])
   const selectedCollectionCount = useMemo(() => collectionMods.filter(m => m.selected).length, [collectionMods])
 
-  // Render a single mod row — extracted to avoid duplication across groups.
-  // Hover-reveal pattern: action cluster + checkbox stay hidden until the row
-  // gets hover/focus or when any selection is active. Keeps the resting state
-  // calm while still being one keystroke/cursor away from the controls.
   const renderModRow = useCallback((mod: TrackedMod) => {
     const isSelected = selectedMods.has(mod.workshop_id)
     const inConfig = configuredWorkshopIds.has(mod.workshop_id)
@@ -2082,7 +1909,6 @@ export default function Mods() {
                 aria-label={`Select ${label}`}
               />
             </div>
-            {/* Leading tile carries the per-mod state colour (update / unchecked / up-to-date). */}
             <WorkshopThumb
               wsId={mod.workshop_id}
               label={label}
@@ -2105,7 +1931,6 @@ export default function Mods() {
         }
         titleBadges={
           <>
-            {/* "Not in Config" first — a mod that can't load is a bigger problem than a stale one. */}
             {!inConfig && (
               <Badge variant="outline" className="h-5 shrink-0 border-destructive/40 bg-destructive/5 text-[10px] text-destructive">
                 {t('installedTab.notInConfig')}
@@ -2159,7 +1984,6 @@ export default function Mods() {
     )
   }, [demoMode, selectedMods, configuredWorkshopIds, loading, toggleModSelect, toast, t, i18n.language])
 
-  // ── Virtualized tracked mods list ──
   type ModGroup = 'update' | 'neverChecked' | 'upToDate' | 'deactivated'
   type FlatModItem =
     | { type: 'header'; group: ModGroup; count: number }
@@ -2199,7 +2023,6 @@ export default function Mods() {
     overscan: 10,
   })
 
-  // ── Active Mods sub-tab: memoized derived data ──
   const activeModsData = useMemo(() => {
     const wsMap = iniConfig?.workshopModMap || {}
     const groups: WsGroup[] = []
@@ -2217,14 +2040,10 @@ export default function Mods() {
     const mappedIds = new Set(allModsList.map(m => m.id))
     const enabledIds = new Set(allModsList.filter(m => m.enabled).map(m => m.id))
     const orphaned = (iniConfig?.modIds || []).filter(id => !mappedIds.has(id))
-    // Add orphaned enabled IDs so dependency checks can find them
     for (const id of orphaned) enabledIds.add(id)
     const enabledCount = enabledIds.size
     const multiIdCount = groups.filter(g => g.mods.length > 1).length
 
-    // Build missing-deps map: modId → list of required mod IDs not currently enabled.
-    // Resolution (exact id, or a "<required>_<suffix>" / "<required>-<suffix>" fork)
-    // is shared with the load-order auto-sort so the two can't disagree.
     const resolveRequirement = createRequirementResolver(enabledIds)
     const isRequireSatisfied = (req: string) => resolveRequirement(req) !== null
     const missingDepsMap = new Map<string, string[]>()
@@ -2236,7 +2055,6 @@ export default function Mods() {
       }
     }
 
-    // Build duplicate mod ID map: modId → list of wsIds that provide it
     const modIdProviders = new Map<string, string[]>()
     for (const g of groups) {
       for (const mod of g.mods) {
@@ -2253,11 +2071,6 @@ export default function Mods() {
     return { groups, orphaned, enabledCount, multiIdCount, missingDepsMap, duplicateModIds }
   }, [iniConfig?.workshopModMap, iniConfig?.workshopIds, iniConfig?.modIds])
 
-  // ── Sibling conflicts: within a single workshop item, which mod IDs overlap
-  //    with each other? These are typically alternatives (e.g. NUDE vs DOLL
-  //    texture variants) — usually only one should be enabled at a time.
-  //    Pairs the user has dismissed as false positives are excluded so the
-  //    Advanced tab doesn't keep nagging about library + dependant combos. ──
   const ignoredPairKeys = useMemo(() => {
     const s = new Set<string>()
     for (const p of ignoredPairs) {
@@ -2272,7 +2085,6 @@ export default function Mods() {
   const siblingConflictsMap = useMemo(() => {
     const result = new Map<string, Map<string, Set<string>>>()
     if (!conflicts?.pairs?.length) return result
-    // Build modId → wsId lookup from active groups
     const modToWs = new Map<string, string>()
     for (const g of activeModsData.groups) {
       for (const m of g.mods) modToWs.set(m.id, g.wsId)
@@ -2281,9 +2093,7 @@ export default function Mods() {
       const wsA = modToWs.get(pair.modA.modId)
       const wsB = modToWs.get(pair.modB.modId)
       if (!wsA || wsA !== wsB) continue
-      // User dismissed this pair as a false positive — skip.
       if (isPairIgnored(pair.modA.modId, pair.modB.modId)) continue
-      // Same-workshop conflict — record both directions
       let groupMap = result.get(wsA)
       if (!groupMap) { groupMap = new Map(); result.set(wsA, groupMap) }
       const setA = groupMap.get(pair.modA.modId) || new Set<string>()
@@ -2314,7 +2124,6 @@ export default function Mods() {
 
 
   const scanConflicts = useCallback(async () => {
-    // Close any previous SSE connection
     if (eventSourceRef.current) {
       closingIntentionallyRef.current = true
       eventSourceRef.current.close()
@@ -2328,17 +2137,14 @@ export default function Mods() {
     setScanModsScanned(0)
     setScanTotalMods(0)
     setStreamConflicts([])
-    // Cancel any pending rAF from previous scan
     cancelAnimationFrame(scanBatchRef.current.raf)
     scanBatchRef.current = { progress: 0, modName: null, modsScanned: 0, dirty: false, raf: 0 }
 
     const token = getAccessToken()
-    // SSE doesn't support custom headers, so pass token as query param
     const url = `/api/mods/conflicts/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`
     const es = new EventSource(url)
     eventSourceRef.current = es
 
-    // Idle timeout: if no SSE events arrive for 90s, assume connection is dead
     const resetIdleTimer = () => {
       if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
       sseIdleTimerRef.current = setTimeout(() => {
@@ -2363,7 +2169,6 @@ export default function Mods() {
       resetIdleTimer()
       try {
         const data: ScanStreamModScanned = JSON.parse(e.data)
-        // Batch into ref — flush once per frame to avoid 3 setState per SSE event
         const batch = scanBatchRef.current
         batch.progress = data.progress
         batch.modName = data.modName
@@ -2384,7 +2189,6 @@ export default function Mods() {
       resetIdleTimer()
       try {
         const data: ScanStreamConflictFound = JSON.parse(e.data)
-        // Keep only the last 50 entries (only 8 are displayed at a time)
         setStreamConflicts(prev => {
           const next = [...prev, data]
           return next.length > 50 ? next.slice(-50) : next
@@ -2406,7 +2210,6 @@ export default function Mods() {
       if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
       try {
         const data = JSON.parse((e as MessageEvent).data)
-        // Flush any pending batch before setting final state
         cancelAnimationFrame(scanBatchRef.current.raf)
         scanBatchRef.current.dirty = false
         setConflicts(data)
@@ -2423,15 +2226,10 @@ export default function Mods() {
     })
 
     es.addEventListener('error', (e) => {
-      // Native EventSource fires Event (not MessageEvent) on connection drop.
-      // Custom 'error' events from our backend ARE MessageEvents with data.
       if (sseIdleTimerRef.current) clearTimeout(sseIdleTimerRef.current)
       es.close()
-      // Only null the ref if this is still the active EventSource (prevents race with re-scan)
       if (eventSourceRef.current === es) eventSourceRef.current = null
 
-      // If we closed intentionally (navigation/unmount), don't show errors.
-      // The backend may still finish — cached results will load on re-mount.
       if (closingIntentionallyRef.current) {
         closingIntentionallyRef.current = false
         setConflictsLoading(false)
@@ -2449,9 +2247,6 @@ export default function Mods() {
         setConflictsLoading(false)
         toast({ title: t('toasts.scanFailedTitle'), description: t('toasts.scanConnectionLostDesc'), variant: 'destructive' })
       } else {
-        // Connection lost — try to recover cached results from backend.
-        // Only show the destructive toast if recovery fails; otherwise the
-        // user gets a less alarming "showing cached results" notice inline.
         setConflictsLoading(false)
         modsApi.getCachedConflicts().then(cached => {
           if (closingIntentionallyRef.current) return
@@ -2493,7 +2288,6 @@ export default function Mods() {
             </AlertDescription>
           </Alert>
         )}
-        {/* Header */}
         <PageHeader
           title={t('pageHeader.title')}
           description={t('pageHeader.description')}
@@ -2517,7 +2311,6 @@ export default function Mods() {
           />
         ) : (
         <>
-        {/* Status Bar — only show when mods are tracked */}
         {(status?.totalModsTracked || 0) > 0 && (
         <div className="flex items-center gap-4 rounded-lg border border-border/50 bg-card/60 px-3 py-2 flex-wrap">
           <div className="flex items-center gap-2">
@@ -2547,7 +2340,6 @@ export default function Mods() {
             </>
           )}
 
-          {/* Workshop ACF Status */}
           {!status?.workshopAcfConfigured && (
             <>
               <Separator orientation="vertical" className="h-4" />
@@ -2644,7 +2436,6 @@ export default function Mods() {
         </div>
         )}
 
-        {/* Pending Restart Alert */}
         {status?.pendingRestart && (
           <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3 sm:items-center">
@@ -2670,10 +2461,6 @@ export default function Mods() {
           </div>
         )}
 
-        {/* Stale-flag warning: backend reports N pending updates from live Workshop ACF
-            but the per-mod DB flags don't reflect them yet (e.g. last check was rejected,
-            or the ACF was rewritten by Steam after a sync). Surface it so it's not invisible
-            inside a collapsed group. */}
         {!status?.pendingRestart
           && (status?.updatesAvailable ?? 0) > 0
           && groupedMods.updateAvailable.length === 0
@@ -2697,7 +2484,6 @@ export default function Mods() {
           </div>
         )}
 
-        {/* A confirmed missing Workshop item requires operator action. */}
         {removedWorkshopMods.length > 0 && (
           <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm">
             <div className="flex items-start gap-3">
@@ -2737,8 +2523,6 @@ export default function Mods() {
           </div>
         )}
 
-        {/* A transient Workshop outage falls back to local comparison and
-            retries on the next update cycle. */}
         {status && !status.steamApiHealthy && status.lastSteamApiFailureAt &&
           steamApiIssueDismissed !== status.lastSteamApiFailureAt && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -2765,8 +2549,6 @@ export default function Mods() {
             </div>
         )}
 
-        {/* Unknown Workshop result codes stay informational and display the
-            raw code instead of an unverified label. */}
         {(status?.unknownWorkshopIds?.length ?? 0) > 0 && (
           <div className="flex flex-wrap items-start gap-2 px-1 text-xs text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
@@ -2780,14 +2562,6 @@ export default function Mods() {
           </div>
         )}
 
-        {/* Duplicate-key warning: a setting appears more than once as its own
-            line in the raw INI. This page's own reads/writes (content.match()
-            with no /g, server-side) only ever see the FIRST copy; the Server
-            Configuration editor's line-by-line parser lets the LAST copy win.
-            Two screens the operator can both have open at once, showing
-            different values for the same nominal setting, with nothing else
-            telling either of them the file is like this. See
-            apps/panel-server/utils/iniDuplicateKeys.js. */}
         {iniConfig?.duplicateKeys && iniConfig.duplicateKeys.length > 0 && (
           <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3 sm:items-center">
@@ -2881,7 +2655,6 @@ export default function Mods() {
               </p>
             </div>
 
-            {/* Import Collection Dialog */}
             <Dialog
               open={collectionDialogOpen}
               onOpenChange={(open) => {
@@ -3056,7 +2829,6 @@ export default function Mods() {
                 </DialogContent>
             </Dialog>
 
-            {/* Add Single Mod Dialog - Improved with Multi-ID support */}
             <Dialog open={advancedAddOpen} onOpenChange={(open) => {
                 setAdvancedAddOpen(open)
                 if (!open) {
@@ -3086,7 +2858,6 @@ export default function Mods() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
-                    {/* Input section */}
                     <div className="space-y-2">
                       <Label htmlFor="advanced-mod-input" className="sr-only">{t('addModDialog.inputLabel')}</Label>
                       <div className="flex flex-col gap-2 sm:flex-row">
@@ -3121,7 +2892,6 @@ export default function Mods() {
                       </p>
                     </div>
 
-                    {/* Loading skeleton */}
                     {discoveringMod && (
                       <div className="space-y-3 p-4 border rounded-lg bg-muted/30 animate-pulse">
                         <div className="flex items-start justify-between">
@@ -3138,10 +2908,8 @@ export default function Mods() {
                       </div>
                     )}
 
-                    {/* Discovered mod info */}
                     {discoveredMod && !discoveringMod && (
                       <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
-                        {/* Mod header */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <h4 className="font-medium text-sm truncate" title={discoveredMod.name}>
@@ -3181,7 +2949,6 @@ export default function Mods() {
                           </div>
                         </div>
 
-                        {/* Already added warning */}
                         {discoveredMod.isAlreadyAdded && (
                           <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 p-2 text-xs text-foreground">
                             <Info className="w-4 h-4 text-primary shrink-0" />
@@ -3189,7 +2956,6 @@ export default function Mods() {
                           </div>
                         )}
 
-                        {/* Mod IDs selection */}
                         {discoveredMod.modIds.length > 0 ? (
                           <div className="space-y-2.5">
                             <div className="flex items-center justify-between gap-2">
@@ -3320,7 +3086,6 @@ export default function Mods() {
                           </div>
                         )}
 
-                        {/* Map folders info */}
                         {discoveredMod.mapFolders.length > 0 && (
                           <div className="flex items-start gap-2 text-xs">
                             <MapIcon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
@@ -3367,7 +3132,6 @@ export default function Mods() {
                 </DialogContent>
             </Dialog>
 
-            {/* Restart Settings Dialog */}
             <Dialog open={restartSettingsOpen} onOpenChange={setRestartSettingsOpen}>
                 <DialogContent>
                   <DialogHeader>
@@ -3441,10 +3205,8 @@ export default function Mods() {
             </Dialog>
           </div>
 
-          {/* Server Mods Tab — auto-tracks every workshop ID in the server INI. */}
           {activeTab === 'installed' && (
           <div className="space-y-4">
-            {/* Search and Filters */}
             {mods.length > 0 && (
             <div className="flex items-center gap-4 flex-wrap">
               <div className="relative min-w-0 basis-full sm:basis-auto sm:flex-1 sm:max-w-sm">
@@ -3496,9 +3258,6 @@ export default function Mods() {
                 <TooltipContent>{t('installedTab.showDisabledTooltip')}</TooltipContent>
               </Tooltip>
 
-              {/* Workshop collection sync indicator. Shown only when an admin
-                  has wired up a collection ID. Clicking the chip refreshes
-                  the diff; the inline button performs the actual sync. */}
               {collectionStatus.configured && (
                 collectionStatus.error ? (
                   <button
@@ -3568,7 +3327,6 @@ export default function Mods() {
             </div>
             )}
 
-            {/* Mods List — grouped by status */}
             <Card>
               <CardContent className="p-0">
                 {filteredMods.length === 0 ? (
@@ -3584,7 +3342,6 @@ export default function Mods() {
                   ) : (
                     <div className="px-4 py-10 sm:px-8">
                       <div className="mx-auto max-w-2xl">
-                        {/* Hero */}
                         <div className="flex flex-col items-center text-center mb-6">
                           <div className="relative mb-4" aria-hidden="true">
                             <div className="absolute inset-0 rounded-2xl bg-primary/15 blur-xl" />
@@ -3601,7 +3358,6 @@ export default function Mods() {
                           </p>
                         </div>
 
-                        {/* 3 paths to populate the list */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5">
                           <button
                             type="button"
@@ -3758,13 +3514,6 @@ export default function Mods() {
               </CardContent>
             </Card>
 
-            {/* ─── Disabled mods ──────────────────────────────────────────
-                Mods downloaded into the Workshop content folder but not in
-                the server INI's WorkshopItems= list. Hidden by default; the
-                "Show disabled" toggle in the filter bar reveals this panel
-                and triggers a one-shot fetch. Each row offers a quick Enable
-                that adds it to the INI (and lifts any prior ignore-list
-                entry so auto-track picks it up). */}
             {showDisabled && (
               <div className="rounded-lg border border-dashed border-border/50 bg-card/40">
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/30">
@@ -3882,7 +3631,6 @@ export default function Mods() {
               </div>
             )}
 
-            {/* Ignored Mods — collapsible section */}
             {ignoredMods.length > 0 && (
               <div className="rounded-lg border border-border/30 bg-card/50">
                 <button
@@ -3969,14 +3717,10 @@ export default function Mods() {
           </div>
           )}
 
-          {/* Server Config Tab */}
           {CONFIG_VIEWS.includes(activeTab) && (
           <div className="space-y-4">
             {iniConfig?.configured ? (
               <>
-                {/* ─── Summary bar ───
-                    Hidden in the Active Mods sub-tab, where the per-row toolbar
-                    already shows the more-useful "enabled / total" count. */}
                 {configSubTab !== 'active' && (
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span className="tabular-nums">{iniConfig.totalMods} <span className="opacity-50">{t('serverConfigTab.summaryMods')}</span></span>
@@ -3985,15 +3729,10 @@ export default function Mods() {
                   </div>
                 )}
 
-                {/* ═══ ACTIVE MODS SUB-TAB ═══ */}
                 {configSubTab === 'active' && (() => {
                   const { orphaned, enabledCount, multiIdCount, groups, missingDepsMap, duplicateModIds } = activeModsData
                   const { filteredGroups } = activeModsFiltered
 
-                  // What actually warrants a red flag: two enabled variants the
-                  // scanner confirmed overlap, an enabled mod whose required ID
-                  // isn't loaded, or an ID claimed by two Workshop items.
-                  // A partial "1 of 5 enabled" is normal and is NOT a problem.
                   const groupAttention = (g: WsGroup) => {
                     const enabledSet = new Set(g.mods.filter(m => m.enabled).map(m => m.id))
                     const siblings = siblingConflictsMap.get(g.wsId)
@@ -4039,10 +3778,6 @@ export default function Mods() {
                     } catch (e) { reportClientError('Failed to toggle mod', e); toast({ variant: 'destructive', title: 'Failed to toggle mod' }) } finally { busyRef.current = false }
                   }
 
-                  // Mark a sibling-conflict pair as a false positive. Used when the
-                  // variant detector mis-flags a shared library + dependant
-                  // (e.g. DynamicTradingCommon vs DynamicTradingV2) as two
-                  // variants of the same mod.
                   const dismissPair = async (a: string, b: string) => {
                     if (!canManageMods) return
                     try {
@@ -4123,7 +3858,6 @@ export default function Mods() {
                     } catch (e) { reportClientError('Failed to remove workshop item', e); toast({ variant: 'destructive', title: 'Failed to remove workshop item' }) }
                   }
 
-                  // Handle confirmed workshop removal from AlertDialog
                   const handleConfirmedRemoveWorkshop = async () => {
                     if (confirmRemoveWorkshop) {
                       await removeWorkshop(confirmRemoveWorkshop.wsId, confirmRemoveWorkshop.knownModIds)
@@ -4280,8 +4014,6 @@ export default function Mods() {
                                 <span className="font-mono tabular-nums text-foreground/85">{groups.length}</span>
                                 {t(groups.length !== 1 ? 'activeMods.workshopItems_other' : 'activeMods.workshopItems_one')}
                               </span>
-                              {/* One switch to jump straight to the items that are actually
-                                  broken, instead of scrolling the whole list looking for red. */}
                               {attentionCount > 0 && (
                                 <button
                                   type="button"
@@ -4326,7 +4058,6 @@ export default function Mods() {
                                 </span>
                               )}
                             </div>
-                            {/* Collapsed by default — it's onboarding copy, not a status line. */}
                             <details className="group/help">
                               <summary className="inline-flex cursor-pointer select-none list-none items-center gap-1 text-[11px] text-muted-foreground/70 transition-colors hover:text-foreground">
                                 <ChevronRight className="h-3 w-3 transition-transform group-open/help:rotate-90" aria-hidden="true" />
@@ -4365,9 +4096,7 @@ export default function Mods() {
                         </div>
                       </div>
 
-                      {/* (Dependency / duplicate badges are now inline above) */}
 
-                      {/* Scrollable mod list */}
                       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_21rem]">
                       <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-muted/50 shadow-md">
                         {displayGroups.length > 0 ? (
@@ -4381,16 +4110,11 @@ export default function Mods() {
                                 const att = groupAttention(g)
                                 const enabledN = g.mods.filter(m => m.enabled).length
                                 const totalN = g.mods.length
-                                // Chips are the dense part of the row. Compact keeps them in the
-                                // inspector; the selected row always shows them so a click still
-                                // reveals everything in place.
                                 const showChips = !isSingle && (activeDensity === 'detailed' || isInspected)
                                 const groupMissing = g.mods.flatMap(m => missingDepsMap.get(m.id) || [])
                                 const groupRequires = g.mods.flatMap(m => m.require || []).filter((v, i, a) => a.indexOf(v) === i)
                                 const missingRequired = groupRequires.filter(dep => groupMissing.includes(dep))
 
-                                // Only colour the count when something is actually wrong. A partial
-                                // "1 of 5" is the normal, correct state for most multi-ID items.
                                 const countTone = att.any
                                   ? 'border-destructive/40 bg-destructive/10 text-destructive'
                                   : g.allEnabled
@@ -4568,8 +4292,6 @@ export default function Mods() {
                                                       : null,
                                                   mod.enabled ? t('activeMods.clickToDisable') : t('activeMods.clickToEnable'),
                                                 ].filter(Boolean).join('\n')
-                                                // Colour priority: confirmed clash > known overlap > duplicate > normal.
-                                                // Heuristics alone never earn red — many multi-ID mods are legit bundles.
                                                 const styleClass = isScanClashing
                                                   ? (mod.enabled ? 'bg-destructive/20 text-destructive hover:bg-destructive/30 ring-1 ring-destructive/50' : 'bg-destructive/5 text-destructive/60 hover:bg-destructive/10 ring-1 ring-destructive/20')
                                                   : hasScanOverlap
@@ -4618,11 +4340,9 @@ export default function Mods() {
                                               }
                                             }
                                           }
-                                          // Dismissed false positives, so a wrong "Not a conflict" can be undone.
                                           const groupModIds = new Set(g.mods.map(m => m.id))
                                           const dismissedHere = ignoredPairs.filter(p => groupModIds.has(p.mod_a) && groupModIds.has(p.mod_b))
 
-                                          // A real clash always shows, at any density.
                                           if (scanClashingPairs.length > 0) {
                                             return (
                                               <div role="alert" className="flex flex-wrap items-start gap-1.5 text-[11px] sm:items-center">
@@ -4651,8 +4371,6 @@ export default function Mods() {
                                             )
                                           }
 
-                                          // Everything below is reassurance or nuance, not a problem —
-                                          // it only earns space in the detailed density.
                                           if (activeDensity !== 'detailed' && !isInspected) return null
 
                                           if (groupSiblings && groupSiblings.size > 0) {
@@ -4715,7 +4433,6 @@ export default function Mods() {
                                   />
                                 )
                               })}
-                              {/* Orphaned mods */}
                               {!filterMultiId && orphaned.filter(id => !q || id.toLowerCase().includes(q)).map(id => (
                                 <div key={`orphan-${id}`} className="group flex items-center gap-3 px-3 py-1.5 opacity-60">
                                   <AlertTriangle className="w-3 h-3 text-warning/60 shrink-0" />
@@ -5005,7 +4722,6 @@ export default function Mods() {
                       )}
                       </div>
 
-                      {/* Mods= raw line — collapsed by default */}
                       <details className="pt-2 border-t border-border/20 group/raw">
                         <summary className="text-[11px] text-muted-foreground/60 hover:text-foreground cursor-pointer select-none list-none flex items-center gap-1 transition-colors">
                           <ChevronRight className="w-3 h-3 transition-transform group-open/raw:rotate-90" aria-hidden="true" />
@@ -5016,7 +4732,6 @@ export default function Mods() {
                         </div>
                       </details>
 
-                      {/* Workshop item remove confirmation */}
                       <AlertDialog open={!!confirmRemoveWorkshop} onOpenChange={(open) => { if (!open) setConfirmRemoveWorkshop(null) }}>
                         <AlertDialogContent>
                           <AlertDialogHeader>
@@ -5041,9 +4756,7 @@ export default function Mods() {
                   )
                 })()}
 
-                {/* ═══ LOAD ORDER SUB-TAB ═══ */}
                 {configSubTab === 'order' && (() => {
-                  // Build modId → display name lookup from workshopModMap + tracked mods
                   const modIdNameMap = new Map<string, string>()
                   const modIdWsMap = new Map<string, string>()
                   const wsMap = iniConfig?.workshopModMap || {}
@@ -5053,7 +4766,6 @@ export default function Mods() {
                       modIdWsMap.set(m.id, wsId)
                     }
                   }
-                  // Fallback: use tracked mod names matched via workshop ID
                   for (const mod of mods) {
                     const details = wsMap[mod.workshop_id]
                     if (details) {
@@ -5200,10 +4912,8 @@ export default function Mods() {
                   )
                 })()}
 
-                {/* ═══ ADD MODS SUB-TAB ═══ */}
                 {configSubTab === 'add' && (
                   <div className="space-y-4 sub-tab-enter">
-                    {/* Sync Mod IDs */}
                     <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-secondary p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="text-sm font-medium">{t('addModsTab.syncTitle')}</p>
@@ -5226,7 +4936,6 @@ export default function Mods() {
                       </Button>
                     </div>
 
-                    {/* Pending Mods to Install */}
                     {modsToInstall.length > 0 && (
                       <div className="space-y-3 rounded-lg border border-border/70 bg-secondary p-3">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -5275,7 +4984,6 @@ export default function Mods() {
                   </div>
                 )}
 
-                {/* ═══ PRESETS SUB-TAB ═══ */}
                 {configSubTab === 'presets' && (
                   <div className="space-y-4 sub-tab-enter">
                     <div className="flex items-center justify-between">
@@ -5391,7 +5099,6 @@ export default function Mods() {
                       </div>
                     )}
 
-                    {/* Preset apply confirmation */}
                     <AlertDialog open={!!confirmApplyPreset} onOpenChange={(open) => { if (!open) setConfirmApplyPreset(null) }}>
                       <AlertDialogContent>
                         <AlertDialogHeader>
@@ -5417,7 +5124,6 @@ export default function Mods() {
                       </AlertDialogContent>
                     </AlertDialog>
 
-                    {/* Preset delete confirmation */}
                     <AlertDialog open={!!confirmDeletePreset} onOpenChange={(open) => { if (!open) setConfirmDeletePreset(null) }}>
                       <AlertDialogContent>
                         <AlertDialogHeader>
@@ -5446,7 +5152,6 @@ export default function Mods() {
                   </div>
                 )}
 
-                {/*  TOOLS SUB-TAB  */}
                 {configSubTab === 'tools' && (
                   <div className="space-y-4 sub-tab-enter">
                     <div className="rounded-lg border border-border/40 p-3 space-y-2">
@@ -5494,7 +5199,6 @@ export default function Mods() {
                       </div>
                     </div>
 
-                    {/* Workshop IDs Review */}
                     <div className="rounded-lg border border-border/40 p-3 space-y-2">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Package className="w-4 h-4" />
@@ -5512,7 +5216,6 @@ export default function Mods() {
                       </div>
                     </div>
 
-                    {/* Operator Notes */}
                     <div className="rounded-lg border border-border/40 p-3 space-y-3 text-sm text-muted-foreground">
                       <div className="text-xs font-semibold text-foreground flex items-center gap-2">
                         <Info className="w-3.5 h-3.5" />
@@ -5553,7 +5256,6 @@ export default function Mods() {
           </div>
           )}
 
-          {/* ─── Conflicts Tab ─── */}
           {activeTab === 'conflicts' && (
             <ConflictsPanel
               conflicts={conflicts}
@@ -5584,17 +5286,12 @@ export default function Mods() {
             />
           )}
 
-          {/* ─── Collection Tab ─── */}
           {activeTab === 'collection' && (
           <div className="space-y-4">
             <WorkshopCollectionPanel />
           </div>
           )}
 
-          {/* ─── Deactivated Tab ───
-              Tracked mods that are no longer present in the active server INI's
-              WorkshopItems= list. Kept tracked so you can re-enable them, but
-              segregated from the live server view. */}
           {activeTab === 'deactivated' && (
           <div className="space-y-4">
             <Card>
@@ -5627,7 +5324,6 @@ export default function Mods() {
                   </div>
                 ) : (
                   <>
-                    {/* Toolbar: select-all / enable / delete bulk actions */}
                     {(() => {
                       const deactivatedIds = groupedMods.deactivated.map(m => m.workshop_id)
                       const selectedDeactivated = deactivatedIds.filter(id => selectedMods.has(id))
@@ -5693,10 +5389,6 @@ export default function Mods() {
                                   const label = someSelected
                                     ? t(ids.length === 1 ? 'deactivatedTab.deleteSelectedConfirm_one' : 'deactivatedTab.deleteSelectedConfirm_other', { count: ids.length })
                                     : t(ids.length === 1 ? 'deactivatedTab.deleteAllConfirm_one' : 'deactivatedTab.deleteAllConfirm_other', { count: ids.length })
-                                  // Actually just an INI untrack (files stay on disk, see
-                                  // deleteHint above) -- not a disk delete, so this doesn't
-                                  // get the same red/no-undo framing as Mods.tsx's actual
-                                  // delete-from-disk actions elsewhere in this file.
                                   const ok = await confirm({ title: t('deactivatedTab.deleteFromTrackingTitle'), description: label, confirmLabel: t('deactivatedTab.deleteConfirmButton'), destructive: false })
                                   if (!ok) return
                                   setSelectedMods(new Set(ids))
@@ -5738,7 +5430,6 @@ export default function Mods() {
                       )
                     })()}
 
-                    {/* Rows: per-row Enable + Delete; checkbox for bulk select */}
                     <div className="divide-y divide-border/30">
                       {groupedMods.deactivated.map(mod => {
                         const isSelected = selectedMods.has(mod.workshop_id)
@@ -5866,7 +5557,6 @@ export default function Mods() {
         )}
       </div>
 
-      {/* Single mod remove confirmation */}
       <AlertDialog open={!!confirmRemoveMod} onOpenChange={(open) => { if (!open) setConfirmRemoveMod(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -5888,7 +5578,6 @@ export default function Mods() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk remove confirmation */}
       <AlertDialog open={confirmBulkRemove} onOpenChange={setConfirmBulkRemove}>
         <AlertDialogContent>
           <AlertDialogHeader>

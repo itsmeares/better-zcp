@@ -3,28 +3,6 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import ChunkCleaner from '../ChunkCleaner'
 import { chunksApi, serversApi, mapApi, ApiError } from '@/lib/api'
 
-// hunt-wave13-2026-08-30: 41fa20a3 gated chunks.js's previously-open READ
-// routes (/saves, /suggested-paths, /chunks/:saveName, /stats/:saveName,
-// /browse) behind chunks.manage. ChunkCleaner.tsx had NO gate on its READ
-// fetches -- only the Delete button and save-path form were ever disabled
-// (see ChunkCleaner.capabilityGating.test.tsx). Before this fix, a role
-// lacking chunks.manage would open Map Cleanup, fire the mount-time
-// fetchSaves() unconditionally, and land on the misleading "no saves
-// found -- here's what we tried" empty state (implying a data/config
-// problem) plus a destructive "failed to load saves" toast -- for a page
-// it was never going to be allowed to use at all.
-//
-// Fix follows the SAME precedent Mods.tsx/Users.tsx/RolesPermissions.tsx/
-// OidcSettings.tsx/Debug.tsx already established for this exact shape (a
-// whole page gated behind one capability): react to a REAL 403 from the
-// mount-time fetch, not a client-side can() guess -- their own comments
-// give the reason (a stale/wrong local read is worse either direction).
-// NOT the Servers.tsx docker pattern originally cited in the dispatch --
-// that guard lives inside an ACTION handler (handleDockerAction), not a
-// read fetch; verified via grep that no `if (!can...) return` guard
-// anywhere in this codebase currently skips a READ fetch pre-emptively,
-// so the real precedent to follow is the five-page permissionDenied
-// pattern instead.
 
 let mockCan = (_capability: string) => true
 
@@ -85,11 +63,6 @@ function renderChunkCleaner() {
   vi.stubGlobal('ResizeObserver', NoopResizeObserver)
   getResolvedActive.mockResolvedValue({ server: null })
   suggestedPaths.mockResolvedValue({ candidates: [] })
-  // Unrelated to this fix (hunt-wave12's tile-URL versioning wiring) but
-  // unmocked here would hit a real, unreachable network fetch in jsdom on
-  // every mount -- caught harmlessly by ChunkCleaner's own .catch(), but
-  // noisy (retry logging) and slow. Mocked cleanly instead of relying on
-  // that catch to paper over it.
   mapResolve.mockResolvedValue({
     root: '/tiles', b42Dir: 'test-build', b41Path: '/tiles/b41',
     tileSize: 1024, width: 1, height: 1, maxLevel: 1, renderedMaxLevel: 1,
@@ -104,19 +77,10 @@ describe('ChunkCleaner.tsx: read routes gated behind chunks.manage (41fa20a3 fol
 
     expect(await screen.findByText(/you can't view map cleanup/i)).toBeInTheDocument()
 
-    // The normal "no saves found" diagnostic panel (which would wrongly
-    // imply a data/config problem, not a permissions one) must not appear.
     expect(screen.queryByText(/no saves found/i)).not.toBeInTheDocument()
-    // Nor should the now-pointless Save Selection controls render.
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   })
 
-  // bug-hunt-2026-08-31: this page's EmptyState (ChunkCleaner.tsx:2249) is
-  // one of 8 call sites that overrode `icon` to ShieldAlert without a
-  // matching `type`, so the eyebrow fell through to the 'noData' default --
-  // "No Data" above an icon that says the opposite. Second real-render
-  // check (alongside EmptyState.test.tsx's unit test) that the shared
-  // render path actually produces the fix on a page other than Users.tsx.
   it('shows the Access Denied eyebrow on the real permission-denied render, not the No Data default', async () => {
     getSaves.mockRejectedValue(new ApiError('Forbidden', { status: 403 }))
     renderChunkCleaner()

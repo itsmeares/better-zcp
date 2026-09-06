@@ -5,26 +5,6 @@ import Scheduler from '../Scheduler'
 import { schedulerApi, serverApi, serversApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// bug-hunt-2026-08-26 (Jim's ranked list, #7): the "Advanced (Cron)" tab's
-// Save gate used to run a local regex (isValidCron: exactly 5 whitespace-
-// separated fields, each matching /^[\d*,\/-]+$/) instead of the server's
-// real node-cron validator (cron.validate() + the app's own field-count and
-// too-frequent rules). Enumerating a battery of hand-picked expressions
-// against both showed real divergence in BOTH directions:
-//   - client accepts, server rejects (17/40 candidates): the local regex has
-//     no numeric bounds at all, so "99 * * * *", "* 25 * * *", "60 0 * * *",
-//     "0 0 31 2 *" (Feb 31st), "* * * * *" (too-frequent), etc. all showed a
-//     green tick and then failed one network round-trip later, at Save.
-//   - client rejects, server accepts (9/40 candidates): the local regex
-//     rejects any letter outright, so "0 12 * JAN *", "0 12 * * MON",
-//     "0 0 L * *" (last day of month), "0 0 * * MON#2" (2nd Monday), etc.
-//     were refused by the client even though node-cron and the server
-//     happily accept them -- denying the operator a schedule they were
-//     entitled to.
-// The fix removes the local regex entirely and delegates to the same
-// POST /scheduler/validate-cron endpoint the live preview above the field
-// already calls, getting exact parity by construction instead of hand-
-// porting node-cron's bounds/name/token tables and keeping them in sync.
 
 let mockCan = (_capability: string) => true
 
@@ -100,7 +80,6 @@ async function setUp() {
 async function openAdvancedTaskDialog(cron: string) {
   fireEvent.click(await screen.findByRole('button', { name: 'New Task' }))
   fireEvent.change(await screen.findByPlaceholderText('e.g., Daily Restart'), { target: { value: 'A task' } })
-  // Radix's TabsTrigger switches on mousedown, not click (see Console.test.tsx's openRconTab).
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Advanced (Cron)' }), { button: 0 })
   fireEvent.change(await screen.findByPlaceholderText('e.g., 0 */2 * * *'), { target: { value: cron } })
   fireEvent.change(screen.getByPlaceholderText('Or enter custom command'), { target: { value: 'restart' } })

@@ -7,12 +7,6 @@ interface User {
   id: string
   username: string
   role: string
-  // UX-only signal for hiding controls the caller's role can't use (e.g. a
-  // Settings tab) -- NOT an access-control boundary; every route this could
-  // gate is (and remains) independently enforced server-side via
-  // requirePermission(). null means "couldn't resolve" (role renamed out
-  // from under the session, a lookup failure, or an older cached response) --
-  // treat that as "unknown", never as "no capabilities".
   capabilities: string[] | null
 }
 
@@ -29,11 +23,6 @@ interface AuthContextType extends AuthState {
   setup: (username: string, password: string, rememberMe?: boolean, panelPort?: string, setupToken?: string) => Promise<void>
   logout: () => Promise<void>
   getToken: () => string | null
-  // Fails OPEN: unknown capabilities (null, or no user yet) return true.
-  // Hiding a UI control from a real administrator because a field failed to
-  // load is a lockout-shaped support problem with no security benefit --
-  // the server still says no to anyone who shouldn't be there regardless of
-  // what this returns.
   can: (capability: string) => boolean
 }
 
@@ -52,10 +41,6 @@ async function getErrorPayload(response: Response): Promise<{ error?: string; co
 
 export const LOGIN_FAILED_MESSAGE = "We couldn't sign you in. Check your username and password and try again."
 
-// Exported solely so its 5xx-vs-auth-failure branch can be unit tested
-// directly (see __tests__/AuthContext.test.ts) without standing up a
-// rendered AuthProvider + mocked fetch harness this file has never needed
-// before -- the function itself has no dependency on component state.
 export function getLoginErrorMessage(error: unknown): string {
   if (error instanceof TypeError) {
     return CORS_LOGIN_MESSAGE
@@ -63,15 +48,6 @@ export function getLoginErrorMessage(error: unknown): string {
   if (error instanceof Error && /cors|origin policy|failed to fetch/i.test(error.message)) {
     return CORS_LOGIN_MESSAGE
   }
-  // 2026-08-26: the enumeration ruling (revealing WHY authentication failed
-  // -- wrong username vs. wrong password vs. locked account -- is an
-  // account-enumeration oracle) only applies to an actual auth failure
-  // (4xx). It says nothing about a genuine server error, which reveals no
-  // information about the account either way -- collapsing a real 500 into
-  // the identical "check your password" text was never required by that
-  // ruling, just an accidental side effect of throwing a plain Error that
-  // discarded the response status. A coded 5xx is preferred to the generic
-  // fallback text here too, via getUserErrorMessage's normal precedence.
   if (error instanceof ApiError && typeof error.status === 'number' && error.status >= 500) {
     return getUserErrorMessage(error, LOGIN_FAILED_MESSAGE)
   }
@@ -87,18 +63,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authEnabled: true,
   })
 
-  // Get stored token
   const getToken = useCallback((): string | null => {
     return getAccessToken()
   }, [])
 
-  // Check auth status and try auto-login
   const checkAuth = useCallback(async () => {
     try {
-      // Step 1: Check if auth is needed
       const statusRes = await fetch('/api/auth/status')
       if (!statusRes.ok) {
-        // Server might not have auth routes yet — allow access
         setState(prev => ({ ...prev, isLoading: false, authEnabled: false }))
         return
       }
@@ -124,7 +96,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // Step 2: Try existing token
       const token = getToken()
       if (token) {
         const meRes = await fetch('/api/auth/me', {
@@ -141,11 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
           return
         }
-        // Token expired — try refresh
         clearAccessToken()
       }
 
-      // Step 3: Try refresh token (httpOnly cookie sent automatically)
       const refreshRes = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
       if (refreshRes.ok) {
         const data = await refreshRes.json()
@@ -160,7 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // Not authenticated
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -168,7 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authEnabled: true,
       }))
     } catch {
-      // Network error — assume no auth needed (server might be starting)
       setState(prev => ({ ...prev, isLoading: false, authEnabled: false }))
     }
   }, [getToken])
@@ -187,11 +154,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
       if (!res.ok) {
-        // 2026-08-26: this fetch bypasses lib/api.ts's handleResponse(), so
-        // constructing an ApiError (not a plain Error) here is what lets
-        // getLoginErrorMessage() below tell a genuine 5xx apart from an
-        // actual auth failure -- a plain Error would discard res.status
-        // before that distinction could ever be made.
         const data = await getErrorPayload(res)
         throw new ApiError(data?.error || LOGIN_FAILED_MESSAGE, { status: res.status, code: data?.code })
       }
@@ -222,20 +184,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!res.ok) {
       const data = await res.json()
-      // Setup.tsx recognizes this exact message and swaps in a localized,
-      // token-specific explanation instead of the generic setup-failed copy.
-      // Untouched by the ApiError conversion below: its own copy (see
-      // setup.json's invalidSetupToken) is more specific than the
-      // registered SETUP_TOKEN_REQUIRED translation, so it must keep
-      // winning ahead of getUserErrorMessage() rather than being replaced
-      // by it.
       if (data.code === 'SETUP_TOKEN_REQUIRED') {
         throw new Error('SETUP_TOKEN_REQUIRED')
       }
-      // 2026-08-26: this fetch bypasses lib/api.ts's handleResponse(), so
-      // an ApiError (not a plain Error) is what lets Setup.tsx's
-      // getUserErrorMessage() call translate a coded failure or wrap an
-      // uncoded 5xx instead of always showing this raw fallback text.
       throw new ApiError(data.error || "We couldn't create the admin account. Try again.", {
         status: res.status,
         code: data.code,

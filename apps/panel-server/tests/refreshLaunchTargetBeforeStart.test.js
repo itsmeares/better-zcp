@@ -14,20 +14,6 @@ vi.mock("../database/init.js", () => ({
 
 const { refreshLaunchTargetBeforeStart } = await import("../routes/server.js");
 
-// 2026-08-27 root cause completion (loonE, Discord config-revert report):
-// generateStartupScripts() bakes -cachedir/-servername as literal text into
-// StartServer_<name>.bat/.sh at generation time, but that function was only
-// ever called from the manual /start route and the install/setup-wizard
-// flows -- NEVER from PUT /api/servers/:id (the Settings-UI edit route) and
-// never from scheduler.js's performRestart(). So editing zomboidDataPath or
-// serverName in Settings updated the database immediately but left the
-// already-written launch script stale until the next MANUAL start
-// regenerated it -- the next SCHEDULED restart in between launched PZ
-// against the OLD baked cachedir, which found no ini there and generated a
-// fresh default one. refreshLaunchTargetBeforeStart() is the fix: the
-// single function both the manual /start route and performRestart() now
-// call, so a scheduled restart refreshes RCON config and the launch script
-// exactly the way a manual start always did.
 describe("refreshLaunchTargetBeforeStart()", () => {
   let root;
 
@@ -57,18 +43,12 @@ describe("refreshLaunchTargetBeforeStart()", () => {
     const server = baseServer({ installPath, zomboidDataPath: oldDataPath });
     getActiveServer.mockResolvedValue(server);
 
-    // Simulate an existing script baked with the OLD path (as if written by
-    // an earlier manual start).
     await refreshLaunchTargetBeforeStart(server);
     const batPath = path.join(installPath, "StartServer_TestServer.bat");
     expect(fs.readFileSync(batPath, "utf8")).toContain(
       `-cachedir="${oldDataPath}"`,
     );
 
-    // Operator edits zomboidDataPath in Settings (updates the DB record
-    // only -- modeled here by passing the updated server object, exactly
-    // what a fresh getServer()/getActiveServer() read after the edit would
-    // return).
     const updatedServer = { ...server, zomboidDataPath: newDataPath };
     getActiveServer.mockResolvedValue(updatedServer);
 
@@ -159,8 +139,6 @@ describe("refreshLaunchTargetBeforeStart()", () => {
 
   it("a script-regen failure is swallowed and reported as an empty warnings list, never thrown", async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-refresh-launch-"));
-    // installPath points at a file, not a directory -- regenerateStartupScriptsWithBackup's
-    // internal writes will fail.
     const notADir = path.join(root, "not-a-directory");
     fs.writeFileSync(notADir, "x", "utf8");
 

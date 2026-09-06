@@ -1,23 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { installationErrorGuidance } from '../ServerSetup'
 
-// 2026-08-27, no-raw-error-lint-rule-only-matches-the-toast-shape sweep:
-// ServerSetup.tsx's catch block used to compute rawMessage via the bare
-// `error instanceof Error ? error.message : fallback` ternary, feed it into
-// this function, and display whatever it returned -- invisible to
-// no-raw-error-message.js because the ternary fed a function call, not a
-// toast()/set*() argument directly (a TWO-HOP indirection, one hop further
-// than the one-hop variable-flow check that same sweep added). For every
-// installation error OTHER than "path not writable", this function just
-// returned its input unchanged, so any coded/translatable error showed the
-// server's fully raw English text with no translation. Fixed by splitting
-// the single `message` parameter into `rawMessage` (kept raw ON PURPOSE,
-// via rawErrorMessageIntentional -- needed to pattern-match the server's
-// literal string and to embed the exact unwritable path in the Linux
-// guidance suffix, the same "raw text for internal logic" use
-// errorMessage.ts's own getRecoveryUrl() has) and `displayMessage` (routed
-// through getUserErrorMessage() -- what actually reaches the user for
-// every OTHER installation error).
 const t = (key: string, opts?: Record<string, unknown>) =>
   key === 'toasts.installationErrorGuidance'
     ? `${opts?.message} -- see ${opts?.path} on the host and restart the service`

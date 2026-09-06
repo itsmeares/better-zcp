@@ -3,18 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage for a copy-paste bug found while auditing every
-// PanelBridge.lua handler for "reports success without checking whether the
-// thing it claims to do happened" (the b376b2c defect family). This is the
-// mirror image: handlers.vehicleHotwire referenced `results`/`executed`,
-// two locals that are only ever declared inside a DIFFERENT handler
-// (runEventSequence, `local results = {}` / `local executed = 0`) -- not
-// inside vehicleHotwire itself. Every real handler dispatch wraps the call
-// in pcall (see processSingleCommand), so this didn't crash the server, but
-// it meant EVERY successful hotwire (engine started, doors unlocked) was
-// reported back to the operator as "Handler crashed: bad argument #1 to
-// 'ipairs' (table expected, got no value)" -- a fully working operation
-// permanently misreported as broken.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -64,10 +52,6 @@ describe('PanelBridge.lua handlers.vehicleHotwire -- undefined-global crash on s
   it('does not crash on a fully successful hotwire (a real engine-start reported as a handler crash is the bug)', () => {
     const bridge = loadPanelBridge(LUA_PATH, STUBS);
 
-    // Before the fix, this call always threw a Lua runtime error --
-    // "bad argument #1 to 'ipairs' (table expected, got no value)" --
-    // because it hit `for _, result in ipairs(results) do` with `results`
-    // undefined in this handler's scope, right after a successful hotwire.
     let result;
     expect(() => {
       result = bridge.callHandler('vehicleHotwire', { vehicleId: 1 });

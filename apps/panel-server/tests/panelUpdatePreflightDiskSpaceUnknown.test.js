@@ -3,12 +3,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-// 2026-09-04, Dwight's finding: `if (free !== null && free < needed)` reads
-// as careful, but the other half was silent -- a null free (statfs
-// unsupported, or a swallowed error) or a thrown error both fell through
-// with no warning at all, identical to no check having run. This is the
-// exact "checksPerformed:false, not a bare ok:true" honesty the Docker
-// preflight path was deliberately built with; this check never got it.
 
 process.pkg = {};
 
@@ -25,16 +19,6 @@ describe("preflight() surfaces an unknown free-disk-space result instead of stay
 
   function makeChecker() {
     const checker = new PanelUpdateChecker();
-    // preflight() resolves the release asset by an exact, platform-specific
-    // name (ZomboidControlPanel.exe on Windows, ZomboidControlPanel on
-    // Linux) before ever reaching the disk-space check that's under test
-    // here. A hardcoded ".exe" name only matches on Windows -- on Linux the
-    // lookup fails, asset stays undefined, and the disk-space block (gated
-    // on `asset?.size`) never runs at all, regardless of what
-    // getFreeDiskSpace is mocked to do. That produced the exact "expected
-    // undefined to be defined" failure this comment is here to prevent from
-    // recurring: match the real resolution logic instead of one platform's
-    // shape of it.
     const assetName =
       process.platform === "win32"
         ? "ZomboidControlPanel.exe"
@@ -72,8 +56,6 @@ describe("preflight() surfaces an unknown free-disk-space result instead of stay
     const result = await checker.preflight();
     expect(unknownWarning(result)).toBeDefined();
     expect(result.info.freeBytes).toBeNull();
-    // Must not also silently pass as if space were confirmed sufficient --
-    // no blocker either, since we genuinely do not know.
     expect(result.blockerDetails.some((b) => b.key === "updates.preflight.diskSpace")).toBe(false);
   });
 
@@ -100,7 +82,7 @@ describe("preflight() surfaces an unknown free-disk-space result instead of stay
     setExecPath(fakeExePath);
 
     const checker = makeChecker();
-    vi.spyOn(checker, "getFreeDiskSpace").mockResolvedValue(1024 * 1024 * 1024 * 10); // 10GB
+    vi.spyOn(checker, "getFreeDiskSpace").mockResolvedValue(1024 * 1024 * 1024 * 10);
 
     const result = await checker.preflight();
     expect(unknownWarning(result)).toBeUndefined();

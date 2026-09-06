@@ -3,16 +3,11 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 
-// Real modules (not mocked) — the globalSetup already redirects dataDir into
-// a throwaway temp root for the whole suite, so this is safe to exercise
-// against the real fs the same way circuitBreakerStatus.test.js does.
 const { sweepOrphanedTmpFiles } = await import("../database/init.js");
 const { getDataPaths } = await import("../utils/paths.js");
 
 const { dataDir } = getDataPaths();
 
-// Mirrors MIN_ORPHAN_AGE_MS in database/init.js with margin — not exported
-// since it's an internal safety threshold, not part of the module's surface.
 const OLD_ENOUGH_MS = 90_000;
 
 function tmpFilePath(pid) {
@@ -32,7 +27,6 @@ function writeTmpFile(pid, ageMs) {
   return filePath;
 }
 
-/** A pid guaranteed dead: spawn a trivial child and wait for it to exit. */
 function getDeadPid() {
   const result = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
   return result.pid;
@@ -83,17 +77,6 @@ describe("sweepOrphanedTmpFiles", () => {
     fs.rmSync(decoyPath, { force: true });
   });
 
-  // 2026-09-02, single-signal-sweep, REAL DEFECT fix: this sweep used to
-  // carry its own local isPidAlive(), a THIRD undeduplicated copy of the
-  // exact bug already fixed once in pidLock.js (bughunt-2026-08-31-c) --
-  // it resolved any signal-0 probe error OTHER than EPERM to "dead",
-  // instead of failing toward "still alive" for anything short of a
-  // confirmed ESRCH. Now imports the shared, correctly-directioned
-  // utils/pidLiveness.js isPidAlive() instead. This must NOT delete a tmp
-  // file when the liveness probe is genuinely ambiguous (e.g. some
-  // transient errno that is neither ESRCH nor EPERM) -- an ambiguous
-  // signal should never authorise deleting a file a live writer might
-  // still own.
   it("does NOT remove a tmp file when the pid-liveness probe is ambiguous (neither ESRCH nor EPERM)", () => {
     const filePath = writeTmpFile(999999, OLD_ENOUGH_MS);
     const killSpy = vi.spyOn(process, "kill").mockImplementation(() => {

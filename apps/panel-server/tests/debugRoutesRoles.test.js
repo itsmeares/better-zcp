@@ -1,30 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// debug.js now gates with requirePermission (DB-backed) instead of
-// requireRole -- getRoleByName needs mocking. The admin-passthrough test
-// below lets a request continue into REAL handler logic (real database
-// backup/compact/clear-stale-locks calls, since nothing else in this file
-// is mocked), so this uses importActual to keep every other real export
-// working rather than replacing the whole module and leaving those
-// functions undefined.
 vi.mock("../database/init.js", async () => {
   const actual = await vi.importActual("../database/init.js");
   return { ...actual, getRoleByName: mockGetRoleByName };
 });
 
-// debug.js was, until now, guarded only by the central login gate: ANY
-// authenticated role (including moderator) could trigger a database
-// backup, compact the database, clear stale locks, or repoint the panel's
-// data paths. Every route in the file is now admin-only, with ONE
-// deliberate exception (POST /client-errors, client-side crash telemetry
-// -- see the comment above the router in debug.js for why). This proves
-// both halves: every admin-only route actually refuses technician and
-// moderator, AND the one route that's supposed to stay open genuinely
-// does -- a sweep that silently locked everything (including the
-// exception) would still pass a refusal-only test suite.
-//
-// Same route-stack-walking approach as roles.test.js / panelBridgeModInstallAuth.test.js.
 const { default: debugRouter } = await import("../routes/debug.js");
 
 function createResponse() {
@@ -60,12 +41,6 @@ async function runRoute(router, routePath, method, req) {
   return res;
 }
 
-// Every admin-only route in debug.js: [path, method]. Mirrors the grep
-// this was built from (`router.<method>("<path>"` in debug.js) minus the
-// one deliberate exception. If a route is added to debug.js later without
-// requireRole("admin"), it's missing from THIS list too (runRoute() throws
-// "No route registered" rather than silently skipping), so this file
-// itself doesn't quietly go stale.
 const ADMIN_ONLY_ROUTES = [
   ["/ram", "get"],
   ["/system", "get"],
@@ -112,8 +87,6 @@ describe("debug.js: every route is admin-only except the one documented exceptio
   });
 
   it("does not refuse an admin at the role gate for the routes named explicitly as the risk (may still do real work downstream)", async () => {
-    // These three are the ones god called out by name as the reason
-    // debug.js mattered: an admin must still be able to do them.
     for (const [routePath, method] of [
       ["/database/backup", "post"],
       ["/database/compact", "post"],
@@ -125,9 +98,6 @@ describe("debug.js: every route is admin-only except the one documented exceptio
         query: {},
         body: {},
       });
-      // 403 would mean the gate itself is broken for admins; anything else
-      // (200, or a downstream error from the fake req/res) means the gate
-      // let an admin through, which is the only thing this test checks.
       expect(res.getStatusCode()).not.toBe(403);
     }
   });

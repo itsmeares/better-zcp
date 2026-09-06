@@ -74,12 +74,6 @@ describe("ServerManager managed Linux lifecycle", () => {
     expect(manager.serverProcess).toBeNull();
   });
 
-  // Regression (2026-08-31 services sweep): the SteamCMD guard used to sit
-  // AFTER the managed-lifecycle branch's own early return, so it never ran
-  // for a systemd/openrc-managed install -- systemctl would start the
-  // server while SteamCMD was still writing into the exact same
-  // installPath, exactly the "spawn against a mid-write install" crash
-  // this guard exists to prevent for the direct-launch path.
   describe("SteamCMD guard also covers the managed-lifecycle start path", () => {
     const normalizedInstallPath = path.normalize(profile.installPath).toLowerCase();
 

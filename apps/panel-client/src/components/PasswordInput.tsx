@@ -10,16 +10,12 @@ interface PasswordInputProps {
   onChange: (value: string) => void
   placeholder?: string
   className?: string
-  /** Used in the toggle button's aria-label, e.g. "RCON password". Caller-supplied — translate at the call site. */
   label?: string
   maxLength?: number
   id?: string
   autoComplete?: string
 }
 
-// Defaults hidden (type="password") and toggles to type="text" on click —
-// shared by every RCON/SFTP password field so the show/hide behavior and
-// aria-labeling stay consistent instead of being re-implemented per form.
 export function PasswordInput({
   value,
   onChange,

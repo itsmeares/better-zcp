@@ -1,8 +1,3 @@
-/**
- * Project Zomboid's sandbox API sometimes returns an internal key from
- * getTranslatedName() / getTooltip() when a mod has no translation entry.
- * Convert those keys into labels suitable for the Settings UI.
- */
 export function formatModSettingLabel(value: string | undefined, groupName?: string): string {
   let label = String(value || '').trim()
   if (!label) return ''
@@ -12,8 +7,6 @@ export function formatModSettingLabel(value: string | undefined, groupName?: str
 
   label = label.replace(/^Sandbox_/i, '')
 
-  // A group header already says "Better Containers", so avoid showing
-  // "Better Containers Allow Toggle" on every option beneath it.
   if (groupName) {
     const normalizedGroup = groupName.replace(/^Sandbox_/i, '').replace(/[^a-z0-9]/gi, '')
     const normalizedLabel = label.replace(/[^a-z0-9]/gi, '')
@@ -31,12 +24,10 @@ export function formatModSettingLabel(value: string | undefined, groupName?: str
     .trim()
 }
 
-/** Returns empty text when a mod only supplied an untranslated tooltip key. */
 export function formatModSettingDescription(value: string | undefined): string {
   const text = String(value || '').replace(/\\n/g, '\n').trim()
   if (!text) return ''
 
-  // Keys such as "BecomeDesensitized.ConsiderOccupations" are not player-facing help.
   if (!/\s/.test(text) && (/^Sandbox_/i.test(text) || /[_\.]/.test(text))) return ''
   return text
 }

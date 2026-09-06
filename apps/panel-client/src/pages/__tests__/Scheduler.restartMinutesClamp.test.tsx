@@ -5,21 +5,6 @@ import Scheduler from '../Scheduler'
 import { schedulerApi, serverApi, serversApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// bug-hunt-2026-08-27 (Jim's ranked list, #2): the operator could type a
-// custom restart-warning time above 60 minutes into the "Custom Time" field
-// (its min/max={1,30} are decorative -- NumberInput only enforces a bound
-// via native <input> attrs unless a `clamp` prop is also passed, and
-// Scheduler.tsx's usage here doesn't pass one). The server (scheduler.js's
-// POST /restart-now) has always silently capped the value at 60 minutes,
-// but its response never said so -- the client's toast just echoed back
-// whatever the operator typed, so an operator who entered 500 saw "Server
-// will restart in 500 minutes" while the real countdown was 60.
-//
-// The 60-minute bound itself is being KEPT, not removed -- an unbounded
-// "restart now with a warning" is a contradiction in terms, and the
-// countdown/restartInProgress state has to resolve in a sane window. The
-// fix is telling the operator when their value was substituted, not
-// removing the substitution.
 
 let mockCan = (_capability: string) => true
 
@@ -94,7 +79,6 @@ describe('Scheduler.tsx: the custom restart-warning time reports the real, possi
   it('typing 500 into the custom-time field (past the decorative max={30}) and clicking Restart Now surfaces the server-clamped value, not the typed one', async () => {
     mockCan = () => true
     await setUpRunningServer()
-    // The server's real 60-minute cap, reported back honestly.
     restartNow.mockResolvedValue({ success: true, message: 'Restart initiated', warningMinutes: 60 })
 
     renderScheduler()
@@ -115,8 +99,6 @@ describe('Scheduler.tsx: the custom restart-warning time reports the real, possi
         }),
       ),
     )
-    // The misleading behavior this replaces: a plain success toast claiming
-    // the server WILL restart in 500 minutes, as if that were honored.
     expect(toastSpy).not.toHaveBeenCalledWith(
       expect.objectContaining({ variant: 'success' }),
     )

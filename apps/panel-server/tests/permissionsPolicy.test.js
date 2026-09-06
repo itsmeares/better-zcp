@@ -33,8 +33,6 @@ describe("permissionsPolicy middleware", () => {
     const features = value.split(", ");
     expect(features.length).toBeGreaterThan(0);
     for (const entry of features) {
-      // "feature=()" -- empty allowlist, not "(self)", which would still
-      // permit this origin. An empty allowlist denies everyone, always.
       expect(entry).toMatch(/^[a-z-]+=\(\)$/);
     }
   });

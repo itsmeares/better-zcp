@@ -3,16 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-31: /configure-rcon, applyUpnpToIni(), and /configure-network each
-// hand-rolled the same unanchored content.includes("Key=")/content.replace(
-// /Key=.*/g, ...) pair server.js's ensureRconConfigured() had (fixed
-// separately, see ensureRconConfigured.test.js's own free-text-collision
-// case) -- .includes() matches that substring anywhere in the file and the
-// unanchored replace rewrites every line containing it, including inside an
-// operator's own free-text field. These three call sites now go through the
-// same anchored apps/panel-server/utils/iniKeyWrite.js helper; this file proves each
-// of them at the route/function level (not just the shared helper's own
-// unit tests) leaves a free-text collision line alone.
 
 vi.mock("../database/init.js", () => ({
   logServerEvent: vi.fn(),

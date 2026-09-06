@@ -6,16 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Players from '../Players'
 import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
 
-// killplayer-ui-2026-08-30: killPlayer is permanent character loss in a
-// permadeath game, inflicted on someone else -- the only destructive one of
-// the five GM-tools Powers-tab actions. Guarded by a NEW, app-wide
-// typed-confirmation field on ConfirmContext (ConfirmOptions.
-// requireTypedConfirmation): the Confirm button in the dialog stays disabled
-// until the admin types the TARGET PLAYER'S USERNAME, not just clicks
-// through. This proves the gate itself, not just the happy path: the action
-// must NOT be dispatched when the typed value doesn't match the target's
-// username, and must NOT be dispatched at all when the bridge is down
-// (Kill's own disabled state, same as its four Powers-tab siblings).
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -136,7 +126,6 @@ describe('Players.tsx: killPlayer is guarded by a typed username confirmation', 
     fireEvent.click(screen.getByRole('button', { name: 'Kill' }))
 
     const confirmButton = await screen.findByRole('button', { name: 'Kill player' })
-    // Nothing typed yet -- must start disabled, not default to armed.
     expect(confirmButton).toBeDisabled()
 
     const typedInput = screen.getByLabelText('Type TestPlayer to confirm')
@@ -146,8 +135,6 @@ describe('Players.tsx: killPlayer is guarded by a typed username confirmation', 
 
     expect(killPlayer).not.toHaveBeenCalled()
 
-    // A trailing-space or wrong-case near-match must not slip through either
-    // -- this is a barrier against clicking through blind, not a fuzzy hint.
     fireEvent.change(typedInput, { target: { value: 'testplayer' } })
     expect(confirmButton).toBeDisabled()
     fireEvent.change(typedInput, { target: { value: 'TestPlayer ' } })
@@ -171,13 +158,6 @@ describe('Players.tsx: killPlayer is guarded by a typed username confirmation', 
     await waitFor(() => expect(killPlayer).toHaveBeenCalledWith('TestPlayer'))
   })
 
-  // 2026-08-31 impeccable pass: ConfirmContext.tsx's requireTypedConfirmation
-  // defaults an omitted `placeholder` to the exact required value -- an
-  // untouched input would show "TestPlayer" in placeholder-gray, pixel-
-  // indistinguishable at a glance from having already typed it (confirmed by
-  // cropping the rendered screenshot and comparing text color against a real
-  // button's text). handleKillPlayer now passes an explicit empty
-  // placeholder so the box is genuinely blank instead.
   it('the typed-confirmation input has no placeholder text mirroring the required value', async () => {
     await setUpFixtures(true)
     renderPlayers()

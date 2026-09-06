@@ -74,8 +74,8 @@ describe('FolderBrowser', () => {
     render(<FolderBrowser open onOpenChange={vi.fn()} onSelect={onSelect} initialPath="/srv" />)
     await screen.findByText('Zomboid Données')
 
-    fireEvent.click(screen.getByText('Zomboid Données')) // select it
-    fireEvent.doubleClick(screen.getByText('Zomboid Données')) // then navigate into it
+    fireEvent.click(screen.getByText('Zomboid Données'))
+    fireEvent.doubleClick(screen.getByText('Zomboid Données'))
     await screen.findByText('nested')
 
     fireEvent.click(screen.getByRole('button', { name: 'Select Folder' }))

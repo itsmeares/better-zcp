@@ -3,9 +3,6 @@ import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Same getDataPaths() mock as panelBridgeSftp.test.js -- required so
-// utils/logger.js's module-load-time getDataPaths() call (transitively
-// imported via panelBridgeSftp.js) doesn't crash before any test body runs.
 const mockDataPaths = vi.hoisted(() => {
   const base = (process.env.TEMP || process.env.TMPDIR || '/tmp') + '/panel-bridge-sftp-queuestate-test-default';
   return { current: () => ({ dataDir: base + '/data', logsDir: base + '/logs' }) };
@@ -38,15 +35,6 @@ function makeTempCache() {
   return dir;
 }
 
-// 2026-08-30 sftp-bridge-inbox-selfheal-is-nonfunctional: syncNow() uploaded
-// inbox/cmd-*.json and downloaded status.json / queue-state-lua.json /
-// outbox, but never uploaded .queue-state-node.json to the remote host at
-// all -- so PanelBridge.lua's tryResyncInboxCursor (which reads exactly this
-// file to detect and recover from an inbox counter desync) always saw nil
-// over SFTP, and the entire self-heal path was silently inert for every
-// remote bridge. These tests cover the fix: the file now gets uploaded, and
-// -- the part that matters more than "it uploads" -- it uploads a snapshot
-// that can never claim a command exists remotely before it actually does.
 describe('readLocalQueueStateNodeSnapshot', () => {
   it('returns null when cachePath has not been set yet', () => {
     const transport = new PanelBridgeSftpTransport();
@@ -140,20 +128,6 @@ describe('syncNow: queue-state upload ordering', () => {
     expect(put).not.toHaveBeenCalled();
   });
 
-  // The test that actually pins the fix for the hazard the header comments
-  // describe, not just "it uploads something": the snapshot must be the
-  // value from BEFORE uploadInbox() ran, even when the live file advances
-  // DURING uploadInbox() -- exactly what a second, concurrent write (another
-  // command enqueued while this sync tick's network-bound uploads are still
-  // in flight) would do. Uploading the post-uploadInbox() value instead would
-  // let the remote-visible nextCommandSeq claim a command whose file was
-  // never actually part of this pass's upload loop -- and once Lua accepts a
-  // forward move, its forward-only guard (2026-08-30) can never undo it.
-  //
-  // Break-verified: temporarily reading the snapshot AFTER uploadInbox()
-  // instead of before reproduces the exact wrong value this test would then
-  // catch (999 instead of 5) -- confirmed in the WSL gate run, reverted
-  // before landing.
   it('uploads the queue-state snapshot captured before uploadInbox() runs, never a value that advanced during it', async () => {
     const transport = new PanelBridgeSftpTransport();
     transport.running = true;
@@ -168,9 +142,6 @@ describe('syncNow: queue-state upload ordering', () => {
     transport.ensureRemoteDirectories = vi.fn(async () => {});
     transport.syncModFile = vi.fn(async () => {});
     transport.syncOutbox = vi.fn(async () => {});
-    // Simulates a second command being enqueued (and queue state persisted)
-    // by the live panel process while this sync tick's uploadInbox() is
-    // still working through its own (real, network-bound) per-file uploads.
     transport.uploadInbox = vi.fn(async () => {
       fs.writeFileSync(statePath, JSON.stringify({ nextCommandSeq: 999, lastConsumedResultSeq: 0 }));
     });

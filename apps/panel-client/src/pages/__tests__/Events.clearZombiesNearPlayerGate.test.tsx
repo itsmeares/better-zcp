@@ -6,16 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// wired-no-ui-2026-08-30: clearZombiesNearPlayer (POST /panel-bridge/zombies/
-// clear-near-player) had a live, gated route and Lua handler but zero client
-// callers -- the per-player sibling of clearAllZombies, which already has a
-// warning-tier confirm() gate in the same horde section. Matched (not
-// exceeded, per the operator's own instruction: "match or exceed") that same
-// tier and mechanism, since it's the identical reversible-but-affects-
-// someone-else class (zombies respawn over time; this just scopes the clear
-// to one player's fight instead of every loaded cell). This proves the GATE,
-// not just the happy path: the action must NOT be dispatched before the
-// confirm dialog is accepted, and NOT dispatched at all if cancelled.
 
 class StubResizeObserver {
   observe() {}
@@ -62,20 +52,12 @@ function renderEvents() {
 }
 
 async function openHordeSection() {
-  // Sidebar label is "Spawn horde" (matches the `horde` section's nav
-  // entry); the section itself covers both spawning and clearing.
   const nav = await screen.findByText('Spawn horde')
   nav.click()
   await screen.findByRole('button', { name: /^clear near\b/ })
 }
 
 beforeEach(() => {
-  // Exactly one online player -- with targetAll's default (true, "all
-  // online"), pickStrikeTarget()'s random-pick fallback becomes
-  // deterministic, which is what lets this test assert an exact username
-  // without needing to drive the page's "specific player" Select (Radix
-  // Select cannot be operated via fireEvent.click in jsdom -- see
-  // Events.generateWeatherFront.test.tsx's comment for the same limitation).
   getPlayers.mockReset().mockResolvedValue({ players: [{ name: 'Kate', online: true }] } as never)
   getStatus.mockReset().mockResolvedValue({ modConnected: true } as never)
   getClimateFloats.mockReset().mockResolvedValue({ success: false } as never)
@@ -101,11 +83,6 @@ describe('Events -- clearZombiesNearPlayer is gated behind a confirm dialog, mat
   })
 
   it('IS dispatched with the resolved target and the chosen radius once confirmed', async () => {
-    // targetAll defaults to true ("all online") -- the trigger and confirm
-    // buttons both read "clear near random" (they show the SELECTION mode,
-    // not a resolved name), but the actual dispatch resolves
-    // pickStrikeTarget() at click time. With exactly one online player
-    // mocked, that random pick is deterministic: Kate.
     renderEvents()
     await openHordeSection()
 

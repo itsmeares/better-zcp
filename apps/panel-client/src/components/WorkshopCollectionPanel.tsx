@@ -1,23 +1,3 @@
-/**
- * WorkshopCollectionPanel
- * ───────────────────────
- * Daily-driver UI for reconciling locally-tracked mods with the Steam
- * Workshop collection. Lives in the Mod Manager as its own tab.
- *
- * Design intent (PZ control-room aesthetic):
- *  - Stat tiles up top tell the whole story at a glance
- *  - Drift becomes loud when present, calm when zero
- *  - One unified table with filter pills + search + bulk actions
- *  - Per-row buttons for surgical fixes
- *
- * Source of truth: `GET /api/mods/collection/diff` returns a denormalised
- * `items[]` already merged from tracked-mods + Steam collection, with
- * status, name (resolved via Steam title API) and credential state.
- *
- * The component intentionally does NOT manage settings — it links the
- * user to Settings → Workshop Collection Sync when configuration is
- * missing.
- */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -95,7 +75,6 @@ type RowAction = 'add' | 'remove' | 'track' | 'untrack' | 'add-server' | 'remove
 
 type TFn = (key: string, opts?: Record<string, unknown>) => string
 
-// Friendly relative-time string for the "last refreshed" badge.
 function formatAgo(date: Date | null, t: TFn, locale?: string): string {
   if (!date) return t('never')
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -161,7 +140,6 @@ export function WorkshopCollectionPanel() {
     }
   }, [t])
 
-  // Load on mount.
   useEffect(() => {
     refresh()
   }, [refresh])
@@ -172,8 +150,6 @@ export function WorkshopCollectionPanel() {
   const autoSync = !!diff?.autoSync
   const items: DiffItem[] = useMemo(() => (diff?.ok && diff.items) ? diff.items : [], [diff])
 
-  // Counts per filter category — drive both the pill labels and the
-  // stat tiles so they always agree.
   const counts = useMemo(() => {
     let synced = 0, toAdd = 0, collectionOnly = 0, trackedOnly = 0, tracked = 0, inColl = 0, onServer = 0
     for (const it of items) {
@@ -188,7 +164,6 @@ export function WorkshopCollectionPanel() {
     return {
       synced, toAdd, collectionOnly, trackedOnly, tracked, inColl, onServer,
       total: items.length,
-      // Everything the collection and the server disagree about.
       mismatch: toAdd + collectionOnly + trackedOnly,
     }
   }, [items])
@@ -210,10 +185,6 @@ export function WorkshopCollectionPanel() {
     })
   }, [items, filter, search])
 
-  // Selection helpers — selection is intentionally scoped to the
-  // currently-visible (filtered) rows. Switching filter clears nothing,
-  // but bulk actions only fire on rows still on screen and matching the
-  // action's prerequisites.
   const visibleIds = useMemo(() => filtered.map((i) => i.workshopId), [filtered])
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id))
   const someVisibleSelected = visibleIds.some((id) => selected.has(id))
@@ -264,7 +235,6 @@ export function WorkshopCollectionPanel() {
     }
   }
 
-  // ── Mutations ────────────────────────────────────────────────────────
   const runRowAction = async (workshopId: string, action: RowAction) => {
     setRowBusy((prev) => ({ ...prev, [workshopId]: action }))
     try {
@@ -325,12 +295,8 @@ export function WorkshopCollectionPanel() {
     }
   }
 
-  // Bulk actions iterate sequentially so we don't slam Steam with parallel
-  // writes (their endpoints rate-limit cookie-auth pretty aggressively).
-  // Each row's success / failure is surfaced at the end as a single toast.
   const runBulk = async (action: RowAction) => {
     if (bulkBusy) return
-    // Filter selection to rows where the action makes sense.
     const targets = filtered.filter((it) => {
       if (!selected.has(it.workshopId)) return false
       if (action === 'add') return !it.inCollection
@@ -415,10 +381,6 @@ export function WorkshopCollectionPanel() {
     if (errors.length === 0) {
       toast({ title: t('toastBulkCompleteTitle'), description: t('toastBulkCompleteDesc', { count: ok }) })
     } else {
-      // Don't silently drop errors 2..N behind "first error" -- if every
-      // failure is the same, say so explicitly; if they differ, say how
-      // many distinct causes there were so the user knows more than one
-      // thing needs attention instead of assuming a single fluke.
       const uniqueErrors = [...new Set(errors.map((e) => e.error))]
       toast({
         variant: 'destructive',
@@ -430,11 +392,8 @@ export function WorkshopCollectionPanel() {
     }
   }
 
-  // ── Render guards ────────────────────────────────────────────────────
   const noCollectionConfigured = diff !== null && !collectionId
 
-  // Configuration empty-state: shown when the panel is loaded but the
-  // user hasn't set a collection ID yet. Points them at the Settings card.
   if (noCollectionConfigured) {
     return (
       <Card>
@@ -584,7 +543,6 @@ export function WorkshopCollectionPanel() {
       </Dialog>
 
       <CardContent className="space-y-4">
-        {/* Error banner */}
         {diffError && (
           <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
@@ -592,7 +550,6 @@ export function WorkshopCollectionPanel() {
           </div>
         )}
 
-        {/* Sync summary — one calm read of the state, details tucked away. */}
         <div className={cn(
           'rounded-lg border px-3 py-3',
           inSync ? 'border-success/30 bg-success/[0.04]' : 'border-warning/35 bg-warning/[0.045]'
@@ -634,7 +591,6 @@ export function WorkshopCollectionPanel() {
           </details>
         </div>
 
-        {/* Toolbar: filter pills + search + bulk actions */}
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-md border border-border/55 bg-muted/30 p-0.5 text-[11px] font-medium">
             {([
@@ -683,8 +639,6 @@ export function WorkshopCollectionPanel() {
           </div>
         </div>
 
-        {/* Bulk action bar — only renders when something's selected, so
-            the toolbar stays calm in the common case */}
         {selected.size > 0 && (
           <div className="flex items-center gap-2 flex-wrap rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs animate-in fade-in slide-in-from-top-1">
             <span className="font-medium text-foreground">
@@ -756,7 +710,6 @@ export function WorkshopCollectionPanel() {
           </div>
         )}
 
-        {/* Table */}
         <div className="rounded-md border border-border/60 overflow-hidden">
           <div className="max-h-[520px] overflow-auto">
             {diffLoading && !diff ? (
@@ -810,8 +763,6 @@ export function WorkshopCollectionPanel() {
                           return
                         }
                         if (action === 'untrack') {
-                          // This also changes the user's Steam Workshop
-                          // collection, so confirm before syncing the removal.
                           confirm({
                             title: t('untrackConfirmTitle'),
                             description: t('untrackConfirmDescription'),
@@ -823,9 +774,6 @@ export function WorkshopCollectionPanel() {
                           return
                         }
                         if (action === 'remove-server') {
-                          // Mods.tsx confirms this exact operation (modsApi.batchRemove)
-                          // on both its row and bulk paths; this panel and Settings.tsx
-                          // reached the same server mutation with no confirm at all.
                           confirm({
                             title: t('removeServerConfirmTitle'),
                             description: t('removeServerConfirmDescription'),
@@ -900,9 +848,6 @@ export function WorkshopCollectionPanel() {
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Subcomponents
-// ─────────────────────────────────────────────────────────────────────────
 
 type StatAccent = 'primary' | 'warning' | 'destructive' | 'muted'
 
@@ -1135,10 +1080,6 @@ function Row({
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
-                  // copyText, not the raw clipboard API directly, so this
-                  // still works over a plain-HTTP LAN deployment --
-                  // navigator.clipboard requires a secure context and is
-                  // unavailable there; copyText falls back to execCommand.
                   copyText(item.workshopId).then((ok) => {
                     toast(ok
                       ? { title: t('copiedTitle'), description: item.workshopId }

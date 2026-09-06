@@ -1,19 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { probeRconFallbackIfConfigured } from "../index.js";
 
-// Regression coverage for the startup RCON fallback probe (apps/panel-server/index.js,
-// inside start()'s "PZ server not detected running" branch). The probe exists
-// for wrapper setups (WinGSM etc.) where process detection misses a server
-// whose RCON is genuinely up. The defect: it used to fire even when no server
-// had ever been configured, falling back to the hardcoded default host/port
-// with an empty password — which meant a brand-new, unconfigured install
-// would repeatedly try to authenticate against whatever unrelated process
-// happened to be listening on the default RCON port.
-//
-// Both directions matter. A test that only proves "unconfigured -> no probe"
-// would pass just as happily if the whole feature had been deleted, so the
-// second case (configured server, process check failed, probe must still
-// run) is the one that actually protects the WinGSM use case.
 
 function makeFakeRconService({ portOpen = true, connectSucceeds = true } = {}) {
   return {
@@ -33,7 +20,7 @@ describe("probeRconFallbackIfConfigured", () => {
     const rcon = makeFakeRconService();
 
     const result = await probeRconFallbackIfConfigured(
-      /* activeServer */ null,
+       null,
       rcon,
       5000,
     );

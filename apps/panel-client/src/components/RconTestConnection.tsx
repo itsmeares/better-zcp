@@ -13,9 +13,6 @@ interface RconTestConnectionProps {
   className?: string
 }
 
-// Lets a user verify RCON host/port/password before saving — distinguishes
-// "can't reach the host at all" from "reached it but the password is wrong",
-// which a bare connect failure can't tell apart.
 export function RconTestConnection({ host, port, password, className }: RconTestConnectionProps) {
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<RconTestResult | null>(null)

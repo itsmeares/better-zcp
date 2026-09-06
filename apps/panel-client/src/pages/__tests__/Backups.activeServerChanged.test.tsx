@@ -4,21 +4,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } from '@/lib/api'
 
-// bug-hunt-2026-09-04 (worse than #1 tonight, same root cause): a comment on
-// activeServerRemote/activeServerId CLAIMED this page already "refresh[ed]
-// when the server-changed socket event fires (handled via socket effect
-// below)" -- it didn't; only backup:progress was ever subscribed.
-// createBackup()/restoreBackup(name)/deleteBackup(name) all resolve the
-// active server fresh server-side per-request, same pattern as
-// ServerConfig's ini/sandbox routes -- restoreBackup is a live-world
-// overwrite, so a stale display here isn't cosmetic. Fix: reload
-// unconditionally on activeServerChanged (nothing here is user-typed state
-// worth protecting the way ServerConfig's settings were), close any open
-// destructive dialog (its own local state doesn't update just because the
-// list behind it refreshed), and block the four mutating actions for the
-// brief window until the reload lands. Separately, per god's addition: the
-// restore confirmation now names the actual target server, read fresh when
-// the dialog opens, not from mount-time state.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -49,10 +34,6 @@ vi.mock('@/lib/api', async () => {
   }
 })
 
-// A fake socket the test can fire activeServerChanged on directly. STABLE
-// module-level reference -- see tonight's Console/Dashboard mount-tests for
-// why a fresh object literal per useSocket() call thrashes effects that
-// depend on [socket, ...].
 const socketHandlers = vi.hoisted(() => new Map<string, Set<() => void>>())
 const fakeSocket = vi.hoisted(() => ({
   connected: true,
@@ -135,13 +116,11 @@ describe('Backups.tsx: activeServerChanged', () => {
     fireEvent.click(restoreButton)
     expect(await screen.findByRole('button', { name: /restore this backup/i })).toBeInTheDocument()
 
-    // Make the reload hang so the guard's transient window is observable.
     let resolveReload!: () => void
     getResolvedActive.mockReturnValue(new Promise((r) => { resolveReload = () => r({ server: { id: 2, name: 'Brightmoor' } as never }) }))
 
     act(() => { emitActiveServerChanged() })
 
-    // The stale dialog closes immediately, before the reload even resolves.
     await waitFor(() => expect(screen.queryByRole('button', { name: /restore this backup/i })).not.toBeInTheDocument())
 
     const createButton = screen.getByRole('button', { name: /create backup/i })

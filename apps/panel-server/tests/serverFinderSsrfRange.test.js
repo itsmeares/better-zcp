@@ -8,11 +8,6 @@ import {
 } from "../routes/serverFinder.js";
 import dgram from "dgram";
 
-// Regression coverage for the isPrivateIp() boundary
-// (the SSRF deny-list backing GET /query and GET /ping) blocked every usual
-// private/reserved range but missed 100.64.0.0/10 (RFC 6598, Carrier-Grade
-// NAT / shared address space) entirely -- increasingly used as an internal
-// routing range by cloud providers and some Docker/Kubernetes setups.
 
 describe("isPrivateIp: 100.64.0.0/10 (Carrier-Grade NAT) is now blocked", () => {
   it.each([
@@ -135,12 +130,6 @@ describe("queryServerInfo: A2S challenge handling", () => {
   });
 });
 
-// Regression coverage: queryServerInfo used to resolve null identically for
-// a timeout, a socket error, and a genuinely unparseable response -- GET
-// /query and GET /ping had no way to tell an operator which of the three
-// actually happened. onFailureReason is the optional, backward-compatible
-// side channel that fixes that (see the "shape unchanged" case above -- the
-// resolved value itself is untouched when the callback isn't passed).
 describe("queryServerInfo: onFailureReason distinguishes the collapsed causes", () => {
   it("does not fire onFailureReason on a successful response", async () => {
     const server = dgram.createSocket("udp4");
@@ -176,9 +165,6 @@ describe("queryServerInfo: onFailureReason distinguishes the collapsed causes", 
   it("reports 'unparseable-response' -- server answered, but the panel could not read it", async () => {
     const server = dgram.createSocket("udp4");
     server.on("message", (message, remote) => {
-      // Header byte 0x99 matches neither 'I' (0x49) nor the obsolete
-      // GoldSource 'm' (0x6d) -- parseA2SInfoResponse throws "Invalid
-      // response header" for this on purpose.
       server.send(Buffer.from([0xff, 0xff, 0xff, 0xff, 0x99]), remote.port, remote.address);
     });
     await new Promise((resolve) => server.bind(0, "127.0.0.1", resolve));
@@ -196,12 +182,6 @@ describe("queryServerInfo: onFailureReason distinguishes the collapsed causes", 
   });
 });
 
-// Regression coverage: GET / reported an identical `servers: []` for three
-// different causes on the master-server fallback path -- genuinely zero PZ
-// servers listed, servers listed but none answered A2S, and the master
-// itself unreachable. deriveEmptyReason is the pure decision extracted from
-// that route so the branching can be tested without standing up fake UDP
-// master servers.
 describe("deriveEmptyReason: the master-list zero-collapse, disambiguated", () => {
   it("is undefined outside the master_server path -- steam_api source is untouched", () => {
     expect(

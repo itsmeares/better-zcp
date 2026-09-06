@@ -39,9 +39,6 @@ import { getUserErrorMessage, getRecoveryUrl } from '@/lib/errorMessage'
 import { VerdictBand, WorkList } from '@/components/dashboard/DashboardVerdict'
 import type { Verdict, WorkItem } from '@/components/dashboard/DashboardVerdict'
 
-/* -------------------------------------------------------------------------- */
-/*  Types                                                                     */
-/* -------------------------------------------------------------------------- */
 
 interface PlayerActivity { id: number; player_name: string; action: string; details: string | null; logged_at: string }
 interface BridgeStatus {
@@ -52,25 +49,10 @@ interface BridgeStatus {
 }
 interface ServerStatus {
   running: boolean
-  // See apps/panel-server/services/serverManager.js's getServerStatus() comment: true
-  // when the OS process scan itself failed (AV interference, WMI timeout,
-  // ps/pgrep unavailable), distinct from a confirmed stop. deriveDashboardStatus
-  // (lib/serverStatus.ts) reads this to avoid treating a scan hiccup as a
-  // confident "server is down."
   scanFailed?: boolean
   startTime: string | null
   uptime: number
   serverPath: string
-  // Renamed from `configured` server-side (2026-08-31): this has only ever
-  // meant "does the local process-launch path have a directory to run in"
-  // (apps/panel-server/services/serverManager.js's startServer() guard), not "is this
-  // server profile complete". A remote server's launch happens on a
-  // different host and correctly never sets serverPath, so under the old
-  // name it read as permanently unconfigured everywhere this field was
-  // read without already special-casing isRemote -- see the three call
-  // sites below, all still gated on !activeServer?.isRemote for exactly
-  // that reason. The value was already right for what it actually gates;
-  // only the name over-promised.
   serverPathConfigured: boolean
   publicIp?: string
   localIp?: string
@@ -87,23 +69,9 @@ interface PerformancePoint {
 
 const DashboardPerformanceCharts = lazy(() => import('@/components/DashboardPerformanceCharts'))
 const DASHBOARD_ONBOARDING_DISMISSED_KEY = 'pz-dashboard-onboarding-dismissed-v1'
-// Stores the exact lastError STRING that was dismissed, not a boolean --
-// so dismissing "cannot reach GitHub" (the common air-gapped-install case)
-// does not also silence a completely different failure that shows up later
-// (e.g. after the machine gets network access and a real bug surfaces). If
-// panelUpdate.lastError ever changes to different text, the stored value
-// no longer matches and the indicator reappears. localStorage (not the
-// sessionStorage the update-available banner above uses) because "never
-// see this again" needs to survive closing the browser, not just a reload.
 const PANEL_UPDATE_ERROR_DISMISSED_KEY = 'pz-panel-update-error-dismissed'
 
-/* -------------------------------------------------------------------------- */
-/*  Small helpers                                                             */
-/* -------------------------------------------------------------------------- */
 
-// These helpers live outside the component and can't use the useTranslation
-// hook, so `t` is threaded through as a parameter instead — each is called
-// from inside the component body, where `t` is already in scope.
 function getDashboardSuccessCopy(t: TFunction<'dashboard'>, action: string) {
   switch (action) {
     case 'Start server':   return { title: t('successCopy.startServer.title'), description: t('successCopy.startServer.description') }
@@ -118,15 +86,6 @@ function getDashboardSuccessCopy(t: TFunction<'dashboard'>, action: string) {
   }
 }
 
-// Force Stop attempts a bounded, fail-open save before killing the server
-// (server.js's attemptBoundedSaveBeforeForceStop) and reports the outcome as
-// saveOutcome on every response shape. "saved" uses the plain success copy
-// (getDashboardSuccessCopy above) -- this only covers the other three, which
-// must NOT be collapsed into one message: "the save was refused" and "the
-// save didn't answer in time" mean different things about server state, and
-// "skipped" has to say why rather than reading as a silent nothing. Returns
-// null for "saved" or an unrecognized/absent value, telling the caller to
-// fall through to the generic success toast instead.
 export function getForceStopSaveOutcomeCopy(t: TFunction<'dashboard'>, saveOutcome: string | undefined) {
   switch (saveOutcome) {
     case 'failed':   return { title: t('successCopy.forceStopSaveFailed.title'), description: t('successCopy.forceStopSaveFailed.description') }
@@ -136,19 +95,6 @@ export function getForceStopSaveOutcomeCopy(t: TFunction<'dashboard'>, saveOutco
   }
 }
 
-// 2026-08-26: unreachable for every current handleAction() caller (serverApi
-// .start/.save, rconApi.connect, backupApi.createBackup) -- each resolves
-// through apiPost, and lib/api.ts's handleResponse() already throws on any
-// 200 body with success: false before this function's own .then() branch
-// could ever see it (see the same note on Console.tsx/Events.tsx/etc.,
-// which document the same centralized mechanism for their own call sites).
-// Kept, and commented rather than deleted, because a check that WOULD fire
-// if a future caller ever bypassed apiPost is a trap, not a safety net: it
-// throws a bare Error with no status/code, which getUserErrorMessage()
-// cannot translate -- strictly worse than what the live apiPost path
-// already does automatically today. If this ever starts actually firing,
-// that is a sign a new handleAction() caller skipped apiPost, not that this
-// check earned its keep.
 function isFailedActionResult(value: unknown): value is { success: false; error?: string; message?: string } {
   return typeof value === 'object'
     && value !== null
@@ -166,10 +112,6 @@ function formatAge(t: TFunction<'dashboard'>, iso: string): string {
   return t('age.daysAgo', { count: Math.floor(hrs / 24) })
 }
 
-/** Like formatAge, but phrased as "since joined" rather than "X ago" -- kept
- * as its own function instead of deriving it from formatAge's output with
- * string manipulation, since stripping a hardcoded " ago" suffix silently
- * breaks the moment formatAge returns translated text. */
 function formatSinceJoined(t: TFunction<'dashboard'>, iso: string): string {
   const ms = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(ms / 60000)
@@ -180,7 +122,6 @@ function formatSinceJoined(t: TFunction<'dashboard'>, iso: string): string {
   return t('age.forDays', { count: Math.floor(hrs / 24) })
 }
 
-/** Countdown to a future moment. Returns null once the moment has passed. */
 function formatEta(t: TFunction<'dashboard'>, iso: string): string | null {
   const ms = new Date(iso).getTime() - Date.now()
   if (!Number.isFinite(ms) || ms < 0) return null
@@ -201,16 +142,10 @@ function eventStyle(t: TFunction<'dashboard'>, action: string) {
     case 'pvp_kill':   return { icon: <Sword       className="h-3 w-3" />, tone: 'text-warning',         verb: t('liveActivity.verbs.killed') }
     case 'ban':        return { icon: <ShieldAlert className="h-3 w-3" />, tone: 'text-destructive',     verb: t('liveActivity.verbs.banned') }
     case 'kick':       return { icon: <AlertCircle className="h-3 w-3" />, tone: 'text-warning',         verb: t('liveActivity.verbs.kicked') }
-    // Raw log actions read as SCREAMING_SNAKE. Say them like words. Not
-    // translated -- these are ad-hoc identifiers from scheduler/mod logs,
-    // not a closed set of known verbs.
     default:           return { icon: <Activity    className="h-3 w-3" />, tone: 'text-muted-foreground', verb: action.replace(/_/g, ' ').toLowerCase() }
   }
 }
 
-/**
- * Connection LED row.
- */
 function ConnLine({
   label, state, value, hint,
 }: { label: string; state: 'on' | 'off' | 'wait'; value?: string; hint?: string }) {
@@ -235,19 +170,13 @@ function ConnLine({
   )
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Dashboard                                                                 */
-/* -------------------------------------------------------------------------- */
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation('dashboard')
-  /* ---------------------------- state ------------------------------------- */
   const [status, setStatus] = useState<ServerStatus | null>(null)
   const [composedStatus, setComposedStatus] = useState<ComposedServerStatus | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus | null>(null)
-  // These metrics are not included in the existing status poll or
-  // `panelBridge:modStatus` payload, so they need their own state and request.
   const [zombieCount, setZombieCount] = useState<number | null>(null)
   const [worldMap, setWorldMap] = useState<string | null>(null)
   const [playerActivity, setPlayerActivity] = useState<PlayerActivity[]>([])
@@ -289,11 +218,6 @@ export default function Dashboard() {
   const initialLoadingRef = useRef(true)
 
   const [confirmAction, setConfirmAction] = useState<{
-    // actionId is the stable, untranslated key getDashboardSuccessCopy()
-    // switches on and handleAction() uses for its `loading === ...` checks.
-    // title is the translated text actually shown in the dialog -- they
-    // used to be the same string, which would have broken the switch the
-    // moment the dialog title was translated to anything but English.
     actionId: string; title: string; description: string
     action: () => Promise<unknown>
     variant?: 'destructive' | 'warning'
@@ -306,9 +230,6 @@ export default function Dashboard() {
     truncated?: boolean
   } | null>(null)
   const [wipeLoading, setWipeLoading] = useState(false)
-  // Defaults to true, same as ChunkCleaner.tsx's chunk-delete backup switch --
-  // the panel already has one convention for "destructive delete backs up
-  // first unless you opt out," this just applies it here too.
   const [wipeCreateBackup, setWipeCreateBackup] = useState(true)
   const [wipeBackupProgress, setWipeBackupProgress] = useState<{
     phase: string; percent: number; message: string
@@ -318,16 +239,9 @@ export default function Dashboard() {
   const socket = useSocket()
   const navigate = useNavigate()
   const { can } = useAuth()
-  // server.control gates Start/Stop/Force-Stop/Restart/Restart-Now/Save
-  // (apps/panel-server/routes/server.js) -- one capability behind six triggers on this
-  // page. server.wipe is a SEPARATE, more dangerous capability (server.js's
-  // /wipe and /wipe/preview) -- holding server.control must never unlock
-  // the Wipe control. can() fails open on unknown/null capabilities, same
-  // convention as every other capability check in the app.
   const canControlServer = can('server.control')
   const canWipeServer = can('server.wipe')
 
-  /* ---------------------------- effects ----------------------------------- */
   useEffect(() => { initialLoadingRef.current = initialLoading }, [initialLoading])
   useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 10000); return () => clearInterval(t) }, [])
 
@@ -365,12 +279,6 @@ export default function Dashboard() {
     }
   }, [socket])
 
-  // Surfaces backupService's pre-wipe backup progress inside the wipe dialog.
-  // `backup:progress` is a single global event (see Backups.tsx's identical
-  // listener) with no id tying it to a specific caller -- gating on
-  // wipeLoading is safe because backupService only ever runs one backup at a
-  // time (its own internal mutex refuses a second), so any event that lands
-  // while a wipe request is in flight is this wipe's own backup.
   useEffect(() => {
     if (!socket) return
     const handleBackupProgress = (data: { phase: string; percent: number; message: string }) => {
@@ -391,7 +299,6 @@ export default function Dashboard() {
     try { localStorage.setItem(DASHBOARD_ONBOARDING_DISMISSED_KEY, 'true') } catch { /* ignore storage failures */ }
   }
 
-  /* ---------------------------- fetchers ---------------------------------- */
   const fetchStatus = useCallback(async () => {
     try { const data = await serverApi.getStatus({ retries: 0 }); setStatus(data); setFetchError(null); setLastUpdated(new Date()) }
     catch { setFetchError(t('errors.failedToConnect')) }
@@ -413,11 +320,6 @@ export default function Dashboard() {
   const fetchBridgeStatus = useCallback(async () => {
     try { setBridgeStatus(await panelBridgeApi.getStatus()) } catch { setBridgeStatus(null) }
   }, [])
-  // Uses two distinct getters rather than one: getZombieCount is the
-  // purpose-built number for the tile below; getWorldStats' only
-  // non-duplicate field is the map name, shown next to the server name in
-  // the header. Neither result is seeded with a plausible-looking default
-  // on failure -- null means "unknown", not "0".
   const fetchWorldZombieStats = useCallback(async () => {
     const [zc, ws] = await Promise.allSettled([
       panelBridgeApi.getZombieCount(),
@@ -451,10 +353,6 @@ export default function Dashboard() {
           hostMemTotalGB: h.hostMemTotal ? +((h.hostMemTotal as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
           hostDiskUsedGB: h.hostDiskUsed ? +((h.hostDiskUsed as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
           hostDiskTotalGB: h.hostDiskTotal ? +((h.hostDiskTotal as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
-          // != null, not truthy: a real 0 (swap genuinely not configured) is
-          // the answer this feature exists to surface, and must survive this
-          // mapping rather than collapsing to undefined ("could not
-          // determine") the way a truthy check would.
           hostSwapUsedGB: h.hostSwapUsed != null ? +((h.hostSwapUsed as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
           hostSwapTotalGB: h.hostSwapTotal != null ? +((h.hostSwapTotal as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
         })))
@@ -514,7 +412,6 @@ export default function Dashboard() {
     }
   }
 
-  /* ---------------------------- bootstrap --------------------------------- */
   useEffect(() => {
     const load = async () => {
       try {
@@ -564,19 +461,6 @@ export default function Dashboard() {
     const onStatus = (data: Partial<ServerStatus>) => {
       setStatus(prev => {
         if (prev) return { ...prev, ...data }
-        // Every real server:status emit (apps/panel-server/index.js, routes/server.js,
-        // services/scheduler.js) sends only { running } -- never enough
-        // fields to safely stand in for a full ServerStatus (rcon/startTime/
-        // uptime/serverPath/serverPathConfigured all missing). Before prev
-        // exists there is nothing to merge onto, so an early push here is
-        // dropped; fetchStatus()'s REST call populates the first real
-        // snapshot instead. (This used to check for a `configured` field
-        // that would have made a full-snapshot payload acceptable, but no
-        // server:status emission has ever sent one, under either that name
-        // or its 2026-08-31 rename to serverPathConfigured -- removed
-        // rather than "fixed" to the new name, since accepting a partial
-        // payload here would cast it to ServerStatus and crash the first
-        // render that reads e.g. status.rcon.connected.)
         return prev
       })
       setLastUpdated(new Date())
@@ -611,11 +495,6 @@ export default function Dashboard() {
     }
   }, [socket, fetchStatus, fetchComposedStatus, fetchPlayers, fetchBridgeStatus, fetchActiveServer])
 
-  // Zombie count changes continuously while the server runs -- unlike
-  // bridgeStatus (pushed live over the socket), nothing pushes this, so it
-  // needs its own poll. Same cadence and visibility-pause as Events.tsx's
-  // own bridge-data poll. Only runs while the mod is actually connected --
-  // an offline bridge would just 400 every 10s for nothing.
   useEffect(() => {
     if (!bridgeStatus?.modConnected) {
       setZombieCount(null)
@@ -645,11 +524,8 @@ export default function Dashboard() {
 
   useEffect(() => { if (showPerformanceCharts) fetchPerformanceHistory() }, [showPerformanceCharts, fetchPerformanceHistory])
 
-  // Real-time perf subscription via Socket.IO — appends each new snapshot
   useEffect(() => {
     if (!socket || !showPerformanceCharts) return
-    // Room membership is per connection, so reconnecting requires a new
-    // subscription even when Socket.IO reuses the client object.
     const subscribePerf = () => socket.emit('subscribe:perf')
     if (socket.connected) subscribePerf()
     socket.on('connect', subscribePerf)
@@ -665,8 +541,6 @@ export default function Dashboard() {
         hostMemTotalGB: snap.hostMemTotal ? +((snap.hostMemTotal as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
         hostDiskUsedGB: snap.hostDiskUsed ? +((snap.hostDiskUsed as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
         hostDiskTotalGB: snap.hostDiskTotal ? +((snap.hostDiskTotal as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
-        // != null, not truthy -- see the identical comment in
-        // fetchPerformanceHistory above.
         hostSwapUsedGB: snap.hostSwapUsed != null ? +((snap.hostSwapUsed as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
         hostSwapTotalGB: snap.hostSwapTotal != null ? +((snap.hostSwapTotal as number) / (1024 * 1024 * 1024)).toFixed(1) : undefined,
       }
@@ -694,12 +568,6 @@ export default function Dashboard() {
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [fetchStatus, fetchPlayers, fetchBridgeStatus, fetchPlayerActivity, fetchPerformanceHistory, showPerformanceCharts])
 
-  /* ---------------------------- actions ----------------------------------- */
-  // errorAction lets one call site attach a toast action button specific to
-  // the error it got back (e.g. "Open Servers" only for a fixable RCON
-  // failure) without every OTHER handleAction caller needing to know it
-  // exists -- returning undefined (the default for anyone who doesn't pass
-  // it) renders no action, identical to today's behavior.
   const handleAction = async (
     action: string,
     fn: () => Promise<unknown>,
@@ -712,34 +580,11 @@ export default function Dashboard() {
         throw new Error(result.error || result.message || t('toasts.actionFailedFallback'))
       }
       const copy = getDashboardSuccessCopy(t, action)
-      // 2026-08-26 bug hunt: POST /start regenerates the startup script on
-      // every stopped-to-started transition and now backs up + reports any
-      // existing content it didn't itself last write (a hand-edit, or a
-      // pre-fix install) instead of silently discarding it. A silent log
-      // line is what let that go unnoticed in the first place, so this gets
-      // its own toast rather than folding into the generic success copy.
       const scriptWarnings = action === 'Start server' && result && typeof result === 'object'
         ? (result as { scriptWarnings?: string[] }).scriptWarnings
         : undefined
-      // 2026-08-26 bug hunt: POST /stop used to report success:true (and this
-      // toast used to say "Server stopped") the instant rconService.quit()
-      // returned -- which only proves PZ accepted the quit command, not that
-      // its save-and-exit has actually finished. Now the server marks this
-      // response confirmed:false for exactly that case, so the toast can
-      // stop claiming completion it doesn't have; the real "stopped" state
-      // still arrives over the socket (Layout.tsx's status listener) once
-      // the watchdog genuinely observes the process gone.
       const stopUnconfirmed = action === 'Stop server' && result && typeof result === 'object'
         && (result as { confirmed?: boolean }).confirmed === false
-      // 2026-08-26 bug hunt: Force Stop now attempts a bounded, fail-open save
-      // before killing the server (server.js's attemptBoundedSaveBeforeForceStop)
-      // and reports the outcome as saveOutcome -- but the generic success toast
-      // read nothing from the response, so a failed/timed-out/skipped save was
-      // reported identically to a genuine save. "saved" still uses the plain
-      // success copy below; the other three get their own warning-tier toast
-      // (this operation's outer action DID succeed -- the server IS stopped --
-      // so destructive-red would overstate it, and folding into success would
-      // hide the one thing an operator needs to know after a force-stop).
       const forceStopSaveOutcome = action === 'Force stop server' && result && typeof result === 'object'
         ? (result as { saveOutcome?: string }).saveOutcome
         : undefined
@@ -788,12 +633,6 @@ export default function Dashboard() {
       })
     } finally { setLoading(null) }
   }
-  // Two of the six server.control triggers on this page (this Start button,
-  // and the verdict band's shortcut for the same action below) call
-  // handleAction() directly with no confirm dialog in between -- guarded
-  // here, inside the function, not just on the buttons that call it. Same
-  // lesson as Console.tsx's Enter-key path: a disabled attribute is an
-  // affordance, the function guard is the actual gate.
   const startServer = () => {
     if (!canControlServer) return
     void handleAction('Start server', serverApi.start)
@@ -804,8 +643,6 @@ export default function Dashboard() {
   }
   const handleConnect = async () => {
     await handleAction('Connect RCON', () => rconApi.connect(), {
-      // Reuse the central recovery mapping instead of duplicating route
-      // classification here.
       errorAction: (error) => {
         const url = getRecoveryUrl(error)
         if (url !== '/servers') return undefined
@@ -818,7 +655,6 @@ export default function Dashboard() {
     })
   }
 
-  /* ---------------------------- loading ----------------------------------- */
   if (initialLoading) {
     return (
       <div className="page-transition">
@@ -830,18 +666,7 @@ export default function Dashboard() {
     )
   }
 
-  /* ---------------------------- derived ----------------------------------- */
   const hasServer = !!activeServer
-  // GH#114: status.running is a local process scan -- it can only ever see a
-  // process in *this* container/host. That's a valid, freshest signal for a
-  // native server, but for docker-local/docker-managed the mapped process
-  // runs in a DIFFERENT container, so the scan always finds nothing and
-  // (because isRemote is false for a Docker provider too, not just native)
-  // used to win the ?? chain below over the provider-aware composedStatus --
-  // a Docker container correctly shown running in the Docker panel could
-  // still read "down" on this exact same page. isRemote only distinguishes
-  // remote-SFTP from everything else; it was never a "this process is local
-  // to this container" proxy, which is what this check actually needs.
   const provider = composedStatus?.provider ?? resolveClientProvider(activeServer)
   const { hostRunning, rconConnected, hostUnknown, online } = deriveDashboardStatus({
     hasServer,
@@ -852,7 +677,6 @@ export default function Dashboard() {
   const modsPending = maintenance.modUpdatesAvailable > 0
   const staleLink = !lastUpdated || Date.now() - lastUpdated.getTime() > 60_000
 
-  /* Thresholds drive the verdict. Colour follows a crossed threshold, never a palette slot. */
   const latestPerf = performanceHistory[performanceHistory.length - 1]
   const maxMemoryGB = activeServer?.maxMemory
   const hostMemoryRatio = latestPerf?.hostMemUsedGB != null && latestPerf?.hostMemTotalGB
@@ -866,7 +690,6 @@ export default function Dashboard() {
     ? latestPerf.hostDiskUsedGB / latestPerf.hostDiskTotalGB
     : null
 
-  /* Who is online, with a join age only where a real connect event exists. */
   const joinedAt = new Map<string, string>()
   for (const event of playerActivity) {
     if (event.action === 'connect' && !joinedAt.has(event.player_name)) joinedAt.set(event.player_name, event.logged_at)
@@ -877,9 +700,7 @@ export default function Dashboard() {
     return { name: player.name, since: formatSinceJoined(t, joined) }
   })
 
-  /* One verdict at a time, highest severity wins. Calm states say nothing at all. */
   const verdict: Verdict = (() => {
-    // A remote server has no local process-launch path by design.
     if (!hasServer || (status && !status.serverPathConfigured && !activeServer?.isRemote)) {
       return {
         level: 'warning',
@@ -899,11 +720,6 @@ export default function Dashboard() {
       return {
         level: hostUnknown ? 'warning' : 'critical',
         headline: hostUnknown ? t('verdict.serverStatusUnknown') : t('verdict.serverStopped'),
-        // Omit the shortcut entirely rather than show it disabled with no
-        // explanation -- VerdictAction has no reason/tooltip support, same
-        // treatment isRemote/hostUnknown already get here. The header Start
-        // button (which DOES carry a DisabledReason) remains the explained
-        // affordance for why this operator can't start the server.
         action: hostUnknown || activeServer?.isRemote || !canControlServer
           ? undefined
           : {
@@ -937,7 +753,6 @@ export default function Dashboard() {
         headline: t('verdict.hostMemory', { percent: Math.round(hostMemoryRatio * 100) }),
       }
     }
-    /* A full disk corrupts saves and fails backups, so it outranks a busy CPU. */
     if (diskRatio != null && diskFreeGB != null && diskRatio >= 0.95) {
       return {
         level: 'critical',
@@ -970,8 +785,6 @@ export default function Dashboard() {
         action: { label: t('verdict.reviewMods'), to: '/mods' },
       }
     }
-    /* Game errors are reported by the Errors row, which is already coloured by
-       severity. Repeating the count here would say the same thing twice. */
     if (maintenance.schedulerLoaded && maintenance.backupCount === 0 && !activeServer?.isRemote) {
       return {
         level: 'warning',
@@ -987,15 +800,12 @@ export default function Dashboard() {
     return { level: 'calm' }
   })()
 
-  /* Readiness numbers live on the thing you act on, not in a read-only panel. */
   const backupState = maintenance.lastBackup
     ? t('workItems.backupsStoredLast', { count: maintenance.backupCount, age: formatAge(t, maintenance.lastBackup.created) })
     : maintenance.backupCount > 0
       ? t('workItems.backupsStored', { count: maintenance.backupCount })
       : t('workItems.backupsNoneYet')
 
-  /* A count of tasks is trivia. The next time something will happen is the
-     thing that decides whether you can walk away from the server. */
   const nextRunEta = maintenance.nextRun ? formatEta(t, maintenance.nextRun.at) : null
   const scheduleState = nextRunEta && maintenance.nextRun
     ? `${maintenance.nextRun.label} ${nextRunEta}`
@@ -1051,24 +861,6 @@ export default function Dashboard() {
     { id: 'config', to: '/server-config', icon: Server, label: t('workItems.config') },
   ]
 
-  // WORK_STATE_TONE (DashboardVerdict.tsx) already colors each row by
-  // severity, but color alone doesn't pull a 'bad' row up past several
-  // calm ones above it in a 7-row list -- the operator has to read every
-  // row to find it. Sorting by severity (stable, so same-tone rows keep
-  // their original relative order) puts what needs attention where the
-  // operator's own "actionable items on top" ask actually lands: the top
-  // of the list, not just a different color partway down it.
-  //
-  // 'warning' collapses into the same bucket as 'default'/'good' rather
-  // than getting its own rank (GH#137): 'warning' is the tone a normal
-  // Stop/Restart passes through on the way to disconnecting RCON, so
-  // ranking it above 'default' reshuffled the whole list on every
-  // ordinary status poll while a server was merely stopping or starting
-  // -- rows visibly swapping places for a state the operator caused
-  // themselves and already knows about, not something that needed
-  // surfacing. 'bad' (the server is actually unreachable) is the state
-  // worth interrupting the list's order for; the rest stay in place and
-  // let color alone carry the signal, same as they always did.
   const WORK_ITEM_SEVERITY: Record<'bad' | 'warning' | 'default' | 'good', number> = {
     bad: 0, warning: 1, default: 1, good: 1,
   }
@@ -1076,22 +868,15 @@ export default function Dashboard() {
     (a, b) => WORK_ITEM_SEVERITY[a.tone ?? 'default'] - WORK_ITEM_SEVERITY[b.tone ?? 'default'],
   )
 
-  /* ====================================================================== */
-  /*  RENDER                                                                  */
-  /* ====================================================================== */
   return (
     <div className="page-transition pb-12">
       <AutoUpdateResultBanner />
-      {/* ─── TOP STATUS BAR ───────────────────────────────────────── */}
       <header
         aria-label={t('header.ariaLabel')}
         className="overflow-hidden rounded-lg border border-border/55 bg-card/45 shadow-sm"
       >
-        {/* Main row */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3">
-          {/* Identity cluster: status + name + uptime */}
           <div className="flex min-w-0 items-center gap-3">
-            {/* One light for the whole page: green calm, amber attention, red broken. */}
             <span
               className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center"
               title={verdict.headline ?? t('header.everythingNominal')}
@@ -1119,16 +904,11 @@ export default function Dashboard() {
               {activeServer?.serverName ?? t('header.noActiveServer')}
             </h1>
 
-            {/* Uptime */}
             {online && status && status.uptime > 0 && (
               <span className="hidden font-mono text-[11px] tabular-nums text-muted-foreground/60 sm:inline">
                 {t('header.upPrefix', { uptime: formatUptime(status.uptime) })}
               </span>
             )}
-            {/* Map name -- from getWorldStats, the only field it reports that
-                getZombieCount doesn't already cover. Bridge-sourced, so it's
-                unknown (hidden) rather than guessed until the bridge poll
-                actually reports one. */}
             {worldMap && (
               <span className="hidden font-mono text-[11px] text-muted-foreground/60 sm:inline" title={t('header.mapTooltip')}>
                 {worldMap}
@@ -1139,7 +919,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Address cluster — grouped, distinct background */}
           <div className="order-3 -mx-4 -mb-3 flex w-[calc(100%+2rem)] flex-wrap items-center gap-1 border-t border-border/30 bg-background/20 px-3 py-1.5">
             {status?.localIp && (
               <button
@@ -1193,7 +972,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* primary controls — right-aligned */}
           <div className="order-2 ms-auto flex flex-wrap justify-end gap-1">
           {!online ? (
             <DisabledReason reason={
@@ -1222,12 +1000,6 @@ export default function Dashboard() {
                     title: t('confirm.stopServer.title'),
                     description: t('confirm.stopServer.description'),
                     action: serverApi.stop,
-                    // Same severity class as the adjacent graceful Restart
-                    // button (reversible, comes back with a click) -- was
-                    // styled destructive-red while Restart uses warning-amber
-                    // for the same "disconnects players, nothing is lost"
-                    // outcome. Matches Restart's precedent instead of
-                    // inventing a third tier.
                     variant: 'warning',
                   })}
                   disabled={loading !== null || !online || !canControlServer}
@@ -1334,12 +1106,6 @@ export default function Dashboard() {
               >
                 <DropdownMenuItem
                   onClick={() => {
-                    // Radix's MenuItem composes this onClick to fire BEFORE
-                    // its own disabled check (which only guards its internal
-                    // select/close behavior, not an arbitrary onClick prop) --
-                    // the disabled attribute below is an affordance, this
-                    // guard is the actual gate, same lesson as Console.tsx's
-                    // Enter-key path.
                     if (!canControlServer) return
                     setConfirmAction({
                       actionId: 'Restart server now',
@@ -1360,9 +1126,6 @@ export default function Dashboard() {
                 reason={
                   !hasServer ? t('actions.addServerFirst')
                   : activeServer?.isRemote ? t('actions.notAvailableRemote')
-                  // Capability before the transient "server is running" reason
-                  // -- an operator who will never hold server.wipe gets told
-                  // that, not sent to wait for a restart that wouldn't help them.
                   : !canWipeServer ? t('actions.noPermissionWipe')
                   : online ? t('actions.wipeMustStopFirst')
                   : null
@@ -1370,10 +1133,6 @@ export default function Dashboard() {
               >
                 <DropdownMenuItem
                   onClick={() => {
-                    // Same Radix quirk as Restart Now above: this onClick
-                    // fires before the disabled prop is ever consulted, so
-                    // the real gate on the single most destructive control
-                    // in the product has to live here, not in the attribute.
                     if (!canWipeServer) return
                     setWipePreview(null)
                     setWipeDialog(true)
@@ -1390,7 +1149,6 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* ─── Panel update banner ─────────────────────────────────────────── */}
       {(() => {
         if (!panelUpdate?.updateAvailable) return null
         const latest = panelUpdate.latestVersion
@@ -1461,11 +1219,6 @@ export default function Dashboard() {
         )
       })()}
 
-      {/* ─── Update check failing (quiet) ───────────────────────────────────
-          Deliberately NOT the accented-banner treatment used above and below:
-          the panel is working fine, it just cannot tell whether a newer
-          version exists. That is information, not an alarm, so no border,
-          no fill, no accent bar -- just muted icon + text + a dismiss X. */}
       {(() => {
         if (!panelUpdate || panelUpdate.updateAvailable) return null
         if (!panelUpdate.lastError) return null
@@ -1495,7 +1248,6 @@ export default function Dashboard() {
         )
       })()}
 
-      {/* ─── Error banner ────────────────────────────────────────────────── */}
       {fetchError && (
         <div
           role="alert"
@@ -1516,11 +1268,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ─── Not configured ──────────────────────────────────────────────── */}
-      {/* !activeServer?.isRemote: see the verdict's own comment above -- a
-          remote server's serverPathConfigured is always false by
-          construction (no local launch path), not a real "unconfigured"
-          signal. */}
       {status && !status.serverPathConfigured && !activeServer?.isRemote && (
         <Link
           to="/server-setup"
@@ -1539,7 +1286,6 @@ export default function Dashboard() {
         </Link>
       )}
 
-      {/* ─── Quick-start onboarding ──────────────────────────────────────── */}
       {!hasServer && showQuickStart && (
         <section className="relative mt-3 overflow-hidden rounded-lg border border-primary/30 bg-card/50 px-4 py-4">
           <button
@@ -1582,7 +1328,6 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* ─── VERDICT ────────────────────────────────────────────────────── */}
       <VerdictBand
         verdict={verdict}
         players={presence}
@@ -1591,20 +1336,16 @@ export default function Dashboard() {
         stale={staleLink}
       />
 
-      {/* ─── EVIDENCE AND WORK ──────────────────────────────────────────── */}
       <div className="mt-6 grid content-start gap-6 xl:grid-cols-[minmax(0,1fr)_19rem] xl:items-start">
 
-        {/* ════ CENTER ════ */}
         <main className="grid min-w-0 content-start gap-4 2xl:grid-cols-2 2xl:items-start">
 
-          {/* LIVE ACTIVITY */}
           <section className={cn(
             'order-2 flex flex-col overflow-hidden rounded-lg border border-border/45 bg-card/25',
             playerActivity.length > 0 && 'max-h-[15rem]',
           )}>
             <header className="flex items-center justify-between border-b border-border/30 px-3 py-1.5">
               <h3 className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/75">{t('liveActivity.heading')}</h3>
-              {/* No status dot. Whether the server is up is answered by the verdict band, not repeated here. */}
               <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
                 {playerActivity.length > 0 ? t('liveActivity.eventsCount', { count: playerActivity.length }) : online ? t('liveActivity.idle') : t('liveActivity.offline')}
               </span>
@@ -1612,15 +1353,6 @@ export default function Dashboard() {
             {playerActivity.length === 0 ? (
               <div className="flex items-center px-3 py-3">
                 <p className="text-xs text-muted-foreground/75">
-                  {/* Third consumer of the same status.serverPathConfigured
-                      signal gated at :869/:1477 -- same !activeServer?.isRemote
-                      fix, or an offline remote server with no recent
-                      activity would still read "not configured" here after
-                      the verdict and banner above it were already
-                      corrected (2026-08-31, caught in review: a fix that
-                      covers only the consumers a screenshot showed leaves
-                      the others disagreeing with the ones that got fixed,
-                      which reads worse than being uniformly wrong). */}
                   {online
                     ? t('liveActivity.emptyOnline')
                     : status?.serverPathConfigured || activeServer?.isRemote
@@ -1651,20 +1383,12 @@ export default function Dashboard() {
             )}
           </section>
 
-          {/* TELEMETRY */}
           <section className="order-1 overflow-hidden rounded-lg border border-border/65 bg-card/50 shadow-sm">
             <header className="flex items-center justify-between gap-3 border-b border-border/35 px-4 py-2">
               <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/75">{t('telemetry.heading')}</h2>
               <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60">
                 {(() => {
                   if (performanceHistory.length === 0) return online ? t('telemetry.sampling') : t('telemetry.standby')
-                  // This history comes from the server's own persisted log
-                  // (debugApi.getPerformanceHistory), independent of the
-                  // verdict's own online/hostUnknown check above -- recent
-                  // samples can survive even while that check can't confirm
-                  // the server right now. Calling a stale-relative-to-that-
-                  // check reading "live" said the opposite of the verdict
-                  // headline sitting right above it on the same page.
                   if (!online) {
                     if (performanceHistory.length < 2) return t('telemetry.unconfirmed')
                     const first = performanceHistory[0].timestamp
@@ -1720,10 +1444,8 @@ export default function Dashboard() {
           </section>
         </main>
 
-        {/* ════ WORK ════ */}
         <aside className="grid content-start gap-6">
 
-          {/* DESTINATIONS — each one carries its own live state */}
           <section>
             <WorkList items={sortedWorkItems} />
             <div className="mt-2 border-t border-border/25 px-1 pt-1">
@@ -1744,7 +1466,6 @@ export default function Dashboard() {
             </div>
           </section>
 
-          {/* MAINTENANCE */}
           {!activeServer?.isRemote && (
             <section>
               <h3 className="px-1 pb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/75">{t('maintenance.heading')}</h3>
@@ -1775,12 +1496,6 @@ export default function Dashboard() {
                 <DisabledReason
                   className="w-full"
                   reason={
-                    // Same priority order and same Radix onClick-before-disabled
-                    // guard as the "..." dropdown's Wipe item -- this sidebar
-                    // button opens the identical destructive dialog and was
-                    // missing both, which let a role without server.wipe
-                    // open the wipe dialog only to strand on unexplained
-                    // disabled Preview/Wipe Now buttons inside it.
                     !canWipeServer ? t('actions.noPermissionWipe')
                     : online ? t('maintenance.wipeTooltipOnline')
                     : null
@@ -1828,7 +1543,6 @@ export default function Dashboard() {
         </aside>
       </div>
 
-      {/* ─── Confirm dialog ──────────────────────────────────────────────── */}
       <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
         <AlertDialogContent className="glass border-border/50">
           <AlertDialogHeader>
@@ -1844,21 +1558,8 @@ export default function Dashboard() {
               disabled={loading !== null}
               className={cn(buttonVariants({ variant: confirmAction?.variant === 'destructive' ? 'destructive' : 'warning' }))}
               onClick={async (e) => {
-                // AlertDialogAction is Radix's own Close primitive -- it
-                // auto-closes the dialog on click unless preventDefault()
-                // is called, which otherwise leaves a narrow window (the
-                // CSS exit-animation) where a second click can still land
-                // and fire Stop/Force Stop a second time before the first
-                // resolves (Stop/Force Stop have no server-side mutex,
-                // unlike Restart's restartInProgress flag).
                 e.preventDefault()
                 if (!confirmAction) return
-                // Stop/Force Stop/Restart/Restart Now all require
-                // server.control and all share this one AlertDialogAction --
-                // the buttons that stage confirmAction above only open this
-                // dialog, so THIS is the real execution point and where the
-                // gate actually has to live, same as Console.tsx's
-                // executeCommand()/sendAnnouncement() guards.
                 if (!canControlServer) { setConfirmAction(null); return }
                 await handleAction(confirmAction.actionId, confirmAction.action)
                 setConfirmAction(null)
@@ -1870,7 +1571,6 @@ export default function Dashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ─── Wipe dialog ─────────────────────────────────────────────────── */}
       <AlertDialog open={wipeDialog} onOpenChange={(open) => { if (!open && !wipeLoading) { setWipeDialog(false); setWipePreview(null) } }}>
         <AlertDialogContent className="glass border-border/50">
           <AlertDialogHeader>
@@ -1962,10 +1662,6 @@ export default function Dashboard() {
                 variant="warning"
                 disabled={!Object.values(wipeTargets).some(Boolean) || wipeLoading || !canWipeServer}
                 onClick={async () => {
-                  // POST /server/wipe/preview requires server.wipe too --
-                  // guarded here as well as on the DropdownMenuItem that
-                  // opens this dialog, so this stays safe even if something
-                  // else ever opens wipeDialog without checking first.
                   if (wipeLoading || !canWipeServer) return
                   setWipeLoading(true)
                   try {

@@ -84,10 +84,6 @@ describe("versioned panel update bundles", () => {
     expect(fs.existsSync(path.join(journal.paths.stagedClient, "index.html"))).toBe(true);
   });
 
-  // main-is-red, 2026-09-05: clientFiles exists purely so a genuine
-  // clientSha256 disagreement on Windows can be compared, file by file,
-  // against what Node actually hashed -- pins its shape and content so it
-  // can't silently drift from what sha256Directory() really produces.
   it("records the per-file (path, hash) pairs it hashed alongside clientSha256", () => {
     const { journalPath } = prepareBundle();
     const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
@@ -144,11 +140,6 @@ describe("versioned panel update bundles", () => {
     );
   });
 
-  // 2026-09-05, client-bundle-integrity: the staged BINARY has always been
-  // hash-verified before every apply -- the staged CLIENT bundle never was,
-  // on either platform. A file corrupted in the same window Dwight measured
-  // for the binary (staged, present under the right name, but no longer
-  // matching what was staged) passed straight through and got activated.
   it("rejects a staged client bundle whose content no longer matches what was staged, before changing either live artifact", () => {
     const { binaryPath, liveClientPath, journalPath } = prepareBundle();
     const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));

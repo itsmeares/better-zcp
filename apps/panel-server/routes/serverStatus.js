@@ -1,7 +1,3 @@
-// Composed, provider-aware status for the active server: host (process /
-// container / remote reachability), RCON, and PanelBridge as three
-// independent signals instead of one ambiguous "running" flag. See
-// apps/panel-server/utils/serverStatusModel.js for the composition logic.
 import express from "express";
 import { createLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/sanitize.js";
@@ -13,10 +9,6 @@ import { resolveDockerHostSignal } from "../services/managedContainer.js";
 const log = createLogger("API:ServerStatus");
 const router = express.Router();
 
-// No requireRole, deliberately: every role needs to know whether the
-// server is up before doing anything else with it (a moderator deciding
-// whether to even attempt an in-game action, a technician deciding whether
-// to restart it). Read-only, nothing sensitive returned.
 router.get("/active/status", async (req, res) => {
   try {
     const server = await getActiveServer();
@@ -32,23 +24,10 @@ router.get("/active/status", async (req, res) => {
     const isContainerProvider =
       provider === "docker-local" || provider === "docker-managed";
 
-    // A fresh check, not serverManager.isRunning -- that cached field is
-    // forced to a confident `false` by ANY failed process-detection scan,
-    // so reading it directly here made this endpoint (which feeds the
-    // dashboard's host badge) disagree with /wipe's own fresh scanFailed
-    // check on the exact same host, at the exact same moment. See
-    // apps/panel-server/utils/serverStatusModel.js's buildHostSignal for how scanFailed
-    // renders as "unknown" instead of a wrong "stopped".
     let processDetails;
     let dockerContainer = null;
     if (isContainerProvider) {
       const dockerClient = req.app.get("dockerClient");
-      // resolveDockerHostSignal is also what the status watchdog
-      // (apps/panel-server/index.js's getObservedServerRunning) calls for these same
-      // two providers -- one implementation so this route's dashboard
-      // badge and the watchdog's push-on-transition emit can never disagree
-      // about what "Docker says running" means for the same server at the
-      // same moment.
       const dockerSignal = await resolveDockerHostSignal(server, dockerClient);
       processDetails = dockerSignal;
       dockerContainer = dockerSignal.scanFailed
@@ -60,13 +39,6 @@ router.get("/active/status", async (req, res) => {
         : { running: !!serverManager?.isRunning, scanFailed: false };
     }
 
-    // GH#114: PZ in this provider runs as PID 1 of a *different* container,
-    // so the local process scan above can never see it -- it's asked for
-    // regardless (serverManager still needs it for native servers) but for
-    // docker-local/docker-managed the host signal must come from the
-    // managed container's own state instead, never the scan. See
-    // buildHostSignal in serverStatusModel.js for the fail-closed handling
-    // when Docker control is disabled/unavailable or the mapping is broken.
     const status = composeServerStatus({
       server,
       isRunning: !!processDetails.running,

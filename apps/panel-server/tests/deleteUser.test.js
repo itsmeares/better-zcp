@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// authService.deleteUser -- DELETE /api/auth/users/:id's backend. Same
-// in-memory stand-in pattern as changeUserRoleById.test.js (reuses its own
-// assertNoRecoveryLockout helper, so these tests are really proving that
-// reuse holds for the deletion case too, not re-deriving the lockout rule).
 const settings = new Map();
 const db = { data: { users: [], roles: [] } };
 
@@ -92,7 +88,6 @@ describe("authService.deleteUser", () => {
     await expect(
       authService.deleteUser("u-tech", { actingUserId: "u-tech" }),
     ).rejects.toMatchObject({ code: "USER_SELF_DELETE_REFUSED", status: 400 });
-    // Untouched.
     expect(db.data.users.find((u) => u.id === "u-tech")).toBeTruthy();
   });
 
@@ -107,11 +102,9 @@ describe("authService.deleteUser", () => {
     ).rejects.toMatchObject({
       code: "ROLE_LOCKOUT_LAST_MANAGER",
       status: 409,
-      // roles.manage is checked before users.manage (RECOVERY_CAPABILITIES'
-      // fixed order) and u-admin is the sole holder of both.
       params: { action: "roles.manage" },
     });
-    expect(db.data.users.find((u) => u.id === "u-admin")).toBeTruthy(); // unchanged
+    expect(db.data.users.find((u) => u.id === "u-admin")).toBeTruthy();
   });
 
   it("LOCKOUT: allows deletion once a second user also holds users.manage", async () => {
@@ -130,7 +123,7 @@ describe("authService.deleteUser", () => {
 
   it("LOCKOUT: also protects roles.manage independently of users.manage", async () => {
     const admin = db.data.roles.find((r) => r.id === "role-admin");
-    admin.capabilities = ["users.manage"]; // admin no longer the only roles.manage holder's OTHER capability
+    admin.capabilities = ["users.manage"];
     db.data.roles.push({
       id: "role-role-only-manager",
       name: "Role Steward",
@@ -194,8 +187,6 @@ describe("authService.deleteUser: sessions stop working immediately, not at toke
     const user = db.data.users.find((u) => u.id === "u-tech");
     const accessToken = authService.generateAccessToken(user);
 
-    // Proves the token was genuinely valid before deletion -- otherwise
-    // the "fails after" assertion below would be trivially true.
     const before = await authService.authenticateAccessToken(accessToken);
     expect(before?.userId).toBe("u-tech");
 

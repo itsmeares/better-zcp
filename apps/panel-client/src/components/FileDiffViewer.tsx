@@ -58,10 +58,7 @@ interface FileDiffViewerProps {
   modBName: string
   severity: 'high' | 'medium' | 'low'
   categoryLabel?: string
-  /** Mod name that wins this file given the current load order. */
   winnerName?: string | null
-  /** Loser-side label to show alongside ("X loses"). Optional, derived from
-   *  whichever of modA/modB is not the winner. */
   loserName?: string | null
   overlap?: {
     kind: 'lua-symbols' | 'lua-shadow' | 'script-defs' | 'clothing-items' | 'translation-keys'
@@ -92,7 +89,6 @@ export const FileDiffViewer = memo(function FileDiffViewer({ file, modAId, modBI
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  // Cancel in-flight request on unmount
   useEffect(() => () => { abortRef.current?.abort() }, [])
 
   const fetchDiff = useCallback(async () => {
@@ -110,11 +106,6 @@ export const FileDiffViewer = memo(function FileDiffViewer({ file, modAId, modBI
       const res = await fetch(`/api/mods/conflicts/diff?${params}`, { headers, signal: controller.signal })
       if (controller.signal.aborted) return
       if (!res.ok) {
-        // 2026-08-26: this fetch bypasses lib/api.ts's handleResponse(), so
-        // preserving status/code here is the only way getUserErrorMessage()
-        // below can translate this failure -- mods.js's conflicts/diff
-        // route already ships registered codes (MODS_CONFLICTS_DIFF_*) that
-        // a plain Error would have discarded before they ever reached it.
         const body = await res.json().catch(() => ({} as { error?: string; code?: string }))
         throw new ApiError(body.error || `HTTP ${res.status}`, { status: res.status, code: body.code })
       }
@@ -139,7 +130,6 @@ export const FileDiffViewer = memo(function FileDiffViewer({ file, modAId, modBI
 
   return (
     <div className="group">
-      {/* File row — clickable to expand diff */}
       <button
         type="button"
         onClick={handleClick}
@@ -196,7 +186,6 @@ export const FileDiffViewer = memo(function FileDiffViewer({ file, modAId, modBI
         )}
       </button>
 
-      {/* Expanded diff panel */}
       {expanded && (
         <div className="diff-panel-enter ms-5 me-2 mt-1.5 mb-2.5 rounded-md border border-border/50 overflow-hidden bg-background/50">
           {overlap && overlap.total > 0 && overlap.kind !== 'lua-shadow' && overlap.items.length > 0 && (
@@ -227,10 +216,6 @@ export const FileDiffViewer = memo(function FileDiffViewer({ file, modAId, modBI
             </div>
           )}
           {overlap && overlap.kind === 'lua-shadow' && (
-            // The compact row only shows the one-word "shadowed" badge; its full
-            // explanation lives in that badge's hover title, which a touch user
-            // tapping this row open can never see. Same text, shown as real
-            // content here instead of relying on hover.
             <div className="px-3 py-2 border-b border-border/30 bg-muted/20 text-[10px] text-muted-foreground/70 leading-relaxed">
               {t('shadowedTooltip')}
             </div>
@@ -259,7 +244,6 @@ export const FileDiffViewer = memo(function FileDiffViewer({ file, modAId, modBI
   )
 })
 
-// ─── Text diff view ──────────────────────────────────────────────────────────
 function TextDiffView({ diff, modAName, modBName }: { diff: TextDiff; modAName: string; modBName: string }) {
   const { t } = useTranslation('fileDiffViewer')
   const [showFull, setShowFull] = useState(false)
@@ -268,7 +252,6 @@ function TextDiffView({ diff, modAName, modBName }: { diff: TextDiff; modAName: 
 
   return (
     <div>
-      {/* Header */}
       <div className="flex items-center gap-3 px-3 py-1.5 bg-muted/30 border-b border-border/30 text-[11px] text-muted-foreground">
         <FileCode aria-hidden="true" className="w-3 h-3 shrink-0" />
         <span className="truncate max-w-[80px] sm:max-w-[120px]" title={modAName}>{modAName}</span>
@@ -283,7 +266,6 @@ function TextDiffView({ diff, modAName, modBName }: { diff: TextDiff; modAName: 
         </span>
       </div>
 
-      {/* Hunks */}
       <div className="diff-code overflow-x-auto text-[11px] font-mono leading-[1.6] max-h-[250px] sm:max-h-[400px] overflow-y-auto">
         {diff.hunks.slice(0, maxHunks).map((hunk, hIdx) => (
           <div key={hIdx}>
@@ -338,7 +320,6 @@ function TextDiffView({ diff, modAName, modBName }: { diff: TextDiff; modAName: 
   )
 }
 
-// ─── Image diff view ─────────────────────────────────────────────────────────
 function ImageDiffView({ diff, modAName, modBName, file }: { diff: ImageDiff; modAName: string; modBName: string; file: string }) {
   const { t } = useTranslation('fileDiffViewer')
   return (
@@ -385,7 +366,6 @@ function ImageDiffView({ diff, modAName, modBName, file }: { diff: ImageDiff; mo
   )
 }
 
-// ─── Binary diff view ────────────────────────────────────────────────────────
 function BinaryDiffView({ diff, modAName, modBName }: { diff: BinaryDiff; modAName: string; modBName: string }) {
   const { t } = useTranslation('fileDiffViewer')
   return (

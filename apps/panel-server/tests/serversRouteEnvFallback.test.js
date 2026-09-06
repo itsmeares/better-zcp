@@ -30,10 +30,6 @@ function createResponse() {
   return response;
 }
 
-// POST / now has requireRole("admin", "technician") ahead of the real
-// handler (see roles.test.js for coverage of that gate itself) — grab the
-// last stack entry rather than the first, so this keeps working regardless
-// of how many gating middlewares precede the handler.
 function getCreateHandler() {
   const layer = router.stack.find(
     (entry) => entry.route?.path === "/" && entry.route.methods.post,

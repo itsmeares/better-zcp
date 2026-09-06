@@ -2,17 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { TFunction } from 'i18next'
 import { getHealthHeadline } from '../Debug'
 
-// impeccable-critique-2026-08-31, finding #1: the Health tab's headline used
-// to read `healthStatus.status === "ok"` alone -- but `status: "ok"` only
-// ever means "GET /debug/health's own collection completed without
-// throwing" (apps/panel-server/routes/debug.js:1772, deliberately kept separate from
-// the services it reports on, per two route tests that assert on it). The
-// SAME payload's services.rcon.connected / services.server.running could be
-// false while status stays "ok", and the old headline ignored them
-// entirely -- so "System Status: Healthy" rendered directly above a
-// Services card showing RCON: Disconnected and Game Server: Stopped. This
-// asserts getHealthHeadline() now derives its verdict from both fields, and
-// never returns "healthy" while a critical service is down.
 const t = ((key: string) => key) as unknown as TFunction
 
 function health(overrides: {

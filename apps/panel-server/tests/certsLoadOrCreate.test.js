@@ -4,15 +4,6 @@ import os from "os";
 import path from "path";
 import { loadOrCreateCerts } from "../utils/certs.js";
 
-// Regression coverage for the HTTPS-cert-path crash: a custom
-// httpsCertPath/httpsKeyPath saved via Settings used to be read with a bare
-// fs.existsSync + fs.readFileSync, and existsSync returns true for a
-// DIRECTORY too -- so readFileSync on a directory (EISDIR) or an unreadable
-// file threw straight out of this function, uncaught, all the way up to
-// index.js's global uncaughtException handler, which kills the whole panel
-// process. The fix must never let a bad custom path do that; it must fall
-// back to a self-signed cert instead, exactly like the pre-existing
-// "path doesn't exist" case already did.
 
 let tempDir;
 
@@ -34,8 +25,6 @@ describe("loadOrCreateCerts -- custom path failure modes never throw", () => {
       result = loadOrCreateCerts(dirAsKeyPath, dirAsCertPath);
     }).not.toThrow();
 
-    // Falls all the way through to self-signed generation/reuse, so this
-    // is non-null -- HTTPS still comes up, just not with the custom cert.
     expect(result).not.toBeNull();
     expect(result.key).toBeInstanceOf(Buffer);
     expect(result.cert).toBeInstanceOf(Buffer);
@@ -82,7 +71,6 @@ describe("loadOrCreateCerts -- custom path failure modes never throw", () => {
     }).not.toThrow();
 
     expect(result).not.toBeNull();
-    // Must not be the real key bytes we wrote -- it fell through to self-signed.
     expect(result.key.toString("utf-8")).not.toContain("key bytes");
   });
 });

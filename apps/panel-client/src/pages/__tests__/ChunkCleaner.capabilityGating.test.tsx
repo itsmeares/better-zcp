@@ -3,20 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import ChunkCleaner from '../ChunkCleaner'
 import { chunksApi, serversApi, panelBridgeApi, ApiError } from '@/lib/api'
 
-// 2026-08-27 bug-hunt (god's f7ac68): ChunkCleaner had exactly one test file
-// before this one, ChunkCleaner.canvasKeyboardClaim.test.ts, which pins
-// locale copy and never renders the component -- its own comment says
-// mounting was judged not worth the cost at the time. The page was gated
-// for chunks.manage in 22743fe, hardened in 3e46b62, and had the
-// removeVehiclesInArea 403-swallow bug fixed in 4a0b1dd -- none of that had
-// coverage. Reusing WorldMap.capabilityGating.test.tsx's solved mounting
-// problem (this page needs a no-op ResizeObserver only -- unlike WorldMap,
-// none of the controls under test live inside the canvas, so a synchronous
-// sized stub isn't needed here) plus the save -> scan -> chunks-loaded gate
-// documented in the canvasKeyboardClaim comment block. Selection is driven
-// through the "All" button (selectAll(), a plain JS Set built from `chunks`)
-// rather than simulating canvas mouse-drag geometry -- same reachable
-// end-state, far cheaper to set up.
 
 let mockCan = (_capability: string) => true
 
@@ -64,11 +50,6 @@ const getStats = vi.mocked(chunksApi.getStats)
 const deleteChunks = vi.mocked(chunksApi.deleteChunks)
 const sendCommand = vi.mocked(panelBridgeApi.sendCommand)
 
-// jsdom has no ResizeObserver. Unlike WorldMap, nothing under test here
-// (Select All / the Delete button / the confirm dialog) lives inside the
-// canvas or depends on a real measured size, so a no-op stub is enough --
-// the same "stub only as strong as the code path traversed" rule god
-// confirmed for the Events.tsx Slider stub.
 class NoopResizeObserver {
   observe() {}
   unobserve() {}
@@ -122,9 +103,6 @@ function setUp() {
   })
 }
 
-// Waits for the mount-time fetchSaves -> auto-select -> loadChunks chain to
-// settle, then selects every loaded chunk via the "All" button so the
-// Delete button (which only renders once selectedChunks.size > 0) appears.
 async function mountWithSelection() {
   renderChunkCleaner()
   const allButton = await screen.findByRole('button', { name: /^all$/i })

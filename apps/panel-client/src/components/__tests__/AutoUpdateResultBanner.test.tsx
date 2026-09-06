@@ -37,13 +37,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-// 2026-08-26: this is the persisted-state half of the auto-update
-// notification -- a live socket event alone only reaches whoever is
-// watching at the exact moment it fires, which excludes the operator this
-// feature exists for (enabled it and walked away). These pin that the
-// banner is driven by a COLD fetch on mount, not the socket, and that
-// dismissal is a real server round-trip (shared across admins/devices),
-// not local component state.
 describe('AutoUpdateResultBanner', () => {
   it('renders nothing when there is no recorded result -- no false alarm on a server that has never auto-updated', async () => {
     getStatus.mockResolvedValue(statusWith(null))
@@ -148,7 +141,6 @@ describe('AutoUpdateResultBanner', () => {
     fireEvent.click(screen.getByRole('button', { name: en.autoUpdateResult.dismissAria }))
 
     await waitFor(() => expect(dismissAutoUpdateResult).toHaveBeenCalledTimes(1))
-    // Still there -- a failed dismiss must not silently hide the notice.
     expect(screen.getByRole('alert')).toBeInTheDocument()
   })
 })

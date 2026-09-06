@@ -9,12 +9,6 @@ import {
 import { cn } from '@/lib/utils'
 import { getCurrentLanguage, setLanguage, LANGUAGES } from '@/i18n'
 
-// The persisted locale switcher — its options come entirely from the
-// LANGUAGES registry (apps/panel-client/src/i18n/languages.ts), so adding a language
-// there is the only change needed for it to show up here. Language names
-// are each language's OWN native name (Deutsch, not German), read straight
-// from the registry rather than through t() — see languages.ts for why.
-// Usable pre-login (Login/Setup) and from the app shell footer.
 export function LanguageSwitcher({ className }: { className?: string }) {
   const { t, i18n } = useTranslation('shell')
   const current = getCurrentLanguage()

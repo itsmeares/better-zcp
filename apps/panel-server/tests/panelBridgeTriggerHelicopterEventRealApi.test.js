@@ -3,21 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, operator: "Fix event." handlers.triggerHelicopterEvent used
-// to try four fallback tiers -- HelicopterClass.getInstance()+
-// activateForPlayer, RZSUtil.triggerRandomEvent, addHelicopter,
-// ServerCheatInterface.triggerHelicopter -- ALL FOUR verified absent
-// against the real B42 jar (Kevin's audit): not a B41/B42 divergence, not
-// a near-miss name, none of them exist on any build. It always fell
-// through to error("No helicopter API available in this build").
-//
-// The one real API is LuaManager$GlobalObject.testHelicopter() -- same
-// bare-global binding tier as getWorld()/getCell()/saveGame() -- and it is
-// ZERO-ARG, so there is no per-player targeting API anywhere in the
-// confirmed jar. The handler no longer accepts a username at all: silently
-// accepting an argument it cannot honour is the same defect class as
-// everything else fixed in this audit, so passing one is now a clear,
-// named error instead of being ignored.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -58,10 +43,6 @@ describe('PanelBridge.lua handlers.triggerHelicopterEvent -- uses the real zero-
   });
 
   it('succeeds with NONE of the four old fabricated globals defined -- proves the fix no longer depends on any of them', () => {
-    // Deliberately does not define HelicopterClass/RZSUtil/addHelicopter/
-    // ServerCheatInterface at all -- models the real jar, where none of
-    // them exist. Only testHelicopter is defined, matching what the real
-    // jar actually provides.
     const bridge = loadPanelBridge(LUA_PATH, 'testHelicopter = function() end');
     const result = bridge.callHandler('triggerHelicopterEvent', {});
 

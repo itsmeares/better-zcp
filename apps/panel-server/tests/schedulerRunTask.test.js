@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Roles for the rcon.execute-gate tests below: mirrors the shape
-// requirePermission() (services/permissions.js) actually reads --
-// getRoleByName(req.user.role).capabilities.
 const ROLES = {
   automation_only: { name: "automation_only", capabilities: ["automation.manage"] },
   automation_and_rcon: {
@@ -50,9 +47,6 @@ function makeScheduler() {
   return { scheduler, rconService, serverManager };
 }
 
-// These assert runTaskNow() — the dispatch a cron fire AND the manual
-// "run now" route now share — routes every task type to its real handler
-// instead of shelling task.command straight to RCON.
 describe("Scheduler.runTaskNow command dispatch", () => {
   it("routes 'restart' through performRestart, not raw RCON", async () => {
     const { scheduler, rconService } = makeScheduler();
@@ -340,14 +334,6 @@ describe("PUT /api/scheduler/tasks/:id", () => {
   });
 });
 
-// Finding 1: a role holding only
-// automation.manage must NOT be able to reach raw RCON execution through a
-// scheduled task -- creating one, editing one's command, or running one now
-// all require rcon.execute too when the command isn't one of the curated
-// restart/save/servermsg/bridge: verbs. A cron fire has no req.user to
-// check, so these three request-bound moments are the only places the gate
-// can live; see the comment above requireCapabilityInline() in
-// routes/scheduler.js for why.
 describe("rcon.execute gate on raw scheduled commands", () => {
   describe("POST /api/scheduler/tasks", () => {
     const baseBody = {
@@ -552,16 +538,6 @@ describe("rcon.execute gate on raw scheduled commands", () => {
   });
 });
 
-// broadcast-three-doors escalation close: Finding 1's fix (above) verified
-// automation.manage against rcon.execute only. It never checked automation.manage
-// against server.world_events or server.control for the curated verbs it
-// deliberately left alone -- so a role with automation.manage but NOT
-// server.world_events could still schedule a servermsg broadcast (or a
-// bridge: weather/sound/utilities/chat action) and "Run now" it, reaching
-// the exact effect POST /server/message (server.world_events) exists to
-// gate. requiredCapabilityForScheduledCommand() closes this by requiring
-// each curated classification's OWN matching capability -- same shape as
-// Finding 1's fix, extended to the capabilities Finding 1 never checked.
 describe("server.world_events / server.control gate on curated scheduled commands (closes the automation.manage-vs-world_events gap Finding 1 never checked)", () => {
   const baseBody = {
     name: "Broadcast task",
@@ -640,10 +616,6 @@ describe("server.world_events / server.control gate on curated scheduled command
     });
   });
 
-  // bridge:saveWorld is the one bridge: action that is NOT a world event --
-  // it's PanelBridge's own equivalent of POST /server/save, gated
-  // server.control everywhere else it's reachable, not server.world_events
-  // like the other 14 schedulable bridge actions.
   describe("POST /api/scheduler/tasks -- bridge:saveWorld is server.control, not server.world_events", () => {
     it("refuses to create a bridge:saveWorld task for a role that only holds server.world_events", async () => {
       createScheduledTask.mockClear();
@@ -720,13 +692,6 @@ describe("server.world_events / server.control gate on curated scheduled command
     });
   });
 
-  // The cron firing itself must stay completely unchecked: authorisation
-  // happened at create/edit time, when a real user session existed to check
-  // it against. Calling Scheduler.runTaskNow() directly here -- with no req,
-  // no res, no role, exactly how scheduleTask()'s cron.schedule(expr, () =>
-  // this.runTaskNow(task)) invokes it -- proves the capability gate lives
-  // ONLY in routes/scheduler.js's request-bound handlers, never inside the
-  // service layer a scheduled firing actually runs through.
   describe("the cron firing path stays completely unchecked", () => {
     it("Scheduler.runTaskNow() dispatches a servermsg command with no capability check at all", async () => {
       const { scheduler, rconService } = makeScheduler();
@@ -762,10 +727,6 @@ describe("server.world_events / server.control gate on curated scheduled command
   });
 });
 
-// Finding 3: performRestart() used
-// to hardcode "Auto Restart" as the Schedule History task name for every
-// caller, including a human clicking Restart Now. It now takes an optional
-// label, defaulting to "Auto Restart" for genuinely unattended triggers.
 describe("performRestart() Schedule History labeling", () => {
   function makeSchedulerForRestart() {
     const rconService = {
@@ -816,14 +777,6 @@ describe("performRestart() Schedule History labeling", () => {
   });
 });
 
-// Regression: performRestart()'s own readProcessDetails() helper used to
-// fall back to serverManager.checkServerRunning() -- and hardcode
-// scanFailed:false alongside it -- whenever getServerProcessDetails wasn't
-// available. That collapsed a failed scan into a plain `false` AND lied
-// about a check that never ran, so a server that was actually still running
-// could get silently "auto-started" as a duplicate process. It must refuse
-// the same way a real scanFailed does when the richer check isn't there to
-// even ask, not be rescued into treating it as a confirmed stop.
 describe("performRestart(): a serverManager without process-detection must refuse, not silently start", () => {
   it("refuses when getServerProcessDetails is unavailable and RCON cannot confirm the server either way", async () => {
     const rconService = {
@@ -833,9 +786,6 @@ describe("performRestart(): a serverManager without process-detection must refus
     };
     const serverManager = {
       _serverId: null,
-      // Deliberately no getServerProcessDetails -- the exact "lighter
-      // manager" shape this fix protects against. checkServerRunning must
-      // NOT be consulted as a fallback even though it's present here.
       checkServerRunning: vi.fn().mockResolvedValue(false),
       startServer: vi.fn().mockResolvedValue({ success: true }),
     };
@@ -847,8 +797,6 @@ describe("performRestart(): a serverManager without process-detection must refus
     expect(result.message).toMatch(
       /could not confirm whether the server is stopped/i,
     );
-    // The old bug's signature: silently treating "couldn't tell" as
-    // "confirmed stopped" and auto-starting a possible duplicate process.
     expect(serverManager.startServer).not.toHaveBeenCalled();
     expect(serverManager.checkServerRunning).not.toHaveBeenCalled();
   });
@@ -881,15 +829,6 @@ describe("POST /api/scheduler/restart-now labels its Schedule History entry as m
   });
 });
 
-// bug-hunt-2026-08-27 (Pam's undersell pass, routed as a bypass row): unlike
-// POST /tasks, PUT /tasks/:id and POST /tasks/:id/run above, restart-now has
-// no stored command to classify via requiredCapabilityForScheduledCommand()
-// -- it calls scheduler.performRestart() directly, the exact same live
-// action POST /server/restart performs under server.control. Was gated only
-// by the router-level automation.manage ("manage scheduled tasks"), which
-// says nothing about performing an immediate restart -- someone holding
-// automation.manage but not server.control could restart the live server
-// right now through this door.
 describe("POST /api/scheduler/restart-now requires server.control in addition to automation.manage", () => {
   function getRestartNowHandler() {
     const layer = router.stack.find(

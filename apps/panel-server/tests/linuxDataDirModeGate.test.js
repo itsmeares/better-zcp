@@ -3,22 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Linux bug hunt 2026-08-29, follow-on to Pam's secret-file permission
-// hardening: apps/panel-server/utils/paths.js's getDataPaths() created dataDir via
-// fs.mkdirSync(dataDir, { recursive: true }) with NO explicit mode. Measured
-// across real umasks that comes out 0755 / 0775 / 0700 / 0777 -- world
-// -writable at umask 000. This is the directory holding jwt.secret,
-// server-secrets/ and db.json -- a perfectly 0600 secret file inside a
-// world-writable directory can still be renamed away, replaced, or have a
-// symlink dropped in its place by any local user.
-//
-// Fix mirrors serverRconSecrets.js's ensureSecretsDir(): mkdirSync gets an
-// explicit mode for the create path, AND an unconditional chmodSync runs on
-// every call (not gated behind "did we just create it") -- because
-// mkdirSync's own mode argument is itself subject to umask, and is silently
-// ignored entirely when the directory already exists. That second part is
-// what makes the fix apply to an EXISTING install's already-created dataDir
-// on its next restart, not only a brand-new install.
 
 const originalConfigPathEnv = process.env.PANEL_PATHS_CONFIG_PATH;
 const originalUmask = process.platform !== "win32" ? process.umask() : null;
@@ -37,12 +21,6 @@ afterEach(() => {
   }
 });
 
-// Gives the imported paths.js module its own fresh module registry entry
-// (vi.resetModules()) pointed at a brand-new, never-before-seen config file
-// -- paths.js reads PANEL_PATHS_CONFIG_PATH into a module-level const at
-// import time and memoizes getDataPaths()'s result in a module-level
-// variable, so a stale cached module would silently no-op every scenario
-// after the first.
 async function freshPathsModule(dataDir, logsDir) {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-datadir-mode-"));
   tempRoots.push(tempRoot);
@@ -113,12 +91,9 @@ describe("getDataPaths(): dataDir permission mode", () => {
       );
       tempRoots.push(tempRoot);
       const dataDir = path.join(tempRoot, "data");
-      // Simulate an install that predates this fix: the directory already
-      // exists, at the loose mode the old unconditional-mkdirSync-with-no-
-      // mode code would have left behind under a permissive umask.
       fs.mkdirSync(dataDir, { recursive: true });
       fs.chmodSync(dataDir, 0o777);
-      expect(modeBits(dataDir)).toBe(0o777); // sanity: the simulated pre-fix state is really loose
+      expect(modeBits(dataDir)).toBe(0o777);
 
       const { getDataPaths } = await freshPathsModule(dataDir);
       getDataPaths();

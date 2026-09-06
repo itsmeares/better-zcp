@@ -3,15 +3,6 @@ import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// hunt-wave6-2026-08-29 follow-up 1: exact-value redaction of every secret
-// the panel already holds, applied at the Discord publish boundary. See
-// utils/discordMessageRedaction.js's header for the full reasoning (why
-// not a shape heuristic, why the exit boundary and not each caller). This
-// file covers the two pure/collection halves fast, without a real network;
-// apps/panel-server/tests/linuxDiscordGatewayResilience.test.js's "follow-up 1" test
-// covers the real wire-level proof (an actual discord.js Client, an actual
-// mock Discord API, an actual secret embedded in a sent message) that this
-// file can't -- see that test for the end-to-end break-verify.
 
 describe("redactKnownSecrets() -- pure redaction logic", () => {
   it("replaces every exact occurrence of a known secret with a placeholder", async () => {
@@ -24,9 +15,6 @@ describe("redactKnownSecrets() -- pure redaction logic", () => {
   });
 
   it("redacts a short, common-word secret with no length exemption -- an operator's weak password is still a real secret", async () => {
-    // god's explicit ruling: over-redacting a published message is
-    // strictly safer than leaking one, even if the output reads oddly for
-    // this one case. No minimum-length or "too common" carve-out.
     const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.js");
     const result = redactKnownSecrets(
       "the access level is admin now",

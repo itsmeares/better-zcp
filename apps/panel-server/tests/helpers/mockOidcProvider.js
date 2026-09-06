@@ -1,11 +1,3 @@
-// A tiny local identity provider used only by oidc*.test.js to validate
-// this codebase's OIDC integration against a REAL discovery document, JWKS,
-// and token endpoint over real HTTP -- rather than asserting against this
-// module's own internal logic. It deliberately does no real authentication
-// of its own (no /authorize step, no code/PKCE validation at the token
-// endpoint): the caller controls exactly what ID token claims and signing
-// key the next /token response uses, so tests can assert on how the PANEL's
-// OIDC client reacts to a given (possibly deliberately-broken) response.
 import http from "http";
 import { generateKeyPair, exportJWK, calculateJwkThumbprint, SignJWT } from "jose";
 
@@ -21,13 +13,6 @@ export async function makeSigningKey() {
   return { privateKey, publicJwk, kid };
 }
 
-// strictAuth, when passed, turns on real Basic-auth client authentication at
-// /token -- OFF by default so every existing caller (the real login/callback
-// flow tests) keeps its original "the token endpoint always succeeds"
-// behaviour untouched. Opt in only for tests that need to distinguish
-// invalid_client from invalid_grant (apps/panel-server/services/oidc.js's
-// testOidcDiscovery -- see its own comment for why that distinction is the
-// whole point of the credential-check round trip).
 export async function startMockOidcProvider({
   clientId,
   defaultSubject = "user-123",
@@ -35,12 +20,8 @@ export async function startMockOidcProvider({
 }) {
   const validKey = await makeSigningKey();
   let baseUrl;
-  let nextIdTokenClaims = null; // null = use the default happy-path claims
-  let nextSigningKey = null; // null = sign with validKey (the one published in JWKS)
-  // null = the default invalid_grant response below (a real IdP rejecting a
-  // fabricated code from a correctly-authenticated client). Override via
-  // setNextGrantError to simulate a third OAuth error code, for testing the
-  // "undetermined" outcome that isn't invalid_client or invalid_grant.
+  let nextIdTokenClaims = null;
+  let nextSigningKey = null;
   let nextGrantError = null;
 
   function readBody(req) {
@@ -52,10 +33,6 @@ export async function startMockOidcProvider({
     });
   }
 
-  // openid-client's default client authentication (client_secret_basic,
-  // since this mock's discovery document doesn't advertise
-  // token_endpoint_auth_methods_supported) sends `Authorization: Basic
-  // base64(client_id:client_secret)`. Returns null if missing/malformed.
   function readBasicAuth(req) {
     const header = req.headers["authorization"];
     if (!header || !header.startsWith("Basic ")) return null;
@@ -100,13 +77,6 @@ export async function startMockOidcProvider({
 
     if (req.method === "POST" && url.pathname === "/token") {
       if (strictAuth) {
-        // openid-client's default here is actually client_secret_post (the
-        // credentials go in the form body), not client_secret_basic --
-        // that default only applies when the caller passes an explicit
-        // clientAuthentication; this codebase's discovery() call passes the
-        // secret as a plain string with no explicit method, which
-        // Configuration treats as ClientSecretPost. Support both anyway:
-        // whichever the real request used should authenticate correctly.
         const body = await readBody(req);
         const params = new URLSearchParams(body);
         const basicAuth = readBasicAuth(req);
@@ -119,12 +89,6 @@ export async function startMockOidcProvider({
           return;
         }
         if (params.get("grant_type") === "authorization_code") {
-          // The client authenticated fine -- but this mock never issued the
-          // `code` being redeemed (there is no real /authorize step here),
-          // so a real IdP in this situation rejects the CODE, not the
-          // client: invalid_grant. That is deliberately the success signal
-          // testOidcDiscovery is looking for -- unless a test has overridden
-          // it via setNextGrantError to simulate some other OAuth error.
           const grantError = nextGrantError || {
             status: 400,
             error: "invalid_grant",
@@ -177,12 +141,10 @@ export async function startMockOidcProvider({
   return {
     baseUrl,
     validKey,
-    /** Set the claims/signing key the NEXT /token response will use. Pass `{}` to reset to the default happy-path claims. */
     setNextIdToken({ claims = null, signingKey = null } = {}) {
       nextIdTokenClaims = claims;
       nextSigningKey = signingKey;
     },
-    /** Override /token's authorization_code error response (strictAuth only). Pass null to reset to the default invalid_grant. */
     setNextGrantError(error) {
       nextGrantError = error;
     },

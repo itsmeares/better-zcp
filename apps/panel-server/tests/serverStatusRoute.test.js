@@ -88,13 +88,6 @@ describe("GET /api/servers/active/status", () => {
     );
   });
 
-  // The direct-inspect vs. resolveManagedContainer-fallback distinction
-  // (and the inspectManagedContainer call itself) now lives entirely in
-  // resolveDockerHostSignal() -- see apps/panel-server/tests/managedContainer.test.js
-  // for that coverage. This route is only responsible for turning whatever
-  // resolveDockerHostSignal answers into the right host signal, and for
-  // never falling back to the local process scan for a container provider
-  // (GH#114).
   it("uses Docker container state instead of the host process scan", async () => {
     getActiveServer.mockResolvedValue({
       id: "docker-server",
@@ -157,15 +150,6 @@ describe("GET /api/servers/active/status", () => {
     );
   });
 
-  // Regression: this route used to read the cached serverManager.isRunning
-  // field directly. That field gets forced to a confident `false` by ANY
-  // failed process-detection scan (see serverManager.js), so once detection
-  // started failing on a host, this endpoint -- which feeds the dashboard's
-  // host badge -- kept confidently reporting "stopped" while a fresh check
-  // in the same moment (e.g. /wipe's own guard) correctly refused because it
-  // could not tell. Same underlying scan, two different answers. This must
-  // call getServerProcessDetails() itself so it sees the SAME scanFailed
-  // fresh, not a stale cached boolean.
   it("reports the host as unknown, not stopped, when process detection itself failed", async () => {
     getActiveServer.mockResolvedValue({ id: 1, isRemote: false });
     const response = createResponse();
@@ -203,19 +187,6 @@ describe("GET /api/servers/active/status", () => {
     );
   });
 
-  // GH#114: PZ in its own container, panel in another (docker.sock mounted,
-  // PANEL_DOCKER_CONTROL_ENABLED=true, dockerContainerName set). The local
-  // process scan can never see a process outside this container and
-  // correctly returns running: false -- the bug was reading that scan for
-  // WATCH FOR in GH#114: a profile with dockerContainerName set on a host
-  // where Docker control is disabled or the socket is absent must degrade to
-  // unknown, not crash and not silently fall back to the local process scan
-  // (which would just reintroduce the same bug). Covered above for both
-  // outcomes ("uses Docker container state..." / "reports an unverifiable
-  // Docker state..."); resolveDockerHostSignal() itself (apps/panel-server/tests/
-  // managedContainer.test.js) is what's actually responsible for degrading
-  // to scanFailed:true when Docker control is disabled or the mapped
-  // container isn't found, not this route.
 
   it("does not attempt a Docker lookup for a native server", async () => {
     getActiveServer.mockResolvedValue({ id: 1, isRemote: false });

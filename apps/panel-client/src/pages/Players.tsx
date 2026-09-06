@@ -122,19 +122,10 @@ interface WhitelistAccount {
   displayName: string | null
 }
 
-// Mirrors apps/panel-server/routes/players.js's own SteamID64 check (/^\d{17}$/ on both
-// /banid and /unbanid) so a manually-typed SteamID can't reach a submit
-// button in a shape the server will reject.
 export function sanitizeSteamId(value: string): string {
   return value.replace(/\D/g, '').slice(0, 17);
 }
 
-// Whether the whitelist has loaded successfully and confirms the given
-// player is NOT on it -- used to gate "Remove from whitelist". Fails open
-// (returns false, leaving the control enabled) while the fetch is still in
-// flight or failed, since a wrong disable here costs a real capability
-// (can't remove someone who genuinely is whitelisted, no explanation)
-// while a wrong enable costs one failed click and an error message.
 export function isPlayerConfirmedNotWhitelisted(
   selectedPlayer: string | null,
   whitelistAccounts: Array<{ username: string }>,
@@ -149,12 +140,6 @@ export function isPlayerConfirmedNotWhitelisted(
   );
 }
 
-// The activity log table has no pagination -- when a fetch returns exactly
-// this many rows, older entries may exist and be silently excluded (the
-// server retains up to 1000, see apps/panel-server/database/init.js). Shown as a hint
-// rather than a hard truth ("logs.length === LIMIT" could also mean the
-// real total happens to equal the limit) because there's no cheap way to
-// distinguish the two without a separate total-count query.
 const ACTIVITY_LOG_FETCH_LIMIT = 200
 
 function getAccessLevelLabels(t: TFunction): Record<string, string> {
@@ -163,14 +148,11 @@ function getAccessLevelLabels(t: TFunction): Record<string, string> {
     moderator: t('accessLevels.moderator'),
     gm: t('accessLevels.gm'),
     observer: t('accessLevels.observer'),
-    // `priority` has no translated entry, so the shared fallback displays
-    // the wire token as "Priority".
     user: t('accessLevels.user'),
     none: t('accessLevels.none'),
   }
 }
 
-// Common teleport locations in Project Zomboid
 const TELEPORT_PRESETS = [
   { name: 'Muldraugh', x: '10500', y: '9700', z: '0' },
   { name: 'West Point', x: '11800', y: '6900', z: '0' },
@@ -294,7 +276,6 @@ function ActionTile({
       </div>
       <div className="min-w-0 flex-1">
         <p className={cn('font-medium leading-tight', compact ? 'text-[12px]' : 'text-sm', e.label)}>{label}</p>
-        {/* Two lines preserve short action descriptions in the desktop grid. */}
         {description && !compact ? (
           <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{description}</p>
         ) : null}
@@ -303,10 +284,6 @@ function ActionTile({
   )
 }
 
-// A 0-1 severity bar for a PZ stat (health, hunger/thirst/fatigue).
-// goodWhenLow=true means higher is worse (hunger/thirst/fatigue -- PZ's own
-// scale, confirmed against vanilla Lua thresholds like FATIGUE <= 0.3/0.85
-// gating sleep); goodWhenLow=false means higher is better (health).
 function VitalBar({ label, value, goodWhenLow }: { label: string; value: number; goodWhenLow: boolean }) {
   const pct = Math.max(0, Math.min(100, value * 100))
   const severity = goodWhenLow ? value : 1 - value
@@ -330,9 +307,6 @@ function VitalBar({ label, value, goodWhenLow }: { label: string; value: number;
 export default function Players() {
   const { t, i18n } = useTranslation('players')
   const accessLevelLabels = useMemo(() => getAccessLevelLabels(t), [t])
-  // Moderation actions use players.moderate. Teleport, spawn, character
-  // import/export, and player powers use players.gm_tools; the latter do not
-  // additionally require bridge.command.
   const { can } = useAuth()
   const [searchParams] = useSearchParams()
   const requestedPlayer = searchParams.get('player')?.trim() || ''
@@ -346,11 +320,9 @@ export default function Players() {
   const { toast } = useToast()
   const confirm = useConfirm()
 
-  // Stats tracking
   const [peakPlayers, setPeakPlayers] = useState(0)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
 
-  // Dialog states
   const [kickDialogOpen, setKickDialogOpen] = useState(false)
   const [banDialogOpen, setBanDialogOpen] = useState(false)
   const [banConfirmOpen, setBanConfirmOpen] = useState(false)
@@ -362,7 +334,6 @@ export default function Players() {
   const [itemBrowserOpen, setItemBrowserOpen] = useState(false)
   const [vehicleBrowserOpen, setVehicleBrowserOpen] = useState(false)
 
-  // Form states
   const [kickReason, setKickReason] = useState('')
   const [banReason, setBanReason] = useState('')
   const [banIp, setBanIp] = useState(false)
@@ -375,31 +346,24 @@ export default function Players() {
   const [bannedSteamIds, setBannedSteamIds] = useState<Array<{ steamId: string; banned_at: string; reason?: string }>>([])
   const [loadingBans, setLoadingBans] = useState(false)
 
-  // Add User states
   const [addUserUsername, setAddUserUsername] = useState('')
   const [addUserPassword, setAddUserPassword] = useState('')
 
-  // Teleport states
   const [teleportX, setTeleportX] = useState('')
   const [teleportY, setTeleportY] = useState('')
   const [teleportZ, setTeleportZ] = useState('0')
   const [teleportTarget, setTeleportTarget] = useState('')
 
-  // SteamID Ban states
   const [banSteamId, setBanSteamId] = useState('')
   const [steamBanReason, setSteamBanReason] = useState('')
 
-  // Voice Ban states
   const [voiceBanUsername, setVoiceBanUsername] = useState('')
   const [voiceBanEnabled, setVoiceBanEnabled] = useState(true)
 
-  // Power states (local tracking since server doesn't report these)
   const [playerPowers, setPlayerPowers] = useState<Record<string, { godMode: boolean; invisible: boolean; noclip: boolean }>>({})
 
-  // Player search filter
   const [playerSearchFilter, setPlayerSearchFilter] = useState('')
 
-  // Character Export/Import states
   const [characterData, setCharacterData] = useState<string>('')
   const [importCharacterData, setImportCharacterData] = useState('')
   const [exporting, setExporting] = useState(false)
@@ -409,18 +373,14 @@ export default function Players() {
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
   const [pendingImportData, setPendingImportData] = useState<Record<string, unknown> | null>(null)
 
-  // Bridge status for character export/import
   const [bridgeConnected, setBridgeConnected] = useState(false)
 
-  // Auto-export on login
   const [autoExportEnabled, setAutoExportEnabled] = useState(false)
   const [savedExports, setSavedExports] = useState<Array<{ username: string; filename: string; size: number; timestamp: string }>>([])
 
-  // Ref for copy timeout cleanup
   const copiedTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Cleanup copy timeout on unmount
   useEffect(() => {
     return () => {
       if (copiedTimeoutRef.current) {
@@ -429,7 +389,6 @@ export default function Players() {
     }
   }, [])
 
-  // Activity Log states
   interface ActivityLog {
     id: number
     player_name: string
@@ -441,7 +400,6 @@ export default function Players() {
   const [logsLoading, setLogsLoading] = useState(false)
   const [logPlayerFilter, setLogPlayerFilter] = useState('')
 
-  // Player Notes & Tags states
   interface PlayerNote {
     playerName: string
     note: string
@@ -469,9 +427,6 @@ export default function Players() {
   const [notesError, setNotesError] = useState<string | null>(null)
   const [logsError, setLogsError] = useState<string | null>(null)
 
-  // Live vitals (Vitals tab) -- PanelBridge.getPlayerDetails for the
-  // selected online player: position, health, and the eight
-  // stats:get(CharacterStat.X) fields.
   interface PlayerVitals {
     x?: number
     y?: number
@@ -502,23 +457,11 @@ export default function Players() {
   const [playerVitalsLoading, setPlayerVitalsLoading] = useState(false)
   const [playerVitalsError, setPlayerVitalsError] = useState<string | null>(null)
 
-  // At-a-glance roster health -- PanelBridge.getAllPlayerDetails (the
-  // PLURAL bulk endpoint, distinct from getPlayerDetails above, which is
-  // one player at a time and only fetched for whoever is currently
-  // selected). Nothing else on this page or elsewhere reads it: the roster
-  // list itself comes from RCON's `players` command, which reports only
-  // {name, online} -- no health, hunger, or infection status at all, so
-  // this is genuinely new data, not a second view of something already
-  // shown. Keyed by username, keyed off the SAME 15s interval fetchPlayers
-  // already uses but fired independently (own .then/.catch, not part of
-  // any awaited Promise.all) so a slow or failing bridge call can never
-  // delay the roster list itself from rendering.
   const [rosterVitals, setRosterVitals] = useState<Record<string, { health?: number; isInfected?: boolean }>>({})
 
   const getErrorMessage = (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback
 
-  // Filter players by search term (memoized to avoid recalculation on every render)
   const filteredPlayers = useMemo(() =>
     players.filter(player =>
       player.name.toLowerCase().includes(playerSearchFilter.toLowerCase())
@@ -526,10 +469,6 @@ export default function Players() {
     [players, playerSearchFilter]
   )
 
-  // "Roster" view: every player we've ever seen on this server, minus the
-  // ones currently online. Sorted by most recently seen first so familiar
-  // names sit at the top. Drives the Roster tab and lets admins moderate
-  // (note, ban-by-name) players who are not currently connected.
   const [rosterTab, setRosterTab] = useState<'online' | 'roster' | 'banned' | 'whitelist'>('online')
   const [whitelistAccounts, setWhitelistAccounts] = useState<WhitelistAccount[]>([])
   const [allowedSteamIds, setAllowedSteamIds] = useState<string[]>([])
@@ -537,12 +476,6 @@ export default function Players() {
   const [whitelistAvailable, setWhitelistAvailable] = useState(true)
   const [whitelistError, setWhitelistError] = useState<string | null>(null)
   const [whitelistLoading, setWhitelistLoading] = useState(false)
-  // Sourced from GET /players/access-levels, which reads the server's own
-  // live role table (access-levels-should-come-from-the-server-not-a-
-  // hardcoded-array) -- no client-side fallback copy. The server already
-  // falls back to its own static list when the db is unavailable or the
-  // server is remote, so an empty array here only ever means "not loaded
-  // yet", not "the feature is unavailable".
   const [accessLevelOptions, setAccessLevelOptions] = useState<string[]>([])
   const offlineRoster = useMemo(() => {
     const onlineLower = new Set(players.map(p => p.name.toLowerCase()))
@@ -581,7 +514,6 @@ export default function Players() {
     )
   }, [playerSearchFilter, whitelistAccounts])
 
-  // Update peak players
   useEffect(() => {
     if (players.length > peakPlayers) {
       setPeakPlayers(players.length)
@@ -602,11 +534,6 @@ export default function Players() {
     }
   }, [t])
 
-  // Gated on players.gm_tools -- the same capability GET /panel-bridge/players
-  // (the route getAllPlayerDetails lives behind) actually requires, not the
-  // players.view the base roster list itself uses. Silent no-op on failure
-  // (bridge down, permission denied): the roster still renders fine without
-  // this, it just won't show the health/infection indicator.
   const fetchRosterVitals = useCallback(async () => {
     try {
       const res = await panelBridgeApi.getAllPlayerDetails()
@@ -645,16 +572,12 @@ export default function Players() {
         playersApi.getNotes(),
         playersApi.getStats()
       ])
-      // Convert arrays to lookup objects
       const notesMap: Record<string, PlayerNote> = {}
       if (notesData.notes) {
         notesData.notes.forEach((n: PlayerNote) => { notesMap[n.playerName] = n })
       }
       const statsMap: Record<string, PlayerStat> = {}
       if (statsData.stats) {
-        // The server stores stats with snake_case `player_name`. Older code
-        // here keyed off `playerName` which silently produced an empty map.
-        // Normalize so both shapes resolve to the same lookup key.
         statsData.stats.forEach((s: PlayerStat) => {
           const key = s.player_name || s.playerName
           if (key) {
@@ -684,7 +607,6 @@ export default function Players() {
         description: t('toasts.noteSavedDesc', { player: selectedPlayer }),
         variant: 'success' as const,
       })
-      // Update local state
       setPlayerNotes(prev => ({
         ...prev,
         [selectedPlayer]: {
@@ -715,7 +637,6 @@ export default function Players() {
         description: t('toasts.noteDeletedDesc', { player: selectedPlayer }),
         variant: 'success' as const,
       })
-      // Update local state
       setPlayerNotes(prev => {
         const updated = { ...prev }
         delete updated[selectedPlayer]
@@ -747,7 +668,6 @@ export default function Players() {
     setCurrentTags(currentTags.filter(t => t !== tag))
   }
 
-  // Format playtime in human-readable format
   const formatPlaytime = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
@@ -770,7 +690,6 @@ export default function Players() {
   const fetchData = useCallback(async () => {
     try {
       const perksData = await playersApi.getPerks()
-      // `catalog` carries the in-game skill names; older backends only send ids.
       setPerks(
         perksData.catalog ??
           (perksData.perks || []).map((id: string) => ({ id, label: id, category: t('spawn.skillsCategoryFallback') })),
@@ -826,17 +745,14 @@ export default function Players() {
       reportClientError('Failed to load initial player data.', err)
     })
     let isMounted = true
-    // Check bridge status for character export/import
     panelBridgeApi.getStatus().then(status => {
       if (isMounted) setBridgeConnected(Boolean(status.modConnected && status.isRunning))
     }).catch(() => { if (isMounted) setBridgeConnected(false) })
-    // Load auto-export setting
     configApi.getAppSettings().then(response => {
       if (isMounted && response?.settings) {
         setAutoExportEnabled(response.settings.autoExportOnLogin === true || response.settings.autoExportOnLogin === 'true')
       }
     }).catch(() => {})
-    // Load saved exports
     playersApi.getExports().then(response => {
       if (isMounted && response?.exports) setSavedExports(response.exports)
     }).catch(() => {})
@@ -860,7 +776,6 @@ export default function Players() {
     setSelectedPlayer(matchingPlayer?.name || requestedPlayer)
   }, [initialLoading, players, requestedPlayer])
 
-  // Load note/tags when selected player changes
   useEffect(() => {
     if (selectedPlayer && playerNotes[selectedPlayer]) {
       setCurrentNote(playerNotes[selectedPlayer].note)
@@ -871,12 +786,6 @@ export default function Players() {
     }
   }, [selectedPlayer, playerNotes])
 
-  // `fn` normally resolves to something the caller doesn't inspect (kick,
-  // ban, teleport, etc. -- unrelated to bridge verification). A handler that
-  // DOES need to override the generic success toast (the godmode/invisible/
-  // noclip/teleport bridge actions below, when the mod couldn't confirm the
-  // change) resolves to `{ toastOverride }` instead -- runtime-checked here
-  // rather than widening `fn`'s type, so every other caller is unaffected.
   const handleAction = async (
     action: string,
     fn: () => Promise<unknown>,
@@ -919,20 +828,12 @@ export default function Players() {
     })
   }
 
-  // Overwrites the target player's XP/perks/skills/traits/inventory/wornItems --
-  // split out of the Apply button so the confirm dialog can hold the parsed
-  // data until the operator confirms the target player by name.
   const runCharacterImport = async (data: Record<string, unknown>) => {
     setImporting(true)
     try {
       const { panelBridgeApi } = await import('@/lib/api')
       const response = await panelBridgeApi.importCharacter(selectedPlayer, data)
       const restored = response.data?.restored
-      // Submitted a non-empty perks/inventory section but restored
-      // nothing from it: the Lua side counts honestly (see
-      // PanelBridge.lua importPlayerData) but a caller that only
-      // reads the counts from the description, not the title,
-      // would still see an unconditionally success-styled toast.
       const submittedPerks = data && typeof data.perks === 'object' && data.perks !== null && Object.keys(data.perks).length > 0
       const submittedItems = Array.isArray((data as { inventory?: unknown[] })?.inventory) && (data as { inventory: unknown[] }).inventory.length > 0
       const noneApplied = (restored?.perks ?? 0) === 0 && (restored?.items ?? 0) === 0 && (submittedPerks || submittedItems)
@@ -985,11 +886,6 @@ export default function Players() {
     })
   }
 
-  // Builds the { toastOverride } handleAction reads instead of its default
-  // success toast, for a bridge-verify-gated action that came back
-  // 'unverifiable' or 'old-bridge'. 'confirmed' and null (action isn't
-  // verify-gated at all) both return undefined -- no override, plain
-  // success toast, exactly as before this fix.
   const bridgeVerifyToastOverride = (actionLabel: string, actionKey: string, data: unknown) => {
     const state = getBridgeVerifiedState(actionKey, data as { verified?: unknown } | null | undefined)
     if (state === 'unverifiable') {
@@ -1091,9 +987,6 @@ export default function Players() {
     handleAction(t('actions.setAccessLevel'), () => playersApi.setAccessLevel(selectedPlayer, accessLevel))
   }
 
-  // Direct spawn handlers used by the SpawnBrowser dialog. They intentionally
-  // rethrow on failure so the dialog keeps the current selection (user can retry),
-  // and resolve silently on success so the dialog shows its own in-place confirmation.
   const spawnItemFromBrowser = async (id: string, qty?: number) => {
     if (!selectedPlayer) throw new Error(t('spawn.noPlayerSelected'))
     const count = qty ?? 1
@@ -1159,9 +1052,6 @@ export default function Players() {
     handleAction(label, async () => {
       const response = await panelBridgeApi.sendCommand('setGodMode', { username: player, enabled })
       const state = getBridgeVerifiedState('setGodMode', response?.data)
-      // Only reflect the new state on the control once the mod actually
-      // confirmed it -- an 'unverifiable'/'old-bridge' response leaves the
-      // toggle showing its last KNOWN state instead of one nobody confirmed.
       if (state === null || state === 'confirmed') {
         setPlayerPowers(prev => ({
           ...prev,
@@ -1215,14 +1105,6 @@ export default function Players() {
       })
   }
 
-  // Permanent character loss in a permadeath game, inflicted on someone
-  // else -- the only destructive one of these five GM-tools actions. Guarded
-  // by requiring the operator to type the TARGET's username (not just click
-  // through), so a fast-clicking admin can't kill the wrong player they
-  // happened to have selected. killPlayer has no players.js-native route and
-  // isn't bridge-verify-gated (see bridgeVerify.ts), unlike heal/godmode/
-  // invisible/noclip -- it goes through panelBridgeApi.killPlayer (the
-  // dedicated PanelBridge route), not the generic sendCommand passthrough.
   const handleKillPlayer = async () => {
     const player = selectedPlayer
     if (!player) return
@@ -1234,14 +1116,6 @@ export default function Players() {
       requireTypedConfirmation: {
         value: player,
         label: t('powers.killConfirmTypeLabel', { player }),
-        // ConfirmContext.tsx defaults an omitted placeholder to the
-        // required value itself -- here that would render the exact
-        // string "Kate" in placeholder-gray inside an untouched input,
-        // pixel-indistinguishable at a glance from having already typed
-        // it (2026-08-31 impeccable pass, verified by cropping the
-        // rendered screenshot and comparing text color against the
-        // Cancel button's real text). An explicit empty placeholder
-        // leaves the box genuinely blank instead.
         placeholder: '',
       },
     })
@@ -1252,7 +1126,6 @@ export default function Players() {
       })
   }
 
-  // Get selected player's current powers
   const selectedPlayerPowers = useMemo(() =>
     selectedPlayer ? playerPowers[selectedPlayer] : null,
     [selectedPlayer, playerPowers]
@@ -1263,9 +1136,6 @@ export default function Players() {
     [selectedPlayer, players]
   )
 
-  // Poll getPlayerDetails while an online player is selected and the bridge
-  // is up. Keyed on the boolean (not the `players` array itself) so a
-  // reference-only change from the 15s roster poll doesn't restart this.
   useEffect(() => {
     if (!selectedPlayer || !isSelectedPlayerOnline || !bridgeConnected) {
       setPlayerVitals(null)
@@ -1309,7 +1179,6 @@ export default function Players() {
 
   return (
     <div className="space-y-6 page-transition">
-      {/* Header */}
       <PageHeader
         title={t('pageHeader.title')}
         description={t('pageHeader.description')}
@@ -1352,7 +1221,6 @@ export default function Players() {
         </Alert>
       )}
 
-      {/* Stats summary — tactical signal strip */}
       <div className="flex flex-col gap-2 stagger-in sm:flex-row sm:flex-wrap">
         <SummaryCard
           icon={<Users className="h-4 w-4" />}
@@ -1400,7 +1268,6 @@ export default function Players() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Player List */}
         <Card className="lg:col-span-1 overflow-hidden border-border/55 bg-card/70">
           <div className="flex items-center justify-between border-b border-border/40 bg-muted/20 px-4 py-2">
             <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
@@ -1416,7 +1283,6 @@ export default function Players() {
             </span>
           </div>
           <CardHeader className="space-y-3 pb-3 pt-4">
-            {/* Tab strip: online / roster / banned */}
             <div className="grid grid-cols-4 gap-1 rounded-md border border-border/55 bg-muted/30 p-1">
               <button
                 type="button"
@@ -1473,7 +1339,6 @@ export default function Players() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Search */}
             <div className="relative">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -1836,7 +1701,6 @@ export default function Players() {
               )}
             </ScrollArea>
 
-            {/* Manual entry — for offline or unlisted usernames */}
             <div className="space-y-1.5 border-t border-border/40 pt-3">
               <Label className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/80">
                 <span className="text-primary/70">›</span> {t('roster.manualTargetLabelText')}
@@ -1851,9 +1715,7 @@ export default function Players() {
           </CardContent>
         </Card>
 
-        {/* Player Actions */}
         <Card className="lg:col-span-2 overflow-hidden border-border/55 bg-card/70">
-          {/* Header strip */}
           <div className="flex items-center justify-between border-b border-border/40 bg-muted/20 px-4 py-2">
             <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
               <span className="text-primary/80">//</span>
@@ -1875,14 +1737,12 @@ export default function Players() {
           <CardHeader className="space-y-3 pb-3 pt-4">
             {selectedPlayer ? (
               <>
-                {/* Dossier hero: identity + key stats */}
                 {(() => {
                   const isOnline = players.some(p => p.name === selectedPlayer)
                   const note = playerNotes[selectedPlayer]
                   const stat = playerStats[selectedPlayer]
                   return (
                     <div className="relative overflow-hidden rounded-md border border-border/50 bg-gradient-to-br from-muted/30 via-card to-card p-4">
-                      {/* Corner ticks */}
                       <span aria-hidden="true" className="pointer-events-none absolute -left-px -top-px h-3 w-3 border-s-2 border-t-2 border-primary/40" />
                       <span aria-hidden="true" className="pointer-events-none absolute -right-px -top-px h-3 w-3 border-e-2 border-t-2 border-primary/40" />
                       <span aria-hidden="true" className="pointer-events-none absolute -left-px -bottom-px h-3 w-3 border-b-2 border-s-2 border-primary/40" />
@@ -1902,7 +1762,6 @@ export default function Players() {
                               {isOnline ? t('dossier.connected') : t('dossier.lastSeen')}
                             </span>
                           </div>
-                          {/* Inline stats */}
                           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground/85">
                             {stat ? (
                               <>
@@ -1926,7 +1785,6 @@ export default function Players() {
                               <span className="text-muted-foreground/60">{t('dossier.noHistory')}</span>
                             )}
                           </div>
-                          {/* Tags + powers row */}
                           {((note?.tags && note.tags.length > 0) || (selectedPlayerPowers && (selectedPlayerPowers.godMode || selectedPlayerPowers.invisible || selectedPlayerPowers.noclip))) && (
                             <div className="mt-3 flex flex-wrap items-center gap-1.5">
                               {selectedPlayerPowers?.godMode && (
@@ -1958,7 +1816,6 @@ export default function Players() {
                           )}
                         </div>
 
-                        {/* Quick danger actions */}
                         <div className="flex shrink-0 items-center gap-1.5">
                           <DisabledReason reason={!canModerate ? t('permissions.noModerate') : null}>
                           <Button
@@ -2072,7 +1929,6 @@ export default function Players() {
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="moderation">
-              {/* Wrap tabs so every label remains visible on narrow screens. */}
               <TabsList className="flex h-auto flex-wrap items-center gap-1 rounded-md border border-border/55 bg-muted/30 p-1">
                 <TabsTrigger value="vitals" className="min-h-8 shrink-0 px-3 text-xs font-medium">{t('tabs.vitals')}</TabsTrigger>
                 <TabsTrigger value="moderation" className="min-h-8 shrink-0 px-3 text-xs font-medium">{t('tabs.moderation')}</TabsTrigger>
@@ -2081,11 +1937,6 @@ export default function Players() {
                 <TabsTrigger value="notes" className="min-h-8 shrink-0 px-3 text-xs font-medium" onClick={() => fetchActivityLogs()}>{t('tabs.notesLog')}</TabsTrigger>
               </TabsList>
 
-              {/* Vitals Tab -- live PanelBridge.getPlayerDetails read-back:
-                  position, health, and the eight stats:get(CharacterStat.X)
-                  fields. 2026-08-30: this data has been correctly served by
-                  the server since the same-day stats-repair fix, but had no
-                  UI consumer at all until now. */}
               <TabsContent value="vitals" className="space-y-4 mt-4">
                 {!selectedPlayer ? (
                   <p className="text-sm text-muted-foreground">{t('vitals.noTarget')}</p>
@@ -2160,14 +2011,6 @@ export default function Players() {
                       ))}
                     </div>
 
-                    {/* Endurance/stress/boredom/unhappiness/pain: real values
-                        the bridge sends, but PZ's 0-1 vs 0-100 scale per stat
-                        isn't confirmed against the jar the way hunger/thirst/
-                        fatigue is (see statGet's comment in PanelBridge.lua)
-                        -- shown as raw numbers rather than a bar that could
-                        misrepresent the scale. That reasoning was invisible on
-                        screen (2026-08-31 impeccable pass) -- the HelpTip below
-                        surfaces it instead of just the comment here. */}
                     {playerVitals.stats && (
                       <div className="border-t border-border/40 pt-2">
                         <div className="mb-1 flex items-center gap-1">
@@ -2210,12 +2053,9 @@ export default function Players() {
                 )}
               </TabsContent>
 
-              {/* Moderation Tab */}
               <TabsContent value="moderation" className="space-y-4 mt-4">
-                {/* Primary actions — visible when a player is selected */}
                 {selectedPlayer ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                  {/* Kick */}
                   <DisabledReason className="w-full" reason={selectedPlayer && !canModerate ? t('permissions.noModerate') : null}>
                   <Dialog open={kickDialogOpen} onOpenChange={setKickDialogOpen}>
                     <DialogTrigger asChild>
@@ -2251,7 +2091,6 @@ export default function Players() {
                   </Dialog>
                   </DisabledReason>
 
-                  {/* Ban */}
                   <DisabledReason className="w-full" reason={selectedPlayer && !canModerate ? t('permissions.noModerate') : null}>
                   <Dialog open={banDialogOpen} onOpenChange={setBanDialogOpen}>
                     <DialogTrigger asChild>
@@ -2301,7 +2140,6 @@ export default function Players() {
                   </Dialog>
                   </DisabledReason>
 
-                  {/* Ban Confirmation */}
                   <AlertDialog open={banConfirmOpen} onOpenChange={setBanConfirmOpen}>
                     <AlertDialogContent>
                       <AlertDialogHeader>
@@ -2329,7 +2167,6 @@ export default function Players() {
                     </AlertDialogContent>
                   </AlertDialog>
 
-                  {/* Access Level */}
                   <DisabledReason className="w-full" reason={selectedPlayer && !canModerate ? t('permissions.noModerate') : null}>
                   <Dialog>
                     <DialogTrigger asChild>
@@ -2368,8 +2205,6 @@ export default function Players() {
                   </Dialog>
                   </DisabledReason>
 
-                  {/* Teleport — requires PanelBridge; syncs via teleportTo + setNetworkTeleportEnabled.
-                      Note: known unreliable in B42 multiplayer; we still surface the dialog so admins can try. */}
                   <DisabledReason className="w-full" reason={!canGmTools ? t('permissions.noGmTools') : null}>
                   <Dialog open={teleportDialogOpen} onOpenChange={(open) => {
                     setTeleportDialogOpen(open)
@@ -2398,7 +2233,6 @@ export default function Players() {
                           />
                         </div>
 
-                        {/* Quick Location Presets */}
                         <div>
                           <Label className="text-xs text-muted-foreground mb-2 block">{t('teleportDialog.quickLocations')}</Label>
                           <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
@@ -2477,7 +2311,6 @@ export default function Players() {
                 </div>
                 ) : null}
 
-                {/* Secondary actions — less frequent operations */}
                 <div className="pt-4 mt-2 border-t border-border/30">
                   <div className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground/80">
                     <span className="text-primary/70">//</span>
@@ -2485,11 +2318,9 @@ export default function Players() {
                     <span className="h-px flex-1 bg-border/40" aria-hidden="true" />
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  {/* Voice Ban */}
                   <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
                   <Dialog open={voiceBanDialogOpen} onOpenChange={setVoiceBanDialogOpen}>
                     <DialogTrigger asChild>
-                      {/* eslint-disable-next-line local/no-dead-disabled-title -- pure hint (explains what voice-banning does); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27. */}
                       <button type="button" disabled={!canModerate} title={t('actionTiles.voiceBanTooltip')} className="block h-auto w-full p-0 text-start">
                         <ActionTile icon={<MicOff className="w-4 h-4" />} label={t('actionTiles.voiceBanLabel')} compact />
                       </button>
@@ -2547,11 +2378,9 @@ export default function Players() {
                   </Dialog>
                   </DisabledReason>
 
-                  {/* SteamID Ban */}
                   <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
                   <Dialog open={steamIdBanDialogOpen} onOpenChange={setSteamIdBanDialogOpen}>
                     <DialogTrigger asChild>
-                      {/* eslint-disable-next-line local/no-dead-disabled-title -- pure hint (explains what SteamID banning does); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27. */}
                       <button type="button" disabled={!canModerate} title={t('actionTiles.steamIdBanTooltip')} className="block h-auto w-full p-0 text-start">
                         <ActionTile icon={<Ban className="w-4 h-4" />} label={t('actionTiles.steamIdBanLabel')} emphasis="danger" compact />
                       </button>
@@ -2601,11 +2430,9 @@ export default function Players() {
                   </Dialog>
                   </DisabledReason>
 
-                  {/* Add User */}
                   <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
                   <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
                     <DialogTrigger asChild>
-                      {/* eslint-disable-next-line local/no-dead-disabled-title -- pure hint (explains what adding a user does); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27. */}
                       <button type="button" disabled={!canModerate} title={t('actionTiles.addUserTooltip')} className="block h-auto w-full p-0 text-start">
                         <ActionTile icon={<UserPlus className="w-4 h-4" />} label={t('actionTiles.addUserLabel')} compact />
                       </button>
@@ -2654,11 +2481,9 @@ export default function Players() {
                   </Dialog>
                   </DisabledReason>
 
-                  {/* Unban */}
                   <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
                   <Dialog open={unbanDialogOpen} onOpenChange={setUnbanDialogOpen}>
                     <DialogTrigger asChild>
-                      {/* eslint-disable-next-line local/no-dead-disabled-title -- pure hint (explains what unbanning by username does); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27. */}
                       <button type="button" disabled={!canModerate} title={t('actionTiles.unbanTooltip')} className="block h-auto w-full p-0 text-start">
                         <ActionTile icon={<UserPlus className="w-4 h-4" />} label={t('actionTiles.unbanLabel')} compact />
                       </button>
@@ -2685,7 +2510,6 @@ export default function Players() {
                   </Dialog>
                   </DisabledReason>
 
-                  {/* Unban SteamID */}
                   <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
                   <Dialog open={unbanSteamIdDialogOpen} onOpenChange={(open) => {
                     setUnbanSteamIdDialogOpen(open)
@@ -2693,7 +2517,6 @@ export default function Players() {
                     else setUnbanSteamId('')
                   }}>
                     <DialogTrigger asChild>
-                      {/* eslint-disable-next-line local/no-dead-disabled-title -- pure hint (explains what lifting a SteamID ban does); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27. */}
                       <button type="button" disabled={!canModerate} title={t('actionTiles.unbanSteamIdTooltip')} className="block h-auto w-full p-0 text-start">
                         <ActionTile icon={<UserPlus className="w-4 h-4" />} label={t('actionTiles.unbanSteamIdLabel')} compact />
                       </button>
@@ -2742,9 +2565,7 @@ export default function Players() {
                 </div>
                 </div>
               </TabsContent>
-              {/* Spawn Tab — Items, Vehicles, XP */}
               <TabsContent value="spawn" className="space-y-3 mt-4">
-                {/* Give Item */}
                 <DisabledReason className="w-full" reason={selectedPlayer && !canGmTools ? t('permissions.noGmTools') : null}>
                 <button
                   type="button"
@@ -2775,8 +2596,6 @@ export default function Players() {
                           {t('spawn.browserBadge')}
                         </span>
                       </p>
-                      {/* Keep line-clamp-2 here. It preserves the card height while keeping
-                          the description readable in both LTR and RTL layouts. */}
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                         {selectedPlayer
                           ? <Trans i18nKey="spawn.giveItemsDescWithPlayer" t={t} values={{ player: selectedPlayer }} components={{ 1: <span className="text-primary font-medium" /> }} />
@@ -2797,7 +2616,6 @@ export default function Players() {
                 </button>
                 </DisabledReason>
 
-                {/* Spawn Vehicle */}
                 <DisabledReason className="w-full" reason={!canGmTools ? t('permissions.noGmTools') : null}>
                 <button
                   type="button"
@@ -2828,8 +2646,6 @@ export default function Players() {
                           {t('spawn.browserBadge')}
                         </span>
                       </p>
-                      {/* line-clamp-2, not truncate -- see the matching comment on the
-                          Give Items row above. */}
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                         {selectedPlayer
                           ? <Trans i18nKey="spawn.spawnVehiclesDescWithPlayer" t={t} values={{ player: selectedPlayer }} components={{ 1: <span className="text-primary font-medium" /> }} />
@@ -2850,7 +2666,6 @@ export default function Players() {
                 </button>
                 </DisabledReason>
 
-                {/* Give XP */}
                 <div className="rounded-xl border border-border/60 bg-card/50 p-4 transition-colors">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="rounded-lg border border-primary/20 bg-primary/10 p-2 text-primary">
@@ -2909,13 +2724,11 @@ export default function Players() {
                 </div>
               </TabsContent>
 
-              {/* Powers Tab */}
               <TabsContent value="powers" className="space-y-4 mt-4">
                 <p className="text-sm text-muted-foreground">
                   {selectedPlayer ? t('powers.introWithPlayer', { player: selectedPlayer }) : t('powers.introNoPlayer')}
                 </p>
                 <div className="grid gap-3">
-                  {/* God Mode */}
                   <div className="flex items-center justify-between rounded-xl border border-border/60 bg-card/50 p-4 transition-colors hover:bg-accent/30">
                     <div className="flex items-center gap-3">
                       <div className="rounded-lg border border-primary/20 bg-primary/10 p-2 text-primary">
@@ -2937,14 +2750,6 @@ export default function Players() {
                       )}
                       <DisabledReason reason={!canGmTools ? t('permissions.noGmTools') : (selectedPlayer && !bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
                         {selectedPlayerPowers?.godMode === undefined ? (
-                          // Nothing has reported this player's real current state yet --
-                          // true on every page load until the operator toggles it once
-                          // this session (no fetch populates playerPowers, only the
-                          // optimistic update after a bridge-confirmed toggle). A single
-                          // "Enable" button here would silently assume "currently off",
-                          // which is exactly the state the operator can't actually see.
-                          // Offering both directions keeps each button's own outcome
-                          // predictable instead of guessing one on the operator's behalf.
                           <div className="flex items-center gap-1.5">
                             <Button variant="outline" size="sm" disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools} onClick={() => handleGodMode(true)}>
                               {t('powers.enable')}
@@ -2967,7 +2772,6 @@ export default function Players() {
                     </div>
                   </div>
 
-                  {/* Invisible */}
                   <div className="flex items-center justify-between rounded-xl border border-border/60 bg-card/50 p-4 transition-colors hover:bg-accent/30">
                     <div className="flex items-center gap-3">
                       <div className="rounded-lg border border-primary/20 bg-primary/10 p-2 text-primary">
@@ -3011,7 +2815,6 @@ export default function Players() {
                     </div>
                   </div>
 
-                  {/* Noclip */}
                   <div className="flex items-center justify-between rounded-xl border border-border/60 bg-card/50 p-4 transition-colors hover:bg-accent/30">
                     <div className="flex items-center gap-3">
                       <div className="rounded-lg border border-primary/20 bg-primary/10 p-2 text-primary">
@@ -3055,7 +2858,6 @@ export default function Players() {
                     </div>
                   </div>
 
-                  {/* Heal */}
                   <div className="flex items-center justify-between rounded-xl border border-border/60 bg-card/50 p-4 transition-colors hover:bg-accent/30">
                     <div className="flex items-center gap-3">
                       <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-2 text-green-500">
@@ -3078,9 +2880,6 @@ export default function Players() {
                     </DisabledReason>
                   </div>
 
-                  {/* Kill -- destructive, permanent in permadeath. Only power on this
-                      tab that can inflict irreversible harm on someone other than the
-                      admin, so it gets a red treatment the others don't. */}
                   <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/5 p-4 transition-colors hover:bg-destructive/10">
                     <div className="flex items-center gap-3">
                       <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-2 text-destructive">
@@ -3108,7 +2907,6 @@ export default function Players() {
                 </div>
               </TabsContent>
 
-              {/* Notes & Log Tab */}
               <TabsContent value="notes" className="space-y-4 mt-4">
                 {notesLoading ? (
                   <div className="flex items-center justify-center py-8">
@@ -3118,7 +2916,6 @@ export default function Players() {
                   <EmptyState type="noData" title={t('notes.selectPlayerEmpty')} />
                 ) : (
                   <div className="space-y-4">
-                    {/* Player Stats Card */}
                     {playerStats[selectedPlayer] && (
                       <Card className="border-border/60 bg-muted/20">
                         <CardContent className="pt-4">
@@ -3150,7 +2947,6 @@ export default function Players() {
                       </Card>
                     )}
 
-                    {/* Tags */}
                     <div className="space-y-2">
                       <Label className="text-sm font-medium flex items-center gap-2">
                         <Tag className="w-4 h-4" />
@@ -3194,7 +2990,6 @@ export default function Players() {
                       </p>
                     </div>
 
-                    {/* Note */}
                     <div className="space-y-2">
                       {notesError && (
                         <Alert variant="destructive">
@@ -3222,7 +3017,6 @@ export default function Players() {
                       <p className="text-xs text-muted-foreground">{t('notes.charCount', { count: currentNote.length })}</p>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex justify-between items-center pt-2">
                       <div className="text-xs text-muted-foreground">
                         {playerNotes[selectedPlayer]?.updated_at && (
@@ -3280,7 +3074,6 @@ export default function Players() {
                   </div>
                 )}
 
-                {/* Activity Log */}
                 <div className="pt-4 border-t space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-medium flex items-center gap-2">
@@ -3364,14 +3157,6 @@ export default function Players() {
                                 >
                                   {log.action}
                                 </Badge>
-                                {/* The dedicated Details column is hidden below
-                                    sm (no room for a 4th column at 390px) --
-                                    fold it in here instead of dropping it
-                                    outright, so a real entry's details are
-                                    still readable on mobile once this table
-                                    actually has data (2026-08-31 visual
-                                    sweep: empty today hid that nothing was
-                                    reachable there at all). */}
                                 <p className="mt-1 max-w-[220px] text-[11px] text-muted-foreground break-words sm:hidden">
                                   {log.details || t('notes.detailsFallback')}
                                 </p>
@@ -3397,7 +3182,6 @@ export default function Players() {
         </Card>
       </div>
 
-      {/* Import/Export Character Dialog */}
       <Dialog open={importExportOpen} onOpenChange={setImportExportOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -3423,7 +3207,6 @@ export default function Players() {
             </Alert>
           )}
           <div className={cn("grid grid-cols-1 md:grid-cols-2 gap-4", !bridgeConnected && 'opacity-60 pointer-events-none')}>
-            {/* Export */}
             <div className="space-y-3">
               <h4 className="text-sm font-medium flex items-center gap-2">
                 <Download className="w-4 h-4" />
@@ -3511,7 +3294,6 @@ export default function Players() {
               )}
             </div>
 
-            {/* Import */}
             <div className="space-y-3">
               <h4 className="text-sm font-medium flex items-center gap-2">
                 <Upload className="w-4 h-4" />
@@ -3590,7 +3372,6 @@ export default function Players() {
             </div>
           </div>
 
-          {/* Auto-export on login */}
           <div className="border-t border-border/40 pt-4 mt-2 space-y-3">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
@@ -3676,8 +3457,6 @@ export default function Players() {
         </DialogContent>
       </Dialog>
 
-      {/* The target name is part of the confirmation title; the server creates
-          a recovery export before replacing the character. */}
       <AlertDialog open={importConfirmOpen} onOpenChange={(open) => { if (!open) { setImportConfirmOpen(false); setPendingImportData(null) } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -3700,7 +3479,6 @@ export default function Players() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Spawn browser dialogs — items + vehicles, stay-open workflow */}
       <SpawnBrowser
         mode="items"
         open={itemBrowserOpen}

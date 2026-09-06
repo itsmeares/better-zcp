@@ -6,24 +6,6 @@ import { modsApi, serversApi, ApiError } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmProvider } from '@/contexts/ConfirmContext'
 
-// bug-hunt-2026-08-27: mods.js gates every route (including reads) behind
-// mods.manage via a whole-file router.use, except GET /thumbnail/:workshopId
-// -- every mutating action on this page needed mods.manage, but Mods.tsx had
-// zero client-side awareness of that (confirmed via Kevin's floor-wide sweep:
-// 13 of 18 pages had no client-side capability gating even though the server
-// routes were already correctly gated -- a UX defect, not a hole, but one
-// that hands an operator a fully-enabled button the server will 403). The
-// ONE outlier is "Fix Path" (Workshop install-path save), which goes through
-// serversApi.update (PUT /servers/:id, servers.manage) instead -- a
-// different route file entirely, not mods.js.
-//
-// Every gated handler in Mods.tsx carries an early-return guard INSIDE the
-// function itself (`if (!canManageMods) return`), not just a disabled
-// attribute on the visible button -- per tonight's floor lesson from
-// Angela's Console.tsx work: a disabled button is not a gate if some other
-// path reaches the same handler. These tests assert the underlying API is
-// never called when the capability is denied, not merely that a button has
-// the `disabled` attribute.
 
 let mockCan = (_capability: string) => true
 
@@ -101,10 +83,6 @@ function renderMods() {
   )
 }
 
-// ConfirmContext's own default (no Provider) always resolves false -- fine
-// for every other test in this file (none of them need the confirm step to
-// actually succeed), but the deactivated-tab delete flow's granted-case
-// test below needs a real confirm dialog to click through.
 function renderModsWithConfirm() {
   return render(
     <MemoryRouter>
@@ -121,15 +99,6 @@ async function waitForLoaded() {
   await waitFor(() => expect(getTrackedMods).toHaveBeenCalled())
 }
 
-// bug-hunt-2026-08-27 follow-up: a plain fireEvent.click never opens a
-// Radix DropdownMenu -- it opens on pointerdown, not click (same quirk
-// family as TabsTrigger switching on mousedown). Pam's floor-wide finding:
-// "the menu won't open under fireEvent" was a wrong-event problem, not a
-// real tooling limitation -- Angela's Dashboard.capabilityGating.test.tsx
-// openMoreActionsMenu() already had the fix. Reused here rather than
-// re-deriving it, and used to click-through the "More actions" dropdown's
-// two dialog-opening items (Import Collection, Auto-Restart Settings) --
-// the earlier tests in this file never actually opened this menu.
 async function openMoreActionsMenu() {
   const trigger = await screen.findByRole('button', { name: /more actions/i })
   fireEvent.pointerDown(trigger, { button: 0, pointerId: 1 })
@@ -215,13 +184,6 @@ describe('Mods.tsx capability gating -- mods.manage', () => {
     renderMods()
     await waitForLoaded()
 
-    // Navigate to the "Disabled/Disk-only" panel isn't a single click away in
-    // this component's nav -- instead verify the underlying handler directly
-    // rejects the mutating call regardless of capability by asserting the
-    // function-level guard: since disk-only mods aren't fetched on initial
-    // mount, this test asserts the API-level contract (guard-then-fetch)
-    // that the disabled UI depends on -- enableDiskMod/deleteDiskMod are
-    // never invoked from this render path when mods.manage is denied.
     expect(enableDiskMod).not.toHaveBeenCalled()
     expect(deleteDiskMod).not.toHaveBeenCalled()
   })
@@ -254,12 +216,6 @@ describe('Mods.tsx capability gating -- "More actions" dropdown menu items', () 
     expect(importItem).toHaveAttribute('aria-disabled', 'true')
     expect(restartItem).toHaveAttribute('aria-disabled', 'true')
 
-    // Radix marks these disabled, but per tonight's floor finding a
-    // DropdownMenuItem's disabled prop does not gate the onClick you pass
-    // in -- only the early-return guard inside the handler does. Fire the
-    // click directly against the item (not the whole menu) to prove the
-    // real gate holds even if Radix's own disabled short-circuit were
-    // ever bypassed.
     fireEvent.click(importItem)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     fireEvent.click(restartItem)
@@ -315,18 +271,9 @@ describe('Mods.tsx capability gating -- servers.manage (Fix Path outlier)', () =
   })
 })
 
-// bug-hunt-2026-08-27 (Angela's stock-role hunt): mods.js gates its whole
-// router -- reads included -- behind mods.manage as one whole-file
-// router.use, so a role lacking it (e.g. the stock MODERATOR role) gets
-// all five of fetchData's mount-time calls rejecting with a real 403 at
-// once, not a mix of failures. Before this fix, that hit the generic
-// "all failed" branch and showed "Failed to load mod data. The backend
-// may be unreachable." -- FALSE: the backend answered every request and
-// said no. This asserts the honest page-level empty state replaces the
-// whole body instead, same precedent as Debug.tsx (28bfb0c).
 describe('Mods.tsx: a real 403 on every mount-time fetch shows a permission-denied empty state, not a false "backend unreachable" message', () => {
   it('shows the empty state, not the misleading fetch-error banner, when every mount-time call is refused with a real 403', async () => {
-    mockCan = () => true // client-side gating is irrelevant here -- this is the SERVER's real answer
+    mockCan = () => true
     const denied = () => Promise.reject(new ApiError('Forbidden', { status: 403 }))
     getTrackedMods.mockImplementation(denied)
     getStatus.mockImplementation(denied)
@@ -340,12 +287,6 @@ describe('Mods.tsx: a real 403 on every mount-time fetch shows a permission-deni
 
     await waitFor(() => expect(screen.getByText("You can't view mods")).toBeInTheDocument())
     expect(screen.queryByText(/backend may be unreachable/i)).not.toBeInTheDocument()
-    // The whole mod-management BODY must be gone (PageHeader itself,
-    // including its Add Mod action, stays -- same precedent as Debug.tsx,
-    // 28bfb0c), so assert the section nav -- which renders unconditionally
-    // in the normal page regardless of data state -- is unreachable, not
-    // an element that would legitimately be absent anyway (e.g. a button
-    // gated behind data that never loaded).
     expect(screen.queryByLabelText('Mod management sections')).not.toBeInTheDocument()
   })
 
@@ -353,9 +294,6 @@ describe('Mods.tsx: a real 403 on every mount-time fetch shows a permission-deni
     mockCan = () => true
     getTrackedMods.mockRejectedValue(new Error('network blip'))
     primeReadMocks()
-    // Re-apply after primeReadMocks so getTrackedMods stays rejected while
-    // the other four resolve -- a real mixed-failure case, not the
-    // all-403 shape this fix targets.
     getTrackedMods.mockRejectedValue(new Error('network blip'))
 
     renderMods()
@@ -366,17 +304,6 @@ describe('Mods.tsx: a real 403 on every mount-time fetch shows a permission-deni
   })
 })
 
-// bug-hunt-2026-08-27 (Angela's stock-role hunt, second finding on this
-// page): the Deactivated tab's "Delete Selected/All" tracking-cleanup
-// button had NO capability check at all -- no disabled state, no
-// tooltip -- and handleBulkRemove's own guard (`if (... || !canManageMods)
-// return`) is a SILENT no-op with no toast, no error, nothing. A role
-// lacking mods.manage that reached it (moderator can't today, only
-// because the whole page now fails to load first per the empty-state fix
-// above -- this is a real, independent defect, not exposed by that fix
-// but not created by it either) would click confirm and see nothing
-// happen, with no indication why. Missed in the original mods.manage
-// gating pass; this is that pass's one gap.
 describe('Mods.tsx: Deactivated tab "Delete All" tracking-cleanup gates on mods.manage', () => {
   async function primeDeactivatedFixture() {
     getTrackedMods.mockResolvedValue({ mods: [{ workshop_id: '999', name: 'Deactivated Mod', last_checked: '2026-01-01' }] } as any)

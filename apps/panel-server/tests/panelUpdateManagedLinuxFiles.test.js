@@ -25,12 +25,6 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
-// Split into two phases (staging at download time, activation only after
-// the binary/client update is fully committed -- see
-// activateStagedLinuxLauncherFiles()'s own comment in panelUpdateChecker.js
-// for why the old single-call replaceManagedLinuxFiles() could land these
-// files ahead of a binary/client swap that later rolls back). These tests
-// exercise both phases together, the same way the real update flow does.
 describe("Linux managed updater files", () => {
   it("stages then activates the launcher and service templates together", () => {
     const { incoming, live } = fixture();

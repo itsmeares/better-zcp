@@ -5,12 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { HelpTip } from '@/components/HelpTip'
 import { EmptyState } from '@/components/EmptyState'
 
-// Mirrors the exact composition ServerConfig.tsx's mod-settings "not loaded"
-// EmptyState uses -- real locale strings, not stand-ins -- to prove the
-// EmptyState ReactNode-description seam actually closes the gap it was cut
-// for: the mod-settings tab's own copy names the app-specific term
-// "PanelBridge" with nowhere to explain it until EmptyState's description
-// accepted more than a plain string.
 function ModSettingsNotLoaded() {
   const { t } = useTranslation('serverconfig')
   return (

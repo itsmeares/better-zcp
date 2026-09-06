@@ -11,13 +11,6 @@ import { useToast } from '@/components/ui/use-toast'
 export interface CatalogVehicle {
   id: string
   name: string
-  // Both optional, not a stray gap: PanelBridge.lua only sets these on a
-  // successful pcall -- getSeatNumber() is a known B42 Kahlua thrower, so
-  // getMass()/the seat-count getters can genuinely come back unset (server/
-  // backlog card
-  // api-ts-declares-catalog-weight-mass-seats-non-optional-but-lua-guards-them,
-  // 2026-08-29). A missing value is a real, expected runtime shape, not a
-  // bug to paper over with a fallback of 0.
   mass?: number
   seats?: number
 }
@@ -29,45 +22,33 @@ interface VehiclePickerProps {
   placeholder?: string
 }
 
-// Classify vehicles into types by name/id patterns, mass, and seat count
 export function getVehicleType(v: CatalogVehicle): string {
   const raw = `${v.name || ''} ${v.id}`.toLowerCase()
   const id = v.id.toLowerCase().replace(/^base\./, '')
 
-  // Trailers: typically 0 seats, or explicit trailer/cart names
   if (/trailer|\bcart\b/.test(raw)) return 'Trailers'
   if (v.seats === 0 && typeof v.mass === 'number' && v.mass > 0) return 'Trailers'
 
-  // Emergency & Military — check BEFORE generic types to catch police/military variants
-  // PZ B42 military CUCV series: M1008, M1009, M1010, M1028 etc.
   if (/police|\bcop\b|sheriff|firetruck|fire.?engine|military|army|m10[0-9]{2}|humvee|hmm?wv|cucv|armou?red|swat|ambulance|\bems\b/.test(raw))
     return 'Emergency & Military'
-  // Police/military suffixes on vehicle IDs: pd (police dept), ksp (KY state police), mp (military police)
   if (/(?:pd|ksp|mp|trooper|patrol)$/i.test(id)) return 'Emergency & Military'
   if (/lightsbar|lightbar|siren/.test(raw)) return 'Emergency & Military'
 
-  // Vans & Buses
   if (/\bvan\b|\bbus\b|minivan|stepvan|minibus|schoolbus/.test(raw)) return 'Vans & Buses'
 
-  // Trucks & Pickups
   if (/truck|pickup|pick.?up|\bsemi\b|\btow\b|flatnose|\bdump\b|plow|hauler|flat.?bed/.test(raw)) return 'Trucks'
 
-  // Performance / Sports
   if (/sport|muscle|\brace\b|\bfast\b|corvette|camaro|mustang|\bgto\b|charger|firebird|trans.?am/.test(raw)) return 'Performance'
 
-  // SUVs & Off-road (blazer, K5 are Chevy SUVs)
   if (/\bsuv\b|offroad|off.?road|4x4|\bjeep\b|blazer|\bk5|wrangler|bronco|scout/.test(raw)) return 'SUVs & Off-road'
 
-  // Mass/seats-based fallback for uncategorized vehicles
   if (typeof v.mass === 'number' && v.mass > 5000) return 'Trucks'
   if (typeof v.seats === 'number' && v.seats >= 7) return 'Vans & Buses'
 
   return 'Sedans'
 }
 
-/** Strip Base. prefix and return a cleaner display name */
 export function formatVehicleName(v: CatalogVehicle): string {
-  // If the game provided a real display name, use it
   if (v.name && v.name !== v.id && !v.name.startsWith('Base.')) return v.name
   return (v.name || v.id).replace(/^Base\./, '')
 }
@@ -96,15 +77,12 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [scannedAt, setScannedAt] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  // Not a Radix primitive, so closing the dropdown doesn't automatically
-  // restore focus to the trigger the way a Radix Popover/Select would.
   const triggerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [dropUp, setDropUp] = useState(false)
   const { toast } = useToast()
 
-  // Load cached catalog
   useEffect(() => {
     const ctrl = new AbortController()
     ;(async () => {
@@ -179,7 +157,6 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
     const isCapped = total > MAX_VISIBLE
     const visible = isCapped ? filtered.slice(0, MAX_VISIBLE) : filtered
 
-    // Group by type for display
     const groups = new Map<string, CatalogVehicle[]>()
     for (const v of visible) {
       const type = getVehicleType(v)
@@ -296,7 +273,6 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
 
   return (
     <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
-      {/* Trigger */}
       <div
         ref={triggerRef}
         role="combobox"
@@ -348,7 +324,6 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
         />
       </div>
 
-      {/* Dropdown */}
       {open && (
         <div
           className={cn(
@@ -358,7 +333,6 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
           )}
           style={{ width: 'max(100%, 400px)' }}
         >
-          {/* Search */}
           <div className="flex items-center gap-2 border-b border-border px-3 h-11">
             <Search className="w-4 h-4 text-muted-foreground shrink-0" />
             <input
@@ -394,7 +368,6 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
             </Button>
           </div>
 
-          {/* Vehicle list — grouped by type */}
           <div className="max-h-[320px] overflow-y-auto overscroll-contain" role="listbox" id="vehpicker-listbox" aria-label={t('vehicleListAria')}>
             {totalFiltered === 0 ? (
               <div className="py-10 text-center text-muted-foreground">
@@ -407,7 +380,6 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
               <div ref={listRef} className="py-0.5">
                 {groupedVehicles.map(([type, vehs]) => (
                   <div key={type}>
-                    {/* Group header — only show when not searching */}
                     {!search && groupedVehicles.length > 1 && (() => {
                       const Icon = TYPE_ICON[type] || Car
                       return (
@@ -458,7 +430,6 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
             )}
           </div>
 
-          {/* Footer */}
           <div className="border-t border-border/40 px-3 h-8 flex items-center justify-between gap-3 text-[11px] text-muted-foreground bg-card/30">
             <span className="shrink-0 tabular-nums">
               {capped

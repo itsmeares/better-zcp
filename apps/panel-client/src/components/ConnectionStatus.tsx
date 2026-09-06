@@ -19,18 +19,8 @@ export function ConnectionStatus({ className, showLabel = false }: ConnectionSta
   const { connected, reconnecting, reconnectAttempt, error } = useConnectionStatus()
   const socket = useSocket()
 
-  // Only show when not connected — a permanently visible "Connected" badge is noise
   if (connected && !reconnecting) return null
 
-  // Reaching this component's render at all means the page itself loaded
-  // over HTTP successfully -- so a stuck reconnect or a terminal disconnect
-  // is never proof the panel/server is down, only that THIS live-update
-  // connection specifically can't establish. A generic wifi-off icon with
-  // no explanation reads as "the panel is broken" to a non-technical
-  // operator; naming the likely cause (most commonly a reverse proxy not
-  // forwarding WebSocket upgrades) turns this into something they can act
-  // on or hand to whoever runs their proxy, without asserting it as fact --
-  // plenty of other things can cause a socket to fail to connect.
   const getStatusInfo = () => {
     if (connected) {
       return {
@@ -48,8 +38,6 @@ export function ConnectionStatus({ className, showLabel = false }: ConnectionSta
         surface: 'border-warning/24 bg-warning/10',
         label: t('reconnecting.label'),
         description: t('reconnecting.description', { attempt: reconnectAttempt }),
-        // Only after a few attempts -- a single retry is normal network
-        // noise, not evidence of a proxy misconfiguration worth surfacing.
         hint: reconnectAttempt >= 3 ? t('reconnecting.hint') : undefined,
         animate: true,
       }
@@ -62,15 +50,6 @@ export function ConnectionStatus({ className, showLabel = false }: ConnectionSta
       description: t('disconnected.description'),
       hint: t('disconnected.hint'),
       technicalDetail: error ? t('disconnected.technicalDetail', { error }) : undefined,
-      // The automatic reconnect loop has already given up by the time this
-      // renders (App.tsx's reconnect_failed handler). It retries on its own
-      // once the tab becomes visible again or the network comes back, but
-      // an operator staring at a live, visible, network-fine tab the whole
-      // time has neither of those events to rescue them -- this button is
-      // their only path back short of a full page refresh. Calls the exact
-      // same socket.connect(), which re-checks/refreshes the access token
-      // first via the socket's auth function -- not a second, separate
-      // reconnect implementation.
       showRetry: true,
     }
   }
@@ -81,7 +60,7 @@ export function ConnectionStatus({ className, showLabel = false }: ConnectionSta
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div 
+        <div
           className={cn(
             'flex items-center gap-2 rounded-md border px-2.5 py-1.5 transition-colors',
             status.surface,
@@ -89,7 +68,7 @@ export function ConnectionStatus({ className, showLabel = false }: ConnectionSta
             className
           )}
         >
-          <Icon 
+          <Icon
             className={cn(
               'h-4 w-4',
               status.color,

@@ -56,21 +56,14 @@ describe('FileDiffViewer', () => {
     const row = screen.getByRole('button', { name: /Recipes.lua/ })
     fireEvent.click(row)
     await screen.findByText('+1')
-    fireEvent.click(row) // collapse
-    fireEvent.click(row) // re-expand
+    fireEvent.click(row)
+    fireEvent.click(row)
 
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(screen.getByText('+1')).toBeInTheDocument()
   })
 
   it('surfaces a real fetch error, not a silently empty panel', async () => {
-    // 2026-08-26: this fetch bypasses lib/api.ts's handleResponse(), so the
-    // component constructs an ApiError itself (status + code preserved) and
-    // routes it through getUserErrorMessage() -- a 500 with no code now gets
-    // wrapUncodedServerError()'s generic wrapper around the preserved raw
-    // detail, so the displayed text CONTAINS the server's message rather
-    // than being byte-identical to it. Regex match, not exact, so this
-    // doesn't need updating every time that wrapper's copy changes.
     vi.mocked(fetch).mockResolvedValue({ ok: false, status: 500, json: async () => ({ error: 'diff service unavailable' }) } as any)
     render(<FileDiffViewer {...baseProps} />)
 
@@ -94,12 +87,6 @@ describe('FileDiffViewer', () => {
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 
-  // 2026-08-26: before this fix, the fetch here threw a plain Error built
-  // from res.status/body.code discarded -- so a registered, already-
-  // translated code (mods.js emits MODS_CONFLICTS_DIFF_FILES_NOT_FOUND)
-  // never reached getUserErrorMessage() at all and every locale saw the
-  // same raw English text. Proves the fix actually unlocks that dormant
-  // translation, not just that it doesn't crash.
   describe('translates a registered error code once status/code survive the fetch', () => {
     afterEach(() => {
       void i18n.changeLanguage('en')
@@ -173,15 +160,11 @@ describe('FileDiffViewer', () => {
     vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => textDiff() } as any)
     render(<FileDiffViewer {...baseProps} overlap={{ kind: 'lua-shadow', items: [], total: 0 }} />)
 
-    // Sighted on a mouse, the explanation is already reachable via the
-    // compact badge's hover title -- confirm that's still there too.
     expect(screen.getByTitle(/no symbol names overlap/)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Recipes.lua/ }))
     await screen.findByText('+1')
 
-    // A touch user who taps the row open (no hover available) must be able
-    // to read the same explanation as real, visible content.
     expect(screen.getByText(/no symbol names overlap/)).toBeInTheDocument()
   })
 })

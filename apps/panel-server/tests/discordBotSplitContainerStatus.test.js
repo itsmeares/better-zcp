@@ -1,18 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// 2026-09-01 Discord report (user Deide): panel and PZ in SEPARATE
-// containers -> every Discord command that answers "is the server up" said
-// no, even with RCON connected. handleStatus/handlePlayers/handleStart/
-// handleStop/handleRestart/updatePlayerPresence all used to read
-// serverManager.getServerProcessDetails().running ALONE. Now they all go
-// through resolveObservedServerRunning(), the same OR-of-every-signal
-// verdict the dashboard badge and status watchdog use.
-//
-// THE TEST THAT MATTERS: the local scan succeeds and finds nothing
-// (scanFailed: false, running: false) -- what a split-container scan looks
-// like, not an error -- while RCON is connected. Each command must say the
-// server IS up, not the old code's confident "Offline"/"not running". The
-// scanFailed variant must say "unknown", never a confident offline either.
 
 const getActiveServer = vi.fn(async () => ({ id: "s1", isRemote: true }));
 vi.mock("../database/init.js", () => ({ getActiveServer: (...args) => getActiveServer(...args) }));

@@ -3,25 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit lens (c)#2, batch 1 -- god's own words: "healPlayer's
-// failure branch is NEVER TAKEN -- unconditional `return true` with failures
-// buried in a nested errors array. Zero parts healed reads as clean success."
-//
-// This is a DIFFERENT case from the one panelBridgeHealPlayerNilBodyDamage.test.js
-// already covers (player:getBodyDamage() returning nil entirely, gated by an
-// early `if not bodyDamage then return false, nil, "..." end` guard that
-// already existed). This file covers the deeper case: bodyDamage EXISTS, but
-// the healing loop inside its own pcall either finds zero body parts to heal
-// or throws partway through -- neither of which the existing nil-bodyDamage
-// guard could catch, because both happen INSIDE the pcall the guard sits
-// before.
-//
-// Per the earlier transport finding this same audit surfaced (the JS side's
-// processResult() drops the data table on every failure -- only the third
-// return slot survives), the fix puts the real reason in the error STRING,
-// not just in the pre-existing nested healed.errors array that already lived
-// in the data table and was already invisible to a caller checking `ok`
-// alone.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

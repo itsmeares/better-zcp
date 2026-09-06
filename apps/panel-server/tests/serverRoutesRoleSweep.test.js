@@ -1,19 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// server.js now gates with requirePermission (DB-backed) instead of
-// requireRole -- these are gate-only tests, so a minimal mock is enough.
 vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-// server.js is the headline gap: 44 routes, only 2 had a requireRole call.
-// /start, /stop, /restart, /install, /configure-rcon etc. were reachable by
-// any logged-in account, including moderator -- worse than debug.js, because
-// this can stop the server everybody is playing on or reconfigure RCON.
-// Same standard as the rest of the sweep: every group asserts BOTH
-// directions, so a test file that only proves "moderator refused" would
-// pass just as well if the whole file had been locked to admin.
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -31,7 +22,6 @@ function getGate(router, routePath, method) {
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
   if (!layer) throw new Error(`No ${method.toUpperCase()} ${routePath} route registered`);
-  // requireRole is always the first handler on the routes that have one.
   return layer.route.stack[0].handle;
 }
 
@@ -176,20 +166,6 @@ describe("server.js: server.world_events (folded in from previously-ungated GM/w
     ["/removezombies", "post"],
     ["/releasesafehouse", "post"],
   ];
-  // /steamcmd/detect and the console-log/update-check reads are ALSO
-  // server.world_events, not server.install/server.configure like their
-  // write siblings (/steamcmd/check, /console-log/clear,
-  // /update-check/interval) -- those two are admin+technician only, and
-  // joining a previously-open read to an admin+technician-only capability
-  // would have narrowed moderator's access, not preserved it. Caught by
-  // this exact test failing on first write: moderator refused where the
-  // ruling required "not refused."
-  //
-  // /events/lightning, /events/thunder and /events/horde used to be in this
-  // list -- moved out 2026-08-27 (operator ruling on ranked-bug #5) to
-  // players.endanger_or_impersonate, see the describe block below. They
-  // take an optional username and can strike/spawn a horde AT a named
-  // player, unlike every route still in this array.
 
   it.each(WORLD_EVENTS_ROUTES)("does not refuse a moderator on %s %s", async (routePath, method) => {
     const { default: router } = await import("../routes/server.js");

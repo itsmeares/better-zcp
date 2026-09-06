@@ -3,15 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression suite for the 2026-08-23 validateInt-coerces audit: server.js's
-// validateInt() silently substituted a default for an out-of-range value
-// instead of refusing it, so a human-typed port (Install/Quick Setup) could
-// be swapped for a different one with nothing telling the operator. These
-// four routes are the human-typed-field call sites that now use
-// requireIntInRange() and must return a 400 + named ErrorCode instead of a
-// 200 carrying a substituted value. The horde-count and stats-period call
-// sites deliberately keep coercing (machine/optional inputs) -- not covered
-// here, no behaviour change to regress.
 
 vi.mock("../database/init.js", () => ({
   logServerEvent: vi.fn(),
@@ -188,8 +179,6 @@ describe("POST /api/server/quick-setup refuses an out-of-range numeric field", (
   }
 
   beforeEach(() => {
-    // Quick Setup requires PZ server marker files to already exist at
-    // installPath before it will even look at the numeric fields.
     fs.mkdirSync(path.join(installPath, "jre64"), { recursive: true });
   });
 
@@ -248,8 +237,6 @@ describe("POST /api/server/configure-rcon refuses an out-of-range RCON port", ()
     await handler(fakeReq({ rconPort: 27015, rconPassword: "secret" }), response);
 
     expect(response.status).toHaveBeenCalledWith(400);
-    // No server configured in this test's mocked settings -- proof it moved
-    // past the numeric gate rather than being rejected as a numeric error.
     expect(response.json.mock.calls[0][0].code).toBe("SERVER_CONFIG_PATH_NOT_SET");
   });
 });

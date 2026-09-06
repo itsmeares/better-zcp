@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// In-memory stand-ins so the real service logic (including bcrypt) runs without
-// touching the panel database.
 const settings = new Map();
 const db = { data: { users: [] } };
 

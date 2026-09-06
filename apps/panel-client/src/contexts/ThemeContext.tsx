@@ -18,7 +18,6 @@ function applyThemeClass(theme: ThemeName) {
   for (const cls of THEME_CLASSES) root.classList.remove(`theme-${cls}`)
   root.classList.remove('dark')
   root.classList.add(`theme-${theme}`)
-  // Dark attribute for components that check it (Radix, shadcn)
   if (theme === 'light') {
     root.style.colorScheme = 'light'
   } else {

@@ -3,8 +3,6 @@ import { normalizeRconHost } from "../services/rcon.js";
 
 describe("normalizeRconHost", () => {
   it("strips whitespace pasted around a host", () => {
-    // A leading space made DNS fail with ENOTFOUND, which looked identical to
-    // an offline server: no players, Discord reported offline, RCON silent.
     expect(normalizeRconHost(" 66.51.96.52")).toBe("66.51.96.52");
     expect(normalizeRconHost("66.51.96.52 ")).toBe("66.51.96.52");
     expect(normalizeRconHost("  pz.example.com\t")).toBe("pz.example.com");

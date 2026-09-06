@@ -2,10 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { backupApi } from '../api'
 import { clearAccessToken, setAccessToken } from '../authToken'
 
-// uploadBackup uses a raw XMLHttpRequest (needs upload progress events,
-// which fetch cannot report), so it does NOT get fetchWithRetry's automatic
-// "refresh once on TOKEN_EXPIRED, then replay" behaviour for free. This
-// tests the hand-rolled equivalent added 2026-08-31.
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -69,14 +65,12 @@ describe('uploadBackup: TOKEN_EXPIRED triggers exactly one refresh-and-replay', 
     const file = new File(['zip-bytes'], 'save.zip')
     const uploadPromise = backupApi.uploadBackup(file)
 
-    // Let the XHR get constructed and sent before responding to it.
     await Promise.resolve()
     await Promise.resolve()
     expect(FakeXhr.instances).toHaveLength(1)
     expect(FakeXhr.instances[0].headers.Authorization).toBe('Bearer expired-token')
     FakeXhr.instances[0].respond(401, { code: 'TOKEN_EXPIRED', error: 'expired' })
 
-    // Wait for the refresh fetch + second XHR to be issued.
     await vi.waitFor(() => expect(FakeXhr.instances).toHaveLength(2))
     expect(FakeXhr.instances[1].headers.Authorization).toBe('Bearer fresh-token')
     FakeXhr.instances[1].respond(200, {

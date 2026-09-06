@@ -4,22 +4,6 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// Angela's trace (bug-hunt-2026-08-27, priority insert): PUT /server-files/ini
-// submits the WHOLE iniSettings object every save, never a diff. toIni()
-// re-walks the original file and, for any key present in the submitted
-// object (which is every key, always), rewrites EVERY line matching that
-// key name to the one submitted value. parseIni() is last-occurrence-wins,
-// so the form always shows (and would resave) the LAST copy of a
-// duplicated key -- permanently overwriting the FIRST copy's distinct
-// value, on every save, including one where the operator never opened
-// that tab or touched that key. The value was never even visible to them:
-// parseIni() hid the first copy at load time too.
-//
-// Fix: refuse the structured save outright while a duplicate key exists on
-// disk, pointing at the raw tab (which round-trips the file byte-for-byte
-// and is a genuine escape hatch -- confirmed same serverfiles.manage gate,
-// no extra restriction, works identically for a remote/SFTP-mirrored
-// server). The raw tab itself is untouched by this guard.
 
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", () => ({
@@ -108,11 +92,10 @@ describe("PUT /server-files/ini -- refuses a structured save while a duplicate k
     expect(res.getStatusCode()).toBe(409);
     expect(res.getBody().code).toBe("INI_DUPLICATE_KEY_BLOCKS_STRUCTURED_SAVE");
     expect(res.getBody().duplicateKeys).toEqual([{ key: "PublicName", count: 2 }]);
-    // The file must be completely untouched -- both copies still present.
     const onDisk = fs.readFileSync(iniPath, "utf-8");
     expect(onDisk).toContain("PublicName=First");
     expect(onDisk).toContain("PublicName=Second");
-    expect(onDisk).toContain("PVP=true"); // unchanged, not "false"
+    expect(onDisk).toContain("PVP=true");
   });
 
   it("succeeds once the duplicate is gone", async () => {

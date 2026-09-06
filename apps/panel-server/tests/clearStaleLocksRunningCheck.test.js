@@ -1,16 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// POST /debug/clear-stale-locks deletes *.lock files from the active save
-// folder. Its own comment: "Refuses to run while the server is still alive
-// so we don't yank a lock the JVM still holds open." It gated on
-// serverManager.checkServerRunning() (and, if that itself threw, on an
-// unrelated serverManager.isRunning flag) -- both discard the scan's own
-// scanFailed distinction, so a scan that completed but couldn't determine
-// the server's state came back indistinguishable from "confirmed stopped"
-// and the delete proceeded. Same fail-open class already fixed at /wipe,
-// /delete-files, chunks.js's delete-chunks/delete-region, backup.js's
-// restore, and templates.js's apply.
 
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", async () => {
@@ -73,8 +63,6 @@ beforeEach(() => {
 describe("debug.js POST /clear-stale-locks: an undetermined server state must refuse, not be read as 'stopped'", () => {
   it("refuses (503) and never reaches the active-server lookup when the running-scan itself failed (scanFailed:true)", async () => {
     const res = await postClearStaleLocks({
-      // Old method the route used to call directly -- collapses the failed
-      // scan into a plain `false`, which is exactly the bug.
       checkServerRunning: async () => false,
       getServerProcessDetails: async () => ({ running: false, scanFailed: true }),
     });
@@ -114,9 +102,6 @@ describe("debug.js POST /clear-stale-locks: an undetermined server state must re
       getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
     });
 
-    // getActiveServer resolves null (default), so the route stops one step
-    // later with its own "no active server" 400 -- proving it got PAST the
-    // running-check without needing a full save-folder fixture.
     expect(getActiveServer).toHaveBeenCalled();
     expect(res.getStatusCode()).toBe(400);
   });

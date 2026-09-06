@@ -31,11 +31,6 @@ interface DiscoverySetupProps {
   onCreated?: (server: ServerInstance) => void
 }
 
-// Dialog opened from "Connect" on the mount-discovery banner. Re-probes the
-// discovered mount for per-server RCON settings (the discover-mounts scan
-// itself only reports paths + server names), lets the user pick which
-// server config to use when several exist, and turns it into a full
-// profile via create-from-discovery.
 export function DiscoverySetup({ open, onOpenChange, mount, onCreated }: DiscoverySetupProps) {
   const { t } = useTranslation('discoverySetup')
   const [selectedName, setSelectedName] = useState('')

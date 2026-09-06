@@ -5,23 +5,7 @@ import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 import { maskSecretValue } from "../utils/sanitize.js";
 
-// bug-hunt-2026-08-27 (finding #2, GET /ini half): GET /server-files/ini
-// used to return the live RCONPassword/Password in plaintext to any role
-// gated onto serverfiles.manage -- opening the structured Server Config
-// editor put the live RCON password on screen in a normal text field.
-// PUT /server-files/ini round-trips this SAME settings object back on
-// every save (the client always resubmits the full map, not just the
-// field the operator touched), so masking the GET response only becomes
-// safe once PUT also learns to recognise and drop an unmodified masked
-// value instead of writing the placeholder string into the live file --
-// same skip-write-if-masked-echoed-back idiom already used by
-// config.js/oidc.js/servers.js, applied here for the first time.
 
-// fileWriteQueue.js is deliberately left unmocked here: PUT /ini re-reads
-// the file it just wrote for its own write-verification step, so a mock
-// that doesn't actually touch disk would make that verification compare
-// against stale content. templateSaveOmitsSecrets.test.js could mock it
-// because POST /templates never reads its own write back; this route does.
 
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", () => ({
@@ -137,7 +121,6 @@ describe("serverFiles.js PUT /ini: an unmodified masked value never overwrites t
     expect(onDisk).toContain(`Password=${JOIN_PASSWORD}`);
     expect(onDisk).toContain("PVP=false");
 
-    // The response itself must also mask, not just the disk write.
     const { settings: returned } = res.getBody();
     expect(returned.RCONPassword).toBe(MASKED_RCON);
     expect(returned.Password).toBe(MASKED_JOIN);

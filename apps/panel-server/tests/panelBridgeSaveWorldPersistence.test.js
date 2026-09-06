@@ -3,22 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// Regression coverage for b376b2c: handlers.setSandboxOption used to wrap
-// world:saveWorld() in a bare pcall, discard the result, and unconditionally
-// report success -- so a failed disk write was indistinguishable from a
-// successful one to anything reading the handler's response. See this
-// harness's HONEST LIMIT note in helpers/panelBridgeLua.js: these fakes
-// encode our belief about getSandboxOptions/getWorld's shape, not a verified
-// PZ truth.
-//
-// UPDATED 2026-08-30 (total-audit batch 1, item 2, Kevin's jar-verified
-// spec): world:saveWorld() does not exist anywhere in the jar -- the real
-// save call is saveGame(), a bare global (same LuaManager$GlobalObject
-// binding tier as getWorld()/getCell()), zero args, void return. The old
-// `world.saveWorld` field-existence guard this handler used was always
-// false regardless of world's real state, so this whole persistence path
-// could never actually run before -- these stubs now model the REAL API
-// (a bare saveGame() global) instead of the belief that broke it.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -75,9 +59,6 @@ describe('PanelBridge.lua handlers.setSandboxOption -- world save persistence (b
 
     const result = bridge.callHandler('setSandboxOption', { name: 'ZombieCount', value: '9' });
 
-    // The in-memory option write itself genuinely succeeded (setValue ran
-    // before the save was attempted), so ok stays true -- what must not
-    // happen is claiming the change is durable when the disk write failed.
     expect(result.ok).toBe(true);
     expect(result.data.persisted).toBe(false);
     expect(typeof result.data.saveError).toBe('string');

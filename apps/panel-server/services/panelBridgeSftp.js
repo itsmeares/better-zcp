@@ -8,8 +8,6 @@ import { ErrorCode } from '../utils/errorCodes.js';
 
 const log = createLogger('Bridge:SFTP');
 
-// A trailing-slash-trim regex on an unbounded string is quadratic (CodeQL
-// js/polynomial-redos #1) -- cap the length before it ever reaches the regex.
 const MAX_REMOTE_PATH_LENGTH = 500;
 
 function safeRemotePath(value) {
@@ -30,14 +28,6 @@ function isRemoteFile(entryType) {
   return entryType === true || entryType === '-';
 }
 
-// Single source of truth for classifying an SFTP failure: which ErrorCode it
-// is, AND the English guidance sentence that code's errors.json translation
-// mirrors exactly (see that file for the {{detail}}-carrying versions of
-// these same seven sentences). Kept as one ordered list -- not two functions
-// that could drift from each other -- so a code and its English text can
-// never disagree about which failure they describe. Order matters: earlier
-// patterns are more specific and must be checked first (e.g. a chrooted
-// account's mkdir failure also contains "permission denied").
 const SFTP_ERROR_CLASSIFIERS = [
   {
     code: ErrorCode.SFTP_CHROOTED_ACCOUNT,
@@ -86,10 +76,6 @@ function classifySftpError(error) {
   return SFTP_ERROR_CLASSIFIERS.find((entry) => entry.test(message, error));
 }
 
-// Stable wire code for this failure (SFTP_CHROOTED_ACCOUNT, SFTP_AUTH_FAILED,
-// ...) -- lets a route response carry `code` + `params: {detail: message}`
-// so the client can show a translated version of the exact sentence
-// formatSftpError() below builds in English, instead of the raw string.
 export function classifySftpErrorCode(error) {
   return classifySftpError(error).code;
 }
@@ -134,18 +120,9 @@ export function validateSftpBridgeConfig(config) {
 
 export function getSftpCachePath(config) {
   const key = crypto.createHash('sha256').update(`${config.host}:${config.port}:${config.username}:${config.bridgePath}`).digest('hex').slice(0, 24);
-  // process.cwd() ignores the panel's "move data directory" setting --
-  // same defect as debug.js's crash-log scan, different file. An operator
-  // who relocates their data dir would find this cache silently pinned to
-  // wherever the process happened to be launched from instead.
   return path.join(getDataPaths().dataDir, 'panelbridge-sftp-cache', key);
 }
 
-// ─── Read-only remote log access ────────────────────────────────────────────
-// Separate from the bridge sync loop on purpose: this never writes to the
-// remote host and never mirrors whole files to disk. Callers get a directory
-// listing or a size-capped tail, fetched on demand, so a multi-GB console log
-// on a remote host can be inspected without downloading it.
 const LOG_TAIL_MAX_BYTES = 1024 * 1024;
 const LOG_TAIL_DEFAULT_BYTES = 256 * 1024;
 const LOG_LIST_MAX = 200;
@@ -328,11 +305,6 @@ export class PanelBridgeSftpTransport {
     return `${this.config.bridgePath}/${relativeName}`;
   }
 
-  // Mirrors remote()'s validation rather than relying on copyRemote() having
-  // already called remote() earlier in the same function -- that ordering
-  // was the only thing keeping relativeName out of this join, and nothing
-  // enforced it (2026-08-26 injection-sink sweep). Re-validating here means
-  // a future reorder can't silently drop the guard.
   local(relativeName) {
     if (!relativeName || relativeName.includes('..') || relativeName.includes('\\')) throw new Error('Invalid remote bridge file path');
     return path.join(this.cachePath, relativeName);
@@ -415,19 +387,6 @@ export class PanelBridgeSftpTransport {
     }
   }
 
-  // Reads the panel's own persisted queue position exactly ONCE, before
-  // uploadInbox() runs, and returns the parsed value for uploadQueueStateNode()
-  // to upload later in the same pass. Capturing it now (rather than
-  // re-reading the file fresh right before upload) is what keeps the
-  // eventually-uploaded claim honest: uploadInbox() is guaranteed to put
-  // every cmd file this snapshot implies onto the remote host in this same
-  // call (they're all already present locally, so its directory scan finds
-  // them), so by the time the snapshot itself is uploaded, nothing it
-  // describes is still missing remotely. A command written LATER in this
-  // same sync tick (after this snapshot but before uploadInbox()'s scan)
-  // just isn't claimed yet -- safe surplus, picked up next pass -- rather
-  // than a false claim the mod could act on. See uploadQueueStateNode()'s
-  // header comment for why a false claim (the OTHER direction) matters.
   readLocalQueueStateNodeSnapshot() {
     if (!this.cachePath) return null;
     const statePath = path.join(this.cachePath, '.queue-state-node.json');
@@ -438,26 +397,6 @@ export class PanelBridgeSftpTransport {
     }
   }
 
-  // Uploads the panel's declared queue position to the remote host so
-  // PanelBridge.lua's inbox self-heal (tryResyncInboxCursor, which reads
-  // exactly this file) has something real to read over SFTP -- until now
-  // this file was never uploaded at all, so that read always returned nil
-  // and the whole desync-recovery path was silently inert for every
-  // SFTP-connected bridge (2026-08-30 sftp-bridge-inbox-selfheal-is-nonfunctional).
-  //
-  // Takes the already-parsed snapshot (see readLocalQueueStateNodeSnapshot)
-  // rather than reading the live file itself -- the live file can advance
-  // again while uploadInbox() is still working through its (network-bound,
-  // potentially slow) per-file uploads, and uploading THAT newer value would
-  // let the remote-visible nextCommandSeq claim a command whose file never
-  // actually made it into this same pass's upload loop. Lua's forward-only
-  // guard (2026-08-30) cannot catch that: it protects the cursor from ever
-  // moving BACKWARD, but a premature forward claim is a forward move to a
-  // real, legitimate-looking number that just isn't back by an uploaded file
-  // yet -- and once accepted, the guard makes it PERMANENT, since Lua can
-  // never legitimately rewind to reprocess the skipped command. Uploading the
-  // pre-uploadInbox() snapshot instead of a live re-read is what rules this
-  // out structurally rather than relying on timing.
   async uploadQueueStateNode(stateSnapshot) {
     const remotePath = this.remote('.queue-state-node.json');
     const client = await this.connect();
@@ -494,12 +433,6 @@ export class PanelBridgeSftpTransport {
       if (Date.now() >= this.nextRemoteDirectoryCheckAt) {
         await this.ensureRemoteDirectories();
       }
-      // Upload first so a newly queued command never waits behind remote
-      // reads. Results are collected in the same pass after the Lua mod ticks.
-      // The queue-state snapshot is captured BEFORE uploadInbox() runs and
-      // uploaded AFTER -- see readLocalQueueStateNodeSnapshot()'s and
-      // uploadQueueStateNode()'s header comments for why that order (not
-      // just their presence) is what keeps the claim honest.
       const queueStateSnapshot = this.readLocalQueueStateNodeSnapshot();
       await this.uploadInbox();
       if (queueStateSnapshot) {

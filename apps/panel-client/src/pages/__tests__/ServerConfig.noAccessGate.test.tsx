@@ -4,16 +4,6 @@ import { MemoryRouter } from 'react-router-dom'
 import ServerConfig from '../ServerConfig'
 import { serverFilesApi, serversApi } from '@/lib/api'
 
-// bug-hunt-2026-08-27: proving the client-capability-gating pattern (the
-// same can() idiom Settings.tsx already uses to hide whole tabs) on a
-// ROUTINE, non-destructive capability -- serverfiles.manage -- rather than
-// a rare/destructive one, per the severity judgement from the sweep: a
-// narrowly-scoped custom role ("config editor") would hit this page daily,
-// and today it shows full, unrestricted editing UI regardless of whether
-// the server will actually honor a save. apps/panel-server/routes/serverFiles.js
-// gates its ENTIRE router (reads included, router.use(requirePermission(
-// "serverfiles.manage"))) on this one capability, so a page-level gate is
-// the correct grain -- there is no partial-access tier to preserve.
 
 let mockCan = (_capability: string) => false
 
@@ -31,10 +21,6 @@ vi.mock('@/contexts/AuthContext', () => ({
 }))
 
 const getPaths = vi.spyOn(serverFilesApi, 'getPaths')
-// ServerConfig.tsx's loadData() also resolves the active server independently
-// (2026-08-31 remote-server-messaging fix) -- stub it so this test's real
-// point (the capability gate) doesn't pay for three real, unmocked
-// fetchWithRetry attempts against a server that isn't running.
 vi.spyOn(serversApi, 'getResolvedActive').mockResolvedValue({ server: null })
 
 afterEach(() => {

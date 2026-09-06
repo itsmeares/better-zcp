@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.js";
 
-// bug-hunt-2026-08-27: command_history persisted `adduser "user" "pass"`
-// verbatim -- a real player whitelist password, readable by anyone holding
-// rcon.execute via GET /history, and sitting in cleartext on disk. Fixed at
-// write time (database/init.js's logCommand), not read time. See
-// rconCommandRedaction.js's own header for the full command-catalog
-// enumeration this redactor is scoped to.
 
 describe("redactRconCommandSecrets", () => {
   it("redacts the password argument from a two-arg adduser command", () => {

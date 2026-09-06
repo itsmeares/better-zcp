@@ -4,31 +4,6 @@ import { fileURLToPath } from 'url';
 import { lua, to_luastring } from 'fengari';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, wave123 (queued behind the total-audit failure-honesty lens):
-// capabilityKey()'s fallback branch (used whenever obj:getClass() fails or
-// is unavailable) strips an "@identityhash" suffix so the cache key names
-// the CLASS, not the individual instance -- correct for Java's DEFAULT
-// toString ("ClassName@hex"). It does NOT work for an OVERRIDDEN toString:
-// there is no @hex to strip, so the "class" key silently becomes
-// VALUE-derived instead (a username, an item name, whatever the override
-// returns). Kevin's jar audit confirmed real toString overrides on Stats,
-// InventoryItem, ItemContainer, and the IsoMovingObject family (IsoPlayer
-// AND BaseVehicle both inherit it) -- all high-volume receivers.
-//
-// TWO real consequences, demonstrated below: (1) two DIFFERENT objects that
-// happen to share a toString share a cache key -- if the first fails
-// MAX_METHOD_FAILURES times, the key is marked unavailable, and the SECOND
-// object (whose method genuinely works) is refused too, a false negative
-// that disables a working accessor. (2) per-instance keys (when toStrings
-// differ) mean the "stop retrying a method that's never worked" failure
-// counter never accumulates for the class at all -- not tested directly
-// here since it's the inverse of (1) and follows from the same root cause.
-//
-// The fix: gsub already returns a second value, the substitution count.
-// Only build a key when there was a REAL @hex to strip; otherwise return
-// nil, which PanelBridge.invoke already treats as "do not cache" (every
-// cache read/write there is guarded with `if key`) -- an existing,
-// exercised path, not a new one.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -112,17 +87,12 @@ describe('PanelBridge.lua capabilityKey -- does not build a value-derived key fr
       function FakeWorking:getHunger() return self.hunger end
     `);
 
-    // Fail past MAX_METHOD_FAILURES (3) on the broken object -- this is the
-    // exact sequence that would mark a shared "Alice#getHunger" key
-    // unavailable under the old bug.
     for (let i = 0; i < 4; i++) {
       bridge.run(`__ok, __result = PanelBridgeModule.invoke(FakeBroken, "getHunger")`);
     }
     const brokenResult = bridge.getGlobal('__ok');
     expect(brokenResult).toBe(false);
 
-    // The genuinely-working object must NOT be refused just because it
-    // shares FakeBroken's toString text.
     bridge.run(`__ok2, __result2 = PanelBridgeModule.invoke(FakeWorking, "getHunger")`);
     const workingOk = bridge.getGlobal('__ok2');
     const workingResult = bridge.getGlobal('__result2');

@@ -6,17 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// hunt-wave12-2026-08-30: the five visual controls (view distance, daylight
-// strength, night strength, desaturation, ambient) all apply through the
-// generic setClimateFloat(floatId, value) action, keyed by a hardcoded
-// ClimateFloat id (desaturation=0, nightStrength=2, ambient=9,
-// viewDistance=10, dayLightStrength=11 -- see PanelBridge.lua's
-// handlers.getClimateFloats). tsc and eslint cannot catch a wrong id here:
-// they're all plain numbers, the call still type-checks and still
-// "succeeds" -- it would just silently drive the wrong effect (e.g. a
-// desaturation slider that actually changes night strength). This pins the
-// mapping so a future edit that transposes two ids fails loudly instead of
-// shipping a control that lies about what it does.
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
@@ -37,8 +26,6 @@ vi.mock('@/lib/api', async () => {
   }
 })
 
-// Same stub as Events.climateFloatRanges.test.tsx -- Radix's Slider measures
-// its own DOM node via ResizeObserver, which jsdom does not implement.
 class StubResizeObserver {
   observe() {}
   unobserve() {}
@@ -65,9 +52,6 @@ function renderEvents() {
   )
 }
 
-// Distinct, easy-to-tell-apart values per id -- if two ids were ever
-// transposed, the wrong value would land on the wrong assertion too, not
-// just the wrong id.
 beforeEach(() => {
   getPlayers.mockReset().mockResolvedValue({ players: [] } as never)
   getStatus.mockReset().mockResolvedValue({ modConnected: true } as never)
@@ -95,10 +79,6 @@ describe('Events -- visual controls pin each slider to its real ClimateFloat id'
     const visualNav = await screen.findByText('Visual rendering')
     visualNav.click()
 
-    // Sliders mount with the values getClimateFloats reported (the same
-    // poll the climate section already relies on) -- wait for them before
-    // applying, so the assertions below are against real fetched state,
-    // not the useState(0) seed.
     await waitFor(() => expect(screen.getAllByRole('slider')).toHaveLength(5))
 
     const applyButton = await screen.findByRole('button', { name: 'apply all' })
@@ -106,10 +86,10 @@ describe('Events -- visual controls pin each slider to its real ClimateFloat id'
 
     await waitFor(() => expect(setClimateFloat).toHaveBeenCalledTimes(5))
 
-    expect(setClimateFloat).toHaveBeenCalledWith(10, 0.44) // viewDistance
-    expect(setClimateFloat).toHaveBeenCalledWith(11, 0.55) // dayLight
-    expect(setClimateFloat).toHaveBeenCalledWith(2, 0.22) // nightStrength
-    expect(setClimateFloat).toHaveBeenCalledWith(0, 0.11) // desaturation
-    expect(setClimateFloat).toHaveBeenCalledWith(9, 0.33) // ambient
+    expect(setClimateFloat).toHaveBeenCalledWith(10, 0.44)
+    expect(setClimateFloat).toHaveBeenCalledWith(11, 0.55)
+    expect(setClimateFloat).toHaveBeenCalledWith(2, 0.22)
+    expect(setClimateFloat).toHaveBeenCalledWith(0, 0.11)
+    expect(setClimateFloat).toHaveBeenCalledWith(9, 0.33)
   })
 })

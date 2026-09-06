@@ -42,23 +42,8 @@ import { ErrorCode } from "../utils/errorCodes.js";
 
 const router = express.Router();
 
-// INI/sandbox/spawn config editing, file backups/restore, and templates —
-// "config" and "backups" are explicitly technician's job per the role
-// brief; moderator has no server-config editing role. Applied once at the
-// router level rather than per-route (25 endpoints). Previously any
-// logged-in role, including moderator, could edit sandbox vars or restore
-// a server file backup.
 router.use(requirePermission("serverfiles.manage"));
 
-// PUT /ini writes any key in the submitted settings object to the same
-// Server/<name>.ini file server.js's own /configure-rcon and
-// /configure-network routes edit under server.configure -- RCONPassword,
-// RCONPort, DefaultPort, UDPPort and UPnP. serverfiles.manage's description
-// ("Edit sandbox options, spawn points and other server config files") gives
-// no hint that holding it also lets a caller rewrite the RCON password or
-// the game's listen port through this generic editor, bypassing
-// server.configure's own dedicated gate on those exact fields. Found in the
-// 2026-08-26 capability-description sweep, finding 4.
 const INI_KEY_CAPABILITY = {
   RCONPassword: "server.configure",
   RCONPort: "server.configure",
@@ -67,12 +52,6 @@ const INI_KEY_CAPABILITY = {
   UPnP: "server.configure",
 };
 
-// Thrown by getServerConfigPath()/getServerName() when no server is
-// configured at all (no active server row, and no legacy settings fallback
-// either) — every route below operates on a specific server's config
-// directory (even /templates, which lives under it), so there is no
-// meaningful response to give except "nothing is configured", never a
-// fabricated default.
 export class ServerNotConfiguredError extends Error {
   constructor() {
     super("No active server configured");
@@ -80,15 +59,6 @@ export class ServerNotConfiguredError extends Error {
   }
 }
 
-// Thrown by getServerConfigPath() when the active server IS configured but
-// is remote and its SFTP transport isn't — distinct from ServerNotConfiguredError
-// (no server at all). Without this, getServerConfigPath() fell through to the
-// local-path fallbacks below (which don't apply to a remote server) and ended
-// up throwing ServerNotConfiguredError for a server that plainly IS configured,
-// which is what the 404 SERVER_NOT_CONFIGURED response actually said. The
-// second router.use() below already has the correct REMOTE_CONFIG_NOT_CONFIGURED
-// handling for this exact case; it just never ran, because this function's own
-// fallthrough answered first.
 export class RemoteConfigNotConfiguredError extends Error {
   constructor() {
     super(
@@ -98,8 +68,6 @@ export class RemoteConfigNotConfiguredError extends Error {
   }
 }
 
-// These read or write the panel host's own filesystem, so an SFTP mirror of
-// the remote Server/ folder cannot stand in for them.
 const LOCAL_ONLY_PATHS = new Set(["/browse-files", "/image-preview"]);
 
 async function resolveRemoteConfigTransport() {
@@ -114,11 +82,6 @@ async function resolveRemoteConfigTransport() {
   });
 }
 
-// Every route below resolves a specific server's config directory (directly,
-// or via /templates living under it). Gate on that up front so an unconfigured
-// panel says so once, here, instead of each of the 25 handlers below silently
-// falling through to a fabricated default and reporting invented data as real.
-// Matches the sibling GET /api/servers/active's 404 shape/message.
 router.use(async (req, res, next) => {
   try {
     await getServerConfigPath();
@@ -134,10 +97,6 @@ router.use(async (req, res, next) => {
   next();
 });
 
-// A remote server has no local filesystem, but its Server/ folder is reachable
-// over the SFTP credentials PanelBridge already uses. Mirror it in before the
-// handler runs and push back whatever the handler changed, so every existing
-// local-filesystem handler below works unmodified.
 router.use(async (req, res, next) => {
   let activeServer;
   try {
@@ -208,43 +167,6 @@ router.use(async (req, res, next) => {
   next();
 });
 
-// Ordinary edits to one of these files. The original justification for
-// BLOCKING all of these outright while the server ran was the assumption
-// that PZ rewrites its config files on shutdown and would discard a live
-// edit — measured 2026-08-23 against a real B42 dedicated server (clean RCON
-// `quit`, the same path server.js's POST /stop uses): a clean shutdown
-// touches NEITHER SandboxVars.lua NOR the server .ini at all (byte-identical
-// mtime/hash before and after), and the next startup rewrites both but
-// PRESERVES an edit made on disk while the server was running — measured,
-// not assumed. "PUT /sandbox-option" was the first removed on that evidence
-// alone (a stuck-forever refusal was a real, reported bug).
-//
-// For these remaining nine, the operator has since RULED (2026-08-23, his
-// own knowledge of the game, not derived from the measurement above): edits
-// are always allowed while the server runs; a write just does not reach the
-// live game until the next restart. That ruling is what changed the
-// behavior below from "refuse" to "allow and say so" — the measurement only
-// established that a clean shutdown/startup cycle doesn't lose the edit,
-// which is necessary for the ruling to be safe but isn't by itself a claim
-// about every route below applying live or requiring a restart uniformly.
-// See warnRunningForLocalConfigEdit() in configMutationGuard.js for the
-// mechanism, and each handler's own response for where restartRequired is
-// attached.
-//
-// HONEST CAVEAT for whoever reads this next: the measurement covers a B42
-// server only, both a clean RCON `quit` and a hard `taskkill /F` force-stop
-// (dwight, 2026-08-23, replicating serverManager.stopServer(false)'s actual
-// mechanism) — both behave identically for this question: neither rewrites
-// either file, both preserve an edit made on disk while running, and
-// startup afterward rewrites-but-preserves in both cases. Two things remain
-// genuinely untested: a B41 server (no B41 dedicated-server install was
-// available to test against), and whether a kill landing mid-write could
-// corrupt an in-flight write specifically (no write was ever caught in
-// flight in either session, clean or forced). The operator's ruling covers
-// all of this from his own experience running these servers and outranks
-// one narrow experiment — but it IS judgement layered on top of
-// measurement, not measurement alone, and the two should stay
-// distinguishable here.
 const LOCAL_CONFIG_MUTATIONS = new Set([
   "PUT /ini",
   "PUT /sandbox",
@@ -257,17 +179,6 @@ const LOCAL_CONFIG_MUTATIONS = new Set([
   "PUT /raw/spawnregions",
 ]);
 
-// A wholesale file replacement, not an edit: applying a template or
-// restoring a backup overwrites everything in one of these files at once,
-// without the operator reviewing each changed value the way a form save
-// implies. The operator's "edits are fine while running" ruling above was
-// about editing, and the 2026-08-23 measurement says nothing about whether
-// the running game tolerates one of its own open config files being
-// replaced wholesale underneath it — a restore in particular is the one
-// operation where getting that wrong destroys the very thing the operator
-// was trying to protect. Left gated (409 while running) deliberately,
-// pending its own evidence rather than inheriting the edit ruling by
-// assumption.
 function isLocalConfigOverwrite(req) {
   if (req.method === "POST" && /^\/templates\/[^/]+\/apply$/.test(req.path)) {
     return true;
@@ -298,7 +209,6 @@ router.use((req, res, next) => {
   return next();
 });
 
-// Escape strings for safe interpolation into Lua source code
 function escapeLuaString(str) {
   return String(str).replace(/[\\"'\n\r\t\0\[\]]/g, (c) => {
     const escapes = {
@@ -328,9 +238,6 @@ const LUA_UNESCAPES = {
   "]": "]",
 };
 
-// Inverse of escapeLuaString. Parsing must undo what writing escaped, otherwise
-// every save re-escapes the same backslashes and doubles them until the file is
-// corrupt (seen in the wild: StreetlightGen.ExcludeSprites grew to 16k slashes).
 function unescapeLuaString(value) {
   const str = String(value);
   if (!/^"[\s\S]*"$|^'[\s\S]*'$/.test(str)) {
@@ -345,12 +252,9 @@ function unescapeLuaString(value) {
     );
 }
 
-// Get the server config directory path
 export async function getServerConfigPath() {
   const activeServer = await getActiveServer();
 
-  // A remote server's Server/ folder lives on the host; the handlers below
-  // work against its local SFTP mirror instead.
   if (activeServer?.isRemote) {
     const transport = await resolveRemoteConfigTransport();
     if (transport) {
@@ -358,17 +262,14 @@ export async function getServerConfigPath() {
     }
   }
 
-  // First, use explicitly configured serverConfigPath if available
   if (activeServer?.serverConfigPath) {
     return activeServer.serverConfigPath;
   }
 
-  // Fallback to zomboidDataPath + Server
   if (activeServer?.zomboidDataPath) {
     return path.join(activeServer.zomboidDataPath, "Server");
   }
 
-  // Fallback to legacy settings
   const settings = await getAllSettings();
   if (settings.serverConfigPath) {
     return settings.serverConfigPath;
@@ -377,32 +278,13 @@ export async function getServerConfigPath() {
     return path.join(settings.zomboidDataPath, "Server");
   }
 
-  // A remote server with no usable path anywhere (SFTP transport unresolved
-  // above, and no local/legacy path fallback either) is a DIFFERENT
-  // situation from no server at all — it IS configured, just not reachable
-  // yet. Previously this fell all the way through to ServerNotConfiguredError
-  // below, which made the router's dedicated REMOTE_CONFIG_NOT_CONFIGURED
-  // gate further down unreachable for exactly the case it exists to catch.
   if (activeServer?.isRemote) {
     throw new RemoteConfigNotConfiguredError();
   }
 
-  // Nothing configured anywhere — no active server row and no legacy
-  // settings fallback either. Do NOT default to ~/Zomboid/Server: that is
-  // the vanilla path Project Zomboid itself uses, so on a machine that
-  // happens to have a real (unrelated, never-added-to-the-panel) install
-  // there, this would present its real data as the panel's "active server"
-  // — invented, not merely empty.
   throw new ServerNotConfiguredError();
 }
 
-// Get server name from active server. serverName is interpolated directly
-// into filesystem paths all over this file (`${serverName}.ini`, etc.), so a
-// value containing "../" — e.g. written via a PUT /api/servers/:id that
-// skipped validation — would let those paths escape the server config
-// directory. path.basename() strips any directory component; if that
-// changes the value at all, reject it outright rather than silently using
-// a mangled name.
 export async function getServerName() {
   const activeServer = await getActiveServer();
   let raw;
@@ -413,10 +295,6 @@ export async function getServerName() {
     raw = settings.serverName;
   }
   if (!raw) {
-    // No active server and no legacy settings name either — there is no
-    // real server this could refer to. "servertest" used to fill in here,
-    // which is how an empty database ended up presenting a fully-populated,
-    // fully-editable server that was never configured.
     throw new ServerNotConfiguredError();
   }
 
@@ -427,12 +305,7 @@ export async function getServerName() {
   return safe;
 }
 
-// getBackupPath/createBackup/backupWarningFor moved to
-// ../utils/configBackup.js (parameterized on configPath instead of calling
-// getServerConfigPath() internally) so apps/panel-server/routes/mods.js's ini-rewriting
-// routes can reuse the exact same backup logic. Imported below.
 
-// Parse INI file to object
 export function parseIni(content) {
   const result = {};
   const lines = content.split(/\r?\n/);
@@ -454,20 +327,6 @@ export function parseIni(content) {
   return result;
 }
 
-// Drop any `Key=Value` line whose key looks secret-like (SENSITIVE_FIELD_RE
-// -- same regex GET /app-settings already trusts, not a second hand-kept
-// list) from a raw .ini file's text, preserving every other line -- comments,
-// blank lines, formatting -- byte for byte. Used only when SAVING a template
-// snapshot (POST /templates): that snapshot's `iniRaw` is later written
-// VERBATIM into the live .ini on apply (writeFileAtomic(iniPath,
-// template.iniRaw), no merge), so a masked placeholder string here would
-// land in the live RCON/join password field on apply and break RCON --
-// omitting the line entirely just means the applied server has no RCON
-// password configured afterward (a normal, working, fixable state), not a
-// bogus one. Line-level rather than parse-then-reserialize: reusing
-// parseIni()/toIni() here would rewrite every OTHER line too, and toIni()'s
-// own merge semantics keep an omitted key's ORIGINAL line untouched --
-// exactly the opposite of what a strip needs.
 export function stripSensitiveIniLines(content) {
   const lines = content.split(/\r?\n/);
   const kept = lines.filter((line) => {
@@ -483,13 +342,6 @@ export function stripSensitiveIniLines(content) {
   return kept.join("\n");
 }
 
-// GET /raw/:type=ini's read-side counterpart to the structured /ini route's
-// maskSensitiveObject(): mask a secret-shaped `Key=Value` line's VALUE in
-// place, byte-for-byte otherwise (everything up to and including the `=`,
-// comments, blank lines, formatting). Unlike stripSensitiveIniLines() above,
-// this can't drop the line -- the raw editor's PUT round-trips this exact
-// text back, and reconcileMaskedIniLines() below needs the line to still be
-// there (by key) to know what it's reconciling against.
 export function maskSensitiveIniLines(content) {
   const lines = content.split(/\r?\n/);
   const masked = lines.map((line) => {
@@ -507,30 +359,6 @@ export function maskSensitiveIniLines(content) {
   return masked.join("\n");
 }
 
-// PUT /raw/:type=ini's write-side counterpart. Unlike the structured /ini
-// route, the raw editor round-trips ONE FULL TEXT BLOB on every save with no
-// per-line diff against what the operator actually touched -- Save always
-// resubmits the whole thing, regardless of which line changed. So masking
-// the read alone would let ANY raw-mode save (editing an unrelated line)
-// silently overwrite a live secret with the "••••••••xxxx"
-// placeholder text the moment that key's line comes back unchanged.
-//
-// This reconciles by KEY, never by line position -- reordering lines or
-// inserting a new one above a secret must not misalign the match -- and it
-// REFUSES the entire save (returns ok:false, writes nothing) the instant a
-// masked value can't be resolved unambiguously, rather than guessing or
-// best-effort patching part of the file. A rejected save costs the operator
-// one retry; a half-reconciled write costs them their live server config,
-// which is a strictly worse failure than the secret leak this exists to
-// close. Three ways a masked line fails to resolve, all refused the same
-// way: the key doesn't exist in the live file any more; the key exists more
-// than once in either the live file or the incoming submission (which one
-// would even be "the" secret to restore?); or -- the case a naive line-diff
-// would miss entirely -- the key existed live with a real value but is
-// ABSENT from the incoming content altogether, meaning the operator deleted
-// a line that reads as bullets, quite possibly without realizing it was a
-// real credential. All four are treated as "can't safely tell what the
-// operator intended" rather than silently picking a side.
 export function reconcileMaskedIniLines(incomingContent, liveContent) {
   const indexIniLines = (text) => {
     const lines = text.split(/\r?\n/);
@@ -575,23 +403,8 @@ export function reconcileMaskedIniLines(incomingContent, liveContent) {
   return { ok: true, content: outLines.join("\n") };
 }
 
-// Convert object back to INI format
 export function toIni(obj, originalContent = "") {
-  // Preserve comments and order from original
   if (originalContent) {
-    // Unconditionally joining with "\n" below used to silently convert an
-    // entire CRLF-written file to LF on every structured save, even one
-    // that changes a single field -- confirmed empirically (2026-08-29,
-    // config-editing hunt). mods.js's own INI writers never have this
-    // problem: they patch one line in place via regex-replace on the raw
-    // string, so every OTHER line's original terminator survives by
-    // construction. This file's split-then-rejoin approach needs to
-    // preserve that terminator explicitly instead. PZ's own line reader is
-    // very likely tolerant of either style, so this was probably cosmetic
-    // for the engine itself -- but it's still a needless, avoidable
-    // difference from the file's own prior state on every save, and the
-    // asymmetry with mods.js's sibling writer on the SAME file is exactly
-    // the shape worth closing rather than leaving to chance.
     const lineEnding = originalContent.includes("\r\n") ? "\r\n" : "\n";
     const lines = originalContent.split(/\r?\n/);
     const result = [];
@@ -608,17 +421,7 @@ export function toIni(obj, originalContent = "") {
       if (eqIndex > 0) {
         const key = trimmed.substring(0, eqIndex).trim();
         if (key in obj) {
-          // Strip newlines from values to prevent INI injection
           const safeValue = String(obj[key]).replace(/[\r\n]/g, "");
-          // Rewrite only the value token, keeping the line's own leading
-          // indentation, key spelling, and whitespace around "=" exactly as
-          // written -- the submitted settings object always contains every
-          // key GET returned (the client resends the whole thing on every
-          // save), so this branch runs for every unchanged line too. A
-          // hardcoded "key=value" rebuild here silently strips any spacing
-          // an operator's hand-edited file had (e.g. "PVP = true") the first
-          // time ANY field is saved from the structured editor -- same shape
-          // as the CRLF bug (573f63fd), one level down.
           const lineEqIndex = line.indexOf("=");
           const afterEq = line.slice(lineEqIndex + 1);
           const valueMatch = afterEq.match(/^(\s*)([\s\S]*?)(\s*)$/);
@@ -635,12 +438,9 @@ export function toIni(obj, originalContent = "") {
       }
     }
 
-    // Add any new keys (only if they have a non-empty value)
     for (const [key, value] of Object.entries(obj)) {
       if (!written.has(key)) {
-        // Skip empty values for keys that weren't in the original file
         if (value === "" || value === undefined || value === null) continue;
-        // Validate key is a safe INI identifier
         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
           log.warn(`Invalid INI key skipped: ${key}`);
           continue;
@@ -653,7 +453,6 @@ export function toIni(obj, originalContent = "") {
     return result.join(lineEnding);
   }
 
-  // Generate from scratch
   return Object.entries(obj)
     .filter(([key]) => {
       if (obj[key] === "" || obj[key] === undefined || obj[key] === null) {
@@ -672,7 +471,6 @@ export function toIni(obj, originalContent = "") {
     .join("\n");
 }
 
-// Parse SandboxVars.lua
 export function parseSandboxVars(content) {
   const result = {
     VERSION: 4,
@@ -686,7 +484,6 @@ export function parseSandboxVars(content) {
     Debug: {},
   };
 
-  // Known nested blocks to skip when parsing top-level settings
   const nestedBlocks = [
     "ZombieLore",
     "ZombieConfig",
@@ -698,15 +495,11 @@ export function parseSandboxVars(content) {
   ];
 
   try {
-    // Extract VERSION
     const versionMatch = content.match(/VERSION\s*=\s*(\d+)/);
     if (versionMatch) {
       result.VERSION = parseInt(versionMatch[1], 10);
     }
 
-    // Strip nested block regions from content so the top-level regex
-    // doesn't accidentally capture keys that belong inside ZombieLore,
-    // ZombieConfig, MultiplierConfig, Map, or Basement.
     let topLevelContent = content;
     for (const blockName of nestedBlocks) {
       const blockPattern = new RegExp(
@@ -716,10 +509,6 @@ export function parseSandboxVars(content) {
       topLevelContent = topLevelContent.replace(blockPattern, "");
     }
 
-    // Parse simple key=value pairs (top-level settings only).
-    // The value alternation tries a quoted string first so values like
-    // WorldItemRemovalList = "Base.Hat,Base.Glasses,..." aren't truncated
-    // at the first comma *inside* the quotes.
     const simplePattern =
       /^\s*(\w+)\s*=\s*("(?:[^"\\]|\\.)*"|[^,{}\n]+),?\s*(?:--.*)?$/gm;
     let match;
@@ -727,10 +516,8 @@ export function parseSandboxVars(content) {
       const key = match[1];
       let value = match[2].trim();
 
-      // Skip nested objects and VERSION
       if (nestedBlocks.includes(key) || key === "VERSION") continue;
 
-      // Parse value type
       if (value === "true") value = true;
       else if (value === "false") value = false;
       else if (!isNaN(parseFloat(value))) value = parseFloat(value);
@@ -739,9 +526,7 @@ export function parseSandboxVars(content) {
       result.settings[key] = value;
     }
 
-    // Helper function to parse a nested block
     function parseNestedBlock(blockName) {
-      // Match nested blocks - handle both simple and complex nested structures
       const blockPattern = new RegExp(
         `${blockName}\\s*=\\s*\\{([\\s\\S]*?)\\n\\s*\\}`,
         "m",
@@ -750,14 +535,11 @@ export function parseSandboxVars(content) {
 
       if (blockMatch) {
         const blockContent = blockMatch[1];
-        // Strip Lua comment lines to avoid parsing comment text as keys
-        // (e.g. "-- 1 = Sprinters" or "-- Default = Random")
         const strippedContent = blockContent.replace(/^\s*--.*$/gm, "");
         const valuePattern = /(\w+)\s*=\s*("(?:[^"\\]|\\.)*"|[^,\n]+)/g;
         let valueMatch;
         while ((valueMatch = valuePattern.exec(strippedContent)) !== null) {
           let value = valueMatch[2].trim();
-          // Remove trailing comma if present
           value = value.replace(/,\s*$/, "");
 
           if (value === "true") value = true;
@@ -770,7 +552,6 @@ export function parseSandboxVars(content) {
       }
     }
 
-    // Parse all nested blocks
     nestedBlocks.forEach(parseNestedBlock);
   } catch (error) {
     log.error("Failed to parse SandboxVars:", error);
@@ -779,20 +560,16 @@ export function parseSandboxVars(content) {
   return result;
 }
 
-// Format a number for Lua, preserving the original file's decimal format
 function formatLuaNumber(newValue, originalValueStr) {
   const trimmed = originalValueStr
     ? originalValueStr.trim().replace(/,\s*$/, "")
     : "";
-  // If the original value had a decimal point and the new value is a whole number, add .0
   if (Number.isInteger(newValue) && trimmed.includes(".")) {
     return newValue.toFixed(1);
   }
   return newValue.toString();
 }
 
-// Modify a single value in the SandboxVars file content in-place
-// Preserves all comments and file structure
 function modifySandboxValue(
   originalContent,
   key,
@@ -801,13 +578,11 @@ function modifySandboxValue(
 ) {
   let content = originalContent;
 
-  // Validate key is a valid identifier (alphanumeric and underscore only)
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
     log.warn(`Invalid sandbox key skipped: ${key}`);
     return content;
   }
 
-  // Format the value for Lua (base format, may be refined by context)
   function formatValue(originalValueStr) {
     if (typeof newValue === "boolean") {
       return newValue.toString();
@@ -818,12 +593,9 @@ function modifySandboxValue(
     }
   }
 
-  // Escape key for use in regex (even though we validate, this is defense in depth)
   const escapedKey = escapeRegExp(key);
 
   if (nestedBlock) {
-    // For nested blocks (ZombieLore, ZombieConfig, etc.)
-    // Only match actual assignment lines (not comment lines starting with --)
     const escapedBlock = escapeRegExp(nestedBlock);
     const blockStartPattern = new RegExp(`${escapedBlock}\\s*=\\s*\\{`);
     const blockStartMatch = content.match(blockStartPattern);
@@ -837,10 +609,6 @@ function modifySandboxValue(
         const before = content.substring(0, blockStart);
         const blockSection = content.substring(blockStart, blockEnd + 1);
         const after = content.substring(blockEnd + 1);
-        // Replace only on non-comment lines within the block.
-        // The value alternation matches a full quoted string first so
-        // values containing commas (e.g. comma-separated lists) aren't
-        // truncated mid-string, which would corrupt the Lua syntax.
         const updatedBlock = blockSection.replace(
           new RegExp(
             `(^(?!\\s*--)[^\\n]*?)(${escapedKey})(\\s*=\\s*)("(?:[^"\\\\]|\\\\.)*"|[^,\\n}]+)(,?)`,
@@ -853,8 +621,6 @@ function modifySandboxValue(
       }
     }
   } else {
-    // For top-level settings, only replace occurrences OUTSIDE nested blocks
-    // to avoid accidentally modifying keys that share a name with a nested key.
     const knownBlocks = [
       "ZombieLore",
       "ZombieConfig",
@@ -875,10 +641,6 @@ function modifySandboxValue(
       }
     }
 
-    // The value alternation matches a full quoted string first so values
-    // containing commas (e.g. comma-separated lists like
-    // WorldItemRemovalList) aren't truncated mid-string, which would
-    // corrupt the Lua syntax.
     const pattern = new RegExp(
       `(^\\s*)(${escapedKey})(\\s*=\\s*)("(?:[^"\\\\]|\\\\.)*"|[^,\\n}]+)(,?)(\\s*(?:--.*)?$)`,
       "gm",
@@ -886,7 +648,6 @@ function modifySandboxValue(
     content = content.replace(
       pattern,
       (fullMatch, indent, k, eq, oldVal, comma, comment, offset) => {
-        // Skip matches inside nested blocks
         for (const range of blockRanges) {
           if (offset >= range.start && offset < range.end) return fullMatch;
         }
@@ -898,13 +659,6 @@ function modifySandboxValue(
   return content;
 }
 
-// Count { / } in a SandboxVars.lua content string. A healthy file always has
-// an equal number of each with the running depth never going negative. This
-// is the cheapest possible syntax sanity check we can do without a real Lua
-// parser, but it happens to catch the exact class of corruption PZ's own
-// dedicated server crashes on: an orphaned/dropped block header that leaves
-// a dangling closing brace (see "Exiting due to errors loading ..." crashes
-// with a KahluaException "'}' expected").
 export function checkSandboxBraceBalance(content) {
   let depth = 0;
   let wentNegative = false;
@@ -918,21 +672,6 @@ export function checkSandboxBraceBalance(content) {
   return { balanced: depth === 0 && !wentNegative, depth };
 }
 
-// Attempt to auto-repair the most common SandboxVars.lua corruption pattern:
-// a nested block's "<Name> = {" header line (and the trailing comma on the
-// first entry) got dropped somewhere upstream (mod schema migration, manual
-// editing, etc.), leaving an orphaned scalar entry at a shallower indent
-// than its former siblings — with the original closing "}" still present
-// further down. That desyncs the whole file's brace count and makes PZ's
-// Lua loader refuse to parse the file at all.
-//
-// Repair strategy: whenever a scalar "key = value" line (no trailing comma)
-// is immediately followed by a more-deeply-indented entry line, treat it as
-// an orphaned block opener. Add the missing comma and synthesize a wrapper
-// table around it so the existing (now-dangling) closing brace has
-// something to match again. This is deliberately conservative — it never
-// deletes or reinterprets existing content, only restores brace balance —
-// and every attempt is re-validated for balance before anything is written.
 export function repairSandboxSyntax(content) {
   const before = checkSandboxBraceBalance(content);
   if (before.balanced) {
@@ -951,7 +690,6 @@ export function repairSandboxSyntax(content) {
     if (!m) continue;
     const indent = m[1];
 
-    // Find the next non-blank, non-comment line.
     let j = i + 1;
     while (
       j < lines.length &&
@@ -963,7 +701,7 @@ export function repairSandboxSyntax(content) {
 
     const nextEntry = lines[j].match(entryLine);
     if (!nextEntry) continue;
-    if (nextEntry[1].length <= indent.length) continue; // normal sibling/closing — not orphaned
+    if (nextEntry[1].length <= indent.length) continue;
 
     syntheticCounter += 1;
     changes.push(
@@ -982,46 +720,39 @@ export function repairSandboxSyntax(content) {
   };
 }
 
-// Apply multiple sandbox changes to file content in-place
 export function applySandboxChanges(originalContent, changes) {
   let content = originalContent;
 
-  // Apply settings changes
   if (changes.settings) {
     for (const [key, value] of Object.entries(changes.settings)) {
       content = modifySandboxValue(content, key, value, null);
     }
   }
 
-  // Apply ZombieLore changes
   if (changes.ZombieLore) {
     for (const [key, value] of Object.entries(changes.ZombieLore)) {
       content = modifySandboxValue(content, key, value, "ZombieLore");
     }
   }
 
-  // Apply ZombieConfig changes
   if (changes.ZombieConfig) {
     for (const [key, value] of Object.entries(changes.ZombieConfig)) {
       content = modifySandboxValue(content, key, value, "ZombieConfig");
     }
   }
 
-  // Apply MultiplierConfig changes
   if (changes.MultiplierConfig) {
     for (const [key, value] of Object.entries(changes.MultiplierConfig)) {
       content = modifySandboxValue(content, key, value, "MultiplierConfig");
     }
   }
 
-  // Apply Map changes
   if (changes.Map) {
     for (const [key, value] of Object.entries(changes.Map)) {
       content = modifySandboxValue(content, key, value, "Map");
     }
   }
 
-  // Apply Basement changes
   if (changes.Basement) {
     for (const [key, value] of Object.entries(changes.Basement)) {
       content = modifySandboxValue(content, key, value, "Basement");
@@ -1031,11 +762,6 @@ export function applySandboxChanges(originalContent, changes) {
   return content;
 }
 
-// The 6 top-level shapes applySandboxChanges()/createSandboxVars() actually
-// know how to write. Music and Debug are parsed by parseSandboxVars() (read
-// path) but neither writer touches them, so they're deliberately excluded
-// here too -- checking them would report every Music/Debug key as
-// "unpersisted" even though no write was ever attempted for them.
 const SANDBOX_WRITABLE_SECTIONS = [
   "settings",
   "ZombieLore",
@@ -1045,14 +771,6 @@ const SANDBOX_WRITABLE_SECTIONS = [
   "Basement",
 ];
 
-// modifySandboxValue() (used by applySandboxChanges for an existing file)
-// silently returns its input unchanged when a submitted key's regex finds no
-// matching line to update -- key not present in this file, lives in a block
-// modifySandboxValue doesn't know about, unusual formatting, etc. Compares
-// `submitted` (the request body's `sandbox` object) against `persisted` (the
-// freshly re-parsed on-disk content, via parseSandboxVars) and returns the
-// list of keys that were requested but did not actually change, formatted as
-// "key" for top-level settings or "Section.key" for a nested block.
 export function findUnpersistedSandboxKeys(submitted, persisted) {
   const unpersistedKeys = [];
   for (const section of SANDBOX_WRITABLE_SECTIONS) {
@@ -1114,13 +832,10 @@ function createSandboxVars(sandbox) {
   return lines.join("\n") + "\n";
 }
 
-// Parse spawn points lua - handles profession-based structure
 function parseSpawnPoints(content) {
   const professions = {};
 
   try {
-    // First, find profession blocks like: unemployed = { ... }
-    // The format is: professionName = { { worldX = ..., ... }, { worldX = ..., ... } }
     const professionPattern = /(\w+)\s*=\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g;
     let profMatch;
 
@@ -1128,11 +843,9 @@ function parseSpawnPoints(content) {
       const profName = profMatch[1];
       const profContent = profMatch[2];
 
-      // Skip 'return' as it's not a profession
       if (profName === "return") continue;
 
       const points = [];
-      // Match spawn point entries - posZ is optional
       const pointPattern =
         /\{\s*worldX\s*=\s*(\d+)\s*,\s*worldY\s*=\s*(\d+)\s*,\s*posX\s*=\s*([\d.]+)\s*,\s*posY\s*=\s*([\d.]+)(?:\s*,\s*posZ\s*=\s*(\d+))?\s*\}/g;
       let pointMatch;
@@ -1158,20 +871,17 @@ function parseSpawnPoints(content) {
   return professions;
 }
 
-// Convert spawn points to Lua - handles profession-based structure
 function toSpawnPoints(professions, serverName) {
   const lines = [`function SpawnPoints()`];
   lines.push(`\treturn {`);
 
   for (const [profName, points] of Object.entries(professions)) {
-    // Validate profession name is a safe Lua identifier
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(profName)) {
       log.warn(`Invalid profession name skipped in spawnpoints: ${profName}`);
       continue;
     }
     lines.push(`\t\t${profName} = {`);
     for (const p of points) {
-      // Validate coordinates are finite numbers to prevent Lua injection
       const wx = Number.isFinite(Number(p.worldX)) ? Number(p.worldX) : 0;
       const wy = Number.isFinite(Number(p.worldY)) ? Number(p.worldY) : 0;
       const px = Number.isFinite(Number(p.posX)) ? Number(p.posX) : 0;
@@ -1195,19 +905,14 @@ function toSpawnPoints(professions, serverName) {
   return lines.join("\n");
 }
 
-// Parse spawn regions lua
 function parseSpawnRegions(content) {
   const regions = [];
 
   try {
-    // Match patterns like { name = "Muldraugh, KY", file = "path" } or { name = "...", serverfile = "..." }
-    // Handle both 'file' and 'serverfile' keys
     const lines = content.split(/\r?\n/);
     for (const line of lines) {
-      // Skip comments
       if (line.trim().startsWith("--")) continue;
 
-      // Try to match file or serverfile
       const nameMatch = line.match(/name\s*=\s*"([^"]+)"/);
       const fileMatch = line.match(/(?:server)?file\s*=\s*"([^"]+)"/);
 
@@ -1226,7 +931,6 @@ function parseSpawnRegions(content) {
   return regions;
 }
 
-// Convert spawn regions to Lua
 function toSpawnRegions(regions, serverName) {
   const lines = [`function SpawnRegions()`];
   lines.push(`        return {`);
@@ -1250,9 +954,7 @@ function toSpawnRegions(regions, serverName) {
   return lines.join("\n");
 }
 
-// ===== ROUTES =====
 
-// Get server file paths info
 router.get("/paths", async (req, res) => {
   try {
     log.info("GET /paths");
@@ -1280,7 +982,6 @@ router.get("/paths", async (req, res) => {
   }
 });
 
-// Get INI file (parsed)
 router.get("/ini", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
@@ -1297,21 +998,8 @@ router.get("/ini", async (req, res) => {
     const content = fs.readFileSync(filePath, "utf-8");
     const parsed = parseIni(content);
 
-    // A key appearing more than once means `settings` below silently holds
-    // whichever occurrence parseIni()'s last-write-wins loop landed on --
-    // not necessarily the one the operator thinks they're editing, and not
-    // necessarily the one mods.js's own (first-occurrence) reads/writes
-    // agree with. Reported, not blocked: the file is still readable, and
-    // refusing to load it would lock the operator out of the only tool
-    // that could help them fix it. See utils/iniDuplicateKeys.js.
     const duplicateKeys = findDuplicateIniKeys(content);
 
-    // This is the LIVE config, unlike a template snapshot -- mask rather
-    // than omit, since the structured editor's PUT /ini round-trips this
-    // same object back and toIni() only preserves a key's original line
-    // when the key is ABSENT from the submitted settings, not when it's
-    // present-but-blank. Omitting here would make every unrelated field
-    // edit look like "delete the RCON password" once it reached PUT.
     res.json({
       settings: maskSensitiveObject(parsed),
       path: filePath,
@@ -1324,7 +1012,6 @@ router.get("/ini", async (req, res) => {
   }
 });
 
-// Save INI file
 router.put("/ini", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
@@ -1345,7 +1032,6 @@ router.put("/ini", async (req, res) => {
       });
     }
 
-    // Guard against prototype pollution
     if (
       Object.prototype.hasOwnProperty.call(settings, "__proto__") ||
       Object.prototype.hasOwnProperty.call(settings, "constructor") ||
@@ -1357,19 +1043,6 @@ router.put("/ini", async (req, res) => {
       });
     }
 
-    // A key duplicated across two config blocks makes the structured save
-    // silently destructive (see utils/iniDuplicateKeys.js's own header):
-    // toIni() below reconstructs the file from this flat settings object,
-    // rewriting EVERY line matching a submitted key to that key's one
-    // value -- and since every key is always present (the client resends
-    // the whole object on every save), that fires on EVERY save, even one
-    // that never touched this key, permanently discarding whichever copy
-    // parseIni()'s last-occurrence-wins didn't surface. Refuse outright
-    // rather than risk it; the raw tab is a genuine escape hatch for the
-    // exact same caller (same serverfiles.manage gate, no extra
-    // restriction, mirrored identically for a remote/SFTP server -- not in
-    // LOCAL_ONLY_PATHS) and round-trips the file byte-for-byte instead of
-    // reconstructing it, so it stays available to fix the duplicate first.
     const currentIniContent = fs.existsSync(filePath)
       ? fs.readFileSync(filePath, "utf-8")
       : "";
@@ -1383,13 +1056,6 @@ router.put("/ini", async (req, res) => {
       });
     }
 
-    // GET /ini masks secret-shaped values, so an unmodified field echoes
-    // back here as the "••••••••1234" placeholder rather than the real
-    // password -- never let that placeholder overwrite the stored value.
-    // Same skip-write-if-masked-echoed-back guard as config.js/oidc.js/
-    // servers.js already use; dropping the key here (rather than passing
-    // it through) is what makes toIni() below preserve the live line
-    // unchanged, since toIni() only overwrites keys present in `settings`.
     const submittedSettings = {};
     for (const [key, value] of Object.entries(settings)) {
       if (SENSITIVE_FIELD_RE.test(key) && isMaskedSecret(value)) {
@@ -1399,11 +1065,6 @@ router.put("/ini", async (req, res) => {
       submittedSettings[key] = value;
     }
 
-    // Enforced on CHANGE, not presence: the structured editor round-trips
-    // GET /ini's whole settings object back on every save, so
-    // gating on mere presence would refuse every non-admin save that
-    // touches this tab at all. Compared against the file's own CURRENT
-    // value, never GET's masked response.
     const touchesGovernedIniKey = Object.keys(submittedSettings).some(
       (key) => key in INI_KEY_CAPABILITY,
     );
@@ -1434,8 +1095,6 @@ router.put("/ini", async (req, res) => {
       }
     }
 
-    // Read original to preserve comments/structure. Locked per-path so two
-    // overlapping PUTs to the same INI can't interleave their read-modify-write.
     let backupWarning = null;
     const persistedSettings = await withFileLock(filePath, async () => {
       let originalContent = "";
@@ -1473,7 +1132,6 @@ router.put("/ini", async (req, res) => {
   }
 });
 
-// Get SandboxVars (parsed)
 router.get("/sandbox", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
@@ -1497,7 +1155,6 @@ router.get("/sandbox", async (req, res) => {
   }
 });
 
-// Save SandboxVars
 router.put("/sandbox", async (req, res) => {
   try {
     log.info("PUT /sandbox");
@@ -1513,7 +1170,6 @@ router.put("/sandbox", async (req, res) => {
       });
     }
 
-    // Guard against prototype pollution
     if (
       Object.prototype.hasOwnProperty.call(sandbox, "__proto__") ||
       Object.prototype.hasOwnProperty.call(sandbox, "constructor") ||
@@ -1525,7 +1181,6 @@ router.put("/sandbox", async (req, res) => {
       });
     }
 
-    // Guard nested sections against prototype pollution
     for (const section of Object.values(sandbox)) {
       if (section && typeof section === "object") {
         if (
@@ -1541,7 +1196,6 @@ router.put("/sandbox", async (req, res) => {
       }
     }
 
-    // Size limit: reject payloads > 1MB
     const payloadSize = JSON.stringify(sandbox).length;
     if (payloadSize > 1024 * 1024) {
       return res.status(400).json({
@@ -1550,9 +1204,6 @@ router.put("/sandbox", async (req, res) => {
       });
     }
 
-    // Modify an existing file in-place to preserve comments and structure.
-    // On a fresh server, create a valid sandbox file from the submitted schema
-    // values so the editor works before the game's first boot.
     let fileExists;
     let backupWarning = null;
     let unpersistedKeys = [];
@@ -1568,10 +1219,6 @@ router.put("/sandbox", async (req, res) => {
       }
       writeFileAtomic(filePath, newContent, "utf-8");
 
-      // Without this read-back, a key modifySandboxValue() couldn't find a
-      // line for was silently dropped and this route still reported success
-      // (this route's own PUT /ini sibling already verifies its writes this
-      // way; this route did not).
       const persisted = parseSandboxVars(fs.readFileSync(filePath, "utf-8"));
       unpersistedKeys = findUnpersistedSandboxKeys(sandbox, persisted);
     });
@@ -1597,10 +1244,6 @@ router.put("/sandbox", async (req, res) => {
   }
 });
 
-// Write one option into SandboxVars.lua. Mod options live in blocks the
-// sandbox schema knows nothing about, so they are addressed as "Block.Key" and
-// rewritten in place; a key that is not already in the file is left alone,
-// since PZ regenerates those from the mod's own defaults.
 router.put("/sandbox-option", async (req, res) => {
   try {
     const { name, value } = req.body || {};
@@ -1666,16 +1309,11 @@ router.put("/sandbox-option", async (req, res) => {
   }
 });
 
-// Write top-level sandbox keys straight to disk. The in-game bridge can only
-// change SandboxOptions in memory, so without this every change is lost on the
-// next server start.
 export async function persistSandboxValues(values) {
   const entries = Object.entries(values || {});
   if (entries.length === 0) return { persisted: false, reason: "nothing to do" };
 
   const activeServer = await getActiveServer();
-  // Called from the PanelBridge routes, outside the mirror middleware, so a
-  // remote server has to pull and push around its own write.
   if (activeServer?.isRemote) {
     const transport = await resolveRemoteConfigTransport();
     if (!transport) {
@@ -1725,8 +1363,6 @@ async function writeSandboxValues(entries, configPath, serverName) {
     const originalContent = fs.readFileSync(filePath, "utf-8");
     let content = originalContent;
 
-    // modifySandboxValue only rewrites existing assignments, so a key that
-    // isn't in the file would no-op and look like "already correct".
     const missing = entries
       .map(([key]) => key)
       .filter(
@@ -1749,17 +1385,12 @@ async function writeSandboxValues(entries, configPath, serverName) {
     );
     writeFileAtomic(filePath, content, "utf-8");
     persisted = true;
-    // persisted stays true -- the edit is intentional and did happen; the
-    // caller (PanelBridge) still needs to see the backup failure though.
     if (backupWarning) reason = backupWarning;
   });
 
   return { persisted, reason };
 }
 
-// Check whether SandboxVars.lua is syntactically well-formed (brace balance
-// only — we don't have a real Lua parser). A corrupt file here is a classic
-// cause of "server won't boot, no obvious reason" reports.
 router.get("/sandbox/validate", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
@@ -1782,15 +1413,6 @@ router.get("/sandbox/validate", async (req, res) => {
   }
 });
 
-// Attempt to auto-repair SandboxVars.lua. Refuses to write anything unless
-// BOTH the repaired content is verified brace-balanced AND a real backup of
-// the broken file was made first — if the corruption doesn't match a known
-// repair pattern, or the backup can't be created, nothing is written and
-// the caller is told exactly why and what to do about it. This route
-// rewrites an already-corrupted file with a heuristic the repair function
-// itself admits can miss (see repairSandboxSyntax's own comment) -- with no
-// backup, a wrong result has no way back, so this is the one call site in
-// this file that refuses rather than proceeding on a failed backup.
 router.post("/sandbox/repair", async (req, res) => {
   try {
     log.info("POST /sandbox/repair");
@@ -1829,8 +1451,6 @@ router.post("/sandbox/repair", async (req, res) => {
 
       const backup = await createBackup(configPath, `${serverName}_SandboxVars.lua`);
       if (!backup.backedUp) {
-        // reason === "no-source" can't happen here (existsSync already
-        // confirmed the file above), so this is always the "failed" case.
         return {
           alreadyValid: false,
           repaired: false,
@@ -1875,7 +1495,6 @@ router.post("/sandbox/repair", async (req, res) => {
   }
 });
 
-// Get spawn points
 router.get("/spawnpoints", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
@@ -1900,7 +1519,6 @@ router.get("/spawnpoints", async (req, res) => {
   }
 });
 
-// Save spawn points
 router.put("/spawnpoints", async (req, res) => {
   try {
     log.info("PUT /spawnpoints");
@@ -1941,7 +1559,6 @@ router.put("/spawnpoints", async (req, res) => {
   }
 });
 
-// Get spawn regions
 router.get("/spawnregions", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
@@ -1966,7 +1583,6 @@ router.get("/spawnregions", async (req, res) => {
   }
 });
 
-// Save spawn regions
 router.put("/spawnregions", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
@@ -2006,7 +1622,6 @@ router.put("/spawnregions", async (req, res) => {
   }
 });
 
-// Get raw file content
 router.get("/raw/:type", async (req, res) => {
   log.info(`GET /raw/${req.params.type}`);
   try {
@@ -2048,7 +1663,6 @@ router.get("/raw/:type", async (req, res) => {
   }
 });
 
-// Save raw file content
 router.put("/raw/:type", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
@@ -2092,11 +1706,6 @@ router.put("/raw/:type", async (req, res) => {
     await withFileLock(filePath, async () => {
       let contentToWrite = content;
 
-      // Only the ini type is Key=Value text that GET /raw ever masks --
-      // sandbox/spawnpoints/spawnregions are Lua table syntax, not INI
-      // lines, so running line-based reconciliation on them would at best
-      // no-op and at worst corrupt them. SandboxVars also has no RCON
-      // field to protect in the first place.
       if (type === "ini" && fs.existsSync(filePath)) {
         const liveContent = fs.readFileSync(filePath, "utf-8");
         const reconciled = reconcileMaskedIniLines(content, liveContent);
@@ -2143,7 +1752,6 @@ router.put("/raw/:type", async (req, res) => {
   }
 });
 
-// List backups
 router.get("/backups", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
@@ -2179,7 +1787,6 @@ router.get("/backups", async (req, res) => {
     )
       .filter((f) => f !== null)
       .sort((a, b) => {
-        // Handle invalid dates gracefully
         const dateA = new Date(a.created);
         const dateB = new Date(b.created);
         if (isNaN(dateA.getTime())) return 1;
@@ -2194,13 +1801,11 @@ router.get("/backups", async (req, res) => {
   }
 });
 
-// Restore from backup
 router.post("/restore/:filename", async (req, res) => {
   try {
     const configPath = await getServerConfigPath();
     const backupDir = await getBackupPath(configPath);
 
-    // Sanitize filename to prevent path traversal
     const filename = path.basename(req.params.filename);
     log.info(`POST /restore: filename=${filename}`);
 
@@ -2220,7 +1825,6 @@ router.post("/restore/:filename", async (req, res) => {
       });
     }
 
-    // Extract original filename from backup name (e.g., "servertest.ini.2024-01-01T12-00-00.bak")
     const parts = filename.split(".");
     if (parts.length < 3) {
       return res.status(400).json({
@@ -2229,21 +1833,10 @@ router.post("/restore/:filename", async (req, res) => {
       });
     }
 
-    // Get original filename (everything before the timestamp)
     const bakIndex = filename.lastIndexOf(".bak");
     const timestampStart = filename.lastIndexOf(".", bakIndex - 1);
     const originalName = filename.substring(0, timestampStart);
 
-    // originalName is a SUBSTRING of filename, never independently
-    // re-validated -- unlike filename itself (protected by the .bak-only
-    // check above, which incidentally also rejects bare "." and ".."
-    // since neither ends in ".bak"). A crafted name like "....bak" makes
-    // the lastIndexOf/substring math above land on originalName === "..".
-    // Explicit, not incidental: this must hold regardless of whether
-    // fs.copyFile below happens to refuse a directory target on a given
-    // platform. path.basename() would leave "." and ".." unchanged (same
-    // caveat as chunks.js's saveName sanitization), so check for those
-    // and any separator explicitly rather than re-deriving via basename.
     if (
       !originalName ||
       originalName === "." ||
@@ -2259,11 +1852,6 @@ router.post("/restore/:filename", async (req, res) => {
 
     const targetPath = path.join(configPath, originalName);
 
-    // Create backup of current before restoring. The restore itself is a
-    // deliberate, well-defined choice (the operator picked this exact
-    // backup file), not a guess -- so a failed pre-restore backup doesn't
-    // block it. But it must be said plainly: if this failed, the state as
-    // of right before this restore is not recoverable through this panel.
     let preRestoreBackupWarning = null;
     if (fs.existsSync(targetPath)) {
       const backup = await createBackup(configPath, originalName);
@@ -2286,7 +1874,6 @@ router.post("/restore/:filename", async (req, res) => {
   }
 });
 
-// Save and reload (calls RCON reloadoptions)
 router.post("/save-and-reload", async (req, res) => {
   try {
     log.info("POST /save-and-reload");
@@ -2299,12 +1886,6 @@ router.post("/save-and-reload", async (req, res) => {
       });
     }
 
-    // Reflect what RCON actually reported, not a hardcoded success. execute()
-    // (which reloadOptions() wraps) already distinguishes success from
-    // failure ({success:false, error} on a timeout, disconnect, or rejected
-    // command) -- this used to discard that and always claim "Options
-    // reloaded", so a failed live reload was invisible: the file on disk was
-    // correct, but the running server silently kept its old settings.
     const result = await rconService.reloadOptions();
     if (!result?.success) {
       return res.json({
@@ -2320,15 +1901,12 @@ router.post("/save-and-reload", async (req, res) => {
   }
 });
 
-// ===== CONFIG TEMPLATES =====
 
-// Get templates directory
 async function getTemplatesPath() {
   const configPath = await getServerConfigPath();
   return path.join(configPath, "templates");
 }
 
-// Ensure templates directory exists
 async function ensureTemplatesDir() {
   const templatesPath = await getTemplatesPath();
   if (!fs.existsSync(templatesPath)) {
@@ -2337,7 +1915,6 @@ async function ensureTemplatesDir() {
   return templatesPath;
 }
 
-// GET /templates - List all saved templates
 router.get("/templates", async (req, res) => {
   try {
     const templatesPath = await ensureTemplatesDir();
@@ -2375,10 +1952,8 @@ router.get("/templates", async (req, res) => {
   }
 });
 
-// GET /templates/:id - Get a specific template
 router.get("/templates/:id", async (req, res) => {
   try {
-    // Sanitize template ID to prevent path traversal
     const safeId = path.basename(req.params.id).replace(/[^a-z0-9_-]/gi, "");
     if (!safeId || safeId !== req.params.id) {
       return res.status(400).json({
@@ -2405,7 +1980,6 @@ router.get("/templates/:id", async (req, res) => {
   }
 });
 
-// POST /templates - Save current config as a template
 router.post("/templates", async (req, res) => {
   log.info("POST /templates (create)");
   try {
@@ -2427,14 +2001,12 @@ router.post("/templates", async (req, res) => {
     const configPath = await getServerConfigPath();
     const serverName = await getServerName();
 
-    // Generate safe filename from name with uniqueness check
     const baseId = name
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "_")
       .substring(0, 50);
     let safeId = baseId;
     let counter = 1;
-    // codeql[js/path-injection] safeId/templateFile is derived from name via .toLowerCase().replace(/[^a-z0-9]/g, '_') a few lines above before being joined into a path here.
     while (fs.existsSync(path.join(templatesPath, `${safeId}.json`))) {
       safeId = `${baseId}_${counter++}`;
       if (counter > 100) {
@@ -2455,14 +2027,6 @@ router.post("/templates", async (req, res) => {
       serverName,
     };
 
-    // Read current INI settings. A saved template is a persisted snapshot
-    // with no exclusion list and no expiry -- unlike a live GET, this copy
-    // outlives the credential it was taken from and survives a later
-    // password rotation, so secret-shaped keys (RCONPassword, the server
-    // join Password, ...) are stripped here rather than masked: see
-    // stripSensitiveIniLines()'s own comment for why omission, not a
-    // placeholder, is the safe choice given how POST /templates/:id/apply
-    // writes iniRaw back.
     if (includeIni) {
       const iniPath = path.join(configPath, `${serverName}.ini`);
       if (fs.existsSync(iniPath)) {
@@ -2472,7 +2036,6 @@ router.post("/templates", async (req, res) => {
       }
     }
 
-    // Read current Sandbox settings
     if (includeSandbox) {
       const sandboxPath = path.join(
         configPath,
@@ -2483,7 +2046,6 @@ router.post("/templates", async (req, res) => {
       }
     }
 
-    // codeql[js/path-injection] safeId/templateFile is derived from name via .toLowerCase().replace(/[^a-z0-9]/g, '_') a few lines above before being joined into a path here.
     fs.writeFileSync(templateFile, JSON.stringify(template, null, 2));
     log.info(`Created template: ${name} (${safeId})`);
 
@@ -2499,16 +2061,10 @@ router.post("/templates", async (req, res) => {
   }
 });
 
-// POST /templates/:id/apply - Apply a template to current config
 router.post("/templates/:id/apply", async (req, res) => {
   log.info(`POST /templates/${req.params.id}/apply`);
-  // Declared OUTSIDE the try block, not inside it: the catch below needs to
-  // see whatever landed before a later step threw, so a partial apply (INI
-  // written, Sandbox write then failed) can be reported honestly instead of
-  // reading as "nothing happened".
   const applied = [];
   try {
-    // Sanitize template ID to prevent path traversal
     const safeId = path.basename(req.params.id).replace(/[^a-z0-9_-]/gi, "");
     if (!safeId || safeId !== req.params.id) {
       return res.status(400).json({
@@ -2535,25 +2091,21 @@ router.post("/templates/:id/apply", async (req, res) => {
 
     const backupWarnings = [];
 
-    // Apply INI settings
     if (applyIni && template.iniRaw) {
       const iniPath = path.join(configPath, `${serverName}.ini`);
 
       await withFileLock(iniPath, async () => {
-        // Create backup first
         const iniBackupWarning = backupWarningFor(
           await createBackup(configPath, `${serverName}.ini`),
         );
         if (iniBackupWarning) backupWarnings.push(iniBackupWarning);
 
-        // Write the template INI
         writeFileAtomic(iniPath, template.iniRaw);
       });
       applied.push("INI");
       log.info(`Applied INI from template: ${template.name}`);
     }
 
-    // Apply Sandbox settings
     if (applySandbox && template.sandboxRaw) {
       const sandboxPath = path.join(
         configPath,
@@ -2561,13 +2113,11 @@ router.post("/templates/:id/apply", async (req, res) => {
       );
 
       await withFileLock(sandboxPath, async () => {
-        // Create backup first
         const sandboxBackupWarning = backupWarningFor(
           await createBackup(configPath, `${serverName}_SandboxVars.lua`),
         );
         if (sandboxBackupWarning) backupWarnings.push(sandboxBackupWarning);
 
-        // Write the template sandbox
         writeFileAtomic(sandboxPath, template.sandboxRaw);
       });
       applied.push("Sandbox");
@@ -2589,11 +2139,6 @@ router.post("/templates/:id/apply", async (req, res) => {
     });
   } catch (error) {
     log.error("Failed to apply template:", error);
-    // `applied` tracks each write as it actually lands (pushed right after
-    // its own withFileLock call returns), so if INI succeeded and Sandbox
-    // then threw, `applied` already says so here -- a flat 500 with no
-    // reference to it reads as "nothing happened" when part of the template
-    // really did land on disk.
     res.status(500).json({
       error: sanitizeError(error.message),
       ...(applied.length > 0 ? { success: false, partiallyApplied: applied } : {}),
@@ -2601,10 +2146,8 @@ router.post("/templates/:id/apply", async (req, res) => {
   }
 });
 
-// PUT /templates/:id - Update template metadata
 router.put("/templates/:id", async (req, res) => {
   try {
-    // Sanitize template ID to prevent path traversal
     const safeId = path.basename(req.params.id).replace(/[^a-z0-9_-]/gi, "");
     if (!safeId || safeId !== req.params.id) {
       return res.status(400).json({
@@ -2640,11 +2183,9 @@ router.put("/templates/:id", async (req, res) => {
   }
 });
 
-// DELETE /templates/:id - Delete a template
 router.delete("/templates/:id", async (req, res) => {
   log.info(`DELETE /templates/${req.params.id}`);
   try {
-    // Sanitize template ID to prevent path traversal
     const safeId = path.basename(req.params.id).replace(/[^a-z0-9_-]/gi, "");
     if (!safeId || safeId !== req.params.id) {
       return res.status(400).json({
@@ -2673,7 +2214,6 @@ router.delete("/templates/:id", async (req, res) => {
   }
 });
 
-// ===== FILE BROWSER (for image path fields) =====
 
 const IMAGE_EXTENSIONS = new Set([
   ".png",
@@ -2684,11 +2224,6 @@ const IMAGE_EXTENSIONS = new Set([
   ".webp",
 ]);
 
-/**
- * Build the list of directories the file browser is allowed to access.
- * Restricts browsing to the server config path, server install path,
- * and Zomboid data path — prevents arbitrary filesystem traversal.
- */
 async function getAllowedBrowseRoots() {
   const roots = [];
   const activeServer = await getActiveServer();
@@ -2703,14 +2238,11 @@ async function getAllowedBrowseRoots() {
     roots.push(path.resolve(settings.serverConfigPath));
   if (settings.zomboidDataPath)
     roots.push(path.resolve(settings.zomboidDataPath));
-  // Always allow the default Zomboid config directory
   const defaultConfig = path.join(os.homedir(), "Zomboid");
   roots.push(path.resolve(defaultConfig));
-  // De-duplicate
   return [...new Set(roots)];
 }
 
-// GET /browse-files - List directories and files at a given path
 router.get("/browse-files", async (req, res) => {
   try {
     const browsePath = req.query.path ? String(req.query.path) : null;
@@ -2731,7 +2263,6 @@ router.get("/browse-files", async (req, res) => {
         });
       }
     } else {
-      // Default to the server config directory
       const configPath = await getServerConfigPath();
       targetPath = configPath || "";
     }
@@ -2767,21 +2298,16 @@ router.get("/browse-files", async (req, res) => {
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        // Skip hidden/system directories
         if (!entry.name.startsWith(".") && entry.name !== "node_modules") {
           directories.push(entry.name);
         }
       } else {
-        // Treat everything that's not a directory as a potential file
-        // (avoids issues with pkg/Dirent.isFile() not working for some entries)
         const ext = path.extname(entry.name).toLowerCase();
-        // If extension filter is provided, only show matching files
         if (filterExts) {
           if (filterExts.includes(ext)) {
             files.push({ name: entry.name, ext });
           }
         } else {
-          // Default: show image files only
           if (IMAGE_EXTENSIONS.has(ext)) {
             files.push({ name: entry.name, ext });
           }
@@ -2812,7 +2338,6 @@ router.get("/browse-files", async (req, res) => {
   }
 });
 
-// GET /image-preview - Serve an image file for preview (limited to image types, max 5MB)
 router.get("/image-preview", async (req, res) => {
   try {
     const filePath = req.query.path ? String(req.query.path) : null;

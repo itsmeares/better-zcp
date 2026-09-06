@@ -1,17 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 bug hunt, scheduler blind-success family, third site: POST
-// /server/restart (this file) is a SECOND, independent client entry point
-// to the exact same scheduler.performRestart() call that scheduler.js's
-// POST /restart-now already had fixed earlier tonight -- Dashboard's
-// Restart and Restart Now buttons hit THIS route (serverApi.restart),
-// while only the Scheduler page's own restart control hit the already-fixed
-// one (schedulerApi.restartNow). This route still reported success:true as
-// soon as the restart was ACCEPTED, regardless of what performRestart()
-// actually resolved to. Fixed by reusing scheduler.js's own
-// emitActionResult() helper (now exported) so both entry points emit the
-// identical 'scheduler:action_result' event Layout.tsx already listens for
-// globally -- no client-side change needed for this route to start working.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => ({ isRemote: false })),
@@ -23,9 +11,6 @@ function getHandler(routePath, method) {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
-  // requirePermission is applied inline per-route in server.js, so the real
-  // handler is the LAST entry in this route's middleware stack, not the
-  // first (unlike scheduler.js, which applies it once at the router level).
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -57,7 +42,6 @@ describe("POST /server/restart -- scheduler:action_result socket emission", () =
       response,
     );
 
-    // The immediate HTTP response only confirms acceptance -- unchanged.
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true }),
     );

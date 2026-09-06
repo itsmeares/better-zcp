@@ -3,13 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression: checkForUpdates() silently downgraded to ACF-only comparison
-// whenever fetchSteamTimestamps() came back empty (Steam API outage,
-// network block, or sustained rate-limiting -- a real, reachable
-// condition), logging only a single log.warn line. Nothing in the return
-// value or getStatus() signalled the degradation, so an operator watching
-// the UI during an outage saw a normal "last checked, 0 updates" with no
-// way to tell mod-update detection had quietly gotten worse.
 
 vi.mock("../database/init.js", () => ({
   getTrackedMods: vi.fn(async () => []),
@@ -79,7 +72,6 @@ describe("ModChecker Steam API health tracking", () => {
 
     const checker = new ModChecker();
     checker.workshopAcfPath = acfPath;
-    // Simulate every Steam API batch failing (network error / outage / rate limit).
     checker.fetchSteamTimestamps = vi.fn(async () => new Map());
 
     const result = await checker.checkForUpdates();
@@ -92,7 +84,6 @@ describe("ModChecker Steam API health tracking", () => {
     expect(status.steamApiHealthy).toBe(false);
     expect(status.lastSteamApiFailureAt).not.toBeNull();
 
-    // The ACF-only fallback still worked (found the update via cached data).
     expect(result.updated).toBe(true);
   });
 

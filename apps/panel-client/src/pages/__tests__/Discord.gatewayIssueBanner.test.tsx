@@ -5,14 +5,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Discord from '../Discord'
 import { discordApi } from '@/lib/api'
 
-// hunt-wave6-2026-08-29 follow-up 2 (operator-visible signal): getStatus()
-// now carries gatewayIssue/gatewayDegradedSince (apps/panel-server/services/discordBot.js,
-// debounced against a routine ~2-3s self-healing reconnect -- see
-// linuxDiscordGatewayResilience.test.js). This file is the client half: the
-// quiet banner shows only when the field says so, and its dismissal is keyed
-// on the specific episode (gatewayDegradedSince), not a blanket flag -- a
-// LATER, DIFFERENT episode must re-surface even if the operator dismissed an
-// earlier one, same reasoning as Dashboard.tsx's panel-update-error dismiss.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({

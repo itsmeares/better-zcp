@@ -3,11 +3,6 @@ import { cn } from '@/lib/utils'
 
 type TFn = (key: string, opts?: Record<string, unknown>) => string
 
-/**
- * A single status signal from GET /api/servers/active/status (host, server,
- * or bridge). `status` carries provider-specific values (e.g. "running" vs
- * "unknown" vs "not-applicable") — see apps/panel-server/utils/serverStatusModel.js.
- */
 export interface StatusSignal {
   status: string
   label: string
@@ -18,7 +13,6 @@ interface ServerStatusBadgeProps {
   host?: StatusSignal | null
   server?: StatusSignal | null
   bridge?: StatusSignal | null
-  /** Dot row + short summary text, for tight spaces like server cards. */
   compact?: boolean
   className?: string
 }
@@ -74,8 +68,6 @@ function displayWord(status: string, t: TFn): string {
   return key ? t(key) : status
 }
 
-// Short form for the compact dot-row summary — "Up"/"Down" reads faster than
-// per-signal wording ("Running"/"Connected"/"Active") in a tight card badge.
 function shortWord(status: string, t: TFn): string {
   const state = toIndicatorState(status)
   if (state === 'online') return t('shortWord.up')
@@ -101,12 +93,6 @@ function CompactBadge({ signals, className, t }: { signals: StatusSignal[]; clas
   )
 }
 
-/**
- * Renders the provider-aware 3-signal server status (host / RCON / bridge)
- * so "container running, RCON down" never collapses into one misleading
- * "Stopped". Signals not passed in are simply omitted — used on server
- * cards where only the host signal is known for non-selected servers.
- */
 export function ServerStatusBadge({ host, server, bridge, compact, className }: ServerStatusBadgeProps) {
   const { t } = useTranslation('serverStatusBadge')
   const signals = [host, server, bridge].filter((s): s is StatusSignal => Boolean(s))

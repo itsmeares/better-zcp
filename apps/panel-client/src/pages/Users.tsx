@@ -38,21 +38,12 @@ import {
 } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 
-// POST /api/auth/users only accepts one of these three legacy names -- it
-// has no roleId param, so it can't assign a custom role at creation time
-// (apps/panel-server/routes/auth.js). A role whose current name isn't literally one of
-// these (a custom role, or a seeded role renamed from the matrix) needs the
-// two-step fallback in handleCreate below.
 const LEGACY_USER_ROLES = ['admin', 'technician', 'moderator'] as const
 type LegacyUserRole = (typeof LEGACY_USER_ROLES)[number]
 function isLegacyUserRole(name: string): name is LegacyUserRole {
   return (LEGACY_USER_ROLES as readonly string[]).includes(name)
 }
 
-// Mirrors apps/panel-server/services/permissions.js's RECOVERY_CAPABILITIES, checked in
-// the same order -- lets the client fill in the {{action}} placeholder in
-// errors:ROLE_LOCKOUT_LAST_MANAGER when deleting a user would remove the
-// last holder of one of these two capabilities.
 function recoveryActionKeyForRole(role: RoleInfo | undefined): 'lockout.actionManageRoles' | 'lockout.actionManageUsers' | null {
   if (!role) return null
   if (role.capabilities.includes('roles.manage')) return 'lockout.actionManageRoles'
@@ -60,11 +51,6 @@ function recoveryActionKeyForRole(role: RoleInfo | undefined): 'lockout.actionMa
   return null
 }
 
-// `embedded`: rendered inside a Settings tab panel instead of as its own
-// route. The tab trigger already carries the page's name/icon, so the full
-// PageHeader (eyebrow/title/description) would be a second, redundant
-// header stacked on top of Settings' own -- only the action button carries
-// over, in a slim row instead.
 export default function Users({ embedded = false }: { embedded?: boolean }) {
   const { t, i18n } = useTranslation(['users', 'errors'])
   const { toast } = useToast()
@@ -87,40 +73,11 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
 
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
 
-  // Store the post-delete focus target before removing the row. The next row,
-  // previous row, or add-user button provides a stable keyboard fallback.
   const rowDeleteButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const pendingFocusTargetRef = useRef<string | 'fallback' | null>(null)
   const addUserButtonRef = useRef<HTMLButtonElement>(null)
   const [failedDeleteFocusId, setFailedDeleteFocusId] = useState<string | null>(null)
 
-  // Radix's AlertDialog (useConfirm()) is SUPPOSED to restore focus to
-  // whatever triggered it when it closes -- the row's own delete button.
-  // On the success path that doesn't matter either way, because this
-  // component then deletes the row a moment later (the API call + the
-  // setUsers() filter below), unmounting the very button focus would have
-  // been returned to -- React doesn't move focus when an element unmounts,
-  // so the browser drops it to document.body regardless of what Radix did,
-  // and a keyboard user is stranded with no visible indication of where
-  // they are on the page.
-  //
-  // Fix shape: handleDelete computes the right POST-removal focus target
-  // while the row (and its neighbors) still exist -- the next row if there
-  // is one, else the previous row, else the fallback -- and stores it here.
-  // This effect fires after `users` actually changes (i.e. after the row
-  // has unmounted and its neighbor, if any, has (re-)mounted with a stable
-  // ref), and moves focus there exactly once. Keyed on `users` rather than
-  // called synchronously in handleDelete because the DOM for the neighbor
-  // row isn't guaranteed to reflect the removal until after this render
-  // commits -- focusing too early would target a node that's about to move.
-  //
-  // Deliberately does nothing when pendingFocusTargetRef is null: a normal
-  // list refresh (fetchAll on mount, or any other users-state update) must
-  // never yank focus around -- only a delete that this component itself
-  // initiated sets the pending target, and it's cleared immediately after
-  // use (or on a failed delete, where the row survives -- see the catch
-  // branch in handleDelete, which focuses the surviving button directly
-  // instead of relying on Radix).
   useEffect(() => {
     const target = pendingFocusTargetRef.current
     if (target === null) return
@@ -132,16 +89,6 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
     rowDeleteButtonRefs.current.get(target)?.focus()
   }, [users])
 
-  // Failed-delete counterpart to the effect above -- can't reuse it because
-  // `users` never changes when the delete fails (the row survives), so that
-  // effect's dependency never fires. Deliberately ALSO deferred to a
-  // useEffect rather than called synchronously in the catch branch: tried
-  // that first and it didn't stick -- Radix's AlertDialog content is still
-  // present (and its focus trap still active) at the exact moment the catch
-  // branch runs, mid-close, so a synchronous .focus() call there gets
-  // overridden back to document.body. Firing after the next render commit
-  // (same reason the effect above is used instead of an inline call) gives
-  // the dialog's own close/teardown a chance to finish first.
   useEffect(() => {
     if (failedDeleteFocusId === null) return
     rowDeleteButtonRefs.current.get(failedDeleteFocusId)?.focus()
@@ -197,10 +144,6 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
     })
     if (!ok) return
 
-    // Compute the post-removal focus target NOW, from the list as it exists
-    // before this user is gone -- its neighbors are only knowable while it's
-    // still in `users`. See the focus-restore effect above for why this is
-    // a ref set here and consumed there, not just `.focus()`'d inline.
     const currentList = users || []
     const index = currentList.findIndex((u) => u.id === user.id)
     const neighborId = currentList[index + 1]?.id ?? currentList[index - 1]?.id
@@ -216,15 +159,6 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
         variant: 'success',
       })
     } catch (error) {
-      // The row survived -- its own button is still there. Radix's
-      // onCloseAutoFocus does NOT reliably land focus back on it (confirmed
-      // A real Chromium smoke test showed focus landing on document.body after
-      // this exact flow, a
-      // real keyboard-accessibility defect, not a jsdom artifact) -- so
-      // focus it explicitly rather than trust Radix's restore. Deferred to
-      // the failedDeleteFocusId effect above, not called inline here -- see
-      // that effect's comment for why an inline call loses the race against
-      // Radix's still-active focus trap.
       pendingFocusTargetRef.current = null
       setFailedDeleteFocusId(user.id)
       if (error instanceof ApiError && error.code === 'ROLE_LOCKOUT_LAST_MANAGER') {
@@ -288,8 +222,6 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
         role: creationRole,
       })
 
-      // Custom (or renamed-seeded) role: the account was created with the
-      // legacy fallback above, so assign the real role as a second step.
       if (creationRole !== targetRole.name) {
         try {
           await usersApi.assignRole(user.id, targetRole.id)

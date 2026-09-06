@@ -3,24 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 3, item 3 -- panelbridge-total-audit-2026-08-30.
-// exportPlayerData's worn-container bag scanner keys its `bagItems` table
-// directly on `worn.location` -- WornItem.getLocation()'s raw return value --
-// with no normalization. json.encode's own tostring(key) only runs at final
-// serialization, AFTER this grouping decision has already been made, so it
-// can't fix a key that never merged the way a stable string would have.
-//
-// This test does NOT claim to know the real B42 jar's getLocation() identity
-// semantics (that would need a live server) -- it proves the shape of the
-// bug directly: two worn containers that represent the SAME conceptual body
-// location, via two DIFFERENT (but each internally stable) location objects
-// that both stringify to "Torso", must merge into one bagInventory entry
-// once the key is normalized. Without normalization, Lua's raw table keying
-// treats the two different references as two DIFFERENT keys -- silently
-// duplicative in Lua itself, and exactly the shape that produces a
-// duplicate-key JSON object once json.encode's tostring(key) stringifies
-// each independently at serialization time (a real client's JSON.parse
-// would then silently keep only the last one).
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -35,11 +17,6 @@ const LUA_PATH = path.join(
   'PanelBridge.lua',
 );
 
-// Two worn containers that both sit at "Torso" (a backpack and a bag), via
-// two DISTINCT table references that both stringify the same way -- stands
-// in for "getLocation() returns a fresh, non-interned object for the same
-// conceptual location" without asserting that's actually what the real jar
-// does.
 const BASE = `
 getServerName = function() return "TestServer" end
 
@@ -106,11 +83,6 @@ getOnlinePlayers = function() return FakeOnlinePlayers end
 describe('PanelBridge.lua handlers.exportPlayerData -- worn-container bagItems keying (Finding 4)', () => {
   it('two containers at the same conceptual location merge into one bagInventory entry, measured at the Lua table level itself', () => {
     const bridge = loadPanelBridge(LUA_PATH, BASE);
-    // Measure pairs()-count directly in Lua rather than through the JS test
-    // harness's own table conversion (which independently collapses ANY raw
-    // table key -- unrelated to this bug -- so it can't distinguish "merged
-    // because normalized" from "collapsed because the harness stringified a
-    // plain object the same way regardless of content").
     bridge.run(`
       local ok, data = PanelBridgeModule.handlers.exportPlayerData({ username = "Fielder" })
       local count = 0
@@ -122,12 +94,7 @@ describe('PanelBridge.lua handlers.exportPlayerData -- worn-container bagItems k
     const bagKeyCount = bridge.getGlobal('__BAG_KEY_COUNT');
     const bagDiag = bridge.getGlobal('__BAG_DIAG');
 
-    // Both containers were found and scanned (2 sub-items total) -- that
-    // part of the pipeline is unaffected by this fix either way.
     expect(bagDiag).toMatch(/^2 items in/);
-    // The two "Torso" keys must merge into ONE entry once normalized --
-    // not silently stay as two separate, never-to-be-reconciled raw-object
-    // keys that would produce a duplicate "Torso" key in the final JSON.
     expect(bagKeyCount).toBe(1);
   });
 });

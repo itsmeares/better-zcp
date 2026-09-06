@@ -8,17 +8,6 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi, type ServerInstance,
 } from '@/lib/api'
 
-// impeccable-2026-08-31: performanceHistory (debugApi.getPerformanceHistory)
-// is the server's own persisted host-metrics log -- independent of the
-// online/hostUnknown check the verdict headline above it uses. Recent
-// samples can survive in that log even while the verdict can't confirm the
-// server right now, so the telemetry header used to say "LAST 3 MIN · LIVE"
-// with real numbers directly under a "Server status unknown" headline --
-// two widgets on the same page disagreeing about whether we're connected.
-// Confirmed on dashboard__desktop__light.png (Phase 1 critique). Fix: when
-// the verdict itself can't confirm the server (!online), swap the "live"
-// wording for an honest "unconfirmed" one -- same recency info, no claim
-// the verdict headline is already contradicting.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -81,8 +70,6 @@ function makeServer(overrides: Partial<ServerInstance> = {}): ServerInstance {
   }
 }
 
-// Two samples 90s apart -- recent enough to land in the "last Ns" branch,
-// which is the one that used to say "live" unconditionally.
 const recentHistory = [
   { timestamp: '2026-08-31T09:58:00.000Z', playerCount: 0, cpuUsage: 20, memoryUsed: 100, hostMemUsed: 1, hostMemTotal: 2, hostDiskUsed: 1, hostDiskTotal: 2 },
   { timestamp: '2026-08-31T09:59:30.000Z', playerCount: 0, cpuUsage: 22, memoryUsed: 100, hostMemUsed: 1, hostMemTotal: 2, hostDiskUsed: 1, hostDiskTotal: 2 },

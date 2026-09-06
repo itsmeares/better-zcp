@@ -2,12 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import { apiErrorHandler, handlePanelUpdateDownload } from "../index.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 
-// Wire-level coverage for the 2026-08-22 code-reachability trace: the
-// registry-membership test (errorCodeRegistry.test.js) proves a `code:`
-// literal is registered, but says nothing about whether it actually
-// survives to the JSON body a real client reads. These tests call the real,
-// exported production functions with fake req/res and assert on the actual
-// argument passed to res.json() -- not on source text.
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };
@@ -15,11 +9,6 @@ function createResponse() {
   return response;
 }
 
-// This is the fix from the 2026-08-22 reachability trace: without it, a
-// thrown error's code was dropped here unconditionally (only err.message
-// survived) -- the exact shape of the ServerNotConfiguredError bug found
-// and fixed the same day. The allowlist is the point: it has to work BOTH
-// ways, or it isn't an allowlist, it's a leak.
 describe("apiErrorHandler: registry is an allowlist, not a passthrough", () => {
   it("forwards err.code when it is a registered ErrorCode value (uses APPLY_IN_PROGRESS_LEGACY -- the one code whose only other protection was a hand-written per-catch-site check)", () => {
     const res = createResponse();
@@ -59,11 +48,6 @@ describe("apiErrorHandler: registry is an allowlist, not a passthrough", () => {
   });
 });
 
-// handlePanelUpdateDownload hands checker.downloadUpdate()'s return value to
-// res.json() unmodified in every failure branch -- these tests exist because
-// that pass-through is exactly the kind of code a later, unrelated refactor
-// narrows by accident ("just pull out success/error, why send the whole
-// object") with nothing here today to notice.
 describe("handlePanelUpdateDownload: downloadUpdate()'s result reaches res.json() intact", () => {
   function createRequest(checker) {
     return {
@@ -110,17 +94,6 @@ describe("handlePanelUpdateDownload: downloadUpdate()'s result reaches res.json(
     );
   });
 
-  // docker_updater_not_configured is set inside DockerUpdateProxy.apply()'s
-  // own `if (!this.enabled)` branch -- but downloadUpdate() only ever calls
-  // apply() from behind its OWN `if (this.dockerUpdateProxy.enabled)` guard
-  // (panelUpdateChecker.js ~364-368), and `enabled` is a pure getter over
-  // constructor-time env vars with nothing in between the two checks that
-  // could change it. That makes this specific code effectively dead via its
-  // only real call path today -- a separate finding from what this test
-  // covers. This test proves the ROUTE's pass-through is safe for this code
-  // IF it is ever produced (by a future caller of apply() outside
-  // downloadUpdate(), or if that guard is ever loosened), independent of
-  // whether it can happen today.
   it("docker_updater_not_configured: code survives to the generic fallback branch (currently unreachable via downloadUpdate()'s own guard -- see comment above)", async () => {
     const res = createResponse();
     const checker = {

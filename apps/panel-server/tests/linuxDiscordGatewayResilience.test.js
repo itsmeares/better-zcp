@@ -8,23 +8,6 @@ import path from "node:path";
 import { WebSocketServer } from "ws";
 import { Agent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 
-// hunt-wave5-2026-08-29 suspects 2, 4, 6, against a REAL discord.js Client
-// (imported unmodified, not mocked) talking to a real local mock Discord
-// API + gateway over real TCP/TLS/WS framing. No real token, no real
-// Discord server, no real network -- every outbound HTTPS request is
-// physically redirected to this mock via an undici connector override
-// (setGlobalDispatcher), and the mock's own /gateway/bot response points
-// the WS handshake at a local plain ws:// mock too. discord.js believes
-// it is talking to discord.com the whole time; only the physical
-// destination is redirected. See apps/panel-server/tests/linuxDiscordSendTimeout.test.js
-// for suspect 1 (the fix that shipped, 8d8fdb79) and
-// apps/panel-server/tests/linuxDiscordTokenSecretLifecycle.test.js for suspect 3.
-//
-// Requires a real `openssl` binary to mint the mock HTTPS server's
-// self-signed cert (present on every Linux dev/CI box this floor uses;
-// not guaranteed on a bare Windows host) -- skipped, not failed, when
-// unavailable, same posture as any other environment-gated integration
-// test in this suite.
 const isWindows = process.platform === "win32";
 let opensslAvailable = false;
 if (!isWindows) {
@@ -55,7 +38,6 @@ describe.skipIf(isWindows || !opensslAvailable)(
     let certDir;
     let originalDispatcher;
 
-    // Mutable mock behavior, reset per test.
     let mock;
 
     function resetMock() {
@@ -111,10 +93,6 @@ describe.skipIf(isWindows || !opensslAvailable)(
         }
         if (/^\/api\/v10\/channels\/.+\/messages$/.test(url) && req.method === "POST") {
           mock.sendAttempts++;
-          // The RAW bytes this mock actually received on the wire -- the
-          // whole point of the follow-up-1 redaction test is proving a
-          // secret never reaches even this far, not just that some
-          // in-process object looks clean.
           mock.lastReceivedMessageBody = bodyText;
           if (mock.sendBehavior === "ok") {
             return json(200, { id: String(Date.now()), content: JSON.parse(bodyText).content || "" });
@@ -243,9 +221,6 @@ describe.skipIf(isWindows || !opensslAvailable)(
         { getServerProcessDetails: async () => ({ running: false }) },
         { performRestart: async () => ({ success: true }) },
       );
-      // loadConfig() reads guildId/channelId via getSetting(), which the
-      // module mock above returns null for -- set the real values the bot
-      // needs directly, same shortcut linuxDiscordSendTimeout.test.js uses.
       const ok = await bot.start();
       expect(ok).toBe(true);
       bots.push(bot);
@@ -260,30 +235,6 @@ describe.skipIf(isWindows || !opensslAvailable)(
         mock.send429Count = 2;
         mock.retryAfterSeconds = 1;
 
-        // The discriminating measurement used to be wall-clock elapsed time
-        // (>= 1800ms, on the theory that hammering resolves in well under a
-        // second while genuinely waiting out two 1s Retry-After windows
-        // takes at least ~2s). That's exactly right in spirit but flaky in
-        // practice: this floor runs many agents/workflows concurrently, and
-        // under load the two real ~1050ms waits plus request/response
-        // overhead can land under the threshold on a slow tick even though
-        // the code waited correctly -- proven flaky (3/4 pass, 1/4 fail at
-        // the same commit) rather than assumed.
-        //
-        // Fixed by observing the delay discord.js's REST layer actually
-        // computed and scheduled a real wait against, instead of how long
-        // this machine took to get through it. @discordjs/rest logs
-        // "Encountered unexpected 429 rate limit ... Retry After: <n>ms"
-        // via RESTEvents.Debug synchronously, immediately before it awaits
-        // a real sleep() for exactly that many ms (verified against
-        // node_modules/@discordjs/rest/dist/index.js -- no branch between
-        // the log line and the await skips it). A hammering/bypassing bug
-        // (e.g. our _safeDiscordMakeRequest wrapper swallowing the 429
-        // before discord.js's own handler processes it) would mean this
-        // message never appears for that request, or appears fewer times
-        // than the mock's real 429 count -- so this keeps the same
-        // discrimination the wall-clock version was reaching for, just
-        // pinned to what the code decided rather than to the clock.
         const { RESTEvents } = await import("discord.js");
         const rateLimitWaitsMs = [];
         const onDebug = (message) => {
@@ -298,23 +249,13 @@ describe.skipIf(isWindows || !opensslAvailable)(
         bot.client.rest.off(RESTEvents.Debug, onDebug);
 
         expect(result).toBe(true);
-        expect(mock.sendAttempts).toBe(3); // 2 rate-limited + 1 success
-        expect(rateLimitWaitsMs).toHaveLength(2); // one real, logged wait per 429 -- not zero, not fewer than the mock sent
+        expect(mock.sendAttempts).toBe(3);
+        expect(rateLimitWaitsMs).toHaveLength(2);
         for (const waitedMs of rateLimitWaitsMs) {
-          // retryAfterSeconds (1) * 1000 -- discord.js's own default 50ms
-          // safety offset on top only ever adds to this, never subtracts,
-          // so >= 1000 alone already rules out "computed ~0 / ignored it".
           expect(waitedMs).toBeGreaterThanOrEqual(1000);
         }
-        // Still checks it doesn't hang: unlike the lower bound above, an
-        // upper ceiling on real elapsed time is not the flaky direction --
-        // load only pushes elapsed time up, never down, so this can't
-        // false-fail the way the removed lower bound did. Eventually
-        // resolves well inside our own 30s send ceiling (the suspect-1
-        // fix) -- this is the "well-behaved 429" counterpart to that fix's
-        // "pathological 429" case.
         expect(elapsedMs).toBeLessThan(10000);
-        expect(bot._breakerFor("1111").failures).toBe(0); // absorbed by discord.js's own retry, breaker never saw it
+        expect(bot._breakerFor("1111").failures).toBe(0);
       },
       20000,
     );
@@ -324,26 +265,11 @@ describe.skipIf(isWindows || !opensslAvailable)(
       async () => {
         const bot = await startBot();
 
-        // Confirm getStatus() looks healthy before the outage, as a baseline.
         const before = bot.getStatus();
         expect(before.running).toBe(true);
         expect(before.gatewayIssue).toBe(false);
         expect(before.gatewayDegradedSince).toBeNull();
 
-        // Wiring proof, and it must actually discriminate discordBot.js's
-        // OWN handler running -- not just "discord.js emits this event",
-        // which was never in question. EventEmitter invokes listeners in
-        // REGISTRATION ORDER; discordBot.js's own shardReconnecting/
-        // shardResume listeners are attached inside start() (already called
-        // by startBot() above), strictly before the listeners this test
-        // attaches next -- so by the time THESE callbacks run,
-        // bot._gatewayDegradedSince already reflects whatever discordBot.js's
-        // own handler did, synchronously, no race. (Polling the field
-        // AFTER the fact was tried first and is genuinely racy against a
-        // local loopback mock: RESUME->RESUMED can round-trip inside a
-        // single 200ms poll tick, so a set-then-clear can happen entirely
-        // between two checks -- caught this via break-verify below, not
-        // assumed.)
         let sinceAtReconnecting = "not-yet-fired";
         let sinceAtResume = "not-yet-fired";
         bot.client.once("shardReconnecting", () => {
@@ -353,43 +279,27 @@ describe.skipIf(isWindows || !opensslAvailable)(
           sinceAtResume = bot._gatewayDegradedSince;
         });
 
-        mock.heartbeatBlackhole = true; // no HEARTBEAT_ACK, no close frame -- a genuine zombie connection
+        mock.heartbeatBlackhole = true;
         const outageStart = Date.now();
 
-        // Poll for @discordjs/ws to notice the missed ack and RESUME on its
-        // own -- this is real library behavior, not simulated.
         const deadline = outageStart + 15000;
         while (!mock.resumeReceivedAt && Date.now() < deadline) {
           await new Promise((r) => setTimeout(r, 200));
         }
-        expect(mock.resumeReceivedAt).not.toBeNull(); // it DID notice and DID try to recover, unprompted
-        // discordBot.js's shardReconnecting handler had already set the raw
-        // field by the time our own listener ran, in the same tick.
+        expect(mock.resumeReceivedAt).not.toBeNull();
         expect(sinceAtReconnecting).not.toBeNull();
         expect(sinceAtReconnecting).not.toBe("not-yet-fired");
 
-        // Confirm it's not just noticing -- the resumed session actually
-        // carries live heartbeats again once we stop blackholing.
         mock.heartbeatBlackhole = false;
         const resumedAckDeadline = Date.now() + 5000;
         while (mock.heartbeatAcksSentAfterResume < 1 && Date.now() < resumedAckDeadline) {
           await new Promise((r) => setTimeout(r, 200));
         }
-        expect(mock.heartbeatAcksSentAfterResume).toBeGreaterThan(0); // genuinely recovered, not just resumed-then-stuck
-        // discordBot.js's shardResume handler had already cleared the raw
-        // field back to null by the time our own listener ran.
+        expect(mock.heartbeatAcksSentAfterResume).toBeGreaterThan(0);
         expect(sinceAtResume).toBeNull();
 
         expect(bot._gatewayDegradedSince).toBeNull();
 
-        // The whole round trip (outage -> RESUME -> live heartbeats again)
-        // measured a few seconds above, comfortably under the 30s threshold
-        // -- so the PUBLIC, debounced signal must never have flipped, exactly
-        // the "don't fire on every routine blip" property follow-up 2 asked
-        // for. This is the fixed counterpart to the ORIGINAL suspect 6
-        // finding (getStatus() used to have no field for this at ALL, so
-        // `running` stayed true throughout with no way to tell a healthy
-        // connection from one that had just silently survived an outage).
         const after = bot.getStatus();
         expect(after.running).toBe(true);
         expect(after.lastStartError).toBeNull();
@@ -405,22 +315,11 @@ describe.skipIf(isWindows || !opensslAvailable)(
         const bot = await startBot();
         expect(bot._gatewayDegradedSince).toBeNull();
 
-        // 4004 = Authentication failed, one of @discordjs/ws's own
-        // UNRECOVERABLE_CLOSE_CODES -- the shard gives up instead of
-        // retrying, so this must reach shardDisconnect, not shardReconnecting.
-        // discord.js's own WebSocketManager emits this ON THE CLIENT itself
-        // (this.client.emit(Events.ShardDisconnect, event, shardId)), not on
-        // an intermediate .ws object -- matching that exactly here so this
-        // test exercises the real event name/shape our listener is wired to.
         bot.client.emit("shardDisconnect", { code: 4004 }, 0);
 
         const setAt = bot._gatewayDegradedSince;
         expect(setAt).not.toBeNull();
 
-        // Nothing clears an unrecoverable disconnect on its own -- unlike
-        // the self-healing case above (shardResume/shardReady), there is no
-        // library event coming that would reset this, so it's meant to stay
-        // flagged until an operator (or a fresh start()) intervenes.
         await new Promise((r) => setTimeout(r, 500));
         expect(bot._gatewayDegradedSince).toBe(setAt);
       },
@@ -441,11 +340,6 @@ describe.skipIf(isWindows || !opensslAvailable)(
         );
 
         expect(result).toBe(true);
-        // The assertion that actually matters: what the MOCK SERVER received
-        // on the wire, not any in-process string -- proves the redaction ran
-        // at the real _safeDiscordMakeRequest boundary discord.js's REST
-        // manager actually calls, not merely that some helper function
-        // returns the right thing in isolation.
         expect(mock.lastReceivedMessageBody).not.toBeNull();
         expect(mock.lastReceivedMessageBody).not.toContain(FAKE_SFTP_SECRET);
         expect(mock.lastReceivedMessageBody).toContain("[REDACTED]");

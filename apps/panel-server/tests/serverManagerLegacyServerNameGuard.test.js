@@ -18,15 +18,6 @@ vi.mock("../database/init.js", () => ({
 
 const { ServerManager } = await import("../services/serverManager.js");
 
-// 2026-08-26 bug hunt finding 1: legacy settings.serverName reached
-// serverManager.js's this.serverName / this.serverBat with no validation at
-// all, and both are interpolated straight into a filesystem path
-// (getServerConfig/saveServerConfig's `${serverName}.ini`) and a launched
-// script filename (StartServer_<name>.bat / start-server_<name>.sh). The
-// real fix is at the write side (config.js's PUT /app-settings now rejects
-// an unsafe serverName before it can be stored, see appSettingsRoute.test.js)
-// -- this pins the sink-side defense in depth for an install that already
-// has a bad value saved from before that validation existed.
 describe("ServerManager loadConfig -- legacy settings.serverName path-traversal guard", () => {
   beforeEach(() => {
     logServerEvent.mockReset();
@@ -35,8 +26,6 @@ describe("ServerManager loadConfig -- legacy settings.serverName path-traversal 
     getActiveServer.mockReset();
     getServer.mockReset();
     getServers.mockReset();
-    // No server profile row at all -- the precondition that actually
-    // reaches the legacy-settings fallback branch this guard lives in.
     getActiveServer.mockResolvedValue(null);
   });
 
@@ -58,10 +47,6 @@ describe("ServerManager loadConfig -- legacy settings.serverName path-traversal 
 
     await manager.loadConfig();
 
-    // path.basename("../../../etc/evil") === "evil" !== the raw value, so
-    // this must be treated as no legacy name configured at all -- not
-    // silently truncated to "evil" either, which would just as silently
-    // point the panel at a DIFFERENT, wrong .ini file.
     expect(manager.serverName).not.toBe("../../../etc/evil");
     expect(manager.serverName).toBeFalsy();
   });

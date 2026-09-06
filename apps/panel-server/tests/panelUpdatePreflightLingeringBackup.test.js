@@ -3,18 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-// 2026-09-04, Dwight's finding: this preflight probe checked for a
-// ".old" backup file, a suffix nothing has written since the bundle-journal
-// rewrite renamed it to ".bundle-previous" (see updateBundle.js's
-// backupBinaryPath and scripts/release/build.mjs's BIN_BACKUP). The check could therefore
-// never fire for the current mechanism -- silence here read as "nothing
-// lingering" while the actual current risk (a .bundle-previous a failed or
-// incomplete rollback left behind, exactly the class of bug fixed in
-// acb202b1) went completely unchecked.
 
-// preflight() early-returns before this probe unless the process looks
-// packaged -- match the real runtime condition, not just the file's own
-// isolated logic, the same way every other preflight()-calling test here does.
 process.pkg = {};
 
 const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");

@@ -12,14 +12,6 @@ const ruleTester = new RuleTester({
   },
 })
 
-// scripts/eslint-rules/no-duplicate-interface-name.js: the structural fix for the
-// 2026-08-27 api.ts type-architecture survey's Finding 1 -- api.ts declared
-// `export interface BackupFile` twice, for two unrelated real shapes
-// (server-files/backups' {filename,size,created} vs backup.js's
-// {name,path,size,created}), and TypeScript's declaration merging silently
-// unioned them into one type requiring all five fields. `tsc -b --noEmit`
-// reported zero errors on it -- this rule is what now catches that class of
-// collision, as a real AST check (TSInterfaceDeclaration), not a regex.
 describe('local/no-duplicate-interface-name', () => {
   ruleTester.run('no-duplicate-interface-name', rule, {
     valid: [
@@ -46,19 +38,14 @@ describe('local/no-duplicate-interface-name', () => {
     ],
     invalid: [
       {
-        // The exact api.ts BackupFile shape before the 2026-08-27 fix.
         code: 'export interface BackupFile { filename: string; size: number; created: string }\nexport interface BackupFile { name: string; path: string; size: number; created: string }',
         errors: [{ messageId: 'duplicate' }],
       },
       {
-        // Three declarations of the same name -- the second AND third both
-        // collide with the first.
         code: 'export interface Foo { a: string }\nexport interface Foo { b: string }\nexport interface Foo { c: string }',
         errors: [{ messageId: 'duplicate' }, { messageId: 'duplicate' }],
       },
       {
-        // Identical field sets doesn't make it safe -- still two
-        // declarations claiming the same name, still worth a rename.
         code: 'export interface Foo { a: string }\nexport interface Foo { a: string }',
         errors: [{ messageId: 'duplicate' }],
       },

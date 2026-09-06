@@ -1,17 +1,3 @@
-// This file exists because 25 tests already covered buildLifecycleTemplate()
-// and every one of them stopped at the generated STRING. None ever handed
-// that string to real systemd, which is exactly how the original PR shipped
-// with a WorkingDirectory= line that failed to load on every single Linux
-// host, with a plain path, no special characters required. `execFile` is
-// stubbed everywhere else in this suite -- this file is the one place that
-// is not allowed to stub it: it shells out to the real `systemd-analyze`
-// binary and treats its verdict as ground truth, the same way the bug was
-// actually found.
-//
-// If systemd-analyze is not on this host, the suite SKIPS instead of
-// silently reporting green -- see the loud console.warn below and the
-// runtime-composed describe title, which names the skip in the test list
-// itself rather than relying on a reader to notice a quieter skipped count.
 import { execFileSync } from "child_process";
 import fs from "fs";
 import os from "os";
@@ -49,15 +35,6 @@ const server = {
   serverName: "servertest",
 };
 
-// The four shapes already used to find and characterize the bug: a
-// completely plain path (proved the bug was NOT limited to special
-// characters -- every server failed), a space (the one case the pre-fix
-// test suite claimed to cover, but never actually verified against real
-// systemd), a literal "$" (systemd does not expand it anywhere in this
-// unit, confirmed live -- it must round-trip completely unescaped), and an
-// embedded double quote (the character the original bug's own escaping
-// coincidentally handled *worse*, since it was being applied to a directive
-// that does not use quoting grammar at all).
 const CASES = [
   { label: "plain path, no special characters", installPath: "/opt/pzserver/server.sh" },
   { label: "path containing a space", installPath: "/opt/pz server/server.sh" },
@@ -93,10 +70,6 @@ describeRealSystemd(
         const unitPath = path.join(tmpDir, `${server.id}-${label.replace(/[^a-z0-9]+/gi, "-")}.service`);
         fs.writeFileSync(unitPath, template.content);
 
-        // systemd-analyze verify works on an arbitrary file path -- no
-        // `--user`, no installation into ~/.config/systemd/user/, no running
-        // session required. Safe to run concurrently with anything else on
-        // a shared host: it never touches real systemd state.
         let result;
         try {
           result = execFileSync("systemd-analyze", ["verify", unitPath], {
@@ -110,15 +83,8 @@ describeRealSystemd(
           );
         }
 
-        // A unit can exit 0 while still printing a warning to stderr (this
-        // is exactly how "Ignoring unknown escape sequences" was found for
-        // the old "\$" escaping -- a warning, not a hard failure). Fail the
-        // test on ANY output, not just a non-zero exit code.
         expect(result.trim()).toBe("");
 
-        // Cheap, independent confirmation that the plain-assignment
-        // directive is genuinely unquoted (the actual bug), not just that
-        // systemd tolerated it for some other reason.
         expect(template.content).not.toMatch(/^WorkingDirectory="/m);
       });
     }
@@ -143,11 +109,6 @@ describeRealSystemd(
     });
 
     it("escapes a literal % in Description= so it cannot be read as a systemd specifier", () => {
-      // Real systemd expands recognized specifiers (e.g. "%h" -> the unit's
-      // home directory) in plain assignment directives too, not just
-      // Exec*=/Environment=. Confirmed live: an unescaped "%h" in
-      // Description= silently became "/root". A server named with "%h" in
-      // it must not leak the host's home directory into a unit file.
       const unitPath = path.join(tmpDir, "percent-specifier.service");
       const template = buildLifecycleTemplate(
         { ...server, name: "Survival %h Test", installPath: "/opt/pzserver/server.sh" },

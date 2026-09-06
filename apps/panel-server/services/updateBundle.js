@@ -36,24 +36,6 @@ function sha256File(filePath) {
   return hash.digest("hex");
 }
 
-// Single combined hash over an entire directory tree, used to verify the
-// staged client bundle the same way sha256File() verifies the staged binary.
-// Files are visited in ORDINAL order (plain string comparison, not
-// localeCompare) specifically because this value is written once here (in
-// Node) and re-verified independently in two other places -- applyUpdateBundle()
-// below (Node, Linux) and the PowerShell embedded in scripts/release/build.mjs's generated
-// Start.bat (Windows, no Node available at apply time). Ordinal is the one
-// ordering both runtimes can reproduce byte-for-byte without agreeing on a
-// locale.
-// main-is-red, 2026-09-05: returns { hash, pairs } instead of just the
-// combined hash. `pairs` (one "relativePath:fileHash" string per file,
-// same ordinal order and format the PowerShell mirror in scripts/release/build.mjs's
-// Start.bat now logs on a mismatch) exists purely for side-by-side
-// diagnosis -- stageUpdateBundle() below persists it into the journal
-// specifically so a real mismatch on Windows can be compared against what
-// Node actually hashed, without needing to re-derive it after the fact
-// from a staged directory that may no longer exist by the time anyone
-// looks.
 function sha256Directory(dirPath) {
   const pairs = [];
   const walk = (dir, rel) => {
@@ -378,10 +360,6 @@ export function stageUpdateBundle({
     stagedAt: new Date().toISOString(),
     installDir: resolvedInstallDir,
     metadata: expectedMetadata,
-    // clientFiles is diagnostic only (main-is-red, 2026-09-05) -- never
-    // read back for verification, only for comparing against the
-    // PowerShell mirror's own pairs list when clientSha256 disagrees on
-    // Windows despite both sides computing the identical algorithm.
     hashes: { binarySha256, clientSha256, clientFiles },
     paths: {
       binary: path.resolve(binaryPath),

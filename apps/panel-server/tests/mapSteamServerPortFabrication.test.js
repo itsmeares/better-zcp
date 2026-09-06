@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mapSteamServer } from "../routes/serverFinder.js";
 
-// Regression coverage: mapSteamServer() used to fall back to the hardcoded
-// 16261 (PZ's default game port) whenever BOTH the addr-derived port and
-// server.gameport were unparseable -- a fabricated, real-looking value
-// indistinguishable downstream from a port that was actually read. Fixed to
-// stay null (this file's own established "we don't have this value"
-// convention, see ping: null) rather than invent one.
 
 describe("mapSteamServer: port derivation is honest, never fabricated", () => {
   it("prefers the port parsed out of addr when present", () => {

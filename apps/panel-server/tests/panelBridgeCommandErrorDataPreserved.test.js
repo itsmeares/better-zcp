@@ -1,20 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Bug hunt 2026-08-31: services/panelBridge.js's processResult() attaches a
-// rich soft-failure diagnostic table to the rejected Error's `.data`
-// specifically so "a caller that wants the diagnostics can get them" (its
-// own comment, added alongside runEventSequence's honest per-step results).
-// Three route catch blocks in THIS file built their error response from
-// error.message alone and threw the table away at the route boundary:
-// POST /command (the generic passthrough, reached by ~30 actions with no
-// dedicated route), POST /players/:username/teleport (a live client path --
-// apps/panel-client/src/lib/api.ts's teleportPlayerBridge), and POST /players/:username
-// /kill (also live -- killPlayer). apps/panel-client/src/lib/api.ts's ApiError.data is
-// the ENTIRE parsed response body (buildResponseError), so the fields below
-// are asserted flat at the top level of the JSON response, NOT nested under
-// a `data:` key -- nesting would have put the table at error.data.data,
-// one level deeper than every consumer (getRecoveryUrl's fixUrl read,
-// Events.tsx's isEventSequenceResultData) expects.
 
 const getActiveServer = vi.fn(async () => null);
 const logBridgeCommand = vi.fn(async () => {});
@@ -83,8 +68,6 @@ describe("PanelBridge route catches preserve error.data (the soft-failure diagno
       const body = res.json.mock.calls[0][0];
       expect(body.category).toBe("unknown");
       expect(body.error).toBe("3 of 10 steps failed");
-      // Flat, not nested -- body.data would be undefined if this regressed
-      // to the nested shape.
       expect(body.executed).toBe(10);
       expect(body.failedCount).toBe(3);
       expect(body.results).toEqual([]);
@@ -143,7 +126,7 @@ describe("PanelBridge route catches preserve error.data (the soft-failure diagno
 
       expect(res.status).toHaveBeenCalledWith(500);
       const body = res.json.mock.calls[0][0];
-      expect(body.error).toBe("Teleport failed"); // unchanged wording, own message intentionally not error.message here
+      expect(body.error).toBe("Teleport failed");
       expect(body.verifyPosition).toEqual({ x: 100, y: 100, z: 0 });
       expect(body.newPosition).toEqual({ x: 5000, y: 6000, z: 0 });
     });

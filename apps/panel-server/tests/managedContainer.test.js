@@ -79,8 +79,6 @@ describe("resolveManagedContainer", () => {
 
     const resolved = await resolveManagedContainer({ dockerClient: client });
 
-    // Must not decline: falling back to RCON would kill the process and let the
-    // restart policy bring the container straight back up.
     expect(resolved.handled).toBe(true);
     expect(resolved.error).toMatch(/zomboid-panel\.managed=true/);
   });
@@ -159,10 +157,6 @@ describe("runManagedLifecycle", () => {
   });
 });
 
-// resolveDockerHostSignal is the single implementation apps/panel-server/routes/
-// serverStatus.js's dashboard badge and apps/panel-server/index.js's status watchdog
-// (checkServerStatusNow) both call for docker-local/docker-managed servers,
-// so a bug here would desync both at once -- see its own header comment.
 describe("resolveDockerHostSignal", () => {
   it("inspects a directly-referenced container without requiring the managed label", async () => {
     const client = createClient({
@@ -203,12 +197,6 @@ describe("resolveDockerHostSignal", () => {
     expect(result).toEqual({ running: false, scanFailed: true });
   });
 
-  // Docker control disabled/unavailable -- falls through to
-  // resolveManagedContainer(), which declines the same way (both share the
-  // identical enabled/available guard), so the outcome is the same
-  // scanFailed:true either way. This reuses the REAL resolveManagedContainer
-  // (not mocked), so a regression in how the two functions compose would
-  // also be caught here.
   it("reports scanFailed when Docker control is disabled (falls through to resolveManagedContainer, which also declines)", async () => {
     const client = createClient({ enabled: false, available: false });
 
@@ -218,9 +206,6 @@ describe("resolveDockerHostSignal", () => {
     expect(result).toEqual({ running: false, scanFailed: true });
   });
 
-  // No ref on the server object at all -- both the direct-inspect condition
-  // and resolveManagedContainer's own ref lookup (server.dockerContainerName
-  // /dockerContainerId, re-fetched via getServer(id)) come up empty.
   it("reports scanFailed when the server carries no container reference at all", async () => {
     getServer.mockResolvedValue({ dockerContainerName: null, dockerContainerId: null });
     const client = createClient();

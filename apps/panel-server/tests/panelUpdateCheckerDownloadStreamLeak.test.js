@@ -4,16 +4,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// main-is-red overnight-sweep follow-up, 2026-09-05: downloadFile()'s fail()
-// (panelUpdateChecker.js ~:1420) unlinked the destination file on any
-// failure but never closed the write stream piping into it. pipe() only
-// auto-ends its destination when the SOURCE ends normally -- never on a
-// source error -- so a timeout or abort partway through a download left the
-// write stream open, holding the file descriptor, while fail() tried to
-// delete the very file that handle still held open. On Windows specifically,
-// unlinking a file with an open handle can silently fail (the callback here
-// swallows the error), leaving a corrupt partial download on disk for the
-// next attempt to trip over, on top of the leaked descriptor itself.
 let mockReq;
 let mockRes;
 let capturedFile = null;
@@ -30,10 +20,6 @@ vi.mock("https", () => ({
       mockRes.statusCode = 200;
       mockRes.headers = {};
       mockRes.resume = vi.fn();
-      // The real code does res.pipe(file) -- captured here instead of
-      // actually piping, so the test can inspect the real WriteStream
-      // fail() is responsible for closing, without needing real bytes to
-      // flow through it.
       mockRes.pipe = (dest) => {
         capturedFile = dest;
         return dest;
@@ -88,7 +74,6 @@ describe("PanelUpdateChecker.downloadFile closes its write stream instead of lea
     mockReq.destroy(timeoutError);
 
     await expect(downloadPromise).rejects.toThrow("Download timed out");
-    // The stream's own "close" fires asynchronously after destroy().
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(capturedFile.destroyed).toBe(true);

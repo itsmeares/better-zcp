@@ -1,16 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The vulnerability this file exists to catch, live-found while testing
-// something unrelated: authService.middleware() used to exempt the WHOLE
-// /api/auth/* prefix from authentication (a blanket startsWith check), so
-// req.user was never set for ANY route under it — including ones gated by
-// requireRole/requirePermission, whose own "no req.user -> let it through"
-// branch (meant for the auth-disabled case) then admitted every request
-// regardless of whether a token was even present. Live-confirmed:
-// unauthenticated POST /api/auth/users with role:"admin" created a real
-// admin account on a fully set-up install. This file proves the fix in
-// both directions — the actually-public paths still work with no token,
-// and everything else now genuinely requires one.
 const settings = new Map();
 const db = { data: { users: [{ id: "u1", username: "admin", role: "admin" }] } };
 
@@ -31,7 +20,7 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
 
   beforeEach(async () => {
     settings.clear();
-    db.data.users = [{ id: "u1", username: "admin", role: "admin" }]; // needsSetup() must be false
+    db.data.users = [{ id: "u1", username: "admin", role: "admin" }];
     await authService.init();
     middleware = authService.middleware();
   });
@@ -72,15 +61,6 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
     },
   );
 
-  // /api/auth/oidc/settings and /api/auth/oidc/test-connection were added
-  // later (OIDC settings screen work) and are authenticated + requirePermission
-  // -gated -- this used to be a blanket `startsWith("/api/auth/oidc/")`
-  // exemption, which would have made both of these permanently unusable
-  // (req.user never set under the exemption, so the gate always fails
-  // closed) rather than insecure, but was the exact same "route added under
-  // an exempted prefix inherits its exemption whether wanted or not" shape
-  // as the original incident. Pinned here so nobody "simplifies" the OIDC
-  // exemption back into a prefix and reintroduces it.
   it.each(["/api/auth/oidc/settings", "/api/auth/oidc/test-connection"])(
     "%s is NOT exempt — it requires a token like any other authenticated route",
     async (path) => {
@@ -125,15 +105,12 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
     });
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
-    // req.user is set as a side effect for downstream requireRole/
-    // requirePermission to read — this is the actual thing that was
-    // broken (never set at all under the old blanket exemption).
     expect(req.user).toMatchObject({ username: "admin", role: "admin" });
   });
 
   it("auth explicitly disabled (authEnabled=false): req.user is set to an explicit synthetic full-access user, not left absent", async () => {
     settings.set("authEnabled", false);
-    const { req, next, res } = await run("/api/auth/users"); // no token at all
+    const { req, next, res } = await run("/api/auth/users");
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
@@ -150,7 +127,7 @@ describe("requireRole() — the guard itself fails closed, independent of middle
 
   it("refuses (401) when req.user is missing, rather than the old pass-through — the defense-in-depth half of the fix", () => {
     const gate = requireRole("admin");
-    const req = {}; // no req.user at all — the exact shape a future exemption mistake would produce
+    const req = {};
     const res = createResponse();
     const next = vi.fn();
 
@@ -178,11 +155,6 @@ describe("requireRole() — the guard itself fails closed, independent of middle
 });
 
 describe("/me, /change-password, /recovery-codes — independently safe, pinned so nobody 'simplifies' them onto req.user later", () => {
-  // These three call getAuthenticatedUser(req) themselves instead of
-  // trusting req.user — proven here by invoking their route handlers
-  // DIRECTLY with no req.user set at all (the exact shape they'd see if
-  // someone accidentally re-added their path to PUBLIC_AUTH_PATHS above).
-  // If a future change ever makes them trust req.user instead, this fails.
   function getLayer(routePath, method) {
     return authRouter.stack.find(
       (entry) => entry.route?.path === routePath && entry.route.methods[method],

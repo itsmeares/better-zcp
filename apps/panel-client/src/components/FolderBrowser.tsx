@@ -53,7 +53,6 @@ export function FolderBrowser({ open, onOpenChange, onSelect, initialPath, title
     }
   }, [t])
 
-  // Load initial directory when opening
   useEffect(() => {
     if (open) {
       loadDirectory(initialPath || undefined)
@@ -96,7 +95,6 @@ export function FolderBrowser({ open, onOpenChange, onSelect, initialPath, title
     if (parentPath) {
       loadDirectory(parentPath)
     } else {
-      // Go to drive list
       loadDirectory(undefined)
     }
   }
@@ -114,7 +112,6 @@ export function FolderBrowser({ open, onOpenChange, onSelect, initialPath, title
           <DialogDescription className="sr-only">{t('description')}</DialogDescription>
         </DialogHeader>
 
-        {/* Address bar */}
         <form onSubmit={handlePathSubmit} className="flex items-center gap-2 px-3 py-2 border-b border-border/40 bg-muted/30">
           <Button
             type="button"
@@ -138,7 +135,6 @@ export function FolderBrowser({ open, onOpenChange, onSelect, initialPath, title
           </Button>
         </form>
 
-        {/* File listing */}
         <ScrollArea className="h-[340px]">
           {loading ? (
             <div className="flex items-center justify-center h-full py-20">
@@ -189,7 +185,6 @@ export function FolderBrowser({ open, onOpenChange, onSelect, initialPath, title
           )}
         </ScrollArea>
 
-        {/* Footer */}
         <DialogFooter className="px-4 py-3 border-t border-border/50 bg-muted/20">
           <div className="flex items-center justify-between w-full gap-3">
             <p className="text-xs text-muted-foreground truncate min-w-0 flex-1 font-mono">

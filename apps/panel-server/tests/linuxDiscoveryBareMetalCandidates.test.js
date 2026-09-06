@@ -3,18 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Linux bug hunt 2026-08-29, server-discovery card. mountDiscovery.js's
-// COMMON_MOUNT_CANDIDATES are all container-internal Docker bind-mount
-// conventions (/pz-server, /serverdata/serverfiles, /steam/pz) -- real paths
-// only inside a container built to that convention. The panel also runs
-// bare-metal on Linux (the packaged build), where a genuine SteamCMD install
-// lives at one of a few real host paths instead -- exactly the ones
-// zomboidPaths.js's computeCandidateZomboidPaths() has anticipated on the
-// save-data side for a long time (~/pzserver/Zomboid, /opt/pzserver/Zomboid,
-// /srv/pz/Zomboid). Before this fix, discoverMounts() had zero install-side
-// candidates for any of these, so the "Discover" scan -- shown unconditionally
-// on every deployment, per Servers.tsx -- came up empty for a bare-metal
-// Linux operator no matter how standard their layout was.
 
 let tmpHome;
 
@@ -97,7 +85,6 @@ describe("discoverMounts(): bare-metal Linux SteamCMD layouts", () => {
     "does not report a bare-metal candidate when nothing is there (no false positive on a clean host)",
     async () => {
       tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-discovery-home-"));
-      // Deliberately build nothing under tmpHome.
       const { discoverMounts } = await import("../services/mountDiscovery.js");
       const mounts = discoverMounts();
       expect(mounts.some((m) => m.source === "linux-bare-metal")).toBe(false);
@@ -109,10 +96,6 @@ describe("discoverMounts(): bare-metal Linux SteamCMD layouts", () => {
     async () => {
       tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-discovery-home-"));
       const installDir = path.join(tmpHome, "pzserver");
-      // Build an install that ONLY has the alternate script name -- no
-      // start-server.sh, no ProjectZomboid64 binary, no media/lua, no
-      // steamapps -- so hasStartScript is the ONLY thing that can make this
-      // probe valid, isolating exactly the condition this test checks.
       fs.mkdirSync(installDir, { recursive: true });
       fs.writeFileSync(
         path.join(installDir, "projectzomboid-dedi-server.sh"),

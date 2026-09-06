@@ -1,15 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 
-// Real module (not mocked) — normalizeServerMemory/serverPathEnvFallback
-// tests already establish this as safe: getDataPaths() only touches the
-// repo's gitignored data/ dir, no external state.
 const { getCircuitBreakerStatus, commitNow, getDb } = await import(
   "../database/init.js"
 );
 
-// Mirrors MAX_WRITE_RETRIES in database/init.js — not exported since we're
-// told not to touch the circuit breaker's own logic, only expose its state.
 const MAX_WRITE_RETRIES = 5;
 
 async function forceWriteFailures(times, message = "ENOSPC: no space left on device") {
@@ -53,16 +48,11 @@ describe("getCircuitBreakerStatus", () => {
     await forceWriteFailures(MAX_WRITE_RETRIES, "disk full");
     expect(getCircuitBreakerStatus().open).toBe(true);
 
-    // commitNow() always flushes immediately — flushWrites() itself doesn't
-    // gate on the circuit breaker (only the debounced scheduleWrite() path
-    // does), so a direct write can succeed and heal the error bookkeeping
-    // before the real 60s cooldown elapses.
     await commitNow();
 
     const status = getCircuitBreakerStatus();
     expect(status.lastError).toBeNull();
     expect(status.failCount).toBe(0);
-    // The cooldown window itself is untouched by the successful write.
     expect(status.open).toBe(true);
   });
 

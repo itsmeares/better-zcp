@@ -1,36 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// conv-mods-thumbnails follow-up (the "one-gate-per-router blindness" card):
-// routeRoleSweep.test.js's runFirstUseLayer() (and every router.stack.find()
-// -based helper in that suite) only ever reaches the FIRST router.use()
-// layer of any router. serverFiles.js has FOUR: the requirePermission gate
-// routeRoleSweep.test.js covers (line 36), then three more.
-//
-// CORRECTION to the card as dispatched, found while building this file --
-// worth recording plainly rather than silently patching around it: line 72
-// (the unconfigured-panel 404) is NOT actually uncovered. It's already
-// reached by serverFilesUnconfiguredGate.test.js, which does the same
-// nonRouteLayers[1]-by-index trick this file uses -- routeRoleSweep.test.js
-// can't see it, but a different, dedicated file already can and does, in
-// both directions (404 when unconfigured, passes through when configured).
-// Line 238's underlying guard functions (requireStoppedForLocalConfigMutation,
-// warnRunningForLocalConfigEdit) are ALSO already thoroughly covered --
-// serverFilesMutationSafety.test.js imports and calls them directly from
-// services/configMutationGuard.js, including the exact 92d2772
-// fail-open/scanFailed case. What neither existing file tests is the
-// DISPATCH itself -- the anonymous middleware actually sitting at
-// router.stack's non-route index 3, whose only job is deciding which guard
-// function a given (method, path) pair gets routed to (or neither). That
-// wiring, and the line-88 remote-mirror gate (genuinely zero coverage
-// anywhere, confirmed by grepping the whole suite for its response codes),
-// are this file's actual job -- line 72 is left to its existing owner
-// rather than duplicated here.
-//
-// Line 238's dispatch sits in front of a guard with fail-open history --
-// this file is coverage only, per the boundary: if any assertion here
-// reveals the WIRING doing something the underlying (already-verified)
-// guard functions wouldn't, that's a finding to report, not something to
-// fix in this pass.
 
 const getActiveServer = vi.fn();
 const getAllSettings = vi.fn();
@@ -40,12 +9,6 @@ vi.mock("../database/init.js", () => ({
   getAllSettings,
 }));
 
-// Deliberately mocked rather than imported for real: services/
-// remoteConfigFiles.js pulls in ssh2-sftp-client, and none of the cases
-// below need an actual SFTP round trip -- the "remote but not configured"
-// case only needs isRemoteConfigConfigured() to say no, same principle as
-// this suite's existing discordBot.js stub (a gate test has no legitimate
-// reason to load a real network client).
 const isRemoteConfigConfigured = vi.fn(() => false);
 vi.mock("../services/remoteConfigFiles.js", () => ({
   SFTP_CONFIG_PATH_KEY: "panelBridgeSftpConfigPath",
@@ -59,11 +22,6 @@ vi.mock("../services/remoteConfigFiles.js", () => ({
 
 const { default: router } = await import("../routes/serverFiles.js");
 
-// Verified empirically: router.stack has exactly 4 non-route layers, in
-// source order -- [0] line 36 requirePermission("serverfiles.manage")
-// (already covered by routeRoleSweep.test.js), [1] line 72, [2] line 88,
-// [3] line 238. Grabbed by index, not "first", since that's precisely the
-// blindness this file exists to remove.
 function getUseLayers() {
   return router.stack.filter((entry) => !entry.route).map((entry) => entry.handle);
 }
@@ -89,10 +47,6 @@ function createResponse() {
   return response;
 }
 
-// Runs ONE middleware layer directly (not the whole router), matching
-// routeRoleSweep.test.js's runFirstUseLayer -- these are router.use()
-// layers with no path of their own, so there's no route-matching to
-// faithfully reproduce, just the (req, res, next) contract.
 async function runLayer(handle, req) {
   const res = createResponse();
   let nextCalledWith = "not-called";
@@ -149,12 +103,6 @@ describe("serverFiles.js router.use layers beyond the requirePermission gate", (
         get: (key) => (key === "serverManager" ? { getServerProcessDetails: async () => details } : undefined),
       };
     }
-    // getServerProcessDetails(), not checkServerRunning() -- matching the
-    // 2026-08-26 fix to warnRunningForLocalConfigEdit itself (finding 2):
-    // that guard now only ever consults getServerProcessDetails(), so a
-    // stub exposing just checkServerRunning would (correctly, post-fix)
-    // always warn regardless of `running`, breaking the "passes through
-    // with no warning while stopped" case below for the wrong reason.
     function stubEditManager(running) {
       return {
         get: (key) =>
@@ -259,8 +207,6 @@ describe("serverFiles.js router.use layers beyond the requirePermission gate", (
         fakeReq({ method: "GET", path: "/ini" }),
       );
       expect(nextCalledWith).toBe("called");
-      // Neither branch's server-state check should have run for a path this
-      // gate doesn't even classify as a mutation.
       expect(getActiveServer).not.toHaveBeenCalled();
     });
   });

@@ -4,30 +4,6 @@ import os from "os";
 import path from "path";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.js";
 
-// 2026-08-29/30 hunt-wave13 sweep (god's follow-up to 3d1921ad): the same
-// asymmetry fixed in POST /write-to-ini recurs across the file at every
-// site that decides whether Mods=/WorkshopItems=/Map= already exist via a
-// bare, whitespace-intolerant regex. Verified per-site (not blind-applied)
-// which sites are genuinely reachable -- every site examined reads content
-// fresh via readTextFile() inside its own withIniLock() callback, so a
-// whitespace-variant line written by a hand-edit (or, pre-edda9ca6, left
-// behind by the structured editor) is always reachable there.
-//
-// Two DISTINCT failure shapes exist depending on whether the guarded branch
-// has an else/append:
-//   - DUPLICATE-KEY shape (toggle-mod-id, batch-toggle-mod-ids, add, etc.):
-//     the exists-check fails, the code appends a SECOND key line, and
-//     findDuplicateIniKeys() then 409-locks every future structured PUT
-//     /ini save.
-//   - SILENT-NO-OP shape (remove-from-ini, batch-remove, repair-map-entries,
-//     etc. -- no else/append branch at all): the exists-check fails, the
-//     update is skipped entirely, and the route reports success while the
-//     live file is completely unchanged.
-//
-// This file covers one representative case of each shape; the full per-site
-// census (34 sites confirmed needed, 1 confirmed not needed with reasoning)
-// is in the hunt-wave13 report, not duplicated here as 34 near-identical
-// tests -- these two prove the fix mechanism works for both shapes.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -123,10 +99,6 @@ describe("POST /toggle-mod-id: whitespace-variant Mods= line (duplicate-key shap
     const after = fs.readFileSync(iniPath, "utf-8");
     const modsLines = after.split(/\r?\n/).filter((l) => /^\s*Mods\s*=/.test(l));
     expect(modsLines).toHaveLength(1);
-    // Both the pre-existing (whitespace-variant) and the newly-toggled mod
-    // must survive -- proves the read side was fixed too, not just the
-    // write: pre-fix, the misparsed-as-empty current list would have lost
-    // ExistingMod entirely even before the duplicate-key problem.
     expect(modsLines[0]).toContain("ExistingMod");
     expect(modsLines[0]).toContain("NewMod");
     expect(findDuplicateIniKeys(after)).toEqual([]);
@@ -146,8 +118,6 @@ describe("POST /remove-from-ini: whitespace-variant WorkshopItems= line (silent-
 
     expect(res.getStatusCode()).toBe(200);
     const body = res.getBody();
-    // Pre-fix, this misreported remainingWorkshopItems as 0 (the line was
-    // misparsed as empty from the start) instead of 1.
     expect(body.remainingWorkshopItems).toBe(1);
 
     const after = fs.readFileSync(iniPath, "utf-8");
@@ -159,12 +129,6 @@ describe("POST /remove-from-ini: whitespace-variant WorkshopItems= line (silent-
   });
 });
 
-// 2026-08-30 hunt-wave13, second pass: the remaining 26 sites reported to
-// god (line numbers + shape) after the first 8. These three cover the
-// still-untested shapes: /batch-remove (3-key silent-no-op), /add-missing-dep
-// (duplicate-key shape via a differently-structured route than /add), and
-// /enable-disk-mod (the ternary content = x ? replace : append form, not
-// if/else).
 
 describe("POST /batch-remove: whitespace-variant lines across all three keys (silent-no-op shape)", () => {
   it("actually removes the workshop ID from a spaced WorkshopItems= line", async () => {

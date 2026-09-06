@@ -1,34 +1,4 @@
 #!/usr/bin/env node
-// Generates scripts/engine-signatures.manifest.json: for every Java engine class PanelBridge.lua's
-// call sites resolve to (see scripts/lib/engine-signature-core.mjs), run `javap -p` against the
-// real projectzomboid.jar and record every method it declares (merged with everything inherited
-// from its superclass/superinterface chain, up to java.lang.Object) -- name, return type, and,
-// for a generic collection return (List<X>/Set<X>/ArrayList<X>/Collection<X>), the element type.
-//
-// This is the manifest scripts/check-engine-signatures.mjs validates against. It is COMMITTED so
-// the checker runs in CI/the gate with no JDK. Regenerate it (this script) whenever PanelBridge.lua
-// starts touching a class it didn't before, or when the game updates and method signatures might
-// have moved -- otherwise the checker's coverage silently stays frozen at whatever this last saw
-// (it reports that staleness, see check-engine-signatures.mjs, but does not fail on it: it cannot
-// regenerate itself without a JDK, so it validates whatever the committed manifest covers and
-// reports the rest as unresolved rather than pretending to know).
-//
-// IMPORTANT ASYMMETRY: javap saying a method is ABSENT from a class's full inheritance chain is
-// a definitive, reliable fact -- if PanelBridge.lua calls it, that is a bug. javap saying a method
-// is PRESENT is necessary but NOT sufficient: PZ's Kahlua
-// Lua<->Java binding does not necessarily expose every public Java method to Lua (java.lang.Object
-// methods in particular are known to be selectively rejected at the binding layer even though they
-// are unquestionably present on every class -- getClass() is final on Object, so any real rejection
-// of it is the binding's choice, not a class-shape fact javap could ever have caught). So: this
-// manifest lets the checker FAIL definitively on ABSENT, and PASS (not "confirm callable") on
-// PRESENT. Do not let a later refactor upgrade a PRESENT match into a stronger claim than that.
-//
-// Usage: node scripts/gen-engine-signatures.mjs --jar <path> [--javap <path>]
-// The JAR path is required. `javap` is resolved from PATH unless overridden by
-// --javap or PZ_JAVAP_PATH.
-//
-// Use the server JAR, not the Steam client JAR. PanelBridge.lua runs on the
-// dedicated server, and the two installs may diverge after a game update.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -47,16 +17,6 @@ const ROOT = path.resolve(__dirname, '..');
 const LUA_PATH = path.join(ROOT, 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
 const MANIFEST_PATH = path.join(__dirname, 'engine-signatures.manifest.json');
 
-// A real, correct class guess for a heavily-used variable can still show <100% coverage: some of
-// the fingerprinted methods may be genuine ABSENT bugs on that exact class (which is exactly what
-// this tool exists to surface, not hide) or deliberate build-version fallback probes (PanelBridge.
-// invoke's whole design is "try a method, tolerate it not existing"). Rejecting on anything short of
-// near-total coverage would throw away a correct, well-evidenced seed to protect against a handful
-// of expected misses. This floor exists only to catch a WRONG class guess (which shows up as
-// coverage far below this, since an unrelated class matches almost none of the fingerprint) --
-// Known absent methods and version-specific fallback probes can keep valid
-// class guesses below 100% coverage, so this only rejects clearly wrong
-// guesses.
 const MIN_SEED_FINGERPRINT_COVERAGE = 0.7;
 const MAX_SUPERCLASS_DEPTH = 25;
 
@@ -74,7 +34,6 @@ const JAVAP_PATH =
   cli.javap ||
   process.env.PZ_JAVAP_PATH ||
   "javap";
-// Server install, not the Steam client one -- see the header comment for why.
 const JAR_PATH =
   cli.jar ||
   process.env.PZ_JAR_PATH ||
@@ -94,9 +53,8 @@ if (!fs.existsSync(JAR_PATH)) {
   process.exit(2);
 }
 
-// ---- javap invocation + output parsing --------------------------------------------------------
 
-const javapCache = new Map(); // className -> parsed {exists, superclasses, methods: Map<name, entry[]>} | {exists:false}
+const javapCache = new Map();
 let javapInvocations = 0;
 
 function runJavap(className) {
@@ -108,8 +66,6 @@ function runJavap(className) {
     });
     return out;
   } catch (err) {
-    // Non-zero exit: either the class genuinely doesn't exist, or javap itself errored. Either way
-    // we cannot claim anything about this class's methods, so treat as unknown, not absent.
     return null;
   }
 }
@@ -119,7 +75,6 @@ function stripGenerics(typeText) {
   return (idx === -1 ? typeText : typeText.slice(0, idx)).trim();
 }
 
-/** Split "A<X>,B,C<Y,Z>" into ["A<X>", "B", "C<Y,Z>"] -- top-level commas only, `<>` depth aware. */
 function splitTopLevelGeneric(text) {
   const parts = [];
   let depth = 0;
@@ -146,9 +101,6 @@ function parseReturnType(rawReturnType) {
   let elementClass = null;
   if (m) {
     const inner = m[2];
-    // Only trust a single, dotted (fully-qualified) element type -- a bare type variable like "E"
-    // or "T" (an unspecialized generic, since nothing in the jar specializes these to a concrete
-    // Lua-visible type) or a wildcard carries no information we can act on.
     if (/^[\w$]+(\.[\w$]+)+$/.test(inner)) elementClass = inner;
   }
   const primitiveOrVoid = /^(void|boolean|byte|short|int|long|float|double|char)(\[\])*$/.test(base);
@@ -165,13 +117,11 @@ const MODIFIER_WORDS = new Set([
 
 function parseMemberLine(line) {
   let text = line.trim().replace(/;$/, '');
-  if (!text.includes('(')) return null; // field, not a method
-  // Strip leading modifiers.
+  if (!text.includes('(')) return null;
   const tokens = text.split(/\s+/);
   let idx = 0;
   while (idx < tokens.length && MODIFIER_WORDS.has(tokens[idx])) idx++;
   text = tokens.slice(idx).join(' ');
-  // Strip an optional generic method-type-parameter prefix, e.g. "<T extends Foo> T method(...)".
   if (text.startsWith('<')) {
     let depth = 0;
     let i = 0;
@@ -195,7 +145,7 @@ function parseMemberLine(line) {
   if (!nameMatch) return null;
   const methodName = nameMatch[1];
   const rawReturnType = beforeParen.slice(0, nameMatch.index).trim();
-  if (!rawReturnType) return null; // constructor (javap prints no return type) -- not a call target
+  if (!rawReturnType) return null;
   const { returnClass, elementClass } = parseReturnType(rawReturnType);
   const paramCount = paramsText.trim() === '' ? 0 : splitTopLevelGeneric(paramsText).length;
   return { methodName, returnClass, elementClass, rawReturnType, paramCount };
@@ -233,7 +183,6 @@ function parseJavapOutput(className, output) {
   return { superclasses, methods };
 }
 
-/** javap + parse a class, merging in every superclass/superinterface's methods, memoized. */
 function loadClass(className, depth = 0) {
   if (javapCache.has(className)) return javapCache.get(className);
   if (depth > MAX_SUPERCLASS_DEPTH) {
@@ -252,8 +201,6 @@ function loadClass(className, depth = 0) {
   for (const [name, sigs] of methods) mergedMethods.set(name, sigs.slice());
   const resolvedSuperclasses = [];
   for (const sup of superclasses) {
-    // loadClass memoizes by className, so a superclass shared by many classes (java.lang.Object
-    // above all) is only ever javap'd once regardless of how many subclasses reach it here.
     const supInfo = loadClass(sup, depth + 1);
     resolvedSuperclasses.push(sup);
     if (supInfo.exists) {
@@ -276,7 +223,6 @@ function classProvider(className, methodName) {
   return { exists: true, returnClass: sigs[0].returnClass, elementClass: sigs[0].elementClass };
 }
 
-// ---- seed verification (fingerprint coverage) --------------------------------------------------
 
 function computeSeedFingerprint(cleanedSrc, seedFnName) {
   const varNames = new Set();
@@ -314,7 +260,6 @@ function verifySeed(seedFnName, seedDef, cleanedSrc) {
   };
 }
 
-// ---- main ----------------------------------------------------------------------------------------
 
 const rawSrc = fs.readFileSync(LUA_PATH, 'utf8');
 const cleanedSrc = stripLuaComments(rawSrc);
@@ -383,9 +328,6 @@ if (rejectedCount > 0) {
   console.log(`\n${rejectedCount} seed(s) REJECTED (see above) -- calls through them will resolve as unknown, not guessed.`);
 }
 
-// Re-run resolution using only the ACCEPTED seeds -- resolveAllCallSites reads SEED_GLOBALS /
-// STATIC_CLASS_SEEDS directly from the shared module, so a rejected seed is deleted from them
-// first and must not silently participate in resolution.
 for (const key of Object.keys(SEED_GLOBALS)) {
   if (!(key in acceptedSeeds)) delete SEED_GLOBALS[key];
 }
@@ -399,8 +341,6 @@ const touchedClasses = new Set();
 for (const site of callSites) {
   if (site.receiverType) touchedClasses.add(site.receiverType);
 }
-// Pull in every class actually loaded (includes superclasses merged for inheritance) so the
-// manifest is self-consistent even if resolution later chains through a superclass-declared method.
 for (const [className, info] of javapCache) {
   if (info.exists) touchedClasses.add(className);
 }
@@ -426,7 +366,6 @@ console.log('');
 console.log(`javap invocations this run: ${javapInvocations}`);
 console.log(`classes in manifest:        ${touchedClasses.size}`);
 
-// ---- write manifest --------------------------------------------------------------------------
 
 const manifestClasses = {};
 for (const className of [...touchedClasses].sort()) {

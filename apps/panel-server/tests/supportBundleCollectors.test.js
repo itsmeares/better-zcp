@@ -54,7 +54,6 @@ describe("support bundle: curl availability (World Map's runtime dependency)", (
     mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "curl 8.4.0", ""));
     const result = await buildWorldMapDiagnostics();
     expect(result.curl.available).toBe(true);
-    // Contract fixed in conv-mapbuild: { source, directory, reason }.
     expect(result.b42Resolution).toHaveProperty("source");
     expect(result.b42Resolution).toHaveProperty("directory");
     expect(result.b42Resolution).toHaveProperty("reason");
@@ -67,8 +66,6 @@ describe("support bundle: OIDC status never leaks the client secret value", () =
     expect(result).not.toHaveProperty("_error");
     expect(typeof result.clientSecretSet).toBe("boolean");
     expect(JSON.stringify(result)).not.toMatch(/clientSecret"\s*:\s*"(?!.*Set)/);
-    // The literal key "clientSecret" (the value) must never appear -- only
-    // "clientSecretSet" (the boolean).
     expect(result).not.toHaveProperty("clientSecret");
     expect(result).toHaveProperty("envOverrides");
   });
@@ -80,8 +77,6 @@ describe("support bundle: roles and permissions", () => {
     expect(result).not.toHaveProperty("_error");
     expect(Array.isArray(result.roles)).toBe(true);
     expect(Array.isArray(result.users)).toBe(true);
-    // Every role entry must carry what a support reader needs to answer
-    // "what does this role grant".
     for (const role of result.roles) {
       expect(role).toHaveProperty("name");
       expect(Array.isArray(role.capabilities)).toBe(true);
@@ -90,7 +85,6 @@ describe("support bundle: roles and permissions", () => {
     for (const user of result.users) {
       expect(user).toHaveProperty("username");
       expect(user).toHaveProperty("role");
-      // No password/hash field of any kind should ever reach this collector.
       expect(user).not.toHaveProperty("password");
     }
   });
@@ -115,8 +109,6 @@ describe("support bundle: backups summary", () => {
           schedule: "0 */6 * * *",
           maxBackups: 10,
           includeDb: true,
-          // Deliberately injected to prove sanitizeForBundle is really
-          // applied here, not just declared in a comment.
           apiKey: "sk-live-should-never-appear",
         }),
       },
@@ -151,9 +143,6 @@ describe("support bundle: Discord bot status", () => {
           channelId: "222",
           modRoleId: null,
           lastStartError: null,
-          // getStatus() never actually returns this in real code, but if a
-          // future change accidentally added it, sanitizeForBundle must
-          // still catch it -- defense in depth, proven rather than assumed.
           token: "should-never-survive",
         }),
       },
@@ -200,9 +189,6 @@ describe("support bundle: system info reports whether the server process was run
 });
 
 describe("support bundle: UI language reported by the bundle-download request", () => {
-  // buildBundleDiagnostics also runs buildWorldMapDiagnostics, which shells
-  // out to curl -- give the mock a working implementation so that Promise.all
-  // resolves instead of hanging on an unconfigured child_process mock.
   beforeEach(() => {
     mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "curl 8.4.0", ""));
   });
@@ -270,14 +256,6 @@ describe("support bundle: server config summary flags a Mods/WorkshopItems lengt
       serverConfigPath: configDir,
       serverName: "servertest",
     });
-    // Also pins a real, pre-existing bug found while adding this field:
-    // debug.js called crypto.createHash() with no `import crypto` anywhere
-    // in the file. Node's ESM-global `crypto` is the Web Crypto API only
-    // (no createHash), so this threw on every real request and was silently
-    // swallowed by the collector's own try/catch -- ini.sha256/settings/
-    // mods/workshopItems/map (and this new field) were ALWAYS missing in
-    // practice, masked as a generic ini.error. Fixed alongside this task
-    // since it directly blocked the new field from ever being reachable.
     expect(result.ini.error).toBeUndefined();
     expect(result.ini.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(result.ini.modsWorkshopCountMismatch).toBe(true);
@@ -308,7 +286,6 @@ describe("support bundle assembly: one collector throwing never breaks the rest"
     expect(JSON.parse(byName["backups-summary.json"])._error).toContain(
       "boom-backup-service",
     );
-    // Every other new collector still produced a real result, not an error.
     for (const name of [
       "oidc-status.json",
       "roles-and-permissions.json",
@@ -320,17 +297,11 @@ describe("support bundle assembly: one collector throwing never breaks the rest"
       expect(byName[name]).toBeDefined();
       expect(JSON.parse(byName[name])._error).toBeUndefined();
     }
-    // README.md was updated to describe every file actually produced.
     expect(byName["README.md"]).toContain("roles-and-permissions.json");
     expect(byName["README.md"]).toContain("oidc-status.json");
   });
 });
 
-// support-bundle-2026-08-30: hive/agents/god/research/discord-restart-etxtbsy-2026-08-30.md --
-// a real production report was only diagnosable from a "Text file busy"
-// stack trace a user pasted BY HAND from `docker logs`. None of the
-// filesystem-scanning collectors above would have captured it -- container
-// stdout/stderr is not a file on disk anywhere this panel looks.
 describe("support bundle: Docker container logs", () => {
   afterEach(() => setDockerClient(null));
 
@@ -403,20 +374,10 @@ describe("support bundle: Docker container logs", () => {
 });
 
 describe("support bundle: managed-service (systemd/OpenRC) logs", () => {
-  // The systemd branch is gated on process.platform === "linux" (systemd
-  // --user is a Linux-only concept). Pin the platform explicitly for each
-  // test rather than skipping on a non-Linux CI runner, so this suite's
-  // pass/fail doesn't depend on which OS happens to run it -- mirrors
-  // apps/panel-server/tests/swapInfo.test.js's own process.platform stub pattern.
   const originalPlatform = process.platform;
   function setPlatform(value) {
     Object.defineProperty(process, "platform", { value, configurable: true });
   }
-  // A test earlier in this file (the "one collector throwing" suite) sets
-  // mockExecFile's implementation and calls it via buildWorldMapDiagnostics()
-  // but has no afterEach of its own to clear the call history -- reset here
-  // too so this suite's not.toHaveBeenCalled() assertions don't depend on
-  // execution order across describe blocks.
   beforeEach(() => mockExecFile.mockReset());
   afterEach(() => {
     setPlatform(originalPlatform);
@@ -451,7 +412,7 @@ describe("support bundle: managed-service (systemd/OpenRC) logs", () => {
       expect(args.find((a) => a.endsWith(".service"))).toBe(
         "zomboid-panel-server-s1.service",
       );
-      cb(null, "Aug 30 sacha bash[1]: server ready\n", "");
+      cb(null, "Aug 30 panel bash[1]: server ready\n", "");
     });
     const text = await buildManagedServiceLogsText({ id: "s1", lifecycleProvider: "systemd" });
     expect(text).toContain("server ready");

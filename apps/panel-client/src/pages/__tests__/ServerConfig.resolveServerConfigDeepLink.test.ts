@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { resolveServerConfigDeepLink } from '../ServerConfig'
 
-// mods-unresolved-2026-08-31: resolveServerConfigDeepLink parses the
-// unresolvedCause=modId|cause|suggestion transport Debug.tsx's
-// getDiagnosticsFixAction mods.resolved case writes, so the unresolvedReview
-// banner can say WHY each Mods= entry failed instead of just listing it.
 function params(pairs: Array<[string, string]>) {
   const sp = new URLSearchParams()
   for (const [k, v] of pairs) sp.append(k, v)

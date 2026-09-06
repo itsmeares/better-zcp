@@ -7,15 +7,6 @@ import { getAutoUpdateReasonMessage, getAutoUpdateServerStateMessage, getAutoUpd
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 
-// 2026-08-26: renders the outcome of the UNATTENDED automatic server
-// update (apps/panel-server/services/updateChecker.js's runAutoUpdate()) -- the one
-// panel-managed job that stops and restarts a live server with nobody
-// reviewing the result. A live socket event alone only reaches whoever
-// happens to be watching at that instant, which excludes the exact
-// operator this feature exists for (enabled it and walked away), so this
-// fetches the PERSISTED last result on mount instead. Dismissal is
-// shared server-side state, not local -- see updateApi.dismissAutoUpdateResult's
-// own comment for why a per-browser dismissal would be wrong here.
 export function AutoUpdateResultBanner() {
   const { t } = useTranslation('dashboard')
   const { toast } = useToast()

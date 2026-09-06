@@ -3,18 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// POST /auto-scan and POST /detect used to put the RCON password read off a
-// discovered server's own ini straight into the JSON response, in plaintext
-// -- the client copied it into a form and back into POST / when creating
-// the server. This file proves: (1) neither discovery route puts the
-// password on the wire any more (hasRcon survives, rconPassword doesn't),
-// and (2) POST / can still create a working server from a detected config,
-// by re-reading the password itself from the exact ini the scan already
-// found (config.importIniFrom), gated by the SAME capability
-// (servers.discover) that already gates reading arbitrary local ini files
-// on the two discovery routes -- not just by servers.manage, which alone
-// would let a caller who could never see the scan results make the server
-// read an arbitrary ini path anyway.
 
 const createServer = vi.fn();
 const getServers = vi.fn();
@@ -55,10 +43,6 @@ function getLayer(routePath, method) {
   );
 }
 
-// Runs the FULL middleware stack for the route (not just the final
-// handler), so the router-level requirePermission("servers.manage") gate on
-// POST / is actually exercised alongside the inline servers.discover check
-// inside the handler -- the whole point of the "requires both" test below.
 async function runRoute(routePath, method, req, res) {
   const layer = getLayer(routePath, method);
   const handlers = layer.route.stack.map((s) => s.handle);
@@ -168,15 +152,6 @@ describe("POST / config.importIniFrom", () => {
     expect(response.status).toHaveBeenCalledWith(201);
   });
 
-  // 2026-09-03: importIniFrom read and applied rconPassword from the ini
-  // but never wrote importIniFrom.dataPath back to zomboidDataPath -- the
-  // created server saved successfully (rconPassword worked fine) but could
-  // not start, since serverManager needs zomboidDataPath to resolve the
-  // cachedir. Found via a real enrolment through this exact route. The sibling
-  // route this handler's own comment says it mirrors -- POST
-  // /create-from-discovery in discovery.js -- sets
-  // `zomboidDataPath: discovered.dataPath` from the equivalent field, which is
-  // the contract this pins.
   it("populates zomboidDataPath from importIniFrom.dataPath, not just rconPassword", async () => {
     writeIni(
       tmpRoot,
@@ -251,8 +226,6 @@ describe("POST / config.importIniFrom", () => {
     );
     const response = createResponse();
 
-    // Fixture technician role has servers.manage (passes the router-level
-    // gate) but not servers.discover (must be refused by the inline check).
     await runRoute(
       "/",
       "post",

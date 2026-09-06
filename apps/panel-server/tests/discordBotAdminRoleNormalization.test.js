@@ -3,16 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression (2026-08-31 services sweep): modRoleId is normalized with
-// `|| null` both when stored on the instance and when compared for
-// rolesChanged -- consistent. adminRoleId was compared the same normalized
-// way but stored RAW, unnormalized. Once an operator ever saved an empty
-// admin-role field (typical for a UI form posting "" for an unset role, not
-// literally null), this.adminRoleId stuck at "" forever -- every subsequent
-// unrelated config save (changing only the channel, say) then compared
-// "" !== null, incorrectly detected a role change, and spuriously
-// re-registered Discord slash commands (an avoidable REST call this file's
-// own comments flag as rate-limit risk).
 
 const settings = new Map();
 const initDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-discordadminrole-init-"));

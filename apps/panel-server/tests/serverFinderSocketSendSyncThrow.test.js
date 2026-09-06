@@ -2,33 +2,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import dgram from "dgram";
 import { queryMasterServer, queryServerInfo } from "../routes/serverFinder.js";
 
-// 2026-08-30, serverfinder-crash: queryMasterServer()'s sendQuery() calls
-// socket.send(packet) from inside socket.connect()'s callback (and, on
-// pagination, from inside the 'message' listener) -- neither is inside this
-// function's own `new Promise((resolve, reject) => ...)` executor. A
-// SYNCHRONOUS throw from send() (observed in production: RangeError
-// [ERR_SOCKET_BAD_PORT]) therefore reaches neither `reject` above nor the
-// socket's own 'error' listener -- it becomes a genuine, uncaught Node
-// exception, and Node's default handling of that KILLS THE WHOLE SERVER
-// PROCESS, not just this one request. Confirmed for real, twice, via
-// a manual browser smoke test: the first hit didn't
-// crash (looked clean), the second did, several seconds after the page had
-// already rendered -- invisible to manual QA, which is why it survived.
-//
-// The point of THIS test is proving the real mechanism, not a simulated
-// one: it forces socket.send() to throw synchronously (the exact production
-// error), then asserts BOTH that the returned promise still settles (does
-// not hang forever, which is what "escapes the executor" looks like from
-// the outside) AND that no process-level 'uncaughtException' fired (which
-// is what "escapes the process" looks like). A test that only asserted
-// "the promise rejects" would not catch a regression back to the unguarded
-// code, because on unguarded code the promise never rejects at all -- it
-// just never settles, while the process crashes underneath the test.
-//
-// Break-verify: reverting the try/catch in serverFinder.js's sendQuery()
-// back to a bare `socket.send(packet)` makes this test RED -- the race
-// against the 2s timeout resolves 'timeout' (the promise never settles)
-// and `uncaught` captures the real RangeError (confirmed 2026-08-30).
 
 function interceptFirstSendToThrow(count = 1) {
   const originalCreateSocket = dgram.createSocket;
@@ -39,8 +12,6 @@ function interceptFirstSendToThrow(count = 1) {
     sock.send = (...sendArgs) => {
       calls += 1;
       if (calls <= count) {
-        // The exact production error, thrown synchronously -- not a
-        // rejected promise, not an emitted 'error' event.
         throw new RangeError(
           "Port should be > 0 and < 65536. Received undefined.",
         );
@@ -94,13 +65,9 @@ describe("serverFinder.js: a synchronous throw from socket.send() no longer esca
       ]),
     );
 
-    // Not "timeout" -- on the unfixed code this is exactly what a hung,
-    // never-settled promise looks like from the caller's side.
     expect(result.settled).toBe("rejected");
     expect(result.err).toBeInstanceOf(RangeError);
     expect(result.err.message).toMatch(/Port should be > 0/);
-    // Not just "the promise did the right thing" -- the process itself
-    // must never have seen this as an uncaught exception either.
     expect(uncaught).toEqual([]);
   });
 

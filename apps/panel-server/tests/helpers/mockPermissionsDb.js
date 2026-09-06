@@ -1,26 +1,3 @@
-// Shared fixture for tests exercising a requirePermission(...) gate.
-//
-// requireRole was a pure, synchronous role-name check with no dependency on
-// anything -- a gate test could hand it `{ user: { role: "moderator" } }`
-// and get an answer with zero setup. requirePermission is DB-backed: it
-// resolves req.user.role to a row in the roles collection and checks that
-// row's capabilities array. That's the whole point (an operator can edit
-// what a role grants), so a test can no longer skip mocking role
-// resolution.
-//
-// DELIBERATELY SELF-CONTAINED -- does NOT import DEFAULT_ROLE_CAPABILITIES
-// from services/permissions.js, even though that would avoid a third copy
-// of these three arrays. This file is consumed from inside vi.mock(
-// "../database/init.js", ...) factories; permissions.js itself imports
-// FROM database/init.js, so importing permissions.js here would try to
-// resolve database/init.js's mock while that same mock is still being
-// constructed -- a real circular deadlock (every gate test in the file
-// timed out at exactly the default 5000ms with no error before this was
-// split out). apps/panel-server/tests/mockPermissionsDbMatchesSeed.test.js cross-
-// checks these against services/permissions.js's real DEFAULT_ROLE_CAPABILITIES
-// from a normal (non-mock-factory) import, so the three copies (this one,
-// permissions.js's, and database/init.js's migration snapshot) can't drift
-// silently.
 const ADMIN_CAPABILITIES = [
   "users.manage",
   "roles.manage",

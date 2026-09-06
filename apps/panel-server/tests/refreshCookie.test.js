@@ -61,11 +61,6 @@ describe("getRefreshCookieOptions — the one definition routes/auth.js and rout
     expect(opts.secure).toBe(true);
   });
 
-  // forceSecureCookies is computed once at module scope (matches the
-  // original behavior this was extracted from verbatim — real deployments
-  // set HTTPS/FORCE_HSTS before the process starts). Mutating process.env
-  // after the top-level import above has no effect, so these two need a
-  // genuinely fresh module load to observe.
   it("HTTPS=true forces secure even for a request that looks insecure — the mixed LAN+remote deployment case", async () => {
     process.env.HTTPS = "true";
     vi.resetModules();

@@ -3,26 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Cross-producer shape gate (2026-08-27 api.ts type-architecture survey,
-// build order item 3): compares what MULTIPLE real routes actually return
-// for "the same conceptual shape" against EACH OTHER, not against a
-// hand-written client interface. This catches what a declared-type
-// comparison structurally cannot: the survey's Finding 2
-// (remoteConfigConfigured present on some Server-returning routes, absent
-// on others) was invisible to tsc precisely because the field is correctly
-// optional -- optional-and-genuinely-absent and optional-and-never-set are
-// the same thing to a type checker. They are not the same thing to two
-// routes compared against each other, and the optionality that made it
-// invisible to tsc is irrelevant to this kind of check.
-//
-// Declares its own denominator, per instruction: reliably discovering
-// "every route that returns shape X" by static reading alone is not
-// something this file claims to do completely. The routes below were found
-// by hand -- grepping apps/panel-server/routes/servers.js and apps/panel-server/routes/backup.js
-// for `res.json({ server` / `res.json({ servers` / `res.json({ backups` /
-// `backup:` on 2026-08-27 -- not an automated, self-maintaining discovery.
-// A hand list is acceptable; a hand list that doesn't announce itself as
-// one is not, so this comment is that announcement.
 
 const getServers = vi.fn();
 const getActiveServer = vi.fn();
@@ -87,10 +67,6 @@ function fakeApp(extra = {}) {
   return { get: (key) => extra[key] };
 }
 
-// The one real, currently-stored server row every producer below is fed --
-// deliberately identical across every route, so a key-set difference in the
-// response can only come from what each route itself adds or strips, not
-// from the input differing between calls.
 const FAKE_SERVER_ROW = {
   id: 1,
   name: "Test Server",
@@ -131,9 +107,6 @@ beforeEach(() => {
 });
 
 describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.js)", () => {
-  // servers.js:509-515 documents this exact pair as required to never
-  // drift, via a helper (computeRemoteConfigConfigured) shared by both --
-  // this test makes that comment machine-checked instead of comment-only.
   it("GET / (per-item) and GET /active return identical key sets for the same server", async () => {
     const list = await invokeJson(serversRouter, "/", "get", { app: fakeApp() });
     const active = await invokeJson(serversRouter, "/active", "get", { app: fakeApp() });
@@ -147,53 +120,13 @@ describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.js
     expect(active.server.remoteConfigConfigured).toBe(true);
   });
 
-  // Break-verify: this file does not edit servers.js (not this task's file
-  // to touch, and not something to perturb even temporarily) -- so instead
-  // of reintroducing the historical bug in real route code, this proves the
-  // key-set comparison used throughout this file actually fails on the
-  // exact shape of that bug (a producer silently missing one field), the
-  // same way the no-duplicate-interface-name ESLint rule was break-verified
-  // by feeding it BackupFile's real pre-fix source instead of editing
   // eslint.config.js. If this test ever passed, every assertion above and
-  // below it would be vacuous.
   it("the key-set comparison used above actually fails on a missing field (not a vacuous check)", () => {
     const withField = { id: 1, name: "A", remoteConfigConfigured: true };
     const withoutField = { id: 1, name: "A" };
     expect(Object.keys(withoutField).sort()).not.toEqual(Object.keys(withField).sort());
   });
 
-  // Known, cited, self-documenting exception -- not a hidden allowlist.
-  // These four routes never attach remoteConfigConfigured at all (verified
-  // by reading servers.js directly, 2026-08-27: GET /:id res.json at line
-  // 684, POST / at line 885, PUT /:id at line 1176, POST /:id/activate at
-  // line 1306 all call sanitizeServerResponse(server) with no
-  // remoteConfigConfigured merge -- contrast with GET / line 529 and GET
-  // /active line 659, both of which do).
-  //
-  // Confirmed harmless today, not just assumed: apps/panel-client/src/lib/api.ts and
-  // apps/panel-client/src/components/Layout.tsx were grepped for
-  // "remoteConfigConfigured" and Layout.tsx:314 is the ONLY client
-  // consumer, sourced exclusively from GET / -- Layout.tsx's two fetch
-  // sites (initial load and the activeServerChanged socket handler, lines
-  // ~558-563 and ~579-584) both call serversApi.getAll() (GET /), never GET
-  // /active, GET /:id, or the body of a POST/PUT/activate response.
-  //
-  // This entry exists so a FUTURE consumer that starts reading
-  // remoteConfigConfigured off one of these four routes fails LOUDLY here
-  // first, instead of silently getting undefined -- same self-cleaning
-  // shape as KNOWN_BROKEN_PATTERNS in
-  // apps/panel-server/tests/rconRejectionGroundTruth.test.js: if one of these routes
-  // starts returning the field, THIS assertion breaks and forces someone to
-  // update or remove the exception, not silently keep passing.
-  //
-  // But the exception's OWN justification ("nothing reads it there") is
-  // exactly the shape that created the original bug -- true right up until
-  // it wasn't. See the "reader count" describe block below, which applies
-  // the same self-cleaning trick to THIS exception's premise, not just to
-  // the exception itself: it asserts Layout.tsx stays the field's only
-  // client reader, so a second reader sourced from one of these four
-  // routes fails loudly instead of silently shipping under a comment that
-  // says it's fine.
   const ROUTES_WITHOUT_REMOTE_CONFIG_FIELD = new Set([
     "GET /:id",
     "POST / (create)",
@@ -271,24 +204,6 @@ describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.js
   );
 });
 
-// Self-cleaning guard on the exception above, not just the exception
-// itself: "nothing reads remoteConfigConfigured off those four routes" is
-// exactly the kind of premise that was true right up until it wasn't --
-// the field going unread everywhere except GET / is the whole reason the
-// original bug was invisible. Same technique as KNOWN_BROKEN_PATTERNS in
-// apps/panel-server/tests/rconRejectionGroundTruth.test.js: don't just assert the
-// exception, assert the FACT that justifies it, so the exception can't go
-// stale silently.
-//
-// 2026-08-27: exactly two hits for "remoteConfigConfigured" in apps/panel-client/src
-// -- apps/panel-client/src/lib/api.ts:1546 (the type's own declaration, not a read)
-// and apps/panel-client/src/components/Layout.tsx:314 (the one real read). This is a
-// grep-count check, deliberately not clever: it does not parse the AST or
-// distinguish a real property read from an incidental comment mention. If
-// it ever produces a false positive (a file that merely mentions the name
-// without reading it), that is a five-minute look, not a real incident --
-// cheap enough to be worth the loud failure on the day a second REAL
-// reader shows up sourced from one of the four excepted routes above.
 describe("remoteConfigConfigured reader-count guard (justifies the exception above)", () => {
   const CLIENT_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../panel-client/src");
   const API_TS = path.join(CLIENT_SRC, "lib", "api.ts");
@@ -312,7 +227,7 @@ describe("remoteConfigConfigured reader-count guard (justifies the exception abo
     expect(files.length, "found zero source files under apps/panel-client/src -- the path resolution above is wrong, this check would otherwise pass vacuously").toBeGreaterThan(0);
 
     const readers = files
-      .filter((f) => f !== API_TS) // the interface's own declaration is not a read
+      .filter((f) => f !== API_TS)
       .filter((f) => /remoteConfigConfigured/.test(fs.readFileSync(f, "utf8")))
       .map((f) => path.relative(CLIENT_SRC, f).replace(/\\/g, "/"));
 
@@ -324,14 +239,6 @@ describe("remoteConfigConfigured reader-count guard (justifies the exception abo
 });
 
 describe("cross-producer shape gate: ServerBackupArchive (apps/panel-server/routes/backup.js)", () => {
-  // The two real producers of this shape found in apps/panel-server/routes:
-  // GET /backup/list's per-item shape (backupService.listBackups(),
-  // backupService.js:662-697) and POST /backup/create's .backup field
-  // (backupService.js:512-517's this.lastBackup). Both are the full .zip
-  // server-backup shape -- api.ts's ServerBackupArchive after the
-  // 2026-08-27 BackupFile-collision fix, distinct from ConfigBackupFile
-  // (server-files/backups' unrelated config-file .bak shape, single
-  // producer, nothing to cross-compare it against today).
   const FAKE_ARCHIVE = {
     name: "servertest_2026-08-27.zip",
     path: "/backups/servertest_2026-08-27.zip",
@@ -362,8 +269,6 @@ describe("cross-producer shape gate: ServerBackupArchive (apps/panel-server/rout
     expect(createKeys).toEqual(listKeys);
   });
 
-  // Break-verify, same reasoning as the Server group above: proves the
-  // comparison isn't vacuous without touching backup.js/backupService.js.
   it("the key-set comparison used above actually fails on a missing field (not a vacuous check)", () => {
     const full = { name: "a.zip", path: "/a.zip", size: 1, created: "now" };
     const missingPath = { name: "a.zip", size: 1, created: "now" };

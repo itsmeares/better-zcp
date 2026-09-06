@@ -1,19 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// 2026-09-02, bridge-enforcement: canAutoInstall()/checkBridgeInstalled()
-// both require a local target path to content-compare against, which a
-// remote/SFTP server has none of -- the panel never writes to its
-// filesystem. Before this, GET /panel-bridge/status still computed
-// `localInstall` unconditionally, so a remote server got a real-looking but
-// meaningless {canAutoInstall:false, installed:false, needsUpdate:false} --
-// "nothing is installed locally" (true, there is no "locally" for remote),
-// not "up to date" (unknowable). This wires in the only signal that
-// topology can ever produce instead: a plain version-STRING comparison
-// between the bridge's own live self-report and what this panel bundles --
-// unblocks the client-side staleness indicator, since remote users have no
-// other automated remedy (see panelBridgeInstaller.js's own comment on
-// getBundledBridgeVersion/isBridgeVersionBehindBundled for why content
-// comparison is impossible there).
 
 let getStatusReturn;
 let isModConnectedReturn;
@@ -39,8 +25,6 @@ function getHandler(routePath, method) {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
-  // GET /status carries no requirePermission middleware -- the handler is
-  // the only (and therefore first) entry in its stack.
   return layer.route.stack[0].handle;
 }
 

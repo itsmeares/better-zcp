@@ -3,17 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 2, item 2 -- three of getPlayerDetails'
-// health fields were always nil on the real B42 jar (Kevin's audit):
-//
-// isBleeding -- getIsBleeding() does not exist; no boolean bleeding getter
-//   exists at all. The real method is getNumPartsBleeding() -> int. `> 0`
-//   is a SEMANTIC REINTERPRETATION (count -> boolean), not a rename.
-// temperature -- getTemperature() does not exist directly on BodyDamage; it
-//   is two hops, bodyDamage:getThermoregulator():getCoreTemperature().
-// wetness -- REMOVED entirely. No whole-body wetness concept exists
-//   anywhere on BodyDamage under any name at any hop -- only mutators, zero
-//   getters. Not substituted with a near-miss from a different object.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

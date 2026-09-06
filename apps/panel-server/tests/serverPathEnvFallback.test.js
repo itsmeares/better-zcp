@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import os from "os";
 
-// normalizeServerMemory is pure (env vars + fs.existsSync only) — safe to
-// import the real database module instead of mocking it.
 const { normalizeServerMemory } = await import("../database/init.js");
 
 const ORIGINAL_SERVER_PATH = process.env.PZ_SERVER_PATH;
@@ -104,9 +102,6 @@ describe("normalizeServerMemory env-var fallback", () => {
     delete process.env.PZ_SERVER_PATH;
     delete process.env.PZ_SAVE_PATH;
 
-    // Reproduces the exact scenario Pam found: a server created with
-    // isRemote omitted (stored false by createServer's `|| false`) whose
-    // installPath is configured but not yet installed to disk.
     const result = normalizeServerMemory({
       installPath: "/srv/pz/not-installed-yet",
       zomboidDataPath: null,

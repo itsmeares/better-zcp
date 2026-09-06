@@ -1,23 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// 2026-08-27, do-the-two-mechanisms-for-one-action-actually-do-the-same-thing:
-// POST /panel-bridge/chat/alert tried RCON FIRST regardless of the `alert`
-// flag. RCON's servermsg has NO alert/banner concept at all -- the Lua
-// handler (integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua,
-// handlers.sendToServerChat) calls a genuinely distinct native API for the
-// two cases: chat.server:sendServerAlertMessageToServerChat(message) when
-// isAlert, vs plain chat.server:sendMessageToServerChat(message) otherwise --
-// so an "alert" is not a labeling choice, it is a different game-engine call
-// only PanelBridge can make. Trying RCON first meant a requested alert
-// silently downgraded to a plain broadcast whenever RCON was connected (the
-// common case), while the response still echoed isAlert:true as if the
-// alert had been delivered -- not an honest capability downgrade like the
-// admin/general chat routes' fallback text, an outright false claim.
-//
-// Fixed by trying PanelBridge first when alert is actually requested (RCON
-// remains the fallback when bridge is unavailable or fails), and reporting
-// isAlert:false when RCON ends up being the one that sent it, since RCON
-// has never been able to deliver alert styling regardless of what was asked.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => null),
@@ -75,9 +57,6 @@ describe("POST /panel-bridge/chat/alert -- RCON has no alert styling, so it must
       message: "Zombies incoming!",
       alert: true,
     });
-    // The real bug this proves: pre-fix, RCON was tried FIRST unconditionally,
-    // so a connected RCON always won the race and the only mechanism capable
-    // of an actual alert was never consulted.
     expect(serverMessage).not.toHaveBeenCalled();
   });
 

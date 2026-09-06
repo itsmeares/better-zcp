@@ -1,33 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ErrorCode } from "../utils/errorCodes.js";
 
-// hunt-code-patterns (conv-hunt-resume): isCronTooFrequent()'s "Security:
-// Reject tasks that run more frequently than every 5 minutes to prevent
-// DoS" guard always read parts[0] as MINUTES. node-cron accepts an
-// optional leading SECONDS field (6 fields total) that this app has never
-// documented, tested, or exposed a legitimate use for -- for a 6-field
-// expression parts[0] is actually seconds, so "*/5 * * * * *" (fires every
-// 5 SECONDS) read as minute="*/5", which looks like an ordinary
-// once-every-5-minutes value and sailed through untouched. The bypass
-// window was narrower than "any 6-field expression": "* * * * * *" and
-// "*/1"-"*/4" seconds were caught BY ACCIDENT (parts[0] still matched the
-// every-minute checks), which is exactly why this survived a spot-check.
-// Fix: reject any non-5-field expression outright via
-// hasUnsupportedCronFieldCount(), checked before isCronTooFrequent() at
-// every entry point (POST /tasks, PUT /tasks/:id, POST /validate-cron).
-//
-// These tests prove: the exact bypass string from the live finding is now
-// refused, the accidental-catch cases stay caught (for the right reason
-// now, not by accident), and none of isCronTooFrequent's existing 5-field
-// hardening (every-minute, range-step, comma-separated, hour-pinned burst)
-// regressed.
 
-// Every test body below uses command: "restart" -- incidental to what's
-// actually under test here (cron-expression validation), so the role just
-// needs whatever capability "restart" requires (server.control, see
-// requiredCapabilityForScheduledCommand in services/scheduler.js) to clear
-// the permission check cleanly and reach the cron logic these tests exist
-// to exercise.
 const ROLES = {
   automation_only: {
     name: "automation_only",
@@ -241,13 +215,6 @@ describe("POST /api/scheduler/validate-cron -- preview stays consistent with wha
     });
   });
 
-  // bug-hunt-2026-08-26: this endpoint was shipped-but-unreachable dead code
-  // until tonight, so a raw-server-English bug in these branches was invisible
-  // -- nothing called it to notice. Wiring it up (Dwight, 1b05771) is what
-  // made the missing codes on these three branches a live, user-visible bug.
-  // Every branch below now carries the same code POST/PUT /tasks would use
-  // for the matching failure, so the client can translate it instead of
-  // rendering this raw English string.
   it("previews a malformed expression as invalid with the same code POST/PUT /tasks would use", async () => {
     const response = createResponse();
     await getHandler("/validate-cron", "post")(

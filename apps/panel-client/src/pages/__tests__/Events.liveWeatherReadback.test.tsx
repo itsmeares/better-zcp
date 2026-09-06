@@ -6,19 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// panelbridge-audit-2026-08-30: getWeather was confirmed working (Kevin's
-// audit) but had no caller anywhere in apps/panel-client/src. Most of its payload
-// (temperature, humidity, fog, cloud, precipitation, dayLight, nightStrength,
-// desaturation, viewDistance, ambient) is the exact same ClimateFloat data
-// the climate/visual sections already poll via getClimateFloats and render
-// as sliders -- deliberately NOT duplicated here (see the "did not display
-// getWorldStats.zombiesInCell twice" precedent from the Dashboard card
-// earlier tonight). The only genuinely new, non-duplicated fields are the
-// live isRaining/isSnowing/isThunderStorming booleans and the real
-// windSpeed(kph)/windAngle(degrees) pair -- neither was observable anywhere
-// in the panel before this (the existing "wind" slider is a 0-100% override
-// intensity, not a live reading). This proves those specific fields, and
-// only those, are wired to the climate section's new live-conditions strip.
 
 class StubResizeObserver {
   observe() {}
@@ -91,8 +78,6 @@ describe('Events -- climate section shows a real, non-duplicated live weather re
     await openClimateSection()
 
     await waitFor(() => expect(screen.getByText('thunderstorm')).toBeInTheDocument())
-    // Raining is true too, but thunderstorm takes precedence in the badge set --
-    // both booleans came through, only the display collapsed them.
     expect(screen.getByText('37 km/h @ 214°')).toBeInTheDocument()
   })
 

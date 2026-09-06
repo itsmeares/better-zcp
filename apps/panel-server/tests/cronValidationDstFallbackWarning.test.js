@@ -6,17 +6,6 @@ import {
 } from "../utils/cronValidation.js";
 import { Scheduler } from "../services/scheduler.js";
 
-// 2026-09-05, scheduler-time-audit: node-cron's own README states its DST
-// model verbatim: "Across a daylight-saving fall-back the repeated hour
-// runs once, so a sub-hourly schedule (for example */15) can pause for up
-// to the length of the DST shift during that hour." Nothing in the panel
-// told an operator this could happen. dstFallBackWarning() (and the two
-// functions it composes) surface it, server-side, at schedule-create/update
-// time -- for a schedule in the 15-60 minute band in a DST-observing
-// timezone. See cronValidation.js's own comment for why 15-60 specifically
-// (isCronTooFrequent already floors every schedule at 5 minutes; losing one
-// of many sub-5-14-minute fires is far less noticeable than losing one of
-// only 1-4).
 
 describe("subHourlyIntervalMinutes() -- the 'more than one fire per hour' shape node-cron's DST note is about", () => {
   it.each([
@@ -91,8 +80,6 @@ describe("Scheduler.scheduleTask() -- logs and returns the DST warning, doesn't 
   let scheduler;
 
   afterEach(() => {
-    // cron.schedule() starts a real (if inert-until-fired) timer-driven job;
-    // stop it so it doesn't outlive the test.
     for (const job of scheduler?.jobs?.values() || []) job.stop();
   });
 

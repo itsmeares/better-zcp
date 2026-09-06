@@ -4,18 +4,6 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// bug-hunt-2026-08-26: POST /server-files/templates used to snapshot the
-// CURRENT server.ini verbatim (both parsed into `.ini` and as raw text into
-// `.iniRaw`) with no exclusion list, so RCONPassword/Password ended up
-// persisted in plaintext inside the saved template JSON -- forever, since
-// nothing expires or re-scrubs a template later, and a subsequent password
-// rotation does not touch a copy nobody knows exists. Fixed at the write
-// path: secret-shaped keys (SENSITIVE_FIELD_RE, the same regex GET
-// /app-settings already trusts) are stripped, not masked, before the
-// template is written to disk -- see stripSensitiveIniLines()'s own comment
-// in routes/serverFiles.js for why a placeholder string would be unsafe
-// here (POST /templates/:id/apply writes iniRaw back into the live .ini
-// verbatim, so a masked value would land in the live RCON password field).
 
 const writeFileAtomic = vi.fn();
 vi.mock("../utils/fileWriteQueue.js", async (importOriginal) => {
@@ -120,9 +108,6 @@ describe("serverFiles.js POST /templates: secret-shaped INI keys never reach the
     expect(raw).not.toContain(RCON_PASSWORD);
     expect(raw).not.toContain(JOIN_PASSWORD);
     expect(raw).not.toMatch(/RCONPassword/i);
-    // "Password=" itself (the key) is fine to have stripped; the VALUE
-    // must never appear anywhere, checked above. Confirm the key line is
-    // gone too, not just re-valued.
     expect(raw).not.toMatch(/^Password=/m);
 
     const saved = JSON.parse(raw);

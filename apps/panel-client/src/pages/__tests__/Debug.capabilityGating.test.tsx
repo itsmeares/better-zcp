@@ -7,20 +7,6 @@ import { getRequiredCapabilityForCheck } from '../Debug'
 import Debug from '../Debug'
 import { apiFetch, modsApi, serverApi, rconApi, backupApi, panelBridgeApi, serverFilesApi } from '@/lib/api'
 
-// bug-hunt-2026-08-26/27: Jim's catalogue (catalogue-debug-tsx-destructive-
-// auto-fixes) confirmed all 11 automated diagnostics fixes are already
-// gated server-side, across SEVEN distinct capabilities (not one page-level
-// concern) -- verified here by reading each route's requirePermission call
-// directly: mods.* fixes -> mods.manage (mods.js's router.use), server.process
-// -> server.control, rcon.connected -> rcon.execute, db.backup ->
-// backups.manage, server.staleLocks -> diagnostics.manage, bridge.configured/
-// worldmap.bridge.configured -> bridge.setup, server.sandboxCorrupt ->
-// serverfiles.manage. Debug.tsx itself had zero client-side awareness of any
-// of them. All 11 fixes share ONE render site and ONE handler
-// (handleDiagnosticsFix) -- a native <button>, not a Radix menu item, so the
-// Radix disabled-doesn't-gate-onClick trap doesn't apply here, but the
-// handler is guarded anyway (defense in depth, same two-layer pattern as
-// every other page tonight).
 
 let mockCan = (_capability: string) => true
 
@@ -149,9 +135,6 @@ function setUpApiFetch() {
   mockedApiFetch.mockImplementation(async (endpoint: string) => {
     if (endpoint.startsWith('/debug/diagnostics')) return jsonResponse(diagnosticsFixture)
     if (endpoint.startsWith('/debug/clear-stale-locks')) return jsonResponse({ success: true, deleted: 3 })
-    // Every other mount-time fetch (system/health/logs/logs-files/crash-logs)
-    // -- return a generically-shaped empty success so those unrelated
-    // fetchers don't error and spam reportClientError during the test.
     return jsonResponse({})
   })
 }
@@ -268,12 +251,6 @@ describe('Debug.tsx: automated fixes are gated on their own capability, not one 
   })
 })
 
-// god (2026-08-27, bug-hunt-2026-08-26): "the failure mode here is gating a
-// fix on the wrong one of the seven, which no disabled-state assertion can
-// detect either." The two suites above prove the wiring is generic and
-// correct for mods.manage + diagnostics.manage; this suite proves it holds
-// for the remaining five capabilities too, each one clicking all the way
-// through to its OWN real (mocked) API call -- not just "not disabled."
 describe('Debug.tsx: every automated fix reaches its own real API when granted its own capability (not a neighbor\'s)', () => {
   it('server.control: the server-not-running fix calls serverApi.start', async () => {
     mockCan = () => true
@@ -411,11 +388,6 @@ describe('Debug.tsx: every automated fix reaches its own real API when granted i
   })
 })
 
-// god (2026-08-27): "Gating a control that needs no capability hides a
-// working button, which is the same class of harm as leaving a real one
-// open." server.recentCrash's automated fix only calls setActiveTab -- no
-// API, no capability -- so it must stay enabled even when every capability
-// is withheld.
 describe('Debug.tsx: the one automated fix with no API call is never gated', () => {
   it('server.recentCrash stays enabled and switches tabs even when every capability is withheld', async () => {
     mockCan = () => false
@@ -431,14 +403,6 @@ describe('Debug.tsx: the one automated fix with no API call is never gated', () 
   })
 })
 
-// god (2026-08-27): "EVERY read endpoint in debug.js requires
-// diagnostics.manage ... SO TODAY A USER WITHOUT diagnostics.manage OPENS
-// DEBUG AND GETS A WALL OF 403s." Per-fix gating (above) answers "which
-// buttons work"; this answers "why is this page broken" -- a real 403 from
-// the mount-time diagnostics fetch replaces the whole Tabs UI with one
-// clean permission-denied state, same precedent as Users.tsx/
-// RolesPermissions.tsx/OidcSettings.tsx (react to the server's actual
-// answer, not a client-side can() guess).
 describe('Debug.tsx: a 403 from the diagnostics fetch replaces the whole page, not just one tab', () => {
   it('shows the permission-denied empty state and never renders the Tabs UI when /debug/diagnostics returns 403', async () => {
     mockCan = () => true
@@ -465,16 +429,6 @@ describe('Debug.tsx: a 403 from the diagnostics fetch replaces the whole page, n
   })
 })
 
-// kevin-2026-08-30 (god's follow-up on af4c0c10, the PanelBridge tab): its
-// data is gated on bridge.diagnostics specifically -- narrower than
-// whatever gates this page as a whole (diagnostics.manage, tested above).
-// A role can hold diagnostics.manage (sees the page, the suite above stays
-// green) but lack bridge.diagnostics (must still not see this ONE tab's
-// data). Same reasoning as the page-wide 403 suite: react to the server's
-// real 403 from a bridge.diagnostics-gated route (bridgeDiagFetch), not a
-// client-side can() guess -- the tab's own scoped permission-denied state
-// replaces its cards, the rest of the page (and the other tabs) are
-// unaffected.
 describe('Debug.tsx: the PanelBridge tab gates its own data on bridge.diagnostics, separate from the page-wide gate', () => {
   it('shows the tab-scoped permission-denied state and never renders the Stats card when a bridge.diagnostics route returns 403', async () => {
     mockCan = () => true
@@ -491,13 +445,6 @@ describe('Debug.tsx: the PanelBridge tab gates its own data on bridge.diagnostic
 
     renderDebug()
 
-    // jsdom's fireEvent.click does not move focus the way a real click
-    // does, and Radix Tabs' default activationMode="automatic" selects a
-    // tab on FOCUS, not on click -- a bare fireEvent.click here leaves the
-    // tab permanently unselected (confirmed empirically: aria-selected
-    // stayed "false" without the explicit .focus() call). Same shape as
-    // the Radix Select workaround documented in
-    // Chat.capabilityGating.test.tsx, different root cause.
     const tab = await screen.findByRole('tab', { name: /panelbridge/i })
     tab.focus()
     fireEvent.click(tab)

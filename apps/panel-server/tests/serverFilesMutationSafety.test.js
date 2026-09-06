@@ -60,12 +60,6 @@ describe("local config mutation safety", () => {
     expect(isLocalConfigMutation(createRequest("POST", "/save-and-reload"))).toBe(false);
   });
 
-  // The 2026-08-23 operator ruling split isLocalConfigMutation's old
-  // one-guard-fits-all into two disjoint classes with different behavior
-  // while the server runs: ordinary edits are now WARNED, not blocked;
-  // wholesale overwrites (restore, template-apply) are still blocked. These
-  // two tests pin that split itself, independent of which middleware each
-  // class is routed to below.
   it("classifies the nine edit routes as edits, not overwrites", () => {
     for (const routeKey of [
       "PUT /ini",
@@ -94,9 +88,6 @@ describe("local config mutation safety", () => {
     expect(isLocalConfigEdit(apply)).toBe(false);
   });
 
-  // Pins the part of the operator's ruling that changed: restore and
-  // template-apply are wholesale file overwrites, not edits, and stay
-  // refused while the server runs regardless of the edit ruling above.
   it("still rejects restore and template-apply while the local server is running", async () => {
     for (const [method, path] of [
       ["POST", "/restore/world.bak"],
@@ -120,15 +111,6 @@ describe("local config mutation safety", () => {
     }
   });
 
-  // Regression: this guard used serverManager.checkServerRunning(), which
-  // internally discards getServerProcessDetails()'s scanFailed flag and
-  // returns a bare boolean -- a FAILED detection scan (running: false,
-  // scanFailed: true) came back indistinguishable from a confirmed stop, so
-  // this guard fell through to next() and let a wholesale file overwrite
-  // (restore, template-apply) proceed against a server it simply failed to
-  // see was running. Same bug class already fixed at /wipe, backup restore,
-  // and chunks.js -- this guard was the one sibling still fail-OPEN instead
-  // of fail-closed on scanFailed.
   it("fails closed on a failed detection scan, not just a missing serverManager (restore/template-apply path)", async () => {
     for (const [method, path] of [
       ["POST", "/restore/world.bak"],
@@ -141,10 +123,6 @@ describe("local config mutation safety", () => {
         path,
         app: {
           get: () => ({
-            // checkServerRunning() would collapse this failed scan into a
-            // bare `false`, same as a confirmed stop -- present here so a
-            // fix that still calls it accidentally passes for the wrong
-            // reason instead of genuinely fixing the scanFailed blindness.
             checkServerRunning: vi.fn(async () => false),
             getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: true })),
           }),
@@ -197,9 +175,6 @@ describe("local config mutation safety", () => {
     expect(remoteNext).toHaveBeenCalledOnce();
   });
 
-  // The new behavior: warnRunningForLocalConfigEdit never refuses. It only
-  // ever sets req.configEditRestartWarning so the route handler knows
-  // whether to say the write won't reach the running game yet.
   describe("warnRunningForLocalConfigEdit (the nine edit routes)", () => {
     it("allows the write through and flags a restart warning while running", async () => {
       const response = createResponse();
@@ -258,15 +233,6 @@ describe("local config mutation safety", () => {
       expect(request.configEditRestartWarning).toBe(true);
     });
 
-    // Regression: this guard used to call serverManager.checkServerRunning(),
-    // which internally discards getServerProcessDetails()'s own scanFailed
-    // flag and resolves a plain `false` for a scan that failed outright --
-    // indistinguishable from a confirmed-stopped server. `running !== false`
-    // then evaluated to `false`, so NO warning was shown on an undetermined
-    // server state, the exact opposite of this function's documented policy
-    // (2026-08-26 bug hunt finding 2). Only getServerProcessDetails() is
-    // consulted now, so a manager that still exposes checkServerRunning
-    // alongside it must not influence the result at all.
     it("warns on scanFailed even when checkServerRunning would have reported false", async () => {
       const response = createResponse();
       const next = vi.fn();
@@ -302,12 +268,6 @@ describe("local config mutation safety", () => {
       expect(request.configEditRestartWarning).toBeUndefined();
     });
 
-    // Regression (2026-08-31 services sweep): this function's sibling,
-    // requireStoppedForLocalConfigMutation, was hardened so a CONFIGURED but
-    // currently-unreachable local path (network mount dropped, slow drive,
-    // AV lock) isn't trusted as isRemote:true just because it self-healed
-    // that way -- this guard never got the same treatment, so the exact
-    // same ambiguous state silently skipped the warning check entirely.
     it("warns (does not treat as remote) when a configured local path is currently unreachable", async () => {
       getActiveServer.mockResolvedValue({ isRemote: true, installPath: "/nonexistent/pz-server" });
       const response = createResponse();
@@ -322,4 +282,3 @@ describe("local config mutation safety", () => {
     });
   });
 });
-

@@ -3,22 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, bridge-vehicle-parts-wrong-receiver (Kevin's jar audit):
-// getPartCount, getPartByIndex, getPartById, getBattery and getBatteryCharge
-// are NOT on zombie.vehicles.BaseVehicle -- they live on a separate class,
-// zombie.vehicles.VehicleParts, reachable only via vehicle:getParts(). Every
-// call site in PanelBridge.lua used to invoke them directly on the vehicle
-// object, so every one always returned nil regardless of the vehicle's real
-// part state.
-//
-// THE FAKE OBJECTS BELOW ARE DELIBERATELY SPLIT INTO TWO SEPARATE LUA TABLES
-// (FakeVehicle vs FakeVehicleParts), each carrying only the methods that
-// class genuinely has, to make a wrong-receiver call FAIL LOUDLY (missing
-// method -> invoke() returns false, not a silent nil-that-looks-plausible)
-// instead of quietly returning a coincidentally-plausible value. This is the
-// actual bug shape: "does this method exist" says yes for all five, so the
-// stub has to model RECEIVER identity, not just method presence, or it would
-// pass on both the broken and fixed code.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -33,10 +17,6 @@ const LUA_PATH = path.join(
   'PanelBridge.lua',
 );
 
-// A part whose condition is below its max -- something for vehicleRepair to
-// actually do, and something whose max/current values a wrong-receiver call
-// could never see. getInventoryItem is nil so the getInventoryItem/item
-// branches are skipped, keeping the fixture minimal.
 function luaFakePart({ id, condition = 40, conditionMax = 40, hasDoor = false } = {}) {
   return `
 {
@@ -109,16 +89,11 @@ describe('PanelBridge.lua vehicle handlers -- getPartCount/getPartByIndex/getPar
     const bridge = loadPanelBridge(LUA_PATH, STUBS);
     const result = bridge.callHandler('vehicleRepair', { vehicleId: 1 });
 
-    // Before the fix this always failed with the misleading
-    // "No repairable vehicle parts available", even though FakeEngine is
-    // sitting right there below its max condition -- the call just never
-    // reached it because getPartCount/getPartByIndex targeted FakeVehicle
-    // (which doesn't have them) instead of FakeVehicleParts.
     expect(result.ok).toBe(true);
     expect(result.data.parts).toBeGreaterThan(0);
 
     bridge.run('__ENGINE_COND = FakeEngine.condition');
-    expect(bridge.getGlobal('__ENGINE_COND')).toBe(100); // repaired to its conditionMax fallback... see note below
+    expect(bridge.getGlobal('__ENGINE_COND')).toBe(100);
   });
 
   it('vehicleRepair: an honest, specific error when the vehicle genuinely has zero parts', () => {
@@ -127,8 +102,6 @@ describe('PanelBridge.lua vehicle handlers -- getPartCount/getPartByIndex/getPar
 
     const result = bridge.callHandler('vehicleRepair', { vehicleId: 1 });
     expect(result.ok).toBe(false);
-    // Names the real reason (0 parts) instead of the old blanket message
-    // that fired identically whether there were 0 parts or 40.
     expect(result.err).toMatch(/0 parts/);
   });
 
@@ -149,8 +122,6 @@ describe('PanelBridge.lua vehicle handlers -- getPartCount/getPartByIndex/getPar
     bridge.run('__DOOR_LOCKED = FakeDoorPart:getDoor().locked');
     expect(bridge.getGlobal('__DOOR_LOCKED')).toBe(false);
 
-    // Negative control / crash guard: getParts() returning nil must not
-    // throw (the whole point of guarding every parts-object call).
     const bridge2 = loadPanelBridge(LUA_PATH, STUBS);
     bridge2.run('function FakeVehicle:getParts() return nil end');
     let result2;
@@ -182,10 +153,6 @@ function FakeVehicleParts.battery:getInventoryItem() return { getCurrentUsesFloa
   });
 
   it('vehicleSetBattery: honest, specific error when neither the battery-item path nor setBatteryCharge exists', () => {
-    // setBatteryCharge genuinely does not exist anywhere in the real B42
-    // vehicle API (no near-miss on BaseVehicle, VehicleParts, or
-    // VehiclePart) -- rerouting the receiver cannot fix this one. FakeVehicle
-    // here has no setBatteryCharge at all, matching that reality.
     const bridge = loadPanelBridge(LUA_PATH, STUBS);
     const result = bridge.callHandler('vehicleSetBattery', { vehicleId: 1, charge: 90 });
     expect(result.ok).toBe(false);

@@ -1,15 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// POST /server-files/save-and-reload hardcoded `success: true` regardless of
-// what the RCON reloadoptions call actually returned -- diagnosed in
-// the route hunt's Finding 3, confirmed still present in current
-// code before this fix. reloadOptions() is a thin wrapper over
-// RconService.execute(), which DOES distinguish success from failure
-// (`{success:false, error}` on a failed/unknown-command reply, timeout, or
-// disconnected RCON) -- this route just never looked at that field. The
-// sibling route config.js's POST /reload already does this honestly
-// (`res.json(result)`, passing the real result straight through).
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => null),

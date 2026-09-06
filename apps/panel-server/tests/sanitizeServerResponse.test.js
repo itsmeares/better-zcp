@@ -11,9 +11,7 @@ describe("SENSITIVE_FIELD_RE / maskSensitiveObject", () => {
   it("masks every secret-shaped field, including ones added after the fact", () => {
     const settings = {
       rconPassword: "rcon-secret-1234",
-      // Finding 1: jwtSecret was missing from the old explicit key list.
       jwtSecret: "super-secret-jwt-signing-key",
-      // Finding 3/4: discordBotToken was missing from the old list too.
       discordBotToken: "discord-bot-token-abcd",
       steamApiKey: "steam-key-abcd",
       steamSessionId: "session-id-abcd",
@@ -40,7 +38,6 @@ describe("SENSITIVE_FIELD_RE / maskSensitiveObject", () => {
       expect(masked[key]).not.toBe(settings[key]);
     }
 
-    // Non-secret fields pass through untouched.
     expect(masked.darkMode).toBe(true);
     expect(masked.serverName).toBe("MyServer");
   });

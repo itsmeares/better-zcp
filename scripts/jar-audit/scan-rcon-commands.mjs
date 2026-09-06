@@ -1,17 +1,4 @@
 #!/usr/bin/env node
-// Reads every zombie/commands/serverCommands/*.class out of the real B42
-// dedicated server jar and prints its true @CommandName (the literal RCON
-// keyword -- often NOT the same as the class name), @CommandArgs/
-// @AltCommandArgs (every valid argument-shape variant), @DisabledCommand,
-// and @RequiredCapability, straight from the class file's own bytecode
-// annotations. No guessing, no wiki, no reading our own comments.
-//
-// Usage:
-//   node scripts/jar-audit/scan-rcon-commands.mjs <path-to-projectzomboid.jar>
-//   node scripts/jar-audit/scan-rcon-commands.mjs <jar> --json
-//   node scripts/jar-audit/scan-rcon-commands.mjs <jar> --class BanUserCommand
-//
-// See README.md in this directory for what this can and cannot tell you.
 
 import unzipper from "unzipper";
 import { parseClass } from "./classfile-parser.mjs";
@@ -29,8 +16,6 @@ function annotationElements(classAnnotations, typeSuffix) {
   return classAnnotations.find((a) => a.type.endsWith(typeSuffix + ";"))?.elements ?? null;
 }
 
-// @CommandArgs's own elements shape (required/optional/argName), used both
-// directly and inside each entry of an @AltCommandArgs array.
 function describeArgs(elements) {
   if (!elements) return null;
   const parts = [];

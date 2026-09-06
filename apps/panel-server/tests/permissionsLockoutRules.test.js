@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Lockout rules 1-3 (rule 4 is the migration itself, covered by
-// rolesMigration.test.js). Rule 1 is a CAPABILITY check, not a role-name
-// check -- these tests exercise it against roles.manage/users.manage
-// directly, including via a second role that also grants the capability,
-// to prove it isn't hardcoded to the name "admin".
 
 const rolesById = new Map();
 let users = [];
@@ -13,9 +8,6 @@ function seedRole(id, name, capabilities) {
   rolesById.set(id, { id, name, capabilities, isSeeded: false });
 }
 
-// Distinct from seedRole() above (which, confusingly, always creates a
-// NON-seeded role -- it's named for "seeding test data", not "isSeeded").
-// This one actually sets isSeeded: true, for the Rule 0 tests below.
 function seedBuiltinRole(id, name, capabilities) {
   rolesById.set(id, { id, name, capabilities, isSeeded: true });
 }
@@ -39,11 +31,6 @@ vi.mock("../database/init.js", () => ({
   getUsersForRole: async (role) =>
     users.filter((u) => u.roleId === role.id || (role.isSeeded && u.role === role.name)),
   getUsersForRoleAccounting: async () => users,
-  // Mirrors database/init.js's real reassignRoleMembers -- must set .role
-  // unconditionally (no isSeeded check), see reassignRoleMembers.test.js
-  // for why: requirePermission() resolves capabilities via
-  // getRoleByName(req.user.role), so a stale .role after reassigning to a
-  // custom role kept authorizing the user against their old one forever.
   reassignRoleMembers: async (fromRole, toRole) => {
     let count = 0;
     for (const u of users) {
@@ -166,7 +153,6 @@ describe("updateRole -- lockout rule 2 (soft block: acting user losing their own
       { id: "u2", role: "superuser", roleId: "role-super" },
     ];
 
-    // Acting as the superuser, editing the admin role -- not self-affecting.
     const updated = await updateRole(
       "role-admin",
       { capabilities: ["users.manage"] },
@@ -176,24 +162,16 @@ describe("updateRole -- lockout rule 2 (soft block: acting user losing their own
   });
 });
 
-// Regression coverage for deleteRole()'s seeded-role guard:
-// used to have no isSeeded check at all -- a seeded role with zero current
-// members could be deleted outright via a direct call/API request, even
-// though RolesPermissions.tsx's delete button is disabled for isSeeded
-// roles. "Test both directions" per god's own framing: a seeded role must
-// be refused regardless of members, AND a custom role must still delete
-// normally -- the second is what proves this isn't a fix that just passes
-// by refusing everything.
 describe("deleteRole -- rule 0 (seeded roles can never be deleted, independent of member count)", () => {
   it("refuses a seeded role with ZERO members -- the exact gap that was reachable before this fix", async () => {
     seedBuiltinRole("role-admin", "admin", ["roles.manage", "users.manage"]);
-    users = []; // no members at all
+    users = [];
 
     await expect(deleteRole("role-admin")).rejects.toMatchObject({
       code: "ROLE_IS_SEEDED",
       status: 403,
     });
-    expect(rolesById.has("role-admin")).toBe(true); // untouched
+    expect(rolesById.has("role-admin")).toBe(true);
   });
 
   it("refuses a seeded role WITH members too, and the code says isSeeded, not has-members", async () => {
@@ -213,7 +191,7 @@ describe("deleteRole -- rule 0 (seeded roles can never be deleted, independent o
     await expect(
       deleteRole("role-mod", { reassignTo: "role-custom" }),
     ).rejects.toMatchObject({ code: "ROLE_IS_SEEDED" });
-    expect(users[0].roleId).toBe("role-mod"); // never reassigned
+    expect(users[0].roleId).toBe("role-mod");
   });
 
   it("a CUSTOM role with zero members still deletes normally -- the fix does not overreach", async () => {
@@ -283,16 +261,6 @@ describe("deleteRole -- lockout rule 3 (must not orphan members)", () => {
   });
 });
 
-// A role's .name is also the exact string every current member's user.role
-// field stores -- requirePermission() resolves capabilities via
-// getRoleByName(req.user.role), a plain name match, not roleId (same
-// constraint reassignRoleMembers already has to honor above). Renaming a
-// role without fixing up its members desyncs that string from the row that
-// now defines their capabilities: getRoleByName(oldName) finds nothing, and
-// every member fails every requirePermission check on their very next
-// request -- for a seeded role, that is every admin/technician/moderator on
-// the panel at once, and it bypasses rules 1/2 entirely since neither one
-// fires on a name-only change.
 describe("updateRole -- renaming a role", () => {
   it("refuses to rename a seeded role, even with no capability change", async () => {
     seedBuiltinRole("role-admin", "admin", ["roles.manage", "users.manage"]);
@@ -301,8 +269,8 @@ describe("updateRole -- renaming a role", () => {
     await expect(
       updateRole("role-admin", { name: "Administrator" }),
     ).rejects.toThrow(/renamed/i);
-    expect(rolesById.get("role-admin").name).toBe("admin"); // untouched
-    expect(users[0].role).toBe("admin"); // untouched
+    expect(rolesById.get("role-admin").name).toBe("admin");
+    expect(users[0].role).toBe("admin");
   });
 
   it("refuses to rename a seeded role even when capabilities are unchanged in the same request", async () => {
@@ -338,7 +306,7 @@ describe("updateRole -- renaming a role", () => {
     await updateRole("role-a", { name: "Role A Renamed" });
 
     expect(users[0].role).toBe("Role A Renamed");
-    expect(users[1].role).toBe("Role B"); // untouched
+    expect(users[1].role).toBe("Role B");
   });
 
   it("leaves members alone when the request does not actually change the name", async () => {

@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { TFunction } from 'i18next'
 import { getDiagnosticsFixAction } from '../Debug'
 
-// Minimal stand-in for i18next's t() -- these tests only assert on the
-// boolean openServerConfig/openMods decisions, never on translated text.
 const t = ((key: string) => key) as unknown as TFunction
 
 function fallbackCheck(overrides: Partial<{
@@ -45,10 +43,6 @@ describe('getDiagnosticsFixAction fallback branch (uncovered check ids)', () => 
     expect(action?.links).toBeUndefined()
   })
 
-  // mods-unresolved-2026-08-31: the per-ID triage rides the same querystring
-  // transport as `unresolved` -- one `unresolvedCause=modId|cause|suggestion`
-  // entry per triaged ID, so Server Config's banner can say WHY without a
-  // second network round trip.
   it('carries the server-computed per-ID triage into the deep-link querystring', () => {
     const action = getDiagnosticsFixAction(
       fallbackCheck({
@@ -85,11 +79,6 @@ describe('getDiagnosticsFixAction fallback branch (uncovered check ids)', () => 
     expect(action?.manualRoute).toBe('/server-config?tab=ini&search=Mods&unresolved=SomeMod')
   })
 
-  // impeccable-critique-2026-08-31, finding #2: the primary button's own
-  // `label` used to duplicate `links[0]`'s label ("Open Servers" appeared
-  // twice), and only the links button actually navigated -- the primary one
-  // just popped a toast repeating the note. manualRoute makes the primary
-  // button itself the real navigation, so the duplicate link is dropped.
   it.each(['server.active', 'server.installPath'])(
     '%s navigates via its own manualRoute instead of a redundant duplicate "Open Servers" link',
     (id) => {
@@ -99,17 +88,6 @@ describe('getDiagnosticsFixAction fallback branch (uncovered check ids)', () => 
     },
   )
 
-  // impeccable-critique-2026-08-31, finding #2 turned out to be systemic, not
-  // a one-off: reshooting debug:bridge for the fix above surfaced the exact
-  // same shape on "Start script not found" / "Bundled JRE not found" (both
-  // showing "Open Server Finder" twice) -- a fresh grep of every manual
-  // (automated: false) case found the SAME `label` duplicates the (only, or
-  // first) `links`/`openServerConfig`/`openMods` entry's own rendered text
-  // in 16 more check-id groups. Every one gets the identical treatment:
-  // promote the duplicated destination to manualRoute so the primary button
-  // itself navigates, and drop only the link/flag that duplicated it --
-  // a genuinely distinct secondary link (e.g. server.rconPassword's
-  // Settings link, disk.free's Chunk Cleaner link) stays.
   const manualRouteFixes: Array<{
     ids: string[]
     manualRoute: string
@@ -166,10 +144,6 @@ describe('getDiagnosticsFixAction fallback branch (uncovered check ids)', () => 
   })
 
   it('does NOT open server config for translated prose that would have matched the old English phrase', () => {
-    // Regression case: this is what a German-translated hint for the same
-    // underlying concept looks like. The fallback must never decide UI
-    // behaviour from prose, translated or not -- only from the literal
-    // do-not-translate INI token, which this string does not contain.
     const action = getDiagnosticsFixAction(
       fallbackCheck({ hint: 'Öffne die Serverkonfiguration, um dies zu beheben.' }),
       t,
@@ -178,9 +152,6 @@ describe('getDiagnosticsFixAction fallback branch (uncovered check ids)', () => 
   })
 
   it('does NOT open server config for the English prose phrase alone, without the literal token', () => {
-    // Same check in English: "server config" prose alone no longer
-    // triggers the button either -- the fix removes the phrase entirely
-    // rather than special-casing English.
     const action = getDiagnosticsFixAction(
       fallbackCheck({ hint: 'Open server config to fix this.' }),
       t,
@@ -235,14 +206,6 @@ describe('getDiagnosticsFixAction fallback branch (uncovered check ids)', () => 
   })
 })
 
-// 2026-08-27, debug-tsx-destructive-flag-catalogue follow-up: destructive
-// used to be a fully independent optional field, only ever read inside the
-// requiresConfirm branch -- so destructive:true with no requiresConfirm was
-// silently inert (dialog never shown, fix ran immediately, nothing to catch
-// it). Folded requiresConfirm/confirmMessage/destructive into one `confirm`
-// object where `destructive` is a REQUIRED field, making that combination a
-// compile error instead of a trap. These tests pin the three real fixes that
-// carry `confirm` today, and confirm every other automated fix has none.
 function manyIds(n: number) {
   return Array.from({ length: n }, (_, i) => String(i + 1))
 }

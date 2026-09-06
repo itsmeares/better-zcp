@@ -49,11 +49,8 @@ describe("classifyTileBytes", () => {
   });
 
   it("does not misclassify a near-miss as a real signature -- every byte of a signature must match", () => {
-    // Looks gzip-ish (starts 1f) but the second byte is wrong.
     expect(classifyTileBytes(new Uint8Array([0x1f, 0x00]))).toEqual({ kind: "unrecognized", hex: "1f 00" });
-    // Looks JPEG-ish (starts ff d8) but the third byte is wrong.
     expect(classifyTileBytes(new Uint8Array([0xff, 0xd8, 0x00]))).toEqual({ kind: "unrecognized", hex: "ff d8 00" });
-    // Looks PNG-ish (starts 89 50 4e) but the fourth byte is wrong.
     expect(classifyTileBytes(new Uint8Array([0x89, 0x50, 0x4e, 0x00]))).toEqual({
       kind: "unrecognized",
       hex: "89 50 4e 00",
@@ -74,7 +71,7 @@ describe("parseContentLength", () => {
 
   it("treats a malformed Content-Length the same as absent, never guesses a number from it", () => {
     expect(parseContentLength("not-a-number")).toBeNull();
-    expect(parseContentLength("18340, 18340")).toBeNull(); // a list, from a misbehaving intermediary
+    expect(parseContentLength("18340, 18340")).toBeNull();
     expect(parseContentLength("-5")).toBeNull();
     expect(parseContentLength("")).toBeNull();
     expect(parseContentLength(null)).toBeNull();

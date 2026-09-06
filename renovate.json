@@ -58,7 +58,16 @@
     {
       "description": "Group workspace tooling minor updates",
       "matchManagers": ["npm"],
-      "matchPackageNames": ["pnpm", "turbo", "typescript", "tsup", "tsx"],
+      "matchPackageNames": [
+        "pnpm",
+        "typescript",
+        "vite",
+        "vitest",
+        "eslint",
+        "prettier",
+        "husky",
+        "lint-staged"
+      ],
       "matchUpdateTypes": ["minor"],
       "groupName": "workspace tooling"
     },
@@ -81,7 +90,8 @@
       "matchPackageNames": ["node"],
       "matchUpdateTypes": ["patch", "minor", "major"],
       "groupName": "Node.js",
-      "groupSlug": "node-js"
+      "groupSlug": "node-js",
+      "allowedVersions": "22"
     },
     {
       "description": "Update React and React DOM only together",
@@ -93,35 +103,19 @@
       "schedule": ["* 0-7 * * 1-5"]
     },
     {
-      "description": "Update all Prisma packages only together",
-      "matchManagers": ["npm"],
-      "matchPackageNames": ["@prisma/client", "@prisma/adapter-pg", "prisma"],
-      "matchUpdateTypes": ["minor", "major"],
-      "groupName": "Prisma",
-      "minimumGroupSize": 3,
-      "schedule": ["* 0-7 * * 1-5"]
-    },
-    {
       "description": "Update Tailwind packages only together",
       "matchManagers": ["npm"],
-      "matchPackageNames": ["tailwindcss", "@tailwindcss/postcss"],
+      "matchPackageNames": [
+        "tailwindcss",
+        "tailwind-merge",
+        "tailwindcss-animate",
+        "postcss",
+        "autoprefixer"
+      ],
       "matchUpdateTypes": ["minor", "major"],
       "groupName": "Tailwind CSS",
       "minimumGroupSize": 2,
       "schedule": ["* 0-7 * * 1-5"]
-    },
-    {
-      "description": "Keep the Docker Node image on Node 24",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["node"],
-      "allowedVersions": "24"
-    },
-    {
-      "description": "Require manual PostgreSQL major upgrades",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["postgres"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false
     }
   ]
 }

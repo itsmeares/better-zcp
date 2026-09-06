@@ -35,7 +35,6 @@ async function renderBanner() {
       <SystemHealthBanner />
     </MemoryRouter>
   )
-  // let the initial fetch effect resolve
   await waitFor(() => expect(getStorageHealth).toHaveBeenCalled())
 }
 
@@ -57,7 +56,6 @@ describe('SystemHealthBanner', () => {
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.getByText(en.writesBlockedTitle)).toBeInTheDocument()
-    // A blocked-writes condition must not offer a dismiss that hides it from the operator.
     expect(screen.queryByRole('button', { name: en.dismissAria })).not.toBeInTheDocument()
   })
 
@@ -104,16 +102,7 @@ describe('SystemHealthBanner', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('bug-hunt-2026-09-04: keeps a live critical banner up through an unverifiable reading instead of clearing it', async () => {
-    // diskMonitor.js's computeDiskStatus() forces warning/critical to false
-    // whenever it can't verify the disk (ok: false) -- an unreachable mount,
-    // a permission error, a momentary network-drive hiccup. Its own
-    // socket-emit path already guards against treating that as an all-clear
-    // (it holds the last known level rather than firing disk:normal), but
-    // this component's 30s REST poll bypassed that guard entirely: it just
-    // read save?.critical off the fresh (meaningless, forced-false) reading
-    // and silently cleared a real critical banner the moment the mount
-    // blipped, with no socket event involved at all.
+  it('regression: keeps a live critical banner up through an unverifiable reading instead of clearing it', async () => {
     vi.useFakeTimers()
     getStorageHealth
       .mockResolvedValueOnce(
@@ -138,17 +127,10 @@ describe('SystemHealthBanner', () => {
         <SystemHealthBanner />
       </MemoryRouter>
     )
-    // The initial fetch's .then() resolves on a microtask, then triggers a
-    // state update and a follow-on effect (the dismissed-reset effect) --
-    // advancing fake timers by 0 doesn't reliably drain that whole chain
-    // before the next line runs, so the first assertion needs the same
-    // explicit act()-wrapped flush the second one needs by construction
-    // (real elapsed time via advanceTimersByTimeAsync(30_000)).
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.getByText(en.saveVolumeCriticalTitle)).toBeInTheDocument()
 
-    // Advance past the 30s poll interval to trigger the second, unverifiable reading.
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000) })
     expect(getStorageHealth).toHaveBeenCalledTimes(2)
     expect(screen.getByRole('alert')).toBeInTheDocument()

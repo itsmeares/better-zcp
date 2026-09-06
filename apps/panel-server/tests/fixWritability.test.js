@@ -4,22 +4,7 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// POST /debug/fix-writability clears the read-only attribute on ONE
-// server-resolved file (currently only "db" -> getDataPaths().dbPath) and
-// re-checks writability -- see the route's own comment in
-// apps/panel-server/routes/debug.js for the full safety reasoning (closed target
-// enum, file-only, honest failure on a real ACL/ownership issue).
-//
-// Deliberately exercises the REAL filesystem (a temp file under
-// os.tmpdir(), genuinely marked read-only via fs.chmodSync) rather than
-// mocking fs.promises.chmod -- the entire value of this route is that a
-// real chmod call actually restores writability on this platform, so a
-// fully-mocked test would prove nothing about whether the fix works.
 
-// utils/logger.js calls getDataPaths() once at module load time (for its
-// own logsDir), which happens before any beforeEach() runs -- give the
-// mock a real-shaped default up front so that first call doesn't blow up,
-// same fix documented in panelBridgeSftp.test.js for the identical issue.
 const getDataPaths = vi.fn(() => ({ dataDir: ".", logsDir: ".", dbPath: "" }));
 vi.mock("../utils/paths.js", async () => {
   const actual = await vi.importActual("../utils/paths.js");
@@ -92,8 +77,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   try {
-    // Restore write access before cleanup -- rmSync on a read-only file
-    // can itself fail on some platforms.
     fs.chmodSync(dbPath, 0o600);
   } catch {
     // File may already be gone or never made read-only in a given test.
@@ -108,11 +91,6 @@ describe("POST /fix-writability", () => {
 
     expect(res.getStatusCode()).toBe(400);
     expect(res.getBody().code).toBe("WRITABILITY_TARGET_UNSUPPORTED");
-    // Confirm nothing was touched -- still read-only. Assert the MODE
-    // bits directly rather than "can I write to it": a write-attempt
-    // proxy is false as root (root bypasses POSIX permission checks
-    // entirely, so an append would succeed even on a 0o400 file), but
-    // the mode bits themselves are true regardless of who is asking.
     expect(fs.statSync(dbPath).mode & 0o222).toBe(0);
   });
 
@@ -131,7 +109,7 @@ describe("POST /fix-writability", () => {
   });
 
   it("clears a real read-only file and reports success", async () => {
-    fs.chmodSync(dbPath, 0o400); // read-only
+    fs.chmodSync(dbPath, 0o400);
     expect(fs.statSync(dbPath).mode & 0o222).toBe(0);
 
     const res = await postFixWritability({ target: "db" });
@@ -140,11 +118,6 @@ describe("POST /fix-writability", () => {
     const body = res.getBody();
     expect(body.success).toBe(true);
     expect(body.path).toBe(dbPath);
-    // The real, load-bearing assertion: the chmod actually happened, not
-    // just that the route claimed success. Assert the MODE bits rather
-    // than a write attempt -- root bypasses POSIX write checks, so
-    // "did the write succeed" is not a reliable proxy for "did the mode
-    // change" when this suite runs as root (e.g. the WSL/Linux CI gate).
     expect(fs.statSync(dbPath).mode & 0o200).toBeTruthy();
   });
 
@@ -171,19 +144,9 @@ describe("POST /fix-writability", () => {
   });
 
   it("reports an honest failure when the file is still unwritable after chmod succeeds (ACL, not attribute)", async () => {
-    // chmod itself resolves (as it would on a real ACL-denied file on some
-    // platforms), but the file is genuinely still not writable afterward.
     const chmodSpy = vi.spyOn(fs.promises, "chmod").mockResolvedValue(undefined);
     fs.chmodSync(dbPath, 0o400);
 
-    // The route's post-chmod recheck goes through fs.promises.access(p,
-    // W_OK). That call is not a reliable "still blocked" signal as root --
-    // root bypasses POSIX write checks and access() would report writable
-    // regardless of mode. Force the recheck itself to see "still blocked"
-    // (rejecting only the W_OK call; the existence check earlier in the
-    // route uses access() with no mode and must keep succeeding) so this
-    // test proves the route's honest-failure branch independent of the
-    // uid running the suite.
     const realAccess = fs.promises.access.bind(fs.promises);
     const accessSpy = vi
       .spyOn(fs.promises, "access")

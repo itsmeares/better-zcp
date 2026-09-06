@@ -38,8 +38,6 @@ const purgeMod = vi.mocked(modsApi.purgeMod)
 const collectionUntrack = vi.mocked(modsApi.collectionUntrack)
 const collectionAddItem = vi.mocked(modsApi.collectionAddItem)
 
-// A name with accents/non-ASCII, since the panel is the primary place an
-// operator sees Workshop titles rendered verbatim from Steam.
 const ACCENTED_NAME = 'Café Épée & Bouclier Ünïcode Mod'
 
 function baseDiff(items: any[]) {
@@ -99,7 +97,6 @@ describe('WorkshopCollectionPanel', () => {
     fireEvent.pointerDown(screen.getByTitle('More'), { button: 0, ctrlKey: false })
     fireEvent.click(await screen.findByText('Remove everywhere'))
 
-    // The dialog must appear, naming the real mod, before anything destructive happens.
     expect(await screen.findByRole('alertdialog')).toBeInTheDocument()
     expect(screen.getByText(`Remove ${ACCENTED_NAME} everywhere?`)).toBeInTheDocument()
     expect(purgeMod).not.toHaveBeenCalled()
@@ -190,16 +187,9 @@ describe('WorkshopCollectionPanel', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Untrack & remove from Steam' }))
 
     await waitFor(() => expect(collectionUntrack).toHaveBeenCalledWith('333'))
-    // Refresh isn't called on failure, and the button returns to its idle (non-busy) state
-    // rather than getting stuck -- proving the failure path doesn't leave the row lying about status.
     await waitFor(() => expect(screen.getByRole('button', { name: 'Untrack' })).toBeEnabled())
   })
 
-  // bug-hunt-2026-08-26: unlike Settings.tsx's plain untrack (local tracking
-  // only), this untrack also writes an ignore-list entry and mirrors the
-  // removal into the user's real Steam Workshop collection -- untiered in
-  // Pam's 52-action destructive audit and previously fired on a single
-  // click with zero confirmation.
   it('does NOT untrack on a single click -- it only opens a confirmation naming the Steam-collection side effect', async () => {
     await renderPanel([
       { workshopId: '333', name: ACCENTED_NAME, status: 'to-add', inTracked: true, inCollection: false, inServer: false },
@@ -258,12 +248,6 @@ describe('WorkshopCollectionPanel', () => {
     )
     await screen.findByText(ACCENTED_NAME)
 
-    // 2026-08-27 no-dead-disabled-title triage: a native title is invisible on a
-    // disabled element (confirmed empirically, no tooltip on hover) -- the reason
-    // now lives in aria-label AND in a real DisabledReason/Radix Tooltip on a
-    // focusable wrapper, so it reaches both assistive tech and a sighted mouse
-    // user hovering the (now-focusable) wrapper. The dead title= is gone, not
-    // just duplicated -- find the button by its accessible name instead.
     const addButton = screen.getByRole('button', { name: 'Need Steam cookies' })
     expect(addButton).toBeDisabled()
     expect(addButton).toHaveAccessibleName('Need Steam cookies')
@@ -279,13 +263,6 @@ describe('WorkshopCollectionPanel', () => {
     expect(screen.queryByText('Synced Mod')).not.toBeInTheDocument()
   })
 
-  // user-report-steam-collection-import-fails-success8-filetype2, part (d):
-  // a bulk failure toast used to show only errors[0].error under a "First
-  // error:" label, silently discarding every other item's failure reason
-  // -- "if 47 different failures can hide behind one message, that is its
-  // own bug". These prove the toast now says whether every failure shares
-  // one cause or several, instead of always implying "there's more, who
-  // knows what".
   it('bulk-add failure toast states all items shared the same error, not just "first error"', async () => {
     collectionAddItem.mockRejectedValue(
       new Error('Steam rejected this: that Workshop item is itself a collection, not a mod.'),

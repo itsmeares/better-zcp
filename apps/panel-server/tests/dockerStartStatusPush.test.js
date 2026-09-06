@@ -1,20 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Phase 1 finding (Oscar, 2026-08-29): POST /start's 1s-cadence poll loop
-// called serverManager.getServerProcessDetails() -- a LOCAL host process
-// scan -- unconditionally, even when runManagedLifecycle("start") already
-// launched the server through Docker. For docker-local/docker-managed
-// servers, PZ runs as PID 1 of a *different* container, so that scan can
-// never see it (GH#114). The poll ran its full 30 attempts, never detected
-// running:true, and on timeout just logged a warning -- no server:status
-// event ever fired for a Docker start. The client fell back entirely to its
-// own 10-15s polling.
-//
-// Fixed: when runManagedLifecycle("start") reports managed.handled, emit
-// server:status:{running:true} immediately (Docker's own start action
-// already confirms the container is up before returning -- same trust the
-// existing /stop and /force-stop routes already place in Docker's stop
-// action) and skip the doomed local-scan poll entirely for this path.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => ({
@@ -84,12 +69,6 @@ describe("POST /start -- Docker start pushes server:status immediately", () => {
     const response = createResponse();
 
     await getHandler("/start", "post")({ app }, response);
-    // waitForRconAfterStart() is deliberately fire-and-forgotten by the
-    // route (the HTTP response must not wait out RCON's up-to-5-minute
-    // readiness poll) -- flush pending microtasks so its already-resolved
-    // mock calls (checkPortOpen/connect both resolve immediately, so its
-    // loop breaks on the first iteration with no real timer) settle before
-    // the test ends, rather than leaving it silently still in flight.
     await Promise.resolve();
     await Promise.resolve();
 

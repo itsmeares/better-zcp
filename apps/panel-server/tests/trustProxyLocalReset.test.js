@@ -1,13 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// Route-level coverage for the fail-closed ruling on isLocalPanelRequest
-// (see apps/panel-server/tests/localPanelRequest.test.js for the underlying unit
-// tests): once trust proxy is configured, the panel cannot verify a
-// request's real origin, so it must refuse local-only recovery affordances
-// entirely rather than guess. Two requirements this covers that the unit
-// tests alone don't: (1) the refusal must explain WHY and WHAT TO DO
-// INSTEAD, not just say "no" (2) GET /reset-status must stop advertising
-// the affordance too, or the UI offers a button that always 403s.
 
 const { default: router } = await import("../routes/auth.js");
 

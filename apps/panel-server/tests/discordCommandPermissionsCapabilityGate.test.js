@@ -1,23 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// PUT /discord/permissions could retune ANY Discord slash command's
-// authorization tier, including dropping /rcon (default "admin") all the
-// way to "everyone" -- letting any member of the Discord guild run
-// arbitrary RCON, start/stop/restart the server, kick players, or
-// broadcast, entirely outside the panel's own rcon.execute / server.control
-// / players.moderate / server.world_events gates, with no panel account at
-// all. integrations.manage's own description ("Configure the Discord bot")
-// gave no hint this reaches that far -- flagged in tonight's
-// capability-description sweep and reordered to the top fix because,
-// unlike every other finding that night, this one crosses the panel's own
-// account boundary entirely.
-//
-// Fix: changing a command's Discord tier now requires the caller to already
-// hold the panel capability that command maps to (DISCORD_COMMAND_CAPABILITY
-// in routes/discord.js), mirroring services/scheduler.js's
-// requiredCapabilityForScheduledCommand() shape from earlier tonight -- you
-// cannot hand out an authority through Discord that you do not hold
-// yourself in the panel.
 
 const ROLES = {
   admin: {
@@ -30,13 +12,7 @@ const ROLES = {
       "players.view",
     ],
   },
-  // Holds integrations.manage (passes the router-level gate that guards this
-  // whole file) and NOTHING else -- the exact caller this fix exists to
-  // stop: someone who can open the Discord permissions screen but holds
-  // none of the panel-side capabilities the commands themselves require.
   integrations_only: { capabilities: ["integrations.manage"] },
-  // integrations.manage + rcon.execute only, to prove the check is
-  // per-command, not all-or-nothing.
   integrations_and_rcon: {
     capabilities: ["integrations.manage", "rcon.execute"],
   },
@@ -57,10 +33,6 @@ function createResponse() {
   return response;
 }
 
-// Runs the router-level requirePermission("integrations.manage") gate
-// (router.use, index 0 -- no `.route`, invisible to a route-stack-only
-// lookup) AHEAD of PUT /permissions' own handler stack, so both layers this
-// fix relies on are actually exercised, not just the inline one.
 async function runPutPermissions(discordBot, permissions, role) {
   const useLayer = router.stack.find(
     (entry) => !entry.route && typeof entry.handle === "function",
@@ -136,9 +108,6 @@ describe("PUT /discord/permissions -- per-command capability gate", () => {
   it("re-submitting the SAME tier for a command the caller lacks the capability for is a no-op, not a refusal (whole-object resend must not lock out saves)", async () => {
     const discordBot = mockDiscordBot({ rcon: "admin", start: "admin" });
 
-    // integrations_only holds neither rcon.execute nor server.control, but
-    // resends every current tier unchanged alongside one real edit it IS
-    // allowed to make.
     const response = await runPutPermissions(
       discordBot,
       { rcon: "admin", start: "admin", status: "moderator" },

@@ -4,8 +4,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-// Test PanelBridge command serialization logic
-// Tests the command queue and file write serialization without actual file I/O
 
 describe('PanelBridge command serialization', () => {
   let commands;
@@ -59,7 +57,6 @@ describe('PanelBridge command serialization', () => {
   });
 });
 
-// Test result deduplication logic
 describe('PanelBridge result deduplication', () => {
   let processedResults;
 
@@ -82,12 +79,11 @@ describe('PanelBridge result deduplication', () => {
   });
 
   it('should clean up old entries', () => {
-    const oldTime = Date.now() - 60000; // 1 minute ago
+    const oldTime = Date.now() - 60000;
     processedResults.set('old-1', oldTime);
     processedResults.set('old-2', oldTime);
     processedResults.set('new-1', Date.now());
 
-    // Simulate cleanup (remove entries older than 30s)
     const cutoff = Date.now() - 30000;
     for (const [id, timestamp] of processedResults) {
       if (timestamp < cutoff) {
@@ -100,7 +96,6 @@ describe('PanelBridge result deduplication', () => {
   });
 });
 
-// Test pending command timeout tracking
 describe('PanelBridge pending commands', () => {
   let pendingCommands;
 
@@ -109,7 +104,6 @@ describe('PanelBridge pending commands', () => {
   });
 
   afterEach(() => {
-    // Clear all timeouts
     for (const [, cmd] of pendingCommands) {
       if (cmd.timeout) clearTimeout(cmd.timeout);
     }
@@ -142,7 +136,6 @@ describe('PanelBridge pending commands', () => {
       timestamp: Date.now()
     });
 
-    // Simulate result received
     const pending = pendingCommands.get('cmd-1');
     clearTimeout(pending.timeout);
     pending.resolve({ success: true });
@@ -168,7 +161,6 @@ describe('PanelBridge pending commands', () => {
 
     }
 
-    // Simulate bridge stop
     for (const [id, pending] of pendingCommands) {
       clearTimeout(pending.timeout);
       pending.reject(new Error('Bridge stopped'));
@@ -209,8 +201,6 @@ describe('PanelBridge vehicle compatibility', () => {
     const lua = await readFile(luaPath, 'utf8');
     const vehicleAt = lua.match(/local function vehicleAt\(vehicles, i\)([\s\S]*?)\nend/);
 
-    // Build 42 exposes get(i) as a callable method while `vehicles.get`
-    // reads nil, so a field test silently returns zero vehicles (v1.7.23).
     expect(vehicleAt?.[1]).toContain('PanelBridge.invoke(vehicles, "get", i)');
     expect(vehicleAt?.[1]).not.toContain('vehicles.get');
   });
@@ -219,9 +209,6 @@ describe('PanelBridge vehicle compatibility', () => {
     const luaPath = path.resolve(process.cwd(), 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
     const lua = await readFile(luaPath, 'utf8');
 
-    // `obj.method and obj:method()` substitutes a fallback value whenever the
-    // method is callable but not readable as a field. That produced empty
-    // collections in v1.7.17/v1.7.21/v1.7.23 and fabricated game-time values.
     const offenders = lua
       .split(/\r?\n/)
       .map((line, index) => ({ line: line.replace(/--.*$/, ''), number: index + 1 }))
@@ -247,10 +234,6 @@ describe('PanelBridge vehicle compatibility', () => {
     const lua = await readFile(luaPath, 'utf8');
     const lines = lua.split(/\r?\n/).map(line => line.replace(/--.*$/, ''));
 
-    // Same defect as above in statement form: the guarded block is skipped
-    // entirely when the method is callable but the field reads nil, so the
-    // handler silently does nothing and still reports success. Ratcheted at
-    // zero — use PanelBridge.invoke/tryGet, which probe by calling.
     const offenders = [];
     lines.forEach((line, index) => {
       const guard = line.match(/(?:if|elseif)\s+(\w+)\.(\w+)\s+then/);
@@ -269,12 +252,11 @@ describe('PanelBridge vehicle compatibility', () => {
     const luaPath = path.resolve(process.cwd(), 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
     const modInfoPath = path.resolve(process.cwd(), 'integrations/panelbridge/PanelBridge/mod.info');
     const [lua, modInfo] = await Promise.all([readFile(luaPath, 'utf8'), readFile(modInfoPath, 'utf8')]);
-    const headerVersion = lua.match(/^ {4}Version: ([^\r\n]+)/m)?.[1];
-    const runtimeVersion = lua.match(/^ {4}VERSION = "([^"]+)",/m)?.[1];
+    const runtimeVersion = lua.match(/^\s*VERSION = "([^"]+)",/m)?.[1];
     const manifestVersion = modInfo.match(/^modversion=(.+)$/m)?.[1];
 
-    expect(runtimeVersion).toBe(headerVersion);
-    expect(manifestVersion).toBe(headerVersion);
+    expect(runtimeVersion).toBeDefined();
+    expect(manifestVersion).toBe(runtimeVersion);
   });
 });
 
@@ -286,7 +268,7 @@ describe('PanelBridge climate compatibility', () => {
     );
     const source = await readFile(luaPath, 'utf8');
     const start = source.indexOf('handlers.triggerLightning = function(args)');
-    const end = source.indexOf('-- Applies a climate float', start);
+    const end = source.indexOf('\nlocal function applyClimateFloat', start);
     const handler = source.slice(start, end);
 
     expect(start).toBeGreaterThanOrEqual(0);
@@ -308,7 +290,7 @@ describe('PanelBridge player healing compatibility', () => {
   it('uses the documented body-part collection without probing unavailable APIs', async () => {
     const source = await readFile(bridgePath, 'utf8');
     const healStart = source.indexOf('handlers.healPlayer = function(args)');
-    const killStart = source.indexOf('-- Kill a player', healStart);
+    const killStart = source.indexOf('\nhandlers.killPlayer = function(args)', healStart);
     const healHandler = source.slice(healStart, killStart);
 
     expect(healStart).toBeGreaterThanOrEqual(0);
@@ -326,20 +308,12 @@ describe('PanelBridge player healing compatibility', () => {
   it('uses Build 42 native death and reports a failed verification', async () => {
     const source = await readFile(bridgePath, 'utf8');
     const killStart = source.indexOf('handlers.killPlayer = function(args)');
-    const godModeStart = source.indexOf('-- Set player\'s godmode', killStart);
+    const godModeStart = source.indexOf('\nhandlers.setGodMode = function(args)', killStart);
     const killHandler = source.slice(killStart, godModeStart);
 
     expect(killStart).toBeGreaterThanOrEqual(0);
     expect(godModeStart).toBeGreaterThan(killStart);
     expect(killHandler).toContain('PanelBridge.invoke(player, "Kill", nil)');
-    // 2026-08-30 (total-audit return-contract fix): the old single
-    // `return isDead, { ... }` never populated a third (error) value on
-    // failure, so the dispatcher forwarded a null error to the panel while
-    // the real reason sat unread in data.message. Now branches explicitly
-    // and puts a real error string in the failure path's third slot, same
-    // shape as handlers.teleportPlayer. See
-    // panelBridgeKillPlayerHonestFailure.test.js for the behavioural
-    // coverage this source-shape check can't provide on its own.
     expect(killHandler).toContain('if not isDead then');
     expect(killHandler).toMatch(/return false, \{[\s\S]*?\}, "/);
     expect(killHandler).toContain('return true, {');
@@ -358,11 +332,8 @@ describe('PanelBridge Java capability caching', () => {
     const source = await readFile(bridgePath, 'utf8');
     const invoke = source.match(/function PanelBridge\.invoke\(obj, methodName, \.\.\.\)([\s\S]*?)\nend/);
 
-    // Build 42 raises an empty RuntimeException for a missing method, so the
-    // error-text test alone never matched and the engine retraced every call.
     expect(invoke?.[1]).toContain('failures >= MAX_METHOD_FAILURES');
     expect(invoke?.[1]).toContain('PanelBridge.methodCapabilities[key] = false');
-    // A method that already worked must survive one broken modded object.
     expect(invoke?.[1]).toContain('PanelBridge.methodCapabilities[key] ~= true');
     expect(invoke?.[1]).toContain('PanelBridge.methodFailures[key] = nil');
   });
@@ -371,7 +342,6 @@ describe('PanelBridge Java capability caching', () => {
     const source = await readFile(bridgePath, 'utf8');
     const capabilityKey = source.match(/local function capabilityKey\(obj, methodName\)([\s\S]*?)\nend/);
 
-    // Without a key nothing can be cached, so the call retraces forever.
     expect(capabilityKey?.[1]).toContain('@%x+');
   });
 });
@@ -383,7 +353,7 @@ describe('PanelBridge game-time compatibility', () => {
       'utf8',
     );
     const handlerStart = source.indexOf('handlers.getGameTime = function(args)');
-    const handlerEnd = source.indexOf('-- Set game time', handlerStart);
+    const handlerEnd = source.indexOf('\nhandlers.setGameTime = function(args)', handlerStart);
     const handler = source.slice(handlerStart, handlerEnd);
 
     expect(handlerStart).toBeGreaterThanOrEqual(0);

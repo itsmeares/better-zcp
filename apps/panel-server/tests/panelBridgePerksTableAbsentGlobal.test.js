@@ -3,23 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 2, item 4 (the two bare Perks[perkName]
-// indexes). PanelBridge.invoke's pcall only guards a METHOD CALL
-// (obj[methodName](obj, ...)) -- it does NOT guard a bare Lua table index
-// like Perks[perkName], the same shape already fixed for
-// CharacterStat[enumName] via statGet(). Two live sites had this exact gap:
-//
-// getPlayerPerks' helper (used by exportPlayerData): an absent Perks global
-//   used to throw UNCAUGHT, crashing the entire export -- losing
-//   traits/wornItems/inventory too, directly contradicting the file's own
-//   comment claiming per-field isolation for this export.
-// importPlayerData's perk-restore loop: identical bare-index shape, right
-//   next to a comment describing fixing this EXACT blast-radius class for
-//   getXp() but not for this line.
-//
-// These tests model Perks as a genuinely absent global (never defined at
-// all) -- the worst case Kevin's audit flagged, not merely one perk name
-// missing from an otherwise-present table.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(

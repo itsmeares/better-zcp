@@ -3,28 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-27: apps/panel-server/routes/debug.js's POST /paths relocates the panel's
-// own database and secrets. Two real defects found reading it:
-//   1. moveFiles defaulted to true (`moveFiles !== false` at the route) --
-//      a request naming a new dataDir with no moveFiles key at all silently
-//      moved db.json and every *.secret file. The destructive option was
-//      the default, not a choice.
-//   2. The response says "Restart the application to apply changes" -- so
-//      pointing dataDir somewhere that LOOKS fine now but doesn't actually
-//      end up with a working database is a lockout discovered on next
-//      restart, with no way back in through the app that set it.
-//
-// setDataPaths() itself had zero test coverage before this file. These
-// tests cover the validation and anti-lockout logic added alongside the
-// default-flip fix (apps/panel-server/routes/debug.js carries the flip and the
-// extraBlockedPaths wiring; this file covers the utility both indirectly
-// depend on).
-//
-// No mocking of paths.js needed: apps/panel-server/tests/vitest.perFileDataDir.setup.mjs
-// (wired into every test file via vitest.config.js's setupFiles) gives this
-// file its own private, temp dataDir/logsDir/config before paths.js is even
-// imported -- setDataPaths() below runs for real, against real temp
-// directories, not the developer's or panel's actual data.
 
 const { getDataPaths, setDataPaths } = await import("../utils/paths.js");
 
@@ -40,15 +18,7 @@ describe("setDataPaths: path validation", () => {
   });
 
   it("still rejects a path under a blocked system directory (unchanged behavior)", async (ctx) => {
-    // Reports an actual SKIP, not a bare `return`: a bare return here still
-    // counts as a PASS with zero assertions run, which is exactly what every
-    // ubuntu-only CI run of this file produced -- CI never runs it on
-    // win32, so this, the sole test of BLOCKED_PREFIXES, silently passed
-    // without checking anything (emptying BLOCKED_PREFIXES entirely still
-    // gave a green tick), while four codeql[js/path-injection] suppressions
-    // elsewhere cite this test as their justification. See the
-    // windows-packaged-updater CI job, which now runs this file for real.
-    if (process.platform !== "win32") return ctx.skip(); // BLOCKED_PREFIXES is platform-specific
+    if (process.platform !== "win32") return ctx.skip();
     const result = await setDataPaths({ dataDir: "C:\\Windows\\zcp-test" }, false);
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/protected system directory/i);
@@ -99,7 +69,7 @@ describe("setDataPaths: moveFiles defaults to false", () => {
     expect(pin.success).toBe(true);
 
     const newDir = freshDir("new-data-default");
-    const result = await setDataPaths({ dataDir: newDir }); // moveFiles arg omitted
+    const result = await setDataPaths({ dataDir: newDir });
     expect(result.success).toBe(true);
     expect(result.filesMoved.data).toBe(false);
     expect(fs.existsSync(path.join(newDir, "db.json"))).toBe(false);
@@ -132,9 +102,6 @@ describe("setDataPaths: break-verify the anti-lockout guard against a real, repr
     const newDir = freshDir("new-data-partial");
     const realCopyFileSync = fs.copyFileSync.bind(fs);
     const copySpy = vi.spyOn(fs, "copyFileSync").mockImplementation((src, dest, ...rest) => {
-      // Simulate exactly the silent, no-throw failure mode described in
-      // paths.js's own comment: db.json specifically doesn't make it
-      // across, everything else (if there were anything else) would.
       if (path.basename(src) === "db.json") return undefined;
       return realCopyFileSync(src, dest, ...rest);
     });
@@ -148,15 +115,12 @@ describe("setDataPaths: break-verify the anti-lockout guard against a real, repr
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/did not produce a database file/i);
-    // The old location is untouched and still the active one -- the config
-    // switch (the point of no return) never happened.
     expect(getDataPaths().dataDir).toBe(pinnedDataDir);
     expect(fs.existsSync(path.join(oldDir, "db.json"))).toBe(true);
   });
 
   it("does NOT false-positive when the source legitimately has no database yet", async () => {
     const oldDir = freshDir("old-data-empty");
-    // No db.json written -- a legitimately fresh/empty data directory.
     const pin = await setDataPaths({ dataDir: oldDir }, false);
     expect(pin.success).toBe(true);
 

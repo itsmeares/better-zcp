@@ -1,48 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { VALID_ACTIONS } from "../routes/panelBridge.js";
 
-// bug-hunt-2026-08-26/27, merge of three-unsynced-lists-of-the-same-
-// bridge-actions + three-bridge-action-lists-at-three-different-sizes
-// (Jim, ranked #11/#12): the same set of bridge actions is written down
-// in THREE places and nothing keeps any two in sync -- VALID_ACTIONS (100
-// entries, the enforcement surface, pinned by
-// panelBridgeValidActionsDriftGate.test.js), the GET /commands doc array
-// (85 entries, partially gated by panelBridgeCommandsDocStaleness.test.js
-// -- that gate only enforces "no stale entry," not "no missing entry",
-// for reasons its own header explains), and bridgeOperationTemplates in
-// apps/panel-client/src/pages/Events.tsx (17 entries -- THE ONLY ONE AN OPERATOR
-// EVER READS for this generic "advanced bridge operation" form).
-//
-// Kevin's description audit (Events.bridgeOperationDescriptionAudit
-// .test.ts) checks whether EXISTING template entries lie about what they
-// do -- by construction it cannot see the question this test answers:
-// which enforceable actions have NO template at all, so an operator can
-// never reach them through this form regardless of whether its
-// description would have been honest.
-//
-// FULL DERIVATION WAS REJECTED for the same reason Dwight rejected it for
-// the doc array's missing-entry direction: most of the 83 actions with no
-// client template already have dedicated, purpose-built UI elsewhere
-// (weather triggers via Scheduler.tsx's command presets, kick/ban via
-// Players.tsx, read-only telemetry actions with no form at all because
-// nothing needs to POST them). bridgeOperationTemplates is a deliberately
-// curated subset for safehouse/faction/vehicle-detail/moderation/event-
-// sequence operations that don't have a home elsewhere -- it was never
-// meant to mirror all 100 actions, and auto-generating generic entries
-// for the other 83 would document a form nobody designed, the same
-// confident-but-wrong shape this whole floor has spent tonight closing.
-//
-// So: a gate, not derivation, mirroring PINNED_VALID_ACTIONS' own
-// fallback exactly -- pin the client's small, stable list (eyeball it
-// against Events.tsx's getBridgeOperationTemplates keys when this fails,
-// not imported directly: cross-importing a client .tsx into a server
-// vitest config, or the reverse, pulls in a rendering/i18n or an
-// Express+DB stack neither side's test environment is set up for), then
-// diff it against the LIVE VALID_ACTIONS import. Any VALID_ACTIONS
-// addition or removal changes the computed gap and fails this test,
-// forcing a human to decide per action: does it need an operator-facing
-// template, or does it already have a home elsewhere? That decision is
-// deliberately not automated, same as PINNED_VALID_ACTIONS itself.
 const PINNED_CLIENT_TEMPLATE_ACTIONS = [
   "getSafehouses",
   "safehouseAddPlayer",
@@ -63,11 +21,6 @@ const PINNED_CLIENT_TEMPLATE_ACTIONS = [
   "moderationBanSteamID",
 ];
 
-// Snapshot of VALID_ACTIONS minus PINNED_CLIENT_TEMPLATE_ACTIONS at the
-// time this gate was written. A currently-untemplated action gaining a
-// template shrinks this list (good -- update the pin to match). A new
-// VALID_ACTIONS member with no template grows it (needs a decision, not a
-// silent gap). Either way, the fix is deciding, then updating this pin.
 const PINNED_UNTEMPLATED_ACTIONS = [
   "airdrop",
   "checkAPI",

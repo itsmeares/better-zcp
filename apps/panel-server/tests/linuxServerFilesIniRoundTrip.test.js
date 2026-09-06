@@ -4,18 +4,6 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// 2026-08-29 hunt (god): config-editing surface, suspect 1 -- "the same
-// question that found suspect 6." Reads a realistic server.ini through the
-// REAL GET /ini route, resubmits the exact settings object unchanged
-// through the REAL PUT /ini route (the same round trip the client actually
-// performs -- ServerConfig.tsx spreads GET's full settings object into
-// iniSettings state via `{...parsed}` and resends the whole thing on every
-// save, confirmed by reading mergeSchemaDefaults()), and diffs the file
-// byte-for-byte against the original.
-//
-// Also covers suspect 2 (what happens to lines the panel doesn't model):
-// comments, blank lines, and a key with no entry in the panel's own
-// INI_SCHEMA are all present in the fixture.
 
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", () => ({
@@ -68,10 +56,6 @@ const SERVER_NAME = "RoundTripTest";
 let configDir;
 let iniPath;
 
-// A realistic slice of a real PZ servertest.ini: comments, blank lines,
-// booleans, numbers, an empty-string value, and one key the panel's own
-// INI_SCHEMA has no entry for (RCONPort IS in the real schema, so use a
-// deliberately obscure/newer key PZ ships that this panel version predates).
 const FIXTURE = [
   "# ZomboidINI",
   "version=1",
@@ -116,10 +100,6 @@ describe("GET /ini -> PUT /ini round trip with no changes", () => {
     const after = fs.readFileSync(iniPath, "utf-8");
     const afterLines = after.split(/\r?\n/).filter(Boolean);
 
-    // Every original key must still be present with its original value --
-    // the unknown-to-the-schema key above is the one that would silently
-    // vanish if the client's submission were curated down to a fixed list
-    // of known fields instead of round-tripping everything GET returned.
     expect(afterLines).toEqual(
       expect.arrayContaining([
         "PVP=true",
@@ -131,7 +111,6 @@ describe("GET /ini -> PUT /ini round trip with no changes", () => {
       ]),
     );
 
-    // Comments and blank lines survive too.
     expect(after).toContain("# ZomboidINI");
     expect(after).toContain("; comment about UDP");
   });
@@ -148,7 +127,6 @@ describe("GET /ini -> PUT /ini round trip with no changes", () => {
 
     const after = fs.readFileSync(iniPath, "utf-8");
     expect(after).toContain("PublicName=Renamed Server");
-    // Every other field, including the unknown one, is untouched.
     expect(after).toContain("PVP=true");
     expect(after).toContain("MaxPlayers=32");
     expect(after).toContain("SomeFutureEngineKeyThisPanelHasNoUiFor=42");
@@ -165,14 +143,7 @@ describe("GET /ini -> PUT /ini round trip with no changes", () => {
   });
 });
 
-describe("GET /ini -> PUT /ini round trip: line endings and encoding (suspect 3)", () => {
-  // 2026-08-29: confirmed empirically that toIni() unconditionally rejoined
-  // with "\n", silently converting an entire CRLF-written INI to LF-only on
-  // every structured save, even an unchanged one -- while mods.js's own INI
-  // writers never have this problem, since they patch one matched line via
-  // regex-replace on the raw string and leave every other line's original
-  // terminator untouched. Both editors write the SAME file. Fixed by
-  // detecting the original file's line-ending style and preserving it.
+describe("GET /ini -> PUT /ini round trip: line endings and encoding (case 3)", () => {
   it("preserves CRLF line endings through an unchanged save instead of silently converting to LF", async () => {
     const crlfFixture = FIXTURE.replace(/\n/g, "\r\n");
     fs.writeFileSync(iniPath, crlfFixture);
@@ -198,7 +169,7 @@ describe("GET /ini -> PUT /ini round trip: line endings and encoding (suspect 3)
 
     const after = fs.readFileSync(iniPath, "utf-8");
     expect(after).toContain("PublicName=Renamed Server\r\n");
-    expect(after).not.toMatch(/[^\r]\n/); // no bare LF anywhere
+    expect(after).not.toMatch(/[^\r]\n/);
   });
 
   it("non-ASCII values survive an unchanged save byte-for-byte (already correct, pinned as a regression check)", async () => {
@@ -245,16 +216,7 @@ describe("GET /ini -> PUT /ini round trip: line endings and encoding (suspect 3)
   });
 });
 
-describe("GET /ini -> PUT /ini round trip: per-line formatting the panel never asked to change (suspect 7)", () => {
-  // 2026-08-29 hunt-wave13 (god): same shape as the CRLF bug (573f63fd), one
-  // level down -- toIni() rebuilds every line whose key is present in the
-  // submitted settings as a hardcoded "key=value" with NO surrounding
-  // whitespace, even when only OTHER fields actually changed (or nothing did
-  // at all). The client always resends every key GET returned, so this fires
-  // on every structured save. A file hand-edited with spacing around "="
-  // (extremely common -- copy-pasted from a wiki example, or just a human's
-  // habit) gets that spacing silently stripped the first time anyone saves
-  // any field from the structured editor.
+describe("GET /ini -> PUT /ini round trip: per-line formatting the panel never asked to change (case 7)", () => {
   const spacedFixture = [
     "# ZomboidINI",
     "version=1",
@@ -294,25 +256,10 @@ describe("GET /ini -> PUT /ini round trip: per-line formatting the panel never a
   });
 });
 
-describe("GET /ini -> PUT /ini round trip: byte-order mark (suspect 8)", () => {
-  // 2026-08-29 hunt-wave13 (god): Windows Notepad's default "UTF-8" save
-  // option prepends a BOM (U+FEFF). fs.readFileSync(path, "utf-8") does NOT
-  // strip it -- it stays as a literal leading character in the decoded
-  // string. String.prototype.trim() does not strip U+FEFF either (it is not
-  // in ECMAScript's WhiteSpace/LineTerminator set), so if a BOM prefixes the
-  // file's first key=value line, parseIni()'s `.trim()`'d key comes out as
-  // "\uFEFFPVP" instead of "PVP" -- a key the panel's schema, and every other
-  // reader of this settings object, will never recognize as PVP.
+describe("GET /ini -> PUT /ini round trip: byte-order mark (case 8)", () => {
   const BOM = "﻿";
 
   it("does not mangle the first key's name with a leading BOM", async () => {
-    // No leading "# ZomboidINI" comment here deliberately -- that comment
-    // line has no "=" at all, so a BOM stuck to IT would be a no-op either
-    // way (both parseIni and toIni ignore any line without "=" regardless of
-    // whether the comment-prefix check matches). The real exposure is a BOM
-    // landing directly on the file's first key=value line, which real
-    // ZomboidINI files (no header comment on some PZ versions/exports) can
-    // have.
     const bomFixture = BOM + "version=1\nPVP=true\n";
     fs.writeFileSync(iniPath, bomFixture, "utf-8");
 

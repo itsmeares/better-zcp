@@ -1,19 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// bughunt-2026-08-31-c, completeness-claims-audit-followups: a comment in
-// backupService.js claimed "both reasons already get identical treatment
-// by every consumer of skippedFiles" -- but this file's own scheduled-
-// backup skip note still hardcoded "that vanished during archiving", the
-// pre-2026-08-29 wording, after walkDirectory() started also recording a
-// deliberately-excluded symbolic link in the same skippedFiles array
-// (445c15a5). A symlink was never "vanished"; it was never followed on
-// purpose. routes/backup.js's equivalent operator-facing warning was
-// updated to cause-agnostic wording in that same commit -- this one, in
-// Schedule History (the only place an unattended run's skip is ever
-// visible), was not.
-//
-// Same capture-the-cron-callback technique as
-// linuxSchedulerBackupRestartOverlap.test.js.
 
 const logScheduleExecution = vi.fn().mockResolvedValue();
 
@@ -55,9 +41,6 @@ describe("Scheduler: scheduled-backup skip note is cause-agnostic, not hardcoded
       createBackup: vi.fn().mockResolvedValue({
         success: true,
         backup: { name: "test-backup.zip" },
-        // A symlink skip, not a vanished-mid-archive skip -- see
-        // walkDirectory()'s own { isSymlink: true } marker in
-        // backupService.js.
         skippedFiles: ["Zomboid/Server/link-to-somewhere"],
       }),
     });

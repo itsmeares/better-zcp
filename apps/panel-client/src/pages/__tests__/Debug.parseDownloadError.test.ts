@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseDownloadError } from '../Debug'
 
-// conv-hunt-resume lens: what does the operator see when a call fails?
-// Debug.tsx's three log-download handlers (combined log, single log file,
-// support-bundle zip) all fetch with authFetch() -- a raw fetch, not the
-// JSON api.ts client that already parses `{ error, code }` bodies. On a
-// non-ok response they did `throw new Error(\`HTTP ${res.status}\`)`,
-// discarding the server's actual JSON body entirely -- apps/panel-server/routes/
-// debug.js returns real, specific messages here ("Log file not found",
-// "No support logs found", "Failed to read log file"), all thrown away in
-// favor of a toast that never changes no matter what actually went wrong.
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,

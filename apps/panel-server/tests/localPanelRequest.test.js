@@ -77,11 +77,6 @@ describe("isLocalPanelRequest (Finding 8: Docker bridge bypass)", () => {
   });
 });
 
-// Fail-closed ruling: when trust proxy is configured, the socket peer is
-// always the reverse proxy, not the real client -- the panel cannot verify
-// origin at all, so it must not grant local trust to anyone, not even a
-// request whose socket address happens to be loopback (that's still just
-// the proxy's own connection to this process).
 describe("isLocalPanelRequest: fails closed when trust proxy is configured", () => {
   afterEach(() => {
     networkInterfacesMock.mockReset();

@@ -8,31 +8,6 @@ import {
   scoreServerProcessOwnership,
 } from "../services/serverManager.js";
 
-// 2026-09-04, class sweep after the P0 (four defects found by tripping over
-// them, not by looking): god asked for every site in serverManager.js that
-// builds a command line, splits one, quotes an argument, or unquotes one,
-// checked for a lossless round trip against the awkward inputs now known to
-// be real (space, quote, &^()  trailing backslash, = inside a token, a
-// semicolon in a classpath). This file locks in the sites that were
-// checked and found ALREADY CORRECT, so a future edit that breaks one of
-// them fails a test instead of waiting to be reported by a user again.
-//
-// Sites covered here (see the P0-sweep report for the full table, including
-// sites verified safe-by-construction that don't need a test -- e.g. every
-// execFile()/spawn() call using an argv array rather than a shell string):
-//  - buildWindowsCmdLine: a trailing backslash immediately before a
-//    to-be-added closing quote (the classic CommandLineToArgvW gotcha) --
-//    verified this does NOT bite here, because cmd.exe's own /c tokenizer
-//    (unlike a C-runtime argv parser) does not apply that backslash-
-//    escapes-quote rule, so quoting is safe even for a trailing-backslash
-//    path/arg.
-//  - the Windows process-scan's CSV parsing (apps/panel-server/services/
-//    serverManager.js's csvMatch/replace(/""/g,'"') pair) against REAL
-//    PowerShell ConvertTo-Csv output (captured live, not guessed).
-//  - extractLaunchArgValue (exercised via the exported
-//    scoreServerProcessOwnership) correctly recovers a quoted value
-//    containing a space, and a trailing backslash in a quoted cachedir,
-//    without false-matching or false-rejecting.
 
 const isWindows = process.platform === "win32";
 
@@ -84,13 +59,9 @@ const isWindows = process.platform === "win32";
     });
 
     it("the Windows process-scan's CSV parsing correctly round-trips a command line containing embedded quotes (real PowerShell ConvertTo-Csv ground truth)", () => {
-      // Captured live: `[PSCustomObject]@{ProcessId=1234; CommandLine=
-      // 'java.exe -jar "C:\Program Files (x86)\Zomboid\ProjectZomboid64.exe"
-      // -servername="My World"'} | ConvertTo-Csv -NoTypeInformation`
       const rawCsvLine =
         '"1234","java.exe -jar ""C:\\Program Files (x86)\\Zomboid\\ProjectZomboid64.exe"" -servername=""My World"""';
 
-      // Exactly the parsing logic in serverManager.js's Windows process scan.
       const csvMatch = rawCsvLine.match(/^"([^"]*)","((?:[^"]|"")*)"$/);
       expect(csvMatch).not.toBeNull();
       const pid = csvMatch[1];
@@ -107,8 +78,6 @@ const isWindows = process.platform === "win32";
         'java.exe -jar "C:\\Program Files (x86)\\Zomboid\\ProjectZomboid64.exe" -servername="My World" -cachedir=C:\\ZomboidCache';
 
       expect(scoreServerProcessOwnership(cmd, { serverName: "My World" })).toBe(3);
-      // A mismatched name must be a NEGATIVE signal, not a false positive
-      // from a partially-matched quoted value.
       expect(
         scoreServerProcessOwnership(cmd, { serverName: "Some Other World" }),
       ).toBe(-1);

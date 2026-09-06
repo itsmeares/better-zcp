@@ -13,32 +13,6 @@ import {
   MAX_MEMORY_GB_MAX,
 } from "../routes/server.js";
 
-// Regression coverage for a claim that was wrong, not just a bug: a prior
-// commit said config.js's port/memory checks agreed with server.js's "by
-// construction" because both import the same requireIntInRange function.
-// That's true of the FUNCTION, but the sixteen call sites (ten in
-// server.js, six in config.js) each hand-typed their own copies of the
-// range numbers -- no shared constant anywhere, so a range change in one
-// file silently left the other stale with every test still green (each
-// file was only ever testing its own literals). This file makes the
-// "by construction" claim actually true: it fails if either file goes back
-// to a hand-typed literal at a requireIntInRange call site, and it fails if
-// the exported constants themselves ever drift from the values every
-// existing behavioural test (serverNumericFieldValidation.test.js,
-// appSettingsHttpsValidation.test.js) was written against.
-// See 2026-08-23 validateInt-coerces / config.js numeric-field audit.
-//
-// GitHub #118 (2026-08-26): the single PORT_MIN/PORT_MAX pair this
-// described was itself the bug -- it applied a bind-socket floor (1024) to
-// SFTP, a destination-only field whose standard port (22) is below it, so
-// the panel rejected its own shipped default out of the box. The pair
-// split into BIND_PORT_MIN/MAX (this panel process binds it: its own port,
-// the game port when it launches PZ locally, and this file's/config.js's
-// legacy single-server RCON target) and DESTINATION_PORT_MIN/MAX (a port on
-// someone else's socket the panel only connects out to: SFTP, always).
-// Asserting both pairs here, deliberately, rather than loosening this test
-// to fit whatever server.js currently does -- a test that can't fail no
-// matter what the range becomes isn't coverage.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_JS = path.join(__dirname, "..", "routes", "server.js");
@@ -61,8 +35,6 @@ describe("BIND_PORT_MIN/MAX, DESTINATION_PORT_MIN/MAX, GAME_PORT_MAX, MEMORY_GB_
   });
 });
 
-// requireIntInRange(<value>, <min>, <max>, <label>) -- captures the min/max
-// argument text so it can be checked for a bare numeric literal.
 const CALL_SITE_RE = /requireIntInRange\([^,]+,\s*([^,]+),\s*([^,]+),/g;
 const NUMERIC_LITERAL_RE = /^-?\d+(\.\d+)?$/;
 

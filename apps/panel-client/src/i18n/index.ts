@@ -8,13 +8,6 @@ export type SupportedLanguage = string
 
 export const LANGUAGE_STORAGE_KEY = 'zcp-language'
 
-// Discovers every apps/panel-client/src/locales/<code>/<namespace>.json file at build
-// time — no per-language, per-namespace import list to maintain. Adding a
-// language folder (or a namespace file within one) is picked up here with
-// no code change. See apps/panel-client/src/locales/README.md.
-// i18next's own Resource type is this loose (ResourceKey = string | an
-// object of unspecified shape), so `any` here matches its actual contract
-// rather than fighting it with a narrower type that doesn't describe it.
 const localeModules = import.meta.glob('../locales/*/*.json', {
   eager: true,
   import: 'default',
@@ -60,7 +53,6 @@ function mapBrowserLanguage(raw: string | null | undefined): SupportedLanguage |
   return null
 }
 
-// Bare primary subtag (fr-FR -> fr, zh-Hant-TW -> zh), lowercased.
 function bareSubtag(raw: string): string {
   return raw.trim().replace(/_/g, '-').split('-')[0].toLowerCase()
 }
@@ -80,16 +72,6 @@ export function detectInitialLanguage(): SupportedLanguage {
     const mapped = mapBrowserLanguage(raw)
     if (mapped) return mapped
   }
-  // Second pass, bare-subtag fallback: mapBrowserLanguage() above only
-  // exact-matches a full tag or special-cases zh-*, so a browser reporting
-  // a region-qualified tag with no exact/zh match (fr-FR, de-DE, es-ES,
-  // ht-HT, or a real ar-PS/ar-EG/ar-SA once Arabic is registered -- see
-  // rtl-and-new-languages) fell straight through to English. This restores
-  // the pre-4666849b prefix-match behaviour, but as a FALLBACK layer run
-  // only after every candidate has already had its shot at an exact/zh
-  // match, so the newer, more specific behaviour still wins whenever it
-  // applies -- fixes the fr-FR/de-DE/es-ES/ht-HT regression without
-  // reverting the Chinese fix that was the actual point of that rewrite.
   for (const raw of candidates) {
     const bare = bareSubtag(raw)
     if (isSupportedLanguage(bare)) return bare
@@ -97,15 +79,6 @@ export function detectInitialLanguage(): SupportedLanguage {
   return SOURCE_LANGUAGE
 }
 
-// Keeps <html dir>/<html lang> in sync with the active language -- on
-// first load AND on every runtime switch (the switcher is a live control,
-// not a boot-time setting). Applied synchronously before i18next's own
-// init resolves so the very first paint is already correct rather than
-// flashing ltr and then flipping; the 'languageChanged' subscription below
-// covers every change after that, including setLanguage()'s own
-// i18n.changeLanguage() call. For all seven languages registered today
-// this is a no-op every time (isRTL() is false for all of them) -- there is no
-// RTL row in LANGUAGES yet.
 function applyDocumentDirection(lang: string): void {
   document.documentElement.dir = isRTL(lang) ? 'rtl' : 'ltr'
   document.documentElement.lang = lang

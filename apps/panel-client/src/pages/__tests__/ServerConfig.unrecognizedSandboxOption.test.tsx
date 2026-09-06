@@ -3,16 +3,6 @@ import { render, screen } from '@testing-library/react'
 import { SandboxSettingRow } from '../ServerConfig'
 import type { SandboxSetting } from '@/lib/serverConfigSchema'
 
-// Runtime belt-and-braces for the enum-audit class of bug: PZ can ship a new
-// select option before this panel's schema regenerates against it (exactly
-// what happened with MetaEvent -- PZ has 3 options, the panel only offered
-// 2). The save path never coerces an unrecognized value away (confirmed
-// during the audit), so the value survives; what was missing was telling
-// the operator, instead of a silent blank Select. See
-// serverConfigSchema.ts's getUnrecognizedSandboxOptionWarning and the
-// pzGroundTruth drift test that's supposed to stop new instances of this at
-// the schema level -- this is the layer that still needs to work even when
-// that gate is stale (PZ ships between two regenerations of the fixture).
 
 const META_EVENT: SandboxSetting = {
   key: 'MetaEvent',

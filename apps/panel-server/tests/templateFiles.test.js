@@ -40,16 +40,6 @@ describe("ini helpers", () => {
     expect(result.split("\n").filter((l) => l.startsWith("RCONPassword"))).toHaveLength(0);
   });
 
-  // bughunt-2026-08-31-b: a hand-edited or raw-editor-saved ini can carry
-  // "Key = value" (spaces around "="), and serverFiles.js's toIni() no
-  // longer silently normalizes that away on save. Neither of these two
-  // functions tolerated it until now -- readIniValues returned nothing for
-  // the key at all, and mergeIniValues's own regex test failed the same
-  // way, so it took the append branch and left a SECOND, unspaced copy of
-  // the key instead of replacing the spaced one. No test in this suite
-  // exercised any whitespace variant before this, which is exactly why the
-  // gap went unnoticed: templateFiles.test.js's own iniContent fixture
-  // above has zero whitespace variance anywhere.
   const spacedIniContent = "PVP=true\nMaxPlayers = 16\n";
 
   it("readIniValues reads a key written with spaces around '='", () => {
@@ -95,8 +85,6 @@ describe("sandbox lua helpers", () => {
   });
 
   it("readSandboxValue does not confuse a top-level key with a same-named nested key", () => {
-    // "Strength" only exists under ZombieLore here — a settings lookup must
-    // not accidentally read the nested value.
     expect(readSandboxValue(luaContent, "settings", "Strength")).toBeUndefined();
     expect(readSandboxValue(luaContent, "ZombieLore", "Strength")).toBe(2);
   });
@@ -105,8 +93,6 @@ describe("sandbox lua helpers", () => {
     const { content, applied } = applySandboxValue(luaContent, "settings", "Zombies", 2);
     expect(applied).toBe(true);
     expect(readSandboxValue(content, "settings", "Zombies")).toBe(2);
-    // ZombieLore.Strength shares no name collision here, but ZombieLore.Speed
-    // must survive untouched since we only targeted the top-level key.
     expect(readSandboxValue(content, "ZombieLore", "Speed")).toBe(4);
   });
 

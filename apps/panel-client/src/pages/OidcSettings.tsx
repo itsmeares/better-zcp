@@ -29,12 +29,6 @@ import {
 } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 
-// Prefills the issuer URL SHAPE and recommended scope for a known provider
-// -- not a locked-in choice. The operator still has to substitute their own
-// values (tenant ID, realm name, app slug, ...) for anything in angle
-// brackets, and can freely edit the result same as the free-form path.
-// issuerTemplate/scope are technical values (like fields.issuerUrlPlaceholder
-// below), not translated content -- only the picker's own labels are.
 interface ProviderPreset {
   id: string
   issuerTemplate: string
@@ -62,26 +56,17 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
 ]
 const CUSTOM_PRESET_ID = 'custom'
 
-// Matches apps/panel-server/utils/sanitize.js's isMaskedSecret() -- prefilling the
-// field with exactly this sentinel when a secret is already stored, and
-// submitting it back unchanged, is how the server knows "leave it alone"
-// (GET never returns the real value, not even masked, so there is nothing
-// else to prefill with).
 const MASKED_SECRET_SENTINEL = '••••••••'
 
 const FIELD_KEYS = (['issuerUrl', 'clientId', 'redirectUri', 'scope', 'providerName'] as const) satisfies readonly (keyof OidcSettingsFields)[]
 type FieldKey = (typeof FIELD_KEYS)[number]
 
-// Keep the form-field list aligned with the API type. The assertion catches
-// both missing fields and stale keys at compile time.
 type UncoveredOidcSettingsField = Exclude<keyof OidcSettingsFields, FieldKey | 'allowInsecureHttp'>
 const _assertFieldKeysCoversOidcSettingsFields: UncoveredOidcSettingsField extends never
   ? true
   : { MISSING_FROM_FIELD_KEYS: UncoveredOidcSettingsField } = true
 void _assertFieldKeysCoversOidcSettingsFields
 
-// `embedded`: rendered inside a Settings tab panel instead of as its own
-// route -- see the matching note on Users.tsx.
 export default function OidcSettings({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation('oidcSettings')
   const { toast } = useToast()
@@ -143,8 +128,6 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
     fetchSettings()
   }, [fetchSettings])
 
-  // Only the fields that actually changed from what GET returned -- PUT is a
-  // partial update, same convention as PUT /api/servers/:id.
   function buildUpdatePayload(): OidcSettingsUpdate {
     if (!settings) return {}
     const updates: OidcSettingsUpdate = {}
@@ -187,15 +170,6 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
     setDiscoveryResult(null)
     try {
       const updates = buildUpdatePayload()
-      // apiPost's shared handleResponse() throws on an HTTP 200 body with
-      // `success: false` (this codebase's other way of saying "this
-      // failed" -- see lib/api.ts) rather than resolving with it, so a
-      // discovery/credential-check failure always lands in the catch below,
-      // never in a `result.success === false` branch here. A resolved
-      // result here means the provider actually accepted these credentials
-      // (not just that discovery worked) -- see testOidcDiscovery's own
-      // comment in apps/panel-server/services/oidc.js for the invalid_grant-is-success
-      // reasoning.
       const result = await oidcSettingsApi.testConnection(updates)
       setDiscoveryResult(result.metadata)
       toast({
@@ -204,11 +178,6 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
         variant: 'success',
       })
     } catch (error) {
-      // `undetermined` (network failure, an HTML error page, an OAuth error
-      // code we don't recognise) is NOT the same claim as "these
-      // credentials are wrong" -- it gets its own title/tone rather than
-      // collapsing into the same destructive-red "Connection failed" toast
-      // a confirmed rejection gets.
       const isUndetermined = error instanceof ApiError && error.code === 'OIDC_TEST_UNDETERMINED'
       toast({
         title: isUndetermined ? t('toasts.testUndeterminedTitle') : t('toasts.testFailedTitle'),
@@ -220,10 +189,6 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
     }
   }
 
-  // Prefills the issuer URL/scope shape for a known provider -- the
-  // operator still edits in their own tenant/realm/domain. Skips a field
-  // that's env-pinned (disabled in the UI below) so this can't silently
-  // write to something the operator has no way to actually change.
   function handlePresetChange(id: string) {
     setSelectedPreset(id)
     setDiscoveryResult(null)

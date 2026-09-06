@@ -6,22 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// 5aaf2c3e (2026-08-02) made panelBridge.js's /utilities/restore and
-// /utilities/shutoff routes merge persistUtilities()'s (Node-side, writes
-// SandboxVars.lua directly) `{ persisted, persistReason }` into the JSON
-// response alongside the Lua handler's own result -- so a real "this will
-// not survive a server restart" signal has been on the wire since then.
-// 2d7cca63 (2026-08-30, "Finding C") deleted the client's warning for this,
-// on an analysis that checked only the Lua handler's raw result object
-// (which indeed never carries these fields) instead of the route's merged
-// response the client actually receives -- right observation, wrong
-// producer -- and left behind a test asserting the field is ignored. That
-// test is Events.utilitiesPersistedDeadFieldRemoved.test.tsx, replaced by
-// this file. These fixtures use the ROUTE's real merged response shape
-// (Lua fields alongside persisted/persistReason, exactly as
-// `res.json({ ...result, ...(await persistUtilities(...)) })` produces it)
-// so a future audit that looks only at the Lua handler cannot conclude
-// again that this warning is unreachable.
 
 const toastSpy = vi.hoisted(() => vi.fn())
 vi.mock('@/components/ui/use-toast', () => ({
@@ -92,11 +76,6 @@ beforeEach(() => {
   shutOffUtilities.mockReset()
   sendCommand.mockReset().mockResolvedValue({ success: false } as never)
   toastSpy.mockReset()
-  // 2026-08-31 (paired-buttons operator request): the Power/Water controls
-  // are now a single Switch reflecting utilitiesStatus.powerOn/waterOn, and
-  // the switch disables itself while that state is unknown -- so this test
-  // (which only cares about the toast on the ACTION's own response) needs a
-  // real, resolved status here to make the switch interactable at all.
   getUtilitiesStatus.mockReset().mockResolvedValue({
     success: true,
     data: {
@@ -115,10 +94,6 @@ beforeEach(() => {
 
 describe('Events -- the utilities persist-failure warning (restored, was wrongly deleted in 2d7cca63)', () => {
   it('warns, with the reason, when the route reports persisted: false', async () => {
-    // Route's real merged shape: the Lua handler's own fields
-    // (success/message/power/water/hydroPowerOn/debug) plus persistUtilities()'s
-    // { persisted, persistReason } spread on top -- never a bare
-    // { persisted: false } by itself.
     shutOffUtilities.mockResolvedValue({
       success: true,
       message: 'Utilities shut off',

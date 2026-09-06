@@ -1,12 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Same in-memory stand-in pattern as userRoleManagement.test.js, extended
-// with a roles collection: services/permissions.js's getRoles/getRoleById/
-// getRoleByName are thin re-exports of the same-named functions from
-// database/init.js, so mocking THIS file's roles functions is enough to
-// make permissions.js (and, through it, auth.js's new changeUserRoleById)
-// see this test's in-memory role data — no need to mock permissions.js
-// itself.
 const settings = new Map();
 const db = { data: { users: [], roles: [] } };
 
@@ -107,7 +100,6 @@ describe("authService.changeUserRoleById", () => {
     await expect(
       authService.changeUserRoleById("u-tech", "role-does-not-exist"),
     ).rejects.toMatchObject({ code: "ROLE_NOT_FOUND", status: 404 });
-    // Untouched — the refusal happened before any user record was read.
     const stored = db.data.users.find((u) => u.id === "u-tech");
     expect(stored.roleId).toBe("role-technician");
   });
@@ -119,12 +111,6 @@ describe("authService.changeUserRoleById", () => {
   });
 
   it("LOCKOUT: refuses to move the only user with users.manage away from it", async () => {
-    // u-admin is the only user whose role grants users.manage; moving them
-    // to technician (no users.manage) would leave zero users able to
-    // manage users at all. u-admin's role also grants roles.manage, and
-    // RECOVERY_CAPABILITIES checks roles.manage first, so that's the
-    // action the lockout actually reports (u-admin is the sole holder of
-    // both, so either check alone would refuse the move).
     await expect(
       authService.changeUserRoleById("u-admin", "role-technician"),
     ).rejects.toMatchObject({
@@ -133,7 +119,7 @@ describe("authService.changeUserRoleById", () => {
       params: { action: "roles.manage" },
     });
     const stored = db.data.users.find((u) => u.id === "u-admin");
-    expect(stored.roleId).toBe("role-admin"); // unchanged
+    expect(stored.roleId).toBe("role-admin");
   });
 
   it("LOCKOUT: allows the move once a second user also holds users.manage", async () => {
@@ -149,9 +135,6 @@ describe("authService.changeUserRoleById", () => {
   });
 
   it("LOCKOUT: also protects roles.manage independently of users.manage", async () => {
-    // Give u-admin only users.manage (not roles.manage), so Role Steward
-    // is genuinely the ONLY holder of roles.manage — isolates this test
-    // from the default admin fixture also granting roles.manage.
     const admin = db.data.roles.find((r) => r.id === "role-admin");
     admin.capabilities = ["users.manage"];
     db.data.roles.push({
@@ -177,8 +160,6 @@ describe("authService.changeUserRoleById", () => {
   });
 
   it("does NOT trip the lockout when the target role still grants every recovery capability the user currently has", async () => {
-    // Matches ADMIN_ROLE's full recovery-capability set (users.manage AND
-    // roles.manage) so nothing is actually being lost by the move.
     db.data.roles.push({
       id: "role-custom-admin-like",
       name: "Also Manages Everything",
@@ -195,15 +176,6 @@ describe("authService.changeUserRoleById", () => {
 });
 
 describe("authService.changeUserRole (legacy string path) — now delegates to changeUserRoleById, resolved by name", () => {
-  // Previously this path carried its own admin-count-only lockout check and
-  // needed no roles collection at all. That was the actual bug (see
-  // services/auth.js's comment on changeUserRole): it couldn't see a custom
-  // role's recovery capabilities, only the literal string "admin". It now
-  // resolves the target role by name through the real roles collection and
-  // delegates entirely to changeUserRoleById, so it needs the same seeded
-  // rows every real install has post-migration (see database/init.js's
-  // schema v2) — a bare admin/technician role list is no longer realistic
-  // fixture data for this function.
   const MODERATOR_ROLE = {
     id: "role-moderator",
     name: "moderator",

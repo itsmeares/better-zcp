@@ -1,14 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-26: formatSftpError()/getSftpErrorGuidance() (panelBridgeSftp.js)
-// already classified an SFTP failure correctly and appended a tailored
-// English "Fix: ..." sentence, but that classification never fed into
-// errorCodes.js/errors.json -- every non-English user saw the raw English
-// sentence regardless of locale. This locks in that POST /panel-bridge/
-// sftp/test now sends `code` + `params.detail` alongside the unchanged
-// English `error` fallback, so an updated client can show the exact same
-// classification translated, with the original error text preserved via
-// {{detail}} instead of replaced by a vaguer generic sentence.
 
 vi.mock("../database/init.js", () => ({
   getAllSettings: vi.fn(async () => ({})),
@@ -63,8 +54,6 @@ describe("POST /api/panel-bridge/sftp/test error classification", () => {
     expect(res.statusCode).toBe(400);
     expect(res.body.code).toBe(ErrorCode.SFTP_AUTH_FAILED);
     expect(res.body.params).toEqual({ detail: "Permission denied (publickey)." });
-    // The English fallback must still read exactly as it did before this
-    // classification existed, for any client that doesn't read `code` yet.
     expect(res.body.error).toBe(
       "Permission denied (publickey). Fix: Verify the SFTP username and password, then confirm the account can log in over port 22.",
     );

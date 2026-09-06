@@ -153,17 +153,6 @@ function SectionHeader({
   )
 }
 
-// A single control that both shows and flips a known on/off game state --
-// replaces the enable/disable- or start/stop-shaped BUTTON PAIRS this page
-// used to have one per concept (operator complaint 2026-08-31: "if i enable
-// snow... the same button should show disable, not have 2 buttons ... valid
-// for all the buttons that there are 2 of them like that"). `state: null`
-// is a REQUIRED third value, not a loading nicety -- it means the real state
-// has not landed yet (or its fetch failed) and the switch renders disabled
-// with neutral styling rather than guessing a position. A Switch's checked
-// position IS the claim "this is definitely on/off right now"; showing one
-// confidently from a `null`/undefined value would be exactly the "faked
-// toggle" the request explicitly ruled out for state that can't be known.
 function StateToggle({
   icon: Icon,
   label,
@@ -212,13 +201,6 @@ function StateToggle({
   )
 }
 
-// elecShutModifier/waterShutModifier are the day-thresholds the game's own
-// power formula (ISButtonPrompt.lua:421, replicated in PanelBridge.lua's
-// getUtilitiesStatus) compares worldAgeDays against to produce powerOn/
-// waterOn. 2147483647 is that Lua's own documented "never shuts off"
-// sentinel (see its restoreUtilities comment); shown as-is otherwise rather
-// than reinterpreted, so this never re-derives -- and risks disagreeing
-// with -- the verdict the Lua already computed.
 function formatShutoffModifier(modifier: number, t: TFunction) {
   return modifier >= 2147483647 ? t('utilities.modifierNever') : String(modifier)
 }
@@ -326,7 +308,6 @@ function getEventSuccessCopy(action: string, t: TFunction) {
   }
 }
 
-// Vehicle presets for GM
 function getVehiclePresets(t: TFunction) {
   return [
     { id: 'Base.VanAmbulance', name: t('vehicles.names.VanAmbulance') },
@@ -342,9 +323,6 @@ function getVehiclePresets(t: TFunction) {
   ]
 }
 
-// PanelBridge operation catalog. `args` are literal JSON payload examples with
-// placeholder values (e.g. "PlayerName") — API templates, not prose, so they
-// stay in English. `label`/`description` are real UI text and get translated.
 export function getBridgeOperationTemplates(t: TFunction): Record<string, { label: string; description: string; args: string }> {
   return {
     getSafehouses: { label: t('operations.getSafehouses.label'), description: t('operations.getSafehouses.description'), args: '{}' },
@@ -585,11 +563,6 @@ export function getBridgeOperationGroups(t: TFunction) {
       id: 'territory',
       label: t('operationGroups.territory.label'),
       description: t('operationGroups.territory.description'),
-      // createFaction and removeFaction are deliberately absent: Faction.createFaction
-      // and faction:removeFaction do not exist anywhere in the real B42 jar (confirmed
-      // by a full 23,740-class scan) -- offering them was a control that always failed
-      // with no path to ever working, dressed up as a normal quick-pick button. The
-      // remaining faction operations below call real methods and work.
       operations: ['getSafehouses', 'safehouseAddPlayer', 'safehouseRemovePlayer', 'safehouseSetOwner', 'safehouseSetRespawn', 'getFactions', 'factionAddPlayer', 'factionRemovePlayer', 'factionSetTag'],
     },
     {
@@ -624,9 +597,6 @@ const formatPanelTimestamp = (date: Date, locale?: string): string => {
   }
 }
 
-// ============================================
-// STRUCTURED RESULT DISPLAY
-// ============================================
 
 interface BridgeResultDisplayProps {
   result: BridgeResultData
@@ -635,13 +605,6 @@ interface BridgeResultDisplayProps {
   players: Player[]
 }
 
-// runEventSequence's own response shape (PanelBridge.lua handlers.runEventSequence),
-// present on BOTH the success branch (failedCount: 0) and the failure branch
-// (failedCount > 0) -- Lua returns the same `data` table either way so a
-// caller can always tell 9-of-10 from 0-of-10 without parsing `results`
-// itself. See apps/panel-server/routes/panelBridge.js's POST /command catch handler for
-// Failed sequences may omit this payload on an infrastructure error. In that
-// case the UI falls back to the generic failure card.
 interface EventSequenceStepResult {
   index: number
   kind: string
@@ -724,14 +687,6 @@ function BridgeResultDisplay({ result, loading, onInlineAction, players }: Bridg
   const { operation, success, data, error, timestamp } = result
   const isLoading = loading !== null
 
-  // Checked before the generic !success gate below: a partial failure is
-  // real information (9 of 10 steps genuinely ran), not just "not success" --
-  // showing the plain red card for it is the exact bug this exists to fix
-  // (green-on-total-failure is worse, but red-on-partial was never right
-  // either, and per-step results being reachable only via raw JSON is what
-  // let both hide). Runs for the success branch too (failedCount: 0 reads as
-  // "all succeeded" here rather than falling through to whatever a generic
-  // success renderer would otherwise show for this operation.
   if (operation === 'runEventSequence' && isEventSequenceResultData(data)) {
     return <EventSequenceResult data={data} timestamp={timestamp} />
   }
@@ -749,7 +704,6 @@ function BridgeResultDisplay({ result, loading, onInlineAction, players }: Bridg
     )
   }
 
-  // Vehicle list
   if (operation === 'getVehiclesDetailed') {
     const rawVehicles = Array.isArray(data) ? data : (data as { vehicles?: unknown })?.vehicles
     const vehicles = (Array.isArray(rawVehicles) ? rawVehicles : []) as unknown[]
@@ -840,7 +794,6 @@ function BridgeResultDisplay({ result, loading, onInlineAction, players }: Bridg
     )
   }
 
-  // Safehouse list
   if (operation === 'getSafehouses') {
     const rawSafehouses = Array.isArray(data) ? data : (data as { safehouses?: unknown })?.safehouses
     const safehouses = (Array.isArray(rawSafehouses) ? rawSafehouses : []) as unknown[]
@@ -915,7 +868,6 @@ function BridgeResultDisplay({ result, loading, onInlineAction, players }: Bridg
     )
   }
 
-  // Faction list
   if (operation === 'getFactions') {
     const rawFactions = Array.isArray(data) ? data : (data as { factions?: unknown })?.factions
     const factions = (Array.isArray(rawFactions) ? rawFactions : []) as unknown[]
@@ -963,7 +915,6 @@ function BridgeResultDisplay({ result, loading, onInlineAction, players }: Bridg
     )
   }
 
-  // Infrastructure snapshot
   if (operation === 'getInfrastructureSnapshot') {
     const d = data as Record<string, unknown> | null
     if (!d) return <ResultCard title={t('resultDisplay.noDataTitle')} icon={<Info className="h-4 w-4" />} timestamp={timestamp}><p className="text-sm text-muted-foreground">{t('resultDisplay.emptyResponse')}</p></ResultCard>
@@ -981,7 +932,6 @@ function BridgeResultDisplay({ result, loading, onInlineAction, players }: Bridg
     )
   }
 
-  // Generic action results — extract message from common response shapes
   const msg = typeof data === 'string' ? data
     : (data as Record<string, unknown>)?.message ? String((data as Record<string, unknown>).message)
     : null
@@ -1054,16 +1004,8 @@ interface EventSectionMeta {
   needsBridge: boolean
 }
 
-// Sections whose commands act on a chosen player rather than the whole world.
 const TARGETED_SECTIONS: EventSectionKey[] = ['quickSounds', 'targetedSounds', 'horde', 'teleport']
 
-// getClimateFloats() reports the real, server-authoritative min/max for each
-// ClimateFloat (PanelBridge.lua handlers.getClimateFloats -> cf:getMin()/cf:getMax()).
-// Binding the sliders to a hardcoded 0-100 (or -30..45 for temperature) instead of this
-// data lets an operator either request a value the game will never honour, or hides
-// legitimate values the real range allows. `scale` converts the raw float range into
-// the same units the slider/state already use (the five percent-style floats are
-// stored as value*100; temperature is stored unscaled).
 interface ClimateFloatRange {
   min: number
   max: number
@@ -1141,28 +1083,21 @@ export default function Events() {
   const [selectedPlayer, setSelectedPlayer] = useState<string>('')
   const [targetAll, setTargetAll] = useState(true)
 
-  // Weather controls
   const [rainIntensity, setRainIntensity] = useState(50)
   const [stormDuration, setStormDuration] = useState(1)
 
-  // Horde controls
   const [hordeCount, setHordeCount] = useState(50)
 
-  // Time controls
   const [timeSpeed, setTimeSpeed] = useState(1)
 
-  // Teleport coordinates
   const [teleportX, setTeleportX] = useState('')
   const [teleportY, setTeleportY] = useState('')
   const [teleportZ, setTeleportZ] = useState('0')
 
-  // Vehicle spawning
   const [selectedVehicle, setSelectedVehicle] = useState('Base.VanAmbulance')
 
-  // Announcements
   const [announcement, setAnnouncement] = useState('')
 
-  // Panel Bridge state
   const [bridgeConnected, setBridgeConnected] = useState(false)
   const [bridgeLoading, setBridgeLoading] = useState<string | null>(null)
   const [blizzardDuration, setBlizzardDuration] = useState(2)
@@ -1171,37 +1106,29 @@ export default function Events() {
   const [weatherFrontType, setWeatherFrontType] = useState('0')
   const [clearZombiesRadius, setClearZombiesRadius] = useState(50)
 
-  // Climate controls
   const [fogIntensity, setFogIntensity] = useState(0)
   const [windIntensity, setWindIntensity] = useState(0)
   const [temperature, setTemperature] = useState(20)
   const [cloudIntensity, setCloudIntensity] = useState(0)
   const [humidity, setHumidity] = useState(50)
   const [precipitationIntensity, setPrecipitationIntensity] = useState(0)
-  // Real per-float min/max from getClimateFloats, keyed by ClimateFloat id. Populated
-  // once the bridge reports them; sliders fall back to the old hardcoded range until then.
   const [climateRanges, setClimateRanges] = useState<Record<number, ClimateFloatRange>>({})
 
-  // These visual controls use the corresponding climate-float ids and read
-  // their current values from getClimateFloats.
   const [viewDistance, setViewDistance] = useState(0)
   const [dayLight, setDayLight] = useState(0)
   const [nightStrength, setNightStrength] = useState(0)
   const [desaturation, setDesaturation] = useState(0)
   const [ambient, setAmbient] = useState(0)
 
-  // Game time controls
   const [gameHour, setGameHour] = useState(12)
   const [gameDay, setGameDay] = useState(1)
   const [gameMonth, setGameMonth] = useState(7)
 
-  // Sound controls
   const [soundRadius, setSoundRadius] = useState(100)
   const [soundVolume, setSoundVolume] = useState(100)
   const [soundX, setSoundX] = useState('')
   const [soundY, setSoundY] = useState('')
 
-  // Bridge operations (new Lua handlers)
   const [bridgeOperation, setBridgeOperation] = useState<string>('getSafehouses')
   const [bridgeOperationFormValues, setBridgeOperationFormValues] = useState<Record<string, Record<string, string>>>(() => {
     return Object.fromEntries(
@@ -1223,7 +1150,6 @@ export default function Events() {
   const [bridgeOptionsRefreshTick, setBridgeOptionsRefreshTick] = useState(0)
   const [bridgeConnectionSummary, setBridgeConnectionSummary] = useState<string | null>(null)
 
-  // Utilities status
   const [utilitiesStatus, setUtilitiesStatus] = useState<{
     hydroPowerOn: boolean
     powerOn: boolean
@@ -1236,13 +1162,6 @@ export default function Events() {
     nightsSurvived: number
   } | null>(null)
 
-  // Live weather state -- fields getClimateFloats does not already carry
-  // (isRaining/isSnowing/isThunderStorming, and real windSpeed(kph)/
-  // windAngle(degrees) as distinct from the 0-100% wind-intensity slider
-  // above). The other getWeather fields (temperature, humidity, fog, cloud,
-  // precipitation, dayLight, nightStrength, desaturation, viewDistance,
-  // ambient) are the exact same ClimateFloat values already polled and
-  // shown as sliders, so they are deliberately not duplicated here.
   const [liveWeather, setLiveWeather] = useState<{
     isRaining: boolean
     isSnowing: boolean
@@ -1257,19 +1176,8 @@ export default function Events() {
   const [activeSection, setActiveSection] = useState<EventSectionKey>('rain')
   const [sectionQuery, setSectionQuery] = useState('')
   const [activity, setActivity] = useState<ActivityEntry[]>([])
-  // Below `lg` the sidebar/content grid collapses to one column, so the full
-  // ~18-item nav (plus Recent Actions) renders ABOVE the section you just
-  // picked -- reaching it costs a scroll past everything else on the page,
-  // every time. Desktop's two-column layout never has this problem. Jumping
-  // the content into view on selection is scoped to exactly that narrow
-  // case (2026-08-31 quality pass, operator-approved aesthetic fix) rather
-  // than restructuring the nav itself, which touches far more of the page.
   const contentRef = useRef<HTMLDivElement>(null)
   const jumpToContentOnMobile = () => {
-    // jsdom (every existing test on this page) has no matchMedia at all,
-    // unlike WorldMap.tsx's unconditional call to it -- guard rather than
-    // require every Events.tsx test file to stub a global just so an
-    // unrelated nav click doesn't throw.
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
     if (window.matchMedia('(max-width: 1023px)').matches) {
       contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -1288,18 +1196,10 @@ export default function Events() {
   }, [])
 
   const mountedRef = useRef(true)
-  // Suppress climate-slider overwrites from the 10s bridge poll while the
-  // user is actively dragging or has just released a slider. Updated by
-  // onValueChange on each climate Slider; cleared on apply/reset so the
-  // next poll picks up authoritative game state.
   const climateDirtyUntilRef = useRef(0)
   const markClimateDirty = useCallback(() => {
     climateDirtyUntilRef.current = Date.now() + 2500
   }, [])
-  // Same drag-suppression shape as climateDirtyUntilRef, kept separate (not
-  // folded into "climate") since time speed is fetched in a different poll
-  // branch (timeRes, not floatsRes) and a shared name here would read as
-  // climate state gating an unrelated control.
   const timeSpeedDirtyUntilRef = useRef(0)
   const markTimeSpeedDirty = useCallback(() => {
     timeSpeedDirtyUntilRef.current = Date.now() + 2500
@@ -1312,14 +1212,7 @@ export default function Events() {
       setBridgeConnected(status.modConnected)
       setBridgeConnectionSummary(status.connection?.summary || null)
 
-      // If connected, fetch secondary data in parallel
       if (status.modConnected) {
-        // getWeather is deliberately NOT in this Promise.allSettled batch: it
-        // only feeds the small live-conditions strip below, and awaiting it
-        // alongside floatsRes/timeRes/utilitiesRes would let a slow or
-        // failing weather fetch delay the climate sliders those other reads
-        // actually drive. Fired independently so it can only ever add data,
-        // never hold up the rest of this poll tick.
         panelBridgeApi.getWeather().then((weatherResult) => {
           if (!mountedRef.current) return
           if (weatherResult.success && weatherResult.data) {
@@ -1345,8 +1238,6 @@ export default function Events() {
           const floats = floatsRes.value.data.floats
           const findFloat = (id: number) => floats.find((f: { id: number; value: number; min: number; max: number }) => f.id === id)
 
-          // The server reports each ClimateFloat's real min/max alongside its value;
-          // capture it so the sliders below can bind to it instead of a hardcoded range.
           setClimateRanges((prev) => {
             const next = { ...prev }
             for (const id of [3, 4, 5, 6, 8, 12, 0, 2, 9, 10, 11]) {
@@ -1356,7 +1247,6 @@ export default function Events() {
             return next
           })
 
-          // Don't clobber sliders the user is currently dragging.
           if (Date.now() >= climateDirtyUntilRef.current) {
             setFogIntensity(Math.round((findFloat(5)?.value ?? 0) * 100))
             setWindIntensity(Math.round((findFloat(6)?.value ?? 0) * 100))
@@ -1376,15 +1266,6 @@ export default function Events() {
           setGameHour(Math.floor(timeRes.value.data.hour))
           setGameDay(timeRes.value.data.day)
           setGameMonth(timeRes.value.data.month)
-          // getGameTime's multiplier field reads the same zombie.GameTime
-          // singleton RCON's setTimeSpeed command writes to (confirmed via
-          // the real jar: SetTimeSpeedCommand calls
-          // GameTime.getInstance().setMultiplier(), the exact object/field
-          // this reads) -- a real, authoritative read-back, not a decorative
-          // one. Without this the slider was local-only useState(1), never
-          // reassigned by any fetch, and could show a stale multiplier
-          // after any change made outside the panel (RCON, another admin,
-          // a restart).
           if (
             typeof timeRes.value.data.multiplier === 'number' &&
             Date.now() >= timeSpeedDirtyUntilRef.current
@@ -1397,11 +1278,6 @@ export default function Events() {
           setUtilitiesStatus(utilitiesRes.value.data)
         }
       } else {
-        // The bridge went offline -- a last-known-good reading here would keep
-        // rendering its old green/red "Online"/"Offline" badge (just dimmed by
-        // the panel's opacity-60) instead of falling back to the neutral
-        // "Pending" state, letting an admin mistake a stale reading for a live
-        // one. Clear it so the UI honestly reflects "we don't currently know."
         setUtilitiesStatus(null)
       }
     } catch (error) {
@@ -1413,13 +1289,6 @@ export default function Events() {
     }
   }, [])
 
-  // Same getWeather() read as checkBridgeStatus's own poll tick above, split
-  // out so a toggle that just changed weather state can reconcile with the
-  // real result immediately after its command resolves, instead of waiting
-  // for the next scheduled 10s poll -- see the snow/rain StateToggles below.
-  // Failure is swallowed the same way checkBridgeStatus's own read already
-  // does: a failed reconcile just leaves whatever value is already showing
-  // (the optimistic flip, on a fresh toggle) until the next poll tries again.
   const refetchWeather = useCallback(async () => {
     try {
       const weatherResult = await panelBridgeApi.getWeather()
@@ -1591,13 +1460,6 @@ export default function Events() {
     ].slice(0, 6))
   }, [i18n.language])
 
-  // Bridge weather commands
-  // onSettled: same additive, opt-in shape as handleAction's own -- see its
-  // comment. Added so the snow/rain toggles below can reconcile their own
-  // optimistic flip (refetch the real weather on success, revert it on
-  // failure) without every OTHER caller of this shared function (Stop All
-  // Weather, helicopter, sound/chat actions, ...) growing a weather refetch
-  // it has no use for.
   const handleBridgeAction = useCallback(async (action: string, fn: () => Promise<unknown>, onSettled?: (success: boolean) => void | Promise<void>) => {
     setBridgeLoading(action)
     try {
@@ -1625,26 +1487,9 @@ export default function Events() {
   }, [toast, pushActivity, t])
 
   const executeCommand = useCallback(async (command: string) => {
-    // rconService.execute()'s failures resolve { success: false, error }
-    // rather than throwing, but handleResponse() throws on any 200 body
-    // with success: false anyway (see lib/api.ts) -- this never sees
-    // result.success === false, the throw below is unreachable.
     return rconApi.execute(command)
   }, [])
 
-  // `fn` normally resolves to something this function doesn't inspect (RCON
-  // commands, vehicle spawns, etc. -- no verify concept). A handler that DOES
-  // need to override the generic success toast (createHorde/createHorde2
-  // below, when the mod couldn't confirm the spawn -- see
-  // panelBridgeSpawnHordeFabricatedCount.test.js) resolves to
-  // `{ toastOverride }` instead -- runtime-checked here rather than widening
-  // `fn`'s type, so every other caller is unaffected.
-  // onSettled is optional and additive -- every existing caller that doesn't
-  // pass one is unaffected. It exists so a caller driving a state-reflecting
-  // toggle (e.g. the rain StateToggle below) can reconcile its own optimistic
-  // UI flip with the real outcome (refetch on success, revert on failure)
-  // without this function needing to know what "the right state" is for
-  // every one of its many callers (teleport, spawn, quick sounds, ...).
   const handleAction = useCallback(async (action: string, fn: () => Promise<unknown>, onSettled?: (success: boolean) => void | Promise<void>) => {
     setLoading(action)
     try {
@@ -1688,28 +1533,6 @@ export default function Events() {
         : await panelBridgeApi.shutOffUtilities(power, water)
       await checkBridgeStatus()
       const successCopy = getEventSuccessCopy(action, t)
-      // restoreUtilities/shutOffUtilities already compute the REAL post-
-      // action power state via world:isHydroPowerOn() (a genuine read-back,
-      // not a hardcoded literal -- see panelBridgeUtilitiesHydroPowerOnReporting
-      // .test.js) and return it unconditionally alongside `success: true`.
-      // The Lua's own comments ("applySettings can re-roll the modifier" /
-      // "so it can't be overwritten") describe exactly the case where the
-      // write silently doesn't stick -- until now the client never looked
-      // at hydroPowerOn, so a silent no-op still read back as plain success.
-      // Water has no equivalent boolean read-back in this response (see
-      // PanelBridge.lua's "Water has no Java flag like isHydroPowerOn()"
-      // comment) -- only power's outcome can be verified this way.
-      //
-      // `persisted`/`persistReason` are NOT Lua fields -- since 5aaf2c3e
-      // (2026-08-02) panelBridge.js's /utilities/restore and /utilities
-      // /shutoff routes call persistUtilities() (Node-side, writes
-      // SandboxVars.lua directly) and merge its { persisted, persistReason }
-      // into the JSON response alongside the Lua handler's own result. A
-      // 2026-08-30 audit ("Finding C") checked only the Lua handler's raw
-      // result -- which never carries these fields -- concluded the warning
-      // below was dead code, and deleted it in 2d7cca63. It was live: a
-      // false `persisted` here is a genuine "this will not survive a server
-      // restart" signal on the wire today. Restored 2026-09-04.
       const powerMismatch = power && typeof result?.hydroPowerOn === 'boolean' && result.hydroPowerOn !== on
       const notPersisted = result?.persisted === false
       toast({
@@ -1753,24 +1576,17 @@ export default function Events() {
   const teleportCoordZ = parseCoord(teleportZ)
   const hasValidTeleportCoords = teleportCoordX !== null && teleportCoordY !== null && teleportCoordZ !== null
 
-  // Weather commands
   const startRain = () => serverApi.startRain(rainIntensity / 100)
   const stopRain = () => serverApi.stopRain()
   const startStorm = () => serverApi.startStorm(stormDuration)
   const stopWeather = () => serverApi.stopWeather()
 
-  // Sound/Event commands
-  // Note: chopper and gunshot target a RANDOM online player, not the selected player
   const triggerChopper = () => serverApi.triggerChopper()
   const triggerGunshot = () => serverApi.triggerGunshot()
   const triggerLightning = (username?: string) => serverApi.triggerLightning(username)
   const triggerThunder = (username?: string) => serverApi.triggerThunder(username)
-  // Alarm triggers at admin's in-game position (admin must be online)
   const triggerAlarm = () => serverApi.alarm()
 
-  // PZ RCON `lightning` / `thunder` require a username and silently no-op without one.
-  // If the user has "all online" selected, pick a random connected player instead
-  // of sending an empty command.
   const pickStrikeTarget = (): string => {
     const explicit = getTargetPlayer()
     if (explicit) return explicit
@@ -1778,11 +1594,6 @@ export default function Events() {
     return players[Math.floor(Math.random() * players.length)].name
   }
 
-  // Reports verified:false (never surfaced as ok:false -- see
-  // panelBridgeSpawnHordeFabricatedCount.test.js) when the spawned count was
-  // fabricated from a fallback rather than read back from
-  // VirtualZombieManager. Builds the handleAction toastOverride so
-  // "Horde created" doesn't imply a count the mod couldn't actually confirm.
   const hordeToastOverride = (
     actionKey: 'spawnHordeNearPlayer' | 'spawnHordeBehindPlayer',
     actionLabel: string,
@@ -1798,52 +1609,36 @@ export default function Events() {
     return undefined
   }
 
-  // Zombie commands — use PanelBridge (CreateSwarm) for proper distance control
   const createHorde = async (count: number, username?: string) => {
     if (!username) throw new Error(t('toasts.targetPlayerRequiredHorde'))
     const response = await panelBridgeApi.spawnHordeNear(username, count)
     return hordeToastOverride('spawnHordeNearPlayer', getEventSuccessCopy('Create horde', t).title, response)
   }
 
-  // Spawn horde behind the player based on their facing direction
   const createHorde2 = async (count: number, username?: string) => {
     if (!username) throw new Error(t('toasts.targetPlayerRequiredHorde'))
     const response = await panelBridgeApi.spawnHordeBehind(username, count)
     return hordeToastOverride('spawnHordeBehindPlayer', getEventSuccessCopy('Create horde (behind)', t).title, response)
   }
 
-  // Clear all zombies from loaded cells
   const removeZombies = () => panelBridgeApi.clearAllZombies()
 
-  // Clear zombies within a radius of one player -- same reversible-but-
-  // affects-someone-else tier as clearAllZombies (zombies respawn over
-  // time), just scoped to one player's fight instead of every loaded cell.
   const removeZombiesNear = (username: string) => panelBridgeApi.clearZombiesNearPlayer(username, clearZombiesRadius)
 
-  // Time commands
-  // The bridge reads and writes the server's authoritative game-time
-  // multiplier, so the value returned by getGameTime is safe to display.
   const setGameTimeSpeed = () => executeCommand(`setTimeSpeed ${timeSpeed}`)
 
-  // Teleport commands
-  // teleportto only works if admin is in-game and teleports themselves
-  // For teleporting other players, use teleport command with player name and coordinates
   const teleportToCoords = (x: number, y: number, z: number, targetPlayer?: string) => {
     if (targetPlayer) {
-      // Teleport specific player to coordinates
       return executeCommand(`teleport "${targetPlayer}" ${x},${y},${z}`)
     }
-    // Self-teleport (requires admin to be in-game)
     return executeCommand(`teleportto ${x},${y},${z}`)
   }
   const teleportPlayerToPlayer = (player1: string, player2: string) =>
     executeCommand(`teleport "${player1}" "${player2}"`)
 
-  // Vehicle commands
   const spawnVehicle = (vehicleId: string, username: string) =>
     executeCommand(`addvehicle "${vehicleId}" "${username}"`)
 
-  // Announcement
   const sendAnnouncement = () => serverApi.sendMessage(announcement)
 
   const getBridgeFieldValue = (fieldKey: string): string => bridgeOperationFormValues[bridgeOperation]?.[fieldKey] ?? ''
@@ -1949,9 +1744,6 @@ export default function Events() {
     }
 
     if (fieldKey === 'reason') {
-      // Values stay the literal English strings sent to BanSystem as the RCON
-      // reason argument — only the visible label is translated — so they must
-      // keep matching each form's `defaultValue` (also English) exactly.
       return [
         { value: 'Rule violation', label: t('operationForms.reasonRuleViolation') },
         { value: 'Abuse', label: t('operationForms.reasonAbuse') },
@@ -1996,7 +1788,6 @@ export default function Events() {
         })
       }
       pushActivity(label, true)
-      // Re-run the current list operation to refresh table data
       if (bridgeResultData?.operation) {
         try {
           const refreshed = await panelBridgeApi.sendCommand(bridgeResultData.operation, {})
@@ -2009,7 +1800,6 @@ export default function Events() {
           })
         } catch { /* ignore refresh failure */ }
       }
-      // Also refresh combo options
       setBridgeOptionsRefreshTick((prev) => prev + 1)
     } catch (error) {
       toast({
@@ -2048,12 +1838,6 @@ export default function Events() {
       return
     }
 
-    // Kick/ban ops are raw-argument bridge commands with no other gate --
-    // unlike every other kick/ban entry point in the app (Players.tsx), a
-    // mistyped username/IP/SteamID here fires straight at a real player with
-    // zero confirmation. Not styled destructive-red: these are reversible
-    // via an unban elsewhere, matching the same tier as Players.tsx's own
-    // kick/ban dialogs, just a last-look check before it goes out.
     if (['moderationKickUser', 'moderationBanUser', 'moderationBanIP', 'moderationBanSteamID'].includes(bridgeOperation)) {
       const target = String(parsedArgs.username ?? parsedArgs.ip ?? parsedArgs.steamId ?? '')
       const reason = typeof parsedArgs.reason === 'string' ? parsedArgs.reason : ''
@@ -2082,7 +1866,6 @@ export default function Events() {
         timestamp: formatPanelTimestamp(new Date(), i18n.language),
       })
       setBridgeLastRunAt(formatPanelTimestamp(new Date(), i18n.language))
-      // Refresh combo options for list operations
       if (['getSafehouses', 'getFactions', 'getVehiclesDetailed'].includes(bridgeOperation)) {
         setBridgeOptionsRefreshTick((prev) => prev + 1)
       }
@@ -2107,21 +1890,9 @@ export default function Events() {
           variant: 'success' as const,
         })
       }
-      // Every other bridge action on this page (handleAction, handleBridgeAction,
-      // runInlineAction) logs to Recent Actions -- this, the general Bridge
-      // Tools "Run Operation" path, was the one gap: it toasted and populated
-      // the results table but never called pushActivity, so the sidebar log
-      // could sit on "No recent actions" in the same frame as a completed,
-      // timestamped operation result (2026-08-31 quality pass).
       pushActivity(operationLabel, true)
     } catch (error) {
       const message = getUserErrorMessage(error, t('toasts.bridgeOperationFailedFallback'))
-      // A "failed" bridge command can still carry a rich diagnostic table --
-      // e.g. runEventSequence's per-step results/failedCount/executed on a
-      // partial failure -- attached to ApiError.data when the server sends
-      // one. Hardcoding null here (as this used to) discarded it even when
-      // present, leaving BridgeResultDisplay with nothing to build a partial
-      // state from regardless of its own rendering logic.
       const data = error instanceof ApiError ? (error.data ?? null) : null
       setBridgeResultData({
         operation: bridgeOperation,
@@ -2183,13 +1954,11 @@ export default function Events() {
         }
       />
 
-      {/* Scope and connection state stay visible before event controls. */}
       <div className={cn(
         'rounded-md border bg-card px-4 py-3',
         bridgeConnected ? 'border-border/70' : 'border-amber-400/55'
       )}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Bridge status */}
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground whitespace-nowrap">
               <Zap className={cn('w-3.5 h-3.5', bridgeConnected ? 'text-primary' : 'text-amber-400')} />
@@ -2219,7 +1988,6 @@ export default function Events() {
             )}
           </div>
 
-          {/* Target picker — only for sections whose commands act on a chosen player. */}
           <div className="flex flex-wrap items-center gap-3">
             {TARGETED_SECTIONS.includes(activeSection) && (
               <>
@@ -2405,10 +2173,6 @@ export default function Events() {
                   </div>
                   <Slider aria-label={t('rain.rainIntensityAria')} value={[rainIntensity]} onValueChange={([val]) => setRainIntensity(val)} min={1} max={100} step={1} />
                   {bridgeConnected ? (
-                    // PanelBridge is connected, so liveWeather.isRaining is a real
-                    // read of game state -- a genuine toggle. Still fires the RCON
-                    // startRain/stopRain commands this section has always used
-                    // (not panelBridgeApi's), only the on/off decision changed.
                     <StateToggle
                       icon={CloudRain}
                       label={t('rain.rainLabel')}
@@ -2419,11 +2183,6 @@ export default function Events() {
                       disabled={loading !== null}
                       ariaLabel={t('rain.rainLabel')}
                       onToggle={(next) => {
-                        // Optimistic flip -- state we ARE currently showing,
-                        // not a fake one -- then reconcile with the real
-                        // result once the command resolves, rather than
-                        // waiting on the next scheduled poll (was ~5s per
-                        // the operator's own report on Tower).
                         const previous = liveWeather
                         setLiveWeather((prev) => (prev ? { ...prev, isRaining: next } : prev))
                         handleAction(next ? 'Start rain' : 'Stop rain', next ? startRain : stopRain, async (success) => {
@@ -2433,12 +2192,6 @@ export default function Events() {
                       }}
                     />
                   ) : (
-                    // PanelBridge is NOT connected -- this section exists specifically
-                    // so RCON rain control still works without the bridge, and there is
-                    // no RCON query for "is it currently raining" to build a real toggle
-                    // from. Two buttons is the honest design here, not a shortcut: state
-                    // is genuinely unknowable over this path, so the request's own rule
-                    // ("do NOT fake a toggle where the state is unknowable") applies.
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" onClick={() => handleAction('Start rain', startRain)} disabled={loading !== null} className="h-9 gap-2 text-xs font-medium">
                         {loading === 'Start rain' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudRain className="w-3.5 h-3.5" />}
@@ -2713,7 +2466,6 @@ export default function Events() {
                       panelBridgeApi.setClimateFloat(12, humidity / 100),
                       panelBridgeApi.setClimateFloat(3, precipitationIntensity / 100),
                     ])
-                    // Allow the next poll to re-sync from authoritative game state.
                     climateDirtyUntilRef.current = 0
                   })}
                   disabled={bridgeLoading !== null || !bridgeConnected}
@@ -2831,7 +2583,6 @@ export default function Events() {
                       panelBridgeApi.setClimateFloat(0, desaturation / 100),
                       panelBridgeApi.setClimateFloat(9, ambient / 100),
                     ])
-                    // Allow the next poll to re-sync from authoritative game state.
                     climateDirtyUntilRef.current = 0
                   })}
                   disabled={bridgeLoading !== null || !bridgeConnected}
@@ -2928,10 +2679,6 @@ export default function Events() {
                   <Button size="sm" onClick={() => { markTimeSpeedDirty(); setTimeSpeed(10) }} variant={timeSpeed === 10 ? 'secondary' : 'outline'} className="h-8 text-xs font-medium tabular-nums">10×</Button>
                   <Button size="sm" onClick={() => { markTimeSpeedDirty(); setTimeSpeed(24) }} variant={timeSpeed === 24 ? 'secondary' : 'outline'} className="h-8 text-xs font-medium tabular-nums">24×</Button>
                 </div>
-                {/* No explicit variant, matching Apply All Climate/Visual below --
-                    all three are the same shape (apply this card's pending changes
-                    to the live game) and had no reason in the code for one of the
-                    three to be styled differently (2026-08-31 impeccable pass). */}
                 <Button onClick={() => handleAction('Set time speed', setGameTimeSpeed)} disabled={loading !== null || !bridgeConnected} className="h-9 gap-2 text-xs font-medium">
                   {loading === 'Set time speed' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
                   {t('timespeed.applySpeed')}
@@ -3227,9 +2974,6 @@ export default function Events() {
                   <Slider aria-label={t('horde.clearRadiusAria')} value={[clearZombiesRadius]} onValueChange={([val]) => setClearZombiesRadius(val)} min={10} max={500} step={10} disabled={!bridgeConnected} />
                   <DisabledReason reason={players.length === 0 ? t('horde.noPlayersOnlineTitle') : !bridgeConnected ? t('horde.bridgeOfflineTitle') : null}>
                     <Button variant="outline" onClick={async () => {
-                      // Same reversible-but-affects-someone-else tier as
-                      // "clear all" -- warning, not destructive-red -- scoped
-                      // to one player instead of every loaded cell.
                       const target = targetAll ? null : selectedPlayer
                       const label = target ? t('horde.clearNearConfirmDescTargeted', { player: target }) : t('horde.clearNearConfirmDescRandom')
                       const ok = await confirm({
@@ -3249,10 +2993,6 @@ export default function Events() {
 
                 <DisabledReason reason={!bridgeConnected ? t('horde.bridgeOfflineTitle') : null}>
                   <Button variant="outline" onClick={async () => {
-                    // Instant, world-wide, and every player on the server feels
-                    // it -- reversible (zombies respawn) doesn't undo whatever
-                    // someone was mid-fight against. Affects-others-but-
-                    // reversible tier: warning, not destructive-red, not silent.
                     const ok = await confirm({
                       title: t('horde.removeAllConfirmTitle'),
                       description: t('horde.removeAllConfirmDescription'),
@@ -3829,7 +3569,6 @@ export default function Events() {
                     {bridgeRunDisabledReason || t('bridgeOps.readyStatus')}
                   </p>
 
-                  {/* Structured Result Display */}
                   {bridgeResultData && (
                     <BridgeResultDisplay
                       result={bridgeResultData}

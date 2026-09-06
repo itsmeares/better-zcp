@@ -4,14 +4,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } from '@/lib/api'
 
-// 2026-08-27 bug-hunt: Backups.tsx had NO test file at all before this one
-// (god's f7ac68) -- it was gated for backups.manage/backups.restore/
-// backups.download in 22743fe and hardened with function-level guards in
-// 3e46b62, but neither commit had any coverage. This covers all three
-// capabilities in both directions: denied -> control disabled AND a click
-// never reaches the API; granted -> click goes all the way through to a
-// real API call (through the confirm dialog for restore, since that's the
-// realistic click path an operator takes).
 
 let mockCan = (_capability: string) => true
 

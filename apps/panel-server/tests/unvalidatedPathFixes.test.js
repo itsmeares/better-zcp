@@ -2,27 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import { EventEmitter } from "events";
 
-// spawn() is mocked at module scope (not per-test) because server.js binds
-// it as a live import at module load time; a mock installed after import
-// wouldn't be seen. exec is left as the real implementation via
-// importOriginal -- nothing under test here calls it.
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 vi.mock("child_process", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, spawn: (...args) => spawnMock(...args) };
 });
 
-// GET /api/server/branches derived an executable path from
-// req.query.steamcmdPath and spawned it directly -- the only path-taking
-// route in server.js that skipped the isValidPath() check every sibling
-// route applies. Once role-gated to admin+technician that was reachable
-// authority to run an attacker-chosen binary as the panel process, not just
-// a known one in a validated location (per god's ruling: identical role
-// labels hiding different authority is how an escalation stays invisible).
-// Same class of bug existed in panelBridge.js's /configure and /auto-detect,
-// which fed an unvalidated path straight into bridge.configure()/autoDetect()
-// -- no validation there either, and it flows into mkdirSync/writeFileSync
-// once the bridge starts. This file exercises the fix, not just the role gate.
 
 vi.mock("../database/init.js", () => ({
   getSetting: vi.fn(async (key) => (key === "steamcmdPath" ? null : null)),
@@ -52,7 +37,6 @@ function getRouteHandler(router, routePath, method) {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
-  // Last handler in the stack: requireRole runs first, the real logic last.
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -88,12 +72,6 @@ describe("GET /api/server/branches rejects an unvalidated steamcmdPath", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  // The validation gate above only proves an invalid path never reaches
-  // getSteamCmdExe()/spawn() -- it does not prove a VALID path still does.
-  // A check that's too strict would silently break every legitimate branch
-  // lookup while looking identical in the refusal tests. Mock fs.existsSync
-  // so the derived executable path "exists" and mock spawn so nothing real
-  // runs, then assert spawn was actually invoked with it.
   it("a valid, existing steamcmd path still reaches the spawn call", async () => {
     const validPath =
       process.platform === "win32" ? "C:\\steamcmd" : "/opt/steamcmd";

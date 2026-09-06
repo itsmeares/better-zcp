@@ -112,7 +112,7 @@ interface SaveStats {
 
 interface ChunkVehicle {
   id: number;
-  x: number; // chunk coordinate (game-tile / 10)
+  x: number;
   y: number;
   type: string;
   scriptName: string;
@@ -123,48 +123,33 @@ interface ChunkSafehouse {
   id: string;
   title: string;
   owner: string;
-  x: number; // chunk coordinate (game-tile / 10)
+  x: number;
   y: number;
-  w: number; // size in chunks
+  w: number;
   h: number;
   players: string[];
   playerConnected: boolean;
 }
 
-// Camera: screenX = worldX * scale + offset.x
-// Each chunk occupies 1x1 in world space (world unit = 1 chunk)
-const MIN_SCALE = 0.1; // px per chunk (zoomed way out)
-const MAX_SCALE = 60; // px per chunk (zoomed way in)
-const MIN_FIT_SCALE = 2; // minimum px/chunk when auto-fitting — chunks must be visible
-const MAP_TILE_SIZE = 100; // each grabofus tile covers 100x100 chunks
+const MIN_SCALE = 0.1;
+const MAX_SCALE = 60;
+const MIN_FIT_SCALE = 2;
+const MAP_TILE_SIZE = 100;
 const MAP_TILES_CDN = "https://grabofus.github.io/zomboid-chunk-cleaner/assets";
 
-// B42 DZI map tiles from map.projectzomboid.com (pzmap2dzi top-down view)
-// served via the backend proxy to avoid CORS (migrated from b42map.com).
 const B42_DZI_CDN = "/api/map/toptiles";
-const B42_DZI_FULL_W = 19968; // full-resolution image width in pixels
-const B42_DZI_FULL_H = 16128; // full-resolution image height in pixels
-const B42_DZI_TILE_PX = 256; // DZI tile size in pixels
-const B42_DZI_MAX_LEVEL = 15; // ceil(log2(max(W,H)))
-// B42: 1 PZ cell = 256 tiles, pzmap2dzi renders 256 px/cell → 1 tile = 1 DZI px
-// B42 chunks are 8×8 tiles → 8 DZI px per B42 chunk (native coords, no B41 conversion)
+const B42_DZI_FULL_W = 19968;
+const B42_DZI_FULL_H = 16128;
+const B42_DZI_TILE_PX = 256;
+const B42_DZI_MAX_LEVEL = 15;
 const B42_CHUNK_TO_DZI_PX = 8;
 
-// Known PZ city / landmark positions.
-// Coordinates are stored in B41 chunk space (game-tile ÷ 10). For B42 saves,
-// the renderer multiplies by 1.25 to convert into B42 chunk space (8 tiles
-// per B42 chunk vs 10 per B41 chunk → 10/8 = 1.25).
-//
-// `b42Only` markers are new towns introduced in build 42 and are hidden on
-// B41 saves. Coordinates for B42-only entries come from b42map.com's
-// poi.json (B42 game-tile / 10).
 const PZ_LANDMARKS: {
   name: string;
   x: number;
   y: number;
   b42Only?: boolean;
 }[] = [
-  // Shared B41 + B42 towns (values from map.projectzomboid.com overlays.json)
   { name: "Muldraugh", x: 1063, y: 980 },
   { name: "West Point", x: 1190, y: 690 },
   { name: "Rosewood", x: 809, y: 1150 },
@@ -172,7 +157,6 @@ const PZ_LANDMARKS: {
   { name: "Louisville", x: 1270, y: 170 },
   { name: "March Ridge", x: 1010, y: 1270 },
   { name: "Valley Station", x: 1320, y: 530 },
-  // B42 new towns (values from b42map.com poi.json ÷ 10)
   { name: "Ekron", x: 55, y: 975, b42Only: true },
   { name: "Brandenburg", x: 210, y: 608, b42Only: true },
   { name: "Irvington", x: 250, y: 1425, b42Only: true },
@@ -187,27 +171,9 @@ function formatSize(bytes: number): string {
   return `${bytes} B`;
 }
 
-// A single bounding box across a non-contiguous chunk selection covers
-// chunks the operator never selected -- handleDelete's live vehicle-removal
-// step used to send exactly one such box (2026-08-31 bug hunt), so a
-// removeVehiclesInArea call for e.g. two chunks nine apart swept every
-// chunk in between too, since PanelBridge.lua's handler takes only
-// {minX,minY,maxX,maxY} with no chunk-list awareness. It accepts one
-// rectangle per call, so decompose the selection into the minimal set of
-// rectangles whose UNION is EXACTLY the selected chunks, then send one
-// call per rectangle instead of one call for the whole extent.
-//
-// Not a general minimal-rectangle-cover solver (that's NP-hard) -- the
-// simple version: per-row contiguous X runs, merged vertically when
-// consecutive rows share an identical run. A single solid rectangular
-// drag-select (the overwhelmingly common case) collapses back to exactly
-// one rectangle, same as before this existed.
 function decomposeIntoRectangles(
   selectedChunks: Set<string>,
 ): Array<{ minX: number; minY: number; maxX: number; maxY: number }> {
-  // `new globalThis.Map`, not `new Map` -- this file imports Lucide's `Map`
-  // icon under that exact name, which shadows the global Map constructor
-  // (same fix WorldMap.tsx already applies for its own player-position map).
   const rowsMap = new globalThis.Map<number, number[]>();
   for (const key of selectedChunks) {
     const [xStr, yStr] = key.split("_");
@@ -218,7 +184,6 @@ function decomposeIntoRectangles(
     else rowsMap.set(y, [x]);
   }
 
-  // Per-row contiguous X runs -> horizontal strips.
   const strips: Array<{ y: number; xStart: number; xEnd: number }> = [];
   for (const [y, xsRaw] of rowsMap) {
     const xs = [...xsRaw].sort((a, b) => a - b);
@@ -238,7 +203,6 @@ function decomposeIntoRectangles(
     }
   }
 
-  // Merge vertically-adjacent strips that share an identical X range.
   const byRange = new globalThis.Map<string, number[]>();
   for (const s of strips) {
     const k = `${s.xStart}_${s.xEnd}`;
@@ -268,11 +232,6 @@ function decomposeIntoRectangles(
   return rects;
 }
 
-// A selection this fragmented (e.g. Invert Selection on a large save) would
-// mean this many individual bridge round-trips for a step that's already
-// best-effort/cosmetic (see the comment above its call site) -- past this,
-// skip live sync and say so rather than silently issuing a long burst of
-// commands. The authoritative vehicles.db cleanup is unaffected either way.
 const MAX_VEHICLE_REMOVAL_RECTS = 40;
 
 function findFirstRenderableChunkIndex(
@@ -320,10 +279,7 @@ export default function ChunkCleaner() {
   const { theme } = useTheme();
   const socket = useSocket();
   const { can } = useAuth();
-  // Matches the server permission used by both save-path and delete routes.
   const canManageChunks = can("chunks.manage");
-  // Read requests also report permission failures from the server; keep this
-  // separate from the local capability value so the UI can show a real 403.
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [saves, setSaves] = useState<SaveInfo[]>([]);
   const [selectedSave, setSelectedSave] = useState<string>("");
@@ -331,20 +287,15 @@ export default function ChunkCleaner() {
   const [bounds, setBounds] = useState<ChunkBounds | null>(null);
   const [stats, setStats] = useState<SaveStats | null>(null);
   const [loading, setLoading] = useState(false);
-  // Live scan progress streamed over the socket while the map is loading.
-  // total === 0 means indeterminate (B41 flat saves don't report per-dir progress).
   const [scanProgress, setScanProgress] = useState<{
     scanned: number;
     total: number;
     chunks: number;
   } | null>(null);
-  // The initial request starts immediately; keep its loading state true so an
-  // empty list is not mistaken for a confirmed empty result.
   const [loadingSaves, setLoadingSaves] = useState(true);
   const [selectedChunks, setSelectedChunks] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
-  // Custom path override for manual folder navigation
   const [customPath, setCustomPath] = useState<string>("");
   const [customPathInput, setCustomPathInput] = useState<string>("");
   const [debugInfo, setDebugInfo] = useState<{
@@ -373,16 +324,12 @@ export default function ChunkCleaner() {
       checks?: Record<string, boolean>;
     };
   } | null>(null);
-  // Last loadSaves error message (kept so we can surface remediation hints in
-  // the empty state instead of relying purely on transient toasts).
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Canvas refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
-  // Cached theme colors for canvas (avoid getComputedStyle in rAF)
   const canvasColorsRef = useRef({
     bg: "228 30% 7%",
     primary: "217 91% 60%",
@@ -408,11 +355,9 @@ export default function ChunkCleaner() {
     };
   }, [theme]);
 
-  // Camera state: screen = world * scale + offset
   const [scale, setScale] = useState(4);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
-  // Interaction state
   const [tool, setTool] = useState<"select" | "pan">("select");
   const isPanningRef = useRef(false);
   const panStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
@@ -425,57 +370,43 @@ export default function ChunkCleaner() {
     y: number;
   } | null>(null);
 
-  // Hover state as ref (avoids re-render on every mouse move)
   const hoverWorldRef = useRef<{ x: number; y: number } | null>(null);
   const drawRequestRef = useRef(0);
 
-  // Map tile state
   const [showMap, setShowMap] = useState(true);
   const tileCacheRef = useRef<Record<string, HTMLImageElement | null>>({});
   const tileLoadCountRef = useRef(0);
 
-  // UI collapse states
   const [showCustomPath, setShowCustomPath] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
-  // Guard against stale chunk-load responses when user switches saves quickly
   const loadIdRef = useRef(0);
 
-  // B42 save detection
   const [isB42Save, setIsB42Save] = useState(false);
   const isB42Ref = useRef(false);
 
-  // Delete dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [createBackup, setCreateBackup] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [deleteVehicles, setDeleteVehicles] = useState(true);
 
-  // Server-running override dialog (issue #5: process detection can false-
-  // positive on custom systemd units / wrapper scripts the panel doesn't
-  // recognise). When the server-side check blocks the delete, we surface
-  // the matched processes here and let the operator confirm-and-override.
   const [serverRunningDialog, setServerRunningDialog] = useState<{
     open: boolean;
     matched: Array<{ pid?: string; cmd: string }>;
-    /** Resolved with `true` to retry with force, `false` to cancel. */
     resolve?: (force: boolean) => void;
   }>({ open: false, matched: [] });
 
-  // Vehicle & safehouse overlays
   const [chunkVehicles, setChunkVehicles] = useState<ChunkVehicle[]>([]);
   const [chunkSafehouses, setChunkSafehouses] = useState<ChunkSafehouse[]>([]);
   const [showVehicles, setShowVehicles] = useState(true);
   const [showSafehouses, setShowSafehouses] = useState(true);
 
-  // O(1) chunk lookup by coordinate key "x_y"
   const chunkMap = useMemo(() => {
     const lookup: Record<string, ChunkInfo> = {};
     for (const chunk of chunks) lookup[`${chunk.x}_${chunk.y}`] = chunk;
     return lookup;
   }, [chunks]);
 
-  // Total size of selected chunks (memoized for display)
   const selectedSize = useMemo(() => {
     let total = 0;
     for (const key of selectedChunks) {
@@ -485,13 +416,11 @@ export default function ChunkCleaner() {
     return total;
   }, [chunkMap, selectedChunks]);
 
-  // Whether the canvas container is in the DOM
   const hasCanvas = !!selectedSave && !loading && chunks.length > 0;
   const hasSaves = saves.length > 0;
   const activePathLabel =
     customPath || debugInfo?.zomboidDataPath || t("activePathDefaultLabel");
 
-  // ─── Coordinate transforms ───
   const screenToWorld = useCallback(
     (sx: number, sy: number) => ({
       x: (sx - offset.x) / scale,
@@ -510,7 +439,6 @@ export default function ChunkCleaner() {
     [],
   );
 
-  // ─── Data loading ───
   const fetchSaves = useCallback(
     async (pathOverride?: string) => {
       setLoadingSaves(true);
@@ -520,8 +448,6 @@ export default function ChunkCleaner() {
         const result = await chunksApi.getSaves(pathToUse);
         setPermissionDenied(false);
         setSaves(result.saves || []);
-        // Backend now always returns a `debug` block; preserve it for the
-        // empty state so users can see exactly what was tried.
         setDebugInfo(result.debug ?? null);
         if (
           result.debug?.hint &&
@@ -532,20 +458,10 @@ export default function ChunkCleaner() {
         return result.saves || [];
       } catch (error) {
         const apiErr = error instanceof ApiError ? error : null;
-        // 41fa20a3 gated this route behind chunks.manage -- a real 403 here
-        // means the role genuinely lacks access, not a transient/data
-        // problem. Show the dedicated denied state instead of the normal
-        // "couldn't load saves, here's what we tried" empty state (which
-        // would be actively misleading: there's nothing wrong with the
-        // saves folder) and skip the destructive toast + suggested-paths
-        // fallback below, which would just 403 again for the same reason.
         if (apiErr?.status === 403) {
           setPermissionDenied(true);
           return [];
         }
-        // Server attaches the full payload (including the diagnostic `debug`
-        // block) to ApiError.data — surface that to the empty-state panel so
-        // the user gets the same hints/suggestions as the success path.
         const payload = (apiErr?.data ?? null) as {
           debug?: NonNullable<typeof debugInfo>;
         } | null;
@@ -559,8 +475,6 @@ export default function ChunkCleaner() {
           description: message,
           variant: "destructive",
         });
-        // If the server didn't ship debug info on this error, fetch suggested
-        // paths anyway so the user has something actionable to click.
         if (!payload?.debug) {
           try {
             const suggested = await chunksApi.suggestedPaths();
@@ -583,7 +497,6 @@ export default function ChunkCleaner() {
     [customPath, toast, t],
   );
 
-  // On mount: fetch saves and auto-select the active server's save
   useEffect(() => {
     (async () => {
       const savesList = await fetchSaves();
@@ -605,18 +518,12 @@ export default function ChunkCleaner() {
         // No active server configured — fall through to auto-pick below
       }
 
-      // Fallback: if the active-server lookup didn't yield a match, auto-select
-      // the only save (common on single-server Linux setups) or the first one.
       if (!picked) {
         setSelectedSave(savesList[0].name);
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Safety net: if the saves list changes (Refresh, custom-path swap) and
-  // the current selection is no longer valid, auto-pick the first save so
-  // the user never gets stuck staring at a populated list with nothing
-  // loaded. This complements the mount-time active-server preference.
   useEffect(() => {
     if (saves.length === 0) return;
     if (selectedSave && saves.some((s) => s.name === selectedSave)) return;
@@ -639,9 +546,6 @@ export default function ChunkCleaner() {
     await fetchSaves("");
   }, [fetchSaves]);
 
-  // One-click "try this path" handler for the empty-state suggestions panel.
-  // Pre-fills the custom path input and triggers a fetch in one motion so the
-  // user doesn't have to copy/paste from the suggestion list.
   const applySuggestedPath = useCallback(
     async (suggested: string) => {
       setCustomPathInput(suggested);
@@ -653,15 +557,10 @@ export default function ChunkCleaner() {
     [fetchSaves],
   );
 
-  // Persist the currently-loaded custom (or auto-picked) path as the panel's
-  // configured Zomboid data folder so the user doesn't have to re-enter it
-  // every session. Writes to the active server when one exists, otherwise to
-  // legacy settings — the backend decides.
   const [savingPath, setSavingPath] = useState(false);
   const persistCurrentPath = useCallback(
     async (pathToSave: string) => {
       if (!pathToSave) return;
-      // Keep the action guarded when called outside the button handler.
       if (!canManageChunks) return;
       setSavingPath(true);
       try {
@@ -673,7 +572,6 @@ export default function ChunkCleaner() {
               ? t("toasts.pathSavedServerDesc")
               : t("toasts.pathSavedPanelDesc"),
         });
-        // Clear customPath since the panel now uses it as the default.
         setCustomPath("");
         setCustomPathInput("");
         await fetchSaves("");
@@ -695,16 +593,6 @@ export default function ChunkCleaner() {
 
   const loadChunks = useCallback(async () => {
     if (!selectedSave) return;
-    // 41fa20a3 gated getChunks/getStats behind chunks.manage too, but
-    // selectedSave can only ever be set after fetchSaves succeeds -- a 403
-    // there returns an empty save list and permissionDenied takes over, so
-    // this is already unreachable without the capability via the fetchSaves
-    // gate above. Deliberately NOT adding a second `if (!canManageChunks)
-    // return` guard here to match: that would duplicate a check the fetch
-    // gate already makes structurally impossible to bypass, and conflicts
-    // with ChunkCleaner.capabilityGating.test.tsx's own (still valid)
-    // scenario of chunks having loaded while canManageChunks is false, which
-    // tests the DELETE action's independent guard (line ~1972) in isolation.
     const thisLoadId = ++loadIdRef.current;
     setLoading(true);
     setScanProgress(null);
@@ -715,7 +603,6 @@ export default function ChunkCleaner() {
     setChunkVehicles([]);
     setChunkSafehouses([]);
 
-    // Unique id so concurrent/stale scans don't update each other's progress.
     const scanId = `${thisLoadId}-${Date.now().toString(36)}`;
     const handleProgress = (p: {
       scanId: string;
@@ -723,7 +610,6 @@ export default function ChunkCleaner() {
       total: number;
       chunks: number;
     }) => {
-      // Ignore events from a previous scan (user switched saves mid-load).
       if (p.scanId !== scanId || thisLoadId !== loadIdRef.current) return;
       setScanProgress({ scanned: p.scanned, total: p.total, chunks: p.chunks });
     };
@@ -731,13 +617,11 @@ export default function ChunkCleaner() {
 
     try {
       const pathToUse = customPath || undefined;
-      // Load chunks and stats independently so a stats failure doesn't block the map
       const [chunksSettled, statsSettled] = await Promise.allSettled([
         chunksApi.getChunks(selectedSave, pathToUse, scanId),
         chunksApi.getStats(selectedSave, pathToUse),
       ]);
 
-      // Discard stale response if user switched saves while loading
       if (thisLoadId !== loadIdRef.current) return;
 
       if (chunksSettled.status === "rejected") {
@@ -747,10 +631,6 @@ export default function ChunkCleaner() {
       const statsResult =
         statsSettled.status === "fulfilled" ? statsSettled.value : null;
 
-      // B42 saves use map/{X}/{Y}.bin with 8×8 tile chunks.
-      // B41 saves use flat files with 10×10 tile chunks.
-      // Keep native chunk coordinates (no B41 conversion) to avoid rounding errors.
-      // The 'file' field is preserved unchanged for deletion operations.
       const rawChunks: ChunkInfo[] = Array.isArray(chunksResult.chunks)
         ? chunksResult.chunks
         : [];
@@ -778,12 +658,7 @@ export default function ChunkCleaner() {
     }
   }, [selectedSave, customPath, toast, socket, t]);
 
-  // Fetch vehicles + safehouses from PanelBridge, convert to chunk coords
   const fetchOverlayData = useCallback(async () => {
-    // Reuses loadChunks' own generation counter -- overlay data is only
-    // meaningful paired with a matching, still-current chunk load, and
-    // every caller of fetchOverlayData (the selectedSave effect below,
-    // and the post-delete refresh) always runs loadChunks first/around it.
     const thisLoadId = loadIdRef.current;
     try {
       const [vRes, sRes] = await Promise.allSettled([
@@ -870,16 +745,13 @@ export default function ChunkCleaner() {
 
   useEffect(() => {
     if (selectedSave) {
-      // loadChunks sets isB42Ref before fetchOverlayData needs it
       loadChunks().then(() => fetchOverlayData());
     }
   }, [selectedSave, loadChunks, fetchOverlayData]);
 
-  // ─── Fit view to show all chunks ───
   const fitView = useCallback(() => {
     if (!chunks.length) return;
 
-    // Use canvasSize if available, otherwise read container dimensions directly
     let W = canvasSize.width;
     let H = canvasSize.height;
     if (W === 0 || H === 0) {
@@ -892,7 +764,6 @@ export default function ChunkCleaner() {
       setCanvasSize({ width: W, height: H });
     }
 
-    // Use P5/P95 percentile bounds to exclude outliers that stretch the view
     const xs = chunks.map((c) => c.x).sort((a, b) => a - b);
     const ys = chunks.map((c) => c.y).sort((a, b) => a - b);
     const p5 = Math.floor(chunks.length * 0.02);
@@ -909,9 +780,6 @@ export default function ChunkCleaner() {
       (W - padding * 2) / rangeX,
       (H - padding * 2) / rangeY,
     );
-    // Enforce MIN_FIT_SCALE so chunks are always visible (at least 2px each)
-    // If the data is too spread out to show everything at 2px/chunk, we zoom
-    // to the densest area and the user can pan to see outliers.
     const newScale = Math.max(MIN_FIT_SCALE, Math.min(MAX_SCALE, fitScale));
     const centerX = (fitMinX + fitMaxX + 1) / 2;
     const centerY = (fitMinY + fitMaxY + 1) / 2;
@@ -922,12 +790,8 @@ export default function ChunkCleaner() {
     });
   }, [chunks, canvasSize]);
 
-  // Auto-fit only once per save load. Re-fitting on every canvasSize change
-  // would yank the user back to the default view whenever they resize the
-  // window or toggle a sidebar pane mid-session.
   const hasAutoFittedRef = useRef(false);
 
-  // Reset the auto-fit flag whenever a new save is selected.
   useEffect(() => {
     hasAutoFittedRef.current = false;
   }, [selectedSave]);
@@ -936,8 +800,6 @@ export default function ChunkCleaner() {
     if (hasAutoFittedRef.current) return;
     if (chunks.length === 0) return;
     if (canvasSize.width === 0 || canvasSize.height === 0) return;
-    // Defer one frame so the canvas element is mounted and sized before
-    // we read its rect inside fitView's fallback path.
     const id = requestAnimationFrame(() => {
       hasAutoFittedRef.current = true;
       fitView();
@@ -945,7 +807,6 @@ export default function ChunkCleaner() {
     return () => cancelAnimationFrame(id);
   }, [chunks, canvasSize, fitView]);
 
-  // ─── Canvas resize observer ───
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -964,25 +825,21 @@ export default function ChunkCleaner() {
     return () => ro.disconnect();
   }, [hasCanvas]);
 
-  // ─── Map tile loading (lazy, on-demand) ───
   const MAX_TILE_CACHE = 512;
   const loadMapTile = useCallback((tileX: number, tileY: number) => {
     const key = `${tileX}_${tileY}`;
     if (key in tileCacheRef.current) return;
-    // Evict oldest entries when cache exceeds limit
     const keys = Object.keys(tileCacheRef.current);
     if (keys.length >= MAX_TILE_CACHE) {
       const toRemove = keys.slice(0, keys.length - MAX_TILE_CACHE + 64);
       for (const k of toRemove) delete tileCacheRef.current[k];
     }
-    tileCacheRef.current[key] = null; // mark as loading
+    tileCacheRef.current[key] = null;
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       tileCacheRef.current[key] = img;
       tileLoadCountRef.current++;
-      // Schedule a redraw so the new tile actually appears without
-      // requiring the user to pan or zoom first.
       if (drawRequestRef.current === 0) {
         drawRequestRef.current = requestAnimationFrame(() => {
           drawRequestRef.current = 0;
@@ -996,24 +853,7 @@ export default function ChunkCleaner() {
     img.src = `${MAP_TILES_CDN}/map_${tileX}_${tileY}.png`;
   }, []);
 
-  // ─── B42 DZI tile loading ───
-  // `null` = requested, still waiting. `false` = confirmed unavailable (404
-  // or load error) -- a distinct sentinel from "still loading" so the draw
-  // loop can tell "upstream genuinely has no imagery here" apart from "give
-  // it another frame". Without this distinction a permanently-missing tile
-  // (upstream's own top-down render can have regional gaps for a build,
-  // independent of anything this panel does) looks identical, forever, to
-  // one that just hasn't arrived yet: the untouched dark canvas background
-  // shows through either way, which reads as a broken black hole rather
-  // than "no imagery for this area".
   const dziCacheRef = useRef<Record<string, HTMLImageElement | null | false>>({});
-  // The resolved B42 build this proxy is currently serving -- named in the
-  // tile URL below (`?v=`) purely as a browser cache key so mapProxy.js can
-  // safely cache tiles long-term instead of the short bounded window it
-  // falls back to without one; see mapProxy.js's
-  // TILE_BROWSER_CACHE_CONTROL_VERSIONED comment. Fetched once on mount,
-  // same one-shot pattern as WorldMap.tsx's mapSourceRef -- this page never
-  // needed b42Dir before, its toptiles requests were unversioned entirely.
   const b42DirRef = useRef<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -1041,7 +881,6 @@ export default function ChunkCleaner() {
     const img = new window.Image();
     img.onload = () => {
       dziCacheRef.current[key] = img;
-      // Schedule a redraw so the new tile appears without user interaction.
       if (drawRequestRef.current === 0) {
         drawRequestRef.current = requestAnimationFrame(() => {
           drawRequestRef.current = 0;
@@ -1051,8 +890,6 @@ export default function ChunkCleaner() {
     };
     img.onerror = () => {
       dziCacheRef.current[key] = false;
-      // Redraw so the "no imagery here" fill appears now instead of only
-      // on the next unrelated interaction.
       if (drawRequestRef.current === 0) {
         drawRequestRef.current = requestAnimationFrame(() => {
           drawRequestRef.current = 0;
@@ -1063,12 +900,8 @@ export default function ChunkCleaner() {
     img.src = `${B42_DZI_CDN}/${level}/${col}_${row}.webp${buildTileQuery(0, b42DirRef.current)}`;
   }, []);
 
-  // ─── Canvas draw (extracted to callable function for rAF use) ───
   const drawCanvasRef = useRef<() => void>(() => {});
 
-  // Schedule a canvas redraw via requestAnimationFrame (used by mouse handlers
-  // and by the effect below, so a burst of state changes within one frame --
-  // e.g. every mousemove during a pan or select-drag -- paints at most once).
   const scheduleDraw = useCallback(() => {
     if (drawRequestRef.current) return;
     drawRequestRef.current = requestAnimationFrame(() => {
@@ -1091,7 +924,6 @@ export default function ChunkCleaner() {
       const W = canvasSize.width;
       const H = canvasSize.height;
 
-      // Read cached theme colors (updated on theme change, not per-frame)
       const cc = canvasColorsRef.current;
       const bgVar = cc.bg;
       const primaryVar = cc.primary;
@@ -1104,29 +936,21 @@ export default function ChunkCleaner() {
 
       const canvasBg = bgVar ? `hsl(${bgVar})` : hsl("228 30% 7%", 1);
 
-      // Dark background
       ctx.fillStyle = canvasBg;
       ctx.fillRect(0, 0, W, H);
 
       if (!bounds || chunks.length === 0) return;
 
-      // Visible world bounds (with 1-chunk margin)
       const visMinX = Math.floor(-offset.x / scale) - 1;
       const visMaxX = Math.ceil((W - offset.x) / scale) + 1;
       const visMinY = Math.floor(-offset.y / scale) - 1;
       const visMaxY = Math.ceil((H - offset.y) / scale) + 1;
 
-      // ── Map tiles ──
       if (showMap) {
         ctx.save();
         ctx.globalAlpha = 0.6;
 
         if (isB42Save) {
-          // ── B42 DZI tiles from b42map.com ──
-          // Choose DZI level: want ~1 DZI pixel ≈ 1 screen pixel
-          // 1 B41-equiv chunk on screen = `scale` px; 1 B41-equiv chunk = B42_CHUNK_TO_DZI_PX full DZI px
-          // At level L, levelScale = 2^(maxLevel-L), so 1 DZI pixel at level L = levelScale full-res px
-          // Ideal: levelScale = B42_CHUNK_TO_DZI_PX / scale
           const idealLevel =
             B42_DZI_MAX_LEVEL -
             Math.log2(B42_CHUNK_TO_DZI_PX / Math.max(scale, 0.01));
@@ -1141,7 +965,6 @@ export default function ChunkCleaner() {
           const numCols = Math.ceil(levelW / B42_DZI_TILE_PX);
           const numRows = Math.ceil(levelH / B42_DZI_TILE_PX);
 
-          // Convert visible chunk bounds → DZI pixel bounds at this level
           const pixMinX = (visMinX * B42_CHUNK_TO_DZI_PX) / levelScale;
           const pixMinY = (visMinY * B42_CHUNK_TO_DZI_PX) / levelScale;
           const pixMaxX = (visMaxX * B42_CHUNK_TO_DZI_PX) / levelScale;
@@ -1158,7 +981,6 @@ export default function ChunkCleaner() {
             Math.floor(pixMaxY / B42_DZI_TILE_PX),
           );
 
-          // Chunks covered by one DZI pixel at this level
           const chunkPerDziPx = levelScale / B42_CHUNK_TO_DZI_PX;
 
           for (let row = rowMin; row <= rowMax; row++) {
@@ -1166,10 +988,8 @@ export default function ChunkCleaner() {
               loadDziTile(level, col, row);
               const img = dziCacheRef.current[`dzi_${level}_${col}_${row}`];
               if (img || img === false) {
-                // This DZI tile starts at chunk coordinate:
                 const tileChunkX = col * B42_DZI_TILE_PX * chunkPerDziPx;
                 const tileChunkY = row * B42_DZI_TILE_PX * chunkPerDziPx;
-                // Actual tile pixel dimensions (last tile in row/col may be smaller)
                 const actualTileW = Math.min(
                   B42_DZI_TILE_PX,
                   levelW - col * B42_DZI_TILE_PX,
@@ -1188,10 +1008,6 @@ export default function ChunkCleaner() {
                 if (img) {
                   ctx.drawImage(img, sx, sy, sw, sh);
                 } else {
-                  // Confirmed unavailable (upstream 404 or load error), not
-                  // just still loading -- a soft, distinct fill instead of
-                  // leaving the raw dark canvas background, which reads as
-                  // a broken black hole rather than "no imagery here".
                   ctx.fillStyle = hsl(mutedFgVar, 0.08);
                   ctx.fillRect(sx, sy, sw, sh);
                 }
@@ -1199,7 +1015,6 @@ export default function ChunkCleaner() {
             }
           }
         } else {
-          // ── B41 grabofus tiles ──
           const minTX = Math.floor(visMinX / MAP_TILE_SIZE);
           const maxTX = Math.floor(visMaxX / MAP_TILE_SIZE);
           const minTY = Math.floor(visMinY / MAP_TILE_SIZE);
@@ -1222,7 +1037,6 @@ export default function ChunkCleaner() {
         ctx.restore();
       }
 
-      // ── Tile grid lines (every 100 chunks — B41 tile boundaries) ──
       if (showMap && !isB42Save && scale > 1) {
         const tileGridMinX =
           Math.floor(visMinX / MAP_TILE_SIZE) * MAP_TILE_SIZE;
@@ -1253,8 +1067,6 @@ export default function ChunkCleaner() {
         }
       }
 
-      // ── City / landmark markers ──
-      // Always shown — helps users orient themselves regardless of tile background
       {
         const markerSize = Math.max(6, Math.min(14, scale * 3));
         const fontSize = Math.max(9, Math.min(13, scale * 2.5));
@@ -1263,17 +1075,13 @@ export default function ChunkCleaner() {
         ctx.textBaseline = "middle";
 
         for (const lm of PZ_LANDMARKS) {
-          // B42-only towns don't exist on the B41 map.
           if (lm.b42Only && !isB42Save) continue;
-          // Landmarks are in B41 chunk coords; for B42, convert to B42 chunk space (×1.25)
           const lx = isB42Save ? lm.x * 1.25 : lm.x;
           const ly = isB42Save ? lm.y * 1.25 : lm.y;
           const sx = lx * scale + offset.x;
           const sy = ly * scale + offset.y;
-          // Skip if off screen
           if (sx < -100 || sx > W + 100 || sy < -50 || sy > H + 50) continue;
 
-          // Diamond marker
           const half = markerSize / 2;
           ctx.fillStyle = hsl(primaryVar, 0.85);
           ctx.beginPath();
@@ -1284,16 +1092,10 @@ export default function ChunkCleaner() {
           ctx.closePath();
           ctx.fill();
 
-          // White border
           ctx.strokeStyle = hsl(foregroundVar, 0.7);
           ctx.lineWidth = 1;
           ctx.stroke();
 
-          // Label with shadow — only if it fully fits on screen. The
-          // marker-only cull above is generous enough (±100px) that a
-          // left-aligned label starting near the left edge can have its
-          // front clipped off, leaving only a stray fragment of the name
-          // visible (e.g. "gh" of "Muldraugh") on a narrow viewport.
           const labelX = sx + half + 4;
           const labelWidth = ctx.measureText(lm.name).width;
           const labelFits =
@@ -1310,7 +1112,6 @@ export default function ChunkCleaner() {
         }
       }
 
-      // ── Safehouse overlays ──
       if (showSafehouses && chunkSafehouses.length > 0) {
         for (const sh of chunkSafehouses) {
           const sx = sh.x * scale + offset.x;
@@ -1318,16 +1119,13 @@ export default function ChunkCleaner() {
           const sw = sh.w * scale;
           const shh = sh.h * scale;
 
-          // Skip if off screen
           if (sx + sw < 0 || sx > W || sy + shh < 0 || sy > H) continue;
 
-          // Fill
           ctx.fillStyle = sh.playerConnected
             ? `hsl(120 60% 40% / 0.15)`
             : `hsl(120 40% 50% / 0.08)`;
           ctx.fillRect(sx, sy, sw, shh);
 
-          // Border
           ctx.strokeStyle = sh.playerConnected
             ? `hsl(120 60% 50% / 0.7)`
             : `hsl(120 40% 50% / 0.4)`;
@@ -1336,7 +1134,6 @@ export default function ChunkCleaner() {
           ctx.strokeRect(sx, sy, sw, shh);
           ctx.setLineDash([]);
 
-          // Label (only if large enough to read)
           if (sw > 30 && shh > 20) {
             const label = sh.title || sh.owner || t("canvasLabels.safehouseFallback");
             const shFontSize = Math.max(8, Math.min(11, scale * 2));
@@ -1349,7 +1146,6 @@ export default function ChunkCleaner() {
         }
       }
 
-      // ── Vehicle markers ──
       if (showVehicles && chunkVehicles.length > 0) {
         const vSize = Math.max(2, Math.min(6, scale * 0.8));
 
@@ -1357,10 +1153,8 @@ export default function ChunkCleaner() {
           const vx = (v.x + 0.5) * scale + offset.x;
           const vy = (v.y + 0.5) * scale + offset.y;
 
-          // Skip if off screen
           if (vx < -10 || vx > W + 10 || vy < -10 || vy > H + 10) continue;
 
-          // Dot color by fuel (-1 = unknown → use neutral primary)
           const vColor =
             v.fuelPct < 0
               ? hsl(primaryVar, 0.5)
@@ -1379,7 +1173,6 @@ export default function ChunkCleaner() {
           ctx.stroke();
         }
 
-        // Vehicle count badge (top of map)
         if (scale > 2) {
           const vLabel = t("canvasLabels.vehicleCount", {
             count: chunkVehicles.length,
@@ -1395,7 +1188,6 @@ export default function ChunkCleaner() {
         }
       }
 
-      // ── Grid lines (only when zoomed in enough) ──
       if (scale > 4) {
         ctx.strokeStyle = hsl(foregroundVar, 0.06);
         ctx.lineWidth = 1;
@@ -1425,8 +1217,6 @@ export default function ChunkCleaner() {
         }
       }
 
-      // ── Draw chunks ──
-      // Translucent fill so the map underneath remains visible
       const visibleStart = findFirstRenderableChunkIndex(chunks, visMinX);
       const visibleEnd = findLastRenderableChunkIndex(chunks, visMaxX);
 
@@ -1444,12 +1234,11 @@ export default function ChunkCleaner() {
         const sy = chunk.y * scale + offset.y;
         const key = `${chunk.x}_${chunk.y}`;
         const isSelected = selectedChunks.has(key);
-        const sz = Math.max(scale, 1); // never go below 1px
+        const sz = Math.max(scale, 1);
 
         if (isSelected) {
           ctx.fillStyle = hsl(destructiveVar, 0.5);
         } else {
-          // Chunk heat: blend from accent (small) to warning (large) using theme tokens
           const ratio = Math.min(chunk.size / 50000, 1);
           ctx.fillStyle =
             ratio > 0.5
@@ -1460,7 +1249,6 @@ export default function ChunkCleaner() {
         if (scale > 4) {
           const gap = Math.max(0.5, scale * 0.06);
           ctx.fillRect(sx + gap, sy + gap, scale - gap * 2, scale - gap * 2);
-          // Thin border for definition against the map
           if (isSelected) {
             ctx.strokeStyle = hsl(destructiveVar, 0.8);
           } else {
@@ -1477,7 +1265,6 @@ export default function ChunkCleaner() {
         }
       }
 
-      // ── Chunk region outline (boundary of the data area) ──
       if (bounds) {
         const bx = bounds.minX * scale + offset.x;
         const by = bounds.minY * scale + offset.y;
@@ -1490,7 +1277,6 @@ export default function ChunkCleaner() {
         ctx.setLineDash([]);
       }
 
-      // ── Coordinate labels (when zoomed in) ──
       if (scale > 18) {
         const fontSize = Math.min(10, scale * 0.5);
         ctx.font = `${fontSize}px monospace`;
@@ -1524,7 +1310,6 @@ export default function ChunkCleaner() {
         }
       }
 
-      // ── Selection rectangle ──
       if (selectionStart && selectionEnd) {
         const wsx = Math.min(selectionStart.x, selectionEnd.x);
         const wsy = Math.min(selectionStart.y, selectionEnd.y);
@@ -1549,7 +1334,6 @@ export default function ChunkCleaner() {
         ctx.strokeRect(rx, ry, rw, rh);
         ctx.setLineDash([]);
 
-        // Selection preview: count chunks in selection region
         let selCount = 0;
         const selectionStartIndex = findFirstRenderableChunkIndex(chunks, wsx);
         const selectionEndIndex = findLastRenderableChunkIndex(
@@ -1581,7 +1365,6 @@ export default function ChunkCleaner() {
         }
       }
 
-      // ── Hover highlight ──
       const hover = hoverWorldRef.current;
       if (hover) {
         const hx = Math.floor(hover.x);
@@ -1594,7 +1377,6 @@ export default function ChunkCleaner() {
         ctx.strokeRect(shx, shy, scale, scale);
       }
 
-      // ── HUD: coordinates + zoom ──
       ctx.font = "11px monospace";
       ctx.textAlign = "left";
       ctx.textBaseline = "bottom";
@@ -1629,7 +1411,6 @@ export default function ChunkCleaner() {
       ctx.fillStyle = hsl(mutedFgVar, 0.7);
       ctx.fillText(zLabel, W - 10, H - 8);
 
-      // ── Top-left bounds info ──
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
       const chunksPerCell = isB42Save ? 32 : 30;
@@ -1654,7 +1435,6 @@ export default function ChunkCleaner() {
       ctx.fillStyle = hsl(mutedFgVar, 0.7);
       ctx.fillText(boundsLabel, 12, 9);
 
-      // Map overlay version indicator
       if (showMap) {
         const mapLabel = isB42Save
           ? t("canvasLabels.mapB42")
@@ -1667,16 +1447,6 @@ export default function ChunkCleaner() {
       }
     };
 
-    // Draw via the same rAF-coalescing path the passive-hover case already
-    // uses (scheduleDraw, above) instead of calling drawCanvasRef directly.
-    // offset/selectionStart/selectionEnd update on every raw
-    // mousemove during a pan or select-drag, so this effect can rerun and
-    // rebuild the closure many times within one frame; without this, each
-    // of those reruns painted synchronously too. Rebuilding the closure
-    // stays synchronous and cheap -- only the actual draw call is deferred
-    // and deduplicated to at most once per animation frame. This does not
-    // touch the render itself: the state updates driving this effect still
-    // fire on every event, same as before.
     scheduleDraw();
   }, [
     chunks,
@@ -1700,16 +1470,6 @@ export default function ChunkCleaner() {
     scheduleDraw,
   ]);
 
-  // Cleanup rAF on unmount. Must also reset the ref, not just cancel the
-  // frame -- scheduleDraw's guard treats any non-zero value as "already
-  // scheduled" and no-ops. Only the rAF callback itself normally resets it
-  // to 0; a cancelled callback never runs, so without this the ref stays
-  // stuck non-zero and every future scheduleDraw() call silently does
-  // nothing for the rest of the component's lifetime. Found via StrictMode's
-  // dev-only mount/cleanup/remount cycle, which calls this cleanup once
-  // immediately after first mount while a scheduleDraw() from that same
-  // first mount is still in flight -- but the same stuck-guard risk exists
-  // for any other caller of this cleanup too, not just StrictMode.
   useEffect(() => {
     return () => {
       if (drawRequestRef.current) {
@@ -1719,7 +1479,6 @@ export default function ChunkCleaner() {
     };
   }, []);
 
-  // Prevent page scroll when wheeling over the canvas (React onWheel is passive)
   useEffect(() => {
     if (!hasCanvas) return;
     const container = containerRef.current;
@@ -1731,7 +1490,6 @@ export default function ChunkCleaner() {
     return () => container.removeEventListener("wheel", preventScroll);
   }, [hasCanvas]);
 
-  // ─── Keyboard shortcuts ───
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (
@@ -1767,7 +1525,6 @@ export default function ChunkCleaner() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedChunks.size, deleteDialogOpen, selectedSave, canManageChunks]);
 
-  // ─── Mouse handlers ───
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       e.preventDefault();
@@ -1806,14 +1563,12 @@ export default function ChunkCleaner() {
       } else if (selectionStart) {
         setSelectionEnd(world);
       } else {
-        // Only hover changed — redraw via rAF without re-rendering
         scheduleDraw();
       }
     },
     [selectionStart, getCanvasMousePos, screenToWorld, scheduleDraw],
   );
 
-  // Commit a selection (shared by mouseUp and mouseLeave)
   const commitSelection = useCallback(
     (shiftKey: boolean) => {
       if (!selectionStart || !selectionEnd) return;
@@ -1823,7 +1578,6 @@ export default function ChunkCleaner() {
       const ex = Math.max(selectionStart.x, selectionEnd.x);
       const ey = Math.max(selectionStart.y, selectionEnd.y);
 
-      // If selection area is very small (click), toggle the single chunk under cursor
       const isClick = Math.abs(ex - sx) < 0.5 && Math.abs(ey - sy) < 0.5;
 
       setSelectedChunks((prev) => {
@@ -1895,7 +1649,6 @@ export default function ChunkCleaner() {
       const factor = e.deltaY > 0 ? 0.88 : 1.14;
       const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
 
-      // Zoom centered on mouse position
       const worldX = (pos.x - offset.x) / scale;
       const worldY = (pos.y - offset.y) / scale;
       setScale(newScale);
@@ -1912,7 +1665,6 @@ export default function ChunkCleaner() {
     if (isPanningRef.current) {
       isPanningRef.current = false;
     }
-    // Commit selection if one was in progress (don't lose the work)
     if (selectionStart && selectionEnd) {
       commitSelection(false);
     }
@@ -1923,9 +1675,6 @@ export default function ChunkCleaner() {
     e.preventDefault();
   }, []);
 
-  // ─── Touch support ─────────────────────────────────────
-  // moveDist tracks how far the finger has travelled since touchstart so we
-  // can distinguish a tap (toggle a chunk) from a pan.
   const touchRef = useRef<{
     startX: number;
     startY: number;
@@ -2002,9 +1751,6 @@ export default function ChunkCleaner() {
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
-      // If the user barely moved during a single-finger touch and the select
-      // tool is active, treat it as a tap that toggles the chunk under the
-      // touch point. Without this, mobile users have no way to select.
       const tr = touchRef.current;
       const wasTap =
         isPanningRef.current && tr.moveDist < 8 && tr.pinchDist === null;
@@ -2039,10 +1785,8 @@ export default function ChunkCleaner() {
     [tool, offset, scale, chunkMap],
   );
 
-  // ─── Delete handlers ───
   const handleDelete = async () => {
     if (selectedChunks.size === 0) return;
-    // Keep the action guarded when called outside the trigger or shortcut.
     if (!canManageChunks) return;
 
     setDeleting(true);
@@ -2058,14 +1802,8 @@ export default function ChunkCleaner() {
           cellY: c.cellY,
         }));
 
-      // If deleteVehicles is checked and the server is running, also remove
-      // currently loaded vehicles live via PanelBridge so players don't see
-      // a "ghost" car for a second before the next DB load. This is best-effort
-      // — the authoritative cleanup happens server-side against vehicles.db.
       if (deleteVehicles) {
         const tilesPerChunk = isB42Ref.current ? 8 : 10;
-        // One rectangle per call, not one call for the whole selection's
-        // extent -- see decomposeIntoRectangles' own comment for why.
         const rects = decomposeIntoRectangles(selectedChunks);
         if (rects.length > MAX_VEHICLE_REMOVAL_RECTS) {
           toast({
@@ -2082,9 +1820,6 @@ export default function ChunkCleaner() {
                 maxY: (rect.maxY + 1) * tilesPerChunk,
               });
             } catch (err) {
-              // Server-side cleanup already ran. Treat an unavailable bridge
-              // as best-effort, but stop after a permission failure because
-              // every remaining rectangle would fail the same way.
               if (err instanceof ApiError && err.status === 403) {
                 toast({
                   title: t("toasts.liveVehicleCleanupNoPermissionTitle"),
@@ -2097,9 +1832,6 @@ export default function ChunkCleaner() {
         }
       }
 
-      // Try without force first. If the server-running guard fires, the
-      // server returns `code: 'server_running'` + the matched processes;
-      // we open the override dialog so the operator can confirm.
       const tryDelete = async (force: boolean) =>
         chunksApi.deleteChunks(
           selectedSave,
@@ -2124,7 +1856,6 @@ export default function ChunkCleaner() {
             setServerRunningDialog({ open: true, matched, resolve });
           });
           if (!userForced) {
-            // User cancelled — surface the original message and bail out.
             toast({
               title: t("toasts.serverRunningTitle"),
               description: getUserErrorMessage(err, t("toasts.deleteChunksFailedFallback")),
@@ -2143,11 +1874,6 @@ export default function ChunkCleaner() {
       const deletedCount = result.deleted ?? 0;
       const failures = (result as { errors?: string[] }).errors ?? [];
       if (failures.length > 0) {
-        // The backend reports success:true whenever at least the request
-        // itself was valid, even if individual chunk deletes failed (locked
-        // file, permission error) — the per-file failures ride along in
-        // `errors`. Surface them instead of letting the operator believe
-        // every selected chunk is gone.
         toast({
           title: t("toasts.chunksDeletedPartialTitle"),
           description: t("toasts.chunksDeletedPartialDesc", {
@@ -2197,7 +1923,6 @@ export default function ChunkCleaner() {
   return (
     <TooltipProvider>
       <div className="space-y-5 page-transition">
-        {/* Header + compact warning */}
         <div className="space-y-3">
           <PageHeader
             title={t("pageHeader.title")}
@@ -2219,9 +1944,7 @@ export default function ChunkCleaner() {
           />
         ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
-          {/* Left Panel - Controls */}
           <div className="space-y-3 order-2 lg:order-1">
-            {/* Save Selection */}
             <Card>
               <CardHeader className="px-4 py-3 pb-0">
                 <CardTitle className="text-xs font-medium flex items-center gap-2 text-muted-foreground">
@@ -2299,7 +2022,6 @@ export default function ChunkCleaner() {
                   {loadingSaves ? t("save.refreshing") : t("save.refresh")}
                 </Button>
 
-                {/* Custom path — collapsible */}
                 <Collapsible
                   open={showCustomPath}
                   onOpenChange={setShowCustomPath}
@@ -2407,7 +2129,6 @@ export default function ChunkCleaner() {
               </CardContent>
             </Card>
 
-            {/* Stats — inline when available */}
             {stats &&
               (() => {
                 const folderEntries = Object.entries(stats.folders || {});
@@ -2415,7 +2136,6 @@ export default function ChunkCleaner() {
                   (sum, [, info]) => sum + (info.size || 0),
                   0,
                 );
-                // Up to 5 tonal swatches so adjacent folders read as distinct segments.
                 const swatchClasses = [
                   "bg-primary/70",
                   "bg-primary/45",
@@ -2486,7 +2206,6 @@ export default function ChunkCleaner() {
                 );
               })()}
 
-            {/* Tools */}
             <Card>
               <CardContent className="px-4 py-3 space-y-3">
                 <div className="flex items-center gap-1.5">
@@ -2694,7 +2413,6 @@ export default function ChunkCleaner() {
               </CardContent>
             </Card>
 
-            {/* Delete Button */}
             {selectedChunks.size > 0 && (
               <DisabledReason reason={!canManageChunks ? t("permissions.noManage") : null} className="w-full">
                 <Button
@@ -2713,17 +2431,11 @@ export default function ChunkCleaner() {
             )}
           </div>
 
-          {/* Canvas — primary workspace */}
           <div className="order-1 lg:order-2">
             <Card className="flex flex-col h-[24rem] min-h-[320px] sm:h-[30rem] lg:h-[36rem]">
               <CardContent className="flex-1 p-2 min-h-0">
                 {!selectedSave ? (
                   loadingSaves ? (
-                    // Genuinely unknown (still fetching, or hasn't started
-                    // yet) -- must not fall through to the "no saves found"
-                    // branch below, which asserts a confirmed, investigated
-                    // fact. Same spinner treatment the chunks-loading branch
-                    // further down already uses for this same card.
                     <div className="h-full flex items-center justify-center">
                       <div className="text-center text-muted-foreground">
                         <RefreshCw className="w-6 h-6 mx-auto animate-spin" />
@@ -2745,7 +2457,6 @@ export default function ChunkCleaner() {
                       </div>
                     </div>
                   ) : (
-                    /* No saves found — show what was tried, why, and offer one-click fixes. */
                     <div className="h-full overflow-y-auto p-4 sm:p-6">
                       <div className="max-w-xl mx-auto space-y-4">
                         <div className="text-center">
@@ -2758,7 +2469,6 @@ export default function ChunkCleaner() {
                           </p>
                         </div>
 
-                        {/* What we tried */}
                         <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2.5 space-y-1.5">
                           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                             <Info className="w-3 h-3" /> {t("canvas.whatTried")}
@@ -2806,7 +2516,6 @@ export default function ChunkCleaner() {
                               <span>{debugInfo?.hint || loadError}</span>
                             </p>
                           )}
-                          {/* Structured rejection diagnostics — show why the validator turned the path down. */}
                           {debugInfo?.rejection && (
                             <div className="pt-1 space-y-1">
                               {debugInfo.rejection.tried && (
@@ -2871,7 +2580,6 @@ export default function ChunkCleaner() {
                           )}
                         </div>
 
-                        {/* Suggested paths */}
                         {debugInfo?.suggestedPaths &&
                           debugInfo.suggestedPaths.length > 0 && (
                             <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2.5 space-y-2">
@@ -2932,7 +2640,6 @@ export default function ChunkCleaner() {
                             </div>
                           )}
 
-                        {/* How to find it yourself */}
                         <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2.5 space-y-1.5">
                           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                             <HelpCircle className="w-3 h-3" /> {t("canvas.howToFind")}
@@ -3087,7 +2794,6 @@ export default function ChunkCleaner() {
         </div>
         )}
 
-        {/* Help — collapsible */}
         <Collapsible open={showHelp} onOpenChange={setShowHelp}>
           <CollapsibleTrigger asChild>
             <button className="flex items-center gap-2 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors w-full">
@@ -3117,7 +2823,6 @@ export default function ChunkCleaner() {
           </CollapsibleContent>
         </Collapsible>
 
-        {/* Delete Confirmation Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -3158,7 +2863,6 @@ export default function ChunkCleaner() {
                 </div>
               )}
 
-              {/* Vehicle removal option — always available (works with server stopped) */}
               {(() => {
                 const selChunkKeys = selectedChunks;
                 const vehiclesInArea = chunkVehicles.filter((v) =>
@@ -3189,7 +2893,6 @@ export default function ChunkCleaner() {
                 );
               })()}
 
-              {/* Safehouse overlap warning */}
               {(() => {
                 const selChunkKeys = selectedChunks;
                 const overlapping = chunkSafehouses.filter((sh) => {
@@ -3253,9 +2956,6 @@ export default function ChunkCleaner() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Server-running override dialog (issue #5: false-positive process
-            detection). Shows the matched processes and lets the user force
-            the delete after confirming the server really is stopped. */}
         <AlertDialog
           open={serverRunningDialog.open}
           onOpenChange={(open) => {

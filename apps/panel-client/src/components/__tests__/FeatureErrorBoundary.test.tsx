@@ -15,8 +15,6 @@ afterEach(() => {
   console.error = originalConsoleError
 })
 
-// Throws only while `shouldThrow.current` is true, so a single instance can be
-// flipped to "recovered" across a Try Again re-render.
 function Flaky({ shouldThrow }: { shouldThrow: { current: boolean } }) {
   if (shouldThrow.current) throw new Error('feature exploded')
   return <p>Feature content</p>
@@ -96,7 +94,6 @@ describe('FeatureErrorBoundary', () => {
     )
     expect(screen.getByText(widgetErrorTitle)).toBeInTheDocument()
 
-    // Simulate the underlying cause having cleared before the retry.
     shouldThrow.current = false
     fireEvent.click(screen.getByRole('button', { name: en.tryAgain }))
 

@@ -3,14 +3,6 @@ import i18n from '@/i18n'
 import { ApiError } from '@/lib/api'
 import { getLoginErrorMessage, LOGIN_FAILED_MESSAGE } from '../AuthContext'
 
-// 2026-08-26: login()'s fetch used to discard response status/code entirely,
-// throwing a plain Error whose message getLoginErrorMessage() always
-// collapsed to one of two fixed strings (network/CORS, or this generic
-// auth-failed text) regardless of whether the underlying failure was a real
-// auth rejection or a server crash. These pin the fix: a coded/uncoded 5xx
-// is no longer swallowed into the same text an actual wrong-password
-// response gets, while every existing case (network error, CORS, 4xx auth
-// failure) stays byte-identical to preserve the account-enumeration ruling.
 describe('getLoginErrorMessage', () => {
   afterEach(() => {
     void i18n.changeLanguage('en')

@@ -1,23 +1,3 @@
-/**
- * Storage for operator-ENTERED credentials that must stay editable through
- * the settings UI (Discord bot token, Steam session cookies) — as opposed
- * to utils/jwtSecret.js, which is panel-generated and invisible to the
- * operator.
- *
- * Same reason to move out of db.json as the JWT key: both backup paths
- * (database/init.js's rotation ring, backupService.js's opt-in zip) copy
- * db.json by literal filename, not a directory sweep, so a sibling file
- * here is excluded from both.
- *
- * Deliberately NOT the same failure posture as jwt.secret. Losing the JWT
- * key means every session is invalid and the panel refuses to start — that
- * is proportionate because there is no other way back in. Losing one of
- * these means the Discord bot stops responding or a Workshop download
- * needs a fresh cookie pasted in from Settings — recoverable through the
- * UI these secrets already live in, with everything else (RCON, the
- * panel's own auth) unaffected. So an unreadable file here logs a warning
- * and is treated as "not configured," it never refuses to start.
- */
 
 import fs from "fs";
 import path from "path";
@@ -48,10 +28,6 @@ export function readUiSecretFile(name, log) {
   }
 }
 
-// mode is best-effort: on Windows, fs chmod/mode only toggles the
-// read-only attribute, not a real ACL restriction — same documented
-// limitation as dataDir/backupDir in database/init.js and jwt.secret,
-// not a new gap introduced here.
 export function writeUiSecretFile(name, value) {
   const filePath = secretFilePath(name);
   if (value == null || value === "") {
@@ -70,12 +46,6 @@ export function writeUiSecretFile(name, value) {
   }
 }
 
-/**
- * Replace a related set of UI secrets as one filesystem transaction.
- * Every new value is staged and verified before a live file is touched.
- * Existing files remain available as backups until every replacement has
- * been activated and verified; any failure restores the complete old set.
- */
 export function replaceUiSecretFiles(entries) {
   const transactionId = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const files = entries.map(([name, value]) => {
@@ -164,16 +134,6 @@ export function replaceUiSecretFiles(entries) {
   }
 }
 
-/**
- * Read a UI-entered secret, migrating a legacy db.json value the first
- * time this runs on an upgraded install. `legacyValue` is whatever the
- * caller's own getSetting(name) already returned — passed in rather than
- * looked up here so this module has no dependency on database/init.js.
- * `clearLegacy` is only called (and awaited) when a migration actually
- * happens, and a failed migration write falls back to using the legacy
- * value for this run rather than losing it or crashing — same
- * non-critical posture as the rest of this file.
- */
 export async function loadUiSecret(name, { legacyValue, clearLegacy, log } = {}) {
   const fromFile = readUiSecretFile(name, log);
   if (fromFile) return fromFile;

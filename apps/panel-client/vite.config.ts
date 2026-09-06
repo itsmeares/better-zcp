@@ -21,7 +21,6 @@ function resolveBuildSha() {
   }
 }
 
-// https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const basePath = env.VITE_BASE_PATH || '/'
@@ -64,18 +63,12 @@ export default defineConfig(({ mode }) => {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined
 
-            // Heavy charting library - only loaded on Dashboard/Debug
             if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-')) return 'charts'
-            // Real-time socket - loaded on connect
             if (id.includes('socket.io-client') || id.includes('engine.io')) return 'socket'
-            // Radix UI primitives - loaded as components use them
             if (id.includes('@radix-ui')) return 'radix-vendor'
-            // Icons - separate chunk for tree-shaken icon set
             if (id.includes('lucide-react')) return 'icons'
-            // React Router - needed on first load but separate from core React
             if (id.includes('react-router')) return 'router'
 
-            // Core: react, react-dom, clsx, tailwind-merge, cva
             return 'vendor'
           },
         },
@@ -105,9 +98,6 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       globals: true,
       setupFiles: './src/test-setup.ts',
-      // The client suite waits on real browser-like async work. Keep the
-      // timeout aligned with the server suite so busy runners do not fail it
-      // before the assertion can run.
       testTimeout: 60000,
     },
   }

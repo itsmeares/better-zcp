@@ -19,11 +19,6 @@ function clearOidcEnv() {
   _resetOidcConfigCacheForTests();
 }
 
-// Finds a route's handler function directly on the Express Router, the same
-// way the router itself would dispatch to it, without needing to spin up a
-// real HTTP server (this codebase's tests don't use supertest anywhere, and
-// adding it just for these routes would be a second new test-only
-// dependency on top of the ones this OIDC work already needed).
 function getHandler(method, path) {
   const layer = oidcRoutes.stack.find(
     (l) => l.route?.path === path && l.route.methods[method],
@@ -188,11 +183,6 @@ describe('routes/oidc.js: /callback', () => {
     const res = makeRes();
     await getHandler('get', '/callback')(callbackReq(), res);
     expect(res.redirectedTo).toBe('/?oidcError=not_configured');
-    // The title's second claim ("never touches the flow cookie") had no
-    // assertion of its own -- bug hunt 2026-08-31, mechanical sweep for
-    // tests whose own name promises more than their body checks. The
-    // not_configured branch returns before the route's later
-    // res.clearCookie(FLOW_COOKIE_NAME, ...) call, so this must stay empty.
     expect(res.clearedCookies).toHaveLength(0);
   });
 
@@ -212,8 +202,6 @@ describe('routes/oidc.js: /callback', () => {
     await getHandler('get', '/callback')(callbackReq(), res);
 
     expect(res.redirectedTo).toBe('/?oidcError=invalid_token');
-    // authService.loginWithExternalIdentity's first move is db.data.users --
-    // if the token had reached it, getDb() would have been called.
     expect(getDbSpy).not.toHaveBeenCalled();
   });
 
@@ -273,13 +261,6 @@ describe('routes/oidc.js: /callback', () => {
     expect(refreshCookie.options.httpOnly).toBe(true);
     expect(refreshCookie.options.sameSite).toBe('strict');
     expect(refreshCookie.options.path).toBe('/api/auth');
-    // The session must be genuinely usable by the rest of the app: verify
-    // with the SAME secret authService signed it with that the cookie is a
-    // real, validly-signed refresh token for this user, not just that SOME
-    // cookie was set. (authService.verifyAccessToken() deliberately refuses
-    // refresh-typed tokens -- token-type confusion guard -- so this uses
-    // jwt.verify directly, the same way authService.refreshAccessToken()
-    // itself validates a refresh token.)
     const decoded = jwt.verify(refreshCookie.value, authService.jwtSecret);
     expect(decoded.type).toBe('refresh');
     expect(decoded.userId).toBe('user-42');

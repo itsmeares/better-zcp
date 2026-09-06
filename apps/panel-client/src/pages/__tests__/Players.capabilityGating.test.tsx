@@ -5,22 +5,6 @@ import Players from '../Players'
 import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// bug-hunt-2026-08-27: Players.tsx had zero client-side capability gating.
-// Every mutating action reaches one of TWO distinct server gates --
-// players.moderate (kick/ban/whitelist/access-level/notes) and
-// players.gm_tools (teleport/spawn items+vehicles/xp/character import-export,
-// AND godmode/invisible/noclip/heal -- these route through the generic
-// PanelBridge passthrough, POST /panel-bridge/command, gated on
-// players.gm_tools alone there per an operator ruling, bug-hunt-2026-08-27;
-// see apps/panel-server/routes/panelBridge.js's GM_TOOLS_ONLY_ACTIONS). Kill joined
-// the same players.gm_tools gate when wired up killplayer-ui-2026-08-30,
-// but via its own dedicated route (not the passthrough) -- see that
-// card's comment further down.
-// Several actions have more than one render-level trigger (Kick and Ban each
-// have an ActionTile AND a dossier quick-action button; Unban SteamID has
-// THREE: a summary banner, a Banned-tab row button, and an ActionTile) --
-// this test asserts every one of them, not just the first found, per the
-// Scheduler.tsx restart-now lesson.
 
 let mockCan = (_capability: string) => true
 
@@ -162,11 +146,6 @@ async function selectTestPlayer() {
   await waitFor(() => expect(screen.getAllByText('TestPlayer').length).toBeGreaterThan(1), { timeout: 3000 })
 }
 
-// Radix's DropdownMenuTrigger opens on pointerdown, not click (same quirk
-// family as TabsTrigger switching on mousedown) -- a plain fireEvent.click
-// never dispatches pointerdown, so the menu never opens and a query against
-// its content sits at the suite's timeout instead of failing fast. Per
-// Dashboard.capabilityGating.test.tsx's openMoreActionsMenu precedent.
 async function openMoreActionsMenu() {
   const trigger = await screen.findByRole('button', { name: 'More player actions' })
   fireEvent.pointerDown(trigger, { button: 0, pointerId: 1 })
@@ -181,10 +160,6 @@ describe('Players.tsx: capability gating', () => {
     renderPlayers()
     await selectTestPlayer()
 
-    // Moderation tab -- players.moderate. Kick and Ban each have TWO
-    // triggers (ActionTile + dossier quick-action button). The ActionTile's
-    // accessible name is "Kick <description text>" (label + description are
-    // both rendered inside the trigger <button>), so match by prefix.
     const kickButtons = screen.getAllByRole('button', { name: /^Kick\b/ })
     expect(kickButtons).toHaveLength(2)
     kickButtons.forEach(b => expect(b).toBeDisabled())
@@ -199,8 +174,6 @@ describe('Players.tsx: capability gating', () => {
     expect(screen.getByRole('button', { name: 'Add User' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Unban' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Unban SteamID' })).toBeDisabled()
-    // Unban SteamID's second trigger: the summary banner (only rendered
-    // because getSteamIdBans returned one ban).
     expect(screen.getByRole('button', { name: /View \d+ banned SteamIDs/ })).toBeDisabled()
 
     // Teleport is players.gm_tools, not players.moderate -- confirm it is
@@ -226,10 +199,6 @@ describe('Players.tsx: capability gating', () => {
     expect(unban).not.toHaveBeenCalled()
     expect(unbanSteamId).not.toHaveBeenCalled()
 
-    // Banned tab -- third Unban SteamID trigger (per-row button). The
-    // Moderation tab's own "Unban" ActionTile stays mounted in the right
-    // panel throughout (it's a separate Tabs instance from the roster tabs
-    // on the left), so disambiguate by the row button's title.
     fireEvent.click(screen.getByRole('button', { name: /Banned/ }))
     await waitFor(() => expect(screen.getByText('76561198000000002')).toBeInTheDocument(), { timeout: 3000 })
     const bannedRowUnban = screen.getAllByRole('button', { name: 'Unban' }).find(b => b.title?.includes('76561198000000002'))
@@ -237,7 +206,6 @@ describe('Players.tsx: capability gating', () => {
     if (bannedRowUnban) fireEvent.click(bannedRowUnban)
     expect(unbanSteamId).not.toHaveBeenCalled()
 
-    // Whitelist tab -- Add/Remove allowed SteamID, Remove account.
     fireEvent.click(screen.getByRole('button', { name: /Whitelist/ }))
     await waitFor(() => expect(screen.getByPlaceholderText('76561198XXXXXXXXX')).toBeInTheDocument(), { timeout: 3000 })
     fireEvent.change(screen.getByPlaceholderText('76561198XXXXXXXXX'), { target: { value: '76561198000000099' } })
@@ -251,38 +219,17 @@ describe('Players.tsx: capability gating', () => {
     expect(removeAllowedSteamId).not.toHaveBeenCalled()
     expect(removeFromWhitelist).not.toHaveBeenCalled()
 
-    // Spawn tab -- players.gm_tools.
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Spawn' }), { button: 0 })
     await waitFor(() => expect(screen.getByRole('button', { name: /Give XP/ })).toBeInTheDocument(), { timeout: 3000 })
     const giveItemButton = screen.getByText('Give items').closest('button')
     const spawnVehicleButton = screen.getByText('Spawn vehicles').closest('button')
     expect(giveItemButton).toBeDisabled()
     expect(spawnVehicleButton).toBeDisabled()
-    // Give XP is NOT asserted here (bug-hunt-2026-08-27 gating-test audit):
-    // it's also gated on !selectedPerk, and no perk is selected in this
-    // fixture, so .toBeDisabled() would pass regardless of canGmTools --
-    // exactly the fixture-masking shape Angela found on Dashboard's Wipe
-    // button. Confirmed empirically (not assumed) that a real Select pick
-    // can't drive this in jsdom either: fireEvent.pointerDown+click on the
-    // combobox throws inside @radix-ui/react-select itself
-    // (target.hasPointerCapture is not a function, then
-    // candidate?.scrollIntoView is not a function) -- genuine missing jsdom
-    // APIs, not a wrong-event mistake like Tabs/DropdownMenu turned out to
-    // be. A real, confirmed (not just suspected) jsdom limitation for Radix
-    // Select specifically, matching Kevin's original ChunkCleaner
-    // reasoning -- see zzHighRiskDiagnostic's throwaway run for the full
-    // stack. Give XP's canGmTools gate is untested here as a result; the
-    // other three gm_tools triggers on this tab (Teleport, Give Items,
-    // Spawn Vehicle) still are.
     if (giveItemButton) fireEvent.click(giveItemButton)
     if (spawnVehicleButton) fireEvent.click(spawnVehicleButton)
     expect(addItem).not.toHaveBeenCalled()
     expect(addVehicle).not.toHaveBeenCalled()
-    // addXp not asserted here -- Give XP is never clicked in this test
-    // (see the comment above), so it would be a vacuous assertion.
 
-    // Powers tab -- players.gm_tools (see the dedicated split-capability
-    // tests below for the bridge.command-is-irrelevant proof).
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Powers' }), { button: 0 })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Heal' })).toBeInTheDocument(), { timeout: 3000 })
     const enableButtons = screen.getAllByRole('button', { name: 'Enable' })
@@ -294,14 +241,9 @@ describe('Players.tsx: capability gating', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Heal' }))
     fireEvent.click(screen.getByRole('button', { name: 'Kill' }))
     expect(sendCommand).not.toHaveBeenCalled()
-    // A disabled native <button> never fires onClick, so this proves the
-    // click above never even reached the confirm() call that would have
-    // opened the typed-confirmation dialog -- not just that killPlayer
-    // wasn't invoked after some dialog step.
     expect(screen.queryByText('Kill player')).not.toBeInTheDocument()
     expect(killPlayer).not.toHaveBeenCalled()
 
-    // Notes tab -- players.moderate.
     fireEvent.mouseDown(screen.getByRole('tab', { name: /Notes/ }), { button: 0 })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save Note' })).toBeInTheDocument(), { timeout: 3000 })
     expect(screen.getByRole('button', { name: 'Save Note' })).toBeDisabled()
@@ -311,8 +253,6 @@ describe('Players.tsx: capability gating', () => {
     expect(saveNote).not.toHaveBeenCalled()
     expect(deleteNote).not.toHaveBeenCalled()
 
-    // Teleport -- players.gm_tools, confirmed disabled here too since this
-    // role holds neither gm_tools nor moderate.
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Moderation' }), { button: 0 })
     await waitFor(() => expect(screen.getByRole('button', { name: /^Teleport\b/ })).toBeInTheDocument(), { timeout: 3000 })
     expect(screen.getByRole('button', { name: /^Teleport\b/ })).toBeDisabled()
@@ -320,30 +260,12 @@ describe('Players.tsx: capability gating', () => {
     expect(teleport).not.toHaveBeenCalled()
   })
 
-  // bug-hunt-2026-08-31: a71c947a added `!canModerate` to the wrapping
-  // <button disabled={...}> for Kick/Ban/Access Level (correctly blocking
-  // the click, confirmed by the toBeDisabled() assertions above) but never
-  // extended ActionTile's OWN `disabled` prop to match -- ActionTile is a
-  // plain <div>, not a real form control, so its "looks disabled" signal is
-  // entirely the manually-threaded `disabled` prop driving one Tailwind
-  // class (`opacity-50`); DisabledReason (components/DisabledReason.tsx)
-  // adds only a hover tooltip and cursor-not-allowed, no dimming of its own,
-  // and nothing in the CSS resets a bare <button> to any dimmed appearance.
-  // Net effect before this fix: an operator who holds no players.moderate
-  // capability but HAS a player selected saw these three tiles at full
-  // opacity -- indistinguishable from enabled -- while the click was
-  // silently swallowed. This test targets the visual class directly, since
-  // toBeDisabled() above only proves the click gate, not the appearance.
   it('dims Kick/Ban/Access Level ActionTiles (not just blocks the click) when a player is selected but the role lacks players.moderate', async () => {
     mockCan = () => false
     await setUpFixtures()
     renderPlayers()
     await selectTestPlayer()
 
-    // index [0] of each pair is the dossier header's quick-action <Button>
-    // (a real shadcn Button, which dims itself natively via its own
-    // disabled: variant) -- index [1] is the ActionTile trigger this fix
-    // targets, the one with no native disabled styling of its own.
     const kickTile = screen.getAllByRole('button', { name: /^Kick\b/ })[1].firstElementChild
     const banTile = screen.getAllByRole('button', { name: /^Ban\b/ })[1].firstElementChild
     const accessLevelTile = screen.getByRole('button', { name: /^Access Level\b/ }).firstElementChild
@@ -375,27 +297,6 @@ describe('Players.tsx: capability gating', () => {
     expect(screen.getByRole('button', { name: 'Kill' })).not.toBeDisabled()
   })
 
-  // bug-hunt-2026-08-27, operator ruling (supersedes server commit c3083d5
-  // from earlier the same day): setGodMode/setInvisible/setNoclip/healPlayer
-  // are gated on players.gm_tools ALONE again, not "gm_tools AND
-  // bridge.command". c3083d5's combined requirement was itself a fix for a
-  // real problem (these four were reachable on bridge.command alone, no
-  // gm_tools check at all, since commit 8bd0edc) -- but the operator ruled
-  // requiring BOTH was never the intended fix: bridge.command was only ever
-  // an accidental side effect of these four routing through the generic
-  // passthrough, and requiring it denies Technician (who holds gm_tools but
-  // not bridge.command by default) the GM tools it's meant to have. This
-  // test pair now proves the opposite direction from before: gm_tools alone
-  // must be SUFFICIENT (not just necessary, which the deny-all test above
-  // already covers), and bridge.command alone must remain insufficient
-  // (gm_tools is still the real gate, not dropped entirely).
-  //
-  // killPlayer-ui-2026-08-30: Kill joined this same players.gm_tools gate
-  // when it was wired up (see apps/panel-server/routes/panelBridge.js's POST
-  // /players/:username/kill, requirePermission("players.gm_tools") --
-  // the same capability the four above are checked against, not a new
-  // one). Asserted alongside the original four in both tests below rather
-  // than in a separate pair, since it is the same gate, not a new one.
   it('bridge.command alone is not sufficient for the GM-tools four -- players.gm_tools is still required', async () => {
     mockCan = (capability) => capability === 'bridge.command'
     await setUpFixtures()
@@ -430,22 +331,11 @@ describe('Players.tsx: capability gating', () => {
     expect(screen.getByRole('button', { name: 'Heal' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: 'Kill' })).not.toBeDisabled()
 
-    // Teleport still reachable too -- confirms gm_tools wasn't accidentally
-    // narrowed anywhere else on the page by this change.
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Moderation' }), { button: 0 })
     await waitFor(() => expect(screen.getByRole('button', { name: /^Teleport\b/ })).toBeInTheDocument(), { timeout: 3000 })
     expect(screen.getByRole('button', { name: /^Teleport\b/ })).not.toBeDisabled()
   })
 
-  // bug-hunt-2026-08-27: Radix's DropdownMenuItem composes the caller's
-  // onClick with its own select handler and runs it UNCONDITIONALLY --
-  // the internal disabled check only guards Radix's own side effect, never
-  // the onClick prop. All six capability-gated items in the dossier "..."
-  // menu now carry an explicit `if (!canX) return` as the first line of
-  // their onClick body. This closes the residual gap from the earlier
-  // report: the menu opens correctly with fireEvent.pointerDown (Radix
-  // opens DropdownMenuTrigger on pointerdown, not click), so this exercises
-  // the guard THROUGH THE UI, not just as a direct function assertion.
   it('the dossier "..." menu\'s six gated items never call their API when clicked, even though Radix runs onClick regardless of disabled', async () => {
     mockCan = () => false
     await setUpFixtures()

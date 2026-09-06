@@ -6,15 +6,6 @@ import { SocketContext } from '@/contexts/SocketContext'
 import WorldMap from '../WorldMap'
 import { panelBridgeApi, serversApi, updateApi, mapApi, type ServerInstance } from '@/lib/api'
 
-// 2026-08-30 panelbridge-audit follow-up: MapPlayer/RawBridgePlayer already
-// typed and threaded hunger/thirst/fatigue through WorldMap's state, and
-// getServerInfo now actually sends them (fixed alongside this in
-// PanelBridge.lua's handlers.getServerInfo), but nothing ever rendered
-// them -- the dossier card jumped straight from the HP bar to the role
-// line. Proves the values that make it across the wire are now visible in
-// the dossier, and that a player the bridge sends no stats for (older
-// bridge, or a player whose Stats object couldn't be read) doesn't show
-// broken/placeholder bars for them.
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({

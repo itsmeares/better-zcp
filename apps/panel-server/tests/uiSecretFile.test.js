@@ -3,9 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Same "declare before vi.mock, mutate in beforeEach" pattern as
-// jwtSecret.test.js — the factory doesn't run until first import, by which
-// point tmpDir already has a value.
 let tmpDir;
 
 vi.mock("../utils/paths.js", () => ({
@@ -102,7 +99,7 @@ describe("loadUiSecret — migration from a legacy db.json value", () => {
 
   it("a migration-write failure (directory at the path) falls back to the legacy value for this run instead of crashing or losing it", async () => {
     const filePath = path.join(tmpDir, "discordBotToken.secret");
-    fs.mkdirSync(filePath); // writeFileSync to this path throws EISDIR
+    fs.mkdirSync(filePath);
     const clearLegacy = vi.fn();
     const log = { warn: vi.fn() };
     const result = await loadUiSecret("discordBotToken", {
@@ -111,7 +108,7 @@ describe("loadUiSecret — migration from a legacy db.json value", () => {
       log,
     });
     expect(result).toBe("legacy-value");
-    expect(clearLegacy).not.toHaveBeenCalled(); // never cleared what wasn't safely moved
+    expect(clearLegacy).not.toHaveBeenCalled();
     expect(log.warn).toHaveBeenCalled();
   });
 });

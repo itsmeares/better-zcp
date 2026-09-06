@@ -47,7 +47,6 @@ describe('ConnectionStatus', () => {
   it('does not show the reverse-proxy hint on an early reconnect attempt -- a single retry is normal network noise', async () => {
     renderWithStatus(reconnectingEarly, { showLabel: true })
     fireEvent.focus(screen.getByText(en.reconnecting.label).closest('div')!)
-    // Give the tooltip a beat to render, then confirm the hint text never appears.
     await new Promise((r) => setTimeout(r, 0))
     expect(screen.queryByText(en.reconnecting.hint)).not.toBeInTheDocument()
   })
@@ -85,11 +84,6 @@ describe('ConnectionStatus', () => {
     expect(screen.getByText(en.disconnected.label, { selector: '.sr-only' })).toBeInTheDocument()
   })
 
-  // The manual retry affordance: the case where neither of App.tsx's
-  // visibilitychange/online recovery triggers can ever fire -- the tab was
-  // visible and the network never dropped, the server was simply down the
-  // whole time -- so this button is the operator's only path back short of
-  // a full page refresh.
   it('shows a Retry button in the terminal disconnected state, and clicking it calls socket.connect()', async () => {
     const connect = vi.fn()
     renderWithStatus(disconnected, { showLabel: true }, { connect })

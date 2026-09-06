@@ -3,9 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31 bug hunt: clearing the PROVISIONAL climate/weather block.
-// setSnow/startRain/stopRain are exactly what the operator's live snow and
-// rain toggles call.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LUA_PATH = path.join(
@@ -20,12 +17,6 @@ const LUA_PATH = path.join(
   'PanelBridge.lua',
 );
 
-// setSnow reads climate:isRaining() first (to decide whether to also start
-// rain), then drives the snow bool via admin override + the direct
-// setPrecipitationIsSnow setter, then verifies via getPrecipitationIsSnow().
-// setPrecipitationIsSnow is confirmed (javap -c) to write ClimateBool's
-// finalValue DIRECTLY, bypassing calculate() -- unlike a plain admin-only
-// write, this one IS safe to read back immediately.
 function snowStub({ startingIsRaining = true, sticks = true } = {}) {
   return `
 FakeSnowBool = { enabledAdmin = false, adminValue = false }
@@ -83,10 +74,6 @@ describe('PanelBridge.lua handlers.setSnow -- verify-gates via getPrecipitationI
   });
 });
 
-// startRain/stopRain go through transmitServerStartRain/StopRain, which
-// (confirmed via javap -c) call the private updateOnTick() internally
-// before returning -- so getPrecipitationIntensity()/isRaining() ARE safe
-// to read back immediately here, unlike the plain admin-override floats.
 function rainStub({ startSticks = true, stopSticks = true } = {}) {
   return `
 FakeClimate = {
@@ -157,11 +144,6 @@ getClimateManager = function() return FakeClimate end
   });
 });
 
-// resetClimateOverrides: resetAdmin() (confirmed via javap -c) is a genuinely
-// unconditional loop -- setEnableAdmin(false) on every float/bool/color,
-// no failure path once `climate` itself is valid. Verifies via
-// isEnableAdmin() (a trivial, immediate field read, no calculate()
-// staleness -- unlike getFinalValue()) across the known floats + snow bool.
 function resetStub({ resetAdminAvailable = true, floatsStayOverridden = 0, snowStaysOverridden = false } = {}) {
   const floats = [];
   for (let id = 0; id <= 12; id++) {

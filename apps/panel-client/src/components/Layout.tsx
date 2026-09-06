@@ -56,10 +56,6 @@ import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp'
 import { preloadRouteModule } from '@/lib/routePreload'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
-// Standalone top-level nav item (not collapsible). `labelKey` resolves
-// against the `shell` namespace; kept separate from `label` (English,
-// used for tooltip fallbacks/aria where a plain string is simpler to thread
-// through) so translation is additive rather than replacing the data shape.
 const dashboardItem = { to: '/', icon: Gauge, label: 'Dashboard', labelKey: 'nav.dashboard' }
 
 interface NavItem {
@@ -68,7 +64,6 @@ interface NavItem {
   label: string
   labelKey: string
   requiresLocal?: boolean
-  // Still reachable on a remote server once its Server folder is mirrored over SFTP.
   allowRemoteConfigMirror?: boolean
   disabled?: boolean
   badge?: string
@@ -81,16 +76,9 @@ interface NavSection {
   icon: typeof LayoutDashboard
   color: string
   items: NavItem[]
-  // Every item in this section is about operating a game server that
-  // already exists (live status, config, scheduled maintenance, ...), so
-  // with zero servers configured there is nothing there to show. Sections
-  // that help you GET a server (Servers) or that are panel-level facts
-  // independent of any server (Access Control, Settings & Tools) do not
-  // set this and stay reachable at zero servers.
   requiresServer?: boolean
 }
 
-// Navigation sections with collapsible groups
 const navSections: NavSection[] = [
   {
     id: 'active',
@@ -155,9 +143,6 @@ const navSections: NavSection[] = [
       { to: '/server-finder', icon: Search, label: 'Browse Public', labelKey: 'nav.items.browsePublic' },
     ]
   },
-  // Access Control (Users, Roles & Permissions, Sign-in) is entirely gone
-  // from the left nav now -- all three moved into Settings as tabs. See
-  // Settings.tsx's "users"/"roles"/"sso" tab sections.
   {
     id: 'system',
     label: 'Settings & Tools',
@@ -238,7 +223,6 @@ const sectionToneStyles = {
   },
 } as const
 
-// Auth footer — shows logged-in user and logout button
 function AuthFooter() {
   const { t } = useTranslation('shell')
   const { user, authEnabled, logout } = useAuth()
@@ -261,16 +245,6 @@ function AuthFooter() {
   )
 }
 
-// Tap-to-open touch fix for a disabled nav row's reason tooltip --
-// impeccable-critique-2026-08-31: Radix's TooltipTrigger closes on its own
-// click handler by default (built for hover, where a click is a dismiss
-// gesture), which is useless for touch: there's no hover to open it in the
-// first place. HelpTip.tsx already solved this exact problem (see its own
-// comment) with a controlled `open` state + preventDefault() on click to
-// block Radix's built-in close so the same tap opens it instead. A disabled
-// nav row has no navigation for a tap to conflict with, so the same fix is
-// free here -- unlike the enabled NavLink row below it, whose tap must keep
-// navigating and is deliberately NOT wrapped in this.
 function DisabledNavTooltip({ side = 'right', reason, children }: {
   side?: 'top' | 'right' | 'bottom' | 'left'
   reason: React.ReactNode
@@ -338,22 +312,14 @@ export default function Layout({ children }: LayoutProps) {
     !!activeServer?.isRemote &&
     !(item.allowRemoteConfigMirror && activeServer.remoteConfigConfigured)
   const provider = resolveClientProvider(activeServer)
-  // null = we don't yet know (still loading, or the last fetch failed) — distinct
-  // from [] (fetch succeeded and confirmed there really are zero servers). Collapsing
-  // those into one empty array made a slow/failed fetch render the same "no server
-  // yet" claim as a genuinely empty roster, on every load and permanently on failure.
   const [servers, setServers] = useState<ServerInstance[] | null>(null)
   const serversConfirmedEmpty = servers !== null && servers.length === 0
   const isBlockedByNoServer = (section: NavSection) => !!section.requiresServer && serversConfirmedEmpty
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  // Not a Radix primitive, so it gets none of Radix's automatic focus
-  // trap/restore -- handled manually below.
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
   const mobileMenuAsideRef = useRef<HTMLElement>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === 'true')
   const [updateInfo, setUpdateInfo] = useState<UpdateStatus | null>(null)
-  // Persist dismissal across reloads, but key it by build IDs so a NEW update
-  // re-shows the banner. Was sessionStorage which got cleared on browser restart.
   const [updateDismissed, setUpdateDismissed] = useState(false)
   const [playerCount, setPlayerCount] = useState<number>(0)
   const [serverRunState, setServerRunState] = useState<'unknown' | 'running' | 'stopped' | 'transitioning'>('unknown')
@@ -364,7 +330,6 @@ export default function Layout({ children }: LayoutProps) {
   const { toast } = useToast()
   const { helpOpen, setHelpOpen, shortcuts } = useKeyboardShortcuts()
 
-  // Fetch panel version
   useEffect(() => {
     let cancelled = false
     fetch('/api/health')
@@ -374,7 +339,6 @@ export default function Layout({ children }: LayoutProps) {
     return () => { cancelled = true }
   }, [])
 
-  // Listen for player updates globally
   useEffect(() => {
     if (!socket) return
 
@@ -388,16 +352,6 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [socket])
 
-  // Surface the REAL outcome of a manual restart or "Run now" task, from
-  // wherever the user happens to be -- not just on the Scheduler page.
-  // POST /restart-now and /tasks/:id/run only ever confirmed the action was
-  // ACCEPTED (both run in the background and used to report success:true
-  // unconditionally); this is the one place the actual result reaches the
-  // client at all instead of only being discoverable by someone who thinks
-  // to go check Schedule History (2026-08-26 bug hunt, scheduler
-  // blind-success family). Global, not page-scoped, because a restart's
-  // countdown + graceful shutdown can run long enough that the user has
-  // already navigated elsewhere by the time it resolves.
   useEffect(() => {
     if (!socket) return
     const onActionResult = (data?: { kind?: 'restart' | 'task'; taskName?: string; success?: boolean; message?: string }) => {
@@ -422,7 +376,6 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const playerCountLabel = playerCount > 99 ? '99+' : String(playerCount)
 
-  // Toggle sidebar collapse
   const toggleSidebar = () => {
     setSidebarCollapsed(prev => {
       const next = !prev
@@ -431,21 +384,6 @@ export default function Layout({ children }: LayoutProps) {
     })
   }
 
-  // Track server run state for the status dot on the Active Server card.
-  //
-  // GH#114: status.running (from serverApi.getStatus(), and the raw payload
-  // pushed on the 'server:status' socket event) is a LOCAL process scan --
-  // it can only ever see a process on/in this host/container. That's a
-  // trustworthy, freshest signal for a native server, but a docker-managed
-  // server's PZ process runs in a *different* container the scan can't see
-  // at all, and a remote-sftp server isn't on this host to begin with. This
-  // dot used to trust the raw scan unconditionally for every provider (not
-  // even gated on isRemote, unlike the Dashboard's equivalent bug) -- a
-  // Docker container correctly shown running by the Docker panel could
-  // still read "stopped" here, in the sidebar, on every single page.
-  // Non-native providers now read the provider-aware composed status
-  // instead (apps/panel-server/utils/serverStatusModel.js's 3-signal model), the same
-  // source Dashboard.tsx and Servers.tsx's active-server card already use.
   const refreshServerRunState = useCallback(async () => {
     if (provider === 'native') {
       try {
@@ -470,23 +408,12 @@ export default function Layout({ children }: LayoutProps) {
   }, [provider])
 
   useEffect(() => {
-    // Depends on activeServer?.id (not just refreshServerRunState) so
-    // switching between two servers with the SAME provider -- native to
-    // native, say -- still refetches; provider alone wouldn't change in
-    // that case. No stale-response guard: a slower in-flight request
-    // landing after a newer one could briefly overwrite it with an older
-    // value, the same tolerance the previous version of this effect had.
-    // Acceptable for a sidebar dot that self-corrects on the next
-    // poll/socket event.
     void refreshServerRunState()
   }, [activeServer?.id, refreshServerRunState])
 
   useEffect(() => {
     if (!socket) return
     const onStatus = (data?: { running?: boolean; isRunning?: boolean }) => {
-      // Fast path: for a native server, a pushed boolean is as trustworthy
-      // as a fresh fetch and avoids a round trip. Everything else needs the
-      // composed status to know what the push actually means.
       if (provider === 'native') {
         const running = typeof data?.running === 'boolean' ? data.running : data?.isRunning
         if (typeof running === 'boolean') { setServerRunState(running ? 'running' : 'stopped'); return }
@@ -497,7 +424,6 @@ export default function Layout({ children }: LayoutProps) {
     return () => { socket.off('server:status', onStatus) }
   }, [socket, provider, refreshServerRunState])
 
-  // Track mod updates available count for Mod Manager nav badge
   useEffect(() => {
     let cancelled = false
     const refreshModStatus = async () => {
@@ -521,7 +447,6 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [socket, activeServer?.id])
 
-  // Track panel self-update availability (separate from PZ server update)
   useEffect(() => {
     let cancelled = false
     panelUpdateApi.getStatus()
@@ -534,15 +459,10 @@ export default function Layout({ children }: LayoutProps) {
     return () => { cancelled = true }
   }, [])
 
-  // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [location.pathname])
 
-  // Close mobile menu with Escape for keyboard users, restoring focus to
-  // the trigger button -- an explicit dismissal, unlike the route-change
-  // effect above (there, focus should follow the navigation, not jump
-  // backwards to a button on the page the user just left).
   useEffect(() => {
     if (!mobileMenuOpen) return
 
@@ -557,10 +477,6 @@ export default function Layout({ children }: LayoutProps) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [mobileMenuOpen])
 
-  // Move focus into the drawer when it opens -- this is a hand-rolled
-  // overlay (not a Radix Dialog), so it gets none of Radix's automatic
-  // focus trap. Without this, opening the menu leaves keyboard focus on
-  // the trigger button, behind the now-open drawer.
   useEffect(() => {
     if (!mobileMenuOpen) return
     const firstFocusable = mobileMenuAsideRef.current?.querySelector<HTMLElement>(
@@ -569,7 +485,6 @@ export default function Layout({ children }: LayoutProps) {
     firstFocusable?.focus()
   }, [mobileMenuOpen])
 
-  // Prevent background scroll while mobile menu is open
   useEffect(() => {
     const { body } = document
     const previousOverflow = body.style.overflow
@@ -582,7 +497,6 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [mobileMenuOpen])
 
-  // Fetch servers and active server
   useEffect(() => {
     const fetchServers = async () => {
       try {
@@ -601,7 +515,6 @@ export default function Layout({ children }: LayoutProps) {
     fetchServers()
   }, [toast, t])
 
-  // Listen for server changes
   useEffect(() => {
     if (!socket) return
 
@@ -626,13 +539,11 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [socket, toast, t])
 
-  // Listen for update notifications
   useEffect(() => {
     if (!socket) return
 
     const handleUpdateAvailable = (data: UpdateStatus) => {
       setUpdateInfo(data)
-      // Show banner again when a different update is detected
       const dismissedKey = data?.installed && data?.latest
         ? `updateBannerDismissed:${data.installed.buildId}->${data.latest.buildId}`
         : null
@@ -650,7 +561,6 @@ export default function Layout({ children }: LayoutProps) {
     socket.on('server:updateAvailable', handleUpdateAvailable)
     socket.on('server:updateCheck', handleUpdateCheck)
 
-    // Check for updates on mount
     updateApi.getStatus().then(status => {
       if (status.updateAvailable?.updateAvailable) {
         setUpdateInfo(status.updateAvailable)
@@ -680,7 +590,6 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="flex h-screen bg-background">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm">{t('skipToContent')}</a>
-      {/* Mobile Header */}
       <div className="fixed top-0 inset-x-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85 lg:hidden">
         <div className="flex items-center justify-between p-3">
           <PanelBrand compact />
@@ -697,7 +606,6 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </div>
 
-      {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div
           className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[1px] lg:hidden"
@@ -706,7 +614,6 @@ export default function Layout({ children }: LayoutProps) {
         />
       )}
 
-      {/* Sidebar - Desktop always visible, Mobile as slide-out */}
       <aside
         ref={mobileMenuAsideRef}
         aria-label={t('nav.sidebarAriaLabel')}
@@ -716,14 +623,11 @@ export default function Layout({ children }: LayoutProps) {
         "w-72",
         "lg:translate-x-0",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
-        "pt-16 lg:pt-0" // Add padding for mobile header
+        "pt-16 lg:pt-0"
       )}>
       <TooltipProvider delayDuration={150}>
-        {/* Brand strip — tactical broadcast header */}
         <div className={cn("brand-strip relative overflow-hidden sidebar-header border-b border-border/50")}>
-          {/* Top broadcast accent — thin ember rule */}
           <div className="brand-strip__rule" aria-hidden />
-          {/* Corner stencil */}
           <div className="brand-strip__corner" aria-hidden />
 
           <div className={cn("relative flex items-center", sidebarCollapsed ? "justify-center p-2" : "gap-2.5 px-3 py-2.5")}>
@@ -757,13 +661,6 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </div>
 
-        {/* No-server notice — the active-server strip below only renders once
-            a server exists, so without this a brand-new install shows nothing
-            between the header and a sidebar full of inert-looking nav items.
-            Visible without hovering, unlike the per-item tooltip/aria-label
-            (which stay in place for screen readers — this is additive, not a
-            replacement). Reuses SystemHealthBanner's warning-strip language
-            (border-warning/35, AlertCircle) rather than a new color. */}
         {serversConfirmedEmpty && !sidebarCollapsed && (
           <div className="border-b border-border/40 bg-warning/[0.04] px-3 py-2.5 shadow-[inset_2px_0_0_hsl(var(--warning))]">
             <div className="flex items-start gap-2">
@@ -787,7 +684,6 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         )}
 
-        {/* Active server strip — tactical status bar */}
         {servers && servers.length > 0 && !sidebarCollapsed && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -799,7 +695,6 @@ export default function Layout({ children }: LayoutProps) {
                   `active-server-strip--${serverRunState}`
                 )}
               >
-                {/* Start-edge accent — pulses on running, dim on stopped */}
                 <span className="active-server-strip__edge" aria-hidden />
 
                 <div className="flex items-center gap-1.5 text-[9.5px] font-medium uppercase leading-none tracking-[0.26em] text-muted-foreground/70">
@@ -877,9 +772,7 @@ export default function Layout({ children }: LayoutProps) {
           </DropdownMenu>
         )}
 
-        {/* Navigation — flat, scannable */}
         <nav aria-label={t('nav.ariaLabel')} className="flex-1 overflow-y-auto nav-scroll px-2 py-2">
-          {/* Dashboard — always pinned at top */}
           <Tooltip>
             <TooltipTrigger asChild>
               <NavLink
@@ -906,7 +799,6 @@ export default function Layout({ children }: LayoutProps) {
             {sidebarCollapsed && <TooltipContent side="right">{t(dashboardItem.labelKey)}</TooltipContent>}
           </Tooltip>
 
-          {/* Sections */}
           {navSections.map((section, sectionIdx) => {
             const tone = sectionToneStyles[section.color as keyof typeof sectionToneStyles] || sectionToneStyles.slate
             const sectionHasSignal =
@@ -914,7 +806,6 @@ export default function Layout({ children }: LayoutProps) {
               (section.id === 'active' && playerCount > 0) ||
               (section.id === 'system' && !!panelUpdateAvailable)
 
-            // Collapsed (icon rail) mode — separators between sections
             if (sidebarCollapsed) {
               return (
                 <div key={section.id} className={cn('space-y-0.5', sectionIdx === 0 ? 'mt-2 pt-2 border-t border-border/40' : 'mt-2 pt-2 border-t border-border/40')}>
@@ -971,10 +862,8 @@ export default function Layout({ children }: LayoutProps) {
               )
             }
 
-            // Expanded — flat list with lane label
             return (
               <div key={section.id} className="mt-3 first:mt-3">
-                {/* Lane label */}
                 <div className="mb-1 flex items-center gap-2 px-2">
                   <span className={cn('h-px w-3 rounded-full', tone.childDot)} aria-hidden />
                   <span className={cn('text-[10px] font-semibold uppercase leading-none tracking-[0.18em]', tone.labelActive)}>
@@ -1113,7 +1002,6 @@ export default function Layout({ children }: LayoutProps) {
           })}
         </nav>
 
-        {/* Footer */}
         <div className={cn('border-t border-border/30', sidebarCollapsed ? 'p-2 space-y-1.5' : 'px-3 py-2 space-y-1')}>
           {!sidebarCollapsed ? (
             <>
@@ -1167,7 +1055,6 @@ export default function Layout({ children }: LayoutProps) {
               <LanguageSwitcher />
             </div>
           )}
-          {/* Collapse toggle */}
           <div className="hidden lg:block">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1189,11 +1076,9 @@ export default function Layout({ children }: LayoutProps) {
       </TooltipProvider>
       </aside>
 
-      {/* Main Content */}
       <main id="main-content" className="flex-1 overflow-auto pt-16 lg:pt-0">
         <div className="p-4 lg:p-8 max-w-7xl mx-auto">
           <SystemHealthBanner />
-          {/* Server Update Banner — cockpit-style: vertical accent, mono micro-label, tabular build delta */}
           {updateInfo && updateInfo.updateAvailable && !updateDismissed && (
             <div
               role="status"

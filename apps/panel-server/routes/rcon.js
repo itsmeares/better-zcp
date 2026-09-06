@@ -21,28 +21,6 @@ import { ErrorCode } from '../utils/errorCodes.js';
 
 const router = express.Router();
 
-// Mixed, not file-wide: /execute runs an ARBITRARY raw RCON command with no
-// structural validation beyond a length cap — meaningfully more powerful
-// than the specific, validated actions in players.js (kick/ban/etc.), and
-// includes things like `quit` that can shut the server down. That, plus
-// connection lifecycle (/connect, /disconnect, /test — reconfigures which
-// RCON endpoint the panel talks to), are admin+technician only, NOT
-// moderator: a moderator doing player moderation should use players.js's
-// structured endpoints, not an open console. Read-only status/reference
-// routes below (/status, /health, /commands, /commands/:category) stay open
-// to every logged-in role deliberately — nothing sensitive is returned and
-// a moderator plausibly wants to see RCON status or the command reference.
-//
-// /history is NOT in that group, despite looking like one more read-only
-// reference route: it returns the verbatim command_history log, and
-// logCommand() (database/init.js) stores the exact command STRING that was
-// sent, unredacted -- including, e.g., `adduser "player" "password"` from
-// the whitelist-add flow (a real PZ join password) or anything typed into
-// this file's own /execute console. Leaving it ungated meant any logged-in
-// role -- a moderator included, who never holds rcon.execute -- could read
-// every admin/technician's past RCON console session and every whitelist
-// password ever set, through an endpoint whose neighbors really are
-// harmless. Gated the same as /execute/connect/disconnect/test.
 
 function validateTestInput(host, port, password) {
   if (typeof host !== 'string' || host.length > 255 || !/^[a-zA-Z0-9.-]+$/.test(host)) {
@@ -58,30 +36,22 @@ function validateTestInput(host, port, password) {
   return null;
 }
 
-// Execute raw RCON command
 router.post('/execute', requirePermission('rcon.execute'), async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const command = req.body?.command;
-    // Redact BEFORE truncating: the redaction regex needs the password
-    // argument's closing quote to match (rconCommandRedaction.js), which a
-    // 100-char cut partway through the password would strip, leaving a
-    // partial cleartext fragment logged instead of a redacted one.
     log.info(`POST /execute: ${typeof command === 'string' ? redactRconCommandSecrets(command).substring(0, 100) : ''}`);
 
     if (!command) {
       return res.status(400).json({ error: 'Command is required', code: ErrorCode.RCON_COMMAND_REQUIRED });
     }
 
-    // Validate command type and length
     if (typeof command !== 'string' || command.length > 2000) {
       return res.status(400).json({ error: 'Invalid command (max 2000 characters)', code: ErrorCode.RCON_COMMAND_INVALID });
     }
-    
+
     const result = await rconService.execute(command);
 
-    // Broadcast only redacted values. This room is gated by rcon.execute,
-    // while the broader logs room requires diagnostics.manage.
     const io = req.app.get('io');
     if (io) io.to('rcon-live').emit('rcon:response', {
       command: redactRconCommandSecrets(command),
@@ -89,7 +59,7 @@ router.post('/execute', requirePermission('rcon.execute'), async (req, res) => {
       success: result.success,
       timestamp: new Date().toISOString()
     });
-    
+
     res.json(result);
   } catch (error) {
     log.error(`RCON execute failed: ${error.message}`);
@@ -97,7 +67,6 @@ router.post('/execute', requirePermission('rcon.execute'), async (req, res) => {
   }
 });
 
-// Get RCON connection status
 router.get('/status', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
@@ -108,7 +77,6 @@ router.get('/status', async (req, res) => {
   }
 });
 
-// Connect to RCON
 router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
   try {
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
@@ -117,15 +85,13 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
     const rconService = req.app.get('rconService');
     const { host, port, password } = req.body;
     log.info(`POST /connect (host=${host || 'default'}, port=${port || 'default'}, password=${password ? '***' : 'none'})`);
-    
-    // Validate host format if provided (only alphanumeric, dots, hyphens)
+
     if (host !== undefined) {
       if (typeof host !== 'string' || host.length > 255 || !/^[a-zA-Z0-9.-]+$/.test(host)) {
         return res.status(400).json({ success: false, error: 'Invalid host format', code: ErrorCode.RCON_INVALID_HOST });
       }
     }
 
-    // Validate port if provided
     let normalizedPort;
     if (port !== undefined) {
       normalizedPort = parseBoundedInteger(port, null, 1, 65535);
@@ -134,13 +100,12 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
       }
     }
 
-    // Validate password if provided
     if (password !== undefined) {
       if (typeof password !== 'string' || password.length > 256) {
         return res.status(400).json({ success: false, error: 'Invalid password format', code: ErrorCode.RCON_INVALID_PASSWORD });
       }
     }
-    
+
     if (host !== undefined || port !== undefined || password !== undefined) {
       rconService.updateConfig(host, normalizedPort, password);
     }
@@ -149,11 +114,6 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
     try {
       connected = await rconService.connect();
     } catch {
-      // rconService.connect() throws for some failures (e.g. authenticate()
-      // rejecting) and resolves false for others (e.g. the port never opened)
-      // -- both just mean "did not connect" here. Which one it was gets
-      // reclassified by the reachability probe below, the same way /test
-      // classifies it, rather than by sniffing this error's message.
       connected = false;
     }
 
@@ -161,11 +121,6 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
       return res.json({ success: true, message: 'Connected to RCON' });
     }
 
-    // Reused from /api/rcon/test (below): same probe, same two canonical
-    // detail strings, so the dashboard's reconnect action -- the path a
-    // user hits FIRST -- tells "never reachable" apart from "reachable, but
-    // the password is wrong" exactly as well as the Servers page already
-    // does, instead of the one generic message this used to return for both.
     const { host: configuredHost, port: configuredPort } = rconService.getConfig();
     const reachable = await checkTcpReachable(configuredHost, configuredPort, RCON_USER_ACTION_TIMEOUT_MS);
     if (!reachable) {
@@ -188,14 +143,9 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
   }
 });
 
-// Test arbitrary RCON credentials without applying them. The endpoint opens
-// a TCP connection to a caller-supplied host, so it requires both the ability
-// to execute RCON commands and the ability to manage server entries.
 router.post('/test', requirePermission('rcon.execute'), requirePermission('servers.manage'), async (req, res) => {
   try {
     const { host, port, password } = req.body || {};
-    // Log only host and port. Keep the shared redaction helper as defense in
-    // depth if this message shape changes later.
     log.info(redactRconCommandSecrets(`POST /test (host=${host || 'none'}, port=${port || 'none'})`));
 
     const validationError = validateTestInput(host, port, password);
@@ -215,7 +165,6 @@ router.post('/test', requirePermission('rcon.execute'), requirePermission('serve
   }
 });
 
-// Health check - test if connection is actually alive
 router.get('/health', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
@@ -230,7 +179,6 @@ router.get('/health', async (req, res) => {
   }
 });
 
-// Disconnect from RCON
 router.post('/disconnect', requirePermission('rcon.execute'), async (req, res) => {
   try {
     log.info('POST /disconnect');
@@ -242,7 +190,6 @@ router.post('/disconnect', requirePermission('rcon.execute'), async (req, res) =
   }
 });
 
-// Get command history
 router.get('/history', requirePermission('rcon.execute'), async (req, res) => {
   try {
     const limit = parseClampedInteger(req.query.limit, 100, 1, 1000);
@@ -254,12 +201,10 @@ router.get('/history', requirePermission('rcon.execute'), async (req, res) => {
   }
 });
 
-// Get available commands
 router.get('/commands', (req, res) => {
   res.json({ commands: PZ_COMMANDS });
 });
 
-// Get commands by category
 router.get('/commands/:category', (req, res) => {
   const { category } = req.params;
   const filtered = Object.entries(PZ_COMMANDS)
@@ -268,7 +213,7 @@ router.get('/commands/:category', (req, res) => {
       acc[key] = cmd;
       return acc;
     }, {});
-  
+
   res.json({ commands: filtered });
 });
 

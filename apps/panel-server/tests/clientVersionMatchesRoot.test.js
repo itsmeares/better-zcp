@@ -8,13 +8,6 @@ const ROOT_PACKAGE_JSON = path.join(__dirname, "..", "..", "..", "package.json")
 const CLIENT_PACKAGE_JSON = path.join(__dirname, "..", "..", "..", "apps", "panel-client", "package.json");
 const WORKSPACE_LOCKFILE = path.join(__dirname, "..", "..", "..", "pnpm-lock.yaml");
 
-// apps/panel-client/package.json sat at 1.2.2 for four releases while root advanced to
-// 1.2.6, because nothing ever compared them -- the release process only bumped
-// root. Kept deliberately dumb: parse, compare, done. A test that needs to
-// be clever to pass is a test that can fail to catch the thing it's for.
-//
-// The release process bumps both package files together. Keep this check
-// deliberately dumb: parse, compare, done.
 describe("client version stays in sync with root", () => {
   const rootVersion = JSON.parse(fs.readFileSync(ROOT_PACKAGE_JSON, "utf8")).version;
 

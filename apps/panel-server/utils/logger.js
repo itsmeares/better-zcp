@@ -3,16 +3,13 @@ import path from 'path';
 import fs from 'fs';
 import { getDataPaths } from './paths.js';
 
-// Get paths from central config
 const paths = getDataPaths();
 const logsDir = paths.logsDir;
 
-// Ensure logs directory exists
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
-// Store callbacks for log streaming
 const logCallbacks = [];
 
 export function onLog(callback) {
@@ -23,7 +20,6 @@ export function onLog(callback) {
   };
 }
 
-// Custom transport to stream logs to callbacks
 class CallbackTransport extends winston.Transport {
   log(info, callback) {
     setImmediate(() => {
@@ -44,7 +40,6 @@ class CallbackTransport extends winston.Transport {
   }
 }
 
-// ── Level indicators ──
 const levelIcons = {
   error: '✖',
   warn:  '⚠',
@@ -52,13 +47,11 @@ const levelIcons = {
   debug: '·',
 };
 
-// ── Console format (compact, colored, human-friendly) ──
 const consolePrintf = winston.format.printf(({ level, message, timestamp, stack, source }) => {
-  const time = timestamp;                       // HH:mm:ss only
+  const time = timestamp;
   const icon = levelIcons[level] || '•';
   const tag  = source ? `[${source}]` : '';
   const msg  = stack || message;
-  // e.g.  12:34:56 ● [RCON] Connected on attempt 1
   return `${time} ${icon} ${tag}${tag ? ' ' : ''}${msg}`;
 });
 
@@ -69,7 +62,6 @@ const consoleFormat = winston.format.combine(
   consolePrintf
 );
 
-// ── File format (full timestamp, structured, no colors) ──
 const filePrintf = winston.format.printf(({ level, message, timestamp, stack, source }) => {
   const tag = source ? `[${source}] ` : '';
   return `${timestamp} [${level.toUpperCase()}] ${tag}${stack || message}`;
@@ -81,9 +73,6 @@ const fileFormat = winston.format.combine(
   filePrintf
 );
 
-// Console transport with EPIPE protection — silences itself if the pipe breaks
-// (e.g. terminal closed while the exe keeps running) to prevent an infinite
-// error → log → error loop that floods the error log and can crash the process.
 const consoleTransport = new winston.transports.Console({
   format: consoleFormat,
   handleExceptions: false
@@ -98,15 +87,15 @@ export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   transports: [
     consoleTransport,
-    new winston.transports.File({ 
-      filename: path.join(logsDir, 'error.log'), 
+    new winston.transports.File({
+      filename: path.join(logsDir, 'error.log'),
       level: 'error',
       format: fileFormat,
       maxsize: 10 * 1024 * 1024, // 10MB max file size
       maxFiles: 5,
       tailable: true
     }),
-    new winston.transports.File({ 
+    new winston.transports.File({
       filename: path.join(logsDir, 'combined.log'),
       format: fileFormat,
       maxsize: 25 * 1024 * 1024, // 25MB max file size
@@ -117,26 +106,14 @@ export const logger = winston.createLogger({
   ]
 });
 
-/**
- * Create a tagged child logger for a specific component.
- * Usage:  const log = createLogger('RCON');
- *         log.info('Connected');  → "12:34:56 ● [RCON] Connected"
- */
 export function createLogger(source) {
   return logger.child({ source });
 }
 
-/**
- * Print a blank line to console (visual spacer).
- */
 export function logBlank() {
   console.log('');
 }
 
-/**
- * Print a section header to console for grouping startup phases.
- * e.g.  ── Services ─────────────────────────────────────
- */
 export function logSection(title) {
   const totalWidth = 50;
   const prefix = `── ${title} `;
@@ -144,9 +121,6 @@ export function logSection(title) {
   console.log(`\n  ${prefix}${line}`);
 }
 
-/**
- * Print a startup banner with app name and version.
- */
 export function logBanner(version) {
   const title = 'Zomboid Control Panel';
   const ver = version ? `v${version}` : '';
@@ -161,10 +135,6 @@ export function logBanner(version) {
   console.log(`  ╚${'═'.repeat(innerWidth)}╝`);
 }
 
-/**
- * Print the "Ready" box with server URLs.
- * @param {{ label: string, url: string }[]} urls
- */
 export function logReady(urls) {
   const lines = urls.map(u => `  ${u.label}   ${u.url}`);
   const maxLen = Math.max(...lines.map(l => l.length));

@@ -6,38 +6,6 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Chat from '../Chat'
 import { panelBridgeApi, playersApi, configApi } from '@/lib/api'
 
-// bug-hunt-2026-08-27 Tier-3 capability-gating sweep, later split
-// 2026-08-27 (operator ruling on ranked-bug #5): three genuinely different
-// capabilities gate this one page. Sending on the 'server' channel (plain
-// broadcast, POST /panel-bridge/message) requires server.world_events, the
-// same capability that gates weather/zombie/climate tools. Sending on
-// 'admin' or 'general' requires players.endanger_or_impersonate instead --
-// carved out of server.world_events specifically because chat/general
-// accepts an arbitrary custom author name, indistinguishable in the chat
-// log from that player having said it themselves (see Chat.tsx's own
-// comment). Managing the quick-broadcast preset list requires
-// panel.settings instead. None of TECHNICIAN/MODERATOR hold
-// players.endanger_or_impersonate or panel.settings by default, so this is
-// a live stock-role gap, not a hypothetical one.
-//
-// The Enter-key path is the sharpest risk here (Angela's Console.tsx
-// finding tonight: a disabled button alone is not a gate if a keypress
-// reaches the handler directly) -- sendMessage() is called both by the
-// Send button's onClick AND by handleKeyDown's Enter path, and
-// handleAddPreset/handleSaveEdit/handleDeletePreset are each reachable by
-// both a button click and their own input's Enter-key handler. The real
-// guards live inside sendMessage() and persistPresets() themselves, so
-// they cover every entry point; this file proves that by firing Enter
-// directly, not just clicking the visible button.
-//
-// The channel Select is a Radix Select -- Players.capabilityGating.test.tsx
-// already confirmed empirically (not just suspected) that a real pointer
-// interaction on a Radix Select throws in jsdom (target.hasPointerCapture
-// is not a function, then scrollIntoView is not a function). Mocking
-// '@/components/ui/select' below with a native <select> is the workaround:
-// it preserves Chat.tsx's REAL per-channel canSendChat logic untouched
-// (nothing about the capability gate itself is mocked), it just swaps the
-// picker widget so a channel switch is drivable via fireEvent.change.
 vi.mock('@/components/ui/select', () => {
   function findAriaLabel(children: React.ReactNode): string | undefined {
     let found: string | undefined
@@ -84,10 +52,6 @@ vi.mock('@/components/ui/select', () => {
   }
 })
 
-// jsdom doesn't implement scrollIntoView -- Chat.tsx calls it on every
-// chatHistory update to auto-scroll the message log, which is unrelated to
-// capability gating but throws in every test here without a stub. No prior
-// test file for this page existed to have already discovered this.
 Element.prototype.scrollIntoView = vi.fn()
 
 let mockCan = (_capability: string) => true
@@ -160,12 +124,6 @@ describe("Chat.tsx: sending on the 'server' channel (default) gates on server.wo
     const input = await screen.findByRole('textbox', { name: 'Chat message' })
     const sendButton = screen.getByRole('button', { name: 'send' })
 
-    // bug-hunt-2026-08-27 (Angela's fixture-masking finding): Send's
-    // disabled expression is `sending || !message.trim() ||
-    // !canSendChat` -- with the input still empty, `!message.trim()`
-    // alone already disables it regardless of the capability check, so
-    // asserting disabled here (before typing) would pass even with the
-    // capability gate deleted entirely. Type first, then assert.
     fireEvent.change(input, { target: { value: 'hello players' } })
     expect(sendButton).toBeDisabled()
     fireEvent.click(sendButton)
@@ -204,9 +162,6 @@ describe("Chat.tsx: sending on the 'admin'/'general' channels gates on players.e
     const input = await screen.findByRole('textbox', { name: 'Chat message' })
     const sendButton = screen.getByRole('button', { name: 'send' })
 
-    // Same fixture-masking risk as the 'server' channel tests above: type
-    // first, so `!message.trim()` alone can't be the reason Send is
-    // disabled.
     fireEvent.change(input, { target: { value: 'fake admin notice' } })
     expect(sendButton).toBeDisabled()
     fireEvent.click(sendButton)
@@ -282,11 +237,6 @@ describe('Chat.tsx: quick-broadcast preset management gates on panel.settings', 
     await screen.findByText('Test preset')
     fireEvent.click(screen.getByRole('button', { name: 'Edit presets' }))
 
-    // bug-hunt-2026-08-27 (Angela's fixture-masking finding): Add's
-    // disabled expression is `!newPresetDraft.trim() ||
-    // !canManagePresets` -- with the draft still empty,
-    // `!newPresetDraft.trim()` alone already disables it regardless of
-    // the capability check. Type first, then assert.
     const addInput = screen.getByPlaceholderText('add a new quick message…')
     fireEvent.change(addInput, { target: { value: 'A new preset' } })
     expect(screen.getByLabelText('Add preset')).toBeDisabled()
@@ -311,9 +261,6 @@ describe('Chat.tsx: quick-broadcast preset management gates on panel.settings', 
 
     expect(screen.getByLabelText('Delete preset 1')).not.toBeDisabled()
 
-    // "Add preset" is also legitimately disabled on an empty draft --
-    // unrelated to capability -- so only assert its non-disabled state
-    // once there is something to add.
     const addInput = screen.getByPlaceholderText('add a new quick message…')
     fireEvent.change(addInput, { target: { value: 'A new preset' } })
     expect(screen.getByLabelText('Add preset')).not.toBeDisabled()
@@ -323,16 +270,6 @@ describe('Chat.tsx: quick-broadcast preset management gates on panel.settings', 
   })
 })
 
-// wired-no-ui-2026-08-30: getChatInfo (GET /panel-bridge/chat/info) had a
-// live, gated route and Lua handler but zero client callers. Its two live
-// fields (chatServerAvailable/rconFallback, logical opposites of the same
-// fact) tell the operator whether sendToServerChat/sendToAdminChat/
-// sendToGeneralChat above are actually reaching the game's native
-// ChatServer API or silently degrading to player:Say/RCON -- never
-// observable before this. Its third field (availableChats, a hardcoded
-// description list) is API documentation, not live state, and was
-// deliberately not surfaced -- same reasoning as the /commands route in the
-// 65-action UI-reachability audit.
 describe('Chat.tsx: chat delivery-method status (getChatInfo)', () => {
   it('shows nothing before the fetch resolves and nothing if it fails -- no seeded default', async () => {
     mockCan = () => true

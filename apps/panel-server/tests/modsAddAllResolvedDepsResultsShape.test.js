@@ -3,22 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Bug hunt 2026-08-31 (server-routes slice): POST /add-all-resolved-deps
-// resolves each dep's PZ mod ID via a best-effort Steam-description scrape
-// (fetchModIdFromWorkshop) that routinely returns null -- many workshop
-// items don't declare a Mod ID in their description, which is exactly why
-// they showed up as a missing dep in the first place. When that happens the
-// route still adds the workshop ID to WorkshopItems= but can't add anything
-// to Mods= (there's no ID to add), leaving that one dependency subscribed
-// but not enabled -- the orphan state /resolve-orphan-workshop has its own
-// diagnostic for. The response used to report only aggregate wsAdded/
-// modIdsAdded counts and success:true, with no way for a caller to tell
-// WHICH dep (if any) failed to resolve. Paired with ConflictsPanel.tsx's
-// handleFixAll (apps/panel-client/src/components/mods -- Jim's slice, not fixed here),
-// which marked every requested row "added" on any non-throwing response,
-// this made the panel report a fix that hadn't actually happened for that
-// one dependency. This test locks in the new per-item `results[]` field
-// that lets a caller tell the difference.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
@@ -87,10 +71,6 @@ describe("POST /add-all-resolved-deps: per-item results[]", () => {
       // never runs and fetchModIdFromWorkshop() is the only resolution path,
       // which the fetch stub below controls deterministically.
     });
-    // The unresolved dep (no dep.modId supplied) falls through to
-    // fetchModIdFromWorkshop(), which calls the real global fetch. Stub it
-    // to the "Steam has no info for this item" branch (response.ok===false)
-    // so resolution deterministically fails without a real network call.
     fetchMock = vi.fn(async () => ({ ok: false, status: 404 }));
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -128,8 +108,6 @@ describe("POST /add-all-resolved-deps: per-item results[]", () => {
       modIdAdded: false,
     });
 
-    // The aggregate counts alone can't distinguish this batch from one where
-    // every dep resolved -- results[] is what makes the failure visible.
     expect(body.wsAdded).toBe(2);
     expect(body.modIdsAdded).toBe(1);
 
@@ -142,8 +120,6 @@ describe("POST /add-all-resolved-deps: per-item results[]", () => {
     expect(wsLine.split(";").filter(Boolean)).toEqual(
       expect.arrayContaining(["1111111111", "2222222222"]),
     );
-    // The unresolved dep's workshop ID reached WorkshopItems= but has no
-    // corresponding entry in Mods= -- subscribed, not enabled.
     expect(modsLine.split(";").filter(Boolean)).toEqual(["KnownGoodMod"]);
   });
 

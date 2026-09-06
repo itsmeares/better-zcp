@@ -19,27 +19,12 @@ export default function Templates() {
   const { toast } = useToast()
   const confirm = useConfirm()
   const { can, authEnabled } = useAuth()
-  // Was `user?.role === 'admin'` -- a hardcoded role literal where the
-  // server checks a capability (requirePermission("templates.manage") on
-  // POST/import/apply/delete in routes/templates.js). A default Technician
-  // role holds templates.manage and the server honors it, but that check
-  // hid every manage control from them anyway. can() already fails OPEN
-  // when capabilities are unknown -- see AuthContext's own doc comment --
-  // so this is strictly more permissive for anyone this could have wrongly
-  // blocked, never less.
   const canManage = !authEnabled || can('templates.manage')
 
   const [templates, setTemplates] = useState<SimTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // A hidden built-in never appears in `templates` above -- deleteTemplate()
-  // (templateService.js) doesn't remove its data, it filters it out of
-  // listTemplates(). Without this, hiding one was a one-way trip: no route
-  // returned it, so nothing in the app could ever show it again.
-  // GET /templates/hidden is gated on templates.manage server-side, so
-  // there's nowhere to call it from for a viewer -- skip the request rather
-  // than let it 403 silently.
   const [hiddenTemplates, setHiddenTemplates] = useState<SimTemplate[]>([])
   const [restoringId, setRestoringId] = useState<string | null>(null)
 
@@ -68,9 +53,6 @@ export default function Templates() {
       const { templates: list } = await templatesApi.listHidden()
       setHiddenTemplates(Array.isArray(list) ? list : [])
     } catch {
-      // Non-fatal: the main list above already loaded and is the primary
-      // view. Leave the hidden section empty rather than surface a second
-      // load-error state for a secondary, opt-in section.
       setHiddenTemplates([])
     }
   }, [canManage])
@@ -113,12 +95,6 @@ export default function Templates() {
   }
 
   const handleDelete = async (template: SimTemplate) => {
-    // Built-in templates aren't deleted server-side -- deleteTemplate()
-    // (templateService.js) just adds the id to a hidden-ids setting, no
-    // data loss. "This can't be undone" is false for that case, and there's
-    // no restore control anywhere in the app to make it true, so the confirm
-    // copy has to say what actually happens instead of the destructive
-    // boilerplate the custom-template path still legitimately needs.
     const ok = await confirm(
       template.isBuiltin
         ? {

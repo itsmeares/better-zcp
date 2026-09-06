@@ -17,11 +17,6 @@ export interface CatalogItem {
   id: string
   name: string
   category: string
-  // Optional, not a stray gap: PanelBridge.lua only sets this on a
-  // successful getActualWeight() pcall (server/backlog card
-  // api-ts-declares-catalog-weight-mass-seats-non-optional-but-lua-guards-them,
-  // 2026-08-29) -- a genuinely missing weight is a real, expected runtime
-  // shape, not a bug to paper over with a fallback of 0.
   weight?: number
 }
 
@@ -32,11 +27,8 @@ interface ItemPickerProps {
   placeholder?: string
 }
 
-// PZ categories that are vehicles — filter out of item picker
 export const VEHICLE_CATEGORIES = new Set(['Vehicle'])
 
-// Consolidate PZ's 270+ display categories into ~15 usable groups
-// Uses prefix matching — order matters (first match wins)
 const CATEGORY_RULES: Array<{ match: (c: string) => boolean; group: string }> = [
   { match: c => c.startsWith('Clothing') || c.startsWith('Accessory') || c.startsWith('Frockin') || c === 'Appearance' || c.startsWith('AppearanceOr') || c === 'MaleBody', group: 'Clothing' },
   { match: c => c.startsWith('Weapon') || c.startsWith('Firearm') || c.includes('Weapon') || c.startsWith('BrokenWeapon') || c.startsWith('JunkWeapon'), group: 'Weapons' },
@@ -69,7 +61,6 @@ export function fmtWeight(w: number): string {
   return parseFloat(w.toFixed(2)) + 'kg'
 }
 
-// Icon + display order for each group
 export const GROUP_META: Record<string, { order: number; icon: typeof Sword }> = {
   'Weapons':            { order: 0,  icon: Sword },
   'Ammo':               { order: 1,  icon: Crosshair },
@@ -106,15 +97,12 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [scannedAt, setScannedAt] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  // Not a Radix primitive, so closing the dropdown doesn't automatically
-  // restore focus to the trigger the way a Radix Popover/Select would.
   const triggerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const [dropUp, setDropUp] = useState(false)
   const { toast } = useToast()
 
-  // Load cached catalog on mount
   useEffect(() => {
     const ctrl = new AbortController()
     ;(async () => {
@@ -132,7 +120,6 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
     return () => ctrl.abort()
   }, [])
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
@@ -174,13 +161,11 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
     }
   }, [scanning, toast, t])
 
-  // Filter out vehicles
   const nonVehicleItems = useMemo(
     () => items.filter(item => !VEHICLE_CATEGORIES.has(item.category)),
     [items]
   )
 
-  // Build category sidebar data — consolidate 270+ raw categories into groups
   const categorySummary = useMemo(() => {
     const counts = new Map<string, number>()
     for (const item of nonVehicleItems) {
@@ -201,7 +186,6 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
       .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
   }, [nonVehicleItems, t])
 
-  // Filter by search + category group
   const { visibleItems, totalFiltered, capped } = useMemo(() => {
     const q = search.toLowerCase().trim()
     let filtered = nonVehicleItems
@@ -281,7 +265,6 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
     }
   }
 
-  // Scroll highlighted into view
   useEffect(() => {
     if (highlightIndex < 0 || !listRef.current) return
     const el = listRef.current.querySelector(`[data-item-index="${highlightIndex}"]`)
@@ -340,7 +323,6 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
 
   return (
     <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
-      {/* Trigger */}
       <div
         ref={triggerRef}
         role="combobox"
@@ -390,7 +372,6 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
         />
       </div>
 
-      {/* Dropdown with category sidebar */}
       {open && (
         <div
           className={cn(
@@ -400,7 +381,6 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
           )}
           style={{ width: 'min(90vw, 760px)', minWidth: '100%' }}
         >
-          {/* Search bar */}
           <div className="flex items-center gap-3 border-b border-border px-4 py-3">
             <Search className="w-4 h-4 text-muted-foreground shrink-0" />
             <input
@@ -436,9 +416,7 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
             </Button>
           </div>
 
-          {/* Category sidebar + item list */}
           <div className="flex" style={{ maxHeight: 'min(520px, 60vh)' }}>
-            {/* Sidebar */}
             <div className="w-[210px] shrink-0 border-e border-border/50 overflow-y-auto overscroll-contain py-1.5">
               <button
                 type="button"
@@ -481,9 +459,7 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
               })}
             </div>
 
-            {/* Items */}
             <div className="flex-1 min-w-0 overflow-y-auto overscroll-contain" role="listbox" id="itempicker-listbox" aria-label={t('itemListAria')}>
-              {/* Category header */}
               <div className="sticky top-0 z-10 flex items-center gap-2.5 px-4 py-2 bg-muted/80 backdrop-blur-sm border-b border-border/30">
                 <ActiveIcon className="w-3.5 h-3.5 text-muted-foreground/70" />
                 <span className="text-xs font-semibold text-muted-foreground tracking-wide uppercase">{activeCategoryLabel}</span>
@@ -553,7 +529,6 @@ export function ItemPicker({ value, onChange, disabled, placeholder }: ItemPicke
             </div>
           </div>
 
-          {/* Footer */}
           <div className="border-t border-border/40 px-4 py-2 flex items-center justify-between gap-4 text-[11px] text-muted-foreground">
             <span className="shrink-0 tabular-nums">
               {capped

@@ -21,10 +21,6 @@ function getTestHandler() {
   const layer = router.stack.find(
     (entry) => entry.route?.path === '/test' && entry.route.methods.post,
   );
-  // LAST entry, not the first: requireRole('admin', 'technician') is now
-  // ahead of the real handler in this route's stack (role sweep), so index
-  // 0 would grab the role-gate middleware instead of the route logic this
-  // test actually exercises.
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
@@ -44,8 +40,6 @@ function getHandler(path) {
 
 describe('testRconConnection', () => {
   it('returns unreachable when the TCP connection cannot be established', async () => {
-    // Nothing listens on this loopback port in the test environment, so the
-    // connection is refused (or times out) rather than authenticating.
     const result = await testRconConnection({
       host: '127.0.0.1',
       port: 39822,
@@ -60,9 +54,6 @@ describe('testRconConnection', () => {
   });
 
   it('returns auth_failed when TCP connects but RCON auth never completes', async () => {
-    // A bare TCP server that accepts the connection but never speaks the
-    // RCON protocol -- authenticate() times out and rejects, exercising the
-    // auth_failed branch without needing a real RCON server.
     const server = net.createServer((socket) => socket.on('data', () => {}));
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const port = server.address().port;
@@ -144,14 +135,6 @@ describe('POST /api/rcon/connect route updates', () => {
       {
         body: { password: '' },
         app: {
-          // Mirrors the real RconService (services/rcon.js) enough to
-          // survive the unreachable-vs-auth-failed classification a failed
-          // connect() falls through to: getConfig() for the reachability
-          // re-probe, getUserFriendlyError() for the outer catch's
-          // fallback. A mock missing either one crashes here instead of in
-          // production -- exactly what happened when this test's mock went
-          // stale against a real /connect change; see
-          // routeRoleSweep.test.js:298 for the same lesson learned earlier.
           get: () => ({
             updateConfig,
             connect,
@@ -163,12 +146,7 @@ describe('POST /api/rcon/connect route updates', () => {
       res,
     );
 
-    // The behaviour this test is named for: an explicitly empty password is
-    // passed through, not dropped for being falsy.
     expect(updateConfig).toHaveBeenCalledWith(undefined, undefined, '');
-    // 39822: nothing listens there in the test environment (same convention
-    // as this file's other tests above), so the failed connect() above is
-    // deliberately classified as unreachable -- not just "didn't crash".
     expect(res.statusCode).toBe(503);
     expect(res.body).toEqual({
       success: false,
@@ -217,26 +195,6 @@ describe('RCON route malformed request handling', () => {
   });
 });
 
-// 2026-08-27 bug hunt: POST /execute broadcasts its command AND response to
-// a socket room via rcon:response, and separately logs the command via
-// log.info -- both were the raw, unredacted string. logCommand()
-// (database/init.js) already redacts an adduser password before persisting
-// to command_history for exactly this reason (see rconCommandRedaction.js);
-// these two sites were never brought in line, so `adduser "Bob" "hunter2"`
-// still reached every subscribed socket, and every log line, in cleartext.
-// Wire-level coverage: calls the real handler and asserts on what actually
-// got emitted/logged, not on source text.
-//
-// 2026-08-31 bug hunt: the broadcast target moved from "logs" (gated
-// diagnostics.manage in index.js) to "rcon-live" (gated rcon.execute) --
-// the same content class GET /api/rcon/history has always gated rcon.execute
-// alone, per this file's own header comment above. diagnostics.manage is a
-// different, broader capability a custom "diagnostics-only observer" role
-// could plausibly hold without rcon.execute, per that capability's own
-// catalogue description (never mentions RCON). Tests below assert the room
-// name explicitly, and one proves "logs" no longer receives it at all --
-// a retarget bug is invisible to a test that only checks the event fired
-// somewhere.
 describe('RCON /execute -- redacts secrets before they leave the route', () => {
   function createIoMock() {
     const emitted = [];
@@ -266,7 +224,7 @@ describe('RCON /execute -- redacts secrets before they leave the route', () => {
       res,
     );
 
-    expect(res.statusCode).toBe(undefined); // res.json(), no explicit status -- 200 default
+    expect(res.statusCode).toBe(undefined);
     const broadcast = io.emitted.find((e) => e.event === 'rcon:response');
     expect(broadcast.payload.command).toBe('adduser "Bob" "[REDACTED]"');
     expect(broadcast.payload.response).toBe(
@@ -311,9 +269,6 @@ describe('RCON /execute -- redacts secrets before they leave the route', () => {
 
     const broadcast = io.emitted.find((e) => e.event === 'rcon:response');
     expect(broadcast.room).toBe('rcon-live');
-    // The control that makes the above meaningful: a fix that broadcast to
-    // BOTH rooms would still pass a test that only checks "rcon-live" was
-    // used somewhere -- confirm "logs" gets nothing at all from this route.
     expect(io.emitted.some((e) => e.room === 'logs')).toBe(false);
   });
 });
