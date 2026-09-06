@@ -1204,10 +1204,7 @@ export class PanelUpdateChecker {
     const databaseName = path.basename(info.dbPath);
     if (fs.existsSync(info.dbPath)) {
       try {
-        const parsed =
-          process.env.PANEL_DATABASE_DRIVER === "sqlite"
-            ? (await getDb()).data
-            : JSON.parse(fs.readFileSync(info.dbPath, "utf8"));
+        const parsed = (await getDb()).data;
         info.databaseUsers = Array.isArray(parsed.users) ? parsed.users.length : 0;
         info.databaseServers = Array.isArray(parsed.servers) ? parsed.servers.length : 0;
         info.databaseReadable = true;
@@ -1223,13 +1220,30 @@ export class PanelUpdateChecker {
       }
     } else {
       info.databaseReadable = false;
-      addPreflightMessage(
-        warnings,
-        warningDetails,
-        "updates.preflight.databaseMissing",
-        {},
-        `No data/${databaseName} was found beside the running panel. This looks like a fresh install; verify the data folder before applying the update.`,
-      );
+      const legacyDatabasePath = dataPaths.dbPath;
+      if (
+        legacyDatabasePath !== info.dbPath &&
+        fs.existsSync(legacyDatabasePath)
+      ) {
+        const message =
+          `Legacy data/${path.basename(legacyDatabasePath)} was found, but this release uses ` +
+          `${databaseName}. Run the explicit legacy database importer before applying the update.`;
+        addPreflightMessage(
+          blockers,
+          blockerDetails,
+          "updates.preflight.databaseUnreadable",
+          { error: message },
+          message,
+        );
+      } else {
+        addPreflightMessage(
+          warnings,
+          warningDetails,
+          "updates.preflight.databaseMissing",
+          {},
+          `No data/${databaseName} was found beside the running panel. This looks like a fresh install; verify the data folder before applying the update.`,
+        );
+      }
     }
 
     const assetName = isWindows

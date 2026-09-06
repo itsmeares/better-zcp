@@ -19,19 +19,22 @@ function createSandbox() {
   return { root, configPath, dataDir };
 }
 
-function runChild(configPath, markerPath, source) {
+function runChild(configPath, markerPath, source, databaseDriver = "sqlite") {
+  const env = {
+    ...process.env,
+    PANEL_PATHS_CONFIG_PATH: configPath,
+    ZCP_INIT_URL: initUrl,
+    ZCP_MARKER: markerPath,
+  };
+  if (databaseDriver) env.PANEL_DATABASE_DRIVER = databaseDriver;
+  else delete env.PANEL_DATABASE_DRIVER;
+
   return spawnSync(
     process.execPath,
     ["--experimental-strip-types", "--input-type=module", "-e", source],
     {
       cwd: path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../.."),
-      env: {
-        ...process.env,
-        PANEL_PATHS_CONFIG_PATH: configPath,
-        PANEL_DATABASE_DRIVER: "sqlite",
-        ZCP_INIT_URL: initUrl,
-        ZCP_MARKER: markerPath,
-      },
+      env,
       encoding: "utf8",
       stdio: ["ignore", "ignore", "pipe"],
       timeout: 15000,
@@ -45,7 +48,29 @@ afterEach(() => {
   }
 });
 
-describe("opt-in SQLite database driver", () => {
+describe("SQLite database driver", () => {
+  it("uses SQLite by default for a fresh install", () => {
+    const { configPath, dataDir, root } = createSandbox();
+    const markerPath = path.join(root, "default.marker");
+    const result = runChild(
+      configPath,
+      markerPath,
+      `import fs from "node:fs";
+const { getDb, commitNow } = await import(process.env.ZCP_INIT_URL);
+const db = await getDb();
+db.data.settings.defaultDriverProbe = "sqlite";
+await commitNow();
+fs.writeFileSync(process.env.ZCP_MARKER, "ok");
+process.exit(0);`,
+      null,
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(fs.existsSync(path.join(dataDir, "db.sqlite"))).toBe(true);
+    expect(fs.existsSync(path.join(dataDir, "db.json"))).toBe(false);
+    expect(fs.readFileSync(markerPath, "utf8")).toBe("ok");
+  });
+
   it("persists the existing snapshot shape across processes", () => {
     const { configPath, dataDir, root } = createSandbox();
     const markerPath = path.join(root, "writer.marker");

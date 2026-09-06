@@ -182,9 +182,14 @@ export async function setDataPaths(newPaths, moveFiles = false, options = {}) {
           copyDirSync(current.dataDir, newPaths.dataDir);
           filesMoved.data = true;
 
-          const sourceDb = path.join(current.dataDir, 'db.json');
-          const destDb = path.join(newPaths.dataDir, 'db.json');
-          if (fs.existsSync(sourceDb) && !fs.existsSync(destDb)) {
+          const databaseFiles = ['db.sqlite', 'db.json'];
+          const sourceHasDatabase = databaseFiles.some((name) =>
+            fs.existsSync(path.join(current.dataDir, name)),
+          );
+          const destinationHasDatabase = databaseFiles.some((name) =>
+            fs.existsSync(path.join(newPaths.dataDir, name)),
+          );
+          if (sourceHasDatabase && !destinationHasDatabase) {
             return {
               success: false,
               error: 'Data directory move did not produce a database file at the new location -- aborted before switching paths. The old location is untouched.',

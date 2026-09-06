@@ -54,7 +54,8 @@ const MAX_BACKUPS = 5;
 
 const paths = getDataPaths();
 const dataDir = paths.dataDir;
-const useSqliteDatabase = process.env.PANEL_DATABASE_DRIVER === "sqlite";
+const databaseDriver = process.env.PANEL_DATABASE_DRIVER ?? "sqlite";
+const useSqliteDatabase = databaseDriver === "sqlite";
 const legacyDbPath = paths.dbPath;
 const dbPath = useSqliteDatabase
   ? path.join(dataDir, "db.sqlite")
