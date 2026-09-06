@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isServerObservedRunning } from "../utils/serverStatus.js";
+import { isServerObservedRunning } from "../utils/serverStatus.ts";
 
 describe("isServerObservedRunning", () => {
   it("reports stopped when every signal is absent", () => {

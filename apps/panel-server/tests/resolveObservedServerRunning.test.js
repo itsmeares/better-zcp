@@ -10,7 +10,7 @@ vi.mock("../services/panelBridge.js", () => ({ default: fakeBridge }));
 const resolveDockerHostSignal = vi.fn();
 vi.mock("../services/managedContainer.js", () => ({ resolveDockerHostSignal }));
 
-const { resolveObservedServerRunning } = await import("../utils/serverStatus.js");
+const { resolveObservedServerRunning } = await import("../utils/serverStatus.ts");
 
 function fakeServerManager(details) {
   return { getServerProcessDetails: vi.fn(async () => details) };

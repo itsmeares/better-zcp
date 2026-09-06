@@ -1,7 +1,37 @@
 import { getActiveServer } from "../database/init.js";
-import { resolveProvider } from "./serverStatusModel.js";
+import { resolveProvider } from "./serverStatusModel.ts";
 import { resolveDockerHostSignal } from "../services/managedContainer.js";
 import panelBridge from "../services/panelBridge.js";
+
+interface ObservedSignals {
+  processRunning?: boolean;
+  rconConnected?: boolean;
+  bridgeConnected?: boolean;
+  processScanFailed?: boolean;
+  hostStateAuthoritative?: boolean;
+}
+
+interface ProcessDetails {
+  running?: boolean;
+  scanFailed?: boolean;
+}
+
+interface ServerManagerLike {
+  isRunning?: boolean;
+  getServerProcessDetails?: () => Promise<ProcessDetails | null>;
+}
+
+interface RconServiceLike {
+  connected?: boolean;
+}
+
+interface ActiveServerLike {
+  isRemote?: boolean;
+  provider?: string | null;
+  dockerContainerId?: unknown;
+  dockerContainerName?: unknown;
+  lifecycleProvider?: string | null;
+}
 
 export function isServerObservedRunning({
   processRunning = false,
@@ -9,7 +39,7 @@ export function isServerObservedRunning({
   bridgeConnected = false,
   processScanFailed = false,
   hostStateAuthoritative = false,
-} = {}) {
+}: ObservedSignals = {}): boolean | null {
   if (hostStateAuthoritative && !processScanFailed) {
     return Boolean(processRunning);
   }
@@ -17,8 +47,12 @@ export function isServerObservedRunning({
   return Boolean(processRunning || rconConnected || bridgeConnected);
 }
 
-export async function resolveObservedServerRunning(serverManager, rconService, dockerClient) {
-  const activeServer = await getActiveServer();
+export async function resolveObservedServerRunning(
+  serverManager: ServerManagerLike | null | undefined,
+  rconService: RconServiceLike | null | undefined,
+  dockerClient: unknown,
+): Promise<boolean | null> {
+  const activeServer = (await getActiveServer()) as ActiveServerLike | null;
   if (activeServer?.isRemote) {
     return isServerObservedRunning({
       processRunning: false,
@@ -51,7 +85,7 @@ export async function resolveObservedServerRunning(serverManager, rconService, d
     processScanFailed: !processDetails || processDetails.scanFailed,
     hostStateAuthoritative:
       Boolean(processDetails) &&
-      !processDetails.scanFailed &&
-      !["systemd", "openrc"].includes(activeServer?.lifecycleProvider),
+      !processDetails?.scanFailed &&
+      !["systemd", "openrc"].includes(activeServer?.lifecycleProvider ?? ""),
   });
 }

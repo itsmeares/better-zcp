@@ -23,7 +23,7 @@ import { sanitizeError } from "../utils/sanitize.js";
 import { describeStartFailure } from "./discordStartFailure.ts";
 import { readIniValues } from "../utils/templateFiles.js";
 import { runManagedLifecycle } from "./managedContainer.js";
-import { resolveObservedServerRunning } from "../utils/serverStatus.js";
+import { resolveObservedServerRunning } from "../utils/serverStatus.ts";
 import {
   collectKnownSecretValues,
   redactKnownSecrets,

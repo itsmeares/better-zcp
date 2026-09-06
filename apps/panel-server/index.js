@@ -88,7 +88,7 @@ import {
   readClientDistMetadata,
   resolveClientDistPath,
 } from "./utils/embeddedClient.js";
-import { resolveObservedServerRunning } from "./utils/serverStatus.js";
+import { resolveObservedServerRunning } from "./utils/serverStatus.ts";
 import { discoverMounts } from "./services/mountDiscovery.js";
 import { shouldAutoOpenBrowser } from "./utils/browserLaunch.ts";
 import { isLinuxPanelSupervisor } from "./utils/restartSupervisor.ts";
