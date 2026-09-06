@@ -1,5 +1,5 @@
 node_modules/
-client/dist/
+apps/panel-client/dist/
 dist-exe/
 release/
 coverage/

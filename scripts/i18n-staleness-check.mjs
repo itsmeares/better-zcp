@@ -4,7 +4,7 @@
 // and is blind to MEANING: reusing an existing key path while changing only
 // its English wording passes parity at full green while every other
 // language still asserts the disproven old meaning. Built after finding
-// exactly this in client/src/locales/ht/errors.json's SERVER_STATE_UNKNOWN
+// exactly this in apps/panel-client/src/locales/ht/errors.json's SERVER_STATE_UNKNOWN
 // (2026-08-24) via a manual git-history read; this is that method, cleaned
 // up and made repeatable.
 //
@@ -57,7 +57,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
-export const EN_DIR = "client/src/locales/en";
+export const EN_DIR = "apps/panel-client/src/locales/en";
 export const ALL_LANGS = ["fr", "de", "es", "zh-CN", "zh-TW", "ht"];
 
 // Two locale values touched within this window of each other are treated as
@@ -224,7 +224,7 @@ export function analyzeNamespace(ns, langs) {
   const findings = [];
 
   for (const lang of langs) {
-    const langPath = `client/src/locales/${lang}/${ns}`;
+    const langPath = `apps/panel-client/src/locales/${lang}/${ns}`;
     const langMap = keyMapForFile(langPath);
     if (langMap === null) continue;
 
@@ -294,7 +294,7 @@ function main() {
   }
   if (all.length > 0) {
     console.log(
-      "\nFor each: `git show <enHash> -- client/src/locales/en/<ns>` and the equivalent for <lang> " +
+      "\nFor each: `git show <enHash> -- apps/panel-client/src/locales/en/<ns>` and the equivalent for <lang> " +
       "to read what actually changed, and compare current values in both languages by hand. " +
       "This script narrows the search space; it does not verify a finding."
     );
@@ -303,7 +303,7 @@ function main() {
 }
 
 // Runnable as a CLI (`node scripts/i18n-staleness-check.mjs`) and importable
-// as a module (server/tests/roleDescriptionStalenessGate.test.js reuses
+// as a module (apps/panel-server/tests/roleDescriptionStalenessGate.test.js reuses
 // analyzeNamespace directly rather than re-implementing its git-blame/
 // co-change-window logic) -- only invoke main() when this file is the
 // process entrypoint, not when import()'d.

@@ -18,7 +18,7 @@
 //
 //   node scripts/i18n-check.mjs --all
 //     Skips the page/usage check and audits every namespace under
-//     client/src/locales/{en,fr}/*.json for suspicious French duplicates.
+//     apps/panel-client/src/locales/{en,fr}/*.json for suspicious French duplicates.
 //     Use this to gauge the false-positive rate of the duplicate check
 //     across the whole app, not just one page.
 import fs from "fs";
@@ -27,8 +27,8 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
-const enDir = path.join(root, "client/src/locales/en");
-const frDir = path.join(root, "client/src/locales/fr");
+const enDir = path.join(root, "apps/panel-client/src/locales/en");
+const frDir = path.join(root, "apps/panel-client/src/locales/fr");
 
 // The baseline contains reviewed, legitimate duplicate translations. It is
 // keyed by namespace and French value so key renames do not create noise.
@@ -110,7 +110,7 @@ function findSuspiciousDuplicates(ns, { en, frFlat }) {
 }
 
 function checkPage(pageFile, ns) {
-  const pagePath = path.join(root, "client/src/pages", pageFile);
+  const pagePath = path.join(root, "apps/panel-client/src/pages", pageFile);
   if (!fs.existsSync(pagePath)) {
     console.error(`Page not found: ${pagePath}`);
     process.exit(1);

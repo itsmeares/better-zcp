@@ -10,12 +10,12 @@ import path from "path";
 const root = path.resolve(process.argv[2] || ".");
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 
-const lua = read("pz-mod/PanelBridge/media/lua/server/PanelBridge.lua");
+const lua = read("integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua");
 const luaHandlers = new Set(
   [...lua.matchAll(/^\s*handlers\.([a-zA-Z]+)/gm)].map((m) => m[1]),
 );
 
-const routes = read("server/routes/panelBridge.js");
+const routes = read("apps/panel-server/routes/panelBridge.js");
 const validBlock = routes.slice(routes.indexOf("const VALID_ACTIONS"));
 const allowList = new Set(
   [...validBlock.slice(0, validBlock.indexOf("]);")).matchAll(/"([a-zA-Z]+)"/g)].map(
@@ -24,7 +24,7 @@ const allowList = new Set(
 );
 
 // Every action name the client can put on the wire, from the API layer.
-const api = read("client/src/lib/api.ts");
+const api = read("apps/panel-client/src/lib/api.ts");
 const apiActions = new Set(
   [...api.matchAll(/sendCommand\(\s*"([a-zA-Z]+)"/g)].map((m) => m[1]),
 );
@@ -32,7 +32,7 @@ for (const m of api.matchAll(/apiPost\(\s*"\/panel-bridge\/command",\s*\{\s*acti
   apiActions.add(m[1]);
 }
 
-const events = read("client/src/pages/Events.tsx");
+const events = read("apps/panel-client/src/pages/Events.tsx");
 const literalEventsActions = [...events.matchAll(/sendCommand\(\s*'([a-zA-Z]+)'/g)].map((m) => m[1]);
 const eventsOps = new Set(literalEventsActions);
 

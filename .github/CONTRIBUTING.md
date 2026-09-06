@@ -19,8 +19,8 @@ Before opening a pull request, run the checks relevant to your change:
 
 ```bash
 pnpm lint:server
-pnpm --filter pz-server-manager-client lint
-pnpm --filter pz-server-manager-client typecheck
+pnpm --filter @better-zcp/panel-client lint
+pnpm --filter @better-zcp/panel-client typecheck
 pnpm test
 pnpm build
 ```

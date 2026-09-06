@@ -1,0 +1,814 @@
+{
+  "pageHeader": {
+    "title": "Console d'événements",
+    "description": "Météo, temps, sons, actions joueurs et outils bridge",
+    "eyebrow": "contrôle du monde",
+    "refreshPlayers": "actualiser les joueurs"
+  },
+  "statusBar": {
+    "panelBridge": "PanelBridge",
+    "online": "en ligne",
+    "offline": "hors ligne",
+    "configureLink": "configurer →",
+    "eventTarget": "Cible de l'événement",
+    "allOnline": "tous en ligne",
+    "specific": "spécifique",
+    "selectPlayerAria": "Sélectionner le joueur cible",
+    "selectPlayerPlaceholder": "sélectionner un joueur…",
+    "noPlayersOnline": "aucun joueur en ligne",
+    "onlineCount": "en ligne"
+  },
+  "sidebar": {
+    "searchPlaceholder": "Trouver un contrôle",
+    "searchAria": "Trouver un contrôle d'événement",
+    "sectionsAria": "Sections d'événements",
+    "noMatches": "Aucun contrôle ne correspond à cette recherche.",
+    "bridgeBadge": "bridge",
+    "bridgeBadgeTitle": "Nécessite PanelBridge",
+    "recentActions": "Actions récentes",
+    "noRecentActions": "Aucune action récente — les actions déclenchées depuis cette page seront enregistrées ici."
+  },
+  "bridgeOfflineAlert": {
+    "title": "PanelBridge est hors ligne",
+    "description": "Ces contrôles nécessitent le bridge Lua. Connectez-le dans <1>Paramètres</1>, puis démarrez le serveur PZ."
+  },
+  "groups": {
+    "weather": "Météo",
+    "world": "Monde",
+    "sounds": "Sons",
+    "players": "Joueurs",
+    "advanced": "Avancé"
+  },
+  "sections": {
+    "rain": {
+      "label": "Pluie et orages",
+      "hint": "Démarrer ou effacer la pluie et les orages sur toute la carte.",
+      "keywords": "pluie orage effacer météo rcon"
+    },
+    "severe": {
+      "label": "Météo sévère",
+      "hint": "Blizzards, tempêtes tropicales et chutes de neige.",
+      "keywords": "blizzard tropical neige sévère"
+    },
+    "climate": {
+      "label": "Réglages du climat",
+      "hint": "Modifier le brouillard, le vent, la température, les nuages, l'humidité et les précipitations.",
+      "keywords": "brouillard vent température nuages humidité précipitations climat"
+    },
+    "visual": {
+      "label": "Rendu visuel",
+      "hint": "Modifier la distance d'affichage, l'intensité de la lumière du jour, l'obscurité nocturne, la désaturation et la lumière ambiante.",
+      "keywords": "distance d'affichage lumière du jour nuit intensité désaturation lumière ambiante visuel rendu"
+    },
+    "clock": {
+      "label": "Horloge du jeu",
+      "hint": "Définir l'heure, le jour et le mois du jeu.",
+      "keywords": "temps heure jour mois date horloge aube midi crépuscule minuit"
+    },
+    "timespeed": {
+      "label": "Vitesse du temps",
+      "hint": "Accélère l'horloge du jeu. Se réinitialise au redémarrage du serveur.",
+      "keywords": "multiplicateur vitesse accélérer avance rapide temps"
+    },
+    "utilities": {
+      "label": "Électricité et eau",
+      "hint": "Rétablir ou couper le réseau électrique et le réseau d'eau.",
+      "keywords": "électricité eau utilitaires réseau couper rétablir"
+    },
+    "quickSounds": {
+      "label": "Sons rapides",
+      "hint": "Hélicoptère, coup de feu, foudre, tonnerre et alarme de bâtiment.",
+      "keywords": "hélicoptère coup de feu foudre tonnerre alarme bruit"
+    },
+    "targetedSounds": {
+      "label": "Sons ciblés",
+      "hint": "Placer un leurre sonore sur un joueur ou à des coordonnées du monde.",
+      "keywords": "bruit rayon volume coordonnées leurre ciblé"
+    },
+    "horde": {
+      "label": "Faire apparaître une horde",
+      "hint": "Faire apparaître ou supprimer des zombies autour d'un joueur dans les cellules chargées.",
+      "keywords": "horde zombies essaim apparition supprimer"
+    },
+    "vehicles": {
+      "label": "Faire apparaître un véhicule",
+      "hint": "Faire apparaître un véhicule à côté d'un joueur en ligne.",
+      "keywords": "véhicule voiture apparition"
+    },
+    "teleport": {
+      "label": "Téléportation",
+      "hint": "Déplacer un joueur vers un autre joueur ou vers des coordonnées.",
+      "keywords": "téléportation déplacer coordonnées"
+    },
+    "broadcast": {
+      "label": "Diffusion",
+      "hint": "Envoyer une annonce à tout le serveur.",
+      "keywords": "annonce diffusion message chat avertissement"
+    },
+    "bridgeOps": {
+      "label": "Outils bridge",
+      "hint": "Opérations sur les refuges, factions, véhicules et modération.",
+      "keywords": "refuge faction modération expulser bannir opérations avancé bridge"
+    }
+  },
+  "rain": {
+    "sublabel": "rcon · toujours disponible",
+    "rainLabel": "pluie",
+    "stormLabel": "orage",
+    "startRain": "démarrer la pluie",
+    "stopRain": "arrêter la pluie",
+    "startStorm": "démarrer l'orage",
+    "clearWeather": "effacer la météo",
+    "rainIntensityAria": "Intensité de la pluie",
+    "stormDurationAria": "Durée de l'orage"
+  },
+  "severe": {
+    "sublabelOnline": "bridge · avancé",
+    "sublabelOffline": "bridge hors ligne",
+    "blizzardLabel": "blizzard",
+    "triggerBlizzard": "déclencher le blizzard",
+    "tropicalLabel": "tempête tropicale",
+    "triggerTropical": "déclencher la tempête tropicale",
+    "snowToggleLabel": "neige",
+    "enableSnow": "activer la neige",
+    "disableSnow": "désactiver la neige",
+    "stopAllWeather": "arrêter toute la météo",
+    "blizzardDurationAria": "Durée du blizzard",
+    "tropicalDurationAria": "Durée de la tempête tropicale",
+    "frontLabel": "front personnalisé",
+    "frontStrengthAria": "Intensité du front météorologique",
+    "frontTypeAria": "Type de front météorologique",
+    "frontStationary": "stationnaire",
+    "frontCold": "front froid",
+    "frontWarm": "front chaud",
+    "triggerFront": "générer le front",
+    "helicopterLabel": "événement hélicoptère",
+    "helicopterTip": "Attire les zombies proches vers le bruit — ce n'est pas qu'une ambiance sonore. Peut amener une horde sur les joueurs près de la trajectoire de vol.",
+    "triggerHelicopter": "déclencher l'hélicoptère",
+    "stopHelicopter": "arrêter l'hélicoptère"
+  },
+  "climate": {
+    "sublabelOnline": "bridge · réglage admin",
+    "sublabelOffline": "bridge hors ligne",
+    "reset": "réinitialiser",
+    "fog": "brouillard",
+    "wind": "vent",
+    "temperature": "température",
+    "clouds": "nuages",
+    "humidity": "humidité",
+    "precipitation": "précipitations",
+    "applyAll": "tout appliquer",
+    "rainWithPercent": "pluie · {{percent}} %",
+    "rainTooltip": "Démarre la pluie à l'intensité du curseur de précipitations (minimum 5 %)",
+    "stopRain": "arrêter la pluie",
+    "fogAria": "Intensité du brouillard",
+    "windAria": "Intensité du vent",
+    "temperatureAria": "Température",
+    "cloudsAria": "Intensité des nuages",
+    "humidityAria": "Humidité",
+    "precipitationAria": "Intensité des précipitations",
+    "liveConditions": "en direct :",
+    "thunderstorm": "orage",
+    "snowing": "neige",
+    "raining": "pluie",
+    "clear": "dégagé",
+    "windReading": "{{speed}} km/h @ {{angle}}°",
+    "weatherActive": "actif",
+    "weatherInactive": "inactif"
+  },
+  "visual": {
+    "sublabelOnline": "bridge · réglage admin",
+    "sublabelOffline": "bridge hors ligne",
+    "reset": "réinitialiser",
+    "viewDistance": "distance d'affichage",
+    "dayLight": "intensité de la lumière du jour",
+    "nightStrength": "intensité nocturne",
+    "desaturation": "désaturation",
+    "ambient": "lumière ambiante",
+    "applyAll": "tout appliquer",
+    "viewDistanceAria": "Distance d'affichage",
+    "dayLightAria": "Intensité de la lumière du jour",
+    "nightStrengthAria": "Intensité nocturne",
+    "desaturationAria": "Désaturation",
+    "ambientAria": "Lumière ambiante"
+  },
+  "clock": {
+    "sublabel": "bridge · date et heure du monde",
+    "hour": "heure",
+    "dawn": "aube",
+    "noon": "midi",
+    "dusk": "crépuscule",
+    "midnight": "minuit",
+    "day": "jour",
+    "month": "mois",
+    "applyTimeDate": "appliquer l'heure et la date",
+    "hourAria": "Heure du jeu",
+    "dayAria": "Jour du jeu",
+    "monthAria": "Mois du jeu",
+    "months": {
+      "1": "Janvier",
+      "2": "Février",
+      "3": "Mars",
+      "4": "Avril",
+      "5": "Mai",
+      "6": "Juin",
+      "7": "Juillet",
+      "8": "Août",
+      "9": "Septembre",
+      "10": "Octobre",
+      "11": "Novembre",
+      "12": "Décembre"
+    }
+  },
+  "timespeed": {
+    "sublabel": "bridge · réinitialisé au redémarrage",
+    "description": "Accélère l'horloge du jeu. Utile pour tester la météo, les cycles jour/nuit ou avancer rapidement dans le temps. Revient à 1× au redémarrage du serveur.",
+    "multiplier": "multiplicateur",
+    "applySpeed": "appliquer la vitesse",
+    "speedAria": "Vitesse du temps"
+  },
+  "utilities": {
+    "sublabel": "réseau électrique et d'eau",
+    "refresh": "actualiser",
+    "b42Warning": "b42 multijoueur · les changements sandbox ne sont pas encore transmis aux clients connectés",
+    "power": "électricité",
+    "water": "eau",
+    "statusOnline": "en ligne",
+    "statusOffline": "hors ligne",
+    "statusPending": "…",
+    "restore": "rétablir",
+    "shutOff": "couper",
+    "timingReasoning": "modificateur {{modifier}} · jour {{day}} · {{nights}} nuits survécues",
+    "modifierNever": "jamais"
+  },
+  "quickSounds": {
+    "sublabel": "RCON · attire les zombies",
+    "hint": "hélicoptère et coup de feu ciblent un joueur en ligne au hasard · foudre et tonnerre frappent le joueur sélectionné (ou un joueur au hasard si « tous en ligne ») · l'alarme nécessite un admin en jeu",
+    "helicopter": "hélicoptère",
+    "gunshot": "coup de feu",
+    "lightning": "foudre",
+    "thunder": "tonnerre",
+    "alarm": "alarme de bâtiment · admin en jeu",
+    "noPlayersOnlineTitle": "Aucun joueur en ligne",
+    "lightningTooltip": "Frappe le joueur sélectionné, ou un joueur au hasard si « tous en ligne » est actif",
+    "thunderTooltip": "Tonne au-dessus du joueur sélectionné, ou d'un joueur au hasard si « tous en ligne » est actif",
+    "alarmTooltip": "Nécessite un personnage admin en jeu — se déclenche à la position de l'admin"
+  },
+  "targetedSounds": {
+    "sublabelOnline": "bridge · bruit personnalisé",
+    "sublabelOffline": "bridge hors ligne",
+    "radius": "rayon",
+    "volume": "volume",
+    "atTargetLocation": "à l'emplacement de la cible",
+    "pickSpecificPlayer": "choisir un joueur précis",
+    "gunshot": "coup de feu",
+    "alarm": "alarme",
+    "noise": "bruit",
+    "atWorldCoords": "à des coordonnées du monde",
+    "coordRange": "kentucky · 0 – 15000",
+    "x": "x",
+    "y": "y",
+    "radiusAria": "Rayon du bruit",
+    "volumeAria": "Volume du bruit",
+    "worldXAria": "Coordonnée X du bruit",
+    "worldYAria": "Coordonnée Y du bruit"
+  },
+  "horde": {
+    "sublabelOnline": "bridge · cellules chargées uniquement",
+    "sublabelOffline": "bridge hors ligne",
+    "count": "nombre",
+    "spawnNear": "apparaître près de {{target}}",
+    "spawnBehind": "apparaître derrière {{target}}",
+    "random": "aléatoire",
+    "targetFallback": "cible",
+    "clearLoadedZombies": "supprimer les zombies chargés",
+    "removeAllConfirmTitle": "Supprimer tous les zombies chargés ?",
+    "removeAllConfirmDescription": "Cela supprime instantanément tous les zombies dans les cellules chargées, sur tout le serveur -- y compris ceux qu'un joueur est en train de combattre. Les zombies réapparaissent avec le temps, mais cela met fin à ce combat immédiatement pour la personne concernée.",
+    "noPlayersOnlineTitle": "Aucun joueur en ligne",
+    "bridgeOfflineTitle": "Bridge hors ligne",
+    "sizeAria": "Taille de la horde",
+    "clearRadius": "rayon de nettoyage",
+    "clearRadiusAria": "Rayon de nettoyage près du joueur",
+    "clearNear": "nettoyer près de {{target}}",
+    "clearNearConfirmTitle": "Éliminer les zombies près de ce joueur ?",
+    "clearNearConfirmDescTargeted": "Ceci élimine instantanément tous les zombies dans le rayon choisi autour de {{player}} -- y compris ceux qu'il ou elle combat actuellement. Les zombies réapparaissent avec le temps, mais cela met fin à cet affrontement dès maintenant pour cette personne.",
+    "clearNearConfirmDescRandom": "Ceci élimine instantanément tous les zombies dans le rayon choisi autour d'un joueur en ligne aléatoire -- y compris ceux qu'il ou elle combat actuellement. Les zombies réapparaissent avec le temps, mais cela met fin à cet affrontement dès maintenant pour cette personne."
+  },
+  "vehicles": {
+    "sublabel": "RCON · apparaît à côté d'un joueur",
+    "vehicle": "véhicule",
+    "selectPlaceholder": "sélectionner un véhicule…",
+    "spawnFor": "faire apparaître pour",
+    "spawnForTip": "Ne fonctionne que si le joueur est au rez-de-chaussée ou au sous-sol — échoue s'il est à un étage supérieur.",
+    "noPlayersOnline": "aucun joueur en ligne",
+    "selectVehicleFirstTitle": "Sélectionnez d'abord un véhicule",
+    "typeAria": "Type de véhicule",
+    "names": {
+      "VanAmbulance": "Ambulance",
+      "PickUpVanLightsPolice": "Fourgon de police",
+      "CarLightsPolice": "Voiture de police",
+      "PickUpTruckMccoy": "Camionnette",
+      "Van": "Fourgonnette",
+      "ModernCar": "Voiture moderne",
+      "SportsCar": "Voiture de sport",
+      "SUV": "SUV",
+      "StepVan": "Camion de livraison",
+      "Taxi": "Taxi"
+    }
+  },
+  "teleport": {
+    "sublabel": "RCON · déplace les joueurs dans le monde",
+    "playerToPlayer": "joueur → joueur",
+    "playerToMove": "joueur à déplacer",
+    "selectPlayerPlaceholder": "sélectionner un joueur…",
+    "noPlayersOnline": "aucun joueur en ligne",
+    "moveTo": "déplacer vers",
+    "needTwoPlayers": "il faut 2 joueurs en ligne ou plus",
+    "toCoordinates": "vers des coordonnées",
+    "x": "x",
+    "y": "y",
+    "z": "z",
+    "zTip": "L'étage du bâtiment, pas une hauteur — 0 est le rez-de-chaussée, les valeurs plus élevées sont des étages supérieurs.",
+    "teleportSelf": "se téléporter",
+    "teleportSelfTitle": "Vous téléporter vous-même (l'admin doit être en jeu)",
+    "teleportTarget": "téléporter {{target}}",
+    "targetFallback": "cible",
+    "teleportPlayerTitle": "Téléporter le joueur sélectionné vers ces coordonnées",
+    "presetsHint": "muldraugh 10500,9700 · west point 11800,6900 · riverside 6500,5300",
+    "playerToMoveAria": "Joueur à déplacer",
+    "xAria": "Coordonnée X de téléportation",
+    "yAria": "Coordonnée Y de téléportation",
+    "zAria": "Niveau Z de téléportation"
+  },
+  "broadcast": {
+    "sublabel": "RCON · message à tout le serveur",
+    "message": "message",
+    "charCount": "{{count}}/500",
+    "placeholder": "saisir une annonce…",
+    "presetEventWarning": "avertissement d'événement",
+    "presetLootNotice": "avis de butin",
+    "presetHordeAlert": "alerte horde",
+    "broadcastMessage": "diffuser le message",
+    "messageAria": "Message d'annonce du serveur",
+    "messages": {
+      "eventWarning": "ATTENTION : événement imminent !",
+      "lootNotice": "Vérifiez votre inventaire, une surprise vous attend !",
+      "hordeAlert": "Courez ! La horde arrive !"
+    }
+  },
+  "bridgeOps": {
+    "sublabelOnline": "bridge · {{count}} opérations",
+    "sublabelOffline": "bridge hors ligne · privilégié",
+    "lastRunPrefix": "dernière · {{time}}",
+    "neverRun": "jamais exécutée",
+    "operationLabel": "Opération",
+    "operationHint": "Choisissez une opération, remplissez les champs requis et exécutez-la.",
+    "operationSelectAria": "Sélectionner l'opération",
+    "operationSelectPlaceholder": "Sélectionner l'opération",
+    "operationGroupsLabel": "Groupes d'opérations",
+    "operationGroupsHint": "Parcourir par catégorie : territoire, véhicules, événements et modération.",
+    "quickPicks": "Choix rapides : {{group}}",
+    "optionsCount": "{{count}} options",
+    "operationInputsLabel": "Paramètres de l'opération",
+    "operationInputsHint": "Remplissez les champs requis. Le panneau valide vos saisies avant l'envoi.",
+    "needsAttentionBadge": "Attention requise",
+    "noInputsBadge": "Aucune saisie requise",
+    "readyBadge": "Prêt",
+    "requiredFieldsCompleted": "Champs requis complétés",
+    "noAdditionalInputs": "Cette opération s'exécute sans saisie supplémentaire.",
+    "loadingServerOptions": "Chargement des options du serveur...",
+    "noServerOptionsAvailable": "Aucune option de serveur disponible",
+    "loadingOptionsFromServer": "Chargement des options depuis le serveur...",
+    "noOptionsLoadedYet": "Aucune option chargée depuis le serveur pour le moment.",
+    "manualEntryAria": "{{label}} (saisie manuelle)",
+    "manualEntryPlaceholder": "Saisir la valeur manuellement",
+    "loadedFromServer": "Chargé depuis les données du serveur.",
+    "waitingForData": "En attente des données serveur/bridge pour remplir cette liste.",
+    "serverListUnavailable": "Liste du serveur indisponible. La saisie manuelle est activée en secours.",
+    "refreshingLists": "Actualisation des listes du bridge...",
+    "bridgeListsUpdated": "Listes du bridge mises à jour {{time}}",
+    "bridgeListsNotLoaded": "Listes du bridge pas encore chargées.",
+    "refreshLists": "Actualiser les listes",
+    "fieldsPrefilledNote": "Les champs sont pré-remplis à partir de vos saisies.",
+    "lastRun": "Dernière exécution : {{time}}",
+    "notRunYet": "Pas encore exécutée",
+    "bridgeFileLink": "Lien de fichier du bridge : {{summary}}",
+    "bridgeConnectionRequiredTitle": "Connexion au bridge requise",
+    "bridgeConnectionRequiredDesc": "Ces opérations nécessitent une connexion PanelBridge active. Configurez-la d'abord dans Paramètres.",
+    "moderationConfirmTitle": "Exécuter {{operation}} ?",
+    "moderationConfirmDescription": "Ceci envoie une véritable commande de modération via le pont actif{{target}}{{reason}}. Vérifiez les valeurs ci-dessus avant de continuer.",
+    "moderationConfirmTarget": " ciblant {{target}}",
+    "moderationConfirmReason": " (raison : {{reason}})",
+    "moderationConfirmButton": "Exécuter l'opération",
+    "runOperation": "Exécuter l'opération",
+    "resetFields": "Réinitialiser les champs",
+    "clearResults": "Effacer les résultats",
+    "readyStatus": "Prêt.",
+    "bridgeOfflineReason": "Le bridge est hors ligne. Ouvrez Paramètres pour reconnecter PanelBridge.",
+    "operationInProgressReason": "Opération en cours. Attendez la fin avant d'envoyer une autre commande.",
+    "requiredSuffix": " *"
+  },
+  "operationGroups": {
+    "territory": {
+      "label": "Territoire",
+      "description": "Administration des refuges et des factions."
+    },
+    "vehicles": {
+      "label": "Véhicules",
+      "description": "Réparation, alarmes, sirènes et verrous de coffre."
+    },
+    "events": {
+      "label": "Événements",
+      "description": "Essaims, infrastructures et séquences scriptées."
+    },
+    "moderation": {
+      "label": "Modération",
+      "description": "Actions d'expulsion et de bannissement via BanSystem."
+    }
+  },
+  "operations": {
+    "getSafehouses": {
+      "label": "Lister les refuges",
+      "description": "Récupère tous les refuges et leurs métadonnées."
+    },
+    "safehouseAddPlayer": {
+      "label": "Ajouter un joueur au refuge",
+      "description": "Ajoute un joueur à un refuge."
+    },
+    "safehouseRemovePlayer": {
+      "label": "Retirer un joueur du refuge",
+      "description": "Retire un joueur d'un refuge."
+    },
+    "safehouseSetOwner": {
+      "label": "Définir le propriétaire du refuge",
+      "description": "Transfère la propriété d'un refuge."
+    },
+    "safehouseSetRespawn": {
+      "label": "Basculer la réapparition du refuge",
+      "description": "Active/désactive la réapparition dans le refuge pour un joueur."
+    },
+    "getFactions": {
+      "label": "Lister les factions",
+      "description": "Récupère toutes les factions et leurs membres."
+    },
+    "createFaction": {
+      "label": "Créer une faction",
+      "description": "Crée une nouvelle faction."
+    },
+    "factionAddPlayer": {
+      "label": "Ajouter un joueur à la faction",
+      "description": "Ajoute un joueur à une faction."
+    },
+    "factionRemovePlayer": {
+      "label": "Retirer un joueur de la faction",
+      "description": "Retire un joueur d'une faction."
+    },
+    "factionSetTag": {
+      "label": "Définir l'étiquette de la faction",
+      "description": "Définit l'étiquette courte d'une faction."
+    },
+    "removeFaction": {
+      "label": "Supprimer une faction",
+      "description": "Supprime une faction."
+    },
+    "getVehiclesDetailed": {
+      "label": "Lister les véhicules",
+      "description": "Liste les véhicules chargés avec leur télémétrie."
+    },
+    "triggerSwarmEvent": {
+      "label": "Déclencher un essaim",
+      "description": "Fait apparaître des zombies dans une zone rectangulaire."
+    },
+    "runEventSequence": {
+      "label": "Exécuter une séquence d'événements",
+      "description": "Exécute une séquence chaînée de chat/météo/essaim/utilitaires/bruit."
+    },
+    "getInfrastructureSnapshot": {
+      "label": "Instantané des infrastructures",
+      "description": "Lit l'état hydraulique/météo et un point d'échantillon optionnel."
+    },
+    "moderationKickUser": {
+      "label": "Expulser un utilisateur",
+      "description": "Expulse un joueur via BanSystem."
+    },
+    "moderationBanUser": {
+      "label": "Bannir un utilisateur",
+      "description": "Bannit ou débannit uniquement par nom d'utilisateur -- cela ne bannit pas son adresse IP. Utilisez la page Joueurs pour un bannissement combiné nom d'utilisateur + IP."
+    },
+    "moderationBanIP": {
+      "label": "Bannir une IP",
+      "description": "Bannit ou débannit une adresse IP."
+    },
+    "moderationBanSteamID": {
+      "label": "Bannir un SteamID",
+      "description": "Bannit ou débannit un SteamID."
+    }
+  },
+  "operationForms": {
+    "safehouseRef": "Refuge",
+    "selectSafehouse": "Sélectionner un refuge",
+    "playerUsername": "Nom d'utilisateur du joueur",
+    "selectPlayer": "Sélectionner un joueur",
+    "newOwner": "Nouveau propriétaire",
+    "allowRespawn": "Autoriser la réapparition",
+    "factionName": "Nom de la faction",
+    "selectFaction": "Sélectionner une faction",
+    "ownerUsername": "Nom d'utilisateur du propriétaire",
+    "tag": "Étiquette",
+    "tagPlaceholder": "ETIQ",
+    "tagPatternHint": "Utilisez 1 à 12 caractères : lettres, chiffres, tiret bas ou tiret.",
+    "zombieCount": "Nombre de zombies",
+    "x1": "X1",
+    "y1": "Y1",
+    "x2": "X2",
+    "y2": "Y2",
+    "sequencePreset": "Modèle de séquence",
+    "presetStormAlert": "Séquence d'alerte orage",
+    "presetPanicNoise": "Séquence de panique sonore",
+    "presetUtilitiesShutdown": "Séquence de coupure des réseaux",
+    "broadcastMessage": "Message de diffusion",
+    "xOptional": "X (optionnel)",
+    "yOptional": "Y (optionnel)",
+    "zOptional": "Z (optionnel)",
+    "username": "Nom d'utilisateur",
+    "reason": "Motif",
+    "banUser": "Bannir l'utilisateur",
+    "ipAddress": "Adresse IP",
+    "ipPatternHint": "Entrez une adresse IPv4 valide (exemple : 127.0.0.1).",
+    "banIp": "Bannir l'IP",
+    "steamId": "Steam ID",
+    "steamIdPatternHint": "Le Steam ID doit comporter exactement 17 chiffres.",
+    "banSteamId": "Bannir le SteamID",
+    "reasonRuleViolation": "Non-respect du règlement",
+    "reasonAbuse": "Abus",
+    "reasonHarassment": "Harcèlement",
+    "reasonCheating": "Triche"
+  },
+  "resultDisplay": {
+    "operationFailed": "Échec de l'opération",
+    "unknownError": "Erreur inconnue",
+    "noVehiclesTitle": "Aucun véhicule trouvé",
+    "noVehiclesDesc": "Aucun véhicule n'est actuellement chargé dans une cellule active.",
+    "vehiclesLoaded_one": "{{count}} véhicule chargé",
+    "vehiclesLoaded_other": "{{count}} véhicules chargés",
+    "idHeader": "ID",
+    "typeHeader": "Type",
+    "locationHeader": "Position",
+    "batteryHeader": "Batterie",
+    "statusHeader": "État",
+    "actionsHeader": "Actions",
+    "alarmBadge": "Alarme",
+    "sirenBadge": "Sirène",
+    "lockedBadge": "Verrouillé",
+    "openBadge": "Ouvert",
+    "repairButton": "Réparer",
+    "alarmOnButton": "Activer l'alarme",
+    "alarmOffButton": "Désactiver l'alarme",
+    "sirenOnButton": "Activer la sirène",
+    "sirenOffButton": "Désactiver la sirène",
+    "lockButton": "Verrouiller",
+    "unlockButton": "Déverrouiller",
+    "vehicleRepairedLabel": "Véhicule #{{id}} réparé",
+    "alarmEnabledLabel": "Alarme activée sur #{{id}}",
+    "alarmDisabledLabel": "Alarme désactivée sur #{{id}}",
+    "sirenEnabledLabel": "Sirène activée sur #{{id}}",
+    "sirenDisabledLabel": "Sirène désactivée sur #{{id}}",
+    "trunkUnlockedLabel": "Coffre déverrouillé sur #{{id}}",
+    "trunkLockedLabel": "Coffre verrouillé sur #{{id}}",
+    "noSafehousesTitle": "Aucun refuge trouvé",
+    "noSafehousesDesc": "Aucun refuge n'est revendiqué sur ce serveur.",
+    "safehousesCount_one": "{{count}} refuge",
+    "safehousesCount_other": "{{count}} refuges",
+    "safehouseFallback": "Refuge {{n}}",
+    "ownerPrefix": "Propriétaire : {{owner}}",
+    "membersCount_one": "{{count}} membre",
+    "membersCount_other": "{{count}} membres",
+    "membersListPrefix": "Membres : {{list}}",
+    "addPlayerButton": "+ Joueur",
+    "addPlayerSelectLabel": "Joueur à ajouter à {{title}}",
+    "addPlayerSelectPlaceholder": "Sélectionner un joueur…",
+    "addedPlayerLabel": "{{username}} ajouté à {{title}}",
+    "noFactionsTitle": "Aucune faction trouvée",
+    "noFactionsDesc": "Aucune faction n'existe sur ce serveur.",
+    "factionsCount_one": "{{count}} faction",
+    "factionsCount_other": "{{count}} factions",
+    "factionFallback": "Faction {{n}}",
+    "noDataTitle": "Aucune donnée",
+    "emptyResponse": "Réponse vide.",
+    "infrastructureSnapshotTitle": "Instantané des infrastructures",
+    "hideDetails": "Masquer les détails",
+    "showDetails": "Afficher les détails",
+    "sequenceAllSucceededTitle": "Séquence d'événements terminée",
+    "sequencePartialTitle": "{{failed}} sur {{executed}} étape(s) ont échoué",
+    "sequenceAllFailedTitle": "Séquence d'événements échouée",
+    "sequenceExecutedCount_one": "{{executed}} étape exécutée",
+    "sequenceExecutedCount_other": "{{executed}} étapes exécutées",
+    "sequenceFailedStepsTitle": "Étapes échouées",
+    "sequenceStepIndex": "Étape {{index}}"
+  },
+  "successCopy": {
+    "rainStarted": {
+      "title": "Pluie démarrée",
+      "description": "La pluie est maintenant active sur le serveur."
+    },
+    "rainStopped": {
+      "title": "Pluie arrêtée",
+      "description": "La pluie a été effacée."
+    },
+    "stormTriggered": {
+      "title": "Orage déclenché",
+      "description": "Un orage est maintenant actif."
+    },
+    "tropicalStormTriggered": {
+      "title": "Tempête tropicale déclenchée",
+      "description": "Une météo de forte intensité est maintenant active."
+    },
+    "blizzardTriggered": {
+      "title": "Blizzard déclenché",
+      "description": "Un blizzard est maintenant actif."
+    },
+    "weatherCleared": {
+      "title": "Météo effacée",
+      "description": "Toutes les conditions météo forcées ont été retirées."
+    },
+    "weatherFrontGenerated": {
+      "title": "Front météo généré",
+      "description": "Un nouveau front météo traverse maintenant le serveur."
+    },
+    "snowEnabled": {
+      "title": "Chute de neige activée",
+      "description": "Les précipitations neigeuses sont maintenant actives."
+    },
+    "snowDisabled": {
+      "title": "Chute de neige désactivée",
+      "description": "Les précipitations neigeuses ont été désactivées."
+    },
+    "climateReset": {
+      "title": "Climat réinitialisé",
+      "description": "Tous les réglages du climat ont été effacés."
+    },
+    "fogUpdated": {
+      "title": "Brouillard mis à jour",
+      "description": "La densité du brouillard a été appliquée au serveur."
+    },
+    "windUpdated": {
+      "title": "Vent mis à jour",
+      "description": "L'intensité du vent a été appliquée au serveur."
+    },
+    "temperatureUpdated": {
+      "title": "Température mise à jour",
+      "description": "La température a été appliquée au serveur."
+    },
+    "cloudsUpdated": {
+      "title": "Couverture nuageuse mise à jour",
+      "description": "L'intensité des nuages a été appliquée au serveur."
+    },
+    "humidityUpdated": {
+      "title": "Humidité mise à jour",
+      "description": "Le taux d'humidité a été appliqué au serveur."
+    },
+    "precipitationUpdated": {
+      "title": "Précipitations mises à jour",
+      "description": "L'intensité des précipitations a été appliquée au serveur."
+    },
+    "timeUpdated": {
+      "title": "Heure mise à jour",
+      "description": "La date et l'heure du jeu ont été ajustées."
+    },
+    "utilitiesRestored": {
+      "title": "Réseaux rétablis",
+      "description": "L'électricité et l'eau sont de nouveau en service."
+    },
+    "utilitiesShutDown": {
+      "title": "Réseaux coupés",
+      "description": "L'électricité et l'eau ont été coupées."
+    },
+    "powerRestored": {
+      "title": "Électricité rétablie",
+      "description": "Le service électrique est de nouveau en ligne."
+    },
+    "waterRestored": {
+      "title": "Eau rétablie",
+      "description": "Le service d'eau est de nouveau en ligne."
+    },
+    "powerShutDown": {
+      "title": "Électricité coupée",
+      "description": "Le service électrique a été coupé."
+    },
+    "waterShutDown": {
+      "title": "Eau coupée",
+      "description": "Le service d'eau a été coupé."
+    },
+    "helicopterTriggered": {
+      "title": "Hélicoptère déclenché",
+      "description": "Un événement hélicoptère est maintenant actif."
+    },
+    "helicopterEventTriggered": {
+      "title": "Événement hélicoptère déclenché",
+      "description": "Un événement hélicoptère à l'échelle du serveur est maintenant actif."
+    },
+    "helicopterEventStopped": {
+      "title": "Événement hélicoptère arrêté",
+      "description": "Signal d'arrêt envoyé pour l'événement hélicoptère à l'échelle du serveur."
+    },
+    "gunshotTriggered": {
+      "title": "Coup de feu déclenché",
+      "description": "Un bruit de coup de feu a été créé."
+    },
+    "alarmTriggered": {
+      "title": "Alarme déclenchée",
+      "description": "Une alarme a été déclenchée."
+    },
+    "noiseCreated": {
+      "title": "Bruit créé",
+      "description": "Un leurre sonore personnalisé a été placé."
+    },
+    "lightningTriggered": {
+      "title": "Foudre déclenchée",
+      "description": "Une frappe de foudre a été demandée."
+    },
+    "thunderTriggered": {
+      "title": "Tonnerre déclenché",
+      "description": "Un événement de tonnerre est maintenant actif."
+    },
+    "hordeSpawned": {
+      "title": "Horde créée",
+      "description": "Un groupe de zombies a été créé."
+    },
+    "rearHordeSpawned": {
+      "title": "Horde arrière créée",
+      "description": "Un groupe de zombies est apparu derrière la cible."
+    },
+    "zombiesCleared": {
+      "title": "Zombies supprimés",
+      "description": "Tous les zombies ont été retirés des cellules chargées."
+    },
+    "zombiesClearedNear": {
+      "title": "Zombies proches supprimés",
+      "description": "Les zombies proches de la cible ont été retirés."
+    },
+    "timeSpeedUpdated": {
+      "title": "Vitesse du temps mise à jour",
+      "description": "Le multiplicateur de temps a été modifié."
+    },
+    "teleportComplete": {
+      "title": "Téléportation terminée",
+      "description": "La cible a été déplacée."
+    },
+    "vehicleSpawned": {
+      "title": "Véhicule créé",
+      "description": "Véhicule livré au joueur ciblé."
+    },
+    "announcementSent": {
+      "title": "Annonce envoyée",
+      "description": "Message diffusé à tous les joueurs."
+    },
+    "climateApplied": {
+      "title": "Climat appliqué",
+      "description": "Tous les paramètres du climat ont été mis à jour."
+    },
+    "visualApplied": {
+      "title": "Paramètres visuels appliqués",
+      "description": "Tous les paramètres visuels ont été mis à jour."
+    },
+    "actionCompleteDefault": {
+      "title": "Action terminée",
+      "description": "{{action}} terminé avec succès."
+    }
+  },
+  "toasts": {
+    "actionFailedTitle": "Échec de {{action}}",
+    "bridgeUnverifiedDesc": "{{action}} a été envoyé, mais le mod n'a pas pu confirmer que cela a fonctionné.",
+    "bridgeOldBridgeDesc": "{{action}} a peut-être fonctionné, mais cette version du mod PanelBridge ne signale pas si c'est le cas. Mettez à jour le mod pour confirmer les résultats.",
+    "bridgeFailedDesc": "{{message}}. Vérifiez la connexion bridge/serveur et réessayez.",
+    "commandFailedDesc": "{{message}}. Vérifiez les paramètres de la commande et réessayez.",
+    "commandFailedFallback": "Échec de la commande",
+    "notPersistedDesc": "Appliqué uniquement au monde en cours d'exécution — SandboxVars.lua n'a pas été mis à jour ({{reason}}), un redémarrage du serveur annulera donc ce changement.",
+    "notPersistedUnknownReason": "raison inconnue",
+    "bridgeCommandFailedFallback": "Échec de la commande bridge.",
+    "powerDidNotTakeEffectDesc": "Le serveur indique que l'alimentation est toujours {{state}} — le changement n'a pas été appliqué.",
+    "noPlayersOnlineError": "Aucun joueur en ligne",
+    "targetPlayerRequiredHorde": "Un joueur cible est requis pour faire apparaître une horde",
+    "operationCompletedDesc": "Opération terminée avec succès.",
+    "operationFailedFallback": "Échec de l'opération.",
+    "bridgeNotConnectedTitle": "Bridge non connecté",
+    "bridgeNotConnectedDesc": "Connectez PanelBridge dans Paramètres avant d'exécuter des opérations avancées.",
+    "missingOrInvalidFieldsTitle": "Champs manquants ou invalides",
+    "completeRequiredFieldsFallback": "Merci de compléter les champs requis.",
+    "operationExecutedSuffix": "{{label}} exécuté",
+    "bridgeOperationFailedTitle": "Échec de l'opération bridge",
+    "bridgeOperationFailedFallback": "Échec de l'opération bridge.",
+    "fieldRequired": "{{label}} est requis.",
+    "fieldMustBeNumber": "{{label}} doit être un nombre valide.",
+    "fieldMinValue": "{{label}} doit être d'au moins {{min}}.",
+    "fieldMaxValue": "{{label}} doit être d'au plus {{max}}.",
+    "fieldMaxLength": "{{label}} doit comporter {{maxLength}} caractères ou moins.",
+    "fieldInvalidFormat": "{{label}} n'est pas au format attendu.",
+    "couldNotRefreshAllLists": "Impossible d'actualiser les listes du bridge. Les options existantes sont conservées.",
+    "couldNotRefreshSomeLists": "Certaines listes du bridge n'ont pas pu être actualisées ({{sources}}).",
+    "unableToReadBridgeStatus": "Impossible de lire l'état du bridge depuis l'API du panneau.",
+    "sourceSafehouses": "refuges",
+    "sourceFactions": "factions",
+    "sourceVehicles": "véhicules"
+  }
+}

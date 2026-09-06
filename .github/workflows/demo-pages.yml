@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - client/**
+      - apps/panel-client/**
       - .github/workflows/demo-pages.yml
   workflow_dispatch:
 
@@ -44,11 +44,11 @@ jobs:
         env:
           VITE_DEMO_MODE: "true"
           VITE_BASE_PATH: "/better-zcp/"
-        run: pnpm --filter pz-server-manager-client build
+        run: pnpm --filter @better-zcp/panel-client build
 
       - name: Publish to gh-pages branch
         uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: client/dist
+          publish_dir: apps/panel-client/dist
           force_orphan: true

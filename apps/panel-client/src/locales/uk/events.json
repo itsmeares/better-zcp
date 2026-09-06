@@ -1,0 +1,814 @@
+{
+  "pageHeader": {
+    "title": "Консоль подій",
+    "description": "Погода, час, звуки, дії гравців та інструменти bridge",
+    "eyebrow": "керування світом",
+    "refreshPlayers": "оновити гравців"
+  },
+  "statusBar": {
+    "panelBridge": "PanelBridge",
+    "online": "онлайн",
+    "offline": "офлайн",
+    "configureLink": "налаштувати →",
+    "eventTarget": "Ціль події",
+    "allOnline": "усі онлайн",
+    "specific": "конкретний",
+    "selectPlayerAria": "Вибрати гравця-ціль",
+    "selectPlayerPlaceholder": "виберіть гравця…",
+    "noPlayersOnline": "немає гравців онлайн",
+    "onlineCount": "онлайн"
+  },
+  "sidebar": {
+    "searchPlaceholder": "Знайти елемент керування",
+    "searchAria": "Знайти елемент керування подіями",
+    "sectionsAria": "Розділи подій",
+    "noMatches": "Жоден елемент керування не відповідає цьому запиту.",
+    "bridgeBadge": "bridge",
+    "bridgeBadgeTitle": "Потребує PanelBridge",
+    "recentActions": "Останні дії",
+    "noRecentActions": "Немає останніх дій — дії, запущені з цієї сторінки, з'являтимуться тут."
+  },
+  "bridgeOfflineAlert": {
+    "title": "PanelBridge офлайн",
+    "description": "Ці елементи керування потребують Lua-моста. Підключіть його в розділі <1>Налаштування</1>, а потім запустіть сервер PZ."
+  },
+  "groups": {
+    "weather": "Погода",
+    "world": "Світ",
+    "sounds": "Звуки",
+    "players": "Гравці",
+    "advanced": "Додатково"
+  },
+  "sections": {
+    "rain": {
+      "label": "Дощ і шторми",
+      "hint": "Почати або припинити дощ і шторми на всій карті.",
+      "keywords": "дощ шторм гроза припинити погода rcon"
+    },
+    "severe": {
+      "label": "Сувора погода",
+      "hint": "Хуртовини, тропічні шторми та снігопад.",
+      "keywords": "хуртовина тропічний сніг сувора"
+    },
+    "climate": {
+      "label": "Підстроювання клімату",
+      "hint": "Перевизначити туман, вітер, температуру, хмарність, вологість та опади.",
+      "keywords": "туман вітер температура хмари вологість опади клімат"
+    },
+    "visual": {
+      "label": "Візуальне відображення",
+      "hint": "Перевизначити дальність огляду, яскравість денного світла, темряву ночі, десатурацію та розсіяне світло.",
+      "keywords": "дальність огляду денне світло ніч яскравість десатурація розсіяне світло візуальне відображення"
+    },
+    "clock": {
+      "label": "Ігровий годинник",
+      "hint": "Встановити ігрову годину, день і місяць.",
+      "keywords": "час година день місяць дата годинник світанок полудень сутінки північ"
+    },
+    "timespeed": {
+      "label": "Швидкість часу",
+      "hint": "Прискорити ігровий годинник. Скидається після перезапуску сервера.",
+      "keywords": "множник швидкість прискорення перемотка час"
+    },
+    "utilities": {
+      "label": "Електрика та вода",
+      "hint": "Відновити або вимкнути мережі електропостачання та водопостачання.",
+      "keywords": "електрика вода комунальні мережі електроенергія вимкнути відновити"
+    },
+    "quickSounds": {
+      "label": "Швидкі звуки",
+      "hint": "Гелікоптер, постріл, блискавка, грім і сигналізація будівлі.",
+      "keywords": "гелікоптер постріл блискавка грім сигналізація шум"
+    },
+    "targetedSounds": {
+      "label": "Спрямовані звуки",
+      "hint": "Розмістити звукову приманку на гравцеві або за координатами світу.",
+      "keywords": "шум радіус гучність координати приманка спрямований"
+    },
+    "horde": {
+      "label": "Створити орду",
+      "hint": "Створити або прибрати зомбі навколо гравця в завантажених комірках.",
+      "keywords": "орда зомбі навала створити прибрати"
+    },
+    "vehicles": {
+      "label": "Створити транспорт",
+      "hint": "Створити транспортний засіб поряд із гравцем онлайн.",
+      "keywords": "транспорт автомобіль машина створити"
+    },
+    "teleport": {
+      "label": "Телепортація",
+      "hint": "Перемістити гравця до іншого гравця або за координатами.",
+      "keywords": "телепортація перемістити координати"
+    },
+    "broadcast": {
+      "label": "Оголошення",
+      "hint": "Надіслати оголошення на весь сервер.",
+      "keywords": "оголошення трансляція повідомлення чат попередження"
+    },
+    "bridgeOps": {
+      "label": "Інструменти bridge",
+      "hint": "Операції з безпечними домами, фракціями, транспортом і модерацією.",
+      "keywords": "безпечний дім фракція модерація вигнати забанити операції додатково bridge"
+    }
+  },
+  "rain": {
+    "sublabel": "rcon · завжди доступно",
+    "rainLabel": "дощ",
+    "stormLabel": "шторм",
+    "startRain": "почати дощ",
+    "stopRain": "зупинити дощ",
+    "startStorm": "почати шторм",
+    "clearWeather": "очистити погоду",
+    "rainIntensityAria": "Інтенсивність дощу",
+    "stormDurationAria": "Тривалість шторму"
+  },
+  "severe": {
+    "sublabelOnline": "bridge · додатково",
+    "sublabelOffline": "bridge офлайн",
+    "blizzardLabel": "хуртовина",
+    "triggerBlizzard": "запустити хуртовину",
+    "tropicalLabel": "тропічний шторм",
+    "triggerTropical": "запустити тропічний шторм",
+    "snowToggleLabel": "сніг",
+    "enableSnow": "увімкнути сніг",
+    "disableSnow": "вимкнути сніг",
+    "stopAllWeather": "зупинити всю погоду",
+    "blizzardDurationAria": "Тривалість хуртовини",
+    "tropicalDurationAria": "Тривалість тропічного шторму",
+    "frontLabel": "власний фронт",
+    "frontStrengthAria": "Сила атмосферного фронту",
+    "frontTypeAria": "Тип атмосферного фронту",
+    "frontStationary": "стаціонарний",
+    "frontCold": "холодний фронт",
+    "frontWarm": "теплий фронт",
+    "triggerFront": "згенерувати фронт",
+    "helicopterLabel": "подія з гелікоптером",
+    "helicopterTip": "Приваблює найближчих зомбі на шум — це не просто фонове звучання. Може навести орду на гравців поблизу маршруту польоту.",
+    "triggerHelicopter": "запустити гелікоптер",
+    "stopHelicopter": "зупинити гелікоптер"
+  },
+  "climate": {
+    "sublabelOnline": "bridge · адмінське перевизначення",
+    "sublabelOffline": "bridge офлайн",
+    "reset": "скинути",
+    "fog": "туман",
+    "wind": "вітер",
+    "temperature": "температура",
+    "clouds": "хмарність",
+    "humidity": "вологість",
+    "precipitation": "опади",
+    "applyAll": "застосувати все",
+    "rainWithPercent": "дощ · {{percent}}%",
+    "rainTooltip": "Починає дощ з інтенсивністю, заданою повзунком опадів (мінімум 5%)",
+    "stopRain": "зупинити дощ",
+    "fogAria": "Щільність туману",
+    "windAria": "Сила вітру",
+    "temperatureAria": "Температура",
+    "cloudsAria": "Щільність хмарності",
+    "humidityAria": "Вологість",
+    "precipitationAria": "Інтенсивність опадів",
+    "liveConditions": "зараз:",
+    "thunderstorm": "гроза",
+    "snowing": "сніжить",
+    "raining": "дощить",
+    "clear": "ясно",
+    "windReading": "{{speed}} км/год @ {{angle}}°",
+    "weatherActive": "активно",
+    "weatherInactive": "неактивно"
+  },
+  "visual": {
+    "sublabelOnline": "bridge · адмінське перевизначення",
+    "sublabelOffline": "bridge офлайн",
+    "reset": "скинути",
+    "viewDistance": "дальність огляду",
+    "dayLight": "яскравість денного світла",
+    "nightStrength": "темрява ночі",
+    "desaturation": "десатурація",
+    "ambient": "розсіяне світло",
+    "applyAll": "застосувати все",
+    "viewDistanceAria": "Дальність огляду",
+    "dayLightAria": "Яскравість денного світла",
+    "nightStrengthAria": "Темрява ночі",
+    "desaturationAria": "Десатурація",
+    "ambientAria": "Розсіяне світло"
+  },
+  "clock": {
+    "sublabel": "bridge · дата й час у світі",
+    "hour": "година",
+    "dawn": "світанок",
+    "noon": "полудень",
+    "dusk": "сутінки",
+    "midnight": "північ",
+    "day": "день",
+    "month": "місяць",
+    "applyTimeDate": "застосувати час і дату",
+    "hourAria": "Ігрова година",
+    "dayAria": "Ігровий день",
+    "monthAria": "Ігровий місяць",
+    "months": {
+      "1": "Січень",
+      "2": "Лютий",
+      "3": "Березень",
+      "4": "Квітень",
+      "5": "Травень",
+      "6": "Червень",
+      "7": "Липень",
+      "8": "Серпень",
+      "9": "Вересень",
+      "10": "Жовтень",
+      "11": "Листопад",
+      "12": "Грудень"
+    }
+  },
+  "timespeed": {
+    "sublabel": "bridge · скидається при перезапуску",
+    "description": "Прискорює ігровий годинник. Корисно для перевірки погоди, циклів дня й ночі або швидкого перемотування подій. Повертається до 1× після перезапуску сервера.",
+    "multiplier": "множник",
+    "applySpeed": "застосувати швидкість",
+    "speedAria": "Швидкість часу"
+  },
+  "utilities": {
+    "sublabel": "мережі електрики та води",
+    "refresh": "оновити",
+    "b42Warning": "b42 мультиплеєр · зміни sandbox поки що не передаються підключеним клієнтам",
+    "power": "електрика",
+    "water": "вода",
+    "statusOnline": "увімкнено",
+    "statusOffline": "вимкнено",
+    "statusPending": "…",
+    "restore": "відновити",
+    "shutOff": "вимкнути",
+    "timingReasoning": "модифікатор {{modifier}} · день світу {{day}} · пережито ночей: {{nights}}",
+    "modifierNever": "ніколи"
+  },
+  "quickSounds": {
+    "sublabel": "RCON · приваблює зомбі",
+    "hint": "гелікоптер і постріл обирають випадкового гравця онлайн · блискавка та грім б'ють по вибраному гравцеві (або по випадковому, якщо «усі онлайн») · сигналізація потребує адміна в грі",
+    "helicopter": "гелікоптер",
+    "gunshot": "постріл",
+    "lightning": "блискавка",
+    "thunder": "грім",
+    "alarm": "сигналізація будівлі · адмін у грі",
+    "noPlayersOnlineTitle": "Немає гравців онлайн",
+    "lightningTooltip": "Б'є по вибраному гравцеві або по випадковому, якщо активовано «усі онлайн»",
+    "thunderTooltip": "Гримить над вибраним гравцем або над випадковим, якщо активовано «усі онлайн»",
+    "alarmTooltip": "Потребує адмінського персонажа в грі — спрацьовує в місці розташування адміна"
+  },
+  "targetedSounds": {
+    "sublabelOnline": "bridge · власний шум",
+    "sublabelOffline": "bridge офлайн",
+    "radius": "радіус",
+    "volume": "гучність",
+    "atTargetLocation": "у місці розташування цілі",
+    "pickSpecificPlayer": "виберіть конкретного гравця",
+    "gunshot": "постріл",
+    "alarm": "сигналізація",
+    "noise": "шум",
+    "atWorldCoords": "за координатами світу",
+    "coordRange": "kentucky · 0 – 15000",
+    "x": "x",
+    "y": "y",
+    "radiusAria": "Радіус звуку",
+    "volumeAria": "Гучність звуку",
+    "worldXAria": "Координата X звуку у світі",
+    "worldYAria": "Координата Y звуку у світі"
+  },
+  "horde": {
+    "sublabelOnline": "bridge · лише завантажені комірки",
+    "sublabelOffline": "bridge офлайн",
+    "count": "кількість",
+    "spawnNear": "створити біля {{target}}",
+    "spawnBehind": "створити позаду {{target}}",
+    "random": "випадковий",
+    "targetFallback": "ціль",
+    "clearLoadedZombies": "прибрати завантажених зомбі",
+    "removeAllConfirmTitle": "Прибрати всіх завантажених зомбі?",
+    "removeAllConfirmDescription": "Це миттєво прибирає всіх зомбі в завантажених комірках на всьому сервері — зокрема й тих, з якими зараз б'ється якийсь гравець. З часом зомбі з'являться знову, але цей бій для нього обірветься просто зараз.",
+    "noPlayersOnlineTitle": "Немає гравців онлайн",
+    "bridgeOfflineTitle": "Bridge офлайн",
+    "sizeAria": "Розмір орди",
+    "clearRadius": "радіус очищення",
+    "clearRadiusAria": "Радіус очищення біля гравця",
+    "clearNear": "очистити біля {{target}}",
+    "clearNearConfirmTitle": "Прибрати зомбі біля цього гравця?",
+    "clearNearConfirmDescTargeted": "Це миттєво прибирає всіх зомбі в межах вибраного радіуса від гравця {{player}} — зокрема й тих, з якими він зараз б'ється. З часом зомбі з'являться знову, але цей бій для нього обірветься просто зараз.",
+    "clearNearConfirmDescRandom": "Це миттєво прибирає всіх зомбі в межах вибраного радіуса від випадкового гравця онлайн — зокрема й тих, з якими він зараз б'ється. З часом зомбі з'являться знову, але цей бій для нього обірветься просто зараз."
+  },
+  "vehicles": {
+    "sublabel": "RCON · створює поряд із гравцем",
+    "vehicle": "транспортний засіб",
+    "selectPlaceholder": "виберіть транспорт…",
+    "spawnFor": "створити для",
+    "spawnForTip": "Працює, лише якщо гравець на першому поверсі або в підвалі — не спрацює, якщо він на верхньому поверсі.",
+    "noPlayersOnline": "немає гравців онлайн",
+    "selectVehicleFirstTitle": "Спершу виберіть транспорт",
+    "typeAria": "Тип транспорту",
+    "names": {
+      "VanAmbulance": "Швидка допомога",
+      "PickUpVanLightsPolice": "Поліцейський фургон",
+      "CarLightsPolice": "Поліцейський автомобіль",
+      "PickUpTruckMccoy": "Пікап",
+      "Van": "Фургон",
+      "ModernCar": "Сучасний автомобіль",
+      "SportsCar": "Спортивний автомобіль",
+      "SUV": "Позашляховик",
+      "StepVan": "Вантажний фургон",
+      "Taxi": "Таксі"
+    }
+  },
+  "teleport": {
+    "sublabel": "RCON · переміщення гравців у світі",
+    "playerToPlayer": "гравець → гравець",
+    "playerToMove": "гравець для переміщення",
+    "selectPlayerPlaceholder": "виберіть гравця…",
+    "noPlayersOnline": "немає гравців онлайн",
+    "moveTo": "перемістити до",
+    "needTwoPlayers": "потрібно 2+ гравці онлайн",
+    "toCoordinates": "за координатами",
+    "x": "x",
+    "y": "y",
+    "z": "z",
+    "zTip": "Поверх будівлі, а не висота — 0 це рівень землі, більші значення це верхні поверхи.",
+    "teleportSelf": "телепортувати себе",
+    "teleportSelfTitle": "Телепортувати себе (адмін має бути в грі)",
+    "teleportTarget": "телепортувати {{target}}",
+    "targetFallback": "ціль",
+    "teleportPlayerTitle": "Телепортувати вибраного гравця за координатами",
+    "presetsHint": "muldraugh 10500,9700 · west point 11800,6900 · riverside 6500,5300",
+    "playerToMoveAria": "Гравець для переміщення",
+    "xAria": "Координата X телепортації",
+    "yAria": "Координата Y телепортації",
+    "zAria": "Рівень Z телепортації"
+  },
+  "broadcast": {
+    "sublabel": "RCON · повідомлення на весь сервер",
+    "message": "повідомлення",
+    "charCount": "{{count}}/500",
+    "placeholder": "введіть оголошення…",
+    "presetEventWarning": "попередження про подію",
+    "presetLootNotice": "звістка про здобич",
+    "presetHordeAlert": "тривога через орду",
+    "broadcastMessage": "надіслати оголошення",
+    "messageAria": "Текст оголошення сервера",
+    "messages": {
+      "eventWarning": "УВАГА: наближається подія!",
+      "lootNotice": "Перевірте свій інвентар — там сюрприз!",
+      "hordeAlert": "Тікайте! Орда наближається!"
+    }
+  },
+  "bridgeOps": {
+    "sublabelOnline": "bridge · {{count}} операцій",
+    "sublabelOffline": "bridge офлайн · привілейовано",
+    "lastRunPrefix": "останнє · {{time}}",
+    "neverRun": "не виконувалася",
+    "operationLabel": "Операція",
+    "operationHint": "Виберіть операцію, заповніть обов'язкові поля та виконайте її.",
+    "operationSelectAria": "Вибрати операцію",
+    "operationSelectPlaceholder": "Вибрати операцію",
+    "operationGroupsLabel": "Групи операцій",
+    "operationGroupsHint": "Перегляд за категоріями: територія, транспорт, події та модерація.",
+    "quickPicks": "Швидкий вибір: {{group}}",
+    "optionsCount": "{{count}} варіантів",
+    "operationInputsLabel": "Параметри операції",
+    "operationInputsHint": "Заповніть обов'язкові поля. Панель перевірить введені дані перед надсиланням.",
+    "needsAttentionBadge": "Потребує уваги",
+    "noInputsBadge": "Дані не потрібні",
+    "readyBadge": "Готово",
+    "requiredFieldsCompleted": "Обов'язкові поля заповнено",
+    "noAdditionalInputs": "Ця операція виконується без додаткових даних.",
+    "loadingServerOptions": "Завантаження серверних варіантів...",
+    "noServerOptionsAvailable": "Немає доступних варіантів із сервера",
+    "loadingOptionsFromServer": "Завантаження варіантів із сервера...",
+    "noOptionsLoadedYet": "Варіанти з сервера ще не завантажено.",
+    "manualEntryAria": "{{label}} (ручне введення)",
+    "manualEntryPlaceholder": "Введіть значення вручну",
+    "loadedFromServer": "Завантажено з даних сервера.",
+    "waitingForData": "Очікування даних сервера/bridge для заповнення цього списку.",
+    "serverListUnavailable": "Список із сервера недоступний. Для відновлення увімкнено ручне введення.",
+    "refreshingLists": "Оновлення списків bridge...",
+    "bridgeListsUpdated": "Списки bridge оновлено {{time}}",
+    "bridgeListsNotLoaded": "Списки bridge ще не завантажено.",
+    "refreshLists": "Оновити списки",
+    "fieldsPrefilledNote": "Поля попередньо заповнено з ваших даних.",
+    "lastRun": "Останнє виконання: {{time}}",
+    "notRunYet": "Ще не виконувалася",
+    "bridgeFileLink": "Файлове підключення bridge: {{summary}}",
+    "bridgeConnectionRequiredTitle": "Потрібне підключення до bridge",
+    "bridgeConnectionRequiredDesc": "Ці операції потребують активного підключення PanelBridge. Спершу налаштуйте його в Налаштуваннях.",
+    "moderationConfirmTitle": "Виконати «{{operation}}»?",
+    "moderationConfirmDescription": "Це надішле справжню команду модерації через активний bridge{{target}}{{reason}}. Перевірте значення вище, перш ніж продовжити.",
+    "moderationConfirmTarget": " щодо {{target}}",
+    "moderationConfirmReason": " (причина: {{reason}})",
+    "moderationConfirmButton": "Виконати операцію",
+    "runOperation": "Виконати операцію",
+    "resetFields": "Скинути поля",
+    "clearResults": "Очистити результати",
+    "readyStatus": "Готово.",
+    "bridgeOfflineReason": "Bridge офлайн. Відкрийте Налаштування, щоб знову підключити PanelBridge.",
+    "operationInProgressReason": "Операція виконується. Зачекайте на завершення, перш ніж надсилати іншу команду.",
+    "requiredSuffix": " *"
+  },
+  "operationGroups": {
+    "territory": {
+      "label": "Територія",
+      "description": "Адміністрування безпечних домів і фракцій."
+    },
+    "vehicles": {
+      "label": "Транспорт",
+      "description": "Ремонт, сигналізації, сирени та замки багажника."
+    },
+    "events": {
+      "label": "Події",
+      "description": "Навали, інфраструктура та скриптовані послідовності."
+    },
+    "moderation": {
+      "label": "Модерація",
+      "description": "Вигнання та блокування через BanSystem."
+    }
+  },
+  "operations": {
+    "getSafehouses": {
+      "label": "Список безпечних домів",
+      "description": "Отримати всі безпечні доми та їхні метадані."
+    },
+    "safehouseAddPlayer": {
+      "label": "Додати гравця до безпечного дому",
+      "description": "Додає гравця до безпечного дому."
+    },
+    "safehouseRemovePlayer": {
+      "label": "Вилучити гравця з безпечного дому",
+      "description": "Вилучає гравця з безпечного дому."
+    },
+    "safehouseSetOwner": {
+      "label": "Змінити власника безпечного дому",
+      "description": "Передає право власності на безпечний дім."
+    },
+    "safehouseSetRespawn": {
+      "label": "Перемкнути відродження в безпечному домі",
+      "description": "Вмикає або вимикає відродження гравця в безпечному домі."
+    },
+    "getFactions": {
+      "label": "Список фракцій",
+      "description": "Отримати всі фракції та їхніх учасників."
+    },
+    "createFaction": {
+      "label": "Створити фракцію",
+      "description": "Створює нову фракцію."
+    },
+    "factionAddPlayer": {
+      "label": "Додати гравця до фракції",
+      "description": "Додає гравця до фракції."
+    },
+    "factionRemovePlayer": {
+      "label": "Вилучити гравця з фракції",
+      "description": "Вилучає гравця з фракції."
+    },
+    "factionSetTag": {
+      "label": "Встановити тег фракції",
+      "description": "Задає короткий тег фракції."
+    },
+    "removeFaction": {
+      "label": "Видалити фракцію",
+      "description": "Видаляє фракцію."
+    },
+    "getVehiclesDetailed": {
+      "label": "Список транспорту",
+      "description": "Перелічує завантажений транспорт із телеметрією."
+    },
+    "triggerSwarmEvent": {
+      "label": "Запустити навалу",
+      "description": "Створює зомбі в прямокутній зоні."
+    },
+    "runEventSequence": {
+      "label": "Виконати послідовність подій",
+      "description": "Виконує ланцюжок дій: чат / погода / навала / мережі / шум."
+    },
+    "getInfrastructureSnapshot": {
+      "label": "Знімок інфраструктури",
+      "description": "Зчитує стан водопостачання та погоди й необов'язкову точку вимірювання."
+    },
+    "moderationKickUser": {
+      "label": "Вигнати користувача",
+      "description": "Виганяє гравця через BanSystem."
+    },
+    "moderationBanUser": {
+      "label": "Заблокувати користувача",
+      "description": "Блокує або розблоковує лише за іменем користувача — це не блокує його IP-адресу. Для спільного блокування за іменем і IP скористайтеся сторінкою «Гравці»."
+    },
+    "moderationBanIP": {
+      "label": "Заблокувати IP",
+      "description": "Блокує або розблоковує IP-адресу."
+    },
+    "moderationBanSteamID": {
+      "label": "Заблокувати SteamID",
+      "description": "Блокує або розблоковує SteamID."
+    }
+  },
+  "operationForms": {
+    "safehouseRef": "Безпечний дім",
+    "selectSafehouse": "Виберіть безпечний дім",
+    "playerUsername": "Ім'я користувача гравця",
+    "selectPlayer": "Виберіть гравця",
+    "newOwner": "Новий власник",
+    "allowRespawn": "Дозволити відродження",
+    "factionName": "Назва фракції",
+    "selectFaction": "Виберіть фракцію",
+    "ownerUsername": "Ім'я користувача власника",
+    "tag": "Тег",
+    "tagPlaceholder": "TAG",
+    "tagPatternHint": "Використовуйте від 1 до 12 символів: літери, цифри, підкреслення або дефіс.",
+    "zombieCount": "Кількість зомбі",
+    "x1": "X1",
+    "y1": "Y1",
+    "x2": "X2",
+    "y2": "Y2",
+    "sequencePreset": "Шаблон послідовності",
+    "presetStormAlert": "Послідовність «Штормове попередження»",
+    "presetPanicNoise": "Послідовність «Панічний шум»",
+    "presetUtilitiesShutdown": "Послідовність «Вимкнення мереж»",
+    "broadcastMessage": "Текст оголошення",
+    "xOptional": "X (необов'язково)",
+    "yOptional": "Y (необов'язково)",
+    "zOptional": "Z (необов'язково)",
+    "username": "Ім'я користувача",
+    "reason": "Причина",
+    "banUser": "Забанити користувача",
+    "ipAddress": "IP-адреса",
+    "ipPatternHint": "Введіть коректну адресу IPv4 (наприклад: 127.0.0.1).",
+    "banIp": "Забанити IP",
+    "steamId": "Steam ID",
+    "steamIdPatternHint": "Steam ID має містити рівно 17 цифр.",
+    "banSteamId": "Забанити SteamID",
+    "reasonRuleViolation": "Порушення правил",
+    "reasonAbuse": "Образлива поведінка",
+    "reasonHarassment": "Переслідування",
+    "reasonCheating": "Читерство"
+  },
+  "resultDisplay": {
+    "operationFailed": "Операцію не виконано",
+    "unknownError": "Невідома помилка",
+    "noVehiclesTitle": "Транспорту не знайдено",
+    "noVehiclesDesc": "Наразі в жодній активній комірці немає завантаженого транспорту.",
+    "vehiclesLoaded_one": "Завантажено {{count}} транспортний засіб",
+    "vehiclesLoaded_other": "Завантажено транспортних засобів: {{count}}",
+    "idHeader": "ID",
+    "typeHeader": "Тип",
+    "locationHeader": "Розташування",
+    "batteryHeader": "Акумулятор",
+    "statusHeader": "Стан",
+    "actionsHeader": "Дії",
+    "alarmBadge": "Сигналізація",
+    "sirenBadge": "Сирена",
+    "lockedBadge": "Замкнено",
+    "openBadge": "Відчинено",
+    "repairButton": "Полагодити",
+    "alarmOnButton": "Увімкнути сигналізацію",
+    "alarmOffButton": "Вимкнути сигналізацію",
+    "sirenOnButton": "Увімкнути сирену",
+    "sirenOffButton": "Вимкнути сирену",
+    "lockButton": "Замкнути",
+    "unlockButton": "Відімкнути",
+    "vehicleRepairedLabel": "Транспорт #{{id}} полагоджено",
+    "alarmEnabledLabel": "Сигналізацію ввімкнено на #{{id}}",
+    "alarmDisabledLabel": "Сигналізацію вимкнено на #{{id}}",
+    "sirenEnabledLabel": "Сирену ввімкнено на #{{id}}",
+    "sirenDisabledLabel": "Сирену вимкнено на #{{id}}",
+    "trunkUnlockedLabel": "Багажник відімкнено на #{{id}}",
+    "trunkLockedLabel": "Багажник замкнено на #{{id}}",
+    "noSafehousesTitle": "Безпечних домів не знайдено",
+    "noSafehousesDesc": "На цьому сервері немає зайнятих безпечних домів.",
+    "safehousesCount_one": "{{count}} безпечний дім",
+    "safehousesCount_other": "Безпечних домів: {{count}}",
+    "safehouseFallback": "Безпечний дім {{n}}",
+    "ownerPrefix": "Власник: {{owner}}",
+    "membersCount_one": "{{count}} учасник",
+    "membersCount_other": "Учасників: {{count}}",
+    "membersListPrefix": "Учасники: {{list}}",
+    "addPlayerButton": "+ Гравець",
+    "addPlayerSelectLabel": "Гравець для додавання до {{title}}",
+    "addPlayerSelectPlaceholder": "Виберіть гравця…",
+    "addedPlayerLabel": "{{username}} додано до {{title}}",
+    "noFactionsTitle": "Фракцій не знайдено",
+    "noFactionsDesc": "На цьому сервері немає жодної фракції.",
+    "factionsCount_one": "{{count}} фракція",
+    "factionsCount_other": "Фракцій: {{count}}",
+    "factionFallback": "Фракція {{n}}",
+    "noDataTitle": "Немає даних",
+    "emptyResponse": "Порожня відповідь.",
+    "infrastructureSnapshotTitle": "Знімок інфраструктури",
+    "hideDetails": "Сховати подробиці",
+    "showDetails": "Показати подробиці",
+    "sequenceAllSucceededTitle": "Послідовність подій завершено",
+    "sequencePartialTitle": "Не вдалося виконати кроків: {{failed}} з {{executed}}",
+    "sequenceAllFailedTitle": "Послідовність подій не вдалася",
+    "sequenceExecutedCount_one": "Виконано {{executed}} крок",
+    "sequenceExecutedCount_other": "Виконано кроків: {{executed}}",
+    "sequenceFailedStepsTitle": "Невдалі кроки",
+    "sequenceStepIndex": "Крок {{index}}"
+  },
+  "successCopy": {
+    "rainStarted": {
+      "title": "Дощ почався",
+      "description": "Дощ тепер активний на сервері."
+    },
+    "rainStopped": {
+      "title": "Дощ зупинено",
+      "description": "Опади припинено."
+    },
+    "stormTriggered": {
+      "title": "Шторм запущено",
+      "description": "Подія шторму тепер активна."
+    },
+    "tropicalStormTriggered": {
+      "title": "Тропічний шторм запущено",
+      "description": "Погода високої інтенсивності тепер активна."
+    },
+    "blizzardTriggered": {
+      "title": "Хуртовину запущено",
+      "description": "Подія хуртовини тепер активна."
+    },
+    "weatherCleared": {
+      "title": "Погоду очищено",
+      "description": "Усі примусові погодні умови скасовано."
+    },
+    "weatherFrontGenerated": {
+      "title": "Атмосферний фронт згенеровано",
+      "description": "Новий атмосферний фронт тепер рухається через сервер."
+    },
+    "snowEnabled": {
+      "title": "Снігопад увімкнено",
+      "description": "Снігові опади тепер активні."
+    },
+    "snowDisabled": {
+      "title": "Снігопад вимкнено",
+      "description": "Снігові опади вимкнено."
+    },
+    "climateReset": {
+      "title": "Клімат скинуто",
+      "description": "Усі перевизначення клімату скасовано."
+    },
+    "fogUpdated": {
+      "title": "Туман оновлено",
+      "description": "Щільність туману застосовано на сервері."
+    },
+    "windUpdated": {
+      "title": "Вітер оновлено",
+      "description": "Силу вітру застосовано на сервері."
+    },
+    "temperatureUpdated": {
+      "title": "Температуру оновлено",
+      "description": "Температуру застосовано на сервері."
+    },
+    "cloudsUpdated": {
+      "title": "Хмарність оновлено",
+      "description": "Щільність хмарності застосовано на сервері."
+    },
+    "humidityUpdated": {
+      "title": "Вологість оновлено",
+      "description": "Рівень вологості застосовано на сервері."
+    },
+    "precipitationUpdated": {
+      "title": "Опади оновлено",
+      "description": "Інтенсивність опадів застосовано на сервері."
+    },
+    "timeUpdated": {
+      "title": "Час оновлено",
+      "description": "Ігрові дату й час скориговано."
+    },
+    "utilitiesRestored": {
+      "title": "Мережі відновлено",
+      "description": "Електрика та вода знову працюють."
+    },
+    "utilitiesShutDown": {
+      "title": "Мережі вимкнено",
+      "description": "Електрику та воду відключено."
+    },
+    "powerRestored": {
+      "title": "Електрику відновлено",
+      "description": "Електропостачання знову працює."
+    },
+    "waterRestored": {
+      "title": "Воду відновлено",
+      "description": "Водопостачання знову працює."
+    },
+    "powerShutDown": {
+      "title": "Електрику вимкнено",
+      "description": "Електропостачання відключено."
+    },
+    "waterShutDown": {
+      "title": "Воду вимкнено",
+      "description": "Водопостачання відключено."
+    },
+    "helicopterTriggered": {
+      "title": "Гелікоптер запущено",
+      "description": "Подія з гелікоптером тепер активна."
+    },
+    "helicopterEventTriggered": {
+      "title": "Подію з гелікоптером запущено",
+      "description": "Подія з гелікоптером на всьому сервері тепер активна."
+    },
+    "helicopterEventStopped": {
+      "title": "Подію з гелікоптером зупинено",
+      "description": "Сигнал зупинки надіслано для загальносерверної події з гелікоптером."
+    },
+    "gunshotTriggered": {
+      "title": "Постріл відтворено",
+      "description": "Створено звук пострілу."
+    },
+    "alarmTriggered": {
+      "title": "Сигналізацію ввімкнено",
+      "description": "Сигналізацію спрацьовано."
+    },
+    "noiseCreated": {
+      "title": "Шум створено",
+      "description": "Розміщено власну звукову приманку."
+    },
+    "lightningTriggered": {
+      "title": "Блискавку викликано",
+      "description": "Викликано удар блискавки."
+    },
+    "thunderTriggered": {
+      "title": "Грім запущено",
+      "description": "Подія грому тепер активна."
+    },
+    "hordeSpawned": {
+      "title": "Орду створено",
+      "description": "Створено групу зомбі."
+    },
+    "rearHordeSpawned": {
+      "title": "Орду позаду створено",
+      "description": "Групу зомбі створено позаду цілі."
+    },
+    "zombiesCleared": {
+      "title": "Зомбі прибрано",
+      "description": "Усіх зомбі прибрано із завантажених комірок."
+    },
+    "zombiesClearedNear": {
+      "title": "Найближчих зомбі прибрано",
+      "description": "Зомбі поблизу цілі прибрано."
+    },
+    "timeSpeedUpdated": {
+      "title": "Швидкість часу оновлено",
+      "description": "Множник часу змінено."
+    },
+    "teleportComplete": {
+      "title": "Телепортацію завершено",
+      "description": "Ціль переміщено."
+    },
+    "vehicleSpawned": {
+      "title": "Транспорт створено",
+      "description": "Транспорт доставлено гравцеві-цілі."
+    },
+    "announcementSent": {
+      "title": "Оголошення надіслано",
+      "description": "Повідомлення розіслано всім гравцям."
+    },
+    "climateApplied": {
+      "title": "Клімат застосовано",
+      "description": "Усі параметри клімату оновлено."
+    },
+    "visualApplied": {
+      "title": "Візуальні налаштування застосовано",
+      "description": "Усі візуальні параметри оновлено."
+    },
+    "actionCompleteDefault": {
+      "title": "Дію завершено",
+      "description": "{{action}} — виконано успішно."
+    }
+  },
+  "toasts": {
+    "actionFailedTitle": "{{action}} — не вдалося",
+    "bridgeUnverifiedDesc": "{{action}} — надіслано, але мод не зміг підтвердити, що дія набула чинності.",
+    "bridgeOldBridgeDesc": "{{action}} — можливо, спрацювало, але ця версія мода PanelBridge не повідомляє про результат. Оновіть мод, щоб отримувати підтвердження.",
+    "bridgeFailedDesc": "{{message}}. Перевірте підключення до bridge/сервера та спробуйте ще раз.",
+    "commandFailedDesc": "{{message}}. Перевірте налаштування команди та спробуйте ще раз.",
+    "commandFailedFallback": "Команду не виконано",
+    "bridgeCommandFailedFallback": "Команду bridge не виконано.",
+    "notPersistedDesc": "Застосовано лише до поточного світу — SandboxVars.lua не оновлено ({{reason}}), тому перезапуск сервера скасує цю зміну.",
+    "notPersistedUnknownReason": "невідома причина",
+    "powerDidNotTakeEffectDesc": "Сервер повідомляє, що електрика досі {{state}} — зміну не застосовано.",
+    "noPlayersOnlineError": "Немає гравців онлайн",
+    "targetPlayerRequiredHorde": "Для створення орди потрібен гравець-ціль",
+    "operationCompletedDesc": "Операцію успішно виконано.",
+    "operationFailedFallback": "Операцію не виконано.",
+    "bridgeNotConnectedTitle": "Bridge не підключено",
+    "bridgeNotConnectedDesc": "Підключіть PanelBridge у Налаштуваннях, перш ніж виконувати додаткові операції.",
+    "missingOrInvalidFieldsTitle": "Відсутні або некоректні поля",
+    "completeRequiredFieldsFallback": "Будь ласка, заповніть обов'язкові поля.",
+    "operationExecutedSuffix": "{{label}} — виконано",
+    "bridgeOperationFailedTitle": "Операцію bridge не виконано",
+    "bridgeOperationFailedFallback": "Операцію bridge не виконано.",
+    "fieldRequired": "Поле «{{label}}» є обов'язковим.",
+    "fieldMustBeNumber": "Поле «{{label}}» має містити коректне число.",
+    "fieldMinValue": "Поле «{{label}}» має бути не менше {{min}}.",
+    "fieldMaxValue": "Поле «{{label}}» має бути не більше {{max}}.",
+    "fieldMaxLength": "Поле «{{label}}» має містити не більше {{maxLength}} символів.",
+    "fieldInvalidFormat": "Поле «{{label}}» має неочікуваний формат.",
+    "couldNotRefreshAllLists": "Не вдалося оновити списки bridge. Наявні варіанти збережено.",
+    "couldNotRefreshSomeLists": "Деякі списки bridge не вдалося оновити ({{sources}}).",
+    "unableToReadBridgeStatus": "Не вдалося прочитати стан bridge через API панелі.",
+    "sourceSafehouses": "безпечні доми",
+    "sourceFactions": "фракції",
+    "sourceVehicles": "транспорт"
+  }
+}

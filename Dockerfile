@@ -11,7 +11,7 @@
 
 # --- Build stage ---
 # Pinned to $BUILDPLATFORM (the build host's native arch, not the target
-# one): this stage only produces static client assets (client/dist — plain
+# one): this stage only produces static client assets (apps/panel-client/dist — plain
 # JS/CSS/HTML, no native binaries in the output), so there's nothing
 # architecture-specific to gain from building it per-target. Without this
 # pin, buildx runs dependency installation and `vite build` under QEMU for every non-native
@@ -26,23 +26,23 @@ RUN corepack enable
 # Install client dependencies (includes devDeps for build tooling).
 # pnpm's workspace lockfile includes the platform-specific optional binaries.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY client/package.json ./client/package.json
+COPY apps/panel-client/package.json ./apps/panel-client/package.json
 COPY .husky/install.mjs ./.husky/install.mjs
-RUN corepack install && pnpm install --filter pz-server-manager-client --frozen-lockfile
+RUN corepack install && pnpm install --filter @better-zcp/panel-client --frozen-lockfile
 
 # Copy client source and build.
 # The root package.json is needed because vite.config.ts reads the panel version from it.
 COPY package.json ./
-COPY client/ ./client/
+COPY apps/panel-client/ ./apps/panel-client/
 
-# The FRONTEND needs the sha too. client/vite.config.ts already prefers
+# The FRONTEND needs the sha too. apps/panel-client/vite.config.ts already prefers
 # process.env.PANEL_BUILD_SHA over shelling out to git, and the builder stage has no .git
 # either -- so without this the bundle bakes in "unknown" while the backend reports the real
 # sha, and the build-compatibility gate compares "unknown" against it and blocks the UI.
 # Both halves must be given the same value or the check compares two different things.
 ARG PANEL_BUILD_SHA=""
 ENV PANEL_BUILD_SHA=${PANEL_BUILD_SHA}
-RUN pnpm --filter pz-server-manager-client build
+RUN pnpm --filter @better-zcp/panel-client build
 
 # --- Runtime stage ---
 FROM node:22-bookworm-slim
@@ -82,27 +82,28 @@ ENV NODE_ENV=production
 
 # Install server dependencies only (no devDeps).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/panel-server/package.json ./apps/panel-server/package.json
 COPY .husky/install.mjs ./.husky/install.mjs
-RUN corepack enable && corepack install && pnpm install --filter pz-server-manager --prod --frozen-lockfile
+RUN corepack enable && corepack install && pnpm install --filter @better-zcp/panel-server --prod --frozen-lockfile
 
 # Copy server source
-COPY server/ ./server/
+COPY apps/panel-server/ ./apps/panel-server/
 
 # Copy built client from builder stage
-COPY --from=builder /app/client/dist ./client/dist
+COPY --from=builder /app/apps/panel-client/dist ./apps/panel-client/dist
 
 # Copy PanelBridge mod so users can extract it (docker cp)
-COPY pz-mod/ ./pz-mod/
+COPY integrations/panelbridge/ ./pz-mod/
 
 # Runtime PUID/PGID support is handled before Node starts.
-COPY docker/entrypoint.sh /usr/local/bin/zomboid-panel-entrypoint
+COPY infra/docker/entrypoint.sh /usr/local/bin/zomboid-panel-entrypoint
 RUN chmod 0755 /usr/local/bin/zomboid-panel-entrypoint
 
 # Create runtime directories owned by the panel user (numeric IDs survive
 # the case where we're reusing the base image's existing user).
 RUN mkdir -p data logs && chown -R ${UID}:${GID} /app
 
-# Build provenance. server/index.js prefers process.env.PANEL_BUILD_SHA over shelling out to
+# Build provenance. apps/panel-server/index.js prefers process.env.PANEL_BUILD_SHA over shelling out to
 # `git rev-parse HEAD`, which cannot work in an image: there is no .git and no git binary. Passing
 # the sha in makes the frontend/backend build-compatibility check meaningful in Docker rather than
 # merely non-fatal. CI supplies this via --build-arg; a local `docker build` without it simply
@@ -121,4 +122,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
     CMD node -e "import('http').then(h => h.get('http://localhost:3001/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1)))"
 
 ENTRYPOINT ["/usr/local/bin/zomboid-panel-entrypoint"]
-CMD ["node", "server/index.js"]
+CMD ["node", "apps/panel-server/index.js"]

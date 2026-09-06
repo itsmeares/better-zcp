@@ -1,7 +1,7 @@
 # Zomboid Control Panel - Docker Compose
 #
 # Don't have Project Zomboid running anywhere yet? This is the wrong file —
-# use docker/all-in-one instead, which installs and runs PZ *and* the panel
+# use infra/docker/all-in-one instead, which installs and runs PZ *and* the panel
 # in one container. Full comparison of all three Docker paths, with
 # step-by-step walkthroughs: docs/install/docker.md
 #

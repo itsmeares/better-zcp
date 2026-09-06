@@ -2,8 +2,8 @@
 // Extracts the real UTF8 string constants out of every RCON command class
 // (plus the command dispatcher, for "Unknown command") in the real B42
 // server jar, and writes a committed fixture that
-// server/tests/rconRejectionGroundTruth.test.js diffs
-// server/services/rcon.js's KNOWN_RCON_REJECTIONS against on every test run.
+// apps/panel-server/tests/rconRejectionGroundTruth.test.js diffs
+// apps/panel-server/services/rcon.js's KNOWN_RCON_REJECTIONS against on every test run.
 //
 // WHY THIS EXISTS: KNOWN_RCON_REJECTIONS's whole job is telling a real
 // command success apart from a silent rejection (see its own comment in
@@ -35,7 +35,7 @@ if (!jarPath) {
 }
 
 const appManifestPath = path.resolve(path.dirname(jarPath), "..", "..", "appmanifest_108600.acf");
-const FIXTURE_PATH = path.join(REPO_ROOT, "server/__fixtures__/pzRconRejectionStrings.json");
+const FIXTURE_PATH = path.join(REPO_ROOT, "apps/panel-server/__fixtures__/pzRconRejectionStrings.json");
 
 if (!fs.existsSync(jarPath)) {
   console.error(`projectzomboid.jar not found at ${jarPath} -- pass the real path as an argument.`);
@@ -123,7 +123,7 @@ const fixture = {
       "any per-command class), zombie/network/BanSystem.class and zombie/network/ServerWorldDatabase.class " +
       "(plus its LogonResult inner class) because banuser/unbanuser/adduser/" +
       "removeuserfromwhitelist's own command classes carry no rejection text of their own; they return " +
-      "whatever these two classes' methods hand back. server/tests/rconRejectionGroundTruth.test.js asserts " +
+      "whatever these two classes' methods hand back. apps/panel-server/tests/rconRejectionGroundTruth.test.js asserts " +
       "every pattern in rcon.js's KNOWN_RCON_REJECTIONS matches at least one string somewhere in this " +
       "corpus. A pattern matching nothing here is not a fixture bug -- it means the live jar no longer " +
       "contains that text, which is exactly the drift this fixture exists to catch.",

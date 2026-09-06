@@ -1,7 +1,7 @@
 {
   "overrides": [
     {
-      "files": ["client/**/*.{js,jsx,ts,tsx}"],
+      "files": ["apps/panel-client/**/*.{js,jsx,ts,tsx}"],
       "options": {
         "semi": false,
         "singleQuote": true

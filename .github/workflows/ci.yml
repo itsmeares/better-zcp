@@ -119,18 +119,18 @@ jobs:
         run: corepack enable && corepack install
 
       - name: Install
-        run: pnpm install --filter pz-server-manager-client --frozen-lockfile
+        run: pnpm install --filter @better-zcp/panel-client --frozen-lockfile
 
       - name: Lint
-        working-directory: client
+        working-directory: apps/panel-client
         run: pnpm run lint
 
       - name: Typecheck
-        working-directory: client
+        working-directory: apps/panel-client
         run: pnpm run typecheck
 
       - name: Tests
-        working-directory: client
+        working-directory: apps/panel-client
         run: pnpm run test
 
   windows-packaged-updater:
@@ -159,10 +159,10 @@ jobs:
       # These tests contain Windows-only branches. Running them on the Windows
       # job keeps path quoting, process spawning, and path guards covered.
       - name: Exercise bundle transaction and generated supervisor
-        run: pnpm exec vitest run server/tests/panelUpdateBundle.test.js server/tests/supervisor-restart.test.js server/tests/serverManagerSpacedPathCmdQuoting.test.js server/tests/serverManagerWindowsSpawnFixes.test.js server/tests/serverManagerCustomStartCommandQuoting.test.js server/tests/serverManagerCommandLineRoundTrip.test.js server/tests/serverManagerEmptyScanWindows.test.js server/tests/serverManager-stopTimeout.test.js server/tests/setDataPaths.test.js
+        run: pnpm --filter @better-zcp/panel-server exec vitest run tests/panelUpdateBundle.test.js tests/supervisor-restart.test.js tests/serverManagerSpacedPathCmdQuoting.test.js tests/serverManagerWindowsSpawnFixes.test.js tests/serverManagerCustomStartCommandQuoting.test.js tests/serverManagerCommandLineRoundTrip.test.js tests/serverManagerEmptyScanWindows.test.js tests/serverManager-stopTimeout.test.js tests/setDataPaths.test.js
 
       - name: Build packaged Windows executable
-        run: node build.js --windows
+        run: node scripts/release/build.mjs --windows
 
       - name: Verify packaged updater artifacts
         shell: pwsh

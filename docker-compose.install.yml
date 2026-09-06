@@ -9,7 +9,7 @@
 # This installer is suitable when Project Zomboid runs on another machine, or
 # when you only need the panel first. For host PZ mounts and PanelBridge file
 # access, use the fully annotated docker-compose.yml instead. Don't have
-# Project Zomboid running anywhere yet? Use docker/all-in-one instead, which
+# Project Zomboid running anywhere yet? Use infra/docker/all-in-one instead, which
 # installs and runs PZ *and* the panel in one container.
 #
 # Full comparison of all three Docker paths, with step-by-step walkthroughs:

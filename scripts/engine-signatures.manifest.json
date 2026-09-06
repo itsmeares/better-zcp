@@ -3,7 +3,7 @@
   "generatorNote": "Run `node scripts/gen-engine-signatures.mjs` to regenerate after PanelBridge.lua or the game jar changes.",
   "javapVersion": "21.0.12.1",
   "jarBasename": "projectzomboid.jar",
-  "sourceFile": "pz-mod/PanelBridge/media/lua/server/PanelBridge.lua",
+  "sourceFile": "integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua",
   "sourceFileSha256": "7ef91ab8be413a7ccd421d1db6cefdd853aaf6a99c4e34f5a695eb1e3cffa03b",
   "seedGlobals": {
     "getWorld": {
@@ -118,9 +118,7 @@
       }
     },
     "java.util.AbstractCollection": {
-      "declaredSuperclasses": [
-        "java.util.Collection"
-      ],
+      "declaredSuperclasses": ["java.util.Collection"],
       "methods": {
         "AbstractCollection": [
           {
@@ -1502,9 +1500,7 @@
       }
     },
     "java.util.Collection": {
-      "declaredSuperclasses": [
-        "java.lang.Iterable"
-      ],
+      "declaredSuperclasses": ["java.lang.Iterable"],
       "methods": {
         "size": [
           {
@@ -1722,9 +1718,7 @@
       }
     },
     "java.util.List": {
-      "declaredSuperclasses": [
-        "java.util.SequencedCollection"
-      ],
+      "declaredSuperclasses": ["java.util.SequencedCollection"],
       "methods": {
         "size": [
           {
@@ -2141,9 +2135,7 @@
       "methods": {}
     },
     "java.util.SequencedCollection": {
-      "declaredSuperclasses": [
-        "java.util.Collection"
-      ],
+      "declaredSuperclasses": ["java.util.Collection"],
       "methods": {
         "reversed": [
           {
@@ -2380,9 +2372,7 @@
       }
     },
     "java.util.Set": {
-      "declaredSuperclasses": [
-        "java.util.Collection"
-      ],
+      "declaredSuperclasses": ["java.util.Collection"],
       "methods": {
         "size": [
           {
@@ -6403,9 +6393,7 @@
       }
     },
     "zombie.characters.CharacterInputComponentEntity": {
-      "declaredSuperclasses": [
-        "zombie.characters.ecs.ECSEntity"
-      ],
+      "declaredSuperclasses": ["zombie.characters.ecs.ECSEntity"],
       "methods": {
         "getCharacterInputComponent": [
           {
@@ -26556,9 +26544,7 @@
       }
     },
     "zombie.characters.IsoLivingCharacter": {
-      "declaredSuperclasses": [
-        "zombie.characters.IsoGameCharacter"
-      ],
+      "declaredSuperclasses": ["zombie.characters.IsoGameCharacter"],
       "methods": {
         "IsoLivingCharacter": [
           {
@@ -82604,9 +82590,7 @@
       }
     },
     "zombie.characters.SurvivorDesc": {
-      "declaredSuperclasses": [
-        "zombie.core.skinnedmodel.visual.IHumanVisual"
-      ],
+      "declaredSuperclasses": ["zombie.core.skinnedmodel.visual.IHumanVisual"],
       "methods": {
         "getHumanVisual": [
           {
@@ -84421,9 +84405,7 @@
       }
     },
     "zombie.core.skinnedmodel.IGrappleableWrapper": {
-      "declaredSuperclasses": [
-        "zombie.core.skinnedmodel.IGrappleable"
-      ],
+      "declaredSuperclasses": ["zombie.core.skinnedmodel.IGrappleable"],
       "methods": {
         "getWrappedGrappleable": [
           {
@@ -85871,9 +85853,7 @@
       }
     },
     "zombie.core.skinnedmodel.visual.IAnimalVisual": {
-      "declaredSuperclasses": [
-        "zombie.core.skinnedmodel.visual.IHumanVisual"
-      ],
+      "declaredSuperclasses": ["zombie.core.skinnedmodel.visual.IHumanVisual"],
       "methods": {
         "getAnimalVisual": [
           {
@@ -86626,9 +86606,7 @@
       }
     },
     "zombie.inventory.InventoryItem": {
-      "declaredSuperclasses": [
-        "zombie.entity.GameEntity"
-      ],
+      "declaredSuperclasses": ["zombie.entity.GameEntity"],
       "methods": {
         "getCoverType": [
           {
@@ -98940,10 +98918,7 @@
       }
     },
     "zombie.iso.IsoMovingObject": {
-      "declaredSuperclasses": [
-        "zombie.iso.IsoObject",
-        "zombie.ai.astar.Mover"
-      ],
+      "declaredSuperclasses": ["zombie.iso.IsoObject", "zombie.ai.astar.Mover"],
       "methods": {
         "IsoMovingObject": [
           {

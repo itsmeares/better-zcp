@@ -1,0 +1,400 @@
+{
+  "loading": "正在建立连接…",
+  "autoUpdateResult": {
+    "successTitle": "自动更新已完成",
+    "successDescription": "服务器自动更新已成功完成。",
+    "successDescriptionVersioned": "服务器自动更新已成功完成（当前运行版本 {{version}}）。",
+    "failedTitle": "自动更新失败",
+    "dismiss": "关闭",
+    "dismissAria": "关闭自动更新通知",
+    "dismissFailedTitle": "无法关闭通知",
+    "dismissFailedFallback": "无法关闭该通知，请重试。",
+    "serverUp": "您的服务器目前正在运行。",
+    "serverDown": "您的服务器目前已停止。",
+    "serverUnaffected": "没有发生任何更改——您的服务器状态未受影响。",
+    "reasons": {
+      "MANAGED_CONTAINER": "此服务器运行在面板管理的 Docker 容器中。请改为更新容器镜像——面板不会对受管理的容器运行 SteamCMD。",
+      "NOT_CONFIGURED": "未配置 SteamCMD 路径或服务器安装路径。",
+      "INITIAL_SCAN_FAILED": "无法确认服务器是否正在运行，出于安全考虑已放弃本次更新。",
+      "RCON_NOT_CONNECTED": "RCON 未连接，因此无法安全停止服务器。",
+      "SAVE_FAILED": "无法保存世界（{{reason}}），因此已放弃更新以避免丢失进度。",
+      "STOP_SCAN_FAILED": "无法再确认服务器是否已停止，出于安全考虑已放弃本次更新。",
+      "STOP_TIMEOUT": "服务器未在 5 分钟内停止。",
+      "STEAMCMD_NOT_FOUND": "在 {{path}} 未找到 SteamCMD。",
+      "STEAMCMD_EXIT_CODE": "SteamCMD 以代码 {{code}} 退出。",
+      "STEAM_OPERATION_IN_PROGRESS": "{{path}} 已经在进行 Steam 安装或更新，因此已放弃本次自动更新以避免冲突。",
+      "UNKNOWN": "自动更新过程中发生了意外错误。"
+    }
+  },
+  "errors": {
+    "failedToConnect": "无法连接到服务器。",
+    "failedToLoad": "加载仪表盘状态失败。",
+    "takingLongerThanExpected": "仪表盘响应时间比预期更长。"
+  },
+  "header": {
+    "ariaLabel": "服务器状态",
+    "everythingNominal": "一切正常",
+    "upPrefix": "已运行 {{uptime}}",
+    "mapTooltip": "地图（来自 PanelBridge）",
+    "remoteBadge": "远程",
+    "noActiveServer": "没有活动服务器"
+  },
+  "addresses": {
+    "lan": {
+      "label": "局域网",
+      "tooltip": "从本地网络连接",
+      "copyAria": "复制局域网地址：{{address}}",
+      "copyLabel": "局域网地址"
+    },
+    "wan": {
+      "label": "广域网",
+      "tooltip": "与互联网玩家分享此地址",
+      "copyAria": "复制广域网地址：{{address}}",
+      "copyLabel": "广域网地址"
+    },
+    "panel": {
+      "label": "面板",
+      "tooltip": "打开或复制控制面板地址",
+      "copyAria": "复制面板地址：{{address}}",
+      "copyLabel": "面板地址"
+    },
+    "join": {
+      "label": "加入",
+      "aria": "通过 Steam 加入：{{address}}",
+      "tooltip": "通过 Steam 连接"
+    }
+  },
+  "toasts": {
+    "copied": "已复制",
+    "copiedDesc": "{{label}}已复制到剪贴板",
+    "copyFailedTitle": "复制失败",
+    "copyFailedDesc": "无法复制到剪贴板",
+    "autoStartEnabledTitle": "已启用自动启动",
+    "autoStartDisabledTitle": "已禁用自动启动",
+    "autoStartEnabledDesc": "面板启动时服务器将自动启动",
+    "autoStartDisabledDesc": "服务器将不会自动启动",
+    "autoStartSaveFailed": "保存自动启动设置失败",
+    "errorTitle": "错误",
+    "actionFailedFallback": "操作失败，请重试。",
+    "rconAuthFailed": {
+      "openServers": "打开服务器",
+      "openServersAlt": "打开服务器页面以更新 RCON 密码"
+    }
+  },
+  "actions": {
+    "start": "启动",
+    "stop": "停止",
+    "forceStop": "强制停止",
+    "restart": "重启",
+    "restartNow": "立即重启",
+    "save": "保存",
+    "refreshStatus": "刷新状态",
+    "createBackup": "创建备份",
+    "bridgeSettings": "桥接设置",
+    "connectRcon": "连接 RCON",
+    "wipeServer": "清除服务器",
+    "moreActionsAria": "更多服务器操作",
+    "addServerFirst": "先添加或选择一个服务器",
+    "notAvailableRemote": "远程（仅 RCON）服务器不可用",
+    "forceStopTooltip": "尝试快速保存，之后无论如何都会立即停止",
+    "connectRconNeedsHostRunning": "请先启动服务器",
+    "noPermissionControl": "您的角色没有控制服务器的权限。",
+    "noPermissionWipe": "您的角色没有清除世界的权限。",
+    "wipeMustStopFirst": "请先停止服务器再清除。"
+  },
+  "confirm": {
+    "cancel": "取消",
+    "stopServer": {
+      "title": "停止服务器",
+      "description": "确定要停止服务器吗？所有已连接的玩家都将被断开连接。"
+    },
+    "forceStopServer": {
+      "title": "强制停止服务器",
+      "description": "此操作会先尝试快速保存（最多 3 秒），然后无论保存是否成功都会立即停止游戏。",
+      "descriptionPlayers": " {{count}} 名玩家将被断开连接！"
+    },
+    "restartServer": {
+      "title": "重启服务器",
+      "description": "此操作将向所有玩家发送 5 分钟警告，然后重启服务器。"
+    },
+    "restartServerNow": {
+      "title": "立即重启服务器",
+      "description": "此操作将立即重启服务器，不发出警告。",
+      "descriptionPlayers": " {{count}} 名玩家将被断开连接！"
+    }
+  },
+  "successCopy": {
+    "startServer": {
+      "title": "服务器正在启动",
+      "description": "在仪表盘上查看实时状态。"
+    },
+    "startServerScriptBackup": {
+      "title": "服务器正在启动——启动脚本已备份",
+      "description": "面板检测到启动脚本有变化，已在重新生成前保存了你的版本。"
+    },
+    "stopServer": {
+      "title": "服务器已停止",
+      "description": "会话已正常关闭。"
+    },
+    "stopServerRequested": {
+      "title": "已请求关闭",
+      "description": "服务器正在保存并正常关闭——大型存档可能需要一些时间。状态徽标会在确认已停止后更新。"
+    },
+    "forceStopServer": {
+      "title": "服务器已强制停止",
+      "description": "世界已保存，然后游戏进程已停止。"
+    },
+    "forceStopSaveFailed": {
+      "title": "服务器已强制停止 — 保存失败",
+      "description": "停止前的保存被拒绝。最近的进度可能会丢失。"
+    },
+    "forceStopSaveTimedOut": {
+      "title": "服务器已强制停止 — 保存超时",
+      "description": "停止前的保存在 3 秒内没有响应。最近的进度可能会丢失。"
+    },
+    "forceStopSaveSkipped": {
+      "title": "服务器已强制停止 — 未尝试保存",
+      "description": "RCON 未连接，因此停止前未尝试保存。最近的进度可能会丢失。"
+    },
+    "restartServer": {
+      "title": "已安排重启",
+      "description": "服务器即将重启。"
+    },
+    "restartServerNow": {
+      "title": "已触发重启",
+      "description": "已发送强制重启指令。"
+    },
+    "saveWorld": {
+      "title": "世界已保存",
+      "description": "当前状态已写入磁盘。"
+    },
+    "createBackup": {
+      "title": "备份已开始",
+      "description": "正在打包新的恢复点。"
+    },
+    "connectRcon": {
+      "title": "RCON 已连接",
+      "description": "远程指令控制已就绪。"
+    },
+    "defaultTitle": "操作完成",
+    "defaultDescription": "{{action}}已成功完成。"
+  },
+  "verdict": {
+    "noServerConfigured": "未配置服务器",
+    "openSetup": "打开设置",
+    "panelCannotReach": "面板无法连接到服务器",
+    "retry": "重试",
+    "serverStatusUnknown": "服务器状态未知",
+    "serverStopped": "服务器已停止",
+    "rconDisconnected": "RCON 已断开",
+    "rconHelpLabel": "RCON",
+    "rconHelpTip": "RCON 是本面板用来向正在运行的游戏发送命令的远程控制台协议——踢出玩家、保存世界、广播消息，以及面板所做的其他一切操作。在它断开连接期间，这些操作将无法使用，直到重新连接为止。",
+    "hostMemory": "主机内存 {{percent}}%",
+    "diskAlmostFull": "磁盘空间即将耗尽，剩余 {{gb}} GB",
+    "diskPercent": "磁盘 {{percent}}%，剩余 {{gb}} GB",
+    "hostCpu": "主机 CPU {{percent}}%",
+    "bridgeOffline": "PanelBridge 离线",
+    "bridgeSettingsLink": "桥接设置",
+    "modUpdatesWaiting_one": "{{count}} 个模组更新待处理",
+    "modUpdatesWaiting_other": "{{count}} 个模组更新待处理",
+    "reviewMods": "查看模组",
+    "noBackups": "暂无备份"
+  },
+  "panelUpdateBanner": {
+    "applyFailed": "应用失败",
+    "updateStaged": "更新已就绪",
+    "panelUpdate": "面板更新",
+    "lastApplyFailedDesc": "上次应用尝试失败——请查看设置以获取诊断信息。",
+    "stagedDesc": "已下载并准备就绪。重启面板即可应用。",
+    "newVersionDesc": "有新的面板版本可用。",
+    "dismissAria": "关闭更新通知",
+    "dismissTooltip": "关闭，直到下一个版本",
+    "applyUpdate": "应用更新",
+    "viewUpdate": "查看更新"
+  },
+  "updateCheckError": {
+    "label": "无法检查面板更新",
+    "dismissAria": "关闭更新检查提示",
+    "dismissTooltip": "关闭，直到情况发生变化"
+  },
+  "connectionError": {
+    "label": "连接错误",
+    "suffix": "。部分功能可能不可用。",
+    "retry": "重试"
+  },
+  "notConfigured": {
+    "label": "未配置",
+    "description": "打开服务器设置以添加或配置服务器。",
+    "openSetup": "打开设置 →"
+  },
+  "quickStart": {
+    "dismissAria": "关闭快速入门指南",
+    "eyebrow": "首个服务器",
+    "heading": "先让一个服务器运行起来，让 RCON 正常工作，然后再逐步完善其余部分。",
+    "step1Title": "接入一个服务器",
+    "step1Desc": "添加现有安装、连接远程 RCON，或创建新服务器。",
+    "step2Title": "校验连接",
+    "step2Desc": "确认路径、RCON 凭据和活动服务器。",
+    "step3Title": "实现实时控制",
+    "step3Desc": "当状态、玩家和聊天开始更新时，实时控制即已就绪。",
+    "installNewServer": "安装新服务器",
+    "addExistingServer": "添加现有服务器",
+    "addRemoteServer": "添加远程服务器"
+  },
+  "liveActivity": {
+    "heading": "实时动态",
+    "eventsCount_one": "{{count}} 个事件",
+    "eventsCount_other": "{{count}} 个事件",
+    "idle": "空闲",
+    "offline": "离线",
+    "emptyOnline": "正在监听玩家加入、离开、死亡及管理操作事件。",
+    "emptyConfiguredNotRunning": "启动服务器以开始追踪玩家活动。",
+    "emptyNotConfigured": "配置服务器以开始追踪活动。",
+    "verbs": {
+      "joined": "加入",
+      "left": "离开",
+      "died": "死亡",
+      "killed": "击杀",
+      "banned": "封禁",
+      "kicked": "踢出"
+    }
+  },
+  "telemetry": {
+    "heading": "服务器遥测",
+    "sampling": "采样中",
+    "standby": "待机",
+    "live": "实时",
+    "lastSecondsLive": "最近 {{seconds}} 秒 · 实时",
+    "lastMinutesLive": "最近 {{minutes}} 分钟 · 实时",
+    "unconfirmed": "未确认",
+    "lastSecondsUnconfirmed": "最近 {{seconds}} 秒 · 未确认",
+    "lastMinutesUnconfirmed": "最近 {{minutes}} 分钟 · 未确认",
+    "placeholderOnline": "遥测数据将在下一个采样周期内显示。",
+    "placeholderOffline": "启动服务器以追踪 CPU、内存和玩家指标。"
+  },
+  "connLine": {
+    "rcon": "RCON",
+    "bridge": "桥接",
+    "connected": "已连接",
+    "pending": "等待中",
+    "offline": "离线"
+  },
+  "maintenance": {
+    "heading": "维护",
+    "refreshStatus": "刷新状态",
+    "createBackup": "创建备份",
+    "wipeServer": "清除服务器",
+    "wipeTooltipOnline": "清除前需先停止服务器",
+    "wipeTooltipOffline": "删除地图/玩家/世界状态",
+    "autoStartLabel": "启动时自动开启"
+  },
+  "bridgeOfflineNotice": {
+    "title": "桥接离线",
+    "description": "高级世界控制功能需要 PanelBridge。",
+    "configureLink": "配置桥接"
+  },
+  "workItems": {
+    "players": "玩家",
+    "zombies": "丧尸",
+    "console": "控制台",
+    "mods": "模组",
+    "schedule": "计划任务",
+    "errors": "错误",
+    "backups": "备份",
+    "config": "配置",
+    "rconReady": "rcon 已就绪",
+    "rconOffline": "rcon 离线",
+    "modsToUpdate_one": "{{count}} 个待更新",
+    "modsToUpdate_other": "{{count}} 个待更新",
+    "modsTracked_one": "已追踪 {{count}} 个",
+    "modsTracked_other": "已追踪 {{count}} 个",
+    "errorsNone": "无",
+    "errorsLogged": "已记录 {{count}} 个",
+    "backupsNoneYet": "尚无",
+    "backupsStored_one": "已存储 {{count}} 个",
+    "backupsStored_other": "已存储 {{count}} 个",
+    "backupsStoredLast_one": "已存储 {{count}} 个，最近 {{age}}",
+    "backupsStoredLast_other": "已存储 {{count}} 个，最近 {{age}}",
+    "scheduleNoneActive": "无生效任务",
+    "scheduleActive_one": "{{count}} 个生效中",
+    "scheduleActive_other": "{{count}} 个生效中"
+  },
+  "age": {
+    "justNow": "刚刚",
+    "minutesAgo_one": "{{count}} 分钟前",
+    "minutesAgo_other": "{{count}} 分钟前",
+    "hoursAgo_one": "{{count}} 小时前",
+    "hoursAgo_other": "{{count}} 小时前",
+    "daysAgo_one": "{{count}} 天前",
+    "daysAgo_other": "{{count}} 天前",
+    "justJoined": "刚刚加入",
+    "forMinutes_one": "{{count}} 分钟",
+    "forMinutes_other": "{{count}} 分钟",
+    "forHours_one": "{{count}} 小时",
+    "forHours_other": "{{count}} 小时",
+    "forDays_one": "{{count}} 天",
+    "forDays_other": "{{count}} 天"
+  },
+  "eta": {
+    "anyMoment": "随时",
+    "inMinutes_one": "{{count}} 分钟后",
+    "inMinutes_other": "{{count}} 分钟后",
+    "inHours_one": "{{count}} 小时后",
+    "inHours_other": "{{count}} 小时后",
+    "inHoursMinutes": "{{hours}} 小时 {{minutes}} 分钟后",
+    "inDays_one": "{{count}} 天后",
+    "inDays_other": "{{count}} 天后"
+  },
+  "wipeDialog": {
+    "title": "清除服务器",
+    "description": "选择要从 <b>{{serverName}}</b> 中删除的数据。服务器必须处于停止状态。",
+    "defaultServerName": "当前活动的服务器",
+    "targets": {
+      "map": {
+        "label": "地图与地形",
+        "desc": "区块、地形、建筑物、丧尸数量、iso 区域。"
+      },
+      "players": {
+        "label": "玩家与载具",
+        "desc": "玩家存档、物品栏、位置、载具数据。"
+      },
+      "world": {
+        "label": "世界状态",
+        "desc": "世界字典、元数据、侵蚀、游戏对象状态、电台。"
+      },
+      "accounts": {
+        "label": "账号与封禁",
+        "desc": "用户账号、密码、角色、白名单及封禁列表。所有人将在下次加入时重新注册。"
+      }
+    },
+    "notice": "选择地图、玩家或世界将永久删除相应数据——除非先在下方创建备份，否则无法撤销。选择账号将永久删除白名单和封禁列表；所有人将在下次加入时重新注册。服务器 .ini 与沙盒设置单独存储，不会受到影响。",
+    "backupLabel": "清除前先备份",
+    "backupDesc": "在删除任何内容之前，创建当前存档的完整备份（如果选择了账号，也会备份账号数据库）。可在备份页面中恢复。",
+    "noBackupTitle": "不会创建备份",
+    "noBackupDesc": "你清除的内容将永久丢失，无法通过面板撤销。",
+    "backupStarting": "正在开始备份……",
+    "noFilesFound": "未找到所选目标对应的文件。",
+    "willDelete": "此操作将永久删除：",
+    "categoryLabels": {
+      "map": "地图/地形",
+      "players": "玩家/载具",
+      "world": "世界状态",
+      "leftovers": "其他残留",
+      "accounts": "账号数据库"
+    },
+    "filesCount": "{{count}} 个{{category}}文件（{{mb}} MB）",
+    "noCategoryFilesFound": "未找到{{category}}文件",
+    "total": "总计：{{count}} 个文件（{{mb}} MB）",
+    "truncatedWarning": "由于存档过大，扫描提前停止——以上数字为最低估计，实际数量可能更多。",
+    "cancel": "取消",
+    "preview": "预览",
+    "wipeNow": "立即清除",
+    "previewFailedTitle": "预览失败",
+    "previewFailedFallback": "无法扫描存档目录",
+    "wipedTitle": "服务器已清除",
+    "wipedDesc": "已删除：{{targets}}",
+    "wipedDescWithBackup": "已删除：{{targets}}。已提前备份为 {{name}}。",
+    "wipeFailedTitle": "清除失败",
+    "wipeFailedFallback": "未知错误"
+  }
+}

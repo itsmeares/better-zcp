@@ -13,7 +13,7 @@ data/backups/
 data/map-tiles-cache/
 
 # Build outputs
-client/dist/
+apps/panel-client/dist/
 dist-exe/
 server.cjs
 

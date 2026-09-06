@@ -223,7 +223,7 @@ The fastest path to a fully working setup — panel **and** a new Project
 Zomboid server — is the all-in-one installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker/all-in-one/bootstrap.sh | sh
+curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh
 ```
 
 It checks Docker, generates the secret and persistent configuration, pulls the
@@ -353,7 +353,7 @@ pnpm dev
 Frontend at `http://localhost:5173`, backend at `http://localhost:3001`.
 
 ```bash
-node build.js --all        # Build Windows + Linux binaries
+pnpm run build:exe:all     # Build Windows + Linux binaries
 pnpm test                  # Run tests
 ```
 

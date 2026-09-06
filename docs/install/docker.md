@@ -50,7 +50,7 @@ need `sudo` in front of the commands below).
 
 3. Run:
    ```sh
-   curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker/all-in-one/bootstrap.sh | sh
+   curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh
    ```
    This resolves the latest release, creates its state under
    `~/.local/state/zomboid-panel/` (override with the `PANEL_HOME` or
@@ -61,7 +61,7 @@ need `sudo` in front of the commands below).
    To install a specific version instead of the latest release, pass it as
    an argument:
    ```sh
-   curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker/all-in-one/bootstrap.sh | sh -s -- 2.0.0
+   curl -fsSL https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/all-in-one/bootstrap.sh | sh -s -- 2.0.0
    ```
 
    For the panel and updater images, it pulls the exact release-tagged image
@@ -354,7 +354,7 @@ install or run Project Zomboid itself.
 ### Phase 2 — Import and configure
 
 2. In Unraid's **Docker** tab, add the container from template:
-   `https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker/unraid/zomboid-panel.xml`
+   `https://raw.githubusercontent.com/itsmeares/better-zcp/main/infra/docker/unraid/zomboid-panel.xml`
    (or search "Zomboid Control Panel" if it's listed in Community
    Applications).
 3. Set these four path mappings — the panel's own two are pre-filled, the

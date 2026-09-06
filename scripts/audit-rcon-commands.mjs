@@ -34,7 +34,7 @@ function collectJsFiles(dir, out) {
   return out;
 }
 
-const serverDir = path.join(root, "server");
+const serverDir = path.join(root, "apps/panel-server");
 const files = collectJsFiles(serverDir, []);
 
 // A single pattern, not three: `execute\w*\(` with no receiver anchor
@@ -80,14 +80,14 @@ for (const file of files) {
 const MIN_COMMANDS = 20;
 if (found.size < MIN_COMMANDS) {
   console.error(
-    `ERROR: found only ${found.size} distinct command(s) across server/ ` +
+    `ERROR: found only ${found.size} distinct command(s) across apps/panel-server/ ` +
     `(expected at least ${MIN_COMMANDS}). The extraction pattern or the file walk is ` +
     `almost certainly broken -- fix it before trusting this script's output.`,
   );
   process.exit(1);
 }
 
-console.log(`panel sends ${found.size} distinct commands (across ${files.length} files scanned under server/)`);
+console.log(`panel sends ${found.size} distinct commands (across ${files.length} files scanned under apps/panel-server/)`);
 
 if (!supportedFile) {
   console.log(
