@@ -140,7 +140,7 @@ function countCollections(data) {
   );
 }
 
-export function summarizeLegacyImport(prepared, { sourcePath, targetPath, applied }) {
+function summarizeLegacyImport(prepared, { sourcePath, targetPath, applied }) {
   return {
     sourcePath,
     targetPath,
@@ -161,18 +161,22 @@ export async function importLegacyDatabase({ sourcePath, targetPath, apply = fal
   if (source === target) {
     throw new Error("Source and target must be different files");
   }
-  if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
-    throw new Error(`Legacy database was not found: ${source}`);
-  }
   if (fs.existsSync(target)) {
     throw new Error(`Refusing to overwrite an existing SQLite database: ${target}`);
   }
 
   let legacyData;
+  let sourceHandle;
   try {
-    legacyData = JSON.parse(fs.readFileSync(source, "utf8"));
+    sourceHandle = fs.openSync(source, "r");
+    if (!fs.fstatSync(sourceHandle).isFile()) {
+      throw new Error(`Legacy database was not found: ${source}`);
+    }
+    legacyData = JSON.parse(fs.readFileSync(sourceHandle, "utf8"));
   } catch (error) {
     throw new Error(`Could not read legacy database JSON: ${error.message}`);
+  } finally {
+    if (sourceHandle !== undefined) fs.closeSync(sourceHandle);
   }
 
   const prepared = prepareLegacyImport(legacyData);
