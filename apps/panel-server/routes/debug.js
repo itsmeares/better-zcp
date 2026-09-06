@@ -53,7 +53,7 @@ import { getThumbnailResolutionStatus } from "./mods.js";
 import {
   getCandidateZomboidPaths,
   inspectZomboidPath,
-} from "../utils/zomboidPaths.js";
+} from "../utils/zomboidPaths.ts";
 import { requirePermission, listRolesWithMemberCounts } from "../services/permissions.js";
 import { getDockerClient } from "../services/managedContainer.ts";
 import { resolveProvider } from "../utils/serverStatusModel.ts";

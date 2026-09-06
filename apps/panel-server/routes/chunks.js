@@ -19,7 +19,7 @@ import {
   getCandidateZomboidPaths,
   invalidateCandidatePathsCache,
   inspectZomboidPath,
-} from "../utils/zomboidPaths.js";
+} from "../utils/zomboidPaths.ts";
 import { ErrorCode } from "../utils/errorCodes.js";
 
 export { normalizeUserPath, getCandidateZomboidPaths, invalidateMapFolderScan };

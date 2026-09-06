@@ -7,7 +7,7 @@ import {
   getCandidateZomboidPaths,
   invalidateCandidatePathsCache,
   inspectZomboidPath,
-} from '../utils/zomboidPaths.js';
+} from '../utils/zomboidPaths.ts';
 
 describe('normalizeUserPath', () => {
   it('returns null for null/undefined/empty input', () => {
