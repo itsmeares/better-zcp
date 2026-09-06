@@ -2,7 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
-import { writeLuaAtomic } from "../utils/embeddedLua.js";
+import { writeLuaAtomic } from "../utils/embeddedLua.ts";
 
 function mode(p) {
   return fs.statSync(p).mode & 0o777;

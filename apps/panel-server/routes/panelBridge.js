@@ -24,7 +24,7 @@ import {
   getEmbeddedPanelBridgeLua,
   compareModVersions,
   writeLuaAtomic,
-} from "../utils/embeddedLua.js";
+} from "../utils/embeddedLua.ts";
 import {
   canAutoInstall,
   checkBridgeInstalled,

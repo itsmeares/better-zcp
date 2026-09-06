@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { compareModVersions, writeLuaAtomic } from '../utils/embeddedLua.js';
+import { compareModVersions, writeLuaAtomic } from '../utils/embeddedLua.ts';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('PanelBridgeInstaller');
