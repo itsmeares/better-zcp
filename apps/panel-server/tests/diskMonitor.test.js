@@ -5,7 +5,7 @@ const getSetting = vi.fn();
 vi.mock("../database/init.js", () => ({ getActiveServer, getSetting }));
 
 const getDiskFree = vi.fn();
-vi.mock("../utils/diskSpace.js", () => ({ getDiskFree }));
+vi.mock("../utils/diskSpace.ts", () => ({ getDiskFree }));
 
 const {
   computeDiskStatus,

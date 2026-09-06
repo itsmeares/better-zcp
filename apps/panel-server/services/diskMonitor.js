@@ -1,6 +1,6 @@
 import { createLogger } from "../utils/logger.js";
 import { getActiveServer, getSetting } from "../database/init.js";
-import { getDiskFree } from "../utils/diskSpace.js";
+import { getDiskFree } from "../utils/diskSpace.ts";
 
 const log = createLogger("DiskMonitor");
 

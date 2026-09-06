@@ -2,20 +2,33 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 
+type DiskFree = { free: number; total: number };
+type ExecResult = { ok: boolean; stdout: string; stderr: string };
+
 const FS_TIMEOUT_MS = 2000;
 
-function withTimeout(promise, ms, fallback) {
-  let timer;
+function withTimeout<T, F>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: F,
+): Promise<T | F> {
+  let timer: NodeJS.Timeout | undefined;
   return Promise.race([
     promise,
-    new Promise((resolve) => {
+    new Promise<F>((resolve) => {
       timer = setTimeout(() => resolve(fallback), ms);
       timer.unref?.();
     }),
-  ]).finally(() => clearTimeout(timer));
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
-function execFileP(file, args, opts = {}) {
+function execFileP(
+  file: string,
+  args: string[],
+  opts: Record<string, unknown> = {},
+): Promise<ExecResult> {
   return new Promise((resolve) => {
     try {
       execFile(
@@ -25,8 +38,8 @@ function execFileP(file, args, opts = {}) {
         (err, stdout, stderr) => {
           resolve({
             ok: !err,
-            stdout: stdout || "",
-            stderr: stderr || "",
+            stdout: stdout ? String(stdout) : "",
+            stderr: stderr ? String(stderr) : "",
           });
         },
       );
@@ -36,7 +49,7 @@ function execFileP(file, args, opts = {}) {
   });
 }
 
-async function getDiskFreeFallback(targetPath) {
+async function getDiskFreeFallback(targetPath: string): Promise<DiskFree | null> {
   try {
     const resolved = path.resolve(targetPath);
     if (process.platform === "win32") {
@@ -95,7 +108,9 @@ async function getDiskFreeFallback(targetPath) {
   }
 }
 
-export async function getDiskFree(targetPath) {
+export async function getDiskFree(
+  targetPath: string | null | undefined,
+): Promise<DiskFree | null> {
   try {
     if (!targetPath) return null;
     if (typeof fs.promises.statfs === "function") {
