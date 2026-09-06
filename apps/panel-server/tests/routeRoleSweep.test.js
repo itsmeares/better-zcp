@@ -192,7 +192,7 @@ describe("rcon.js: mixed -- /execute, connection lifecycle and /history are admi
   ];
 
   it.each(RESTRICTED)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/rcon.js");
+    const { default: router } = await import("../routes/rcon.ts");
     const res = await runRoute(router, routePath, method, {
       user: { role: "moderator" },
       body: {},
@@ -203,7 +203,7 @@ describe("rcon.js: mixed -- /execute, connection lifecycle and /history are admi
   });
 
   it.each(RESTRICTED)("does not refuse a technician at the gate on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/rcon.js");
+    const { default: router } = await import("../routes/rcon.ts");
     const stubRconService = {
       connect: async () => false,
       disconnect: async () => {},
@@ -221,7 +221,7 @@ describe("rcon.js: mixed -- /execute, connection lifecycle and /history are admi
   });
 
   it.each(OPEN)("stays open to a moderator on %s %s (read-only, nothing sensitive)", async (routePath, method) => {
-    const { default: router } = await import("../routes/rcon.js");
+    const { default: router } = await import("../routes/rcon.ts");
     const stubRconService = {
       getConfig: () => ({ host: "127.0.0.1", port: 27015 }),
       healthCheck: async () => ({ healthy: true }),

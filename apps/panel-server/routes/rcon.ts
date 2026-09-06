@@ -21,8 +21,15 @@ import { ErrorCode } from '../utils/errorCodes.js';
 
 const router = express.Router();
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
-function validateTestInput(host, port, password) {
+function validateTestInput(
+  host: unknown,
+  port: unknown,
+  password: unknown,
+): string | null {
   if (typeof host !== 'string' || host.length > 255 || !/^[a-zA-Z0-9.-]+$/.test(host)) {
     return 'Invalid host format';
   }
@@ -40,7 +47,7 @@ router.post('/execute', requirePermission('rcon.execute'), async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const command = req.body?.command;
-    log.info(`POST /execute: ${typeof command === 'string' ? redactRconCommandSecrets(command).substring(0, 100) : ''}`);
+    log.info(`POST /execute: ${typeof command === 'string' ? String(redactRconCommandSecrets(command)).substring(0, 100) : ''}`);
 
     if (!command) {
       return res.status(400).json({ error: 'Command is required', code: ErrorCode.RCON_COMMAND_REQUIRED });
@@ -61,9 +68,10 @@ router.post('/execute', requirePermission('rcon.execute'), async (req, res) => {
     });
 
     res.json(result);
-  } catch (error) {
-    log.error(`RCON execute failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    log.error(`RCON execute failed: ${message}`);
+    res.status(500).json({ error: sanitizeError(message) });
   }
 });
 
@@ -72,8 +80,8 @@ router.get('/status', async (req, res) => {
     const rconService = req.app.get('rconService');
     const config = rconService.getConfig();
     res.json(config);
-  } catch (error) {
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -100,12 +108,13 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
       }
     }
 
-    let normalizedPort;
+    let normalizedPort: number | undefined;
     if (port !== undefined) {
-      normalizedPort = parseBoundedInteger(port, null, 1, 65535);
-      if (normalizedPort === null) {
+      const parsedPort = parseBoundedInteger(port, null, 1, 65535);
+      if (parsedPort === null) {
         return res.status(400).json({ success: false, error: 'Invalid port (1-65535)', code: ErrorCode.RCON_INVALID_PORT });
       }
+      normalizedPort = parsedPort;
     }
 
     if (password !== undefined) {
@@ -143,10 +152,11 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
       error: RCON_AUTH_FAILED_DETAIL,
       code: ErrorCode.RCON_CONNECT_AUTH_FAILED,
     });
-  } catch (error) {
-    log.error(`RCON connect failed: ${error.message}`);
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    log.error(`RCON connect failed: ${message}`);
     const rconService = req.app.get('rconService');
-    const friendlyError = rconService.getUserFriendlyError(error.message);
+    const friendlyError = rconService.getUserFriendlyError(message);
     res.status(500).json({ success: false, error: friendlyError });
   }
 });
@@ -167,9 +177,10 @@ router.post('/test', requirePermission('rcon.execute'), requirePermission('serve
       password,
     });
     res.json(result);
-  } catch (error) {
-    log.error(`RCON test failed: ${error.message}`);
-    res.status(500).json({ success: false, error: 'internal_error', detail: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    log.error(`RCON test failed: ${message}`);
+    res.status(500).json({ success: false, error: 'internal_error', detail: sanitizeError(message) });
   }
 });
 
@@ -182,8 +193,8 @@ router.get('/health', async (req, res) => {
     } else {
       res.status(503).json({ success: false, ...health });
     }
-  } catch (error) {
-    res.status(500).json({ success: false, reason: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, reason: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -193,8 +204,8 @@ router.post('/disconnect', requirePermission('rcon.execute'), async (req, res) =
     const rconService = req.app.get('rconService');
     await rconService.disconnect();
     res.json({ success: true, message: 'Disconnected from RCON' });
-  } catch (error) {
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -203,9 +214,10 @@ router.get('/history', requirePermission('rcon.execute'), async (req, res) => {
     const limit = parseClampedInteger(req.query.limit, 100, 1, 1000);
     const history = await getCommandHistory(limit);
     res.json({ history });
-  } catch (error) {
-    log.error(`Failed to get command history: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    log.error(`Failed to get command history: ${message}`);
+    res.status(500).json({ error: sanitizeError(message) });
   }
 });
 
@@ -215,12 +227,13 @@ router.get('/commands', (req, res) => {
 
 router.get('/commands/:category', (req, res) => {
   const { category } = req.params;
-  const filtered = Object.entries(PZ_COMMANDS)
+  const commands = PZ_COMMANDS as Record<string, { category?: string; [key: string]: unknown }>;
+  const filtered: Record<string, unknown> = Object.entries(commands)
     .filter(([_, cmd]) => cmd.category === category)
     .reduce((acc, [key, cmd]) => {
       acc[key] = cmd;
       return acc;
-    }, {});
+    }, {} as Record<string, unknown>);
 
   res.json({ commands: filtered });
 });

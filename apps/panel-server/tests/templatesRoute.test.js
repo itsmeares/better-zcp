@@ -22,7 +22,7 @@ vi.mock("../services/templateService.js", () => ({
   applyTemplate,
 }));
 
-const { default: router } = await import("../routes/templates.js");
+const { default: router } = await import("../routes/templates.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

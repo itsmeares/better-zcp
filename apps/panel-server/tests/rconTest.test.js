@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import net from 'net';
 import { testRconConnection, RCON_UNREACHABLE_DETAIL } from '../services/rcon.js';
-import router from '../routes/rcon.js';
+import router from '../routes/rcon.ts';
 import { ErrorCode } from '../utils/errorCodes.js';
 
 function createResponse() {

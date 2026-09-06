@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import net from 'net';
-import router from '../routes/rcon.js';
+import router from '../routes/rcon.ts';
 import { RCON_UNREACHABLE_DETAIL, RCON_AUTH_FAILED_DETAIL } from '../services/rcon.js';
 
 

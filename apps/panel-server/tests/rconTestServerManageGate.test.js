@@ -26,7 +26,7 @@ function createResponse() {
 }
 
 async function runPostRoute(routePath, req) {
-  const { default: router } = await import('../routes/rcon.js');
+  const { default: router } = await import('../routes/rcon.ts');
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods.post,
   );
