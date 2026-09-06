@@ -98,10 +98,6 @@ COPY pz-mod/ ./pz-mod/
 COPY docker/entrypoint.sh /usr/local/bin/zomboid-panel-entrypoint
 RUN chmod 0755 /usr/local/bin/zomboid-panel-entrypoint
 
-# The extension bundle is served when present, but its source is not currently
-# tracked in Git and `release/` is intentionally excluded from Docker builds.
-# Do not COPY a generated local ZIP here: that breaks clean GitHub/CI builds.
-
 # Create runtime directories owned by the panel user (numeric IDs survive
 # the case where we're reusing the base image's existing user).
 RUN mkdir -p data logs && chown -R ${UID}:${GID} /app

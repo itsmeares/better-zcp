@@ -533,37 +533,12 @@ function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (corsState.allowAll) return true;
 
-  // Browser extension popups (chrome-extension://, moz-extension://,
-  // safari-web-extension://) must be checked BEFORE normalizeOrigin, because
-  // Node's URL.origin returns the literal string "null" for non-special
-  // schemes, which would otherwise drop these origins on the floor.
-  if (typeof origin === "string") {
-    const lower = origin.toLowerCase();
-    if (
-      lower.startsWith("chrome-extension://") ||
-      lower.startsWith("moz-extension://") ||
-      lower.startsWith("safari-web-extension://")
-    ) {
-      return true;
-    }
-  }
-
   const normalized = normalizeOrigin(origin);
   if (!normalized) return false;
   if (allowedOrigins.has(normalized)) return true;
 
   try {
     const url = new URL(normalized);
-    // Browser extensions (popup pages) call the panel from origins like
-    // chrome-extension://<id> or moz-extension://<id>. We trust these
-    // because the request still has to carry a valid JWT to do anything.
-    if (
-      url.protocol === "chrome-extension:" ||
-      url.protocol === "moz-extension:" ||
-      url.protocol === "safari-web-extension:"
-    ) {
-      return true;
-    }
     if (
       corsState.allowPrivateNetworks &&
       (isPrivateNetworkHost(url.hostname) || isLikelyLanHostname(url.hostname))
