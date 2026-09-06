@@ -39,6 +39,7 @@ import {
   setSetting,
   flushWrites,
   flushForShutdown,
+  closeDatabase,
   recordPerformanceSnapshot,
   logServerEvent,
   getDatabaseFilePath,
@@ -2561,6 +2562,7 @@ async function start() {
             refreshInlineScriptCspHash();
             try {
               const backupPath = await getSetting("preUpdateDataBackupPath");
+              closeDatabase();
               if (
                 restorePreUpdateDataBackup(
                   { ...getDataPaths(), dbPath: getDatabaseFilePath() },

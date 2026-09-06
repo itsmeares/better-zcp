@@ -380,6 +380,10 @@ export async function commitNow() {
   await flushWrites();
 }
 
+export function closeDatabase() {
+  if (useSqliteDatabase && db) db.adapter.close();
+}
+
 
 const TMP_FILE_RE = /^db\.json\.(\d+)\.[0-9a-z]+\.tmp$/i;
 
