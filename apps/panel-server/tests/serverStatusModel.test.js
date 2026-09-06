@@ -6,7 +6,7 @@ import {
   buildBridgeSignal,
   buildSummary,
   composeServerStatus,
-} from "../utils/serverStatusModel.js";
+} from "../utils/serverStatusModel.ts";
 
 describe("resolveProvider", () => {
   it("defaults a local server to native", () => {

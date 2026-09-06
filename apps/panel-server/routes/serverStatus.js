@@ -3,7 +3,7 @@ import { createLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/sanitize.js";
 import { getActiveServer } from "../database/init.js";
 import panelBridge from "../services/panelBridge.js";
-import { composeServerStatus, resolveProvider } from "../utils/serverStatusModel.js";
+import { composeServerStatus, resolveProvider } from "../utils/serverStatusModel.ts";
 import { resolveDockerHostSignal } from "../services/managedContainer.js";
 
 const log = createLogger("API:ServerStatus");

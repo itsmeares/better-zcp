@@ -56,7 +56,7 @@ import {
 } from "../utils/zomboidPaths.js";
 import { requirePermission, listRolesWithMemberCounts } from "../services/permissions.js";
 import { getDockerClient } from "../services/managedContainer.js";
-import { resolveProvider } from "../utils/serverStatusModel.js";
+import { resolveProvider } from "../utils/serverStatusModel.ts";
 import {
   getLifecycleServiceName,
   isManagedLifecycleProvider,
