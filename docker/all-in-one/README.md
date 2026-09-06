@@ -1,8 +1,8 @@
 # All-in-One Docker Deployment
 
 One container runs the panel, SteamCMD, and the Project Zomboid dedicated
-server together. This is what the maintainer runs in production, and the
-most complete Docker path in this repo — pick it when you don't have a PZ
+server together. This is the most complete Docker path in this repo — pick it
+when you don't have a PZ
 server running anywhere yet.
 
 For the full walkthrough with verification checkpoints at every step, plus
