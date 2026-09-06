@@ -1,7 +1,29 @@
 export const RESTART_WARNING_SETTING_KEY = "restartWarning";
 export const DEFAULT_RESTART_WARNING_LOCALE = "en";
 
-export const RESTART_WARNING_PRESETS = Object.freeze({
+type RestartWarningUnit = "minute" | "second";
+type RestartWarningNotice = "cancelled" | "restarting";
+
+interface RestartWarningPreset {
+  template: string;
+  units: Record<RestartWarningUnit, readonly [string, string]>;
+  cancelled: string;
+  restarting: string;
+}
+
+export interface RestartWarningSettings {
+  locale: string;
+  template: string;
+}
+
+interface RestartWarningInput {
+  locale?: unknown;
+  template?: unknown;
+}
+
+export const RESTART_WARNING_PRESETS: Readonly<
+  Record<string, RestartWarningPreset>
+> = Object.freeze({
   en: {
     template: "[SERVER] *** RESTART IN {count} {unit} ***",
     units: {
@@ -9,7 +31,8 @@ export const RESTART_WARNING_PRESETS = Object.freeze({
       second: ["SECOND", "SECONDS"],
     },
     cancelled: "[SERVER] Restart CANCELLED.",
-    restarting: "[SERVER] *** RESTARTING NOW - please reconnect in a few minutes ***",
+    restarting:
+      "[SERVER] *** RESTARTING NOW - please reconnect in a few minutes ***",
   },
   "zh-CN": {
     template: "[服务器] *** 将在 {count}{unit} 后重启 ***",
@@ -27,7 +50,8 @@ export const RESTART_WARNING_PRESETS = Object.freeze({
       second: ["SECONDE", "SECONDES"],
     },
     cancelled: "[SERVEUR] Redémarrage ANNULÉ.",
-    restarting: "[SERVEUR] *** REDÉMARRAGE EN COURS - reconnectez-vous dans quelques minutes ***",
+    restarting:
+      "[SERVEUR] *** REDÉMARRAGE EN COURS - reconnectez-vous dans quelques minutes ***",
   },
   de: {
     template: "[SERVER] *** NEUSTART IN {count} {unit} ***",
@@ -36,7 +60,8 @@ export const RESTART_WARNING_PRESETS = Object.freeze({
       second: ["SEKUNDE", "SEKUNDEN"],
     },
     cancelled: "[SERVER] Neustart ABGEBROCHEN.",
-    restarting: "[SERVER] *** NEUSTART LÄUFT - bitte in wenigen Minuten erneut verbinden ***",
+    restarting:
+      "[SERVER] *** NEUSTART LÄUFT - bitte in wenigen Minuten erneut verbinden ***",
   },
   es: {
     template: "[SERVIDOR] *** REINICIO EN {count} {unit} ***",
@@ -45,7 +70,8 @@ export const RESTART_WARNING_PRESETS = Object.freeze({
       second: ["SEGUNDO", "SEGUNDOS"],
     },
     cancelled: "[SERVIDOR] Reinicio CANCELADO.",
-    restarting: "[SERVIDOR] *** REINICIANDO - vuelve a conectarte en unos minutos ***",
+    restarting:
+      "[SERVIDOR] *** REINICIANDO - vuelve a conectarte en unos minutos ***",
   },
   ht: {
     template: "[SÈVÈ] *** REDÈMAJ NAN {count} {unit} ***",
@@ -54,15 +80,19 @@ export const RESTART_WARNING_PRESETS = Object.freeze({
       second: ["SEGOND", "SEGOND"],
     },
     cancelled: "[SÈVÈ] Redèmaj ANILE.",
-    restarting: "[SÈVÈ] *** REDÈMAJ AN KOU - rekonekte nan kèk minit ***",
+    restarting:
+      "[SÈVÈ] *** REDÈMAJ AN KOU - rekonekte nan kèk minit ***",
   },
 });
 
-function presetFor(locale) {
-  return RESTART_WARNING_PRESETS[locale] || RESTART_WARNING_PRESETS[DEFAULT_RESTART_WARNING_LOCALE];
+function presetFor(locale: string): RestartWarningPreset {
+  return (
+    RESTART_WARNING_PRESETS[locale] ||
+    RESTART_WARNING_PRESETS[DEFAULT_RESTART_WARNING_LOCALE]
+  );
 }
 
-function normalizeTemplate(template) {
+function normalizeTemplate(template: unknown): string | null {
   if (typeof template !== "string") return null;
   const normalized = template.trim();
   if (!normalized || normalized.length > 300) return null;
@@ -76,7 +106,15 @@ function normalizeTemplate(template) {
   return normalized;
 }
 
-export function defaultRestartWarningSettings(locale = DEFAULT_RESTART_WARNING_LOCALE) {
+function inputFrom(value: unknown): RestartWarningInput {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as RestartWarningInput)
+    : {};
+}
+
+export function defaultRestartWarningSettings(
+  locale = DEFAULT_RESTART_WARNING_LOCALE,
+): RestartWarningSettings {
   const selectedLocale = RESTART_WARNING_PRESETS[locale]
     ? locale
     : DEFAULT_RESTART_WARNING_LOCALE;
@@ -86,47 +124,68 @@ export function defaultRestartWarningSettings(locale = DEFAULT_RESTART_WARNING_L
   };
 }
 
-export function normalizeRestartWarningSettings(value) {
-  const locale = RESTART_WARNING_PRESETS[value?.locale]
-    ? value.locale
-    : DEFAULT_RESTART_WARNING_LOCALE;
+export function normalizeRestartWarningSettings(
+  value: unknown,
+): RestartWarningSettings {
+  const input = inputFrom(value);
+  const locale =
+    typeof input.locale === "string" && RESTART_WARNING_PRESETS[input.locale]
+      ? input.locale
+      : DEFAULT_RESTART_WARNING_LOCALE;
   return {
     locale,
-    template: normalizeTemplate(value?.template) || presetFor(locale).template,
+    template: normalizeTemplate(input.template) || presetFor(locale).template,
   };
 }
 
-export function validateRestartWarningSettings(value) {
+export function validateRestartWarningSettings(
+  value: unknown,
+): RestartWarningSettings {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Restart warning settings must be an object");
   }
-  if (typeof value.locale !== "string" || !RESTART_WARNING_PRESETS[value.locale]) {
+  const input = value as RestartWarningInput;
+  if (
+    typeof input.locale !== "string" ||
+    !RESTART_WARNING_PRESETS[input.locale]
+  ) {
     throw new Error("Unsupported restart warning language");
   }
-  const template = normalizeTemplate(value.template);
+  const template = normalizeTemplate(input.template);
   if (!template) {
     throw new Error(
       "Restart warning must be 1-300 characters, use only {count}/{unit} placeholders, and contain no quotes, backslashes, controls, or emoji",
     );
   }
-  return { locale: value.locale, template };
+  return { locale: input.locale, template };
 }
 
-export function formatRestartWarning(settings, count, unitKind) {
+export function formatRestartWarning(
+  settings: unknown,
+  count: number | string,
+  unitKind: RestartWarningUnit,
+): string {
   const { locale, template } = normalizeRestartWarningSettings(settings);
-  const units = presetFor(locale).units[unitKind] || presetFor(locale).units.minute;
+  const units =
+    presetFor(locale).units[unitKind] || presetFor(locale).units.minute;
   const unit = Number(count) === 1 ? units[0] : units[1];
   return template
     .replace(/\{count\}/g, String(count))
     .replace(/\{unit\}/g, unit);
 }
 
-export function getRestartWarningNotice(settings, notice) {
+export function getRestartWarningNotice(
+  settings: unknown,
+  notice: RestartWarningNotice,
+): string {
   const { locale } = normalizeRestartWarningSettings(settings);
-  return presetFor(locale)[notice] || presetFor(DEFAULT_RESTART_WARNING_LOCALE)[notice];
+  return (
+    presetFor(locale)[notice] ||
+    presetFor(DEFAULT_RESTART_WARNING_LOCALE)[notice]
+  );
 }
 
-export function getRestartWarningPresetTemplates() {
+export function getRestartWarningPresetTemplates(): Record<string, string> {
   return Object.fromEntries(
     Object.entries(RESTART_WARNING_PRESETS).map(([locale, preset]) => [
       locale,

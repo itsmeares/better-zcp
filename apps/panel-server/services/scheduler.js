@@ -41,7 +41,7 @@ import {
   normalizeRestartWarningSettings,
   RESTART_WARNING_SETTING_KEY,
   validateRestartWarningSettings,
-} from "../utils/restartWarning.js";
+} from "../utils/restartWarning.ts";
 
 const SCHEDULER_TIMEZONE_SETTING_KEY = "schedulerTimezone";
 const SCHEDULABLE_BRIDGE_ACTIONS = new Set([

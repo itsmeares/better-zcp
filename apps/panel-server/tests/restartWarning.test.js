@@ -4,7 +4,7 @@ import {
   formatRestartWarning,
   getRestartWarningNotice,
   validateRestartWarningSettings,
-} from "../utils/restartWarning.js";
+} from "../utils/restartWarning.ts";
 
 describe("restart warning settings", () => {
   it("renders the Chinese preset for both minute and second countdowns", () => {
