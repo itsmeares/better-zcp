@@ -42,6 +42,7 @@ export const USER_ROLES = ["admin", "technician", "moderator"];
 
 const BCRYPT_ROUNDS = 12;
 export const ACCESS_TOKEN_EXPIRY = "15m";
+const JWT_ALGORITHM = "HS256";
 const REFRESH_TOKEN_EXPIRY = "30d";
 const REFRESH_TOKEN_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_REFRESH_SESSIONS = 5;
@@ -166,7 +167,9 @@ class AuthService {
 
   async authenticateAccessToken(token) {
     try {
-      const payload = jwt.verify(token, this.jwtSecret);
+      const payload = jwt.verify(token, this.jwtSecret, {
+        algorithms: [JWT_ALGORITHM],
+      });
       if (payload.type === "refresh") {
         return null;
       }
@@ -502,7 +505,7 @@ class AuthService {
         tokenGen: user.tokenGen || 0,
       },
       this.jwtSecret,
-      { expiresIn: ACCESS_TOKEN_EXPIRY },
+      { algorithm: JWT_ALGORITHM, expiresIn: ACCESS_TOKEN_EXPIRY },
     );
   }
 
@@ -515,13 +518,15 @@ class AuthService {
         sessionId,
       },
       this.jwtSecret,
-      { expiresIn: REFRESH_TOKEN_EXPIRY },
+      { algorithm: JWT_ALGORITHM, expiresIn: REFRESH_TOKEN_EXPIRY },
     );
   }
 
   verifyAccessToken(token) {
     try {
-      const payload = jwt.verify(token, this.jwtSecret);
+      const payload = jwt.verify(token, this.jwtSecret, {
+        algorithms: [JWT_ALGORITHM],
+      });
       if (payload.type === "refresh") return null;
       return payload;
     } catch (error) {
@@ -531,7 +536,9 @@ class AuthService {
 
   async refreshAccessToken(refreshToken) {
     try {
-      const payload = jwt.verify(refreshToken, this.jwtSecret);
+      const payload = jwt.verify(refreshToken, this.jwtSecret, {
+        algorithms: [JWT_ALGORITHM],
+      });
       if (payload.type !== "refresh") {
         throw new Error("Invalid token type");
       }
@@ -778,7 +785,9 @@ class AuthService {
     }
 
     try {
-      const payload = jwt.verify(refreshToken, this.jwtSecret);
+      const payload = jwt.verify(refreshToken, this.jwtSecret, {
+        algorithms: [JWT_ALGORITHM],
+      });
       if (
         !payload ||
         typeof payload !== "object" ||

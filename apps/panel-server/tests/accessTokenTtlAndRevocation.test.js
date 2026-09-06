@@ -96,6 +96,33 @@ describe("Expiry is genuinely enforced, not merely labeled", () => {
   });
 });
 
+describe("JWT verification accepts only the configured signing algorithm", () => {
+  beforeEach(() => {
+    resetWith({
+      roles: [TECHNICIAN_ROLE],
+      users: [{ id: "u-tech", username: "tech", role: "technician", roleId: "role-technician", tokenGen: 0 }],
+    });
+    authService.jwtSecret = "test-ttl-secret";
+  });
+
+  it("rejects HS384 tokens across access-token and refresh-token paths", async () => {
+    const user = db.data.users[0];
+    const session = authService.createRefreshSession(user);
+    const payload = { userId: user.id, username: user.username, role: user.role, tokenGen: user.tokenGen };
+    const accessToken = jwt.sign(payload, authService.jwtSecret, { algorithm: "HS384" });
+    const refreshToken = jwt.sign(
+      { userId: user.id, type: "refresh", tokenGen: user.tokenGen, sessionId: session.id },
+      authService.jwtSecret,
+      { algorithm: "HS384" },
+    );
+
+    await expect(authService.authenticateAccessToken(accessToken)).resolves.toBeNull();
+    expect(authService.verifyAccessToken(accessToken)).toBeNull();
+    await expect(authService.refreshAccessToken(refreshToken)).resolves.toBeNull();
+    await expect(authService.logout(refreshToken)).resolves.toBe(false);
+  });
+});
+
 describe("The residual window is real and bounded (15m), not zero and not unbounded", () => {
   beforeEach(() => {
     resetWith({
