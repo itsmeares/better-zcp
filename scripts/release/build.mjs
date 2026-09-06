@@ -1093,8 +1093,11 @@ Recommended safe-upgrade commands:
     fs.cpSync("./integrations/panelbridge", "./release/pz-mod", { recursive: true });
   }
 
-  const wasmSrc = "./node_modules/sql.js/dist/sql-wasm.wasm";
-  if (fs.existsSync(wasmSrc)) {
+  const wasmSrc = [
+    "./node_modules/sql.js/dist/sql-wasm.wasm",
+    "./apps/panel-server/node_modules/sql.js/dist/sql-wasm.wasm",
+  ].find((candidate) => fs.existsSync(candidate));
+  if (wasmSrc) {
     fs.copyFileSync(wasmSrc, "./release/sql-wasm.wasm");
   } else {
     console.warn(
