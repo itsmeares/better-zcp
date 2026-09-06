@@ -1,6 +1,6 @@
-import fs from "fs";
+import fs from "node:fs";
 
-export function readSecret(name) {
+export function readSecret(name: string): string | null {
   const filePath = process.env[`${name}_FILE`];
   if (filePath) {
     const value = fs.readFileSync(filePath, "utf8").replace(/\r?\n$/, "");

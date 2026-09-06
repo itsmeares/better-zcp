@@ -10,7 +10,7 @@ import {
   discoverMountIssues,
   readServerIniSettings,
 } from "../services/mountDiscovery.js";
-import { isContainerized } from "../utils/dockerDetect.js";
+import { isContainerized } from "../utils/dockerDetect.ts";
 
 let tmpRoot;
 

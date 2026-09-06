@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { readSecret } from "../utils/secrets.js";
+import { readSecret } from "../utils/secrets.ts";
 import { getSteamApiKey } from "../services/steamApiKey.js";
 
 const savedEnvironment = {

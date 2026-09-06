@@ -8,7 +8,7 @@ import { getDataPaths } from "../utils/paths.js";
 import { getDiskStatusForPath } from "../services/diskMonitor.js";
 import { getCircuitBreakerStatus } from "../database/init.js";
 import { getRestartAssessment } from "../services/panelUpdateChecker.js";
-import { isContainerized } from "../utils/dockerDetect.js";
+import { isContainerized } from "../utils/dockerDetect.ts";
 
 const log = createLogger("API:System");
 const router = express.Router();

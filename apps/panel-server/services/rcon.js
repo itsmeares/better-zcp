@@ -9,7 +9,7 @@ import {
   getServer,
 } from "../database/init.js";
 import { SourceRconClient } from "../utils/sourceRcon.js";
-import { readSecret } from "../utils/secrets.js";
+import { readSecret } from "../utils/secrets.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import { ErrorCode } from "../utils/errorCodes.js";

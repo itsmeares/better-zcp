@@ -1,6 +1,10 @@
-import fs from "fs";
+import fs from "node:fs";
 
-export function isContainerized(fileExists = fs.existsSync) {
+type FileExists = (filePath: string) => boolean;
+
+export function isContainerized(
+  fileExists: FileExists = fs.existsSync,
+): boolean {
   if (fileExists("/.dockerenv") || fileExists("/run/.containerenv")) {
     return true;
   }

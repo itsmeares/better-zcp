@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const isContainerized = vi.fn(() => false);
 
-vi.mock("../utils/dockerDetect.js", () => ({
+vi.mock("../utils/dockerDetect.ts", () => ({
   isContainerized: (...args) => isContainerized(...args),
 }));
 

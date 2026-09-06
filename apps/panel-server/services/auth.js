@@ -10,7 +10,7 @@ import {
   getJwtSecretPath,
   regenerateJwtSecretFile,
 } from "../utils/jwtSecret.js";
-import { readSecret } from "../utils/secrets.js";
+import { readSecret } from "../utils/secrets.ts";
 import { getCapabilitiesForRole } from "./permissions.js";
 import {
   getRoleById,

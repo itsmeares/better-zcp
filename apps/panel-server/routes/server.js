@@ -40,7 +40,7 @@ import { emitActionResult } from "./scheduler.js";
 import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.js";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
-import { isContainerized } from "../utils/dockerDetect.js";
+import { isContainerized } from "../utils/dockerDetect.ts";
 
 const router = express.Router();
 

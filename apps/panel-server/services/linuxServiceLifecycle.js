@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-import { isContainerized } from "../utils/dockerDetect.js";
+import { isContainerized } from "../utils/dockerDetect.ts";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("LinuxServiceLifecycle");
