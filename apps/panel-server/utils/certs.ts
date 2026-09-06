@@ -2,6 +2,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.js";
+import { writeFileAtomic } from "./fileWriteQueue.ts";
 import { getDataPaths } from "../utils/paths.js";
 
 const log = createLogger("HTTPS");
@@ -23,6 +24,18 @@ interface GeneratedCertificate {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function readRegularFile(filePath: string): Buffer {
+  const fd = fs.openSync(filePath, fs.constants.O_RDONLY);
+  try {
+    if (!fs.fstatSync(fd).isFile()) {
+      throw new Error("not a regular file");
+    }
+    return fs.readFileSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function generateSelfSignedCert(): GeneratedCertificate {
@@ -205,18 +218,10 @@ export function loadOrCreateCerts(
 ): CertificatePair | null {
   if (customKeyPath && customCertPath) {
     try {
-      const keyIsFile = fs.statSync(customKeyPath).isFile();
-      const certIsFile = fs.statSync(customCertPath).isFile();
-      if (keyIsFile && certIsFile) {
-        log.info(`Using custom certificates: ${customCertPath}`);
-        return {
-          key: fs.readFileSync(customKeyPath),
-          cert: fs.readFileSync(customCertPath),
-        };
-      }
-      log.warn(
-        "Custom certificate paths specified but one or both are not regular files — falling back to self-signed",
-      );
+      const key = readRegularFile(customKeyPath);
+      const cert = readRegularFile(customCertPath);
+      log.info(`Using custom certificates: ${customCertPath}`);
+      return { key, cert };
     } catch (error: unknown) {
       log.warn(
         `Custom certificate paths specified but could not be read (${errorMessage(error)}) — falling back to self-signed`,
@@ -224,18 +229,17 @@ export function loadOrCreateCerts(
     }
   }
 
-  if (fs.existsSync(KEY_FILE) && fs.existsSync(CERT_FILE)) {
+  try {
+    const key = readRegularFile(KEY_FILE);
+    const cert = readRegularFile(CERT_FILE);
     log.info("Using existing self-signed certificate");
-    return {
-      key: fs.readFileSync(KEY_FILE),
-      cert: fs.readFileSync(CERT_FILE),
-    };
+    return { key, cert };
+  } catch {
+    // A missing or incomplete pair is regenerated below.
   }
 
   try {
-    if (!fs.existsSync(CERT_DIR)) {
-      fs.mkdirSync(CERT_DIR, { recursive: true, mode: 0o700 });
-    }
+    fs.mkdirSync(CERT_DIR, { recursive: true, mode: 0o700 });
     try {
       fs.chmodSync(CERT_DIR, 0o700);
     } catch {
@@ -243,13 +247,13 @@ export function loadOrCreateCerts(
     }
 
     const { key, cert } = generateSelfSignedCert();
-    fs.writeFileSync(KEY_FILE, key, { mode: 0o600 });
+    writeFileAtomic(KEY_FILE, key, { encoding: "utf8", mode: 0o600 });
     try {
       fs.chmodSync(KEY_FILE, 0o600);
     } catch {
       /* best-effort: Windows / network shares */
     }
-    fs.writeFileSync(CERT_FILE, cert, { mode: 0o644 });
+    writeFileAtomic(CERT_FILE, cert, { encoding: "utf8", mode: 0o644 });
 
     log.info(`Self-signed certificate generated at ${CERT_DIR}`);
     return { key: Buffer.from(key), cert: Buffer.from(cert) };

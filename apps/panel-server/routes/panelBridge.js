@@ -2853,28 +2853,7 @@ router.post("/install-mod", requirePermission("bridge.setup"), async (req, res) 
     });
   }
   const resolvedTarget = path.resolve(targetPath);
-
-  let realTarget;
-  try {
-    if (fs.existsSync(resolvedTarget)) {
-      realTarget = fs.realpathSync(resolvedTarget);
-    } else {
-      const parent = path.dirname(resolvedTarget);
-      if (fs.existsSync(parent)) {
-        realTarget = path.join(
-          fs.realpathSync(parent),
-          path.basename(resolvedTarget),
-        );
-      } else {
-        realTarget = resolvedTarget;
-      }
-    }
-  } catch (e) {
-    log.debug(`Path resolution failed for deploy target: ${e.message}`);
-    realTarget = resolvedTarget;
-  }
-
-  const normalizedTarget = realTarget.replace(/\\/g, "/");
+  const normalizedTarget = resolvedTarget.replace(/\\/g, "/");
   const targetLower = normalizedTarget.toLowerCase();
   if (
     !targetLower.endsWith("/media/lua/server") &&
@@ -2895,7 +2874,7 @@ router.post("/install-mod", requirePermission("bridge.setup"), async (req, res) 
       const resolved = path.resolve(value);
       return process.platform === "win32" ? resolved.toLowerCase() : resolved;
     };
-    const normalizedResolvedTarget = normalizePath(realTarget);
+    const normalizedResolvedTarget = normalizePath(resolvedTarget);
 
     for (const server of servers) {
       if (server?.isRemote) continue;
@@ -2905,22 +2884,24 @@ router.post("/install-mod", requirePermission("bridge.setup"), async (req, res) 
       } catch {
         continue;
       }
-      if (!installDir || !path.isAbsolute(installDir) || !fs.existsSync(installDir)) {
+      if (!installDir || !path.isAbsolute(installDir)) {
         continue;
       }
 
-      const canonicalInstallDir = fs.realpathSync(installDir);
+      let canonicalInstallDir;
+      try {
+        canonicalInstallDir = fs.realpathSync(installDir);
+      } catch {
+        continue;
+      }
       const candidate = path.join(
         canonicalInstallDir,
         "media",
         "lua",
         "server",
       );
-      const canonicalCandidate = fs.existsSync(candidate)
-        ? fs.realpathSync(candidate)
-        : candidate;
-      if (normalizePath(canonicalCandidate) === normalizedResolvedTarget) {
-        allowedTarget = canonicalCandidate;
+      if (normalizePath(candidate) === normalizedResolvedTarget) {
+        allowedTarget = candidate;
         break;
       }
     }

@@ -86,6 +86,14 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
     const { host, port, password } = req.body;
     log.info(`POST /connect (host=${host || 'default'}, port=${port || 'default'}, password=${password ? '***' : 'none'})`);
 
+    if (host !== undefined || port !== undefined) {
+      let canOverrideTarget = false;
+      await requirePermission('servers.manage')(req, res, () => {
+        canOverrideTarget = true;
+      });
+      if (!canOverrideTarget) return;
+    }
+
     if (host !== undefined) {
       if (typeof host !== 'string' || host.length > 255 || !/^[a-zA-Z0-9.-]+$/.test(host)) {
         return res.status(400).json({ success: false, error: 'Invalid host format', code: ErrorCode.RCON_INVALID_HOST });

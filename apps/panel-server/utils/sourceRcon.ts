@@ -148,6 +148,7 @@ export class SourceRconClient {
         }
       });
 
+      // codeql[js/request-forgery] RCON targets are operator-configured; request-provided overrides are gated by servers.manage in routes/rcon.js.
       socket.connect(this.port, this.host, () => {
         clearTimeout(connectTimer);
         socket.setNoDelay(true);

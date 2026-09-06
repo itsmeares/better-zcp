@@ -25,10 +25,10 @@ function createResponse() {
   return response;
 }
 
-async function runTestRoute(req) {
+async function runPostRoute(routePath, req) {
   const { default: router } = await import('../routes/rcon.js');
   const layer = router.stack.find(
-    (entry) => entry.route?.path === '/test' && entry.route.methods.post,
+    (entry) => entry.route?.path === routePath && entry.route.methods.post,
   );
   const handlers = layer.route.stack.map((s) => s.handle);
   const res = createResponse();
@@ -41,6 +41,9 @@ async function runTestRoute(req) {
   await next();
   return res;
 }
+
+const runTestRoute = (req) => runPostRoute('/test', req);
+const runConnectRoute = (req) => runPostRoute('/connect', req);
 
 describe('POST /api/rcon/test requires servers.manage in addition to rcon.execute', () => {
   it('refuses a role holding rcon.execute alone, before ever probing the host', async () => {
@@ -59,5 +62,19 @@ describe('POST /api/rcon/test requires servers.manage in addition to rcon.execut
       app: { get: () => undefined },
     });
     expect(res.statusCode).not.toBe(403);
+  });
+});
+
+describe('POST /api/rcon/connect only permits explicit host/port overrides for server managers', () => {
+  it('refuses a custom target from a role that can execute RCON but cannot manage servers', async () => {
+    const connect = vi.fn();
+    const res = await runConnectRoute({
+      user: { role: 'rcon_only' },
+      body: { host: '10.0.0.1', port: 27015 },
+      app: { get: () => ({ connect }) },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(connect).not.toHaveBeenCalled();
   });
 });
