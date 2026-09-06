@@ -3,7 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
-import { panelState } from "./schema.js";
+import { panelState } from "./schema.ts";
 
 const SNAPSHOT_KEY = "main";
 
