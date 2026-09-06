@@ -1,28 +1,31 @@
-
-import fs from "fs";
-import path from "path";
-import crypto from "crypto";
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
 import { getDataPaths } from "./paths.js";
-import { readSecret } from "./secrets.js";
+import { readSecret } from "./secrets.ts";
 import { checkAndExitIfOwnershipBlocked } from "./firstRunOwnershipCheck.js";
 
-export function getJwtSecretPath() {
+export function getJwtSecretPath(): string {
   return path.join(getDataPaths().dataDir, "jwt.secret");
 }
 
 const MIN_JWT_SECRET_LENGTH = 32;
 
-function writeSecretFile(secretPath, value) {
+function writeSecretFile(secretPath: string, value: string): void {
   try {
     fs.writeFileSync(secretPath, value, { encoding: "utf8", mode: 0o600 });
-  } catch (err) {
+  } catch (error: unknown) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? error.code
+        : undefined;
     if (
-      (err.code === "EACCES" || err.code === "EPERM") &&
+      (code === "EACCES" || code === "EPERM") &&
       checkAndExitIfOwnershipBlocked([getDataPaths().dataDir, secretPath])
     ) {
-      throw err;
+      throw error;
     }
-    throw err;
+    throw error;
   }
   try {
     fs.chmodSync(secretPath, 0o600);
@@ -31,7 +34,18 @@ function writeSecretFile(secretPath, value) {
   }
 }
 
-export async function loadOrCreateJwtSecret({ legacyValue } = {}) {
+interface LoadJwtSecretOptions {
+  legacyValue?: string | null;
+}
+
+type JwtSecretSource = "env" | "file" | "migrated" | "generated";
+
+export async function loadOrCreateJwtSecret({
+  legacyValue,
+}: LoadJwtSecretOptions = {}): Promise<{
+  secret: string;
+  source: JwtSecretSource;
+}> {
   const envSecret = readSecret("JWT_SECRET");
   if (envSecret) {
     if (envSecret.length < MIN_JWT_SECRET_LENGTH) {
@@ -48,12 +62,13 @@ export async function loadOrCreateJwtSecret({ legacyValue } = {}) {
   const secretPath = getJwtSecretPath();
 
   if (fs.existsSync(secretPath)) {
-    let raw;
+    let raw: string;
     try {
       raw = fs.readFileSync(secretPath, "utf8");
-    } catch (err) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `JWT secret file exists but could not be read (${secretPath}): ${err.message}. ` +
+        `JWT secret file exists but could not be read (${secretPath}): ${message}. ` +
           "Refusing to start rather than silently issuing a new signing key, which " +
           "would log out every user with nothing in the log to explain why. Fix the " +
           "file's permissions, or delete it to force a fresh key (this signs everyone " +
@@ -82,7 +97,7 @@ export async function loadOrCreateJwtSecret({ legacyValue } = {}) {
   return { secret: generated, source: "generated" };
 }
 
-export function regenerateJwtSecretFile() {
+export function regenerateJwtSecretFile(): { secret: string; path: string } {
   const secretPath = getJwtSecretPath();
   const secret = crypto.randomBytes(64).toString("hex");
   writeSecretFile(secretPath, secret);

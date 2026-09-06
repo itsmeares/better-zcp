@@ -32,7 +32,7 @@ vi.mock("../utils/logger.js", () => ({
 }));
 
 const { default: authService } = await import("../services/auth.js");
-const { getJwtSecretPath } = await import("../utils/jwtSecret.js");
+const { getJwtSecretPath } = await import("../utils/jwtSecret.ts");
 const { default: authRouter } = await import("../routes/auth.js");
 
 function createResponse() {

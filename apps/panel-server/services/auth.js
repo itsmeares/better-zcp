@@ -9,7 +9,7 @@ import {
   loadOrCreateJwtSecret,
   getJwtSecretPath,
   regenerateJwtSecretFile,
-} from "../utils/jwtSecret.js";
+} from "../utils/jwtSecret.ts";
 import { readSecret } from "../utils/secrets.ts";
 import { getCapabilitiesForRole } from "./permissions.js";
 import {

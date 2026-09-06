@@ -10,7 +10,7 @@ vi.mock("../utils/paths.js", () => ({
 }));
 
 const { loadOrCreateJwtSecret, getJwtSecretPath, regenerateJwtSecretFile } =
-  await import("../utils/jwtSecret.js");
+  await import("../utils/jwtSecret.ts");
 
 describe("loadOrCreateJwtSecret", () => {
   beforeEach(() => {
