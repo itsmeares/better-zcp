@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getDataPaths } from "./paths.js";
-import { readUiSecretFile, writeUiSecretFile } from "./uiSecretFile.js";
+import { readUiSecretFile, writeUiSecretFile } from "./uiSecretFile.ts";
 
 interface Logger {
   warn?: (message: string) => unknown;
@@ -119,7 +119,10 @@ export function redactRconSecretsForWrite(data: DatabaseData): DatabaseData {
 
   let redactedSettings = data.settings;
   if (data.settings && data.settings.rconPassword !== undefined) {
-    writeUiSecretFile("rconPassword", data.settings.rconPassword);
+    writeUiSecretFile(
+      "rconPassword",
+      data.settings.rconPassword as string | null | undefined,
+    );
     const { rconPassword: _rconPassword, ...rest } = data.settings;
     redactedSettings = rest;
   }

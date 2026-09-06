@@ -4,7 +4,7 @@ import {
   loadUiSecret,
   readUiSecretFile,
   replaceUiSecretFiles,
-} from "../utils/uiSecretFile.js";
+} from "../utils/uiSecretFile.ts";
 
 const log = createLogger("SteamSessionCredentials");
 

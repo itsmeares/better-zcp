@@ -14,7 +14,7 @@ import {
   deleteServerSecret,
 } from "../utils/serverRconSecrets.ts";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
-import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.js";
+import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import { isPidAlive } from "../utils/pidLiveness.ts";
 const log = createLogger("DB");
 

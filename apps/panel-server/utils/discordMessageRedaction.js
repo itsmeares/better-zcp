@@ -1,6 +1,6 @@
 
 import { getServers, getSetting } from "../database/init.js";
-import { readUiSecretFile } from "./uiSecretFile.js";
+import { readUiSecretFile } from "./uiSecretFile.ts";
 import { readIniValues } from "./templateFiles.js";
 import fs from "fs";
 import path from "path";

@@ -111,7 +111,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
       getServers: async () => [],
       getSetting: async () => null,
     }));
-    const { writeUiSecretFile } = await import("../utils/uiSecretFile.js");
+    const { writeUiSecretFile } = await import("../utils/uiSecretFile.ts");
     writeUiSecretFile("discordBotToken", "bot-token-secret");
     writeUiSecretFile("panelBridgeSftpPassword", "sftp-secret");
     writeUiSecretFile("steamSessionId", "steam-session-secret");
@@ -153,7 +153,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
       },
       getSetting: async () => null,
     }));
-    const { writeUiSecretFile } = await import("../utils/uiSecretFile.js");
+    const { writeUiSecretFile } = await import("../utils/uiSecretFile.ts");
     writeUiSecretFile("discordBotToken", "still-collected-token");
 
     const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.js");

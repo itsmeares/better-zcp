@@ -38,7 +38,7 @@ describe.skipIf(isWindows)(
       "SET under umask %o: a fresh token file is 0600, not whatever the umask would otherwise leave a plain write at",
       async (umask) => {
         const { writeUiSecretFile, readUiSecretFile } = await import(
-          "../utils/uiSecretFile.js"
+          "../utils/uiSecretFile.ts"
         );
         originalUmask = process.umask(umask);
 
@@ -59,7 +59,7 @@ describe.skipIf(isWindows)(
 
     it("ROTATE: overwriting an already-set token file re-tightens the mode even if it drifted loose in between, under a hostile umask", async () => {
       const { writeUiSecretFile, readUiSecretFile } = await import(
-        "../utils/uiSecretFile.js"
+        "../utils/uiSecretFile.ts"
       );
       originalUmask = process.umask(0o022);
       writeUiSecretFile("discordBotToken", "old-token-before-rotation");
@@ -77,7 +77,7 @@ describe.skipIf(isWindows)(
 
     it("REMOVE then RE-SET: deleting via an empty value leaves no residual file, and a later re-set is unaffected by the deletion", async () => {
       const { writeUiSecretFile, readUiSecretFile } = await import(
-        "../utils/uiSecretFile.js"
+        "../utils/uiSecretFile.ts"
       );
       originalUmask = process.umask(0o000);
 
@@ -96,7 +96,7 @@ describe.skipIf(isWindows)(
 
     it("full lifecycle in one pass -- set, read, rotate, remove -- content is correct and mode is 0600 at every live step", async () => {
       const { writeUiSecretFile, readUiSecretFile } = await import(
-        "../utils/uiSecretFile.js"
+        "../utils/uiSecretFile.ts"
       );
       originalUmask = process.umask(0o000);
 

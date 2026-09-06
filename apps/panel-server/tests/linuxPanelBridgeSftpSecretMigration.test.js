@@ -12,7 +12,7 @@ const {
 } = await import("../database/init.js");
 const { getDataPaths } = await import("../utils/paths.js");
 const { readUiSecretFile, writeUiSecretFile } = await import(
-  "../utils/uiSecretFile.js"
+  "../utils/uiSecretFile.ts"
 );
 
 const { dataDir, dbPath } = getDataPaths();

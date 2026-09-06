@@ -29,7 +29,7 @@ vi.mock("../utils/logger.js", () => ({
 
 const { getSteamSessionCredentials, setSteamSessionCredentials } =
   await import("../services/workshopCollectionSync.js");
-const { readUiSecretFile, writeUiSecretFile } = await import("../utils/uiSecretFile.js");
+const { readUiSecretFile, writeUiSecretFile } = await import("../utils/uiSecretFile.ts");
 
 describe("Steam session cookie pair — migration out of db.json", () => {
   beforeEach(() => {

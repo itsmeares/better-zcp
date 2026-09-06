@@ -214,7 +214,7 @@ describe.skipIf(isWindows || !opensslAvailable)(
 
     async function startBot() {
       const { DiscordBot } = await import("../services/discordBot.js");
-      const { writeUiSecretFile } = await import("../utils/uiSecretFile.js");
+      const { writeUiSecretFile } = await import("../utils/uiSecretFile.ts");
       writeUiSecretFile("discordBotToken", "mock.token.value-not-real");
       const bot = new DiscordBot(
         { connected: false },
@@ -329,7 +329,7 @@ describe.skipIf(isWindows || !opensslAvailable)(
     it(
       "follow-up 1 -- a known secret value never reaches the wire, even when it's embedded in an otherwise-ordinary message, redacted at the REAL discord.js REST boundary",
       async () => {
-        const { writeUiSecretFile } = await import("../utils/uiSecretFile.js");
+        const { writeUiSecretFile } = await import("../utils/uiSecretFile.ts");
         const FAKE_SFTP_SECRET = "fake-sftp-secret-hunter3-for-redaction-test";
         writeUiSecretFile("panelBridgeSftpPassword", FAKE_SFTP_SECRET);
 

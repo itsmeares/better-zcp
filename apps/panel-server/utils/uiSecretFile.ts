@@ -1,34 +1,46 @@
-
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { getDataPaths } from "./paths.js";
 
-function secretFilePath(name) {
+export interface UiSecretLogger {
+  warn?: (message: string) => void;
+}
+
+type UiSecretValue = string | null | undefined;
+
+function secretFilePath(name: string): string {
   return path.join(getDataPaths().dataDir, `${name}.secret`);
 }
 
-function normalizeUiSecret(value) {
+function normalizeUiSecret(value: unknown): string | null {
   if (value == null || value === "") return null;
   const normalized = String(value).trim();
   return normalized || null;
 }
 
-export function readUiSecretFile(name, log) {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function readUiSecretFile(
+  name: string,
+  log?: UiSecretLogger | null,
+): string | null {
   const filePath = secretFilePath(name);
   if (!fs.existsSync(filePath)) return null;
   try {
     const value = fs.readFileSync(filePath, "utf8").trim();
     return value || null;
-  } catch (err) {
+  } catch (error: unknown) {
     log?.warn?.(
-      `Could not read ${filePath}: ${err.message}. Treating "${name}" as ` +
+      `Could not read ${filePath}: ${errorMessage(error)}. Treating "${name}" as ` +
         "not configured until it is re-entered in Settings.",
     );
     return null;
   }
 }
 
-export function writeUiSecretFile(name, value) {
+export function writeUiSecretFile(name: string, value: UiSecretValue): void {
   const filePath = secretFilePath(name);
   if (value == null || value === "") {
     try {
@@ -46,9 +58,22 @@ export function writeUiSecretFile(name, value) {
   }
 }
 
-export function replaceUiSecretFiles(entries) {
+interface SecretFileTransaction {
+  name: string;
+  value: string | null;
+  target: string;
+  staged: string;
+  backup: string;
+  hadOriginal: boolean;
+  backedUp: boolean;
+  activated: boolean;
+}
+
+export function replaceUiSecretFiles(
+  entries: Array<[string, UiSecretValue]>,
+): void {
   const transactionId = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const files = entries.map(([name, value]) => {
+  const files: SecretFileTransaction[] = entries.map(([name, value]) => {
     const target = secretFilePath(name);
     return {
       name,
@@ -108,8 +133,8 @@ export function replaceUiSecretFiles(entries) {
         /* no previous file */
       }
     }
-  } catch (err) {
-    const rollbackErrors = [];
+  } catch (error: unknown) {
+    const rollbackErrors: string[] = [];
     for (const file of files) {
       try {
         if ((file.activated || file.backedUp) && fs.existsSync(file.target)) {
@@ -118,8 +143,8 @@ export function replaceUiSecretFiles(entries) {
         if (file.backedUp && fs.existsSync(file.backup)) {
           fs.renameSync(file.backup, file.target);
         }
-      } catch (rollbackErr) {
-        rollbackErrors.push(`${file.name}: ${rollbackErr.message}`);
+      } catch (rollbackError: unknown) {
+        rollbackErrors.push(`${file.name}: ${errorMessage(rollbackError)}`);
       }
       try {
         if (fs.existsSync(file.staged)) fs.unlinkSync(file.staged);
@@ -130,11 +155,22 @@ export function replaceUiSecretFiles(entries) {
     const rollbackDetail = rollbackErrors.length
       ? `; rollback incomplete (${rollbackErrors.join(", ")})`
       : "";
-    throw new Error(`UI secret transaction failed: ${err.message}${rollbackDetail}`);
+    throw new Error(
+      `UI secret transaction failed: ${errorMessage(error)}${rollbackDetail}`,
+    );
   }
 }
 
-export async function loadUiSecret(name, { legacyValue, clearLegacy, log } = {}) {
+interface LoadUiSecretOptions {
+  legacyValue?: string | null;
+  clearLegacy?: () => Promise<unknown> | unknown;
+  log?: UiSecretLogger | null;
+}
+
+export async function loadUiSecret(
+  name: string,
+  { legacyValue, clearLegacy, log }: LoadUiSecretOptions = {},
+): Promise<string | null> {
   const fromFile = readUiSecretFile(name, log);
   if (fromFile) return fromFile;
 
@@ -145,9 +181,9 @@ export async function loadUiSecret(name, { legacyValue, clearLegacy, log } = {})
       log?.warn?.(
         `Moved "${name}" out of db.json into its own file. Same value, safer location.`,
       );
-    } catch (err) {
+    } catch (error: unknown) {
       log?.warn?.(
-        `Could not move "${name}" out of db.json (${err.message}); using ` +
+        `Could not move "${name}" out of db.json (${errorMessage(error)}); using ` +
           "it from db.json for now, will retry moving it on the next restart.",
       );
     }

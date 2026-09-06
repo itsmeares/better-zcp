@@ -10,7 +10,7 @@ vi.mock("../utils/paths.js", () => ({
 }));
 
 const { readUiSecretFile, writeUiSecretFile, loadUiSecret } = await import(
-  "../utils/uiSecretFile.js"
+  "../utils/uiSecretFile.ts"
 );
 
 describe("readUiSecretFile / writeUiSecretFile", () => {
