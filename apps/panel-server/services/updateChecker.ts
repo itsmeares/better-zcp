@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, type SpawnOptions } from "child_process";
 import path from "path";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
@@ -13,7 +13,89 @@ import {
 } from "./activeSteamOperations.ts";
 import { acquireLifecycleLock } from "./lifecycleCoordinator.ts";
 
-export function parseAutoUpdateWarningMinutes(value) {
+type UpdateSocket = {
+  emit: (event: string, payload: unknown) => void;
+};
+
+type CommandResult = {
+  success?: boolean;
+  error?: string;
+  message?: string;
+};
+
+type RconService = {
+  connected?: boolean;
+  serverMessage: (message: string, options?: { skipLog?: boolean }) => Promise<CommandResult>;
+  save: (options?: { skipLog?: boolean }) => Promise<CommandResult>;
+  quit: () => Promise<CommandResult>;
+};
+
+type ServerProcessDetails = {
+  running: boolean;
+  scanFailed?: boolean;
+};
+
+type ServerManager = {
+  serverName?: string;
+  getServerProcessDetails: () => Promise<ServerProcessDetails>;
+  startServer: (options: { serverId: string | number | null }) => Promise<CommandResult>;
+};
+
+type UpdateCheckerOptions = {
+  rconService?: RconService;
+  serverManager?: ServerManager;
+};
+
+type InstalledBuildInfo = {
+  buildId: string | null;
+  branch: string;
+  lastUpdated: string | null;
+};
+
+type LatestBuildInfo = {
+  branch: string;
+  buildId: string | null;
+  timeUpdated: string | null;
+  description: string | null;
+};
+
+type UpdateInfo = {
+  updateAvailable: boolean;
+  installed: InstalledBuildInfo;
+  latest: LatestBuildInfo;
+  lastCheck: string;
+};
+
+type AutoUpdateResult = {
+  status: "success" | "failed";
+  at: string;
+  dismissed: boolean;
+  appliedVersion?: string | null;
+  reason?: string;
+  params?: unknown;
+  phase?: string;
+  serverUp?: boolean | null;
+};
+
+type AutoUpdateResultInput = Omit<AutoUpdateResult, "dismissed">;
+
+class AutoUpdateError extends Error {
+  autoUpdateReason?: string;
+  autoUpdateParams?: unknown;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function errorCode(error: unknown): string {
+  if (error && typeof error === "object" && "code" in error) {
+    return String(error.code);
+  }
+  return "unknown";
+}
+
+export function parseAutoUpdateWarningMinutes(value: unknown): number {
   if (value === null || value === undefined) return 15;
   if (typeof value === "string" && value.trim() === "") return 15;
 
@@ -28,7 +110,22 @@ async function getSteamLoginArgs() {
 }
 
 export class UpdateChecker {
-  constructor(io, { rconService, serverManager } = {}) {
+  io: UpdateSocket;
+  rconService?: RconService;
+  serverManager?: ServerManager;
+  checkInterval: ReturnType<typeof setInterval> | null;
+  lastCheck: string | null;
+  updateAvailable: UpdateInfo | null;
+  gameVersion: string | null;
+  isChecking: boolean;
+  initialTimeout: ReturnType<typeof setTimeout> | null;
+  autoUpdateTimer: ReturnType<typeof setTimeout> | null;
+  autoUpdateRunning: boolean;
+  intervalMs: number;
+  checkStartTime: number | null;
+  lastAutoUpdateResult: AutoUpdateResult | null | undefined;
+
+  constructor(io: UpdateSocket, { rconService, serverManager }: UpdateCheckerOptions = {}) {
     this.io = io;
     this.rconService = rconService;
     this.serverManager = serverManager;
@@ -41,9 +138,12 @@ export class UpdateChecker {
     this.autoUpdateRunning = false;
 
     this.intervalMs = 30 * 60 * 1000;
+    this.initialTimeout = null;
+    this.checkStartTime = null;
+    this.lastAutoUpdateResult = undefined;
   }
 
-  async start() {
+  async start(): Promise<void> {
     const interval = await getSetting("updateCheckInterval");
     if (interval && interval > 0) {
       this.intervalMs = interval * 60 * 1000;
@@ -58,7 +158,7 @@ export class UpdateChecker {
     log.info(`started (checking every ${this.intervalMs / 60000} minutes)`);
   }
 
-  stop() {
+  stop(): void {
     if (this.initialTimeout) {
       clearTimeout(this.initialTimeout);
       this.initialTimeout = null;
@@ -74,7 +174,7 @@ export class UpdateChecker {
     log.info("stopped");
   }
 
-  async setInterval(minutes) {
+  async setInterval(minutes: number): Promise<void> {
     if (minutes < 5) minutes = 5;
     if (minutes > 1440) minutes = 1440;
 
@@ -91,7 +191,7 @@ export class UpdateChecker {
     log.info(`interval set to ${minutes} minutes`);
   }
 
-  async getGameVersion() {
+  async getGameVersion(): Promise<string | null> {
     let consolePath = null;
     try {
       const activeServer = await getActiveServer();
@@ -112,13 +212,13 @@ export class UpdateChecker {
       return match ? match[1] : null;
     } catch (e) {
       log.debug(
-        `Failed to read PZ version from ${consolePath || "(unset)"}: ${e.message}`,
+        `Failed to read PZ version from ${consolePath || "(unset)"}: ${errorMessage(e)}`,
       );
       return null;
     }
   }
 
-  async getInstalledBuildInfo(serverPath) {
+  async getInstalledBuildInfo(serverPath: string): Promise<InstalledBuildInfo | null> {
     const manifestPath = path.join(
       serverPath,
       "steamapps",
@@ -146,13 +246,17 @@ export class UpdateChecker {
           : null,
       };
     } catch (err) {
-      log.error(`Failed to read appmanifest: ${err.message}`);
+      log.error(`Failed to read appmanifest: ${errorMessage(err)}`);
       return null;
     }
   }
 
-  async getLatestBuildInfo(steamcmdPath, branch = "public", installPath = null) {
-    let steamcmdExe;
+  async getLatestBuildInfo(
+    steamcmdPath: string,
+    branch = "public",
+    installPath: string | null = null,
+  ): Promise<LatestBuildInfo | null> {
+    let steamcmdExe: string | undefined;
     if (process.platform === "win32") {
       steamcmdExe = path.join(steamcmdPath, "steamcmd.exe");
     } else {
@@ -162,12 +266,12 @@ export class UpdateChecker {
         await fs.promises.access(shPath);
         steamcmdExe = shPath;
       } catch (e1) {
-        log.debug(`SteamCMD not at ${shPath}: ${e1.message}`);
+        log.debug(`SteamCMD not at ${shPath}: ${errorMessage(e1)}`);
         try {
           await fs.promises.access(binPath);
           steamcmdExe = binPath;
         } catch (e2) {
-          log.debug(`SteamCMD not at ${binPath}: ${e2.message}`);
+          log.debug(`SteamCMD not at ${binPath}: ${errorMessage(e2)}`);
           for (const sysPath of [
             "/usr/games/steamcmd",
             "/usr/bin/steamcmd",
@@ -178,7 +282,7 @@ export class UpdateChecker {
               steamcmdExe = sysPath;
               break;
             } catch (e3) {
-              log.debug(`SteamCMD not at ${sysPath}: ${e3.message}`);
+              log.debug(`SteamCMD not at ${sysPath}: ${errorMessage(e3)}`);
             }
           }
           if (!steamcmdExe) {
@@ -193,6 +297,7 @@ export class UpdateChecker {
     }
 
     try {
+      if (!steamcmdExe) throw new Error("SteamCMD not found");
       await fs.promises.access(steamcmdExe);
     } catch (e) {
       throw new Error("SteamCMD not found");
@@ -214,7 +319,7 @@ export class UpdateChecker {
     }
 
     try {
-      return await new Promise((resolve, reject) => {
+      return await new Promise<LatestBuildInfo | null>((resolve, reject) => {
         const args = [
           "+login",
           "anonymous",
@@ -225,7 +330,7 @@ export class UpdateChecker {
           "+quit",
         ];
 
-        const spawnOpts = { cwd: steamcmdPath };
+        const spawnOpts: SpawnOptions = { cwd: steamcmdPath };
         if (process.platform !== "win32") {
           const ldPaths = [
             path.join(steamcmdPath, "linux32"),
@@ -250,11 +355,11 @@ export class UpdateChecker {
           reject(new Error("SteamCMD timeout"));
         }, 60000);
 
-        steamcmd.stdout.on("data", (data) => {
+        steamcmd.stdout?.on("data", (data) => {
           output += data.toString();
         });
 
-        steamcmd.stderr.on("data", (data) => {
+        steamcmd.stderr?.on("data", (data) => {
           output += data.toString();
         });
 
@@ -279,7 +384,7 @@ export class UpdateChecker {
     }
   }
 
-  parseBranchFromOutput(output, targetBranch) {
+  parseBranchFromOutput(output: string, targetBranch: string): LatestBuildInfo | null {
     try {
       const branch = targetBranch === "stable" ? "public" : targetBranch;
 
@@ -315,12 +420,12 @@ export class UpdateChecker {
         description: descMatch ? descMatch[1] : null,
       };
     } catch (err) {
-      log.error(`Failed to parse Steam output: ${err.message}`);
+      log.error(`Failed to parse Steam output: ${errorMessage(err)}`);
       return null;
     }
   }
 
-  async checkForUpdates(forceEmit = false) {
+  async checkForUpdates(forceEmit = false): Promise<UpdateInfo | null> {
     if (this.isChecking) {
       if (this.checkStartTime && Date.now() - this.checkStartTime > 120000) {
         log.warn(
@@ -417,7 +522,7 @@ export class UpdateChecker {
 
       return updateInfo;
     } catch (err) {
-      log.error(`Update check failed: ${err.message}`);
+      log.error(`Update check failed: ${errorMessage(err)}`);
       this.isChecking = false;
       return null;
     } finally {
@@ -425,8 +530,10 @@ export class UpdateChecker {
     }
   }
 
-  async scheduleAutoUpdate(updateInfo) {
-    if (this.autoUpdateRunning || this.autoUpdateTimer || !this.rconService || !this.serverManager) return;
+  async scheduleAutoUpdate(updateInfo: UpdateInfo): Promise<void> {
+    const rconService = this.rconService;
+    const serverManager = this.serverManager;
+    if (this.autoUpdateRunning || this.autoUpdateTimer || !rconService || !serverManager) return;
 
     const enabled = await getSetting("serverAutoUpdate");
     if (enabled !== true && enabled !== "true") return;
@@ -445,22 +552,23 @@ export class UpdateChecker {
       ? `A server update was detected. The server will restart in ${warningMinutes} minute${warningMinutes === 1 ? "" : "s"}.`
       : "A server update was detected. The server is restarting now.";
     try {
-      if (this.rconService.connected) {
-        const announced = await this.rconService.serverMessage(message, { skipLog: true });
+      if (rconService.connected) {
+        const announced = await rconService.serverMessage(message, { skipLog: true });
         if (!announced?.success) log.warn(`Could not announce automatic update: ${announced?.error || "unknown error"}`);
       }
     } catch (error) {
-      log.warn(`Could not announce automatic update: ${error.message}`);
+      log.warn(`Could not announce automatic update: ${errorMessage(error)}`);
     }
     this.io.emit("server:autoUpdateScheduled", { warningMinutes, updateInfo });
     this.autoUpdateTimer = setTimeout(() => {
       this.autoUpdateTimer = null;
-      this.runAutoUpdate(updateInfo).catch((error) => log.error(`Automatic update failed: ${error.message}`));
+      this.runAutoUpdate(updateInfo).catch((error) => log.error(`Automatic update failed: ${errorMessage(error)}`));
     }, warningMinutes * 60 * 1000);
   }
 
-  async runAutoUpdate(updateInfo) {
-    const lifecycleLock = acquireLifecycleLock("automatic-update", this.serverManager?.serverName || null);
+  async runAutoUpdate(updateInfo: UpdateInfo): Promise<{ success: false; message: string } | void> {
+    const serverManager = this.serverManager;
+    const lifecycleLock = acquireLifecycleLock("automatic-update", serverManager?.serverName || null);
     if (!lifecycleLock) {
       this.autoUpdateRunning = false;
       log.warn("Automatic update skipped because another lifecycle operation is in progress");
@@ -469,15 +577,21 @@ export class UpdateChecker {
 
     let shouldRestart = false;
     let normalizedInstallPath = null;
-    let targetServerId = null;
-    let phase = "not-started";
-    const fail = (reason, message, params) => {
-      const err = new Error(message);
+    let targetServerId: string | number | null = null;
+    let phase: "not-started" | "before-stop" | "updating" = "not-started";
+    const fail = (reason: string, message: string, params?: unknown): never => {
+      const err = new AutoUpdateError(message);
       err.autoUpdateReason = reason;
       if (params) err.autoUpdateParams = params;
       throw err;
     };
     try {
+      const rconService = this.rconService;
+      if (!rconService || !serverManager) {
+        fail("NOT_CONFIGURED", "RCON or server manager is not configured");
+      }
+      const configuredRconService = rconService as RconService;
+      const configuredServerManager = serverManager as ServerManager;
       const enabled = await getSetting("serverAutoUpdate");
       if (enabled !== true && enabled !== "true") {
         log.info("Automatic server update cancelled because the setting was disabled");
@@ -492,19 +606,19 @@ export class UpdateChecker {
       }
       if (!activeServer?.installPath || !steamcmdPath) fail("NOT_CONFIGURED", "SteamCMD path or server install path is not configured");
 
-      const initialDetails = await this.serverManager.getServerProcessDetails();
+      const initialDetails = await configuredServerManager.getServerProcessDetails();
       if (initialDetails.scanFailed) fail("INITIAL_SCAN_FAILED", "Could not verify whether the server is running, so the automatic update was abandoned for safety");
       if (initialDetails.running) {
         shouldRestart = true;
         phase = "before-stop";
-        if (!this.rconService.connected) fail("RCON_NOT_CONNECTED", "RCON is not connected, so the server cannot be stopped safely");
-        const saved = await this.rconService.save({ skipLog: true });
+        if (!configuredRconService.connected) fail("RCON_NOT_CONNECTED", "RCON is not connected, so the server cannot be stopped safely");
+        const saved = await configuredRconService.save({ skipLog: true });
         if (!saved?.success) fail("SAVE_FAILED", `The world could not be saved (${saved?.error || "unknown error"}), so the update was abandoned rather than lose progress`, { reason: sanitizeError(saved?.error || "unknown error") });
-        const quit = await this.rconService.quit();
+        const quit = await configuredRconService.quit();
         if (!quit?.success) log.warn(`Quit command failed (${quit?.error || "unknown error"}); waiting to see whether the server stops anyway`);
         const deadline = Date.now() + 5 * 60 * 1000;
         while (true) {
-          const details = await this.serverManager.getServerProcessDetails();
+          const details = await configuredServerManager.getServerProcessDetails();
           if (details.scanFailed) fail("STOP_SCAN_FAILED", "Lost the ability to verify the server had stopped, so the automatic update was abandoned for safety");
           if (!details.running) break;
           if (Date.now() >= deadline) fail("STOP_TIMEOUT", "Server did not stop within 5 minutes");
@@ -537,9 +651,9 @@ export class UpdateChecker {
       });
       normalizedInstallPath = candidateInstallPath;
 
-      let code;
+      let code: number | null;
       try {
-        code = await new Promise((resolve, reject) => {
+        code = await new Promise<number | null>((resolve, reject) => {
           const child = spawn(steamcmdExe, ["+force_install_dir", activeServer.installPath, ...loginArgs, "+app_update", "380870", ...branch, "validate", "+quit"], { cwd: steamcmdPath });
           child.once("error", reject);
           child.once("close", resolve);
@@ -555,7 +669,7 @@ export class UpdateChecker {
       const postBuildId = postUpdate?.buildId
         ? parseInt(postUpdate.buildId, 10)
         : NaN;
-      const preBuildId = parseInt(updateInfo.installed.buildId, 10);
+      const preBuildId = parseInt(updateInfo.installed.buildId ?? "", 10);
       if (isNaN(postBuildId) || postBuildId <= preBuildId) {
         fail(
           "BUILD_DID_NOT_ADVANCE",
@@ -574,12 +688,13 @@ export class UpdateChecker {
         appliedVersion: postUpdate?.buildId ?? null,
       });
     } catch (error) {
-      this.io.emit("server:autoUpdateComplete", { success: false, error: error.message });
+      const updateError = error instanceof AutoUpdateError ? error : new AutoUpdateError(errorMessage(error));
+      this.io.emit("server:autoUpdateComplete", { success: false, error: updateError.message });
       await this._recordAutoUpdateResult({
         status: "failed",
         at: new Date().toISOString(),
-        reason: error.autoUpdateReason || "UNKNOWN",
-        params: error.autoUpdateParams || null,
+        reason: updateError.autoUpdateReason || "UNKNOWN",
+        params: updateError.autoUpdateParams || null,
         phase,
         serverUp: phase === "before-stop" ? true : phase === "not-started" ? null : false,
       });
@@ -589,7 +704,7 @@ export class UpdateChecker {
       if (normalizedInstallPath) clearActiveSteamOperation(normalizedInstallPath);
       if (shouldRestart && phase !== "before-stop") {
         try {
-          const started = await this.serverManager.startServer({
+          const started = await this.serverManager!.startServer({
             serverId: targetServerId,
           });
           if (started?.success) {
@@ -599,7 +714,7 @@ export class UpdateChecker {
             await this._patchAutoUpdateResultServerUp(false);
           }
         } catch (error) {
-          log.error(`Automatic update could not restart the server: ${error.message}`);
+          log.error(`Automatic update could not restart the server: ${errorMessage(error)}`);
           await this._patchAutoUpdateResultServerUp(false);
         }
       }
@@ -607,18 +722,18 @@ export class UpdateChecker {
     }
   }
 
-  async _recordAutoUpdateResult(result) {
+  async _recordAutoUpdateResult(result: AutoUpdateResultInput): Promise<void> {
     this.lastAutoUpdateResult = { ...result, dismissed: false };
     await setSetting("lastAutoUpdateResult", this.lastAutoUpdateResult);
   }
 
-  async _patchAutoUpdateResultServerUp(serverUp) {
+  async _patchAutoUpdateResultServerUp(serverUp: boolean): Promise<void> {
     if (!this.lastAutoUpdateResult || this.lastAutoUpdateResult.status !== "failed") return;
     this.lastAutoUpdateResult = { ...this.lastAutoUpdateResult, serverUp };
     await setSetting("lastAutoUpdateResult", this.lastAutoUpdateResult);
   }
 
-  async dismissAutoUpdateResult() {
+  async dismissAutoUpdateResult(): Promise<void> {
     if (this.lastAutoUpdateResult === undefined) {
       this.lastAutoUpdateResult = (await getSetting("lastAutoUpdateResult")) || null;
     }
@@ -627,7 +742,14 @@ export class UpdateChecker {
     await setSetting("lastAutoUpdateResult", this.lastAutoUpdateResult);
   }
 
-  async getStatus() {
+  async getStatus(): Promise<{
+    updateAvailable: UpdateInfo | null;
+    gameVersion: string | null;
+    lastCheck: string | null;
+    intervalMinutes: number;
+    isChecking: boolean;
+    lastAutoUpdateResult: AutoUpdateResult | null;
+  }> {
     if (this.lastAutoUpdateResult === undefined) {
       this.lastAutoUpdateResult = (await getSetting("lastAutoUpdateResult")) || null;
     }
@@ -637,7 +759,7 @@ export class UpdateChecker {
       lastCheck: this.lastCheck,
       intervalMinutes: this.intervalMs / 60000,
       isChecking: this.isChecking,
-      lastAutoUpdateResult: this.lastAutoUpdateResult,
+      lastAutoUpdateResult: this.lastAutoUpdateResult ?? null,
     };
   }
 }

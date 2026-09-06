@@ -17,7 +17,7 @@ vi.mock("../services/managedContainer.ts", () => ({
   resolveManagedContainer: vi.fn(async () => ({ handled: false })),
 }));
 
-const { UpdateChecker } = await import("../services/updateChecker.js");
+const { UpdateChecker } = await import("../services/updateChecker.ts");
 const {
   getActiveSteamOperations,
   clearActiveSteamOperation,

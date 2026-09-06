@@ -24,7 +24,7 @@ import {
   parseLegacyBoolean,
   parseLegacyMinutes,
 } from "../services/modChecker.js";
-import { parseAutoUpdateWarningMinutes } from "../services/updateChecker.js";
+import { parseAutoUpdateWarningMinutes } from "../services/updateChecker.ts";
 import { BackupService } from "../services/backupService.js";
 import authService from "../services/auth.js";
 import { parsePlayerExportFile } from "../routes/players.js";

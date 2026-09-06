@@ -28,7 +28,7 @@ vi.mock("../database/init.js", () => ({
   })),
 }));
 
-const { UpdateChecker } = await import("../services/updateChecker.js");
+const { UpdateChecker } = await import("../services/updateChecker.ts");
 
 function fakeChild(code) {
   const handlers = {};

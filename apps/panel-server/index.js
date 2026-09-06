@@ -52,7 +52,7 @@ import { ModChecker } from "./services/modChecker.js";
 import { Scheduler } from "./services/scheduler.js";
 import { DiscordBot } from "./services/discordBot.js";
 import { BackupService } from "./services/backupService.js";
-import { UpdateChecker } from "./services/updateChecker.js";
+import { UpdateChecker } from "./services/updateChecker.ts";
 import {
   PanelUpdateChecker,
   createUpdateDataBackup,

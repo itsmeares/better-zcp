@@ -17,7 +17,7 @@ vi.mock("../services/managedContainer.ts", () => ({
   resolveManagedContainer: vi.fn(async () => ({ handled: false })),
 }));
 
-const { UpdateChecker } = await import("../services/updateChecker.js");
+const { UpdateChecker } = await import("../services/updateChecker.ts");
 const dbModule = await import("../database/init.js");
 
 describe("UpdateChecker.runAutoUpdate fails closed when process detection can't confirm the server is stopped", () => {
