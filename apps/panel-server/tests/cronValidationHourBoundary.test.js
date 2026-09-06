@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isCronTooFrequent } from "../utils/cronValidation.js";
+import { isCronTooFrequent } from "../utils/cronValidation.ts";
 
 describe("isCronTooFrequent() -- hour-boundary wrap, not just the literal '*' hour case", () => {
   it("catches a sub-5-minute gap across two LISTED (non-wildcard) adjacent hours", () => {

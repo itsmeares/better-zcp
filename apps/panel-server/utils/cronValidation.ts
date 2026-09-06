@@ -2,7 +2,7 @@ import cron from "node-cron";
 
 const RAW_OFFSET_TIMEZONE_RE = /^(?:UTC|GMT)?[+-]\d{1,2}(?::?\d{2})?$/i;
 
-export function isValidIanaTimezone(tz) {
+export function isValidIanaTimezone(tz: unknown): boolean {
   if (typeof tz !== "string" || !tz.trim()) return false;
   const trimmed = tz.trim();
   if (RAW_OFFSET_TIMEZONE_RE.test(trimmed)) return false;
@@ -14,34 +14,39 @@ export function isValidIanaTimezone(tz) {
   }
 }
 
-export function isRawOffsetTimezone(tz) {
+export function isRawOffsetTimezone(tz: unknown): boolean {
   return typeof tz === "string" && RAW_OFFSET_TIMEZONE_RE.test(tz.trim());
 }
 
-export function hasUnsupportedCronFieldCount(expression) {
+export function hasUnsupportedCronFieldCount(expression: unknown): boolean {
   return (
     typeof expression !== "string" ||
     expression.trim().split(/\s+/).length !== 5
   );
 }
 
-export function isSupportedFiveFieldCron(expression) {
+export function isSupportedFiveFieldCron(expression: unknown): boolean {
   return (
-    !hasUnsupportedCronFieldCount(expression) && cron.validate(expression)
+    typeof expression === "string" &&
+    !hasUnsupportedCronFieldCount(expression) &&
+    cron.validate(expression)
   );
 }
 
-function expandCronField(field, max) {
-  const values = new Set();
+function expandCronField(field: string, max: number): Set<number> | null {
+  const values = new Set<number>();
 
   for (const part of field.split(",")) {
     const match = /^(\*|\d+)(?:-(\d+))?(?:\/(\d+))?$/.exec(part);
     if (!match) return null;
 
     const start = match[1] === "*" ? 0 : Number(match[1]);
-    const end = match[2] === undefined
-      ? (match[1] === "*" ? max : start)
-      : Number(match[2]);
+    const end =
+      match[2] === undefined
+        ? match[1] === "*"
+          ? max
+          : start
+        : Number(match[2]);
     const step = match[3] === undefined ? 1 : Number(match[3]);
     if (
       !Number.isInteger(start) ||
@@ -63,8 +68,13 @@ function expandCronField(field, max) {
   return values.size > 0 ? values : null;
 }
 
-export function isCronTooFrequent(expression) {
-  if (hasUnsupportedCronFieldCount(expression)) return true;
+export function isCronTooFrequent(expression: unknown): boolean {
+  if (
+    typeof expression !== "string" ||
+    hasUnsupportedCronFieldCount(expression)
+  ) {
+    return true;
+  }
   const [minute, hour] = expression.trim().split(/\s+/);
 
   const minutes = expandCronField(minute, 59);
@@ -72,7 +82,7 @@ export function isCronTooFrequent(expression) {
   const hours = expandCronField(hour, 23);
   if (!hours) return true;
 
-  const dayMinutes = new Set();
+  const dayMinutes = new Set<number>();
   for (const h of hours) {
     for (const m of minutes) {
       dayMinutes.add(h * 60 + m);
@@ -90,17 +100,22 @@ export function isCronTooFrequent(expression) {
   return false;
 }
 
-export function subHourlyIntervalMinutes(expression) {
-  if (hasUnsupportedCronFieldCount(expression)) return null;
+export function subHourlyIntervalMinutes(expression: unknown): number | null {
+  if (
+    typeof expression !== "string" ||
+    hasUnsupportedCronFieldCount(expression)
+  ) {
+    return null;
+  }
   const [minute] = expression.trim().split(/\s+/);
   const minutes = expandCronField(minute, 59);
   if (!minutes || minutes.size < 2) return null;
   return Math.round(60 / minutes.size);
 }
 
-export function timezoneObservesDst(zone) {
+export function timezoneObservesDst(zone: string): boolean {
   try {
-    const offsetOf = (date) =>
+    const offsetOf = (date: Date) =>
       new Intl.DateTimeFormat("en-US", {
         timeZone: zone,
         timeZoneName: "shortOffset",
@@ -115,11 +130,15 @@ export function timezoneObservesDst(zone) {
   }
 }
 
-export function dstFallBackWarning(expression, timezone, label) {
+export function dstFallBackWarning(
+  expression: unknown,
+  timezone: unknown,
+  label?: unknown,
+): string | null {
   const interval = subHourlyIntervalMinutes(expression);
   if (interval === null || interval < 15 || interval > 60) return null;
-  if (!timezoneObservesDst(timezone)) return null;
-  const name = label ? `"${label}" ` : "";
+  if (typeof timezone !== "string" || !timezoneObservesDst(timezone)) return null;
+  const name = label ? `"${String(label)}" ` : "";
   return (
     `Schedule ${name}fires roughly every ${interval} minute(s); during ` +
     `${timezone}'s daylight-saving fall-back each year, one occurrence in ` +

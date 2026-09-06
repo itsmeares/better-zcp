@@ -3,7 +3,7 @@ import {
   subHourlyIntervalMinutes,
   timezoneObservesDst,
   dstFallBackWarning,
-} from "../utils/cronValidation.js";
+} from "../utils/cronValidation.ts";
 import { Scheduler } from "../services/scheduler.js";
 
 

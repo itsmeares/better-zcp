@@ -14,7 +14,7 @@ import { ErrorCode } from "../utils/errorCodes.js";
 import {
   isCronTooFrequent,
   isSupportedFiveFieldCron,
-} from "../utils/cronValidation.js";
+} from "../utils/cronValidation.ts";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 const log = createLogger("API:Backup");
 

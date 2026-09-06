@@ -32,7 +32,7 @@ import {
   isValidIanaTimezone,
   isRawOffsetTimezone,
   dstFallBackWarning,
-} from "../utils/cronValidation.js";
+} from "../utils/cronValidation.ts";
 import {
   defaultRestartWarningSettings,
   formatRestartWarning,

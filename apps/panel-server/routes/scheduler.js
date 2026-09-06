@@ -20,7 +20,7 @@ import {
   hasUnsupportedCronFieldCount,
   isCronTooFrequent,
   isValidIanaTimezone,
-} from '../utils/cronValidation.js';
+} from '../utils/cronValidation.ts';
 import { parseBoundedInteger, parseClampedInteger } from '../utils/queryNumbers.ts';
 
 export { hasUnsupportedCronFieldCount };

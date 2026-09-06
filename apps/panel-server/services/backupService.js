@@ -23,7 +23,7 @@ import { invalidateMapFolderScan } from "../routes/chunks.js";
 import {
   isCronTooFrequent,
   isSupportedFiveFieldCron,
-} from "../utils/cronValidation.js";
+} from "../utils/cronValidation.ts";
 
 let unzipper;
 async function getUnzipper() {

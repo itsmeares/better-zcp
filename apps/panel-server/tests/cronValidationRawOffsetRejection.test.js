@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isValidIanaTimezone,
   isRawOffsetTimezone,
-} from "../utils/cronValidation.js";
+} from "../utils/cronValidation.ts";
 
 describe("isValidIanaTimezone() / isRawOffsetTimezone() -- reject bare offsets, keep everything else", () => {
   it.each([
