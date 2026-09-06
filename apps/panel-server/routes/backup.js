@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createLogger } from "../utils/logger.js";
-import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.js";
+import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.js";
 import { requirePermission } from "../services/permissions.js";
 import { listBackupRecords } from "../services/backupRecords.ts";

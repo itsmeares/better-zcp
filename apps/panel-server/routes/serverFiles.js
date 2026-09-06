@@ -13,7 +13,7 @@ import {
   maskSensitiveObject,
   isMaskedSecret,
   maskSecretValue,
-} from "../utils/sanitize.js";
+} from "../utils/sanitize.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.js";
 import {
   getBackupPath,

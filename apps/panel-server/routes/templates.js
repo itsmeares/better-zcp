@@ -1,6 +1,6 @@
 import express from "express";
 import { createLogger } from "../utils/logger.js";
-import { sanitizeError } from "../utils/sanitize.js";
+import { sanitizeError } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.js";
 import { requirePermission } from "../services/permissions.js";
 import { getActiveServer } from "../database/init.js";

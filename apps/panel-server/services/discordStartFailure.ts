@@ -1,4 +1,4 @@
-import { sanitizeError } from "../utils/sanitize.js";
+import { sanitizeError } from "../utils/sanitize.ts";
 
 interface StartError {
   kind?: unknown;

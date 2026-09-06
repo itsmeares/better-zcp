@@ -7,7 +7,7 @@ import {
   parseBoundedInteger,
   parseClampedInteger,
 } from '../utils/queryNumbers.ts';
-import { sanitizeError } from '../utils/sanitize.js';
+import { sanitizeError } from '../utils/sanitize.ts';
 import { redactRconCommandSecrets } from '../utils/rconCommandRedaction.ts';
 import {
   testRconConnection,

@@ -9,7 +9,7 @@ import {
   SENSITIVE_FIELD_RE,
   isMaskedSecret,
   maskSensitiveObject,
-} from "../utils/sanitize.js";
+} from "../utils/sanitize.ts";
 import net from "net";
 import { requirePermission, getRoleByName } from "../services/permissions.js";
 import {

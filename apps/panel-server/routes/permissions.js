@@ -1,6 +1,6 @@
 import express from "express";
 import { createLogger } from "../utils/logger.js";
-import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.js";
+import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import {
   requirePermission,
   listCapabilitiesGrouped,

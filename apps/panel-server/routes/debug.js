@@ -32,7 +32,7 @@ import {
   getRoleByName,
   getDatabaseFilePath,
 } from "../database/init.js";
-import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils/sanitize.js";
+import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.js";
 import { checkSandboxBraceBalance } from "./serverFiles.js";
 import panelBridgeService from "../services/panelBridge.js";

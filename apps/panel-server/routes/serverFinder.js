@@ -3,7 +3,7 @@ import dgram from 'dgram';
 import { createLogger } from '../utils/logger.js';
 const log = createLogger('API:Finder');
 import { getSteamApiKey } from '../services/steamApiKey.ts';
-import { sanitizeError } from '../utils/sanitize.js';
+import { sanitizeError } from '../utils/sanitize.ts';
 import { requirePermission } from '../services/permissions.js';
 
 const router = express.Router();

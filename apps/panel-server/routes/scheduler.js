@@ -2,7 +2,7 @@ import express from 'express';
 import cron from 'node-cron';
 import { createLogger } from '../utils/logger.js';
 const log = createLogger('API:Scheduler');
-import { sanitizeError, sanitizeErrorParams } from '../utils/sanitize.js';
+import { sanitizeError, sanitizeErrorParams } from '../utils/sanitize.ts';
 import { ErrorCode } from '../utils/errorCodes.js';
 import {
   getScheduledTasks,

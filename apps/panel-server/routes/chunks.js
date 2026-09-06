@@ -10,7 +10,7 @@ import {
   updateServer,
   getServers,
 } from "../database/init.js";
-import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.js";
+import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { requirePermission, getRoleByName } from "../services/permissions.js";
 import { deleteVehiclesInBoxes } from "../utils/vehiclesDb.js";
 import { confineToRoots } from "../utils/browseRoots.ts";

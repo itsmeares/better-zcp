@@ -5,7 +5,7 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("Updates");
 import { getSetting, setSetting, getActiveServer } from "../database/init.js";
 import { resolveManagedContainer } from "./managedContainer.js";
-import { sanitizeError } from "../utils/sanitize.js";
+import { sanitizeError } from "../utils/sanitize.ts";
 import {
   hasActiveSteamOperation,
   getActiveSteamOperations,

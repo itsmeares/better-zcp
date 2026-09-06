@@ -16,7 +16,7 @@ import {
   flushWrites,
   getDatabaseFilePath,
 } from "../database/init.js";
-import { sanitizeError } from "../utils/sanitize.js";
+import { sanitizeError } from "../utils/sanitize.ts";
 import { captureBackupSnapshot } from "../utils/backupSnapshot.ts";
 import { addBackupRecord, removeBackupRecord } from "./backupRecords.ts";
 import { invalidateMapFolderScan } from "../routes/chunks.js";

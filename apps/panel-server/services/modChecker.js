@@ -14,7 +14,7 @@ import {
 import fs from "fs";
 import path from "path";
 import { EventEmitter } from "events";
-import { sanitizeError } from "../utils/sanitize.js";
+import { sanitizeError } from "../utils/sanitize.ts";
 import panelBridge from "./panelBridge.js";
 
 export const MOD_CHECK_INTERVAL_MINUTES_MIN = 1;

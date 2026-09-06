@@ -2,7 +2,7 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import authService from "../services/auth.js";
 import { createLogger } from "../utils/logger.js";
-import { sanitizeError, isMaskedSecret } from "../utils/sanitize.js";
+import { sanitizeError, isMaskedSecret } from "../utils/sanitize.ts";
 import {
   getOidcSettings,
   getOidcEnvOverrides,

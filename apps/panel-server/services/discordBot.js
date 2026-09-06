@@ -19,7 +19,7 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("Discord");
 import { getActiveServer, getSetting, setSetting } from "../database/init.js";
 import { loadUiSecret, writeUiSecretFile } from "../utils/uiSecretFile.ts";
-import { sanitizeError } from "../utils/sanitize.js";
+import { sanitizeError } from "../utils/sanitize.ts";
 import { describeStartFailure } from "./discordStartFailure.ts";
 import { readIniValues } from "../utils/templateFiles.js";
 import { runManagedLifecycle } from "./managedContainer.js";

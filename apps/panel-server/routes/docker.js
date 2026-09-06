@@ -1,6 +1,6 @@
 import express from "express";
 import { requirePermission } from "../services/permissions.js";
-import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.js";
+import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getServer } from "../database/init.js";
 import { RconService } from "../services/rcon.js";
 import { ErrorCode } from "../utils/errorCodes.js";

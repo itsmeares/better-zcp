@@ -73,7 +73,7 @@ import { requireRole } from "./services/auth.js";
 import authRoutes from "./routes/auth.js";
 import oidcRoutes from "./routes/oidc.js";
 import { loadOrCreateCerts } from "./utils/certs.js";
-import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.js";
+import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";
 import { ErrorCode } from "./utils/errorCodes.js";
 import { getSftpCachePath } from "./services/panelBridgeSftp.js";
 import { resolveInstallDir } from "./services/panelBridgeInstaller.js";

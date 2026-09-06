@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
-import { maskSecretValue } from "../utils/sanitize.js";
+import { maskSecretValue } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.js";
 
 

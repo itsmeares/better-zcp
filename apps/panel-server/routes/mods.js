@@ -35,7 +35,7 @@ import {
   sanitizeIniList,
   sanitizeModIdList,
   looksLikeWorkshopId,
-} from "../utils/sanitize.js";
+} from "../utils/sanitize.ts";
 import {
   getCollectionContents,
   addItemToCollection,

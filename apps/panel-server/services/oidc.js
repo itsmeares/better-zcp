@@ -2,7 +2,7 @@ import * as client from "openid-client";
 import { createLogger } from "../utils/logger.js";
 import { getSetting, setSetting } from "../database/init.js";
 import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.ts";
-import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.js";
+import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.js";
 
 const log = createLogger("OIDC");

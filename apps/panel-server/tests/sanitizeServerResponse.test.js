@@ -5,7 +5,7 @@ import {
   maskSensitiveObject,
   sanitizeServerResponse,
   sanitizeServerResponseList,
-} from "../utils/sanitize.js";
+} from "../utils/sanitize.ts";
 
 describe("SENSITIVE_FIELD_RE / maskSensitiveObject", () => {
   it("masks every secret-shaped field, including ones added after the fact", () => {

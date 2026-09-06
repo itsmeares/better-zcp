@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
 import { createLogger } from "../utils/logger.js";
 import { ErrorCode } from "../utils/errorCodes.js";
-import { sanitizeErrorParams } from "../utils/sanitize.js";
+import { sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getServer, getSetting, setSetting } from "../database/init.js";
 import {
   getUserTemplates,

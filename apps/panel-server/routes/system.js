@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { createLogger } from "../utils/logger.js";
-import { sanitizeError } from "../utils/sanitize.js";
+import { sanitizeError } from "../utils/sanitize.ts";
 import { getDataPaths } from "../utils/paths.js";
 import { getDiskStatusForPath } from "../services/diskMonitor.js";
 import { getCircuitBreakerStatus } from "../database/init.js";

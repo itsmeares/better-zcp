@@ -1,6 +1,6 @@
 import express from "express";
 import { createLogger } from "../utils/logger.js";
-import { sanitizeError } from "../utils/sanitize.js";
+import { sanitizeError } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.js";
 import panelBridge from "../services/panelBridge.js";
 import { composeServerStatus, resolveProvider } from "../utils/serverStatusModel.ts";

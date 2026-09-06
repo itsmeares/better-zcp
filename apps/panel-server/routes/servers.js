@@ -8,7 +8,7 @@ import {
   sanitizeServerResponse,
   sanitizeServerResponseList,
   isMaskedSecret,
-} from "../utils/sanitize.js";
+} from "../utils/sanitize.ts";
 import { testRconConnection } from "../services/rcon.js";
 import {
   getServers,

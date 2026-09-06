@@ -1,6 +1,6 @@
 import express from "express";
 import { createLogger } from "../utils/logger.js";
-import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.js";
+import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { normalizeChatRelayScope } from "../services/discordBot.js";
 import { describeStartFailure } from "../services/discordStartFailure.ts";
 import { requirePermission, getRoleByName } from "../services/permissions.js";

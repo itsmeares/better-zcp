@@ -15,7 +15,7 @@ import {
   getActiveServer,
   getServers,
 } from "../database/init.js";
-import { sanitizeError, sanitizeIniValue } from "../utils/sanitize.js";
+import { sanitizeError, sanitizeIniValue } from "../utils/sanitize.ts";
 import { hasIniKeyValue, setIniKeyLine } from "../utils/iniKeyWrite.ts";
 import { resolveLaunchMode } from "../services/serverManager.js";
 import {
