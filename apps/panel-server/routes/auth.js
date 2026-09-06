@@ -14,6 +14,7 @@ import { verifySetupToken, clearSetupToken } from "../utils/setupToken.js";
 import { getRefreshCookieOptions } from "../utils/refreshCookie.js";
 import { requirePermission, getCapabilitiesForRole } from "../services/permissions.js";
 import { ErrorCode } from "../utils/errorCodes.js";
+import { z } from "zod";
 
 const log = createLogger("Auth");
 const router = Router();
@@ -21,6 +22,21 @@ const router = Router();
 function isNonEmptyString(value) {
   return typeof value === "string" && value.length > 0;
 }
+
+const loginBodySchema = z
+  .object({
+    username: z.string().min(1).max(32),
+    password: z.string().min(1).max(128),
+    rememberMe: z.boolean().optional().default(false),
+  })
+  .strict();
+
+const setupBodySchema = loginBodySchema
+  .extend({
+    setupToken: z.string().min(1),
+    panelPort: z.coerce.number().int().min(1024).max(65535).default(3001),
+  })
+  .strict();
 
 const RESET_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const RESET_TOKEN_MAX_BYTES = 1024;
@@ -207,20 +223,21 @@ router.post("/setup", setupLimiter, async (req, res) => {
       });
     }
 
-    const { username, password, rememberMe = false, panelPort = 3001 } = req.body || {};
-    if (!isNonEmptyString(username) || !isNonEmptyString(password)) {
+    const parsedBody = setupBodySchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      const hasPanelPortError = parsedBody.error.issues.some(
+        (issue) => issue.path[0] === "panelPort",
+      );
       return res.status(400).json({
-        error: "Username and password are required",
-        code: ErrorCode.AUTH_USERNAME_PASSWORD_REQUIRED,
+        error: hasPanelPortError
+          ? "Panel port must be a whole number between 1024 and 65535"
+          : "Setup fields are invalid",
+        code: hasPanelPortError
+          ? ErrorCode.SETUP_PANEL_PORT_INVALID
+          : ErrorCode.AUTH_REQUEST_INVALID,
       });
     }
-    const normalizedPanelPort = Number(panelPort);
-    if (!Number.isInteger(normalizedPanelPort) || normalizedPanelPort < 1024 || normalizedPanelPort > 65535) {
-      return res.status(400).json({
-        error: "Panel port must be a whole number between 1024 and 65535",
-        code: ErrorCode.SETUP_PANEL_PORT_INVALID,
-      });
-    }
+    const { username, password, rememberMe, panelPort: normalizedPanelPort } = parsedBody.data;
     await setSetting("panelPort", normalizedPanelPort);
     await authService.createUser(username, password);
     await clearSetupToken();
@@ -253,13 +270,14 @@ router.post("/setup", setupLimiter, async (req, res) => {
 
 router.post("/login", loginLimiter, async (req, res) => {
   try {
-    const { username, password, rememberMe = false } = req.body || {};
-    if (!isNonEmptyString(username) || !isNonEmptyString(password)) {
+    const parsedBody = loginBodySchema.safeParse(req.body);
+    if (!parsedBody.success) {
       return res.status(400).json({
-        error: "Username and password are required",
-        code: ErrorCode.AUTH_USERNAME_PASSWORD_REQUIRED,
+        error: "Login fields are invalid",
+        code: ErrorCode.AUTH_REQUEST_INVALID,
       });
     }
+    const { username, password, rememberMe } = parsedBody.data;
     const result = await authService.login(
       username,
       password,

@@ -157,6 +157,26 @@ describe("POST /api/auth/setup — the setup-token gate", () => {
     expect(db.data.users.length).toBe(0);
   });
 
+  it("validates the panel port before creating the admin account", async () => {
+    const token = await getOrCreateSetupToken();
+    const req = makeReq(
+      {
+        username: "op",
+        password: "correct horse battery",
+        setupToken: token,
+        panelPort: "not-a-port",
+      },
+      "10.0.0.2",
+    );
+    const res = createResponse();
+    await runRoute("/setup", "post", req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "SETUP_PANEL_PORT_INVALID" }),
+    );
+    expect(db.data.users.length).toBe(0);
+  });
+
   it("accepts the correct token exactly once, and clearSetupToken() makes reuse fail on a second attempt", async () => {
     const token = await getOrCreateSetupToken();
 
