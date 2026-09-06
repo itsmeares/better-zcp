@@ -2,7 +2,7 @@ import express from 'express';
 import { createLogger } from '../utils/logger.js';
 const log = createLogger('API:RCON');
 import { getCommandHistory } from '../database/init.js';
-import { PZ_COMMANDS } from '../utils/commands.js';
+import { PZ_COMMANDS } from '../utils/commands.ts';
 import {
   parseBoundedInteger,
   parseClampedInteger,

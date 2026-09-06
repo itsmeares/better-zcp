@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCESS_LEVELS } from "../utils/commands.js";
+import { ACCESS_LEVELS } from "../utils/commands.ts";
 
 const EXPECTED_ACCESS_LEVELS = ["admin", "moderator", "gm", "observer", "priority", "user", "none"];
 
