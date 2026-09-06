@@ -243,7 +243,7 @@ let createSqliteSnapshotStore;
 
 async function createSqliteAdapter() {
   createSqliteSnapshotStore ??= (
-    await import("./sqlite/snapshotStore.js")
+    await import("./sqlite/snapshotStore.ts")
   ).createSqliteSnapshotStore;
   const store = createSqliteSnapshotStore(dbPath);
   return {

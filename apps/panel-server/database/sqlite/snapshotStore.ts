@@ -1,17 +1,24 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import {
+  DatabaseSync,
+  type SQLInputValue,
+  type StatementSync,
+} from "node:sqlite";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { panelState } from "./schema.ts";
 
 const SNAPSHOT_KEY = "main";
 
-function rowsAsArrays(statement, params) {
+function rowsAsArrays(
+  statement: StatementSync,
+  params: SQLInputValue[],
+): unknown[][] {
   return statement.all(...params).map((row) => Object.values(row));
 }
 
-function createDrizzleDatabase(client) {
+function createDrizzleDatabase(client: DatabaseSync) {
   // Drizzle's sqlite-proxy driver lets us keep Node's built-in SQLite driver,
   // so the native executable does not need another native addon.
   return drizzle(async (query, params, method) => {
@@ -26,7 +33,7 @@ function createDrizzleDatabase(client) {
   });
 }
 
-function ensureParentDirectory(filePath) {
+function ensureParentDirectory(filePath: string): void {
   const directory = path.dirname(filePath);
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   try {
@@ -36,7 +43,20 @@ function ensureParentDirectory(filePath) {
   }
 }
 
-export function createSqliteSnapshotStore(filePath) {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export interface SqliteSnapshotStore {
+  read: () => Promise<unknown>;
+  write: (data: unknown) => Promise<void>;
+  close: () => void;
+  filePath: string;
+}
+
+export function createSqliteSnapshotStore(
+  filePath: string,
+): SqliteSnapshotStore {
   if (typeof filePath !== "string" || !filePath.trim()) {
     throw new TypeError("SQLite database path is required");
   }
@@ -45,7 +65,7 @@ export function createSqliteSnapshotStore(filePath) {
   ensureParentDirectory(resolvedPath);
   const client = new DatabaseSync(resolvedPath);
   let schemaReady = false;
-  const ensureSchema = () => {
+  const ensureSchema = (): void => {
     if (schemaReady) return;
     client.exec(`
       PRAGMA foreign_keys = ON;
@@ -62,7 +82,7 @@ export function createSqliteSnapshotStore(filePath) {
   let closed = false;
 
   return {
-    async read() {
+    async read(): Promise<unknown> {
       ensureSchema();
       const row = await database
         .select()
@@ -73,12 +93,14 @@ export function createSqliteSnapshotStore(filePath) {
 
       try {
         return JSON.parse(row.value);
-      } catch (error) {
-        throw new Error(`SQLite snapshot is not valid JSON: ${error.message}`);
+      } catch (error: unknown) {
+        throw new Error(
+          `SQLite snapshot is not valid JSON: ${errorMessage(error)}`,
+        );
       }
     },
 
-    async write(data) {
+    async write(data: unknown): Promise<void> {
       ensureSchema();
       const value = JSON.stringify(data);
       await database
@@ -96,7 +118,7 @@ export function createSqliteSnapshotStore(filePath) {
       }
     },
 
-    close() {
+    close(): void {
       if (closed) return;
       closed = true;
       client.close();

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { createSqliteSnapshotStore } from "./snapshotStore.js";
+import { createSqliteSnapshotStore } from "./snapshotStore.ts";
 
 const EXPECTED_TOP_LEVEL_KEYS = new Set([
   "command_history",
