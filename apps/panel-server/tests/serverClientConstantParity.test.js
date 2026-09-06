@@ -95,7 +95,7 @@ describe("AIRDROP_PRESETS (client) vs airdrop's VALID_PRESETS (server): parity",
 
 describe("DISK_SOCKET_EVENTS (client) vs diskMonitor's io.emit() calls (server): parity", () => {
   const CLIENT_PATH = "apps/panel-client/src/components/SystemHealthBanner.tsx";
-  const SERVER_PATH = "apps/panel-server/services/diskMonitor.js";
+  const SERVER_PATH = "apps/panel-server/services/diskMonitor.ts";
 
   function extractClientDiskEvents() {
     const content = fs.readFileSync(path.join(ROOT, CLIENT_PATH), "utf-8");

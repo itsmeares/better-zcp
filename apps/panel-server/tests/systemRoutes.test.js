@@ -5,7 +5,7 @@ const getCircuitBreakerStatus = vi.fn();
 vi.mock("../database/init.js", () => ({ getCircuitBreakerStatus }));
 
 const getDiskStatusForPath = vi.fn();
-vi.mock("../services/diskMonitor.js", () => ({ getDiskStatusForPath }));
+vi.mock("../services/diskMonitor.ts", () => ({ getDiskStatusForPath }));
 
 const { getDataPaths } = await import("../utils/paths.js");
 const { default: router } = await import("../routes/system.js");

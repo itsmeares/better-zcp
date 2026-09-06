@@ -5,7 +5,7 @@ import path from "path";
 import { createLogger } from "../utils/logger.js";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { getDataPaths } from "../utils/paths.js";
-import { getDiskStatusForPath } from "../services/diskMonitor.js";
+import { getDiskStatusForPath } from "../services/diskMonitor.ts";
 import { getCircuitBreakerStatus } from "../database/init.js";
 import { getRestartAssessment } from "../services/panelUpdateChecker.js";
 import { isContainerized } from "../utils/dockerDetect.ts";

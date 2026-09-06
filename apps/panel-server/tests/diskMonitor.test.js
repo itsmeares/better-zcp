@@ -15,7 +15,7 @@ const {
   DiskMonitor,
   WARNING_PERCENT,
   CRITICAL_PERCENT,
-} = await import("../services/diskMonitor.js");
+} = await import("../services/diskMonitor.ts");
 
 beforeEach(() => {
   getActiveServer.mockReset();

@@ -66,7 +66,7 @@ import {
   recoverInterruptedUpdateBundle,
 } from "./services/updateBundle.js";
 import { LogTailer } from "./services/logTailer.js";
-import { DiskMonitor } from "./services/diskMonitor.js";
+import { DiskMonitor } from "./services/diskMonitor.ts";
 import authService from "./services/auth.js";
 import { getRoleByName } from "./services/permissions.js";
 import { requireRole } from "./services/auth.js";
