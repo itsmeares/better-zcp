@@ -1,4 +1,3 @@
-
 export const ProgressCode = Object.freeze({
   STEAMCMD_LINUX_AUTO_DOWNLOAD_START: "STEAMCMD_LINUX_AUTO_DOWNLOAD_START",
   STEAMCMD_EXTRACTING: "STEAMCMD_EXTRACTING",
@@ -34,4 +33,6 @@ export const ProgressCode = Object.freeze({
   STEAMCMD_32BIT_LIB_WARNING: "STEAMCMD_32BIT_LIB_WARNING",
   STEAMCMD_SETUP_FAILED: "STEAMCMD_SETUP_FAILED",
   STEAMCMD_SELF_SETUP_UNEXPECTED_ERROR: "STEAMCMD_SELF_SETUP_UNEXPECTED_ERROR",
-});
+} as const);
+
+export type ProgressCode = (typeof ProgressCode)[keyof typeof ProgressCode];

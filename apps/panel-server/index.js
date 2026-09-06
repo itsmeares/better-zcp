@@ -8,7 +8,7 @@ import { permissionsPolicy } from "./middleware/permissionsPolicy.js";
 import { logSetupTokenIfNeeded } from "./utils/setupToken.js";
 import { computeInlineScriptCspHash } from "./utils/cspScriptHash.js";
 import { parseTrustProxySetting } from "./utils/trustProxy.ts";
-import { isUncompressedBinaryProxyPath } from "./utils/compressionFilter.js";
+import { isUncompressedBinaryProxyPath } from "./utils/compressionFilter.ts";
 import { createServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import { Server } from "socket.io";

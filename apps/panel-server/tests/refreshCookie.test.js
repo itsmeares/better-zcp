@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getRefreshCookieOptions } = await import(
-  "../utils/refreshCookie.js"
+  "../utils/refreshCookie.ts"
 );
 
 function makeReq({ secure = false, forwardedProto = null } = {}) {
@@ -65,7 +65,7 @@ describe("getRefreshCookieOptions — the one definition routes/auth.js and rout
     process.env.HTTPS = "true";
     vi.resetModules();
     const { getRefreshCookieOptions: freshGetOptions } = await import(
-      "../utils/refreshCookie.js"
+      "../utils/refreshCookie.ts"
     );
     const opts = freshGetOptions(makeReq({ secure: false }));
     expect(opts.secure).toBe(true);
@@ -75,7 +75,7 @@ describe("getRefreshCookieOptions — the one definition routes/auth.js and rout
     process.env.FORCE_HSTS = "true";
     vi.resetModules();
     const { getRefreshCookieOptions: freshGetOptions } = await import(
-      "../utils/refreshCookie.js"
+      "../utils/refreshCookie.ts"
     );
     const opts = freshGetOptions(makeReq({ secure: false }));
     expect(opts.secure).toBe(true);

@@ -11,7 +11,7 @@ import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.js";
 import { getDataPaths } from "../utils/paths.js";
 import { setSetting } from "../database/init.js";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.js";
-import { getRefreshCookieOptions } from "../utils/refreshCookie.js";
+import { getRefreshCookieOptions } from "../utils/refreshCookie.ts";
 import { requirePermission, getCapabilitiesForRole } from "../services/permissions.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 import { z } from "zod";

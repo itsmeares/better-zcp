@@ -13,7 +13,7 @@ import {
   resetOidcConfigCache,
   testOidcDiscovery,
 } from "../services/oidc.js";
-import { getRefreshCookieOptions } from "../utils/refreshCookie.js";
+import { getRefreshCookieOptions } from "../utils/refreshCookie.ts";
 import { requirePermission } from "../services/permissions.js";
 
 const log = createLogger("OIDC");

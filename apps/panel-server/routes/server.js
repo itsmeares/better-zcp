@@ -34,7 +34,7 @@ import {
   lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.js";
 import { ErrorCode } from "../utils/errorCodes.js";
-import { ProgressCode } from "../utils/progressCodes.js";
+import { ProgressCode } from "../utils/progressCodes.ts";
 import { invalidateMapFolderScan } from "./chunks.js";
 import { emitActionResult } from "./scheduler.js";
 import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.js";

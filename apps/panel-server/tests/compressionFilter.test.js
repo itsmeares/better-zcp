@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isUncompressedBinaryProxyPath, UNCOMPRESSED_BINARY_PROXY_PREFIXES } from "../utils/compressionFilter.js";
+import { isUncompressedBinaryProxyPath, UNCOMPRESSED_BINARY_PROXY_PREFIXES } from "../utils/compressionFilter.ts";
 
 
 describe("isUncompressedBinaryProxyPath", () => {

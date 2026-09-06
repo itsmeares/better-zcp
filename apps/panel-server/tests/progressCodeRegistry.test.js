@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { ProgressCode } from "../utils/progressCodes.js";
+import { ProgressCode } from "../utils/progressCodes.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.join(__dirname, "..");
@@ -45,7 +45,7 @@ describe("install/SteamCMD progress codes: registry membership (structure, not m
     expect(
       unregistered,
       unregistered.length
-        ? `Found ${unregistered.length} ProgressCode.* reference(s) not in apps/panel-server/utils/progressCodes.js: ${unregistered.join(", ")}`
+        ? `Found ${unregistered.length} ProgressCode.* reference(s) not in apps/panel-server/utils/progressCodes.ts: ${unregistered.join(", ")}`
         : "",
     ).toEqual([]);
   });
