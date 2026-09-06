@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - apps/panel-client/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
       - .github/workflows/demo-pages.yml
   workflow_dispatch:
 
@@ -37,10 +40,9 @@ jobs:
         run: corepack enable && corepack install
 
       - name: Install client dependencies
-        run: pnpm install --filter pz-server-manager-client --frozen-lockfile
+        run: pnpm install --filter @better-zcp/panel-client --frozen-lockfile
 
       - name: Build static demo
-        working-directory: client
         env:
           VITE_DEMO_MODE: "true"
           VITE_BASE_PATH: "/better-zcp/"

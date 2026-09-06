@@ -1125,7 +1125,7 @@ async function buildWorldMapDiagnostics() {
   }
 }
 
-// db.json's own write path (server/database/init.js) already tracks retry
+// db.json's own write path (apps/panel-server/database/init.js) already tracks retry
 // count / circuit-breaker state for exactly this "silent write failure"
 // question -- getCircuitBreakerStatus() surfaces it read-only, no new
 // tracking added here. writeFileAtomic (apps/panel-server/utils/fileWriteQueue.js,

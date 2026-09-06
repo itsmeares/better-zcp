@@ -19,7 +19,7 @@ import { RconService } from "../services/rcon.js";
 // Testing only the first would be indistinguishable from a classifier that
 // catches everything.
 //
-// New pattern sourcing: server/__fixtures__/pzRconRejectionStrings.json
+// New pattern sourcing: apps/panel-server/__fixtures__/pzRconRejectionStrings.json
 // (decompiled PZ B42 server jar, build 24909800) -- KickUserCommand.class
 // ("User X doesn't exist.", "This user can't be kicked."),
 // GameServer.getPlayerByUserNameForCommand (shared by AddItemCommand,

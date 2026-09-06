@@ -1,4 +1,4 @@
-// Extracts every literal RCON command the panel sends anywhere in server/
+// Extracts every literal RCON command the panel sends anywhere in apps/panel-server/
 // and compares it against the command list reported by the live server
 // (rcon "help", one command per line, path given as the 2nd argument).
 //

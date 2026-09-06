@@ -75,7 +75,7 @@ scale without hand-checking each hit.
 
 The PanelBridge Lua checker used for the Lua audit is NOT a clean, reusable
 CLI the way the two RCON scripts are -- it depends on a hand-curated
-`RECEIVER_CLASSES` map built by reading `pz-mod/PanelBridge/media/lua/
+`RECEIVER_CLASSES` map built by reading `integrations/panelbridge/media/lua/
 server/PanelBridge.lua`'s own variable assignments (e.g. knowing that the
 Lua local `climate` came from `getClimateManager()`, which is
 `zombie.iso.weather.ClimateManager`). That map goes stale the moment new

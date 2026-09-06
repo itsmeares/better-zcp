@@ -69,7 +69,7 @@ describe("computeInlineScriptCspHash — present and matching", () => {
   it("normalizes CRLF/CR line endings before hashing, matching what a real browser computes", () => {
     // Real CRLF bytes, not a JS "\n" escape (which is always LF and can
     // never reproduce this) -- this is what a checkout with
-    // core.autocrlf=true actually produces for client/index.html, which has
+    // core.autocrlf=true actually produces for apps/panel-client/index.html, which has
     // no .gitattributes rule pinning it to LF.
     const scriptBodyCrlf = "\r\n      console.log('anti-fouc');\r\n    ";
     writeIndexHtml(

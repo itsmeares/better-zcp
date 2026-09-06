@@ -1,5 +1,5 @@
 // Simulation template library: a curated set of built-in PZ rulesets (see
-// server/data/templates/*.json) plus user-created templates persisted in
+// apps/panel-server/data/templates/*.json) plus user-created templates persisted in
 // db.json. Templates are sparse overrides — applying one only ever touches
 // the keys it defines, never resets a server to "everything else default".
 import fs from "fs";

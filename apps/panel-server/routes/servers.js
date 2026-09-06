@@ -1186,7 +1186,8 @@ const ALLOWED_SERVER_UPDATE_FIELDS = [
   "adminPassword",
   // startBat/batFile used to be allowed here too. Re-confirmed dead
   // (2026-08-27, custom-launcher-as-a-real-supported-mode-not-an-accident):
-  // grepped serverManager.js, database/init.js and all of apps/panel-client/src --
+  // grepped apps/panel-server/services/serverManager.js, apps/panel-server/database/init.js,
+  // and all of apps/panel-client/src --
   // zero reads of either field anywhere. Removed rather than repurposed:
   // the real, now-supported mechanism for "point at a specific launcher
   // file" is a serverPath/installPath ending in .bat/.sh/.exe (see
@@ -1194,7 +1195,7 @@ const ALLOWED_SERVER_UPDATE_FIELDS = [
   // third, unused mechanism sitting beside the two real ones.
   //
   // "description" removed the same way (2026-08-29): grepped for
-  // `.description` on a server-shaped object across server/ and apps/panel-client/src/
+  // `.description` on a server-shaped object across apps/panel-server/ and apps/panel-client/src/
   // -- every hit was mod metadata, Steam branch metadata, a toast's
   // `description` field, or an i18n key literally named `description`, none
   // of it this record's own field. updateServer() persists whatever lands in

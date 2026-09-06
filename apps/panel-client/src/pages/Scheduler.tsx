@@ -123,7 +123,7 @@ function getCommonCommands(t: TFunction) {
 
 // No pagination on this panel -- when a fetch returns exactly this many
 // rows, older executions may exist and be silently excluded (server
-// retains up to 500, see server/database/init.js). A hint, not a hard
+// retains up to 500, see apps/panel-server/database/init.js). A hint, not a hard
 // truth: hitting the limit exactly by coincidence is possible too.
 const EXECUTION_HISTORY_FETCH_LIMIT = 50
 
