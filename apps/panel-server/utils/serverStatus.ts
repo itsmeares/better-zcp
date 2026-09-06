@@ -1,6 +1,9 @@
 import { getActiveServer } from "../database/init.js";
 import { resolveProvider } from "./serverStatusModel.ts";
-import { resolveDockerHostSignal } from "../services/managedContainer.js";
+import {
+  resolveDockerHostSignal,
+  type DockerControl,
+} from "../services/managedContainer.ts";
 import panelBridge from "../services/panelBridge.js";
 
 interface ObservedSignals {
@@ -50,7 +53,7 @@ export function isServerObservedRunning({
 export async function resolveObservedServerRunning(
   serverManager: ServerManagerLike | null | undefined,
   rconService: RconServiceLike | null | undefined,
-  dockerClient: unknown,
+  dockerClient: DockerControl | null | undefined,
 ): Promise<boolean | null> {
   const activeServer = (await getActiveServer()) as ActiveServerLike | null;
   if (activeServer?.isRemote) {

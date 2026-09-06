@@ -11,7 +11,7 @@ vi.mock("../database/init.js", () => ({
 const { runManagedLifecycleMock } = vi.hoisted(() => ({
   runManagedLifecycleMock: vi.fn(async () => ({ handled: false })),
 }));
-vi.mock("../services/managedContainer.js", () => ({
+vi.mock("../services/managedContainer.ts", () => ({
   runManagedLifecycle: (...args) => runManagedLifecycleMock(...args),
 }));
 

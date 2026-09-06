@@ -5,11 +5,11 @@ vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => ({ isRemote: false })),
 }));
 
-vi.mock("../services/managedContainer.js", () => ({
+vi.mock("../services/managedContainer.ts", () => ({
   runManagedLifecycle: vi.fn(),
 }));
 
-const { runManagedLifecycle } = await import("../services/managedContainer.js");
+const { runManagedLifecycle } = await import("../services/managedContainer.ts");
 const { default: router } = await import("../routes/server.js");
 
 function getHandler(routePath, method) {

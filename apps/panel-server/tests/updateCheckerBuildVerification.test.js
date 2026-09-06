@@ -9,7 +9,7 @@ vi.mock("child_process", () => ({
   spawn: (...args) => spawnImpl(...args),
 }));
 
-vi.mock("../services/managedContainer.js", () => ({
+vi.mock("../services/managedContainer.ts", () => ({
   resolveManagedContainer: vi.fn(async () => ({ handled: false })),
 }));
 

@@ -22,7 +22,7 @@ const {
   buildDockerContainerLogsText,
   buildManagedServiceLogsText,
 } = await import("../routes/debug.js");
-const { setDockerClient } = await import("../services/managedContainer.js");
+const { setDockerClient } = await import("../services/managedContainer.ts");
 
 function fakeReq(services = {}, headers = {}) {
   return { app: { get: (key) => services[key] }, headers };

@@ -10,7 +10,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const runManagedLifecycle = vi.fn();
-vi.mock("../services/managedContainer.js", () => ({ runManagedLifecycle }));
+vi.mock("../services/managedContainer.ts", () => ({ runManagedLifecycle }));
 
 const { default: router } = await import("../routes/server.js");
 const { resolveSourcePath } = await import(

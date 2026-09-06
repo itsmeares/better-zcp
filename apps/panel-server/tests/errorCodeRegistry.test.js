@@ -9,17 +9,17 @@ const SERVER_DIR = path.join(__dirname, "..");
 
 const CODE_LITERAL_RE = /\bcode:\s*(["'])([^"']+)\1/g;
 
-function listJsFiles(dir) {
+function listServerFiles(dir) {
   return fs
     .readdirSync(dir)
-    .filter((f) => f.endsWith(".js"))
+    .filter((f) => f.endsWith(".js") || f.endsWith(".ts"))
     .map((f) => path.join(dir, f));
 }
 
 const SCANNED_FILES = [
-  ...listJsFiles(path.join(SERVER_DIR, "routes")),
-  ...listJsFiles(path.join(SERVER_DIR, "services")),
-  ...listJsFiles(path.join(SERVER_DIR, "middleware")),
+  ...listServerFiles(path.join(SERVER_DIR, "routes")),
+  ...listServerFiles(path.join(SERVER_DIR, "services")),
+  ...listServerFiles(path.join(SERVER_DIR, "middleware")),
   path.join(SERVER_DIR, "index.js"),
 ];
 

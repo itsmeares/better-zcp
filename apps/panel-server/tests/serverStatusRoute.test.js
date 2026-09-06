@@ -10,7 +10,7 @@ const fakeBridge = { bridgePath: null, isRunning: false, isModConnected: () => f
 vi.mock("../services/panelBridge.js", () => ({ default: fakeBridge }));
 
 const resolveDockerHostSignal = vi.fn(async () => ({ running: false, scanFailed: true }));
-vi.mock("../services/managedContainer.js", () => ({ resolveDockerHostSignal }));
+vi.mock("../services/managedContainer.ts", () => ({ resolveDockerHostSignal }));
 
 const { default: router } = await import("../routes/serverStatus.js");
 

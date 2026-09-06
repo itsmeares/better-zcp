@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 
-vi.mock("../services/managedContainer.js", () => ({
+vi.mock("../services/managedContainer.ts", () => ({
   resolveManagedContainer: vi.fn(async () => ({ handled: false })),
 }));
 

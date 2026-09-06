@@ -28,7 +28,7 @@ import {
 import { normalizeMemoryGb } from "../utils/memory.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
 import { requirePermission } from "../services/permissions.js";
-import { runManagedLifecycle } from "../services/managedContainer.js";
+import { runManagedLifecycle } from "../services/managedContainer.ts";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,

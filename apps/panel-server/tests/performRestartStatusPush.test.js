@@ -13,7 +13,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const runManagedLifecycle = vi.fn();
-vi.mock("../services/managedContainer.js", () => ({
+vi.mock("../services/managedContainer.ts", () => ({
   runManagedLifecycle: (...args) => runManagedLifecycle(...args),
 }));
 

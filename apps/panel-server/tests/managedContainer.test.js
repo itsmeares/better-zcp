@@ -8,7 +8,7 @@ const { getServer, getActiveServer } = vi.hoisted(() => ({
 vi.mock("../database/init.js", () => ({ getServer, getActiveServer }));
 
 const { runManagedLifecycle, resolveManagedContainer, resolveDockerHostSignal, setDockerClient } =
-  await import("../services/managedContainer.js");
+  await import("../services/managedContainer.ts");
 
 function createClient(overrides = {}) {
   return {

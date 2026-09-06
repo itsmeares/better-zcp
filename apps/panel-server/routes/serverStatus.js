@@ -4,7 +4,7 @@ import { sanitizeError } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.js";
 import panelBridge from "../services/panelBridge.js";
 import { composeServerStatus, resolveProvider } from "../utils/serverStatusModel.ts";
-import { resolveDockerHostSignal } from "../services/managedContainer.js";
+import { resolveDockerHostSignal } from "../services/managedContainer.ts";
 
 const log = createLogger("API:ServerStatus");
 const router = express.Router();

@@ -13,7 +13,7 @@ vi.mock("../database/init.js", () => ({
   })),
 }));
 
-vi.mock("../services/managedContainer.js", () => ({
+vi.mock("../services/managedContainer.ts", () => ({
   resolveManagedContainer: vi.fn(async () => ({ handled: false })),
 }));
 

@@ -5,7 +5,7 @@ const getActiveServer = vi.fn();
 vi.mock("../database/init.js", () => ({ getActiveServer }));
 
 const resolveDockerHostSignal = vi.fn();
-vi.mock("../services/managedContainer.js", () => ({
+vi.mock("../services/managedContainer.ts", () => ({
   setDockerClient: vi.fn(),
   resolveDockerHostSignal,
 }));
