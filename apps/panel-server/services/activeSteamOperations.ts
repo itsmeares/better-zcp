@@ -1,4 +1,4 @@
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("SteamOperations");
 

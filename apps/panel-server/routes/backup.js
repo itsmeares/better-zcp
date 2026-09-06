@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.js";
 import { requirePermission } from "../services/permissions.js";

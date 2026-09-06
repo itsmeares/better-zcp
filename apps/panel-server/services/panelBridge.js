@@ -5,7 +5,7 @@ import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
 import { logPlayerAction, recordPlayerSession } from '../database/init.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 import { PanelBridgeSftpTransport } from './panelBridgeSftp.js';
 const log = createLogger('Bridge');
 

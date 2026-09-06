@@ -4,7 +4,7 @@ import { createWriteStream } from "fs";
 import archiver from "archiver";
 import { createReadStream } from "fs";
 import { crc32 } from "zlib";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { isPidAlive } from "../utils/pidLiveness.ts";
 const log = createLogger("Backup");
 import {

@@ -1,4 +1,5 @@
 import winston from 'winston';
+import TransportStream from 'winston-transport';
 import path from 'path';
 import fs from 'fs';
 import { getDataPaths } from './paths.js';
@@ -10,9 +11,23 @@ if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
-const logCallbacks = [];
+type LogEntry = {
+  level: string;
+  message: string;
+  timestamp: string;
+  source: string;
+};
 
-export function onLog(callback) {
+type LogCallback = (entry: LogEntry) => void;
+
+type ReadyUrl = {
+  label: string;
+  url: string;
+};
+
+const logCallbacks: LogCallback[] = [];
+
+export function onLog(callback: LogCallback) {
   logCallbacks.push(callback);
   return () => {
     const index = logCallbacks.indexOf(callback);
@@ -20,16 +35,16 @@ export function onLog(callback) {
   };
 }
 
-class CallbackTransport extends winston.Transport {
-  log(info, callback) {
+class CallbackTransport extends TransportStream {
+  log(info: winston.Logform.TransformableInfo, callback: () => void) {
     setImmediate(() => {
       logCallbacks.forEach(cb => {
         try {
           cb({
             level: info.level,
-            message: info.message,
-            timestamp: info.timestamp || new Date().toISOString(),
-            source: info.source || 'server'
+            message: String(info.message),
+            timestamp: typeof info.timestamp === 'string' ? info.timestamp : new Date().toISOString(),
+            source: typeof info.source === 'string' ? info.source : 'server',
           });
         } catch (e) {
           // Ignore callback errors
@@ -40,7 +55,7 @@ class CallbackTransport extends winston.Transport {
   }
 }
 
-const levelIcons = {
+const levelIcons: Record<string, string> = {
   error: '✖',
   warn:  '⚠',
   info:  '●',
@@ -48,9 +63,9 @@ const levelIcons = {
 };
 
 const consolePrintf = winston.format.printf(({ level, message, timestamp, stack, source }) => {
-  const time = timestamp;
+  const time = String(timestamp ?? '');
   const icon = levelIcons[level] || '•';
-  const tag  = source ? `[${source}]` : '';
+  const tag  = source ? `[${String(source)}]` : '';
   const msg  = stack || message;
   return `${time} ${icon} ${tag}${tag ? ' ' : ''}${msg}`;
 });
@@ -63,8 +78,8 @@ const consoleFormat = winston.format.combine(
 );
 
 const filePrintf = winston.format.printf(({ level, message, timestamp, stack, source }) => {
-  const tag = source ? `[${source}] ` : '';
-  return `${timestamp} [${level.toUpperCase()}] ${tag}${stack || message}`;
+  const tag = source ? `[${String(source)}] ` : '';
+  return `${String(timestamp ?? '')} [${level.toUpperCase()}] ${tag}${stack || message}`;
 });
 
 const fileFormat = winston.format.combine(
@@ -77,8 +92,8 @@ const consoleTransport = new winston.transports.Console({
   format: consoleFormat,
   handleExceptions: false
 });
-consoleTransport.on('error', (err) => {
-  if (err && err.code === 'EPIPE') {
+consoleTransport.on('error', (err: Error) => {
+  if ((err as NodeJS.ErrnoException).code === 'EPIPE') {
     consoleTransport.silent = true;
   }
 });
@@ -106,7 +121,7 @@ export const logger = winston.createLogger({
   ]
 });
 
-export function createLogger(source) {
+export function createLogger(source: string) {
   return logger.child({ source });
 }
 
@@ -114,14 +129,14 @@ export function logBlank() {
   console.log('');
 }
 
-export function logSection(title) {
+export function logSection(title: string) {
   const totalWidth = 50;
   const prefix = `── ${title} `;
   const line = '─'.repeat(Math.max(0, totalWidth - prefix.length));
   console.log(`\n  ${prefix}${line}`);
 }
 
-export function logBanner(version) {
+export function logBanner(version?: string) {
   const title = 'Zomboid Control Panel';
   const ver = version ? `v${version}` : '';
   const content = ver ? `${title}  ${ver}` : title;
@@ -135,8 +150,8 @@ export function logBanner(version) {
   console.log(`  ╚${'═'.repeat(innerWidth)}╝`);
 }
 
-export function logReady(urls) {
-  const lines = urls.map(u => `  ${u.label}   ${u.url}`);
+export function logReady(urls: ReadyUrl[]) {
+  const lines = urls.map((u) => `  ${u.label}   ${u.url}`);
   const maxLen = Math.max(...lines.map(l => l.length));
   const innerWidth = Math.max(maxLen + 2, 45);
 

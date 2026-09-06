@@ -4,7 +4,7 @@ import fs from "fs";
 import { promises as fsp } from "fs";
 import os from "os";
 import crypto from "crypto";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Mods");
 import {
   getTrackedMods,

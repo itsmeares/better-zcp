@@ -1,6 +1,6 @@
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import express from 'express';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Players');
 import {
   logPlayerAction,

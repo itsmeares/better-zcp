@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createLogger } from "./logger.js";
+import { createLogger } from "./logger.ts";
 import { isPidAlive } from "./pidLiveness.ts";
 
 const log = createLogger("Lock");

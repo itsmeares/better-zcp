@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { EventEmitter } from 'events';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 const log = createLogger('LogTailer');
 import { getActiveServer, getSetting } from '../database/init.js';
 

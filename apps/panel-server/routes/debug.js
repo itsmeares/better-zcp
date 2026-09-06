@@ -8,7 +8,7 @@ import crypto from "crypto";
 import { execFile } from "child_process";
 import { fileURLToPath } from "url";
 import archiver from "archiver";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { getDiskFree } from "../utils/diskSpace.ts";
 import { resolveLaunchMode } from "../services/serverManager.js";
 const log = createLogger("API:Debug");

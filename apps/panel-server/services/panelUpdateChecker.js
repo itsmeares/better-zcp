@@ -5,7 +5,7 @@ import path from "path";
 import https from "https";
 import crypto from "crypto";
 import { spawn } from "child_process";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import {
   getSetting,
   setSetting,

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import cron from "node-cron";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Scheduler");
 import panelBridge from "./panelBridge.js";
 import { RconService } from "./rcon.js";

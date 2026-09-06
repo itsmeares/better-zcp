@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import net from "net";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("RCON");
 import {
   logCommand,

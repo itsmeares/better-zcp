@@ -2,7 +2,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { getSetting, setSetting, getDb, commitNow } from "../database/init.js";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
 import {

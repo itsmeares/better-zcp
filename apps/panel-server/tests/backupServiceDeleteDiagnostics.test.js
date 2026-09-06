@@ -36,7 +36,7 @@ const { warnCalls, mockLogger } = vi.hoisted(() => {
   };
 });
 
-vi.mock("../utils/logger.js", () => ({
+vi.mock("../utils/logger.ts", () => ({
   createLogger: () => mockLogger,
 }));
 

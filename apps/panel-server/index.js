@@ -28,7 +28,7 @@ import {
   logSection,
   logBanner,
   logReady,
-} from "./utils/logger.js";
+} from "./utils/logger.ts";
 const log = createLogger("Panel");
 import {
   initDatabase,

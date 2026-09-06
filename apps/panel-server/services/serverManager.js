@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import net from "net";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Server");
 import {
   logServerEvent,

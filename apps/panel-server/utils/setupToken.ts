@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { getSetting, setSetting } from "../database/init.js";
-import { createLogger } from "./logger.js";
+import { createLogger } from "./logger.ts";
 
 const log = createLogger("Setup");
 const TOKEN_BYTES = 32;

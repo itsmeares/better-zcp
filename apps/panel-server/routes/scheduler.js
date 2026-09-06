@@ -1,6 +1,6 @@
 import express from 'express';
 import cron from 'node-cron';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Scheduler');
 import { sanitizeError, sanitizeErrorParams } from '../utils/sanitize.ts';
 import { ErrorCode } from '../utils/errorCodes.ts';

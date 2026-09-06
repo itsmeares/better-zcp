@@ -1,5 +1,5 @@
 import { getActiveServer, getServer } from "../database/init.js";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("ManagedContainer");
 

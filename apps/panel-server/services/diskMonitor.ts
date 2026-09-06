@@ -1,4 +1,4 @@
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { getActiveServer, getSetting } from "../database/init.js";
 import { getDiskFree } from "../utils/diskSpace.ts";
 

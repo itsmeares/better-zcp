@@ -6,7 +6,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import crypto from "crypto";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Server");
 import {
   logServerEvent,

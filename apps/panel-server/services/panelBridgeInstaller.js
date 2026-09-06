@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { compareModVersions, writeLuaAtomic } from '../utils/embeddedLua.ts';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 
 const log = createLogger('PanelBridgeInstaller');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

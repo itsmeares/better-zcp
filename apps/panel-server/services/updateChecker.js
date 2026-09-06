@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Updates");
 import { getSetting, setSetting, getActiveServer } from "../database/init.js";
 import { resolveManagedContainer } from "./managedContainer.ts";

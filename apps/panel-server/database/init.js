@@ -5,7 +5,7 @@ import fs from "fs";
 import { randomUUID } from "crypto";
 import { getDataPaths } from "../utils/paths.js";
 import { checkAndExitIfOwnershipBlocked } from "../utils/firstRunOwnershipCheck.ts";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { normalizeMemoryGb } from "../utils/memory.ts";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import {

@@ -1,5 +1,5 @@
 import express from 'express';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:RCON');
 import { getCommandHistory } from '../database/init.js';
 import { PZ_COMMANDS } from '../utils/commands.ts';

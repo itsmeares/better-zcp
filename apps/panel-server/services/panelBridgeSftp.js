@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import SftpClient from 'ssh2-sftp-client';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 import { getDataPaths } from '../utils/paths.js';
 import { ErrorCode } from '../utils/errorCodes.ts';
 

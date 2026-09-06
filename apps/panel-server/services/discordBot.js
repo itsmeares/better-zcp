@@ -15,7 +15,7 @@ import path from "path";
 import { request as undiciRequest, Headers as UndiciHeaders } from "undici";
 import { STATUS_CODES } from "http";
 import { types } from "util";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Discord");
 import { getActiveServer, getSetting, setSetting } from "../database/init.js";
 import { loadUiSecret, writeUiSecretFile } from "../utils/uiSecretFile.ts";

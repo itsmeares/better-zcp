@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("DockerClient");
 const MANAGED_LABEL = "zomboid-panel.managed";

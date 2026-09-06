@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import initSqlJs from "sql.js";
-import { createLogger } from "./logger.js";
+import { createLogger } from "./logger.ts";
 
 const log = createLogger("WhitelistDB");
 const ROLE_NAMES = new Map([

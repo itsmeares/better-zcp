@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 import { isContainerized } from "../utils/dockerDetect.ts";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("LinuxServiceLifecycle");
 

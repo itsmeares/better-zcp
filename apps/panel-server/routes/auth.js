@@ -6,7 +6,7 @@ import fs from "fs";
 import crypto from "crypto";
 import os from "os";
 import authService, { USER_ROLES, requireRole } from "../services/auth.js";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getDataPaths } from "../utils/paths.js";
 import { setSetting } from "../database/init.js";

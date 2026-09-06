@@ -1,6 +1,6 @@
 import express from "express";
 import fs from "fs";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Config");
 import { getAllSettings, getSetting, setSetting } from "../database/init.js";
 import {

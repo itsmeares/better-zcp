@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { writeFileAtomic } from "./fileWriteQueue.ts";
 import { getDataPaths } from "../utils/paths.js";
 

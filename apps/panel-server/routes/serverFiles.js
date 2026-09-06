@@ -2,7 +2,7 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Files");
 import { getActiveServer, getAllSettings, getRoleByName } from "../database/init.js";
 import {

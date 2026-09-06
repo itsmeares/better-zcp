@@ -1,6 +1,6 @@
 import express from "express";
 import path from "path";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Discovery");
 import { sanitizeError, sanitizeServerResponse } from "../utils/sanitize.ts";
 import { normalizeRconHost } from "../services/rcon.js";

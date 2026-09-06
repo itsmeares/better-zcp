@@ -16,7 +16,7 @@ vi.mock("../database/init.js", () => ({
   logServerEvent: vi.fn(async () => {}),
 }));
 
-vi.mock("../utils/logger.js", () => ({
+vi.mock("../utils/logger.ts", () => ({
   createLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),

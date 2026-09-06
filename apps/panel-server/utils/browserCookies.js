@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import initSqlJs from 'sql.js';
-import { createLogger } from './logger.js';
+import { createLogger } from './logger.ts';
 
 const log = createLogger('BrowserCookies');
 const STEAM_HOSTS = ['steamcommunity.com', '.steamcommunity.com', 'store.steampowered.com', '.steampowered.com'];

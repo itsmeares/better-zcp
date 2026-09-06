@@ -34,7 +34,7 @@ import {
   isBridgeVersionBehindBundled,
   resolveInstallDir,
 } from "../services/panelBridgeInstaller.js";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import {
   getSftpCachePath,
   testSftpBridge,

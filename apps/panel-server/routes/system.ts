@@ -2,7 +2,7 @@ import express from "express";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { getDataPaths } from "../utils/paths.js";
 import { getDiskStatusForPath } from "../services/diskMonitor.ts";

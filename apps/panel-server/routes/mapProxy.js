@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { createLogger } from "../utils/logger.js";
+import { createLogger } from "../utils/logger.ts";
 import { getDataPaths } from "../utils/paths.js";
 import { getActiveServer } from "../database/init.js";
 import { listPersistedVehicles } from "../utils/vehiclesDb.js";

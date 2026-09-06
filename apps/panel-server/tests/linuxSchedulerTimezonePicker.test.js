@@ -11,7 +11,7 @@ const logError = vi.fn();
 const logWarn = vi.fn();
 const logInfo = vi.fn();
 
-vi.mock("../utils/logger.js", () => ({
+vi.mock("../utils/logger.ts", () => ({
   createLogger: () => ({
     info: (...args) => logInfo(...args),
     warn: (...args) => logWarn(...args),

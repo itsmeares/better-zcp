@@ -1,6 +1,6 @@
 import express from 'express';
 import dgram from 'dgram';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Finder');
 import { getSteamApiKey } from '../services/steamApiKey.ts';
 import { sanitizeError } from '../utils/sanitize.ts';

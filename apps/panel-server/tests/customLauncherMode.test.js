@@ -16,7 +16,7 @@ vi.mock("../database/init.js", () => ({
 const { logSpy } = vi.hoisted(() => ({
   logSpy: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("../utils/logger.js", () => ({
+vi.mock("../utils/logger.ts", () => ({
   createLogger: () => logSpy,
 }));
 

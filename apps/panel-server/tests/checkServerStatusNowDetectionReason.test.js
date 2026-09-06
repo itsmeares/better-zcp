@@ -8,7 +8,7 @@ vi.mock("../database/init.js", async (importOriginal) => {
 
 const { checkServerStatusNow, io } = await import("../index.js");
 const { ServerManager } = await import("../services/serverManager.js");
-const { onLog } = await import("../utils/logger.js");
+const { onLog } = await import("../utils/logger.ts");
 
 describe("checkServerStatusNow(detectionReason) -- the reason reaches both transition messages", () => {
   afterEach(() => {

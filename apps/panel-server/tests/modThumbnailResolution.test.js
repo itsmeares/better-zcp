@@ -13,7 +13,7 @@ vi.mock("../utils/paths.js", () => ({
   getDataPaths: vi.fn(),
 }));
 
-vi.mock("../utils/logger.js", () => ({
+vi.mock("../utils/logger.ts", () => ({
   createLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
