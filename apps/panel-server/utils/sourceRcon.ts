@@ -159,6 +159,8 @@ export class SourceRconClient {
       void resolveHostAddress(this.host)
         .then((address) => {
           if (settled) return;
+
+          // codeql[js/request-forgery]
           socket.connect(this.port, address, () => {
             clearTimeout(connectTimer);
             socket.setNoDelay(true);
