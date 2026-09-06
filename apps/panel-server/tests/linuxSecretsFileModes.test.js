@@ -24,7 +24,7 @@ vi.mock("ssh2-sftp-client", () => ({
 }));
 
 const { writeFileAtomic } = await import("../utils/fileWriteQueue.ts");
-const { loadOrCreateCerts, getCertPaths } = await import("../utils/certs.js");
+const { loadOrCreateCerts, getCertPaths } = await import("../utils/certs.ts");
 const { pullRemoteConfigFiles } = await import("../services/remoteConfigFiles.js");
 
 function mode(p) {
