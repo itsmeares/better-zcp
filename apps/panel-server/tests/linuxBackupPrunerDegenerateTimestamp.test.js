@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { createBackup } from "../utils/configBackup.js";
 
-// 2026-08-29, Linux bug hunt (god, "backups: the pruner still deletes the
+// 2026-08-29, Linux regression (testing, "backups: the pruner still deletes the
 // newest backup on Linux"): the pruner fix in 48de518/b8c288f sorted
 // existing backups by real fs birthtime instead of the filename string, and
 // that held up on Windows -- but on real Linux/ext4 (confirmed here via

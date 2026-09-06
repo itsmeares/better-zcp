@@ -5,7 +5,7 @@ import Scheduler from '../Scheduler'
 import { schedulerApi, serverApi, serversApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// bug-hunt-2026-08-27: POST /scheduler/restart-now is gated by automation.manage
+// regression: POST /scheduler/restart-now is gated by automation.manage
 // alone at the router level, but the route itself additionally requires
 // server.control (apps/panel-server/routes/scheduler.js, b2fc76c) -- it performs the
 // identical immediate restart POST /server/restart does. Before this fix,
@@ -128,7 +128,7 @@ describe('Scheduler.tsx: Restart Now buttons gate on server.control, not just pa
     }
   })
 
-  // bug-hunt-2026-08-27 (Players.tsx follow-up): "not disabled" only proves
+  // regression (Players.tsx follow-up): "not disabled" only proves
   // the visual gate is open. Two of these six triggers put DisabledReason as
   // the DIRECT child of an AlertDialogTrigger's asChild slot -- DisabledReason
   // is a plain function component (no forwardRef), so Radix Slot's

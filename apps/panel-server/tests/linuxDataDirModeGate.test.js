@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Linux bug hunt 2026-08-29, follow-on to Pam's secret-file permission
+// Linux regression 2026-08-29, follow-on to the secret-file permission
 // hardening: apps/panel-server/utils/paths.js's getDataPaths() created dataDir via
 // fs.mkdirSync(dataDir, { recursive: true }) with NO explicit mode. Measured
 // across real umasks that comes out 0755 / 0775 / 0700 / 0777 -- world

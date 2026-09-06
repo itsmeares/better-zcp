@@ -117,7 +117,7 @@ describe("setupHttpsServer -- boot must never crash the process", () => {
       });
     });
     expect(server.listening).toBe(false);
-    // bug hunt 2026-08-31-c (under-coverage sweep): the title's own
+    // regression 2026-08-31-c (under-coverage sweep): the title's own
     // parenthetical -- "(server nulls itself out)" -- names the module-level
     // `httpsServer` binding setupHttpsServer() resets on this error path, a
     // DIFFERENT reference from the `server` object this test already holds

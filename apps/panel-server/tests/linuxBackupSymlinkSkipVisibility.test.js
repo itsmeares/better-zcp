@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29 hunt (god): backup-and-restore, suspects 2 (what's excluded)
+// 2026-08-29 hunt (testing): backup-and-restore, cases 2 (what's excluded)
 // and 3 (symlinks through the archive round trip).
 //
 // walkDirectory() deliberately never follows a symbolic link into the

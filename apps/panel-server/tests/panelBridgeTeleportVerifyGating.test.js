@@ -9,7 +9,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // does not always stick on B42 dedicated servers" -- but never compared it
 // to the requested target before returning ok=true.
 //
-// Per god's ruling, the gate is NOT "how close to the target counts as
+// Per the ruling, the gate is NOT "how close to the target counts as
 // arrived" (ground snap / z-level resolution / tile centring can legitimately
 // shift the landing spot, and gating on that would manufacture false
 // failures). It's "did the player move at all, given how far they were

@@ -9,7 +9,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // persistence half of this same handler (world save) already verified for
 // real (b376b2c), leaving the value half as the one remaining inconsistency.
 //
-// The fix compares on MEANING, not identity, per god's caveat: a value
+// The fix compares on MEANING, not identity, per the caveat: a value
 // crossing the Lua/JSON boundary can legitimately come back as a different
 // Lua type than what was sent (a boolean's own engine-side string
 // representation, "8" vs 8) without the write having actually failed.

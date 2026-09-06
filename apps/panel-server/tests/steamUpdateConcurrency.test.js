@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Concurrency hunt 2026-08-29 (conversation hunt-wave5-2026-08-29). god's
+// Concurrency regression 2026-08-29 (conversation regression-2026-08-29). the
 // brief named "an update-apply racing anything" as an angle to check.
 // server.js's /wipe route (see wipeConcurrency.test.js, same describe-block
 // style reused below) already fixed exactly this shape once: its own
@@ -25,7 +25,7 @@ import path from "path";
 // against the same install directory concurrently -- SteamCMD is not
 // designed for two instances writing the same install dir at once
 // (manifest lock contention, partial/interleaved file writes), so this was
-// the "genuinely unsafe, not merely untidy" category god asked to
+// the "genuinely unsafe, not merely untidy" category the test checks to
 // identify, not the "untidy" one.
 //
 // FIXED by moving the check-and-claim block to AFTER
@@ -93,7 +93,7 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-// Found while verifying an unrelated build-packaging card (hunt-wave6):
+// Found while verifying an unrelated build-packaging card (regression):
 // fails outright on Windows, not by design. The fake fixture above is a
 // steamcmd.sh -- but the route's own SteamCmd resolution
 // (server.js getSteamCmdExe(), win32 ? "steamcmd.exe" : "steamcmd.sh") never

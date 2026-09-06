@@ -4,14 +4,14 @@ import os from "os";
 import path from "path";
 import { LogTailer } from "../services/logTailer.js";
 
-// LINUX BUG HUNT (2026-08-29, card 560930): "does it handle LOG ROTATION --
+// LINUX regression (2026-08-29, card 560930): "does it handle LOG ROTATION --
 // when PZ rotates a file, does the tail follow the new inode or keep reading
 // a deleted one forever? On Windows a rotating process usually cannot even
 // delete an open file; on Linux it can, and the tail keeps a live handle to
 // nothing."
 //
 // Reading logTailer.js end to end first: it never uses fs.watch/inotify (the
-// other named suspect) at all -- it's a plain 2s setTimeout poll loop, so the
+// other named case) at all -- it's a plain 2s setTimeout poll loop, so the
 // inotify-watch-limit concern doesn't apply here. It also never holds a
 // persistent file handle across polls: checkChatLog()/checkConsoleLog() each
 // do a fresh fs.promises.stat() by PATH and a fresh fs.createReadStream() per

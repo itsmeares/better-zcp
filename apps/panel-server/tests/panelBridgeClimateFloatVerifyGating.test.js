@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31 bug hunt: clearing the PROVISIONAL climate/weather block in
+// 2026-08-31 regression: clearing the PROVISIONAL climate/weather block in
 // panelBridgeHandlerVerifyEnforcement.test.js (operator's own snow/rain
 // toggles call setSnow/startRain/stopRain directly).
 //

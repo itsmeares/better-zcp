@@ -16,13 +16,13 @@ const { generateStartupScripts, regenerateStartupScriptsWithBackup, refreshLaunc
 
 // 2026-08-27 reproduction task (card
 // user-report-servertest-ini-and-sandbox-reverted-to-default-after-restart),
-// originally by Jim (4b8b22f). Pam's leading theory: PZ writes a fresh
+// originally by testing (4b8b22f). the leading theory: PZ writes a fresh
 // default servertest.ini when it starts and can't find the one it expects
 // at -cachedir, and the scheduled-restart path can point PZ at the WRONG
 // cachedir without ever touching the real config -- an orphan, not a
 // corruption.
 //
-// ORIGINAL MECHANISM PROVEN HERE (Jim, 4b8b22f): -cachedir and -servername
+// ORIGINAL MECHANISM PROVEN HERE (testing, 4b8b22f): -cachedir and -servername
 // are baked as literal text into StartServer_<name>.bat/.sh at
 // generateStartupScripts() time (server.js), and that function used to be
 // called from exactly three places -- the manual /start route and the two

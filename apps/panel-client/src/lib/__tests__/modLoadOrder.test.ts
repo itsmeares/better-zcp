@@ -133,7 +133,7 @@ describe('computeAutoSortedOrder', () => {
   describe('longestIncreasingSubsequence / stronglyConnectedComponents audit (2026-08-31)', () => {
     // Prior coverage only exercised 2-node cycles and a single mod depending
     // on one cycle. Every result below was hand-verified against a manual
-    // topological trace before being pinned -- see the audit report to god
+    // topological trace before being pinned -- see the audit report to testing
     // for the full by-hand derivation. No defect found in either function;
     // these close a real coverage gap rather than fix a bug.
 
@@ -269,7 +269,7 @@ describe('createRequirementResolver', () => {
   })
 
   describe('fork false-positive risk (2026-08-31 audit, documented not fixed -- deliberate, out of scope)', () => {
-    // god asked whether a requirement can invent an edge to an unrelated
+    // the test checks whether a requirement can invent an edge to an unrelated
     // mod that merely shares the underscore-fork naming convention. It can,
     // and this is reachable with real data: any two independent workshop
     // mods where one's ID is "<the other's declared requirement>_<anything>"

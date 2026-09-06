@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// hunt-wave10-2026-08-29, suspect #3 (path construction / containment).
+// regression-2026-08-29, case #3 (path construction / containment).
 //
 // Every destructive/read route in chunks.js used to sanitize saveName with
 // just:

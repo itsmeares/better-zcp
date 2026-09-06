@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import net from "net";
 import { SourceRconClient } from "../utils/sourceRcon.js";
 
-// LINUX BUG HUNT (2026-08-29, card 560930): "the Source RCON protocol is
+// LINUX regression (2026-08-29, card 560930): "the Source RCON protocol is
 // byte-oriented -- check packet framing across a split TCP read (a large
 // response arrives in several chunks) ... these behave differently under
 // Linux's TCP stack than under Windows' and a test with a mocked socket

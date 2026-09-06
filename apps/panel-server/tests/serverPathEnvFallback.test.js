@@ -104,7 +104,7 @@ describe("normalizeServerMemory env-var fallback", () => {
     delete process.env.PZ_SERVER_PATH;
     delete process.env.PZ_SAVE_PATH;
 
-    // Reproduces the exact scenario Pam found: a server created with
+    // Reproduces the exact scenario the test found: a server created with
     // isRemote omitted (stored false by createServer's `|| false`) whose
     // installPath is configured but not yet installed to disk.
     const result = normalizeServerMemory({

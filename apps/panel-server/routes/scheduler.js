@@ -31,13 +31,13 @@ export function parseTaskId(value) {
 
 // Guards against a test double or a partial app.get() mock that returns
 // something truthy but not a real Socket.IO server for other keys -- a
-// bare truthy check on `io` isn't enough (2026-08-26 bug hunt, scheduler
+// bare truthy check on `io` isn't enough (2026-08-26 regression, scheduler
 // blind-success family: added after this exact shape broke an existing
 // req.app mock that returns the same object for any key).
 // Exported so server.js's POST /restart -- a second, independent client
 // entry point that also calls scheduler.performRestart() directly -- can
 // reuse the exact same guard and event shape rather than drifting a second
-// copy of it (2026-08-26 bug hunt: /server/restart turned out to be the
+// copy of it (2026-08-26 regression: /server/restart turned out to be the
 // same blind-success shape as /restart-now, just in a different file).
 export function emitActionResult(io, payload) {
   if (typeof io?.emit === 'function') io.emit('scheduler:action_result', payload);
@@ -75,8 +75,8 @@ router.use(requirePermission('automation.manage'));
 //                                             triggerAlarmSound/
 //                                             sendToAdminChat, which match
 //                                             players.endanger_or_impersonate
-//                                             (2026-08-27, operator ruling
-//                                             on ranked-bug #5 -- these
+//                                             (2026-08-27, decision
+//                                             on prioritized issue #5 -- these
 //                                             three can target a named
 //                                             player, same as their direct
 //                                             routes)
@@ -335,7 +335,7 @@ router.post('/tasks', async (req, res) => {
     // sub-hourly (15-60 min) schedule in a DST-observing timezone -- already
     // logged server-side by scheduleTask() itself. Surfaced here too so a
     // future UI can show it without another server change (Scheduler.tsx
-    // reading this field is carded separately, not part of this fix).
+    // reading this field is tracked separately, not part of this fix).
     res.json({ success: true, task, dstWarning: scheduleResult?.dstWarning || null });
   } catch (error) {
     log.error(`Failed to create scheduled task: ${error.message}`);
@@ -557,7 +557,7 @@ router.post('/tasks/:id/run', async (req, res) => {
     // Same rationale as /restart-now just below in this file: the response
     // only confirms the task was accepted, runTaskNow() runs in the
     // background and reports its real outcome here once it resolves
-    // (2026-08-26 bug hunt, scheduler blind-success family).
+    // (2026-08-26 regression, scheduler blind-success family).
     scheduler.runTaskNow(task)
       .then((result) => {
         emitActionResult(io, {
@@ -633,7 +633,7 @@ router.post('/restart-now', async (req, res) => {
     // message} on every path, already logged to Schedule History. This is
     // the one place that outcome can reach the client in real time instead
     // of only being discoverable by someone who thinks to go check history
-    // (2026-08-26 bug hunt, scheduler blind-success family -- restart-now
+    // (2026-08-26 regression, scheduler blind-success family -- restart-now
     // used to report success:true unconditionally regardless of what
     // actually happened).
     scheduler.performRestart(parsedWarningMinutes, { label: 'Manual restart' })

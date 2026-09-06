@@ -91,7 +91,7 @@ export const ProgressCode = Object.freeze({
    * (or, for quick-setup, the already-existing server files) are fine; this
    * only means RCON's password/port may not be in place for the very first
    * boot. Deliberately NOT reported as success:false (2026-08-26
-   * install-failure hunt finding #6) -- ensureRconConfigured() re-runs this
+   * install-failure regression finding #6) -- ensureRconConfigured() re-runs this
    * exact write on every POST /server/start, so this is expected to
    * self-heal the moment the operator starts the server, and the message
    * says so rather than implying manual repair. Travels in a `warnings`
@@ -120,7 +120,7 @@ export const ProgressCode = Object.freeze({
    * `warnings`-array delivery as INSTALL_RCON_INI_PRECREATE_FAILED above.
    * Params: {reason}. */
   INSTALL_STARTUP_SCRIPT_FAILED: "INSTALL_STARTUP_SCRIPT_FAILED",
-  /** POST /api/server/install -- 2026-08-26 bug hunt: steamcmd.on("close")
+  /** POST /api/server/install -- 2026-08-26 regression: steamcmd.on("close")
    * exiting 0 was treated as sufficient proof the game files were actually
    * installed, with nothing checking they were really there -- SteamCMD can
    * exit 0 while a download was rate-limited, interrupted, or otherwise
@@ -144,7 +144,7 @@ export const ProgressCode = Object.freeze({
    * idle watchdog called steamcmd.kill(). Own code from
    * INSTALL_FAILED_EXIT_CODE above, not a shared template with `code`
    * filled in as null/undefined: a killed-by-signal process reports
-   * code=null to Node's close handler (2026-08-26 install-failure hunt
+   * code=null to Node's close handler (2026-08-26 install-failure regression
    * finding #1), so reusing that code's "exit code {{code}}" wording would
    * literally render the word "null" -- a different, true statement (SteamCMD
    * stalled and was stopped) rather than a cosmetically-broken instance of

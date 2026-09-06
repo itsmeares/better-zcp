@@ -4,8 +4,8 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// 2026-08-29 hunt (god): config-editing surface, suspect 1 -- "the same
-// question that found suspect 6." Reads a realistic server.ini through the
+// 2026-08-29 hunt (testing): config-editing surface, case 1 -- "the same
+// question that found case 6." Reads a realistic server.ini through the
 // REAL GET /ini route, resubmits the exact settings object unchanged
 // through the REAL PUT /ini route (the same round trip the client actually
 // performs -- ServerConfig.tsx spreads GET's full settings object into
@@ -13,7 +13,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 // save, confirmed by reading mergeSchemaDefaults()), and diffs the file
 // byte-for-byte against the original.
 //
-// Also covers suspect 2 (what happens to lines the panel doesn't model):
+// Also covers case 2 (what happens to lines the panel doesn't model):
 // comments, blank lines, and a key with no entry in the panel's own
 // INI_SCHEMA are all present in the fixture.
 
@@ -165,7 +165,7 @@ describe("GET /ini -> PUT /ini round trip with no changes", () => {
   });
 });
 
-describe("GET /ini -> PUT /ini round trip: line endings and encoding (suspect 3)", () => {
+describe("GET /ini -> PUT /ini round trip: line endings and encoding (case 3)", () => {
   // 2026-08-29: confirmed empirically that toIni() unconditionally rejoined
   // with "\n", silently converting an entire CRLF-written INI to LF-only on
   // every structured save, even an unchanged one -- while mods.js's own INI
@@ -245,8 +245,8 @@ describe("GET /ini -> PUT /ini round trip: line endings and encoding (suspect 3)
   });
 });
 
-describe("GET /ini -> PUT /ini round trip: per-line formatting the panel never asked to change (suspect 7)", () => {
-  // 2026-08-29 hunt-wave13 (god): same shape as the CRLF bug (573f63fd), one
+describe("GET /ini -> PUT /ini round trip: per-line formatting the panel never asked to change (case 7)", () => {
+  // 2026-08-29 regression (testing): same shape as the CRLF bug (573f63fd), one
   // level down -- toIni() rebuilds every line whose key is present in the
   // submitted settings as a hardcoded "key=value" with NO surrounding
   // whitespace, even when only OTHER fields actually changed (or nothing did
@@ -294,8 +294,8 @@ describe("GET /ini -> PUT /ini round trip: per-line formatting the panel never a
   });
 });
 
-describe("GET /ini -> PUT /ini round trip: byte-order mark (suspect 8)", () => {
-  // 2026-08-29 hunt-wave13 (god): Windows Notepad's default "UTF-8" save
+describe("GET /ini -> PUT /ini round trip: byte-order mark (case 8)", () => {
+  // 2026-08-29 regression (testing): Windows Notepad's default "UTF-8" save
   // option prepends a BOM (U+FEFF). fs.readFileSync(path, "utf-8") does NOT
   // strip it -- it stays as a literal leading character in the decoded
   // string. String.prototype.trim() does not strip U+FEFF either (it is not

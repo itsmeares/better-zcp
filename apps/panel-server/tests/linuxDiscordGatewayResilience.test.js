@@ -8,7 +8,7 @@ import path from "node:path";
 import { WebSocketServer } from "ws";
 import { Agent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 
-// hunt-wave5-2026-08-29 suspects 2, 4, 6, against a REAL discord.js Client
+// regression-2026-08-29 cases 2, 4, 6, against a REAL discord.js Client
 // (imported unmodified, not mocked) talking to a real local mock Discord
 // API + gateway over real TCP/TLS/WS framing. No real token, no real
 // Discord server, no real network -- every outbound HTTPS request is
@@ -17,8 +17,8 @@ import { Agent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 // the WS handshake at a local plain ws:// mock too. discord.js believes
 // it is talking to discord.com the whole time; only the physical
 // destination is redirected. See apps/panel-server/tests/linuxDiscordSendTimeout.test.js
-// for suspect 1 (the fix that shipped, 8d8fdb79) and
-// apps/panel-server/tests/linuxDiscordTokenSecretLifecycle.test.js for suspect 3.
+// for case 1 (the fix that shipped, 8d8fdb79) and
+// apps/panel-server/tests/linuxDiscordTokenSecretLifecycle.test.js for case 3.
 //
 // Requires a real `openssl` binary to mint the mock HTTPS server's
 // self-signed cert (present on every Linux dev/CI box this floor uses;
@@ -310,7 +310,7 @@ describe.skipIf(isWindows || !opensslAvailable)(
         // upper ceiling on real elapsed time is not the flaky direction --
         // load only pushes elapsed time up, never down, so this can't
         // false-fail the way the removed lower bound did. Eventually
-        // resolves well inside our own 30s send ceiling (the suspect-1
+        // resolves well inside our own 30s send ceiling (the case-1
         // fix) -- this is the "well-behaved 429" counterpart to that fix's
         // "pathological 429" case.
         expect(elapsedMs).toBeLessThan(10000);
@@ -386,7 +386,7 @@ describe.skipIf(isWindows || !opensslAvailable)(
         // measured a few seconds above, comfortably under the 30s threshold
         // -- so the PUBLIC, debounced signal must never have flipped, exactly
         // the "don't fire on every routine blip" property follow-up 2 asked
-        // for. This is the fixed counterpart to the ORIGINAL suspect 6
+        // for. This is the fixed counterpart to the ORIGINAL case 6
         // finding (getStatus() used to have no field for this at ALL, so
         // `running` stayed true throughout with no way to tell a healthy
         // connection from one that had just silently survived an outage).

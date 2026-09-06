@@ -8,7 +8,7 @@ import Settings from '../Settings'
 import { configApi, panelUpdateApi, systemApi } from '@/lib/api'
 import { resetRuntimeInfoForTests } from '@/hooks/useRuntimeInfo'
 
-// 2026-09-04, god's approval of the rollback_failed likelyCause value: one
+// 2026-09-04, the approval of the rollback_failed likelyCause value: one
 // value must not lie in any of its eight scripts/release/build.mjs trigger lines. The server
 // side (apps/panel-server/services/panelUpdateChecker.js's isRollbackRetryLikely())
 // carries the distinction that a single cause string can't -- whether the

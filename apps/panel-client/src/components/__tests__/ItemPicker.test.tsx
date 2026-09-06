@@ -25,7 +25,7 @@ const ITEMS: CatalogItem[] = [
 
 // Mirrors the real runtime shape when PanelBridge.lua's getActualWeight()
 // pcall fails: `weight` is genuinely OMITTED from the object, not present
-// as `weight: undefined` -- backlog card
+// as `weight: undefined` -- issue
 // api-ts-declares-catalog-weight-mass-seats-non-optional-but-lua-guards-them
 // (2026-08-29). Cast through unknown since a real API response for this
 // item would have exactly this shape, which `CatalogItem`'s own (now
@@ -106,7 +106,7 @@ describe('ItemPicker', () => {
     expect(onChange).toHaveBeenCalledWith('')
   })
 
-  // 2026-08-29 backlog card
+  // 2026-08-29 issue
   // api-ts-declares-catalog-weight-mass-seats-non-optional-but-lua-guards-them:
   // PanelBridge.lua only sets `weight` on a successful getActualWeight()
   // pcall -- a real catalog entry can genuinely omit it. Proves the

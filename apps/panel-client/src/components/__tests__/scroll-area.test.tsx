@@ -5,7 +5,7 @@ import { ScrollArea } from '../ui/scroll-area'
 // This guards the fix itself from silently regressing, not a general detector
 // for new misuse elsewhere -- jsdom does no real box layout, so it cannot
 // measure whether content actually overflows, and asserting otherwise here
-// would be a test that can't fail. See conv-hunt-pages (Scheduler, Debug,
+// would be a test that can't fail. See regression (Scheduler, Debug,
 // Players, Backups): Radix's ScrollArea Viewport wraps content in an internal
 // `minWidth:100%; display:table` div, private markup we can't reach via
 // props. Every real ScrollArea in this app is vertical-only (grepped: exactly

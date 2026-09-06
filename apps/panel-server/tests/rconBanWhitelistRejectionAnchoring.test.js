@@ -1,26 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { RconService } from "../services/rcon.js";
 
-// hunt-wave11-2026-08-29, follow-up to the B42 jar audit's Pass 4 and the
+// regression-2026-08-29, follow-up to the B42 jar audit's Pass 4 and the
 // earlier
 // fix, banuser / unbanuser / adduser / removeuserfromwhitelist STILL
 // reported a failure as a success -- each command's own class carries no
 // rejection text of its own; it all lives in zombie/network/BanSystem and
-// zombie/network/ServerWorldDatabase, which Kevin traced and this file
-// covers. SAME convention as Pam's linuxPlayersRconRejectionAnchoring.test.js
+// zombie/network/ServerWorldDatabase, which testing traced and this file
+// covers. SAME convention as the linuxPlayersRconRejectionAnchoring.test.js
 // throughout -- one new pattern style would be exactly the "four consumers
 // phrasing the same thing four ways" state two of tonight's bugs came from.
 //
 // New pattern sourcing: apps/panel-server/__fixtures__/pzRconRejectionStrings.json
-// (decompiled PZ B42 server jar, build 24909800, same fixture Pam's patterns
+// (decompiled PZ B42 server jar, build 24909800, same fixture the patterns
 // are cross-checked against -- extended 69 -> 72 classes for this pass).
 // Automatically cross-checked by rconRejectionGroundTruth.test.js's drift
 // gate; this file only owns the discrimination property (does a real
 // success still classify as success), not re-proving the strings are real.
 //
-// This is the positive control god's card specifically required: feeding
+// This is the positive control the card specifically required: feeding
 // only the real rejection strings proves the classifier fires; feeding a
-// GENUINE success response (Kevin's own confirmed success shapes: "User X
+// GENUINE success response (the own confirmed success shapes: "User X
 // is now banned/unbanned", "User X created with/without password", "User X
 // removed from white list") whose interpolated name CONTAINS a rejection
 // fragment proves it still DISCRIMINATES. Testing only the first half would
@@ -58,7 +58,7 @@ describe("classifyRconResponse: a griefer's own name must not turn a genuine ban
   const rcon = new RconService();
 
   it.each([
-    // ban/unban success (Kevin's Pass 4): "User <name> is now banned/unbanned"
+    // ban/unban success (the Pass 4): "User <name> is now banned/unbanned"
     ["ban success, name = \"This user can't be banned.\"", "User This user can't be banned. is now banned"],
     [
       "ban success, name = the IP-ban Steam-Relay fragment",
@@ -87,13 +87,13 @@ describe("classifyRconResponse: a griefer's own name must not turn a genuine ban
   });
 });
 
-// Named as a number, not implied to be zero: Kevin's Pass 4 also found
+// Named as a number, not implied to be zero: the Pass 4 also found
 // "Connection not found" and "Player not found" as bare literals in
 // BanSystem.class, but rated them LOW confidence -- "plausible RCON-reply
 // shape but could equally be internal-console-only text", not attributed to
 // any ban/unban call site. Deliberately NOT added to KNOWN_RCON_REJECTIONS
 // (inventing an attribution would be worse than leaving them out, the same
-// standard Pam's original commit held for these same four commands). This
+// standard the original commit held for these same four commands). This
 // proves the residual is real and current, not a stale claim: 2 rejection
 // shapes for banuser/unbanuser/adduser/removeuserfromwhitelist remain
 // genuinely unrecognized after this fix.

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { getBridgeVerifiedState, VERIFY_GATED_ACTIONS } from '../bridgeVerify'
 
-// The three-state contract god ruled on 2026-08-23 (conv-success-checker):
+// The three-state contract the contract requires 2026-08-23 (regression):
 // verified is a STRING, always present when ok=true for a verify-gated
 // action -- "confirmed" (real read-back matched), "unverifiable" (call
 // succeeded, no read-back exists -- NOT a failure), or the key missing
 // entirely, which means an out-of-date bridge mod (predates the contract),
 // not "unconfirmed". Deliberately NOT a boolean: absence collapsing "old
 // bridge" and "can't confirm" into one non-signal is the exact failure
-// shape god rejected the field for (same class as the SERVER_STATE_UNKNOWN
+// shape the contract rejects the field for (same class as the SERVER_STATE_UNKNOWN
 // bug fixed earlier the same night).
 describe('getBridgeVerifiedState', () => {
   it('returns null for an action that was never verify-gated, regardless of the data shape', () => {

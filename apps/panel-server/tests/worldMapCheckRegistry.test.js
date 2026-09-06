@@ -59,7 +59,7 @@ const STATUS_NAMES = new Set(["ok", "fail", "warn", "skip", "info"]);
  *   in particular often needs a genuine word-order/structural difference
  *   ("a {{skew}} d'avance sur" vs "a {{skew}} de retard sur"), not a
  *   substituted word -- whenever a param would substitute a WORD rather
- *   than a VALUE, suspect it should really be a variant.
+ *   than a VALUE, case it should really be a variant.
  *
  *   Arbitrary/uncontrolled runtime text (a caught exception's `.message`,
  *   an upstream fetch error) is the one accepted exception: it's opaque by

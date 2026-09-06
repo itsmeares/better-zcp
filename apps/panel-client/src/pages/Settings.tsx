@@ -6211,7 +6211,7 @@ function WorkshopCollectionSyncCard({
       const r = await modsApi.collectionExtractCookies(browserId);
       if (r.ok && r.saved) {
         // The server already saved these -- it never sends the raw values
-        // back (2026-08-26 bug hunt). Refresh the same way every other
+        // back (2026-08-26 regression). Refresh the same way every other
         // credential-changing action on this card does, rather than
         // reconstructing a local mask we don't have the real value for.
         toast({

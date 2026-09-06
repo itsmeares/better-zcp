@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// GH#109 / conv-gh109-worldmap-black: a real user reported the world map's
+// GH#109 / regression: a real user reported the world map's
 // terrain turning solid black above 137% zoom while player/vehicle dots
 // kept rendering. Root cause: mapProxy.js computed maxLevel as
 // Math.ceil(log2(max(width, height))) -- the depth a FULL Deep Zoom pyramid
@@ -173,7 +173,7 @@ describe("discoverRenderedMaxLevel (via /api/map/resolve)", () => {
   });
 });
 
-// GH#109 follow-up (god's review of 3d09d94): when discovery cannot even
+// GH#109 follow-up (the review of 3d09d94): when discovery cannot even
 // run (curl entirely unavailable, the same failure mode
 // mapProxyB42Discovery.test.js already covers for getB42Dir/directory
 // selection), the served geometry falls back to B42_GEOMETRY_FALLBACK.

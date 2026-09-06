@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Console from '../Console'
 import { rconApi, serversApi, configApi, type ServerInstance } from '@/lib/api'
 
-// bug-hunt-2026-08-26 Tier 1: POST /rcon/execute (apps/panel-server/routes/rcon.js) is
+// regression Tier 1: POST /rcon/execute (apps/panel-server/routes/rcon.js) is
 // correctly gated server-side by requirePermission('rcon.execute') -- traced
 // and confirmed by hand, not inferred from the capability existing in the
 // list -- but Console.tsx itself had zero client-side awareness of that.

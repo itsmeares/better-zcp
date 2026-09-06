@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-// GET /diagnostics's rcon.commandRejections check -- spec from Kevin (via
-// god, conv-hunt-routes): windowed inspection of the panel's own RCON
+// GET /diagnostics's rcon.commandRejections check -- specification from the test (via
+// testing, regression): windowed inspection of the panel's own RCON
 // command history for a real refusal FROM THE GAME, deliberately excluding
 // connection/timeout failures (rcon.connected already covers those).
 // A real classifyRconResponse (or a faithful stand-in matching the same 4

@@ -222,7 +222,7 @@ describe("PUT /api/config/app-settings", () => {
     expect(setSetting).not.toHaveBeenCalled();
   });
 
-  // 2026-08-26 bug hunt finding 1: this was the one serverName write path
+  // 2026-08-26 regression finding 1: this was the one serverName write path
   // that never validated the value at all, unlike routes/servers.js's
   // SERVER_NAME_REGEX for the modern multi-server profile path -- an
   // unvalidated value here reaches an unguarded path.join() downstream in

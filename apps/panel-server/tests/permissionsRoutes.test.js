@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// API surface for Angela's matrix UI: list capabilities grouped, list
+// API surface for the matrix UI: list capabilities grouped, list
 // roles with capabilities, create/update/delete a role. Every route sits
 // behind requirePermission("roles.manage") -- this is the matrix itself,
 // not a tool the matrix grants access to.

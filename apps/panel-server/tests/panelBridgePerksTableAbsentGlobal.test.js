@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 2, item 4 (the two bare Perks[perkName]
+// 2026-08-30, regression, item 4 (the two bare Perks[perkName]
 // indexes). PanelBridge.invoke's pcall only guards a METHOD CALL
 // (obj[methodName](obj, ...)) -- it does NOT guard a bare Lua table index
 // like Perks[perkName], the same shape already fixed for
@@ -18,7 +18,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 //   getXp() but not for this line.
 //
 // These tests model Perks as a genuinely absent global (never defined at
-// all) -- the worst case Kevin's audit flagged, not merely one perk name
+// all) -- the worst case the audit flagged, not merely one perk name
 // missing from an otherwise-present table.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

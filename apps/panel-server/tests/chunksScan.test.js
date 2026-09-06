@@ -135,7 +135,7 @@ describe("GET /api/chunks/chunks/:saveName and /api/chunks/stats/:saveName", () 
   });
 });
 
-// getMapFolderScan()'s short TTL cache (conv-operator-scale) bridges the gap
+// getMapFolderScan()'s short TTL cache (regression) bridges the gap
 // between /saves and the /chunks+/stats that follows it on the same page
 // mount, since they aren't concurrent and pure in-flight sharing can't help.
 // That TTL is explicitly a BACKSTOP, not the primary correctness mechanism —
@@ -172,7 +172,7 @@ describe("map/ scan caching: TTL backstop + explicit invalidation on delete", ()
     getSetting.mockReset();
     dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "chunks-scan-ttl-FakeZomboidData-"));
     buildFixture(dataRoot, saveName);
-    // bug-hunt-2026-08-27: delete-chunks now requires a customPath to
+    // regression: delete-chunks now requires a customPath to
     // match a configured server's zomboidDataPath -- register dataRoot as
     // one so this describe block's own delete-chunks call (line ~204
     // below) keeps exercising cache invalidation, not this unrelated gate.

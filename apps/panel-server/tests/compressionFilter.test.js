@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isUncompressedBinaryProxyPath, UNCOMPRESSED_BINARY_PROXY_PREFIXES } from "../utils/compressionFilter.js";
 
-// bug-hunt-2026-08-26 / VastayanWings: index.js's global compression()
+// regression / VastayanWings: index.js's global compression()
 // middleware had no exclusion, so every map tile and mod thumbnail response
 // (already-compressed JPEG/PNG, routinely tens of KB) got gzip-encoded on
 // top, forcing Express to drop Content-Length for chunked transfer encoding

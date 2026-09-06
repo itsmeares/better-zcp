@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateStartupScripts } from "../routes/server.js";
 
-// 2026-09-05 overnight bug hunt (injection lens): sanitizeForBatch() stripped
+// 2026-09-05 overnight regression (injection lens): sanitizeForBatch() stripped
 // shell metacharacters and ".." but never CR/LF. Of the three fields it
 // guards (serverName, adminPassword, zomboidDataPath), adminPassword and
 // zomboidDataPath have no separate validator upstream -- sanitizeForBatch is

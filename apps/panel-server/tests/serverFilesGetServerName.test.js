@@ -130,7 +130,7 @@ describe("getServerConfigPath (no server configured must not invent one)", () =>
   });
 });
 
-// Finding (quality-pass 2026-08-31, Angela): a remote server whose SFTP
+// Finding (regression, testing): a remote server whose SFTP
 // transport isn't configured yet fell all the way through getServerConfigPath()
 // to the generic ServerNotConfiguredError -- the SAME 404 a genuinely
 // unconfigured panel gets -- even though the router's second gate

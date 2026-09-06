@@ -84,7 +84,7 @@ describe('VehiclePicker', () => {
     expect(onChange).toHaveBeenCalledWith('')
   })
 
-  // 2026-08-29 backlog card
+  // 2026-08-29 issue
   // api-ts-declares-catalog-weight-mass-seats-non-optional-but-lua-guards-them:
   // PanelBridge.lua only sets mass/seats on a successful pcall --
   // getSeatNumber() is a known B42 Kahlua thrower -- so a real catalog

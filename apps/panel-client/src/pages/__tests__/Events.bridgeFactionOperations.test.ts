@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { getBridgeOperationTemplates, getBridgeOperationForms, getBridgeOperationGroups } from '../Events'
 
-// conv-hunt-pages-2 lens 3/4, confirmed instance: Angela scanned all 23,740
+// regression lens 3/4, confirmed instance: a scan found all 23,740
 // class files in the real B42 jar and confirmed Faction.createFaction and
 // faction:removeFaction do not exist anywhere -- not under another receiver,
 // not via a different signature. PanelBridge.lua's own handlers already fail

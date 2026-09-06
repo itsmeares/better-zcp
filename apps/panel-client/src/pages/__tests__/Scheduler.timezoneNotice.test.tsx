@@ -5,7 +5,7 @@ import Scheduler from '../Scheduler'
 import { schedulerApi, serverApi, serversApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// Timezone-picker card (2026-08-29, hunt-wave5 follow-up): every
+// Timezone-picker card (2026-08-29, regression follow-up): every
 // cron.schedule() call in scheduler.js interprets its expression in an
 // install-wide timezone setting (migrated on upgrade to whatever was
 // already effective, so nothing moves until the operator deliberately

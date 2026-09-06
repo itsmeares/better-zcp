@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import en from '../../locales/en/chunkCleaner.json'
 
-// bug-hunt-2026-08-26: god named the same defect class as moderationBanUser
+// regression: the test identified the same defect class as moderationBanUser
 // (196e057) on a different surface -- the UI claims something the system
 // cannot do. Investigated ChunkCleaner.tsx's chunk-selection canvas:
 //
@@ -34,7 +34,7 @@ import en from '../../locales/en/chunkCleaner.json'
 // needed on that file for this task.
 //
 // Fix here (deliberately NOT a real keyboard selection path -- that is a
-// feature decision, reported to god rather than built): removed
+// feature decision, recorded here rather than built): removed
 // tabIndex={0} from ChunkCleaner's canvas so it no longer offers a focus
 // stop it cannot honour, and corrected the aria-label to state plainly that
 // selecting/deleting areas requires a mouse or touchscreen. A full render

@@ -4,11 +4,11 @@ import {
   selectMasterServersToQuery,
 } from "../routes/serverFinder.js";
 
-// hunt-wave10-2026-08-29, apps/panel-server/routes/serverFinder.js, suspect 4 fix
-// (SSRF filter on master-listed addresses) and suspect 2 fix (visible cap
+// regression-2026-08-29, apps/panel-server/routes/serverFinder.js, case 4 fix
+// (SSRF filter on master-listed addresses) and case 2 fix (visible cap
 // on how many of them GET / actually probes). Both decisions are pure
 // functions extracted from the route specifically so they can be asserted
-// directly -- per god's explicit instruction NOT to prove the cap with a
+// directly -- per the explicit instruction NOT to prove the cap with a
 // slow live-UDP fan-out ("assert the CAP... a fast, exact assertion about
 // the thing you actually changed"), this never opens a socket.
 

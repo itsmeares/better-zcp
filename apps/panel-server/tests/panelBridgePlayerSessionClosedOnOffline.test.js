@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// 2026-09-04, overnight bug hunt (Angela's fence: panelBridge*):
+// 2026-09-04, overnight regression (the fence: panelBridge*):
 // trackPlayerActivity()'s connect/disconnect diffing (against
 // this.previousPlayers) only ever ran from checkModStatus()'s own
 // `if (status.alive && status.players)` branch -- a genuinely fresh, alive

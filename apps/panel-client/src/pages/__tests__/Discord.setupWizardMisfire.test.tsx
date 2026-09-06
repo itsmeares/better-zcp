@@ -5,7 +5,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Discord from '../Discord'
 import { discordApi } from '@/lib/api'
 
-// bug-hunt-2026-08-27: this page had no useAuth() call before the Tier-3
+// regression: this page had no useAuth() call before the Tier-3
 // capability-gating pass added one for integrations.manage -- these
 // pre-existing tests never wrapped an AuthProvider because they never
 // needed one, so without this mock every render here throws
@@ -26,7 +26,7 @@ vi.mock('@/contexts/AuthContext', () => ({
   }),
 }))
 
-// bug-hunt-2026-08-26: loadData() ran four independent fetches in parallel,
+// regression: loadData() ran four independent fetches in parallel,
 // each with its own silent-fallback .catch(). Three of the four (status,
 // webhook events, permissions) discarded their failure with zero visible
 // feedback; only the config fetch showed an inline error -- and even that

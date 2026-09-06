@@ -102,7 +102,7 @@ describe("no-unguarded-capability-menu-item", () => {
         },
         {
           // Native button: guard present, but tests a DIFFERENT capability
-          // than its own disabled prop -- Angela's Debug.tsx break-verify
+          // than its own disabled prop -- the Debug.tsx break-verify
           // shape, invisible to any click-through test since disabled
           // genuinely blocks a real click here.
           code: "<Button disabled={!canModerate} onClick={() => { if (!canGmTools) return; doThing() }} />",

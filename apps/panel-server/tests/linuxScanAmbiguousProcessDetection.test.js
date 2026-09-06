@@ -4,11 +4,11 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// LINUX BUG HUNT follow-up (2026-08-29, linux-bug-hunt-2026-08-29): the live
+// LINUX regression follow-up (2026-08-29, linux-regression): the live
 // Discord report (Stop/Force Stop/Restart stuck disabled while RCON works)
 // had TWO separate real bugs. The first (a client-side "false ?? X" JS
 // defect, fixed in ffd8aaf) explains why the UI ignored RCON evidence. This
-// covers the second, deeper one god asked to be fixed directly: WHY the
+// covers the second, deeper one the test checks to be fixed directly: WHY the
 // Linux process scan itself can confidently, wrongly, report a genuinely
 // running server as not running in the first place.
 //

@@ -122,8 +122,8 @@ describe("createBackup() -- backup filename collisions", () => {
     expect(remaining).toContain(result.name);
   });
 
-  // 2026-08-27, operator directive ("make sure backups works") relayed by
-  // god: the sibling collision fix in backupService.js sorts by real file
+  // 2026-08-27, decision ("make sure backups works") relayed by
+  // testing: the sibling collision fix in backupService.js sorts by real file
   // birthtime, but this pruner used to sort the FILENAMES as strings, then
   // slice(10). For files sharing the SAME millisecond -- exactly the case
   // the collision suffix exists to handle -- "name.<ts>-2.bak" sorts
@@ -226,7 +226,7 @@ describe("createBackup() -- backup filename collisions", () => {
   });
 });
 
-// 2026-08-27, operator directive ("make sure backups works") relayed by god,
+// 2026-08-27, decision ("make sure backups works") relayed by testing,
 // safety-net follow-up: createBackup()/writeIniWithBackup() only ever fire
 // from an explicit human edit-and-save action -- no restart, scheduled or
 // manual, and no automated event of any kind ever took a config backup, so
@@ -304,7 +304,7 @@ describe("createBackupIfChanged() -- backup only when content actually differs",
     fs.writeFileSync(iniPath, "stable config, never touched by a human", "utf8");
 
     // Simulate 15 scheduled restarts in a row with no human edit between
-    // any of them -- the exact scenario god flagged as a treadmill risk.
+    // any of them -- the exact scenario the test flagged as a treadmill risk.
     for (let i = 0; i < 15; i++) {
       await createBackupIfChanged(root, "servertest.ini");
     }

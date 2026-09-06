@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29 backlog card (god): panelbridge-message-crlf-strip-rests-on-
+// 2026-08-29 issue (testing): panelbridge-message-crlf-strip-rests-on-
 // json-stringify. A PRECONDITION RECORD, not a bug: server.js's RCON
 // POST /message strips CR/LF before rconService.serverMessage() because RCON
 // is a line-oriented text protocol where an embedded newline could be read

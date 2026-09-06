@@ -5,7 +5,7 @@ import Scheduler from '../Scheduler'
 import { schedulerApi, serverApi, serversApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// bug-hunt-2026-08-26 (Jim's ranked list, #7): the "Advanced (Cron)" tab's
+// regression (the ranked list, #7): the "Advanced (Cron)" tab's
 // Save gate used to run a local regex (isValidCron: exactly 5 whitespace-
 // separated fields, each matching /^[\d*,\/-]+$/) instead of the server's
 // real node-cron validator (cron.validate() + the app's own field-count and

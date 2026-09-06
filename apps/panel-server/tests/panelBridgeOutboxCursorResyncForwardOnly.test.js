@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { PanelBridge } from "../services/panelBridge.js";
 
-// 2026-08-31 bug hunt (PanelBridge Lua mod + bridge protocol): tryResyncOutboxCursor
+// 2026-08-31 regression (PanelBridge Lua mod + bridge protocol): tryResyncOutboxCursor
 // (the results/outbox direction) was the one resync function in this file's
 // three-way symmetric set that did NOT guard against moving its cursor
 // BACKWARD. Its two siblings both do, and both say why in their own

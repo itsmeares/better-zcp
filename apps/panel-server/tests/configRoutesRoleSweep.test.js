@@ -11,7 +11,7 @@ vi.mock("../database/init.js", () => ({
 // blocked-origin state) were reachable by any signed-in account. Same
 // both-directions standard as the rest of the sweep.
 //
-// bug-hunt-2026-08-26: GET/PUT /, POST /reload, GET /options, POST /option,
+// regression: GET/PUT /, POST /reload, GET /options, POST /option,
 // GET/PUT /paths and GET/PUT /rcon were removed as dead code (no client
 // caller anywhere, undocumented, superseded by serverFilesApi's ini/sandbox
 // endpoints and server.js's /configure-rcon) -- see errorCodes.js's removed

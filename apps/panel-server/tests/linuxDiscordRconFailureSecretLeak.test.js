@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-// hunt-wave5-2026-08-29 suspect 5: can an RCON password, a file path, or a
-// token fragment reach a Discord message? god's framing, verbatim: "Check a
+// regression-2026-08-29 case 5: can an RCON password, a file path, or a
+// token fragment reach a Discord message? the framing, verbatim: "Check a
 // FAILURE message, not a success one -- error paths are where secrets get
 // interpolated by accident, because nobody writes an error string expecting
 // it to be published."
@@ -35,13 +35,13 @@ import { describe, expect, it, vi } from "vitest";
 // exercised end to end too, through sanitizeError(), to prove the actual
 // Discord-bound reply text is clean.
 //
-// Explicitly NOT in scope here, and not investigated further, because god's
+// Explicitly NOT in scope here, and not investigated further, because the
 // ask was specifically about a FAILURE message: handleRcon()'s SUCCESS
 // branch includes the raw RCON response verbatim (only backtick-escaped,
 // no secret-aware sanitization at all) -- if some future command's
 // response text happened to echo a secret, that path has no equivalent
 // protection. Noting this precisely rather than silently expanding scope
-// to fix it, same discipline as this hunt's earlier suspect-6 report-only
+// to fix it, same discipline as this hunt's earlier case-6 report-only
 // finding.
 
 // Deliberately does NOT contain the literal substring "password" -- a

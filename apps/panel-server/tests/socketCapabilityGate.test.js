@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-27 bug hunt: apps/panel-server/index.js's Socket.IO connection middleware
+// 2026-08-27 regression: apps/panel-server/index.js's Socket.IO connection middleware
 // only checked that a connection was AUTHENTICATED, never that it held any
 // particular capability. socket.on("subscribe:logs"), subscribe:perf, and
 // subscribe:players joined rooms carrying the exact same data as

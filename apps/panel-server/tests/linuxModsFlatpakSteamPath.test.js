@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Linux bug hunt 2026-08-29, suspect #3: getWorkshopPaths() (apps/panel-server/routes/mods.js)
+// Linux regression 2026-08-29, case #3: getWorkshopPaths() (apps/panel-server/routes/mods.js)
 // is the only place that searches a user's local Steam install for downloaded
 // workshop content (used by dependency resolution and map-folder detection).
 // It already covered ~/Steam, ~/.local/share/Steam and ~/.steam/steam, but not

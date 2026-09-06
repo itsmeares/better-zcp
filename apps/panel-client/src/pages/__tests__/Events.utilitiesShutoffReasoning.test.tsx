@@ -6,7 +6,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// bug-hunt-2026-08-26, card utilities-shutoff-reasoning-is-computed-and-
+// regression, card utilities-shutoff-reasoning-is-computed-and-
 // discarded (#8/46): PanelBridge.lua's getUtilitiesStatus replicates the
 // game's own power formula (ISButtonPrompt.lua:421) and returns the
 // modifier/day/nights-survived inputs behind powerOn/waterOn -- the server
@@ -21,7 +21,7 @@ import { playersApi, panelBridgeApi } from '@/lib/api'
 // stick (the Lua's own comments describe exactly this risk: "applySettings
 // can re-roll the modifier") still produced a plain success toast -- the
 // same "action silently does not happen, reason already computed and
-// discarded" shape as Jim's template-apply fix.
+// discarded" shape as the template-apply fix.
 
 const toastSpy = vi.hoisted(() => vi.fn())
 vi.mock('@/components/ui/use-toast', () => ({

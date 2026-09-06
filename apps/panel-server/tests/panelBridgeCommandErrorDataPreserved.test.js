@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Bug hunt 2026-08-31: services/panelBridge.js's processResult() attaches a
+// regression 2026-08-31: services/panelBridge.js's processResult() attaches a
 // rich soft-failure diagnostic table to the rejected Error's `.data`
 // specifically so "a caller that wants the diagnostics can get them" (its
 // own comment, added alongside runEventSequence's honest per-step results).

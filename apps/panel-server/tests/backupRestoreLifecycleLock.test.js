@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// bug hunt 2026-09-05 (backup-restore-round-trip sweep, item #2): restoring
+// regression 2026-09-05 (backup-restore-round-trip sweep, item #2): restoring
 // a backup used to take no lock at all against a Start happening in
 // parallel. This route now takes the same process-wide lifecycleCoordinator
 // lock /start, /stop, /force-stop and /restart already use, held for the

@@ -7,7 +7,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { serverApi, serversApi, rconApi, configApi, ApiError, type ServerInstance } from '@/lib/api'
 import enConsole from '../../locales/en/console.json'
 
-// conv-hunt-pages-2 lens 3/4: the Server Log panel's "clear" button calls
+// regression lens 3/4: the Server Log panel's "clear" button calls
 // POST /server/console-log/clear, which apps/panel-server/routes/server.js answers with
 // fs.writeFileSync(consoleLogPath, "") -- a real, irreversible truncation of
 // the PZ server's own server-console.txt on disk. Two problems, one root
@@ -129,7 +129,7 @@ describe('Console -- server log clear button', () => {
     await waitFor(() => expect(clearConsoleLog).toHaveBeenCalledTimes(1))
   })
 
-  // conv-hunt-resume lens: what does the operator see when the call fails?
+  // regression lens: what does the operator see when the call fails?
   // apps/panel-server/routes/server.js's POST /console-log/clear returns a specific,
   // actionable message on failure -- "Server data path not configured" (400,
   // code SERVER_DATA_PATH_NOT_CONFIGURED) when no server is configured, or
@@ -166,7 +166,7 @@ describe('Console -- server log clear button', () => {
   })
 })
 
-// conv-hunt-pages-2 phone-width overflow sweep: the server-log path strip
+// regression phone-width overflow sweep: the server-log path strip
 // uses `truncate` (correctly clipping a long path with an ellipsis so it
 // doesn't overflow its box) but never gives the full value anywhere else --
 // no title tooltip, no copy button. On a 390px viewport this cuts the path
@@ -190,7 +190,7 @@ describe('Console -- server log path display', () => {
   })
 })
 
-// 2026-08-26 bug hunt finding 1: POST /config/test-rcon never received the
+// 2026-08-26 regression finding 1: POST /config/test-rcon never received the
 // unreachable-vs-auth-failed split /rcon/test and /rcon/connect got in
 // 0714d91, so testRconConnection() here collapsed every failure to a bare
 // `false` and this banner showed "host unreachable" even for a reachable

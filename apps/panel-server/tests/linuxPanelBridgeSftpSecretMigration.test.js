@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 
-// 2026-08-29 auth/session/DB bug hunt (god): panelBridgeSftpPassword was the
+// 2026-08-29 auth/session/DB regression (testing): panelBridgeSftpPassword was the
 // one settings-field credential that never moved out of db.json the way
 // discordBotToken, steamSessionId/steamLoginSecure and rconPassword all did
 // -- both db.json backup paths (createDatabaseBackup() below, and the #122
@@ -151,7 +151,7 @@ describe("ASK 2 -- restoring an old (pre-migration) backup that still carries th
   });
 });
 
-describe("ASK 3 -- the one god is worried about: db.json restored, but panelBridgeSftpPassword.secret did not make the trip", () => {
+describe("ASK 3 -- db.json restored, but panelBridgeSftpPassword.secret did not make the trip", () => {
   it("resolves to undefined silently -- no thrown error, no warning logged. Same shape as rconPassword's pre-existing analogous gap (see report; not fixed here, filed separately).", () => {
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
     // db.json shape after a successful prior migration: no plaintext, and

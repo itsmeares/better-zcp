@@ -13,7 +13,7 @@
  *     process.kill(pid, 0), treating any error OTHER than ESRCH ("no such
  *     process") as "still alive," never as "safe to overwrite." An
  *     ambiguous signal belongs on the side that fails toward refusing to
- *     start, not toward proceeding (operator ruling, bughunt-2026-08-31-c):
+ *     start, not toward proceeding (decision, regression):
  *     a false PROCEED here is the port-conflict / db.json-corruption pair
  *     this whole file exists to prevent; a false REFUSAL is visible and
  *     recoverable in one step (delete the lock file, restart). This file

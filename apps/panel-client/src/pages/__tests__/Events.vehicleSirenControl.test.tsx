@@ -7,7 +7,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// 2026-08-30, panelbridge-audit-2026-08-30: vehicleSetSiren is a real,
+// 2026-08-30, regression: vehicleSetSiren is a real,
 // working, VERIFY_GATED Lua handler with no caller anywhere in the client --
 // WorldMap.tsx renders live siren state (a flashing map halo) and Events.tsx
 // shows a siren badge in this exact table, but only its two siblings in the

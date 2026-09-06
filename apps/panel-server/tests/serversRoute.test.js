@@ -42,7 +42,7 @@ const {
 } = await import(
   "../routes/server.js"
 );
-// Moved out of routes/server.js into its own module (hunt-wave5-2026-08-29)
+// Moved out of routes/server.js into its own module (regression-2026-08-29)
 // so serverManager.js can check the same tracked state before spawning the
 // PZ JVM -- see services/activeSteamOperations.js's header comment.
 const { isSteamOperationIdle } = await import("../services/activeSteamOperations.js");
@@ -72,7 +72,7 @@ function getLayer(routePath, method) {
 // routes/docker.js, never routes/servers.js -- so nothing tested the
 // servers.manage gate on these two routes (or POST /:id/activate) at all
 // until apps/panel-server/tests/serversManageGateCoverage.test.js was added
-// (bug-hunt-2026-08-27, if-your-change-is-in-middleware-a-handler-only-
+// (regression, if-your-change-is-in-middleware-a-handler-only-
 // test-is-blind-to-it): confirmed by break-verify that stripping
 // requirePermission from all three routes left every test in THIS file
 // green, while that dedicated file caught it immediately. See that file
@@ -493,7 +493,7 @@ describe("PUT /api/servers/:id", () => {
     );
   });
 
-  // 2026-08-29 backlog card savepath-needs-existence-validation-at-set-time:
+  // 2026-08-29 issue savepath-needs-existence-validation-at-set-time:
   // this was the SECOND, unguarded setter for zomboidDataPath -- POST
   // /save-path (chunks.js) already required existence + directory +
   // inspectZomboidPath() for the exact same DB column via

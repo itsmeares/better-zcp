@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
 import { resolveServerConfigDeepLink, SectionHeader } from '../ServerConfig'
 
-// conv-hunt-pages-2 phone-width overflow sweep: the ini/sandbox/spawn-points/
+// regression phone-width overflow sweep: the ini/sandbox/spawn-points/
 // spawn-regions/mod-settings tab toolbars (Form/Raw toggle, download, Wiki
 // link, Save & reload) all share this one SectionHeader component. Its
 // action group had `shrink-0` with no wrap, so on a 390px viewport the Save

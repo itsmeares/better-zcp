@@ -117,7 +117,7 @@ function parseBridgeActionName(rawCommand) {
 // PanelBridge's own equivalent of POST /server/save and POST
 // /panel-bridge/world/save, both gated server.control (panelBridge.js:2003).
 //
-// 2026-08-27 (operator ruling on ranked-bug #5): server.world_events itself
+// 2026-08-27 (decision on prioritized issue #5): server.world_events itself
 // split, and three more schedulable bridge: actions went with the targeted
 // half -- triggerGunshot and triggerAlarmSound both accept {username} and,
 // per the Lua handler, resolve it to that player's exact x/y/z before
@@ -208,7 +208,7 @@ export class Scheduler {
   // never a merely-requested/accepted state -- the same distinction
   // apps/panel-server/routes/server.js's /start and /stop routes already draw (see
   // their own comments) to avoid the exact "confident but unconfirmed
-  // claim" shape the 2026-08-26 bug hunt fixed for /stop's graceful path.
+  // claim" shape the 2026-08-26 regression fixed for /stop's graceful path.
   // Deliberately does NOT go through checkServerStatusNow() (server/
   // index.js) -- these transitions are already independently confirmed
   // here, so there is nothing left for that function to verify -- but see
@@ -410,7 +410,7 @@ export class Scheduler {
 
     // 2026-09-05, scheduler-time-audit: nothing silent -- log it server-side
     // now, and hand it back so the create/update route can surface it in
-    // the API response (Scheduler.tsx reading that field is carded
+    // the API response (Scheduler.tsx reading that field is tracked
     // separately). Non-null return is still truthy/`!== false`, so this
     // does not change either existing caller's success/failure check.
     const dstWarning = dstFallBackWarning(
@@ -431,7 +431,7 @@ export class Scheduler {
   // errors to Schedule History, so nothing rethrew and a caller had no way
   // to learn the outcome without a second, separate history query). The
   // route now uses this to report the real result over the socket instead
-  // of a blind "Task triggered" (2026-08-26 bug hunt, scheduler
+  // of a blind "Task triggered" (2026-08-26 regression, scheduler
   // blind-success family).
   async runTaskNow(task) {
     if (this.runningTasks.has(task.id)) {
@@ -927,7 +927,7 @@ export class Scheduler {
           });
           const duration = Date.now() - startTime;
           if (result.success) {
-            // 2026-08-26 bug hunt: createBackup surfaces skipped files
+            // 2026-08-26 regression: createBackup surfaces skipped files
             // rather than deciding policy -- a scheduled backup tolerates a
             // skip (same reasoning as the manual /backup/create route) but
             // must not bury it inside a message that reads identically to a
@@ -935,7 +935,7 @@ export class Scheduler {
             // would ever see it for an unattended backup.
             //
             // "that vanished during archiving" was accurate until 2026-08-29
-            // (bughunt-2026-08-31-c, completeness-claims-audit-followups):
+            // (regression, completeness-claims-audit-followups):
             // walkDirectory() now also records a deliberately-excluded
             // symbolic link in this same skippedFiles array (see that
             // function's own comment), and this message was never updated

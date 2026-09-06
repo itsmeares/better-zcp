@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// conv-userbugs follow-up: getStatus() never returned an error field in
+// regression follow-up: getStatus() never returned an error field in
 // normal operation, so a start() failure's real reason only ever reached
 // the user as a one-time toast at the instant they clicked Start -- gone on
 // refresh or a later visit, which is exactly what a user "stuck long enough

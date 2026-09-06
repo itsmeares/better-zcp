@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import dgram from "dgram";
 import { queryMasterServer, isPrivateIp } from "../routes/serverFinder.js";
 
-// hunt-wave10-2026-08-29, apps/panel-server/routes/serverFinder.js, suspect 4:
+// regression-2026-08-29, apps/panel-server/routes/serverFinder.js, case 4:
 // "WHETHER THE PANEL CAN BE MADE TO PROBE SOMETHING ON ITS OWN NETWORK it
 // should not." queryMasterServer() used to send its Steam master-server
 // query over a plain, UNCONNECTED dgram udp4 socket and process whatever
@@ -19,7 +19,7 @@ import { queryMasterServer, isPrivateIp } from "../routes/serverFinder.js";
 // master-listed address through isPrivateIp() before probing it (see
 // serverFinderPrivateFilterAndCap.test.js for that half).
 //
-// Per god's explicit requirement: a rejection test alone only proves
+// Per the explicit requirement: a rejection test alone only proves
 // something was refused, never that the RIGHT thing was refused. Both
 // tests below run against the SAME captured ephemeral port, so the
 // "rejected" case and the "still works" case are proven under identical
@@ -28,7 +28,7 @@ import { queryMasterServer, isPrivateIp } from "../routes/serverFinder.js";
 // No real host is contacted; "master" and "attacker" are both local
 // sockets this test owns and closes.
 
-describe("queryMasterServer: response sender is now authenticated (hunt-wave10 suspect 4, fixed)", () => {
+describe("queryMasterServer: response sender is now authenticated (regression case 4, fixed)", () => {
   let legitServer;
   let attackerSocket;
 

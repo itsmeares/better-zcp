@@ -12,7 +12,7 @@ import path from "path";
 //   })
 // and identically for the other two (see debug.js:5232-5264) -- so
 // exercising the underlying functions directly exercises exactly what the
-// route does. debug.js is Dwight's file this round; not edited, only read
+// route does. debug.js is the file this round; not edited, only read
 // to confirm the pass-through shape, and only database/init.js's exported
 // functions are imported/tested here.
 //

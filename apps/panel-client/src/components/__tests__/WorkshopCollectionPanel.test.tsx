@@ -195,10 +195,10 @@ describe('WorkshopCollectionPanel', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Untrack' })).toBeEnabled())
   })
 
-  // bug-hunt-2026-08-26: unlike Settings.tsx's plain untrack (local tracking
+  // regression: unlike Settings.tsx's plain untrack (local tracking
   // only), this untrack also writes an ignore-list entry and mirrors the
   // removal into the user's real Steam Workshop collection -- untiered in
-  // Pam's 52-action destructive audit and previously fired on a single
+  // the 52-action destructive audit and previously fired on a single
   // click with zero confirmation.
   it('does NOT untrack on a single click -- it only opens a confirmation naming the Steam-collection side effect', async () => {
     await renderPanel([

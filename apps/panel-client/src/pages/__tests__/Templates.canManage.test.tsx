@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import Templates from '../Templates'
 import { templatesApi } from '@/lib/api'
 
-// bug-hunt-2026-08-27: canManage used to be `!authEnabled || user?.role ===
+// regression: canManage used to be `!authEnabled || user?.role ===
 // 'admin'` -- a hardcoded role literal where the server actually checks the
 // templates.manage CAPABILITY (requirePermission("templates.manage") on
 // POST/import/apply/delete in routes/templates.js). A default-seeded

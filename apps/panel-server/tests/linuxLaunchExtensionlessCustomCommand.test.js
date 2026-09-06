@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// LINUX BUG HUNT (2026-08-29, linux-bug-hunt-2026-08-29): the custom-start-
+// LINUX regression (2026-08-29, linux-regression): the custom-start-
 // command path (ServerManager.startServer()'s `this.startCommand` branch)
 // deliberately allows a no-extension command on Linux --
 // ALLOWED_CMD_EXTENSIONS is `[".sh", ""]` there, specifically because a

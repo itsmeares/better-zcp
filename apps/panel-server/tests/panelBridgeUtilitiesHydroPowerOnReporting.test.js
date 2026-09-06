@@ -17,7 +17,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // overwritten"), the response still claimed the requested state regardless
 // of what actually happened.
 //
-// 2026-08-31 follow-up (bug hunt): that first fix made the `hydroPowerOn`
+// 2026-08-31 follow-up (regression): that first fix made the `hydroPowerOn`
 // DATA field honest, but left `ok` itself hardcoded true regardless of what
 // hydroPowerOn actually says -- the two "must NOT claim power is on/off"
 // tests below originally still asserted `ok: true` in exactly the scenario

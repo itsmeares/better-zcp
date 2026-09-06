@@ -5,7 +5,7 @@ import {
   buildLifecycleTemplate,
 } from "../services/linuxServiceLifecycle.js";
 
-// 2026-09-05 overnight bug hunt (install shapes under the privilege lens):
+// 2026-09-05 overnight regression (install shapes under the privilege lens):
 // a service account created exactly per docs/install/linux.md
 // (`useradd -r -m -s /bin/false pzuser`) has NEVER had a systemd user-manager
 // instance started for it, so /run/user/<uid> does not exist yet. Reproduced

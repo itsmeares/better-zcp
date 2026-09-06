@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// bughunt-2026-08-31-c: POST /restore/:filename's primary `filename` var IS
+// regression: POST /restore/:filename's primary `filename` var IS
 // safe -- path.basename() + a mandatory ".bak" extension check, and neither
 // "." nor ".." ends in ".bak" so both are rejected incidentally. But the
 // ORIGINAL filename recovered by stripping the ".bak"+timestamp suffix

@@ -1,7 +1,7 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { createServer, deleteServer, getServer } from "../database/init.js";
 
-// 2026-08-29 backlog card dead-allowlist-fields-on-server-update: startBat
+// 2026-08-29 issue dead-allowlist-fields-on-server-update: startBat
 // and batFile were already removed from ALLOWED_SERVER_UPDATE_FIELDS
 // (2026-08-27, see the comment above the list in apps/panel-server/routes/servers.js).
 // "description" was still on it. Grepped every `.description` reference on

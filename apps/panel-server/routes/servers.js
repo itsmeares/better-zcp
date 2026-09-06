@@ -69,7 +69,7 @@ function isValidDockerContainerRef(value) {
 
 const INSTALL_PATH_MAX_LENGTH = 1024;
 
-// HARDEN (operator ruling 2026-08-27, card
+// HARDEN (decision 2026-08-27, card
 // custom-launcher-as-a-real-supported-mode-not-an-accident): neither
 // installPath nor serverPath was validated at all before this, despite
 // silently controlling MANAGED vs CUSTOM LAUNCHER mode (serverManager.js's
@@ -1176,7 +1176,7 @@ const ALLOWED_SERVER_UPDATE_FIELDS = [
   "maxMemory",
   "useNoSteam",
   "useDebug",
-  // Was absent from this list entirely (2026-08-26 same-night audit) --
+  // Was absent from this list entirely (2026-08-26 same pass audit) --
   // there was no edit-screen path to fix a missing/wrong UPnP setting the
   // way adminPassword had one, because there was no per-server column for
   // it to update in the first place.
@@ -1289,7 +1289,7 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       updates.dockerContainerName = value || null;
     }
 
-    // HARDEN (operator ruling 2026-08-27): neither field was validated at
+    // HARDEN (decision 2026-08-27): neither field was validated at
     // all before this, despite silently controlling MANAGED vs CUSTOM
     // LAUNCHER mode (serverManager.js's resolveLaunchMode()) -- an
     // unvalidated path that silently changes launch behavior was the whole
@@ -1505,7 +1505,7 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       // Persisting useUpnp on the server record alone changes nothing PZ
       // actually reads (2026-08-26: adding it to ALLOWED_SERVER_UPDATE_FIELDS
       // without this would have recreated the exact "checkbox does nothing"
-      // bug being fixed, one layer over -- found by a same-night audit
+      // bug being fixed, one layer over -- found by a same pass audit
       // before this shipped). The real toggle is the UPnP= line in the
       // server's own .ini, the same one /configure-network writes -- reused
       // here via applyUpnpToIni() rather than duplicated.

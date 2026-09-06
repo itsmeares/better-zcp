@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 3, item 4 -- panelbridge-total-audit-2026-08-30.
+// 2026-08-30, regression, item 4 -- panelbridge-regression-2026-08-30.
 // getAllSandboxOptions' enum-values block gated on `opt.getNumValues and
 // opt.getValueName` (a field-test on a Java object -- the same anti-pattern
 // this file bans elsewhere) and called opt:getValueName(i), a method that

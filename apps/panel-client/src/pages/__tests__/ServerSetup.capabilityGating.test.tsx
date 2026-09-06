@@ -8,8 +8,8 @@ import ServerSetup from "../ServerSetup";
 import { configApi, serverApi, serversApi } from "@/lib/api";
 import enServerSetup from "../../locales/en/serverSetup.json";
 
-// bug-hunt-2026-08-27: ServerSetup.tsx mixes THREE capabilities on one page
-// (server.install, panel.settings, server.control) -- god's own "may
+// regression: ServerSetup.tsx mixes THREE capabilities on one page
+// (server.install, panel.settings, server.control) -- the own "may
 // genuinely be page-grain" hypothesis, refuted with the route table. The
 // sharpest case: PUT /config/app-settings (Save Path) needs panel.settings,
 // not server.install like every button around it -- and TECHNICIAN holds

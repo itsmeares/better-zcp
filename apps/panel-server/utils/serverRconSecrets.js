@@ -159,7 +159,7 @@ export function redactRconSecretsForWrite(data) {
   // skips servers that never had this key touched (no unnecessary
   // unlink-of-nothing on every flushWrites() cycle), but now reaches ""
   // and null the same way writeServerSecret()'s own guard already expects.
-  // Found bughunt-2026-08-31-c (apps/panel-server/utils sweep), same shape in both
+  // Found regression (apps/panel-server/utils sweep), same shape in both
   // branches below -- the legacy settings.rconPassword mirror had it too.
   const redactedServers = (data.servers || []).map((server) => {
     if (server.rconPassword !== undefined) {

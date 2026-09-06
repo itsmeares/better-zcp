@@ -3,10 +3,10 @@ import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// hunt-wave5-2026-08-29 suspect 3: discordBotToken moved out of db.json into
-// its own file (utils/uiSecretFile.js). god's ask, verbatim: verify the
+// regression-2026-08-29 case 3: discordBotToken moved out of db.json into
+// its own file (utils/uiSecretFile.js). the ask, verbatim: verify the
 // WHOLE lifecycle end to end on real Linux -- set, read, rotate, remove --
-// and check the FILE MODE, because Pam found a regenerated TLS key coming
+// and check the FILE MODE, because the test found a regenerated TLS key coming
 // out 0644 (server.key survived from an earlier, looser install state; the
 // regeneration branch only set `mode` on writeFileSync, which Node only
 // honours when CREATING a file, so the stale mode was inherited instead of
@@ -94,7 +94,7 @@ describe.skipIf(isWindows)(
       writeUiSecretFile("discordBotToken", "old-token-before-rotation");
       expect(mode(secretPath())).toBe(0o600);
 
-      // Simulate the exact shape of Pam's TLS finding: the file on disk
+      // Simulate the exact shape of the TLS finding: the file on disk
       // survives from an earlier, looser install state (an operator or an
       // older panel version could have left it at a laxer mode) before the
       // rotation write happens.
@@ -104,7 +104,7 @@ describe.skipIf(isWindows)(
       // Rotate under the most hostile umask (0000, no bits masked away) --
       // if writeUiSecretFile relied on writeFileSync's `mode` option alone
       // (only honoured on file CREATION, not on a rewrite of an existing
-      // path) this would stay at 0644, reproducing Pam's exact bug shape
+      // path) this would stay at 0644, reproducing the exact bug shape
       // for this file instead of certs.js's.
       process.umask(0o000);
       writeUiSecretFile("discordBotToken", "new-token-after-rotation");

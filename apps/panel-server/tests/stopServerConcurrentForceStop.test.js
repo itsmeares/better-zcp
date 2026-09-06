@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ServerManager } from "../services/serverManager.js";
 
-// Concurrency hunt 2026-08-29 (conversation hunt-wave5-2026-08-29). god's
+// Concurrency regression 2026-08-29 (conversation regression-2026-08-29). the
 // brief quoted Dashboard.tsx's own comment: "Stop/Force Stop have no
 // server-side mutex, unlike Restart's restartInProgress flag." Confirmed by
 // reading serverManager.js: startServer() checks BOTH `this._starting` and
@@ -42,7 +42,7 @@ describe("stopServer(): a second concurrent call (a second Force Stop) is refuse
     // Real-ish timing: scanning takes a few ms (an OS process-list scan
     // always does), killing takes a few ms too. If the fix were absent,
     // both calls' scans would run before either kill took effect -- exactly
-    // the shape god's brief described. With the fix, the entry check is
+    // the shape the brief described. With the fix, the entry check is
     // synchronous and runs before either call ever reaches this mock, so
     // the second call never gets far enough to matter.
     manager.getServerProcessDetails = async () => {

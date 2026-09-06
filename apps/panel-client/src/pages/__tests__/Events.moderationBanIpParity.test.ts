@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import en from '../../locales/en/events.json'
 
-// bug-hunt-2026-08-26: Jim found (RCON-vs-PanelBridge comparison) that RCON
+// regression: the test found (RCON-vs-PanelBridge comparison) that RCON
 // /ban has a same-call banIp toggle (apps/panel-server/services/rcon.js banPlayer ->
 // `banuser "<user>" -ip`, wired to Players.tsx's banIp checkbox), but the
 // bridge's moderationBanUser operation -- the one Events.tsx's Bridge
@@ -22,7 +22,7 @@ import en from '../../locales/en/events.json'
 // all) have any IP capability to begin with, so there is no parity gap to
 // surface for kick.
 //
-// Per god's instruction: do NOT add an IP toggle to the Events path -- the
+// Per the instruction: do NOT add an IP toggle to the Events path -- the
 // bridge genuinely cannot do it, so that would be a feature request against
 // the mod, not a bug fix. Instead, say what is true, right where the
 // operator is choosing this operation: Events.tsx renders

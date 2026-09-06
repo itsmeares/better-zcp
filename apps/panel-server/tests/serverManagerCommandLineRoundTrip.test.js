@@ -9,7 +9,7 @@ import {
 } from "../services/serverManager.js";
 
 // 2026-09-04, class sweep after the P0 (four defects found by tripping over
-// them, not by looking): god asked for every site in serverManager.js that
+// them, not by looking): the test checks for every site in serverManager.js that
 // builds a command line, splits one, quotes an argument, or unquotes one,
 // checked for a lossless round trip against the awkward inputs now known to
 // be real (space, quote, &^()  trailing backslash, = inside a token, a

@@ -27,7 +27,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // DIFFERENT runtime operation from the `==` comparison every vanilla
 // citation above actually demonstrates: a table lookup requires Kahlua to
 // hash a Java object consistently as a Lua table key, and no vanilla site
-// was ever found doing that (only comparing). god caught that this stub
+// was ever found doing that (only comparing). testing caught that this stub
 // could not tell the difference either -- `mkDir` returns a plain Lua
 // table, and a plain Lua table works perfectly as a table key in fengari
 // regardless of whether the equivalent Kahlua operation would. The

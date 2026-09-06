@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-26 bug hunt finding 14: POST /add-missing-dep wrote WorkshopItems=
+// 2026-08-26 regression finding 14: POST /add-missing-dep wrote WorkshopItems=
 // via a bare currentWs.join(";") instead of sanitizeIniList -- inconsistent
 // with the Mods= write six lines below it in the same handler, which already
 // used sanitizeModIdList. Confirmed inert today (workshopId is regex-checked

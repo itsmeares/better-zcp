@@ -3,8 +3,8 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29 hunt (god): mods-and-the-workshop, suspect 2 (mod load order) x
-// suspect 1 (workshop-id validation drift). Some mods legitimately use their
+// 2026-08-29 hunt (testing): mods-and-the-workshop, case 2 (mod load order) x
+// case 1 (workshop-id validation drift). Some mods legitimately use their
 // Steam Workshop file ID as their mod.info `id=` value too -- this file's own
 // enable-disk-mod/resolve-orphan-workshop handlers document a real example
 // ("Tear All Clothes" 3519629457) and deliberately bypass the numeric-ID

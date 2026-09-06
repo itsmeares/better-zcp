@@ -73,8 +73,8 @@ export default function Chat() {
   // spoofable author) requires server.world_events, same as weather/zombie/
   // climate tools. Sending on 'admin' or 'general' (POST /panel-bridge/
   // chat/admin, chat/general) requires players.endanger_or_impersonate
-  // instead -- split out of server.world_events 2026-08-27 (operator ruling
-  // on ranked-bug #5) specifically because chat/general accepts an
+  // instead -- split out of server.world_events 2026-08-27 (decision
+  // on prioritized issue #5) specifically because chat/general accepts an
   // arbitrary custom author name, indistinguishable in the chat log from
   // that player having said it themselves; chat/admin moved with it as the
   // same kind of harm (apps/panel-server/routes/panelBridge.js:4024, 4083). Managing

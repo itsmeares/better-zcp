@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { VALID_ACTIONS } from "../routes/panelBridge.js";
 
-// bug-hunt-2026-08-26/27, merge of three-unsynced-lists-of-the-same-
+// regression, merge of three-unsynced-lists-of-the-same-
 // bridge-actions + three-bridge-action-lists-at-three-different-sizes
-// (Jim, ranked #11/#12): the same set of bridge actions is written down
+// (testing, ranked #11/#12): the same set of bridge actions is written down
 // in THREE places and nothing keeps any two in sync -- VALID_ACTIONS (100
 // entries, the enforcement surface, pinned by
 // panelBridgeValidActionsDriftGate.test.js), the GET /commands doc array
@@ -13,14 +13,14 @@ import { VALID_ACTIONS } from "../routes/panelBridge.js";
 // apps/panel-client/src/pages/Events.tsx (17 entries -- THE ONLY ONE AN OPERATOR
 // EVER READS for this generic "advanced bridge operation" form).
 //
-// Kevin's description audit (Events.bridgeOperationDescriptionAudit
+// the description audit (Events.bridgeOperationDescriptionAudit
 // .test.ts) checks whether EXISTING template entries lie about what they
 // do -- by construction it cannot see the question this test answers:
 // which enforceable actions have NO template at all, so an operator can
 // never reach them through this form regardless of whether its
 // description would have been honest.
 //
-// FULL DERIVATION WAS REJECTED for the same reason Dwight rejected it for
+// FULL DERIVATION WAS REJECTED for the same reason the contract rejects it for
 // the doc array's missing-entry direction: most of the 83 actions with no
 // client template already have dedicated, purpose-built UI elsewhere
 // (weather triggers via Scheduler.tsx's command presets, kick/ban via

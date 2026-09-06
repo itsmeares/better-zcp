@@ -18,14 +18,14 @@ import path from "path";
 //     (success=8, body={"success":8,"html":"","fileType":2})" -- used to
 //     be handed straight to the user. That is exactly what sent a real,
 //     competent user chasing his session cookies for days: the message
-//     gave him nothing else to suspect. describeSharedfilesFailure() (via
+//     gave him nothing else to case. describeSharedfilesFailure() (via
 //     addItemToCollection) must now translate Steam's EResult + fileType
 //     into something actionable, and must never leak the raw protocol
 //     body into the user-facing `error` string.
 
 const settings = new Map();
 // initDir kept as its OWN stable constant, separate from the mutable tmpDir
-// below (ENOTEMPTY class, hunt-wave12, 2026-08-29/30): tmpDir gets
+// below (ENOTEMPTY class, regression, 2026-08-29/30): tmpDir gets
 // reassigned by every describe block's beforeEach, but logger.js's winston
 // singleton resolved logsDir from THIS value, once, at the static import a
 // few lines down -- it never re-reads getDataPaths() afterward. No hook in
@@ -48,7 +48,7 @@ vi.mock("../utils/paths.js", () => ({
   getDataPaths: () => ({ dataDir: tmpDir, logsDir: tmpDir }),
 }));
 
-// ENOTEMPTY class (hunt-wave12, 2026-08-29/30): services/workshopCollectionSync.js
+// ENOTEMPTY class (regression, 2026-08-29/30): services/workshopCollectionSync.js
 // imports utils/logger.js, so without this the real winston logger resolved
 // its logsDir from initDir above (captured at the moment of the static
 // import a few lines down) and wrote real log files into it for the
@@ -163,7 +163,7 @@ describe("addItemToCollection — user-facing error text", () => {
   });
 });
 
-// ENOTEMPTY class regression (hunt-wave12, 2026-08-29/30): placed last so
+// ENOTEMPTY class regression (regression, 2026-08-29/30): placed last so
 // every test above has already run. Before the logger.js mock above, this
 // failed -- initDir genuinely contained combined.log/error.log, measured
 // directly on this machine. After it, nothing ever writes into initDir at

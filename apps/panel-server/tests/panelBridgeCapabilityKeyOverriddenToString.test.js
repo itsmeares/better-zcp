@@ -4,14 +4,14 @@ import { fileURLToPath } from 'url';
 import { lua, to_luastring } from 'fengari';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, wave123 (queued behind the total-audit failure-honesty lens):
+// 2026-08-30, wave123 (queued behind the regression failure-honesty lens):
 // capabilityKey()'s fallback branch (used whenever obj:getClass() fails or
 // is unavailable) strips an "@identityhash" suffix so the cache key names
 // the CLASS, not the individual instance -- correct for Java's DEFAULT
 // toString ("ClassName@hex"). It does NOT work for an OVERRIDDEN toString:
 // there is no @hex to strip, so the "class" key silently becomes
 // VALUE-derived instead (a username, an item name, whatever the override
-// returns). Kevin's jar audit confirmed real toString overrides on Stats,
+// returns). the jar audit confirmed real toString overrides on Stats,
 // InventoryItem, ItemContainer, and the IsoMovingObject family (IsoPlayer
 // AND BaseVehicle both inherit it) -- all high-volume receivers.
 //

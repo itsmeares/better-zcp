@@ -1904,7 +1904,7 @@ export async function createServer(serverConfig) {
     maxMemory: normalizeMemoryGb(serverConfig.maxMemory, 8),
     useNoSteam: serverConfig.useNoSteam || false,
     useDebug: serverConfig.useDebug || false,
-    // Same shape again: never on this list at all, and (per a same-night
+    // Same shape again: never on this list at all, and (per a same pass
     // audit of every wizard field) not even in ALLOWED_SERVER_UPDATE_FIELDS
     // or read anywhere server-side -- unlike adminPassword, there was no
     // edit-screen workaround for this one either, because there was no edit

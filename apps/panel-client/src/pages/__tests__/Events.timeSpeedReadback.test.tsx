@@ -7,8 +7,8 @@ import { vi } from 'vitest'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// 2026-08-30, panelbridge-audit-2026-08-30: third instance of the same
-// defect class found tonight (vehicleSetSiren, then Jim's visual-controls
+// 2026-08-30, regression: third instance of the same
+// defect class found tonight (vehicleSetSiren, then the visual-controls
 // precondition check, now this) -- a control that displays a number it
 // never fetched is asserting something it does not know. The time-speed
 // slider was local useState(1), never reassigned by any poll, so it could
@@ -83,7 +83,7 @@ describe('Events -- time speed slider reflects the server\'s real multiplier ins
     await waitFor(() => expect(screen.getByText('10x')).toBeTruthy())
   })
 
-  // bughunt-2026-08-31-c ("tests whose assertion contradicts their own
+  // regression ("tests whose assertion contradicts their own
   // title"): this used to click 24x and check the display immediately,
   // synchronously, in the same tick -- which only proves the click itself
   // updates local state, something no amount of missing/broken

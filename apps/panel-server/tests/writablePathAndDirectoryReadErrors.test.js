@@ -17,7 +17,7 @@ import { ErrorCode } from "../utils/errorCodes.js";
 //
 // These test the FORMATTERS directly, not the routes, because the failure
 // shape this was built to catch already happened twice tonight elsewhere
-// (Kevin's SANDBOX_REPAIR_BACKUP_FAILED and makeRoleError catch blocks):
+// (the SANDBOX_REPAIR_BACKUP_FAILED and makeRoleError catch blocks):
 // params computed correctly but never actually reaching res.json(). Testing
 // the formatter's return value is what proves {message, code, params} is
 // the exact object every call site spreads into res.json() -- not a

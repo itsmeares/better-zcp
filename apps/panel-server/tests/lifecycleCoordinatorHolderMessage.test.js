@@ -9,7 +9,7 @@ import {
 // never the bug (traced every acquire/release path -- all correct, process-
 // wide scope is intentional). The actual defect was the refusal message:
 // "Another server lifecycle operation is already in progress" names neither
-// the operation nor the server holding the lock. Dwight, having just
+// the operation nor the server holding the lock. testing, having just
 // instrumented this exact code path, still read a correct 409 as a
 // probable lock leak because the message gave him nothing to check it
 // against. These tests lock in the fix: the message now names the holder

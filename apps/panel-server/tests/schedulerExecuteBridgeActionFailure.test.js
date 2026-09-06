@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// bug-hunt-2026-08-27 (hunt: scheduler execution path, not validation):
+// regression (hunt: scheduler execution path, not validation):
 // Scheduler.executeBridgeAction() used to end with
 //   const result = await panelBridge.sendCommand(action, args);
 //   if (result && result.success === false) throw new Error(...);

@@ -3,7 +3,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 // chunks.js gates eight routes on chunks.manage -- the three mutating routes
 // (/save-path, /delete-chunks, /delete-region) plus, as of the operator
-// ruling in hunt-wave12 (2026-08-30), the five reads (/saves,
+// ruling in regression (2026-08-30), the five reads (/saves,
 // /suggested-paths, /chunks/:saveName, /stats/:saveName, /browse) that used
 // to sit only behind the global auth middleware, authed but not
 // permissioned. chunks.manage is the only chunks capability that exists --

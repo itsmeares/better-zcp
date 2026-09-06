@@ -62,7 +62,7 @@ describe("whitelist database reader", () => {
 
 // 2026-08-30, release-runup: access-levels-should-come-from-the-server-not-a-
 // hardcoded-array Phase 2. Same [role] table listWhitelistAccounts already
-// reads (Roles.getRoles() is a live, DB-backed table per Kevin's jar audit,
+// reads (Roles.getRoles() is a live, DB-backed table per the jar audit,
 // not a fixed enum) -- listServerRoleNames just returns its names instead of
 // using them to resolve a whitelist row's role id.
 describe("listServerRoleNames", () => {

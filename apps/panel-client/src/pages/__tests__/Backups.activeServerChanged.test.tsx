@@ -4,7 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } from '@/lib/api'
 
-// bug-hunt-2026-09-04 (worse than #1 tonight, same root cause): a comment on
+// regression (worse than #1 tonight, same root cause): a comment on
 // activeServerRemote/activeServerId CLAIMED this page already "refresh[ed]
 // when the server-changed socket event fires (handled via socket effect
 // below)" -- it didn't; only backup:progress was ever subscribed.
@@ -16,7 +16,7 @@ import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } fr
 // worth protecting the way ServerConfig's settings were), close any open
 // destructive dialog (its own local state doesn't update just because the
 // list behind it refreshed), and block the four mutating actions for the
-// brief window until the reload lands. Separately, per god's addition: the
+// brief window until the reload lands. Separately, per the addition: the
 // restore confirmation now names the actual target server, read fresh when
 // the dialog opens, not from mount-time state.
 

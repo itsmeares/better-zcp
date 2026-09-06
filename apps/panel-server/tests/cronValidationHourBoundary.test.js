@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isCronTooFrequent } from "../utils/cronValidation.js";
 
-// bughunt-2026-08-31-c (apps/panel-server/utils sweep): isCronTooFrequent()'s
+// regression (apps/panel-server/utils sweep): isCronTooFrequent()'s
 // wrap-around check used to fire only when the hour field was the literal
 // string "*" -- so a discrete multi-value hour list that means the exact
 // same "every listed hour" thing (e.g. "5,6") never triggered it, and a

@@ -1901,7 +1901,7 @@ export class DiscordBot {
   getStatus() {
     // Debounced, not raw: a shardReconnecting-to-shardResume/shardReady
     // round trip well under this threshold is exactly what a healthy
-    // connection recovering from a normal blip looks like (see suspect 4's
+    // connection recovering from a normal blip looks like (see case 4's
     // proof) — surfacing that to the operator every time would train them
     // to ignore the signal, which is worse than not having it.
     const gatewayIssue = Boolean(

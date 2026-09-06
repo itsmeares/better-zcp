@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { VALID_ACTIONS } from "../routes/panelBridge.js";
 import { default as router } from "../routes/panelBridge.js";
 
-// bug-hunt-2026-08-27: GET /panel-bridge/commands is a documentation
+// regression: GET /panel-bridge/commands is a documentation
 // endpoint (its own comment used to claim "complete reference for all 60
 // Lua handlers") with NO consumer anywhere in this codebase -- confirmed by
 // grepping apps/panel-client/src for every caller of panelBridgeApi.getCommands (zero)
@@ -28,7 +28,7 @@ import { default as router } from "../routes/panelBridge.js";
 // would document an args shape nobody has confirmed -- the same
 // confident-but-wrong failure mode this whole floor has spent the night
 // closing, just applied to documentation instead of a security check.
-// Reported to god rather than guessed at.
+// recorded here rather than guessed at.
 function getCommandsHandler() {
   const layer = router.stack.find(
     (entry) => entry.route?.path === "/commands" && entry.route.methods.get,

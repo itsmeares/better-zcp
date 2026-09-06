@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit follow-up: collectVehicles() (see
+// 2026-08-30, regression follow-up: collectVehicles() (see
 // panelBridgeVehicleCollectionRuntimeShape.test.js) has three call sites.
 // getVehiclesDetailed and removeVehiclesInArea both capture (list, err), but
 // findVehicleById used to capture only `list`, discarding the error

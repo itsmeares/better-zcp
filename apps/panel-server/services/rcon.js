@@ -1796,7 +1796,7 @@ export class RconService extends EventEmitter {
     return this.execute("stoprain");
   }
 
-  // 2026-08-26 bug hunt: this used to send a bare "startstorm" with no
+  // 2026-08-26 regression: this used to send a bare "startstorm" with no
   // duration when the caller omitted one, leaving PZ's own internal default
   // to decide the length -- an internal default this panel has no way to
   // read, and one that PanelBridge's triggerStorm Lua handler does NOT

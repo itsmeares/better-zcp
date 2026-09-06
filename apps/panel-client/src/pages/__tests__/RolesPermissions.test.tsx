@@ -16,7 +16,7 @@ function renderRolesPermissions() {
   )
 }
 
-// conv-bugfix2 / god's authorization: two capability toggles on the same
+// regression / the authorization: two capability toggles on the same
 // role fired before the first one's response re-renders `roles` used to
 // both compute nextCapabilities from the same stale role.capabilities
 // snapshot. The server's updateRole() is a hard replace, not a merge, so
@@ -112,7 +112,7 @@ describe('RolesPermissions -- concurrent capability toggles on one role', () => 
     // While both requests are in flight the cells render a spinner, not the
     // checkbox -- so both checkboxes are briefly absent from the DOM here.
     // Resolve the SECOND request first, then the first -- the exact
-    // out-of-order landing god described ("it lands second and wins").
+    // out-of-order landing testing described ("it lands second and wins").
     // The first response's own payload (['beta.cap']) reflects only what
     // request 1 knew about at send time -- correct request construction,
     // but stale relative to request 2's already-applied result.

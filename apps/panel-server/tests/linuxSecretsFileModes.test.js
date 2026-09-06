@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// 2026-08-29 Linux secrets/SFTP bug hunt (god): three real exposures found
+// 2026-08-29 Linux secrets/SFTP regression (testing): three real exposures found
 // and fixed with real stat evidence on WSL2/ext4 across four umasks
 // (022/002/077/000) -- see the commit message for the full probe results.
 // This file pins the fixed behavior with a deterministic, cross-platform

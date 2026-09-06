@@ -7,7 +7,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// 2026-08-30, panelbridge-total-audit-2026-08-30 (Finding D): the safehouse
+// 2026-08-30, panelbridge-regression-2026-08-30 (Finding D): the safehouse
 // "Add Player" button read `players[0]?.name` -- the first entry of the
 // whole server's online-player list, not a player the admin chose for this
 // safehouse. It silently added whoever happened to be first, disclosed only

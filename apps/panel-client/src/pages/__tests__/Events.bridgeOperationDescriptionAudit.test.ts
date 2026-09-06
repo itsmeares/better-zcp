@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { getBridgeOperationTemplates } from '../Events'
 import en from '../../locales/en/events.json'
 
-// bug-hunt-2026-08-26, follow-up to the moderationBanUser IP-parity fix
-// (196e057): god asked the same question of every bridgeOperationTemplates
+// regression, follow-up to the moderationBanUser IP-parity fix
+// (196e057): the test checks the same question of every bridgeOperationTemplates
 // entry that surfaced the ban one -- Events.tsx renders each operation's
 // description verbatim as the visible subtitle under the operation picker
 // (~line 2760), so a wrong description reaches the operator with nothing
@@ -16,13 +16,13 @@ import en from '../../locales/en/events.json'
 // removed those two from the templates/forms/groups because the underlying
 // Faction.createFaction/removeFaction methods don't exist in the real B42
 // jar. They cost nothing (never shown to an operator) but are dead weight;
-// noted for god, not deleted here since cleaning them up wasn't what was
+// noted here, not deleted here since cleaning them up wasn't what was
 // asked and they're inert.
 //
 // All 17 rendered descriptions make a CHECKABLE claim -- none are vague
 // filler ("does something with X") -- which is itself a real result: this
 // catalog is small and uniformly specific, unlike the mixed vague/checkable
-// split Pam found across permissions.js's ~100 capability descriptions.
+// split the test found across permissions.js's ~100 capability descriptions.
 // Checked every one against its PanelBridge.lua handler:
 //   getSafehouses            -- "get all safehouses and metadata": matches
 //                                (id/title/owner/x/y/w/h/players/etc, all

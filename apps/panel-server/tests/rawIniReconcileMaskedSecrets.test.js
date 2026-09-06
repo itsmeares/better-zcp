@@ -6,7 +6,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 import { maskSecretValue } from "../utils/sanitize.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 
-// bug-hunt-2026-08-27 (finding #2, /raw half): GET /server-files/raw/ini
+// regression (finding #2, /raw half): GET /server-files/raw/ini
 // returned the live .ini's full text unmasked. Unlike the structured /ini
 // route (a per-key merge -- see serverFilesIniMasksSecrets.test.js), the raw
 // editor round-trips ONE FULL TEXT BLOB on every save, unconditionally,

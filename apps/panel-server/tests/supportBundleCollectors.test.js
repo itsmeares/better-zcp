@@ -54,7 +54,7 @@ describe("support bundle: curl availability (World Map's runtime dependency)", (
     mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "curl 8.4.0", ""));
     const result = await buildWorldMapDiagnostics();
     expect(result.curl.available).toBe(true);
-    // Contract fixed in conv-mapbuild: { source, directory, reason }.
+    // Contract fixed in regression: { source, directory, reason }.
     expect(result.b42Resolution).toHaveProperty("source");
     expect(result.b42Resolution).toHaveProperty("directory");
     expect(result.b42Resolution).toHaveProperty("reason");
@@ -326,7 +326,7 @@ describe("support bundle assembly: one collector throwing never breaks the rest"
   });
 });
 
-// support-bundle-2026-08-30: hive/agents/god/research/discord-restart-etxtbsy-2026-08-30.md --
+// support-bundle regression: historical-support-bundle-research --
 // a real production report was only diagnosable from a "Text file busy"
 // stack trace a user pasted BY HAND from `docker logs`. None of the
 // filesystem-scanning collectors above would have captured it -- container
@@ -451,7 +451,7 @@ describe("support bundle: managed-service (systemd/OpenRC) logs", () => {
       expect(args.find((a) => a.endsWith(".service"))).toBe(
         "zomboid-panel-server-s1.service",
       );
-      cb(null, "Aug 30 sacha bash[1]: server ready\n", "");
+      cb(null, "Aug 30 panel bash[1]: server ready\n", "");
     });
     const text = await buildManagedServiceLogsText({ id: "s1", lifecycleProvider: "systemd" });
     expect(text).toContain("server ready");

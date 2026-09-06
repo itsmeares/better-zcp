@@ -60,7 +60,7 @@ describe("local config mutation safety", () => {
     expect(isLocalConfigMutation(createRequest("POST", "/save-and-reload"))).toBe(false);
   });
 
-  // The 2026-08-23 operator ruling split isLocalConfigMutation's old
+  // The 2026-08-23 decision split isLocalConfigMutation's old
   // one-guard-fits-all into two disjoint classes with different behavior
   // while the server runs: ordinary edits are now WARNED, not blocked;
   // wholesale overwrites (restore, template-apply) are still blocked. These
@@ -264,7 +264,7 @@ describe("local config mutation safety", () => {
     // indistinguishable from a confirmed-stopped server. `running !== false`
     // then evaluated to `false`, so NO warning was shown on an undetermined
     // server state, the exact opposite of this function's documented policy
-    // (2026-08-26 bug hunt finding 2). Only getServerProcessDetails() is
+    // (2026-08-26 regression finding 2). Only getServerProcessDetails() is
     // consulted now, so a manager that still exposes checkServerRunning
     // alongside it must not influence the result at all.
     it("warns on scanFailed even when checkServerRunning would have reported false", async () => {

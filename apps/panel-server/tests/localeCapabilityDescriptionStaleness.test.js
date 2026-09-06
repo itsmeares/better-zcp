@@ -66,7 +66,7 @@ const SOURCE_LANGUAGE = "en";
 //       description byte-identical to English, ran this exact
 //       read-parse-flatten-compare pipeline against that copy, and
 //       confirmed it reported exactly the one mutated key -- see
-//       conversation bug-hunt-2026-08-26 (2026-08-27) for the transcript.
+//       conversation regression (2026-08-27) for the transcript.
 //       Only after that did the real (unmutated) result -- 0 stale
 //       descriptions across all five languages, 28 capabilities each -- get
 //       trusted and reported rather than assumed clean.

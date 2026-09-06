@@ -8,7 +8,7 @@ import ServerSetup, { INSTALL_INFLIGHT_KEY } from '../ServerSetup'
 import { serversApi } from '@/lib/api'
 import enServerSetup from '../../locales/en/serverSetup.json'
 
-// 2026-08-26 install-failure hunt (finding #7) + god's follow-up dispatch:
+// 2026-08-26 install-failure regression (finding #7) + the follow-up dispatch:
 // install:complete/install:log are heard by exactly one file in the whole
 // client (this one), and a tab closed or reloaded mid-download loses the
 // eventual outcome entirely -- no persisted state, no way back. This file
@@ -28,7 +28,7 @@ vi.mock('@/lib/api', async () => {
   }
 })
 
-// bug-hunt-2026-08-27: ServerSetup.tsx gained its first useAuth() call for
+// regression: ServerSetup.tsx gained its first useAuth() call for
 // capability gating -- outside an AuthProvider that throws, which this file
 // never wrapped in one because it never needed one before. can() fails open
 // (returns true) so none of the assertions below, none of which are about

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { isPlayerConfirmedNotWhitelisted } from '../Players'
 
-// bug-hunt-2026-08-26: "Remove from whitelist" (dossier dropdown) called
+// regression: "Remove from whitelist" (dossier dropdown) called
 // playersApi.removeFromWhitelist(selectedPlayer) unconditionally, regardless
 // of whether the selected player was actually on the whitelist -- unlike its
 // sibling on the whitelist tab, which only ever targets a known member of

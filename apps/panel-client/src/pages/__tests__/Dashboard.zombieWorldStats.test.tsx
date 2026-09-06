@@ -8,8 +8,8 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi, type ServerInstance,
 } from '@/lib/api'
 
-// hunt-wave12-2026-08-30: getZombieCount and getWorldStats were both
-// confirmed working by Kevin's engine-side audit but had no caller
+// regression-2026-08-30: getZombieCount and getWorldStats were both
+// confirmed working by the engine-side audit but had no caller
 // anywhere in apps/panel-client/src -- the Dashboard had no zombie or survivor count
 // from any source. This proves the new "Zombies" work-item tile shows the
 // real fetched count while the bridge is connected, falls back to

@@ -29,7 +29,7 @@ vi.mock("../utils/logger.js", () => ({
 
 const { refreshLaunchTargetBeforeStart } = await import("../routes/server.js");
 
-// Operator ruling 2026-08-27 (card custom-launcher-as-a-real-supported-mode-
+// decision 2026-08-27 (card custom-launcher-as-a-real-supported-mode-
 // not-an-accident): a serverPath/installPath ending in .bat/.sh/.exe is a
 // real, supported CUSTOM LAUNCHER mode, not an accident to guess at or an
 // error to reject. resolveLaunchMode() (serverManager.js) is the ONE

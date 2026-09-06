@@ -26,7 +26,7 @@ function getBrowseHandler() {
     (entry) => entry.route?.path === "/browse" && entry.route.methods.get,
   );
   // Route-logic handler is always LAST in the stack: chunks.manage was
-  // added in front of it (hunt-wave12, 2026-08-30, operator ruling to gate
+  // added in front of it (regression, 2026-08-30, decision to gate
   // the previously-unpermissioned reads), same shape
   // chunksRoutesCapability.test.js already documents for the gate itself
   // (stack[0]). This test exercises the business logic directly, bypassing

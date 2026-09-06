@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseDownloadError } from '../Debug'
 
-// conv-hunt-resume lens: what does the operator see when a call fails?
+// regression lens: what does the operator see when a call fails?
 // Debug.tsx's three log-download handlers (combined log, single log file,
 // support-bundle zip) all fetch with authFetch() -- a raw fetch, not the
 // JSON api.ts client that already parses `{ error, code }` bodies. On a

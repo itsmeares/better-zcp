@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-26, two real users + a same-night 14-field audit: createServer()
+// 2026-08-26, two real users + a same pass 14-field audit: createServer()
 // (database/init.js) builds the persisted record from an explicit
 // field-by-field object literal. THAT LITERAL HAS SILENTLY DROPPED FOUR
 // FIELDS SO FAR: adminPassword (fixed this session -- the actual crash),
@@ -16,7 +16,7 @@ import path from "path";
 // which is exactly why re-saving a field after the fact was the only
 // workaround for adminPassword.
 //
-// god's instruction, verbatim: "A test that asserts every field the create
+// the instruction, verbatim: "A test that asserts every field the create
 // ROUTE forwards is a field createServer actually PERSISTS would catch
 // this entire class forever." This is that test -- it does not hand-copy a
 // field list (which could itself go stale the same way the literal did);

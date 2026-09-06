@@ -43,7 +43,7 @@ export function resolveSourcePath() {
 // Exported so index.js's and routes/panelBridge.js's own auto-update/
 // auto-install code paths can share this one implementation instead of
 // each reimplementing the extension check without the lowercasing below
-// (bughunt-2026-08-31-c, launcher-extension-case-sensitivity).
+// (regression, launcher-extension-case-sensitivity).
 export function resolveInstallDir(server) {
   let dir = server?.serverPath || server?.installPath;
   if (!dir) return null;
@@ -186,7 +186,7 @@ export function installBridge(server) {
     // never actually fire -- it exists as a visible signal in case some
     // future change to that guarantee (or an unusual filesystem) silently
     // breaks it, rather than the mod just never loading with nothing in
-    // the log to explain why (2026-08-29 Linux PanelBridge hunt).
+    // the log to explain why (2026-08-29 Linux PanelBridge regression).
     if (process.platform !== 'win32') {
       try {
         const { mode } = fs.statSync(targetPath);

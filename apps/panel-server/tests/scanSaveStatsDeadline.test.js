@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 
 // scanSaveStats (apps/panel-server/routes/debug.js) walks a save folder to find stale
-// .lock files. Jim measured it taking 10.35s just to reach its own
+// .lock files. the test measured it taking 10.35s just to reach its own
 // MAX_FILES=50,000 cap on an operator-scale save -- LONGER than the 8s
 // outer withTimeout() wrapping it at the GET /diagnostics call site, so on
 // any large save the check always lost its own race and the whole

@@ -186,7 +186,7 @@ describe("server.js: server.world_events (folded in from previously-ungated GM/w
   // ruling required "not refused."
   //
   // /events/lightning, /events/thunder and /events/horde used to be in this
-  // list -- moved out 2026-08-27 (operator ruling on ranked-bug #5) to
+  // list -- moved out 2026-08-27 (decision on prioritized issue #5) to
   // players.endanger_or_impersonate, see the describe block below. They
   // take an optional username and can strike/spawn a horde AT a named
   // player, unlike every route still in this array.

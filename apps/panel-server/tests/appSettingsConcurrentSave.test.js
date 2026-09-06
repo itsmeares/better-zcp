@@ -1,8 +1,8 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { getAllSettings, getSetting } from "../database/init.js";
 
-// Concurrency hunt 2026-08-29 (hunt-wave5), god's sharpened version of
-// suspect 3 after ruling on the init.js/Jim collision: flushWrites()
+// Concurrency regression 2026-08-29 (regression), the sharpened version of
+// case 3 after ruling on the init.js/testing collision: flushWrites()
 // (init.js:364-465) is already both atomic (unique tmp name per write,
 // chained _writePromise) AND serialized against itself. The real open
 // question was narrower and NOT answered by either of those: does

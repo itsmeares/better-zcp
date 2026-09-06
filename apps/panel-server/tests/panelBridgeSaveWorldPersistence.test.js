@@ -11,7 +11,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // encode our belief about getSandboxOptions/getWorld's shape, not a verified
 // PZ truth.
 //
-// UPDATED 2026-08-30 (total-audit batch 1, item 2, Kevin's jar-verified
+// UPDATED 2026-08-30 (regression, item 2, the jar-verified
 // spec): world:saveWorld() does not exist anywhere in the jar -- the real
 // save call is saveGame(), a bare global (same LuaManager$GlobalObject
 // binding tier as getWorld()/getCell()), zero args, void return. The old

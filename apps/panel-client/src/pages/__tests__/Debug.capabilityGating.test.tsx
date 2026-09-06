@@ -7,7 +7,7 @@ import { getRequiredCapabilityForCheck } from '../Debug'
 import Debug from '../Debug'
 import { apiFetch, modsApi, serverApi, rconApi, backupApi, panelBridgeApi, serverFilesApi } from '@/lib/api'
 
-// bug-hunt-2026-08-26/27: Jim's catalogue (catalogue-debug-tsx-destructive-
+// regression: the catalogue (catalogue-debug-tsx-destructive-
 // auto-fixes) confirmed all 11 automated diagnostics fixes are already
 // gated server-side, across SEVEN distinct capabilities (not one page-level
 // concern) -- verified here by reading each route's requirePermission call
@@ -268,7 +268,7 @@ describe('Debug.tsx: automated fixes are gated on their own capability, not one 
   })
 })
 
-// god (2026-08-27, bug-hunt-2026-08-26): "the failure mode here is gating a
+// testing (2026-08-27, regression): "the failure mode here is gating a
 // fix on the wrong one of the seven, which no disabled-state assertion can
 // detect either." The two suites above prove the wiring is generic and
 // correct for mods.manage + diagnostics.manage; this suite proves it holds
@@ -411,7 +411,7 @@ describe('Debug.tsx: every automated fix reaches its own real API when granted i
   })
 })
 
-// god (2026-08-27): "Gating a control that needs no capability hides a
+// testing (2026-08-27): "Gating a control that needs no capability hides a
 // working button, which is the same class of harm as leaving a real one
 // open." server.recentCrash's automated fix only calls setActiveTab -- no
 // API, no capability -- so it must stay enabled even when every capability
@@ -431,7 +431,7 @@ describe('Debug.tsx: the one automated fix with no API call is never gated', () 
   })
 })
 
-// god (2026-08-27): "EVERY read endpoint in debug.js requires
+// testing (2026-08-27): "EVERY read endpoint in debug.js requires
 // diagnostics.manage ... SO TODAY A USER WITHOUT diagnostics.manage OPENS
 // DEBUG AND GETS A WALL OF 403s." Per-fix gating (above) answers "which
 // buttons work"; this answers "why is this page broken" -- a real 403 from
@@ -465,7 +465,7 @@ describe('Debug.tsx: a 403 from the diagnostics fetch replaces the whole page, n
   })
 })
 
-// kevin-2026-08-30 (god's follow-up on af4c0c10, the PanelBridge tab): its
+// regression (the follow-up on af4c0c10, the PanelBridge tab): its
 // data is gated on bridge.diagnostics specifically -- narrower than
 // whatever gates this page as a whole (diagnostics.manage, tested above).
 // A role can hold diagnostics.manage (sees the page, the suite above stays

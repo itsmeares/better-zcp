@@ -104,7 +104,7 @@ describe('SystemHealthBanner', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('bug-hunt-2026-09-04: keeps a live critical banner up through an unverifiable reading instead of clearing it', async () => {
+  it('regression: keeps a live critical banner up through an unverifiable reading instead of clearing it', async () => {
     // diskMonitor.js's computeDiskStatus() forces warning/critical to false
     // whenever it can't verify the disk (ok: false) -- an unreachable mount,
     // a permission error, a momentary network-drive hiccup. Its own

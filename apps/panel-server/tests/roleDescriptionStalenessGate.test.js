@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 import { analyzeNamespace, ALL_LANGS } from "../../../scripts/i18n-staleness-check.mjs";
 
-// bug-hunt-2026-08-26 follow-up to 35e529c (localeCapabilityDescriptionStaleness
+// regression follow-up to 35e529c (localeCapabilityDescriptionStaleness
 // .test.js): that gate catches a capability description translation that was
 // NEVER touched or was RESET TO ENGLISH -- byte-identical to the source. It
 // cannot catch "translated once faithfully, then English changed and the
@@ -12,7 +12,7 @@ import { analyzeNamespace, ALL_LANGS } from "../../../scripts/i18n-staleness-che
 // byte-identical to English regardless of which English version it came
 // from. That second shape is exactly what happened tonight, twice:
 // bridge.diagnostics' description (narrowed by d490410, then reverted and
-// rewritten by 06a3657 after Jim proved the wider claim true) and the
+// rewritten by 06a3657 after the test proved the wider claim true) and the
 // 8-description undersell fix (6fada8c) both changed English capability
 // text with nothing enforcing that the five translations get re-read.
 //

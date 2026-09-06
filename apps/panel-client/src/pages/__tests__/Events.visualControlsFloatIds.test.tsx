@@ -6,7 +6,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// hunt-wave12-2026-08-30: the five visual controls (view distance, daylight
+// regression-2026-08-30: the five visual controls (view distance, daylight
 // strength, night strength, desaturation, ambient) all apply through the
 // generic setClimateFloat(floatId, value) action, keyed by a hardcoded
 // ClimateFloat id (desaturation=0, nightStrength=2, ambient=9,

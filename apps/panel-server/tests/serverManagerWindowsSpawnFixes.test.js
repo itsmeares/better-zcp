@@ -4,9 +4,9 @@ import os from "os";
 import path from "path";
 import { EventEmitter } from "events";
 
-// 2026-09-03, Windows spawn bugs (Dwight's pz-verify repro, both real,
+// 2026-09-03, Windows spawn bugs (the pz-verify repro, both real,
 // neither an artifact of his setup -- reported and NOT fixed by him,
-// serverManager.js is Jim's lane):
+// serverManager.js is the lane):
 //
 // (a) The default-bat path spawned `cmd.exe /c StartServer_<name>.bat` with
 // a BARE filename, relying entirely on cmd.exe's own implicit
@@ -14,7 +14,7 @@ import { EventEmitter } from "events";
 // -- a real, non-exotic Windows hardening option -- turns that off, and
 // EVERY server the panel launches on such a host fails to start with "...
 // is not recognized as an internal or external command", independent of
-// PanelBridge. Dwight proved it wasn't Node-specific by running the
+// PanelBridge. the test proved it wasn't Node-specific by running the
 // identical `cmd /c "StartServer_pz-verify.bat"` from the same cwd outside
 // Node entirely.
 //

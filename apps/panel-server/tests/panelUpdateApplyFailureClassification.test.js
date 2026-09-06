@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-// 2026-09-04, Dwight's live finding + god's follow-up: classifyApplyFailure()
+// 2026-09-04, the live finding + the follow-up: classifyApplyFailure()
 // had never been directly tested before this file. readMostRecentApplyLog()
 // prefers supervisor.log (scripts/release/build.mjs's generateStartBat(), "Supervisor v2")
 // whenever it exists, and grepping scripts/release/build.mjs for every prose phrase the
@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest";
 const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");
 
 describe("classifyApplyFailure() recognises Supervisor v2's real, current wording", () => {
-  it("Dwight's exact case: supervisor.log's actual av_quarantine line resolves correctly, not 'unknown'", () => {
+  it("the exact case: supervisor.log's actual av_quarantine line resolves correctly, not 'unknown'", () => {
     const checker = new PanelUpdateChecker();
     const log =
       "[2026-09-04 10:00:00] Supervisor v2 starting\n" +
@@ -59,7 +59,7 @@ describe("classifyApplyFailure() recognises Supervisor v2's real, current wordin
     expect(checker.classifyApplyFailure(log, false)).toBe("unknown");
   });
 
-  it("rollback_failed (2026-09-04, god's approval after the retry-risk case) maps to its own bucket", () => {
+  it("rollback_failed (2026-09-04, the approval after the retry-risk case) maps to its own bucket", () => {
     const checker = new PanelUpdateChecker();
     const log =
       "[2026-09-04 10:00:00] Supervisor v2 starting\n" +
@@ -97,7 +97,7 @@ describe("classifyApplyFailure() recognises Supervisor v2's real, current wordin
   });
 });
 
-// 2026-09-04, god's approval of the rollback_failed value: one likelyCause
+// 2026-09-04, the approval of the rollback_failed value: one likelyCause
 // must not lie in any of its eight scripts/release/build.mjs trigger lines. 7 of the 8 leave
 // a pending-update marker file behind (either .update-pending, re-triggering
 // a fresh swap via run_loop's own check, or .update-applying, re-triggering

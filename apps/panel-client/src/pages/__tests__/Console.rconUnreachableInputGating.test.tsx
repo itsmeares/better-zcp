@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Console from '../Console'
 import { rconApi, serversApi, configApi, type ServerInstance } from '@/lib/api'
 
-// bughunt-2026-08-31-b (Angela, report-only on app source -- filed to Jim,
+// regression (testing, report-only on app source -- recorded here,
 // apps/panel-client/src/pages/Console.tsx is otherwise outside his slice): the RCON tab
 // correctly disables four RCON-dependent controls on `rconConnected === false`
 // (quick-command buttons, broadcast quick-templates, the broadcast textarea,

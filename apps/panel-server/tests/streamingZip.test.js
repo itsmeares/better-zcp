@@ -113,7 +113,7 @@ describe("StreamingZipWriter", () => {
     },
     // 2026-09-04: reducing entryCount alone (above) wasn't enough margin --
     // this test still hit the global 60000ms testTimeout on a real full
-    // server-suite run (Jim), a genuine flake, not a defect in the writer.
+    // server-suite run (testing), a genuine flake, not a defect in the writer.
     // This is a timeout-MARGIN problem, not an assertion-direction one (see
     // linuxDiscordGatewayResilience.test.js's fix the same day for that
     // other class) -- the fix here is more slack for this one slow,

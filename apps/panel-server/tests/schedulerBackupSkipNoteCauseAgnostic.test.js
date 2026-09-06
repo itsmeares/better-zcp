@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// bughunt-2026-08-31-c, completeness-claims-audit-followups: a comment in
+// regression, completeness-claims-audit-followups: a comment in
 // backupService.js claimed "both reasons already get identical treatment
 // by every consumer of skippedFiles" -- but this file's own scheduled-
 // backup skip note still hardcoded "that vanished during archiving", the

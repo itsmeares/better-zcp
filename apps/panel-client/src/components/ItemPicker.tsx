@@ -18,7 +18,7 @@ export interface CatalogItem {
   name: string
   category: string
   // Optional, not a stray gap: PanelBridge.lua only sets this on a
-  // successful getActualWeight() pcall (server/backlog card
+  // successful getActualWeight() pcall (server/issue
   // api-ts-declares-catalog-weight-mass-seats-non-optional-but-lua-guards-them,
   // 2026-08-29) -- a genuinely missing weight is a real, expected runtime
   // shape, not a bug to paper over with a fallback of 0.

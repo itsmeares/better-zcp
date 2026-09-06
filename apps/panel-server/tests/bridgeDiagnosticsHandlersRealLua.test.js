@@ -3,19 +3,19 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-27, revert decision on d490410 (Pam removed "view the mod debug log
+// 2026-08-27, revert decision on d490410 (testing removed "view the mod debug log
 // and stats" from bridge.diagnostics and "database maintenance tools" from
 // diagnostics.manage on a UI-caller test alone, without checking whether the
 // handlers behind bridge.diagnostics actually work -- her own gap, flagged
-// in her own commit). god's instruction: run the same real-execution method
+// in her own commit). the instruction: run the same real-execution method
 // 01a5bc7 used on the visual-settings handlers, per-handler, each with a
 // negative control proving a genuine failure is detectable.
 //
 // NINE Lua handlers are gated by bridge.diagnostics, not seven -- the count
-// moved once already (four to seven) per god's own framing, and it moved
+// moved once already (four to seven) per the own framing, and it moved
 // again: POST /catalog/scan-items and POST /catalog/scan-vehicles are ALSO
 // gated by bridge.diagnostics and ALSO call a Lua handler (getItemCatalog,
-// getVehicleCatalog) that Pam's revert decision did not name. Included here;
+// getVehicleCatalog) that the revert decision did not name. Included here;
 // reported as "found more" rather than silently expanding the scope.
 //
 // Does NOT touch /database, /database/backup, /database/compact -- those are

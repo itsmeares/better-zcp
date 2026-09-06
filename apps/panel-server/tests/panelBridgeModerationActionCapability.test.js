@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Capability-gate cross-route-family sweep (Pam's structural finding,
-// bug-hunt-2026-08-27): POST /command is the generic PanelBridge passthrough,
+// Capability-gate cross-route-family sweep (the structural finding,
+// regression): POST /command is the generic PanelBridge passthrough,
 // gated bridge.command alone -- deliberately broad by the route's own
 // comment, since it reaches every action including ~30 with no dedicated
 // route at all. Four of those, moderationKickUser/BanUser/BanIP/BanSteamID,
@@ -29,7 +29,7 @@ const ROLES = {
   // block below.
   gm_tools_admin: { capabilities: ["bridge.command", "players.gm_tools"] },
   // Holds ONLY players.gm_tools, no bridge.command -- the Technician shape
-  // per an operator ruling (bug-hunt-2026-08-27, reverses c3083d5): this
+  // per an decision (regression, reverses c3083d5): this
   // role must now reach the GM-tools four through this passthrough despite
   // never holding bridge.command at all.
   gm_tools_only: { capabilities: ["players.gm_tools"] },
@@ -39,7 +39,7 @@ const ROLES = {
   bridge_diagnostics_admin: { capabilities: ["bridge.command", "bridge.diagnostics"] },
   // Holds ONLY players.endanger_or_impersonate, no bridge.command -- a role
   // that reaches the eight targeted zombie/sound/chat-impersonation actions
-  // through their own dedicated routes today (2026-08-31 bug hunt fix) and
+  // through their own dedicated routes today (2026-08-31 regression fix) and
   // must keep reaching them through this passthrough too, REPLACEMENT
   // semantics same as gm_tools_only above.
   endanger_or_impersonate_only: { capabilities: ["players.endanger_or_impersonate"] },
@@ -175,7 +175,7 @@ describe("POST /panel-bridge/command -- moderation actions require players.moder
   });
 });
 
-// debugItemScript, added to VALID_ACTIONS 2026-08-29 (backlog card
+// debugItemScript, added to VALID_ACTIONS 2026-08-29 (issue
 // pin-literal-sendcommand-strings-against-valid-actions) alongside this
 // BRIDGE_ACTION_CAPABILITY entry, in the SAME commit -- without the
 // capability entry, adding it to VALID_ACTIONS alone would have reopened
@@ -217,7 +217,7 @@ describe("POST /panel-bridge/command -- debugItemScript requires bridge.diagnost
   });
 });
 
-// bug-hunt-2026-08-27, were-the-dedicated-gm-tools-routes-ever-wired: unlike
+// regression, were-the-dedicated-gm-tools-routes-ever-wired: unlike
 // the moderation four, setGodMode/setInvisible/setNoclip/healPlayer each
 // have their own dedicated, correctly-gated players.gm_tools route
 // (players.js's /godmode, /invisible, /noclip; this file's own
@@ -228,7 +228,7 @@ describe("POST /panel-bridge/command -- debugItemScript requires bridge.diagnost
 // release commit.
 //
 // This describe block previously proved these four need BOTH bridge.command
-// AND players.gm_tools (server commit c3083d5). An operator ruling the same
+// AND players.gm_tools (server commit c3083d5). An decision the same
 // day SUPERSEDED that: players.gm_tools ALONE is now sufficient, and
 // bridge.command is not required at all for these four -- c3083d5's combined
 // requirement was never the intended fix, and denied Technician (who holds
@@ -329,9 +329,9 @@ describe("POST /panel-bridge/command -- setGodMode/setInvisible/setNoclip/healPl
   });
 });
 
-// 2026-08-31 bug hunt: playSoundNearPlayer/triggerGunshot/triggerAlarmSound/
+// 2026-08-31 regression: playSoundNearPlayer/triggerGunshot/triggerAlarmSound/
 // createNoise/spawnHordeNearPlayer/spawnHordeBehindPlayer/sendToAdminChat/
-// sendToGeneralChat are the same eight actions the 2026-08-27 ranked-bug #5
+// sendToGeneralChat are the same eight actions the 2026-08-27 prioritized issue #5
 // ruling moved off server.world_events onto players.endanger_or_impersonate
 // for their OWN dedicated routes (/sound/near-player, /sound/gunshot,
 // /sound/alarm, /sound/noise, /zombies/spawn-near, /zombies/spawn-behind,

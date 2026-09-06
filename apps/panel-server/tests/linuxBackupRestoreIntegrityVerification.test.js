@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import zlib from "zlib";
 
-// 2026-08-29 hunt (god): backup-and-restore, suspect 6 (restore pre-flight)
+// 2026-08-29 hunt (testing): backup-and-restore, case 6 (restore pre-flight)
 // -- "restoring from a corrupt backup over a working world is the only way
 // this subsystem can make things worse than doing nothing."
 //
@@ -27,14 +27,14 @@ import zlib from "zlib";
 // and leaves the live save untouched -- staging is still disposable at that
 // point, so refusing costs nothing.
 //
-// hunt-wave11 follow-up (god's gate, 2026-08-29): the ORIGINAL single test
+// regression follow-up (the gate, 2026-08-29): the ORIGINAL single test
 // here corrupted one random byte and asserted the resulting message matched
 // /integrity verification/i. That's LOAD-DEPENDENT, not flaky-by-chance --
 // which region of the compressed stream a random byte lands in determines
 // WHICH mechanism catches it. A byte inside DEFLATE's structural metadata
 // (block headers, Huffman tables) breaks decompression itself, and
 // unzipper's Parse() surfaces that as its own stream error (observed on
-// god's gate: "expected 'unexpected end of file' to match
+// the gate: "expected 'unexpected end of file' to match
 // /integrity verification/i") BEFORE _verifyExtractedIntegrity ever runs.
 // A byte inside stable literal/length-code data instead just changes
 // decoded VALUES with the stream still parsing cleanly, which is what

@@ -122,7 +122,7 @@ function formatMemory(gb: number): string {
 // POST /install returns as soon as SteamCMD is *launched*, then the real
 // outcome (success or failure) arrives minutes later over install:log /
 // install:complete -- and this component is the ONLY listener for either
-// event anywhere in the client (2026-08-26 install-failure hunt, finding
+// event anywhere in the client (2026-08-26 install-failure regression, finding
 // #7). If the tab is closed or the page reloads before that arrives, the
 // wizard forgets an install was ever attempted while SteamCMD keeps running
 // server-side regardless. This marker is the client's only memory of that:
@@ -658,7 +658,7 @@ export default function ServerSetup() {
           // one. This is a SEPARATE try/catch from the create() above: the
           // server entry above already exists at this point, so a failure here
           // must never be reported as "failed to create server entry" (#2 in
-          // the 2026-08-26 install-failure hunt) -- that told a user the whole
+          // the 2026-08-26 install-failure regression) -- that told a user the whole
           // registration failed when only the auto-activate step had. Also
           // deliberately skip setInstallComplete(true)/the success toast on
           // this path: "Start Server Now" below assumes the server it just

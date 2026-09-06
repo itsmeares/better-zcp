@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildTileQuery } from '../worldMapTileUrl'
 
-// hunt-wave12-2026-08-30 (version-the-tile-url-by-resolved-b42-build): pure
+// regression-2026-08-30 (version-the-tile-url-by-resolved-b42-build): pure
 // unit tests for the query-string half of the fix, pulled out of
 // WorldMap.tsx/ChunkCleaner.tsx for the same reason worldMapTileFallback.ts
 // was -- both files' actual tile-loading call sites (loadDziTile) are only

@@ -3,12 +3,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, operator ruling on bridge-syncfaction-does-not-exist-silent-
+// 2026-08-30, decision on bridge-syncfaction-does-not-exist-silent-
 // partial-apply: factionAddPlayer/factionRemovePlayer/factionSetTag each
 // perform a real mutation (addPlayer/removePlayer/setTag -- all confirmed
 // present and working in the real B42 jar) and then used to call
 // PanelBridge.invoke(faction, "syncFaction") -- a method that does not exist
-// ANYWHERE on zombie.characters.Faction or its superclass chain (Kevin's jar
+// ANYWHERE on zombie.characters.Faction or its superclass chain (the jar
 // audit, 2026-08-30, confirmed with a constant-pool scan for every
 // sync/transmit/propagate/broadcast/update spelling, not just a guessed-name
 // miss). invoke() swallows a missing method as a clean (false, error) rather

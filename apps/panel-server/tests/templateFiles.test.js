@@ -40,7 +40,7 @@ describe("ini helpers", () => {
     expect(result.split("\n").filter((l) => l.startsWith("RCONPassword"))).toHaveLength(0);
   });
 
-  // bughunt-2026-08-31-b: a hand-edited or raw-editor-saved ini can carry
+  // regression: a hand-edited or raw-editor-saved ini can carry
   // "Key = value" (spaces around "="), and serverFiles.js's toIni() no
   // longer silently normalizes that away on save. Neither of these two
   // functions tolerated it until now -- readIniValues returned nothing for

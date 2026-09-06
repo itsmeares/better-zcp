@@ -8,7 +8,7 @@ import Console from '../Console'
 import { rconApi, serversApi, configApi, type ServerInstance } from '@/lib/api'
 import enConsole from '../../locales/en/console.json'
 
-// bug-hunt-2026-08-31: two confirmed bugs in the socket-driven half of the
+// regression: two confirmed bugs in the socket-driven half of the
 // RCON console, both rooted in treating "a socket message arrived" as proof
 // of something it doesn't actually prove.
 //

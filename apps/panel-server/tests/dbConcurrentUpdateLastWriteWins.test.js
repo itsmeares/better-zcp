@@ -1,8 +1,8 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { createServer, deleteServer, getServer, updateServer } from "../database/init.js";
 
-// Concurrency hunt 2026-08-29 (hunt-wave5), item still open from the original
-// card: "two concurrent db.json writes. Pam proved ATOMICITY (tmp + chmod +
+// Concurrency regression 2026-08-29 (regression), item still open from the original
+// card: "two concurrent db.json writes. the test proved ATOMICITY (tmp + chmod +
 // rename, fault-injected mid-write leaves it byte-identical). Atomicity is
 // NOT mutual exclusion. Can two concurrent settings updates lose one to
 // last-write-wins?"

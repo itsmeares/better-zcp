@@ -98,7 +98,7 @@ afterEach(() => {
 });
 
 // These all now need httpsEnabled: true in the payload -- as of the
-// 2026-08-26 bug hunt (finding 4, GitHub #118 generalized), httpsCertPath/
+// 2026-08-26 regression (finding 4, GitHub #118 generalized), httpsCertPath/
 // httpsKeyPath/httpsPort are skipped entirely while HTTPS won't be enabled
 // after this save, the same treatment SFTP's fields got below.
 describe("PUT /app-settings -- httpsCertPath / httpsKeyPath validation (HTTPS enabled)", () => {
@@ -168,7 +168,7 @@ describe("PUT /app-settings -- httpsPort validation (HTTPS enabled, bind-port ra
 
   // Now rejected by the BIND_PORT_MIN floor (1024), not just a bare "must
   // be positive" check -- HTTPS is a bind port like panelPort, joined to
-  // the same shared range in this pass (bug hunt finding 4).
+  // the same shared range in this pass (regression finding 4).
   it("rejects a port below the 1024 bind floor, zero, and negative values", async () => {
     const belowFloor = await putAppSettings({ httpsEnabled: true, httpsPort: 443 });
     expect(belowFloor.getStatusCode()).toBe(400);
@@ -222,7 +222,7 @@ describe("PUT /app-settings -- reconnectInterval validation (same missing-range-
 // One table-driven pass covering every field in FEATURE_GATED_FIELDS
 // (config.js) instead of five more hand-written "skips while disabled" /
 // "still validates when turning on" test blocks -- the DO-IT-ONCE
-// instruction (2026-08-26 bug hunt follow-up) applies to the tests too, not
+// instruction (2026-08-26 regression follow-up) applies to the tests too, not
 // just the production code: five nearly-identical copies of this test are
 // exactly as likely to silently miss a sixth field as five copies of the
 // guard itself were.
@@ -383,7 +383,7 @@ describe("PUT /app-settings -- the second door onto server.js's four hardened fi
 // export rotation -- but an unvalidated garbage value would still sit in the
 // database unreadable by that fallback's intent. Range matches Settings.tsx's
 // own input (min=1 max=50).
-// Gated by autoExportOnLogin as of the 2026-08-26 bug hunt (finding 11) --
+// Gated by autoExportOnLogin as of the 2026-08-26 regression (finding 11) --
 // these need autoExportOnLogin: true in the payload to reach the check.
 describe("PUT /app-settings -- autoExportMaxPerPlayer validation (low priority, self-heals at use; autoExportOnLogin enabled)", () => {
   it("rejects an out-of-range value instead of storing garbage", async () => {
@@ -438,7 +438,7 @@ describe("PUT /app-settings -- the other 8 boolean settings now reject a non-boo
 // save-vs-consumer disagreement, the same bug class this thread closed.
 // Settings.tsx keeping min=1 is a UI recommendation, not a capability claim,
 // and is allowed to differ.
-// Gated by modAutoRestart as of the 2026-08-26 bug hunt (finding 9) -- these
+// Gated by modAutoRestart as of the 2026-08-26 regression (finding 9) -- these
 // need modAutoRestart: true in the payload to reach the check.
 describe("PUT /app-settings -- modRestartDelay validation (bound chased, service is the authority; modAutoRestart enabled)", () => {
   it("accepts zero -- the service's own floor, even though Settings.tsx's UI recommends min=1", async () => {
@@ -468,7 +468,7 @@ describe("PUT /app-settings -- modRestartDelay validation (bound chased, service
 // Bound chased from updateChecker.js's parseAutoUpdateWarningMinutes
 // (`Math.min(60, Math.max(0, ...))`) -- matches Settings.tsx's own input
 // (min=0 max=60) exactly, no discrepancy for this one. Gated by
-// serverAutoUpdate as of the 2026-08-26 bug hunt (finding 10) -- these need
+// serverAutoUpdate as of the 2026-08-26 regression (finding 10) -- these need
 // serverAutoUpdate: true in the payload to reach the check.
 describe("PUT /app-settings -- serverAutoUpdateWarningMinutes validation (bound chased, matches client exactly; serverAutoUpdate enabled)", () => {
   it("accepts zero (a real, meaningful choice here: restart with no warning)", async () => {

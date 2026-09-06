@@ -8,7 +8,7 @@ vi.mock("../database/init.js", () => ({
 // Restore is deliberately narrower than the rest of backup.js: deleting a
 // backup destroys the operator's own safety net (housekeeping), but
 // restoring one rolls the live world back over every player currently
-// standing in it. This checks BOTH directions per god's standard -- a test
+// standing in it. This checks BOTH directions per the standard -- a test
 // that only proves restore is locked would pass just as well if the whole
 // file had been locked to admin, which is exactly the mistake this file
 // exists to rule out.

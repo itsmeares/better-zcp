@@ -3,13 +3,13 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Regression/coverage for conv-modthumbnails: GET /thumbnail/:workshopId never
+// Regression/coverage for regression: GET /thumbnail/:workshopId never
 // wrote a FAILED resolution to its disk cache, so a host where resolution is
 // broken (missing preview_url + an unreachable/failing Steam) re-ran a full
 // Steam round trip for EVERY tracked mod on EVERY page load, forever --
 // needless third-party load and a self-inflicted slow page, discovered while
 // investigating a "thumbnails never render" report that turned out NOT to be
-// the removed-markup bug it first looked like (see conv-modthumbnails).
+// the removed-markup bug it first looked like (see regression).
 // THUMB_FAIL_CACHE now remembers a failure for a bounded TTL so it can be
 // skipped cheaply -- these tests prove it actually short-circuits, actually
 // expires, and actually clears on a later success, plus the diagnostics shape

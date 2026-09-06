@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Settings from '../Settings'
 
-// conv-ia / god's ruling (Option A): a role without users.manage/roles.manage
+// regression / the ruling (Option A): a role without users.manage/roles.manage
 // must not see the Users/Roles & Permissions tabs, and must not reach their
 // panels by direct URL either (?tab=users on a bookmark, browser history,
 // etc). The gate lives entirely client-side (AuthContext's can(), fed by an
@@ -20,7 +20,7 @@ import Settings from '../Settings'
 // the rest of the suite, so mocking all of it here would only test that
 // those fallbacks still work, not the capability gate.
 //
-// bug-hunt-2026-08-26 (client-suite-flaky-one-in-six): the "shows both tabs"
+// regression (client-suite-flaky-one-in-six): the "shows both tabs"
 // test below mutates this SHARED, module-level mock with
 // can.mockImplementation(() => true) and nothing ever reset it back. Vitest
 // runs a file's tests in declaration order by default, so with this test

@@ -315,7 +315,7 @@ function isValidBridgePath(inputPath) {
 // capability players.js's own teleport/give-item-equivalent routes use.
 // Both defaulted to admin+technician+moderator, zero-behaviour-change.
 //
-// 2026-08-27 (operator ruling on ranked-bug #5) split world_events again:
+// 2026-08-27 (decision on prioritized issue #5) split world_events again:
 // /sound/near-player, /sound/gunshot, /zombies/spawn-near, /zombies/spawn-
 // behind, /chat/admin and /chat/general all take an optional target (a
 // username, or in chat/general's case an arbitrary custom author name) and
@@ -1501,7 +1501,7 @@ router.post("/command", requireBridgeCommandUnlessGmToolsOnly, async (req, res) 
       () => {},
     );
 
-    // 2026-08-31 bug hunt: services/panelBridge.js's processResult() attaches
+    // 2026-08-31 regression: services/panelBridge.js's processResult() attaches
     // a rich soft-failure diagnostic table to err.data specifically so "a
     // caller that wants the diagnostics can get them" (see that function's
     // own comment) -- but every branch below built its response from
@@ -2295,7 +2295,7 @@ router.post("/players/:username/teleport", requirePermission("players.gm_tools")
     const result = await bridge.teleportPlayer(req.params.username, x, y, z);
     res.json(result);
   } catch (error) {
-    // Same drop as POST /command's catch (2026-08-31 bug hunt, see its own
+    // Same drop as POST /command's catch (2026-08-31 regression, see its own
     // comment) -- teleportPlayer's verify-false soft failure attaches
     // verifyPosition/newPosition to err.data via processResult(), and this
     // dedicated route (a live path: apps/panel-client/src/lib/api.ts's
@@ -3755,7 +3755,7 @@ router.post("/players/:username/kill", requirePermission("players.gm_tools"), as
     const result = await bridge.sendCommand("killPlayer", { username });
     res.json(result);
   } catch (error) {
-    // Same drop as POST /command's catch (2026-08-31 bug hunt, see its own
+    // Same drop as POST /command's catch (2026-08-31 regression, see its own
     // comment) -- killPlayer's not-dead soft failure attaches its own
     // diagnostic data to err.data via processResult(), and this dedicated
     // route (a live path: apps/panel-client/src/lib/api.ts's killPlayer) discarded it
@@ -4256,7 +4256,7 @@ router.post("/chat/alert", requirePermission("server.world_events"), async (req,
         message,
         alert: true,
       });
-      // 2026-08-30, panelbridge-total-audit-2026-08-30 (Finding B): chat/admin
+      // 2026-08-30, panelbridge-regression-2026-08-30 (Finding B): chat/admin
       // and chat/general both check data.method !== "player:Say" here to
       // detect the alert API silently degrading to plain overhead-text
       // delivery, and fall back to RCON when it does. This route lacked that

@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Players from '../Players'
 import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
 
-// 2026-08-31 impeccable pass, ruling from god: God Mode/Invisible/Noclip had
+// 2026-08-31 impeccable pass, regression check: God Mode/Invisible/Noclip had
 // no fetch that ever populates their real current state (playerPowers only
 // gets an entry AFTER the operator has toggled one of the three this
 // session, via the optimistic update in handleGodMode/handleInvisible/

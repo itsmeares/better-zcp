@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31 bug hunt follow-up (operator: "fix them" -- this is the finding
+// 2026-08-31 regression follow-up (operator: "fix them" -- this is the finding
 // from the stopWeather pass, reported then, fixed now). triggerCustomWeatherStage
 // and triggerCustomWeather both return a real boolean on the real B42 jar --
 // confirmed via javap -c: both early-return false when weatherPeriod:isRunning()

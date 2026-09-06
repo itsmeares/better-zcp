@@ -39,7 +39,7 @@ import { requireStoppedForLocalConfigMutation } from "../services/configMutation
 // Verifies that the Promise.race + clearTimeout pattern doesn't leak unhandled rejections
 
 describe("Restart timeout pattern", () => {
-  // bughunt-2026-08-31-c (Jim's title-contradicts-assertion sweep, this one
+  // regression (the title-contradicts-assertion sweep, this one
   // outside his file list): the old body below only ever proved the race
   // resolved with "done" -- Promise.resolve("done") settles synchronously,
   // so `clearTimeout` fires within microseconds either way, long before the

@@ -8,7 +8,7 @@ import {
   createRedactingLogStream,
 } from "../routes/debug.js";
 
-// support-bundle-2026-08-30 follow-up (operator ruling): the four
+// support-bundle regression follow-up (decision): the four
 // pre-existing raw-log categories (admin-panel, zomboid-server,
 // zomboid-install, crash-logs) and the two added the same night
 // (docker-container-logs.txt, managed-service-logs.txt) must ALL be
@@ -19,7 +19,7 @@ import {
 
 // The exact line (Discord #bug_report, Rhazun) that made the
 // Docker/systemd log capture feature worth building in the first place --
-// see hive/agents/god/research/discord-restart-etxtbsy-2026-08-30.md. If a
+// see historical-support-bundle-research If a
 // redaction rule ever touches this line, it has destroyed the one piece of
 // evidence that made tonight's earlier fix possible.
 const ETXTBSY_STACK_TRACE_LINE =

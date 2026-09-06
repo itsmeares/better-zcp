@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { conservativeRenderedMaxLevel, resolveFallbackTile } from "../worldMapTileFallback";
 
-// GH#109 / conv-gh109-worldmap-black: a requested tile level can be inside
+// GH#109 / regression: a requested tile level can be inside
 // the map's theoretical maxLevel yet have no tile actually rendered
 // upstream (404) -- WorldMap's drawMap used to just skip drawing anything
 // for that rect, which reads as solid black over the dark canvas
@@ -109,7 +109,7 @@ describe("resolveFallbackTile", () => {
   });
 });
 
-// GH#109 follow-up (god's review of 3d09d94): B42's static placeholder and
+// GH#109 follow-up (the review of 3d09d94): B42's static placeholder and
 // the `??` fallbacks used to default renderedMaxLevel to the raw maxLevel --
 // exactly the inflated ceiling this whole fix exists to stop trusting --
 // while B41's static default already used a conservative floor. Pinning

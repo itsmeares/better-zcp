@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { isValidGamePort, isValidPort } from '../Servers'
 
-// conv-hunt-pages-2 lens 4, confirmed instance: the "Add Server" dialog's
+// regression lens 4, confirmed instance: the "Add Server" dialog's
 // RCON port and game port fields, and the "Edit Server" dialog's game port
 // field, had no client-side range check at all -- neither an onChange clamp
 // nor a submit-time guard -- even though the server (apps/panel-server/routes/servers.js

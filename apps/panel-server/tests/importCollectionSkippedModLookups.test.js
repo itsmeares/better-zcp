@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Bug hunt 2026-08-31 (carded low-priority, endorsed as not rising to a
+// regression 2026-08-31 (tracked low-priority, endorsed as not rising to a
 // full finding since nothing here claims completeness -- see
 // import-collection-silently-drops-failed-member-lookups): POST
 // /import-collection fetches Steam details for every ordinary (non-

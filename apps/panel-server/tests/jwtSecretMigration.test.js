@@ -20,7 +20,7 @@ const db = { data: { users: [] } };
 // this out per test for isolation between tests.
 //
 // initDir is kept as its OWN stable constant, separate from the mutable
-// tmpDir below (ENOTEMPTY class, hunt-wave12, 2026-08-29/30): tmpDir gets
+// tmpDir below (ENOTEMPTY class, regression, 2026-08-29/30): tmpDir gets
 // reassigned to a fresh directory by every describe block's beforeEach, but
 // logger.js's winston singleton resolved logsDir from THIS value, once, at
 // the static import a few lines down -- it never re-reads getDataPaths()
@@ -48,7 +48,7 @@ vi.mock("../utils/paths.js", () => ({
   getDataPaths: () => ({ dataDir: tmpDir, logsDir: tmpDir }),
 }));
 
-// ENOTEMPTY class (hunt-wave12, 2026-08-29/30): services/auth.js imports
+// ENOTEMPTY class (regression, 2026-08-29/30): services/auth.js imports
 // utils/logger.js, so without this the real winston logger resolved its
 // logsDir from initDir above (captured at the moment of the static import
 // a few lines down) and wrote real log files into it for the lifetime of
@@ -170,7 +170,7 @@ describe("authService.init() — JWT secret migration out of db.json", () => {
 
   it("fails loud and does not start when jwt.secret exists but is unreadable — never silently regenerates", async () => {
     fs.mkdirSync(getJwtSecretPath()); // directory at the path -> unreadable as a file
-    // bug hunt 2026-08-31-c (under-coverage sweep): the title's own third
+    // regression 2026-08-31-c (under-coverage sweep): the title's own third
     // clause -- "never silently regenerates" -- had no assertion; only the
     // rejection itself was checked. authService is a shared singleton
     // across every test in this file (module-scoped, not reset between
@@ -277,7 +277,7 @@ describe("POST /api/auth/regenerate-jwt-secret — admin-only route gate", () =>
   });
 });
 
-// ENOTEMPTY class regression (hunt-wave12, 2026-08-29/30): placed last so
+// ENOTEMPTY class regression (regression, 2026-08-29/30): placed last so
 // every test above (which collectively exercise real authService/RCON
 // activity that would otherwise produce real log lines) has already run.
 // Before the logger.js mock above, this failed -- initDir genuinely

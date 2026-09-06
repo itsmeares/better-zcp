@@ -110,7 +110,7 @@ export function withFileLock(filePath, fn) {
  * failure: it's only ever cleaned up once, when this function is done
  * retrying and about to give up for good.
  *
- * Permissions (2026-08-29 Linux secrets hunt): rename() makes the LIVE file
+ * Permissions (2026-08-29 Linux secrets regression): rename() makes the LIVE file
  * inherit the TEMP file's mode, not whatever the live file's mode was a
  * moment ago. A caller that doesn't pass an explicit `mode` (most of them —
  * this is shared by ~15 call sites across serverFiles.js/server.js/

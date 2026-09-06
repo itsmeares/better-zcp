@@ -6,7 +6,7 @@ import { SocketContext } from '@/contexts/SocketContext'
 import WorldMap from '../WorldMap'
 import { panelBridgeApi, serversApi, updateApi, mapApi, type ServerInstance } from '@/lib/api'
 
-// 2026-08-27 bug-hunt: UPDATED same day per an operator ruling that reverses
+// 2026-08-27 regression: UPDATED same day per an decision that reverses
 // server commit c3083d5 (also from earlier the same day). c3083d5 had made
 // healPlayer/setGodMode require bridge.command AND players.gm_tools --
 // this file originally asserted exactly that "both capabilities" shape. The
@@ -159,7 +159,7 @@ async function setUp(players: Array<{ name: string; x: number; y: number }>) {
   sendCommand.mockResolvedValue({ success: true, data: {} } as Awaited<ReturnType<typeof panelBridgeApi.sendCommand>>)
 }
 
-describe('WorldMap.tsx: healPlayer/setGodMode require players.gm_tools ALONE (2026-08-27 operator ruling reverses Jim c3083d5)', () => {
+describe('WorldMap.tsx: healPlayer/setGodMode require players.gm_tools ALONE (2026-08-27 decision reverses c3083d5)', () => {
   it('stops vehicle detail polling when the vehicle layer is hidden but keeps safehouse polling', async () => {
     await setUp([])
     renderWorldMap()

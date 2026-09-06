@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// bug-hunt-2026-08-26: POST /server-files/templates used to snapshot the
+// regression: POST /server-files/templates used to snapshot the
 // CURRENT server.ini verbatim (both parsed into `.ini` and as raw text into
 // `.iniRaw`) with no exclusion list, so RCONPassword/Password ended up
 // persisted in plaintext inside the saved template JSON -- forever, since

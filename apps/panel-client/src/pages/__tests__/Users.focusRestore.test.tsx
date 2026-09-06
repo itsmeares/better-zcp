@@ -6,7 +6,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Users from '../Users'
 import { usersApi, permissionsApi, type ManagedUserAccount } from '@/lib/api'
 
-// Focus-restore-after-delete pattern (2026-08-26, Pam found the shape, this
+// Focus-restore-after-delete pattern (2026-08-26, the test found the shape, this
 // pins the fix). On a successful delete, handleDelete removes the row a
 // moment after the dialog closes, unmounting whatever button focus was on --
 // React doesn't move focus when an element unmounts, so the browser silently
@@ -145,7 +145,7 @@ describe('Users -- focus after a confirmed delete', () => {
   })
 
   it('does not move focus at all when the delete fails -- the row survives, and a later unrelated users-state change does not steal focus either', async () => {
-    // 2026-08-31 bug hunt, second pass: this test previously stopped at
+    // 2026-08-31 regression, second pass: this test previously stopped at
     // "the row survives" because a document.activeElement assertion placed
     // immediately after the failed delete can't catch the regression it's
     // meant to guard -- pendingFocusTargetRef is only *consumed* by an

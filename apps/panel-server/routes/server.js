@@ -114,7 +114,7 @@ function getSteamCmdExe(steamcmdPath) {
 // getSteamCmdExe() directly instead, but ONLY when reusing a path this
 // function already persisted earlier in the SAME request -- runFirstTimeSetup
 // documents exactly that at its own call. "The single point every spawn()
-// goes through" was asserted here once (bughunt-2026-08-31-b,
+// goes through" was asserted here once (regression,
 // completeness-claims audit) and was already false the day it was written;
 // check a given spawn() against the rule above, not against this comment's
 // name for itself, since a future exception won't update this count either.
@@ -652,7 +652,7 @@ export function formatWritablePathError(
   const isContainer = !platformIsWindows && isContainerized();
   const baseMessage = `${label} is not writable: ${directoryPath}.`;
 
-  // Wording sharpened 2026-08-29 (Linux bug hunt, "raw EACCES with no
+  // Wording sharpened 2026-08-29 (Linux regression, "raw EACCES with no
   // pointer to the fix" card): both branches used to correctly detect the
   // problem and then explain it vaguely -- "choose a writable folder" for
   // bare metal (never says WHY this one isn't, or how to fix it in place)
@@ -1172,7 +1172,7 @@ router.get("/network-interfaces", async (req, res) => {
 // a container-managed server's image owns the launch command, so there is
 // no local script to regenerate.
 //
-// Operator ruling 2026-08-27 (custom-launcher-as-a-real-supported-mode-not-
+// decision 2026-08-27 (custom-launcher-as-a-real-supported-mode-not-
 // an-accident): a stored serverPath/installPath ending in .bat/.sh/.exe is
 // CUSTOM LAUNCHER mode, not an error -- resolveLaunchMode() (serverManager.js)
 // is the one predicate both this function AND scheduler.js's performRestart()
@@ -1204,7 +1204,7 @@ export async function refreshLaunchTargetBeforeStart(
     activeServer.installPath &&
     launchMode.mode === "custom"
   ) {
-    // CUSTOM LAUNCHER mode (operator ruling 2026-08-27): the panel does not
+    // CUSTOM LAUNCHER mode (decision 2026-08-27): the panel does not
     // manage this script. Regenerating would join a filename onto the
     // launcher PATH itself (installPath here is a file, not a directory)
     // and either write into a broken nested path or silently do nothing --
@@ -1719,7 +1719,7 @@ router.post("/stop", requirePermission("server.control"), async (req, res) => {
       // checkServerStatusNow is the SOLE place that decides whether the
       // observed state changed and emits server:status for it; calling it
       // here instead of emitting our own claim is what keeps it from ever
-      // going stale the way it did before this fix (2026-08-26 bug hunt).
+      // going stale the way it did before this fix (2026-08-26 regression).
       const checkServerStatusNow = req.app.get("checkServerStatusNow");
       if (typeof checkServerStatusNow === "function") {
         Promise.resolve(checkServerStatusNow("graceful-stop")).catch((err) =>
@@ -1950,7 +1950,7 @@ router.post("/restart", requirePermission("server.control"), async (req, res) =>
     // POST /restart-now (Dashboard's Restart/Restart Now buttons hit this
     // route; the Scheduler page's own restart control hits that one) --
     // it had the identical blind-success shape that route used to have
-    // before the 2026-08-26 bug hunt fixed it there, just never fixed here.
+    // before the 2026-08-26 regression fixed it there, just never fixed here.
     const io = req.app.get("io");
 
     // Same reasoning as POST /start: this must run before performRestart()
@@ -2020,7 +2020,7 @@ router.post("/save", requirePermission("server.control"), async (req, res) => {
 // events/lightning, events/thunder and events/horde are the exception: they
 // take an optional username and can strike or spawn a horde AT a named
 // player, not just somewhere in the world, so as of 2026-08-27 (operator
-// ruling on ranked-bug #5) they are gated on players.endanger_or_impersonate
+// ruling on prioritized issue #5) they are gated on players.endanger_or_impersonate
 // instead -- admin-only by default, not open to every role like their
 // untargeted siblings above and below.
 
@@ -2635,7 +2635,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
     // A signal-killed process reports code=null to the close handler below,
     // not the exit code INSTALL_FAILED_EXIT_CODE's message names -- tracked
     // so that branch can say "stalled and was stopped" instead of the
-    // literal word "null" (2026-08-26 install-failure hunt finding #1).
+    // literal word "null" (2026-08-26 install-failure regression finding #1).
     let killedByWatchdog = false;
     activeSteamOperations.get(normalizedPath).watchdog = setInterval(() => {
       const activeOperation = activeSteamOperations.get(normalizedPath);
@@ -2710,7 +2710,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
 
         // The game files installed -- that part is done and expensive to
         // redo, so success:false is never used for a failure past this
-        // point (2026-08-26 install-failure hunt finding #6). A step below
+        // point (2026-08-26 install-failure regression finding #6). A step below
         // that fails but self-heals on the next POST /server/start (the INI
         // pre-create, the startup script) is instead collected here and
         // sent as a `warnings` array alongside success:true, so the
@@ -2836,7 +2836,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
         // though the two have nothing to do with each other -- the
         // wizard's UPnP checkbox saved a global legacy setting nothing
         // ever read, and never touched this server's own .ini at all
-        // (2026-08-26, same-night audit alongside the adminPassword fix:
+        // (2026-08-26, same pass audit alongside the adminPassword fix:
         // "wire it, don't remove it"). Decoupled from rconPassword so a
         // server's UPnP choice reaches its .ini regardless.
         try {
@@ -2941,7 +2941,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
           `Installed PZ server to ${installPath} (${selectedBranch} branch)`,
         );
 
-        // 2026-08-26 bug hunt: exit code 0 was trusted as sufficient proof
+        // 2026-08-26 regression: exit code 0 was trusted as sufficient proof
         // the game files were actually installed -- SteamCMD can exit 0
         // after a rate-limited, interrupted, or otherwise incomplete
         // download. The self-install-steamcmd-itself step above already
@@ -3191,7 +3191,7 @@ router.post("/quick-setup", requirePermission("server.install"), async (req, res
       `Quick setup: Creating server config for ${serverName} using files from ${installPath}`,
     );
 
-    // Same reasoning as /install above (2026-08-26 install-failure hunt
+    // Same reasoning as /install above (2026-08-26 install-failure regression
     // finding #6): the server files already exist (checked above), so a
     // failure past this point that self-heals on the next POST
     // /server/start (the INI pre-create) is reported as a warning, not a
@@ -4463,7 +4463,7 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
       return res.status(400).json({
         error: "Deleting these files requires confirm: true",
         // Own code, not /wipe's -- see errorCodes.js for why this was split
-        // from the shared WIPE_CONFIRM_REQUIRED (2026-08-26 bug hunt round 2).
+        // from the shared WIPE_CONFIRM_REQUIRED (2026-08-26 regression round 2).
         code: ErrorCode.DELETE_FILES_CONFIRM_REQUIRED,
       });
     }
@@ -5705,7 +5705,7 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
       }
       const io = req.app.get("io");
       backupResult = await backupService.createBackup({ isPreWipe: true, io });
-      // 2026-08-26 bug hunt: createBackup can return success:true while
+      // 2026-08-26 regression: createBackup can return success:true while
       // having silently skipped files -- a file that vanished mid-archive,
       // or (since 445c15a5, 2026-08-29) a symbolic link deliberately not
       // followed -- it surfaces that via skippedFiles rather than deciding
@@ -5801,7 +5801,7 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
 
       if (targets.includes("players")) {
         let deletedCount = 0;
-        // No inner try/catch here (bug hunt 2026-08-31): a throw must reach
+        // No inner try/catch here (regression 2026-08-31): a throw must reach
         // the outer catch below, same as map/leftovers/accounts already do,
         // so a real unlink failure (e.g. a lingering AV/backup file lock
         // right after the pre-wipe stop) produces an honest

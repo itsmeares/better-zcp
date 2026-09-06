@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// 2026-08-30, panelbridge-total-audit-2026-08-30 (Finding B): chat/admin and
+// 2026-08-30, panelbridge-regression-2026-08-30 (Finding B): chat/admin and
 // chat/general both check `result?.data?.method !== "player:Say"` before
 // accepting a PanelBridge response, falling back to RCON when the alert API
 // silently degrades to per-player overhead text (handlers.sendToServerChat's

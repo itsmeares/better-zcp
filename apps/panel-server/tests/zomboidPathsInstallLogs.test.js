@@ -3,18 +3,8 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-09-04, god's finding in Charon's real support bundle: zomboid-paths.json's
-// listings.installLogs.path came back "...\StartServer_CharonWorld.bat\logs"
-// (ENOENT) because "custom launcher" mode (operator ruling 2026-08-27,
-// custom-launcher-as-a-real-supported-mode-not-an-accident) legitimately
-// stores a .bat/.sh/.exe FILE path in activeServer.installPath, and
-// buildZomboidPaths() joined "logs" straight onto it without checking.
-// listings.install had the identical bug (listDir() on a file), just
-// without its own ENOENT surfaced the same way in the one bundle god read.
-// Tests the extracted pure function directly, matching how the other
-// support-bundle collectors in this file are tested (real temp-directory
-// fixtures, not mocked fs, so listDir()'s real fs.readdir/stat calls are
-// genuinely exercised).
+// Custom launcher paths point to a file, while diagnostics need the containing
+// directory for install and log listings.
 
 const { buildZomboidPaths } = await import("../routes/debug.js");
 
@@ -30,7 +20,7 @@ describe("zomboid-paths.json: listings.install / listings.installLogs resolve th
 
   it("custom-launcher installPath (a .bat file): install/installLogs list the folder the script lives in, not a path joined onto the file", async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-zomboidpaths-custom-"));
-    const launcherPath = path.join(tempDir, "StartServer_CharonWorld.bat");
+    const launcherPath = path.join(tempDir, "StartServer_TestWorld.bat");
     fs.writeFileSync(launcherPath, "@echo off\r\n");
     const logsDir = path.join(tempDir, "logs");
     fs.mkdirSync(logsDir);

@@ -7,7 +7,7 @@ import type { Socket } from 'socket.io-client'
 import Settings from '../Settings'
 import { configApi, panelUpdateApi } from '@/lib/api'
 
-// GH#141: Angela traced the Windows updater apply path and ruled out our
+// GH#141: testing traced the Windows updater apply path and ruled out our
 // code for the staged binary going missing -- that's deliberate (a fresh
 // download has to re-stage it, see apps/panel-server/tests/panelUpdateReconcile.test.js
 // and apps/panel-server/services/panelUpdateChecker.js's reconcilePendingUpdate()). The

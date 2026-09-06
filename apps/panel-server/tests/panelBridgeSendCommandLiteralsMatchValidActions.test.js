@@ -7,7 +7,7 @@ import { VALID_ACTIONS } from "../routes/panelBridge.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..", "..");
 
-// 2026-08-29 backlog card pin-literal-sendcommand-strings-against-valid-
+// 2026-08-29 issue pin-literal-sendcommand-strings-against-valid-
 // actions. VALID_ACTIONS gates externally-triggered actions arriving through
 // POST /command, but nothing checked the OTHER direction: every internal
 // call site that hardcodes an action string and calls bridge.sendCommand()

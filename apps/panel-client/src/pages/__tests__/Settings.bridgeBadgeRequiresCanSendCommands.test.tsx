@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Settings from '../Settings'
 
-// bughunt-2026-08-31: bridgeStatus.modConnected reflects modStatus.alive,
+// regression: bridgeStatus.modConnected reflects modStatus.alive,
 // which is DEBOUNCED (server keeps it true through up to 5 consecutive poll
 // misses -- deliberate anti-flap, see panelBridge.js's maxConsecutiveFailures).
 // connection.canSendCommands is a separate, undebounced, live check of

@@ -8,7 +8,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // shows a stale multiplier after any change made via RCON or another admin.
 // handlers.getGameTime already holds the GameTime singleton (`gameTime`) for
 // its other fields -- this adds gameTime:getMultiplier() to that same
-// object, zero new round-trips. Pam jar-confirmed RCON's setTimeSpeed writes
+// object, zero new round-trips. testing jar-confirmed RCON's setTimeSpeed writes
 // this exact same singleton/field (GameTime.getInstance():setMultiplier()),
 // so this read-back is authoritative, not decorative.
 

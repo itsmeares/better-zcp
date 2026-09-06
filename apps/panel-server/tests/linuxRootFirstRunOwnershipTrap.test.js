@@ -4,11 +4,11 @@ import os from "os";
 import path from "path";
 import { execSync } from "child_process";
 
-// Root-first-run trap (2026-08-29, hunt-wave5 follow-up to card 9fe76d/
+// Root-first-run trap (2026-08-29, regression follow-up to card 9fe76d/
 // c31675 -- operator report: "do we have to make it work on older install,
 // like if someone install, will it fail because it is missing permission").
 //
-// WHAT PAM ESTABLISHED (treated as fact per god's card, re-derived here):
+// WHAT testing ESTABLISHED (treated as fact per the card, re-derived here):
 // an operator who runs the panel once with sudo just to look at it creates
 // dataDir 0700 root:root -- jwt.secret, db.json, the startup backup, and
 // the log files all land root-owned too, in that one run. The dedicated
@@ -116,7 +116,7 @@ describe("checkAndExitIfOwnershipBlocked(): real filesystem, zero permission moc
   );
 
   it.skipIf(process.platform === "win32")(
-    "POSITIVE CONTROL, REGULAR FILE: a normally-owned 0600 file (jwt.secret/db.json's own mode) owned by the running user MUST NOT be reported as offending -- catches the X_OK-on-a-regular-file bug (god, 2026-08-29): X_OK checks the execute bit, which a 0600 file correctly never has, so R_OK|W_OK|X_OK against ANY correctly-owned secret/database file threw 100% of the time, even for root against a root-owned file. This assertion failed against the pre-fix code -- that's what makes it worth having.",
+    "POSITIVE CONTROL, REGULAR FILE: a normally-owned 0600 file (jwt.secret/db.json's own mode) owned by the running user MUST NOT be reported as offending -- catches the X_OK-on-a-regular-file bug (regression, 2026-08-29): X_OK checks the execute bit, which a 0600 file correctly never has, so R_OK|W_OK|X_OK against ANY correctly-owned secret/database file threw 100% of the time, even for root against a root-owned file. This assertion failed against the pre-fix code -- that's what makes it worth having.",
     async () => {
       const { checkAndExitIfOwnershipBlocked } = await import(
         "../utils/firstRunOwnershipCheck.js"

@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29 hunt follow-up (god): the mods/workshop hunt's suspect 1
+// 2026-08-29 hunt follow-up (testing): the mods/workshop regression's case 1
 // (workshop-id validation drift). /toggle-mod-id and /batch-toggle-mod-ids
 // treated any 5-15 digit modId as an unverifiable "that's a Workshop ID, not
 // a mod ID" 400 -- but enable-disk-mod/resolve-orphan-workshop already
@@ -11,7 +11,7 @@ import path from "path";
 // verification (reading the real mod.info off the installed workshop
 // folder) is strictly MORE evidence than the regex that flagged it
 // ambiguous, so a disk-confirmed numeric mod ID should be allowed, not
-// rejected. Teaching toggle/batch-toggle that same bypass, per god's
+// rejected. Teaching toggle/batch-toggle that same bypass, per the
 // explicit "this is not a UX tradeoff, converging on a sibling's proven
 // pattern is the absence of one" instruction.
 //

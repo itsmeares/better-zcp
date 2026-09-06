@@ -5,32 +5,8 @@ import os from "os";
 import path from "path";
 import { buildWindowsCmdLine } from "../services/serverManager.js";
 
-// 2026-09-04, P0 (Charon's Discord report, live user broken on v1.2.15):
-// apps/panel-server/services/serverManager.js's Windows spawn branches build a
-// `cmd.exe /c` command line to launch the server's .bat and redirect its
-// output into server-launch.log. As shipped in 41d0c6e5/1130108a (in
-// v1.2.15), that command line was built from loose argv tokens --
-// `["/c", batPath, ">", launchLogPath, "2>&1"]` -- and Node's Windows argv
-// joiner quotes each token that contains a space independently. Any install
-// path with a space in it (the common case: "C:\Program Files (x86)\...",
-// "...\Zomboid Server\...", any user's home directory with a space) puts 4
-// quote characters on the /c line. cmd.exe's documented quote-preservation
-// rule (`cmd /?`) requires EXACTLY two quote characters to preserve them;
-// with 4 it falls back to stripping only the first character of the whole
-// line and the last quote character anywhere in it, corrupting the
-// boundary between the bat path and the redirection. Result: cmd.exe exits
-// 1 immediately, java.exe never launches, server-launch.log is never
-// written -- exactly Charon's "Server process exited immediately after
-// starting (code=1, signal=none)" with an empty log.
-//
-// These tests spawn a REAL cmd.exe against a REAL .bat file on disk (no
-// mocking of child_process) because the whole point is cmd.exe's actual,
-// notoriously undocumented quote-parsing behavior -- a mocked spawn() is
-// structurally incapable of catching this (it was already covered by
-// serverManagerWindowsSpawnFixes.test.js's mocked spawn assertions, which
-// is exactly why that file didn't catch this regression before it shipped).
-// The fixture path below has BOTH a space and parentheses, per the same
-// bar.
+// Exercise cmd.exe's real quote parsing with spaces in both the launcher and
+// log paths. Mocking child_process cannot cover this boundary.
 
 const isWindows = process.platform === "win32";
 
@@ -103,9 +79,9 @@ function runCmd(cmdArgs, cwd, opts = {}) {
       expect(logContent).toMatch(/MARKER_STARTED/);
     });
 
-    it("FIELD CASE (Charon's support bundle, confirmed 2026-09-04): a space in the directory name, NO parens, and a space in BOTH the bat path and the log path -- 'D:\\Zomboid Server\\Serwer\\' -- god's brief predicted parens were needed; they were not", async () => {
+    it("handles spaces in both the batch path and the log path", async () => {
       const tmpRoot = fs.mkdtempSync(
-        path.join(os.tmpdir(), "zcp-spacedpath-charon-"),
+        path.join(os.tmpdir(), "zcp-spacedpath-"),
       );
       cleanupDirs.push(tmpRoot);
       // Mirrors the reported install shape exactly: "Zomboid Server" as the
@@ -113,7 +89,7 @@ function runCmd(cmdArgs, cwd, opts = {}) {
       // server dir (matching "D:\Zomboid Server\Serwer\").
       const serverDir = path.join(tmpRoot, "Zomboid Server", "Serwer");
       fs.mkdirSync(serverDir, { recursive: true });
-      const batPath = path.join(serverDir, "StartServer_CharonWorld.bat");
+      const batPath = path.join(serverDir, "StartServer_TestWorld.bat");
       fs.writeFileSync(
         batPath,
         "@echo off\r\necho MARKER_STARTED\r\nexit /b 0\r\n",
@@ -127,7 +103,6 @@ function runCmd(cmdArgs, cwd, opts = {}) {
       const launchLogPath = path.join(logsDir, "server-launch.log");
 
       const commandLine = buildWindowsCmdLine(batPath, [], launchLogPath);
-      console.log(`[Charon field case] argv=${JSON.stringify(["/c", commandLine])}`);
 
       const result = await runCmd(["/c", commandLine], serverDir, {
         windowsVerbatimArguments: true,

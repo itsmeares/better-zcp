@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 
-// backup-restore-round-trip hunt (2026-09-05, god): "does a backup actually
+// backup-restore-round-trip hunt (2026-09-05, testing): "does a backup actually
 // restore" had never been proven end to end with the REAL createBackup/
 // createDatabaseBackup code paths and a REAL corruption+recovery cycle --
 // every existing test either hand-crafted backup file content directly

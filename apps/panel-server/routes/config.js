@@ -259,7 +259,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
     // Fields whose validation only matters while a companion feature flag
     // is on -- built as ONE table, not N copies of "if (key === X &&
     // effectiveFlagEnabled)". GitHub #118 was exactly this bug for
-    // panelBridgeSftpPort alone; the 2026-08-26 bug hunt (findings 4/9-12)
+    // panelBridgeSftpPort alone; the 2026-08-26 regression (findings 4/9-12)
     // found FOUR more fields with the identical shape (httpsCertPath/
     // httpsKeyPath/httpsPort gated by httpsEnabled, modRestartDelay by
     // modAutoRestart, serverAutoUpdateWarningMinutes by serverAutoUpdate,
@@ -352,7 +352,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       // SERVER_NAME_REGEX) already rejects anything but a traversal-
       // incapable name at write time for exactly this reason -- this
       // endpoint is the one write path that never got the same check
-      // (2026-08-26 bug hunt finding 13). Same whitelist, kept local
+      // (2026-08-26 regression finding 13). Same whitelist, kept local
       // rather than imported since route files in this codebase don't
       // currently import from one another (servers.js/server.js each keep
       // their own copy of this same regex already).
@@ -467,7 +467,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       // that goes bad AFTER being saved (moved/deleted/permissions changed
       // later), which is a real but separate case this can't catch.
       //
-      // GitHub #118 sibling (2026-08-26 bug hunt, finding 4), REPRODUCIBLE:
+      // GitHub #118 sibling (2026-08-26 regression, finding 4), REPRODUCIBLE:
       // Settings.tsx never clears these fields when HTTPS is toggled off
       // (only its one-click "Enable HTTPS" quick-setup resets them), so an
       // operator who set a cert path, disabled HTTPS, and later had that
@@ -518,7 +518,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      // GitHub #118 sibling (2026-08-26 bug hunt, finding 4): this used a
+      // GitHub #118 sibling (2026-08-26 regression, finding 4): this used a
       // hand-rolled parseBoundedInteger floor of 1 and never joined the
       // BIND_PORT_MIN family, even though HTTPS is unambiguously a bind
       // port -- the panel itself opens and listens on it, exactly like
@@ -670,7 +670,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       // case if it slips through is a too-fast/too-slow reconnect timer,
       // not a lockout -- worth closing anyway since it's one check in the
       // same loop, not worth its own investigation. Gated by autoReconnect
-      // via FEATURE_GATED_FIELDS above (2026-08-26 bug hunt finding 12).
+      // via FEATURE_GATED_FIELDS above (2026-08-26 regression finding 12).
       if (key === "reconnectInterval") {
         const interval = parseBoundedInteger(value, null, 1, 60);
         if (interval === null) {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ErrorCode } from "../utils/errorCodes.js";
 
-// hunt-code-patterns (conv-hunt-resume): isCronTooFrequent()'s "Security:
+// hunt-code-patterns (regression): isCronTooFrequent()'s "Security:
 // Reject tasks that run more frequently than every 5 minutes to prevent
 // DoS" guard always read parts[0] as MINUTES. node-cron accepts an
 // optional leading SECONDS field (6 fields total) that this app has never
@@ -241,9 +241,9 @@ describe("POST /api/scheduler/validate-cron -- preview stays consistent with wha
     });
   });
 
-  // bug-hunt-2026-08-26: this endpoint was shipped-but-unreachable dead code
+  // regression: this endpoint was shipped-but-unreachable dead code
   // until tonight, so a raw-server-English bug in these branches was invisible
-  // -- nothing called it to notice. Wiring it up (Dwight, 1b05771) is what
+  // -- nothing called it to notice. Wiring it up (testing, 1b05771) is what
   // made the missing codes on these three branches a live, user-visible bug.
   // Every branch below now carries the same code POST/PUT /tasks would use
   // for the matching failure, so the client can translate it instead of

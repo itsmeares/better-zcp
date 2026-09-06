@@ -5,7 +5,7 @@ import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 import { maskSecretValue } from "../utils/sanitize.js";
 
-// bug-hunt-2026-08-27 (finding #2, GET /ini half): GET /server-files/ini
+// regression (finding #2, GET /ini half): GET /server-files/ini
 // used to return the live RCONPassword/Password in plaintext to any role
 // gated onto serverfiles.manage -- opening the structured Server Config
 // editor put the live RCON password on screen in a normal text field.

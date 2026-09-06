@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.js";
 
-// 2026-08-29/30 hunt-wave13 sweep (god's follow-up to 3d1921ad): the same
+// 2026-08-29/30 regression sweep (the follow-up to 3d1921ad): the same
 // asymmetry fixed in POST /write-to-ini recurs across the file at every
 // site that decides whether Mods=/WorkshopItems=/Map= already exist via a
 // bare, whitespace-intolerant regex. Verified per-site (not blind-applied)
@@ -26,7 +26,7 @@ import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.js";
 //
 // This file covers one representative case of each shape; the full per-site
 // census (34 sites confirmed needed, 1 confirmed not needed with reasoning)
-// is in the hunt-wave13 report, not duplicated here as 34 near-identical
+// is in the regression report, not duplicated here as 34 near-identical
 // tests -- these two prove the fix mechanism works for both shapes.
 
 vi.mock("../database/init.js", () => ({
@@ -159,8 +159,8 @@ describe("POST /remove-from-ini: whitespace-variant WorkshopItems= line (silent-
   });
 });
 
-// 2026-08-30 hunt-wave13, second pass: the remaining 26 sites reported to
-// god (line numbers + shape) after the first 8. These three cover the
+// 2026-08-30 regression, second pass: the remaining 26 sites reported to
+// testing (line numbers + shape) after the first 8. These three cover the
 // still-untested shapes: /batch-remove (3-key silent-no-op), /add-missing-dep
 // (duplicate-key shape via a differently-structured route than /add), and
 // /enable-disk-mod (the ternary content = x ? replace : append form, not

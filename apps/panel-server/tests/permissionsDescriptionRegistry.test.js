@@ -57,7 +57,7 @@ function normalizeDashes(value) {
 // description and the en locale -- each is a genuine judgement call about
 // which side is right (or whether to add the missing clause to the locale),
 // deliberately left to a human rather than auto-resolved here. See conv
-// bug-hunt-2026-08-26 (reported 2026-08-27) for the write-up. Remove an entry
+// regression (reported 2026-08-27) for the write-up. Remove an entry
 // the moment it's resolved, in either direction -- this allowlist existing at
 // all is itself a thing worth noticing, not a permanent home for drift.
 //

@@ -7,7 +7,7 @@ import { ServerManager } from "../services/serverManager.js";
 // 2026-09-03, serverManager.js sweep: saveServerConfig() wrote the .ini via
 // writeFileAtomic() and returned {success:true} on nothing more than "the
 // write call didn't throw" -- the exact "succeeded but did nothing" shape
-// this sweep was dispatched to hunt, and one of the two shapes god named
+// this sweep was dispatched to hunt, and one of the two shapes the test identified
 // specifically for this file. It has no production caller today (confirmed
 // by grep, same as the pre-existing comment in the function already notes),
 // but it's listed in scripts/eslint-rules/require-result-handling.js as a result

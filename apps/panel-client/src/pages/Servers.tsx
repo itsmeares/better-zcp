@@ -203,7 +203,7 @@ export function isValidGamePort(port: number): boolean {
 
 // Client-side mirror of apps/panel-server/services/serverManager.js's resolveLaunchMode()
 // -- a serverPath/installPath ending in .bat/.sh/.exe is CUSTOM LAUNCHER mode
-// (operator ruling 2026-08-27, card
+// (decision 2026-08-27, card
 // custom-launcher-as-a-real-supported-mode-not-an-accident): the operator's
 // own script, real and supported. Display-only, matching the server's own
 // authoritative check (serverManager.js) rather than gating anything here --
@@ -1444,7 +1444,7 @@ export default function Servers() {
       return
     }
 
-    // 2026-08-31 quality-pass finding: Add Remote Server had no duplicate
+    // 2026-08-31 regression finding: Add Remote Server had no duplicate
     // detection at all -- resubmitting the identical name+host+port (a
     // double-click, or retrying after a page that looked unresponsive)
     // silently added another card indistinguishable from the first except

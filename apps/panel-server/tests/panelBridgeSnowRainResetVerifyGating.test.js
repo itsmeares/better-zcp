@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31 bug hunt: clearing the PROVISIONAL climate/weather block.
+// 2026-08-31 regression: clearing the PROVISIONAL climate/weather block.
 // setSnow/startRain/stopRain are exactly what the operator's live snow and
 // rain toggles call.
 

@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 2, item 5 (god's own foundation-lens
+// 2026-08-30, regression, item 5 (the own foundation-lens
 // finding). PanelBridge.detectVersion() gated four flags
 // (isB42, isB41, features.blizzard, features.tropical) on
 // PanelBridge.hasMethod, whose own doc comment says "Never gate an action

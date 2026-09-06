@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import Settings from '../Settings'
 import { configApi, serversApi } from '@/lib/api'
 
-// bug-hunt-2026-09-04 (Settings.tsx edit-loss lead, approved design): the
+// regression (Settings.tsx edit-loss lead, approved design): the
 // activeServerChanged handler reloaded configApi.getAppSettings()
 // unconditionally, with no isDirty check -- a user mid-edit on this page
 // (Panel Port, HTTPS, CORS, security fields) lost that typing the instant

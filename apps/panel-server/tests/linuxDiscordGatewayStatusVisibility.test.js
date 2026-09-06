@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-// hunt-wave6-2026-08-29 follow-up 2 (operator-visible signal): getStatus()
+// regression-2026-08-29 follow-up 2 (operator-visible signal): getStatus()
 // used to have no field at all for gateway health -- a real, self-healing
-// heartbeat black hole (suspect 4) and a permanent, unrecoverable shard
+// heartbeat black hole (case 4) and a permanent, unrecoverable shard
 // disconnect both left `running` reporting true throughout, so an operator
 // watching the page saw a healthy bot while alerting was actually down.
 //

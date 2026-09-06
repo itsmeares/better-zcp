@@ -8,16 +8,16 @@ import Servers from '../Servers'
 import { serversApi, serversDetectApi, dockerApi, configApi, updateApi, serverApi } from '@/lib/api'
 import en from '../../locales/en/servers.json'
 
-// bug-hunt-2026-08-27 (Tier 3 gating sweep): Servers.tsx had zero client-side
+// regression (Tier 3 gating sweep): Servers.tsx had zero client-side
 // capability gating. Six distinct capabilities gate its privileged actions --
 // docker.manage, servers.manage, server.control, server.wipe, server.install,
-// servers.discover -- see the mapping sent to god (dwight-tier3-table) for
+// servers.discover -- see the mapping sent to testing (capability-mapping table) for
 // the full route-by-route trace. This suite asserts the ACTION is
 // unreachable (mocked API never called), not just that a control has the
 // `disabled` attribute -- a click on a disabled control still fires here,
-// same discipline as Angela's Console.tsx lesson.
+// same discipline as the Console.tsx lesson.
 //
-// Two rulings from god get their own dedicated tests, not just blanket
+// Two rulings from testing get their own dedicated tests, not just blanket
 // deny/allow coverage: (1) inline Start/Stop needs BOTH servers.manage AND
 // server.control -- holding only one must still leave it unreachable,
 // because the two calls fire in sequence and a role with only one gets a
@@ -327,7 +327,7 @@ describe('Servers.tsx: capability gating', () => {
     expect(steamUpdate).not.toHaveBeenCalled()
     expect(steamVerify).not.toHaveBeenCalled()
 
-    // Fixed 2026-08-27 (stock-role hunt): this button used to stay fully
+    // Fixed 2026-08-27 (stock-role regression): this button used to stay fully
     // clickable regardless of permission -- only the confirm dialog's own
     // button checked server.wipe, so an unauthorized role could open the
     // dialog and just not complete it. Now the opener itself is gated too,

@@ -834,7 +834,7 @@ end
 -- Farming/SFarmingSystem.lua -- none of them import/require CharacterStat,
 -- it is a bare global in PZ's shared Lua environment the same way getWorld()
 -- or Events is, reachable from any server-side file including this one).
--- 2026-08-30, Kevin's jar audit + follow-up. Defined here (rather than next
+-- 2026-08-30, the jar audit + follow-up. Defined here (rather than next
 -- to its first caller) so it is in scope for every handler in the file,
 -- including ones defined earlier in the chunk like getServerInfo.
 --
@@ -915,7 +915,7 @@ function PanelBridge.detectVersion()
         features = {}
     }
 
-    -- 2026-08-30 (total-audit, god's own foundation lens): this used to
+    -- 2026-08-30 (regression, the own foundation lens): this used to
     -- gate four flags on PanelBridge.hasMethod, whose own doc comment says
     -- "Never gate an action on this; use invoke instead." BOTH of its
     -- branches were dead here: the field-test branch is unreliable for a
@@ -2264,7 +2264,7 @@ handlers.getWeather = function(args)
 end
 
 -- Trigger blizzard (duration is in hours, minimum ~2 hours in game)
--- 2026-08-31 bug hunt follow-up (operator: "fix them" -- this is the finding
+-- 2026-08-31 regression follow-up (operator: "fix them" -- this is the finding
 -- from the stopWeather pass). triggerCustomWeatherStage returns a real
 -- boolean (confirmed via javap -c against the real jar: it early-returns
 -- false when weatherPeriod:isRunning() is already true, i.e. a period is
@@ -2480,7 +2480,7 @@ handlers.stopWeather = function(args)
 end
 
 -- Generate custom weather period
--- 2026-08-31 bug hunt follow-up -- a WORSE instance of the triggerBlizzard
+-- 2026-08-31 regression follow-up -- a WORSE instance of the triggerBlizzard
 -- defect above, not just the same one. transmitGenerateWeather was tried
 -- FIRST and never throws (it's a real method on the jar), so
 -- PanelBridge.invoke always reported success and triggerCustomWeather --
@@ -2596,7 +2596,7 @@ end
 
 -- Start rain
 --
--- 2026-08-31 bug hunt follow-up. Verifies via getPrecipitationIntensity(),
+-- 2026-08-31 regression follow-up. Verifies via getPrecipitationIntensity(),
 -- safely -- unlike the plain climate-float admin-override handlers above,
 -- transmitServerStartRain (confirmed via javap -c) calls the private
 -- updateOnTick() internally before returning, so precipitationIntensity's
@@ -2698,7 +2698,7 @@ end
 -- direct setter. Returns the method used (or nil), and a verified tri-state
 -- (true/false/nil).
 --
--- 2026-08-31 bug hunt follow-up (clearing the PROVISIONAL block). Verifies
+-- 2026-08-31 regression follow-up (clearing the PROVISIONAL block). Verifies
 -- via getAdminValue(), NOT getFinalValue() -- confirmed via javap -c against
 -- the real jar: setAdminValue/setEnableAdmin never call calculate(), which
 -- is the only thing that propagates adminValue into finalValue (the value
@@ -3062,7 +3062,7 @@ end
 
 -- Reset all climate overrides
 --
--- 2026-08-31 bug hunt follow-up. The resetAdmin() fast path's own
+-- 2026-08-31 regression follow-up. The resetAdmin() fast path's own
 -- comment used to claim success unconditionally on invoke() not throwing --
 -- confirmed via javap -c that resetAdmin() itself is genuinely
 -- unconditional (an unguarded loop calling setEnableAdmin(false) on every
@@ -3580,7 +3580,7 @@ end
 --
 -- 2026-08-30, operator: "Fix event." All four of this handler's previous
 -- fallback tiers were fabricated -- verified ABSENT against the real B42
--- jar (Kevin's audit), not a B41/B42 divergence or a near-miss name:
+-- jar (the audit), not a B41/B42 divergence or a near-miss name:
 --   HelicopterClass.getInstance()+activateForPlayer -- neither exists on
 --     the real zombie.iso.Helicopter, and there is no singleton field
 --   RZSUtil.triggerRandomEvent -- RZSUtil does not exist ANYWHERE in the
@@ -3626,7 +3626,7 @@ end
 -- real, adjacent sibling on the same bare-global binding tier, confirmed
 -- directly against the real B42 jar (javap against
 -- zombie.Lua.LuaManager$GlobalObject): `public static void endHelicopter()`,
--- zero-arg, same shape as testHelicopter(). 2026-08-30, god's foundation-lens
+-- zero-arg, same shape as testHelicopter(). 2026-08-30, the foundation-lens
 -- follow-up to ce29ee63.
 --
 -- No read-back exists to verify a helicopter event was actually running
@@ -3676,7 +3676,7 @@ handlers.getPlayerDetails = function(args)
     local ok, playerData = pcall(function()
         -- Every field below is read via PanelBridge.tryGet, which pcalls the
         -- underlying call ITSELF (see PanelBridge.invoke) -- an absent method
-        -- like Stats:getHunger() (2026-08-30, Kevin's jar audit: not on
+        -- like Stats:getHunger() (2026-08-30, the jar audit: not on
         -- zombie.characters.Stats at all) now fails ALONE and returns nil,
         -- instead of throwing out of this whole function and losing
         -- position/username/accessLevel/etc, which all work fine. A field
@@ -3724,7 +3724,7 @@ handlers.getPlayerDetails = function(args)
 
         -- Get health if available
         if bodyDamage then
-            -- getIsBleeding does not exist anywhere on BodyDamage (Kevin's
+            -- getIsBleeding does not exist anywhere on BodyDamage (the
             -- jar audit, 2026-08-30) -- there is no boolean bleeding getter
             -- at all. The real method is getNumPartsBleeding() -> int; this
             -- is a SEMANTIC REINTERPRETATION (a count becoming a boolean),
@@ -3735,7 +3735,7 @@ handlers.getPlayerDetails = function(args)
             -- getTemperature does not exist directly on BodyDamage either --
             -- it is two hops: bodyDamage:getThermoregulator():getCoreTemperature().
             -- getCoreTemperatureUI() also exists on the same object, but
-            -- Kevin could not confirm from the descriptor alone whether it
+            -- the available evidence could not confirm from the descriptor alone whether it
             -- rounds or clamps the value, so this uses the raw getter for
             -- an API response rather than a UI-display one.
             local thermoregulator = PanelBridge.tryGet(bodyDamage, "getThermoregulator")
@@ -3759,7 +3759,7 @@ handlers.getPlayerDetails = function(args)
                 temperature = thermoregulator and get(thermoregulator, "getCoreTemperature") or nil
                 -- wetness deliberately removed: no whole-body wetness
                 -- concept exists anywhere on BodyDamage under any name at
-                -- any hop (Kevin's jar audit) -- only mutators, zero
+                -- any hop (the jar audit) -- only mutators, zero
                 -- getters. Not substituted with a near-miss from a
                 -- different object; the field is simply gone.
             }
@@ -4183,7 +4183,7 @@ handlers.exportPlayerData = function(args)
                                     if subContainer then
                                         local subItems = serializeInventory(subContainer)
                                         if #subItems > 0 then
-                                            -- 2026-08-30, total-audit batch 3, item 3:
+                                            -- 2026-08-30, regression, item 3:
                                             -- worn.location is item:getLocation()'s raw
                                             -- return value (a Java object), used here
                                             -- un-normalized as a Lua table key. Lua table
@@ -4318,7 +4318,7 @@ handlers.importPlayerData = function(args)
                     -- (the level change above) has genuinely landed -- NOT
                     -- after the XP step below, which used to be the LAST
                     -- statement in this pcall. xp:setXP(perk, value) does
-                    -- not exist anywhere in the confirmed API (Kevin's jar
+                    -- not exist anywhere in the confirmed API (the jar
                     -- audit, 2026-08-30), so every throw there used to
                     -- silently undercount restored.perks even though the
                     -- level change had already happened for real.
@@ -4331,7 +4331,7 @@ handlers.importPlayerData = function(args)
                     -- -- the alternative (read getXP(perk), then
                     -- AddXPNoMultiplier(perk, delta)) could not be ruled out
                     -- to clamp, round, or trigger level-boundary side
-                    -- effects without decompiling. Operator ruling,
+                    -- effects without decompiling. decision,
                     -- 2026-08-30: an unprovable method that could silently
                     -- corrupt real player progression is strictly worse than
                     -- a provable one that loses part of one level's
@@ -4629,11 +4629,11 @@ end
 -- getDayLength, getStartMonth, getStartDay, getWaterShutoff, getElecShutoff,
 -- getZombieLore, getCharactersPerPlayer, getSleepAllowed, getSleepNeeded) --
 -- NONE of which exist anywhere on SandboxOptions in the real B42 jar
--- (Kevin's audit, 2026-08-30). Each was wrapped in its own pcall, so every
+-- (the audit, 2026-08-30). Each was wrapped in its own pcall, so every
 -- single failure was swallowed silently and `options` stayed `{}` -- this
 -- reported a clean `true, { options = {} }` success, with nothing in it, on
 -- every call.
--- 2026-08-30 operator ruling: this handler has an api.ts wrapper but ZERO UI
+-- 2026-08-30 decision: this handler has an api.ts wrapper but ZERO UI
 -- callers, so there is no flat-shape compatibility to preserve -- match
 -- getAllSandboxOptions' shape instead of hand-picking a second, narrower
 -- (and, it turns out, entirely broken) enumeration. That handler's primary
@@ -4724,7 +4724,7 @@ handlers.getAllSandboxOptions = function(args)
                 info.type = "number"
             elseif className:find("Enum") then
                 info.type = "enum"
-                -- Try to get enum values. 2026-08-30, total-audit batch 3,
+                -- Try to get enum values. 2026-08-30, regression,
                 -- item 4: this used to gate on `opt.getNumValues and
                 -- opt.getValueName` (a field-test on a Java object -- the
                 -- same anti-pattern this file bans elsewhere, e.g. world
@@ -5094,7 +5094,7 @@ handlers.setSandboxOption = function(args)
     -- saveGame() is a bare global -- same LuaManager$GlobalObject binding
     -- tier as getWorld()/getCell(), both already called elsewhere in this
     -- file with identical bare-call syntax -- NOT a method on `world`.
-    -- world:saveWorld() does not exist anywhere in the jar (Kevin's audit,
+    -- world:saveWorld() does not exist anywhere in the jar (the audit,
     -- 2026-08-30). The old `world.saveWorld` field-existence guard was
     -- always false regardless of world's real state (a Java method can be
     -- callable while the field reads nil, this file's own recurring lesson),
@@ -5344,7 +5344,7 @@ end
 handlers.saveWorld = function(args)
     -- saveGame() is a bare global (same LuaManager$GlobalObject binding tier
     -- as getWorld()/getCell()), NOT a method on `world` -- world:saveWorld()
-    -- does not exist anywhere in the jar (Kevin's audit, 2026-08-30). The old
+    -- does not exist anywhere in the jar (the audit, 2026-08-30). The old
     -- `world.saveWorld` field-existence guard was always false, so this
     -- handler could never succeed regardless of the server's real state.
     -- saveGame() returns void -- there is no return value to check, so
@@ -5890,7 +5890,7 @@ handlers.restoreUtilities = function(args, cmdId)
     end)
 
     if not success then
-        -- 2026-08-30, total-audit batch 3, item 2 (mutate-then-fail): the
+        -- 2026-08-30, regression, item 2 (mutate-then-fail): the
         -- pcall above can throw partway through -- SandboxVars, the Java
         -- sync, and/or the hydro power flag may already be mutated by the
         -- time it does. This used to return `nil` for data, discarding
@@ -5942,7 +5942,7 @@ handlers.restoreUtilities = function(args, cmdId)
 
         print("[PanelBridge] restoreUtilities debug: " .. table.concat(debugInfo, " | "))
 
-        -- 2026-08-31 bug hunt: hydroPowerOn used to be reported as pure
+        -- 2026-08-31 regression: hydroPowerOn used to be reported as pure
         -- diagnostic data with no bearing on `ok` -- this handler already
         -- computes the real read-back (world:setHydroPowerOn can silently
         -- not stick, per Step 3's own comment above -- exactly the failure
@@ -6071,7 +6071,7 @@ handlers.shutOffUtilities = function(args, cmdId)
     end)
 
     if not success then
-        -- See restoreUtilities' matching comment (2026-08-30, total-audit
+        -- See restoreUtilities' matching comment (2026-08-30, regression
         -- batch 3, item 2) -- same mutate-then-fail shape, same fix: report
         -- what debugInfo already recorded instead of discarding it as nil.
         local hydroPowerOn = nil
@@ -6110,7 +6110,7 @@ handlers.shutOffUtilities = function(args, cmdId)
 
         print("[PanelBridge] shutOffUtilities debug: " .. table.concat(debugInfo, " | "))
 
-        -- 2026-08-31 bug hunt: same fix as restoreUtilities' finish function
+        -- 2026-08-31 regression: same fix as restoreUtilities' finish function
         -- -- see its comment for the full reasoning. Verified when power was
         -- requested to shut off: ok now means hydro power is confirmed off,
         -- not merely that the mutation attempt ran without throwing.
@@ -7452,7 +7452,7 @@ handlers.factionAddPlayer = function(args)
     -- anything like sync/transmit/propagate/broadcast/update anywhere in its
     -- class or superclass chain -- confirmed against the real B42 jar
     -- including a constant-pool scan for the literal spellings, not just a
-    -- guessed-name miss (Kevin's audit, 2026-08-30). The real client-sync
+    -- guessed-name miss (the audit, 2026-08-30). The real client-sync
     -- path for a faction change is a network packet handler
     -- (FactionAcceptPacket / FactionRemoveMemberPacket /
     -- FactionChangeTagPacket), and that path is unreachable from ANY Lua --
@@ -7623,8 +7623,8 @@ end
 -- Lua (ISVehicleBloodUI.lua) which does the same unconditionally. The
 -- concrete RUNTIME object PZ's Lua binding hands back is reflected against,
 -- not the declared type, so which shape actually comes back cannot be
--- settled without a live server (Kevin's jar audit, 2026-08-30 -- correctly
--- left unresolved rather than guessed). 2026-08-30 operator ruling: don't
+-- settled without a live server (the jar audit, 2026-08-30 -- correctly
+-- left unresolved rather than guessed). 2026-08-30 decision: don't
 -- answer the question, make the code correct under EITHER answer.
 --
 -- This collects every reachable vehicle into a plain Lua array regardless of
@@ -7683,7 +7683,7 @@ end
 -- zombie.vehicles.VehicleParts, reachable ONLY via vehicle:getParts() -- they
 -- are NOT on the vehicle object itself (zombie.vehicles.BaseVehicle). Every
 -- call to one of those five methods must go through this, or it silently
--- returns nil despite the method genuinely existing (2026-08-30, Kevin's jar
+-- returns nil despite the method genuinely existing (2026-08-30, the jar
 -- audit: it just doesn't exist on the object being asked). getParts() can
 -- itself return nil (no parts container), so every caller must still treat
 -- the result as optional.
@@ -7700,7 +7700,7 @@ end
 -- vehicleSetFuel, vehicleSetBattery, vehicleSetSiren, vehicleSetAlarm,
 -- vehicleSetTrunkLocked) reported "Vehicle not found" even when the real
 -- cause was an unreadable collection -- sending an admin hunting a
--- vehicle-id problem that did not exist (god's catch, 2026-08-30, on code
+-- vehicle-id problem that did not exist (the catch, 2026-08-30, on code
 -- written 20 minutes earlier in this same file).
 local function findVehicleById(vehicleId)
     local vehicles = getVehiclesList()
@@ -7811,7 +7811,7 @@ handlers.vehicleRepair = function(args)
         -- methods -- see vehicleParts(). Before this fix they were called
         -- directly on `vehicle`, always returned nil, and this handler could
         -- never repair anything on ANY vehicle regardless of real part
-        -- condition (2026-08-30, Kevin's jar audit).
+        -- condition (2026-08-30, the jar audit).
         local parts = vehicleParts(vehicle)
         if not parts then
             error("Vehicle has no accessible parts container (getParts() returned nothing on this build)")
@@ -7957,7 +7957,7 @@ handlers.vehicleSetFuel = function(args)
         -- B42: fuel is stored as container content amount on the GasTank part
         -- Pattern from Vehicles.Create.GasTank / Vehicles.Update.GasTank.
         -- getPartById is a VehicleParts method, not a vehicle method -- see
-        -- vehicleParts() (2026-08-30, Kevin's jar audit: wrong receiver meant
+        -- vehicleParts() (2026-08-30, the jar audit: wrong receiver meant
         -- this always fell through to the B41 fallback below, silently).
         local parts = vehicleParts(vehicle)
         local part = parts and PanelBridge.tryGet(parts, "getPartById", "GasTank")
@@ -8003,7 +8003,7 @@ handlers.vehicleSetBattery = function(args)
     charge = math.min(math.max(charge, 0), 100)
 
     -- getBattery is a VehicleParts method, not a vehicle method -- see
-    -- vehicleParts() (2026-08-30, Kevin's jar audit). Before this fix
+    -- vehicleParts() (2026-08-30, the jar audit). Before this fix
     -- getBattery was called directly on `vehicle`, always returned nil, so
     -- the primary VehicleUtils.chargeBattery path below could never even be
     -- attempted -- every call fell straight to the B41 fallback.
@@ -8239,7 +8239,7 @@ handlers.vehicleHotwire = function(args)
         end
 
         -- getPartCount/getPartByIndex/getPartById are VehicleParts methods,
-        -- not vehicle methods -- see vehicleParts() (2026-08-30, Kevin's jar
+        -- not vehicle methods -- see vehicleParts() (2026-08-30, the jar
         -- audit: wrong receiver meant doors never unlocked and the engine
         -- condition was never actually checked, though "unlocked" was still
         -- reported since setTrunkLocked below is genuinely a vehicle method).
@@ -8270,7 +8270,7 @@ handlers.vehicleHotwire = function(args)
 
         -- 4. Start engine — try multiple B42/B41 approaches
         --
-        -- 2026-08-30, Kevin's jar audit: of the three methods tried below, only
+        -- 2026-08-30, the jar audit: of the three methods tried below, only
         -- engineDoStarting exists on BaseVehicle in the real B42 jar, so it is the
         -- one that actually fires, every time. startEngine and setEngineRunning
         -- are both ABSENT from BaseVehicle -- despite the "B42/B41: setEngineRunning"
@@ -8501,7 +8501,7 @@ handlers.runEventSequence = function(args)
         end
     end
 
-    -- 2026-08-31 bug hunt: this used to unconditionally `return true` here,
+    -- 2026-08-31 regression: this used to unconditionally `return true` here,
     -- regardless of how many steps above actually failed -- a sequence where
     -- every single step failed still reported success, and Events.tsx (which
     -- gates its failure card on this top-level flag alone) showed a plain

@@ -8,7 +8,7 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi, type ServerInstance,
 } from '@/lib/api'
 
-// bug-hunt-2026-08-26 Tier 1: server.control gates Start/Stop/Force-Stop/
+// regression Tier 1: server.control gates Start/Stop/Force-Stop/
 // Restart/Restart-Now/Save (apps/panel-server/routes/server.js), server.wipe is a
 // SEPARATE, more dangerous capability gating /wipe and /wipe/preview --
 // confirmed by reading both routes with my own eyes, not inferred from the
@@ -336,7 +336,7 @@ describe('Dashboard.tsx: Stop/Force Stop/Restart/Save share server.control, gate
     await waitFor(() => expect(stop).toHaveBeenCalledTimes(1))
   })
 
-  // bug-hunt-2026-08-27: Pam found DisabledReason-inside-Trigger-asChild
+  // regression: the test found DisabledReason-inside-Trigger-asChild
   // silently breaks the GRANTED case (not the disabled one) on Players.tsx,
   // and flagged that a suite which only asserts toBeDisabled()/
   // not.toBeDisabled() would sit green through exactly that kind of break.
@@ -394,7 +394,7 @@ describe('Dashboard.tsx: Wipe is gated on server.wipe, independently of server.c
     expect(wipe).not.toHaveBeenCalled()
   })
 
-  // bug-hunt-2026-08-27, floor-wide re-check: the test above renders an
+  // regression, floor-wide re-check: the test above renders an
   // ONLINE server, so its `toHaveAttribute('aria-disabled', 'true')` check
   // is confounded -- `online` alone already satisfies this item's disabled
   // expression regardless of canWipeServer, same fixture bug found on the
@@ -461,7 +461,7 @@ describe('Dashboard.tsx: Wipe is gated on server.wipe, independently of server.c
     await waitFor(() => expect(wipe).toHaveBeenCalledTimes(1))
   })
 
-  // bug-hunt-2026-08-27, stock-role hunt: this sidebar Maintenance-panel
+  // regression, stock-role regression: this sidebar Maintenance-panel
   // button opens the exact same wipe dialog as the "..." dropdown item
   // above, but was missing canWipeServer entirely -- neither disabled nor
   // onClick-guarded -- so a role without server.wipe (both stock

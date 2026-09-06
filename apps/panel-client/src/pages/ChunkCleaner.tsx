@@ -189,7 +189,7 @@ function formatSize(bytes: number): string {
 
 // A single bounding box across a non-contiguous chunk selection covers
 // chunks the operator never selected -- handleDelete's live vehicle-removal
-// step used to send exactly one such box (2026-08-31 bug hunt), so a
+// step used to send exactly one such box (2026-08-31 regression), so a
 // removeVehiclesInArea call for e.g. two chunks nine apart swept every
 // chunk in between too, since PanelBridge.lua's handler takes only
 // {minX,minY,maxX,maxY} with no chunk-list awareness. It accepts one

@@ -1509,7 +1509,7 @@ router.post("/collection/extract-cookies", async (req, res) => {
     // back for storage (client never displayed them). A technician-tier
     // caller (this router's own permission floor) could ask this one
     // endpoint for the panel host's live Steam login token; now it can't
-    // (2026-08-26 bug hunt, extract-cookies response shape finding).
+    // (2026-08-26 regression, extract-cookies response shape finding).
     await setSteamSessionCredentials(result.sessionid, result.steamLoginSecure);
     res.json({
       ok: true,
@@ -1740,7 +1740,7 @@ router.post("/import-collection", async (req, res) => {
     // entirely) is silently absent from `mods` above -- this list is what
     // lets a caller tell "3 mods were dropped" apart from "the collection
     // only ever had 47", same notice this route already gives for skipped
-    // sub-collections (bug hunt 2026-08-31, carded low-priority: the route
+    // sub-collections (regression 2026-08-31, tracked low-priority: the route
     // already knows how to say "some were dropped" for one class and didn't
     // for this one).
     const resolvedIds = new Set(mods.map((m) => m.workshopId));
@@ -4107,7 +4107,7 @@ router.post("/add-missing-dep", async (req, res) => {
         // WorkshopItems=/Mods= write site in this file goes through
         // sanitizeIniList/sanitizeModIdList regardless of whether its own
         // input happens to be pre-constrained, and this one should match
-        // (2026-08-26 bug hunt finding 14) rather than rely on a guard that
+        // (2026-08-26 regression finding 14) rather than rely on a guard that
         // lives in a different function than the write it protects.
         const wsLine = `WorkshopItems=${sanitizeIniList(currentWs)}`;
         // Reuse wsMatch (computed above), same fix as this file's first

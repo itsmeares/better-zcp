@@ -156,7 +156,7 @@ export async function pullRemoteConfigFiles(rawConfig, serverName) {
   const config = validateRemoteConfigTransport(rawConfig);
   const names = mirroredFileNames(serverName);
   const mirrorDir = getMirrorPath(config, serverName);
-  // 2026-08-29 Linux secrets hunt: this mirror is a byte-for-byte local copy
+  // 2026-08-29 Linux secrets regression: this mirror is a byte-for-byte local copy
   // of a REMOTE hosted server's actual server.ini -- RCONPassword= included,
   // same as the live local config -- so it needs the same 0700/0600
   // discipline serverRconSecrets.js and panelBridgeSftp.js's own cache

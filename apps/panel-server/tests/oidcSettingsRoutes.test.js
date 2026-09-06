@@ -312,7 +312,7 @@ describe("POST /test-connection", () => {
     );
     const payload = res.json.mock.calls[0][0];
     expect(payload.success).toBe(true);
-    // bug hunt 2026-08-31-c (under-coverage sweep): the title claims nothing
+    // regression 2026-08-31-c (under-coverage sweep): the title claims nothing
     // is persisted at all, but this used to check only one specific key
     // (oidcIssuerUrl) out of the five persistable OIDC settings fields --
     // undercutting the actual promise the title makes. settingsStore is the

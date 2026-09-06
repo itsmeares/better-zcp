@@ -18,7 +18,7 @@ vi.mock("../database/init.js", () => ({
 
 const { ServerManager } = await import("../services/serverManager.js");
 
-// 2026-08-26 bug hunt finding 1: legacy settings.serverName reached
+// 2026-08-26 regression finding 1: legacy settings.serverName reached
 // serverManager.js's this.serverName / this.serverBat with no validation at
 // all, and both are interpolated straight into a filesystem path
 // (getServerConfig/saveServerConfig's `${serverName}.ini`) and a launched

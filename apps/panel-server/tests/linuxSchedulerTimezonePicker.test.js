@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// TIMEZONE PICKER (2026-08-29, hunt-wave5 follow-up to card 9fe76d): the
+// TIMEZONE PICKER (2026-08-29, regression follow-up to card 9fe76d): the
 // operator ruled "build the timezone picker" after the visibility-only fix
 // (a2eb5ea8) shipped. THE HARD HALF, per the card, is migration: every
 // existing schedule on every existing install was created under the

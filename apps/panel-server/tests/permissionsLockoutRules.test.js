@@ -180,7 +180,7 @@ describe("updateRole -- lockout rule 2 (soft block: acting user losing their own
 // used to have no isSeeded check at all -- a seeded role with zero current
 // members could be deleted outright via a direct call/API request, even
 // though RolesPermissions.tsx's delete button is disabled for isSeeded
-// roles. "Test both directions" per god's own framing: a seeded role must
+// roles. "Test both directions" per the own framing: a seeded role must
 // be refused regardless of members, AND a custom role must still delete
 // normally -- the second is what proves this isn't a fix that just passes
 // by refusing everything.

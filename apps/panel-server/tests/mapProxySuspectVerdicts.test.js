@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// hunt-wave10-2026-08-29: verdicts for the remaining 4 suspects on god's
-// mapProxy.js card (suspect 4 -- tile Cache-Control staleness -- was REAL
+// regression-2026-08-29: verdicts for the remaining 4 cases on the
+// mapProxy.js card (case 4 -- tile Cache-Control staleness -- was REAL
 // and is fixed + break-verified separately in
 // mapProxyTileBrowserCacheStaleness.test.js). All four verdicts here are
 // DEAD, each proven against the real route handlers (not just read), per
 // "prove it, do not read it."
 //
-// Suspect 1 (path traversal / containment): DEAD. All three tile routes
+// case 1 (path traversal / containment): DEAD. All three tile routes
 // validate :level and :floor via parseBoundedInteger (strict digit regex,
 // range-bounded, returns null -> 400 for anything else) and :tile via a
 // fully-anchored ^...$ regex requiring the ENTIRE decoded param to be
@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ^4[2-9][\w.\-]*$, which also forbids `/`, so it cannot be used to escape
 // TILE_CACHE_DIR via path.join either.
 //
-// Suspect 2 (B41/B42 split asymmetry): DEAD as a defect. /b41tiles hardcodes
+// case 2 (B41/B42 split asymmetry): DEAD as a defect. /b41tiles hardcodes
 // build "41.78.16" and layer0 (no :floor handling) while /tiles resolves
 // dir dynamically and accepts a floor query -- but this is a real,
 // understood asymmetry: B41 has no multi-floor tile set at all, and
@@ -29,7 +29,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // asymmetry matches a client-side asymmetry the client already knows about
 // and accounts for -- not a departed sibling, a correctly-modeled one.
 //
-// Suspect 3 (missing tile handling): DEAD. serveTile() passes a genuine
+// case 3 (missing tile handling): DEAD. serveTile() passes a genuine
 // upstream 404 straight through with X-Tile-Cache: miss and no log entry
 // (quiet -- sparse coverage is normal, not an error), while a 5xx or a
 // thrown network error is mapped to 502 and logged at debug (not error)
@@ -39,7 +39,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // banner) while anything else counts toward it, keyed off exactly the
 // distinction this file's status-code handling makes.
 //
-// Suspect 5 (path/secret leak via /resolve and /vehicles): DEAD. /resolve's
+// case 5 (path/secret leak via /resolve and /vehicles): DEAD. /resolve's
 // response body is built entirely from hardcoded remote hostnames, the
 // resolved (regex-constrained) B42 build directory string, and plain
 // numeric geometry -- no local filesystem path ever enters it. /vehicles'
@@ -182,7 +182,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("suspect 1 (DEAD): path traversal / containment on tile params", () => {
+describe("case 1 (DEAD): path traversal / containment on tile params", () => {
   const TRAVERSAL_TILE_PAYLOADS = [
     "../../../etc/passwd.jpg",
     "..%2f..%2f..%2fetc%2fpasswd.jpg", // pre-decoded form, as req.params would already contain after Express's own decode
@@ -274,7 +274,7 @@ describe("suspect 1 (DEAD): path traversal / containment on tile params", () => 
   });
 });
 
-describe("suspect 2 (DEAD as a defect): B41/B42 floor asymmetry is intentional and matches the client", () => {
+describe("case 2 (DEAD as a defect): B41/B42 floor asymmetry is intentional and matches the client", () => {
   it("/b41tiles ignores a floor query entirely rather than erroring or misrouting -- confirms the asymmetry is a deliberate omission, not a crash", async () => {
     const originalFetch = global.fetch;
     global.fetch = vi.fn(async () => ({
@@ -330,7 +330,7 @@ describe("suspect 2 (DEAD as a defect): B41/B42 floor asymmetry is intentional a
   });
 });
 
-describe("suspect 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, and is distinguished from a real upstream failure", () => {
+describe("case 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, and is distinguished from a real upstream failure", () => {
   it("upstream 404 (sparse/edge tile) passes through as 404 with X-Tile-Cache: miss, never 500", async () => {
     const originalFetch = global.fetch;
     global.fetch = vi.fn(async () => ({ ok: false, status: 404 }));
@@ -384,7 +384,7 @@ describe("suspect 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, 
   });
 });
 
-describe("suspect 5 (DEAD): /resolve and /vehicles never leak local filesystem paths or save names", () => {
+describe("case 5 (DEAD): /resolve and /vehicles never leak local filesystem paths or save names", () => {
   it("/resolve's body contains no local path (no drive letter, no /home, no /data segment)", async () => {
     mockCurlForB42_20_0();
     const originalFetch = global.fetch;
@@ -432,7 +432,7 @@ describe("suspect 5 (DEAD): /resolve and /vehicles never leak local filesystem p
     // join separator is `path.join`, which is path.posix.join on Linux and
     // path.win32.join on Windows; a Windows-shaped fixture prefix joined via
     // path.posix.join produces a MIXED-separator string that a hardcoded
-    // backslash literal can never match on Linux (caught by god's gate on
+    // backslash literal can never match on Linux (caught by the gate on
     // 00bfa2b7 -- this is the fix). Checking for the distinguishing
     // substrings is separator-agnostic and still rules out the false-DEAD.
     expect(mockListPersistedVehicles).toHaveBeenCalledTimes(1);

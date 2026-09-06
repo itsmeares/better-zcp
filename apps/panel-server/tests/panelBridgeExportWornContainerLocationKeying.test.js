@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 3, item 3 -- panelbridge-total-audit-2026-08-30.
+// 2026-08-30, regression, item 3 -- panelbridge-regression-2026-08-30.
 // exportPlayerData's worn-container bag scanner keys its `bagItems` table
 // directly on `worn.location` -- WornItem.getLocation()'s raw return value --
 // with no normalization. json.encode's own tostring(key) only runs at final

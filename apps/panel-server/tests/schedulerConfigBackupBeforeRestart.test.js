@@ -18,7 +18,7 @@ vi.mock("../database/init.js", () => ({
 // every other test in this file keeps taking real backups and checking
 // real files on disk (unchanged) -- only wrapped so a call count can be
 // asserted where the claim under test is specifically "backs up nothing"
-// (bug hunt 2026-08-31-c, under-coverage sweep). Does not touch
+// (regression 2026-08-31-c, under-coverage sweep). Does not touch
 // services/scheduler.js.
 vi.mock("../utils/configBackup.js", async (importOriginal) => {
   const actual = await importOriginal();
@@ -28,7 +28,7 @@ vi.mock("../utils/configBackup.js", async (importOriginal) => {
 const { Scheduler } = await import("../services/scheduler.js");
 const { createBackupIfChanged } = await import("../utils/configBackup.js");
 
-// 2026-08-27, operator directive ("make sure backups works") relayed by god,
+// 2026-08-27, decision ("make sure backups works") relayed by testing,
 // safety-net follow-up: confirmed (by grep, not guesswork) that
 // createBackup()/writeIniWithBackup() only ever fire from an explicit human
 // edit-and-save action -- no restart, scheduled or manual, ever took a
@@ -117,7 +117,7 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
     ).toBe(true);
   });
 
-  // The treadmill risk god explicitly flagged: a server that restarts on a
+  // The treadmill risk testing explicitly flagged: a server that restarts on a
   // schedule calls this on every single restart, whether or not the
   // operator has touched config since the last one.
   it("many restarts in a row with no config change in between do not flood the keep-10 retention quota", async () => {
@@ -176,7 +176,7 @@ describe("Scheduler._backupConfigBeforeRestart()", () => {
 
     const scheduler = makeScheduler();
     await expect(scheduler._backupConfigBeforeRestart(5)).resolves.toEqual(server);
-    // bug hunt 2026-08-31-c (under-coverage sweep): "backs up nothing" is a
+    // regression 2026-08-31-c (under-coverage sweep): "backs up nothing" is a
     // claim about whether a backup was ATTEMPTED, not just what the method
     // returned -- the resolved-value check above says nothing about that.
     expect(createBackupIfChanged).not.toHaveBeenCalled();

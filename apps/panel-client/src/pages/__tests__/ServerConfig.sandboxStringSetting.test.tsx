@@ -13,7 +13,7 @@ import { SANDBOX_SCHEMA } from '@/lib/serverConfigSchema'
 // WorldItemRemovalList's own shipped default couldn't be retyped verbatim.
 //
 // Pulling both settings from the REAL schema rather than hand-authoring a
-// fixture, per god's instruction to confirm the count (2 of 269 sandbox
+// fixture, per the instruction to confirm the count (2 of 269 sandbox
 // entries) rather than re-derive it from a description.
 
 const WORLD_ITEM_REMOVAL_LIST = SANDBOX_SCHEMA.find((s) => s.key === 'WorldItemRemovalList')!

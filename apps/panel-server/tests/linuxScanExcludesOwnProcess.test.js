@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach, afterAll } from "vitest";
 
-// LINUX BUG HUNT follow-up (2026-08-29): the load-bearing fix against the
+// LINUX regression follow-up (2026-08-29): the load-bearing fix against the
 // CI-runner regression is looksLikeUndeterminedJvmCandidate (requiring a
 // "java" signal, not just "mentions zomboid") -- see
 // linuxScanAmbiguousProcessDetection.test.js for that, exercised with real

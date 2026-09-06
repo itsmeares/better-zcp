@@ -60,7 +60,7 @@ export class LogTailer extends EventEmitter {
   // Where to start reading a newly discovered file. A file born after we
   // started watching is a fresh session, so every byte in it is unseen.
   //
-  // 2026-08-29 (Linux gate flake investigation, second suspect): `born` and
+  // 2026-08-29 (Linux gate flake investigation, second case): `born` and
   // `this.watchStartedAt` come from two different clocks -- the filesystem's
   // birthtime and the JS process's Date.now() -- which measured up to ~20ms
   // apart from each other on the same real event on this platform (WSL2),

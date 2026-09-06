@@ -200,7 +200,7 @@ describe("restoreBackup archive safety", () => {
     ).toBe("RESTORED");
   });
 
-  // 2026-08-26 bug hunt: createBackup can return success:true while having
+  // 2026-08-26 regression: createBackup can return success:true while having
   // silently skipped files that vanished mid-archive (a real race on a live
   // PZ directory) -- it surfaces that via skippedFiles rather than deciding
   // policy itself. The pre-restore backup is about to become the world's
@@ -354,7 +354,7 @@ describe("restoreBackup archive safety", () => {
     expect(leftovers).toEqual([]);
   });
 
-  // bug-hunt-2026-08-27, backup-restore hunt: restoreInProgress used to be
+  // regression, backup-restore regression: restoreInProgress used to be
   // set only AFTER the async getServerProcessDetails() check resolved, not
   // before it. Two calls arriving close together (a double-click before the
   // UI disables the button, two admin sessions, a retried request) both read
@@ -452,7 +452,7 @@ describe("createBackup archive safety", () => {
   });
 
   it("removes orphaned backup temp files before starting", async () => {
-    // hunt-wave11-2026-08-29 follow-up: cleanupOrphanBackupTemps now
+    // regression-2026-08-29 follow-up: cleanupOrphanBackupTemps now
     // liveness-checks the .central-*.tmp pattern (it embeds a pid;
     // *.zip.tmp does not, and stays pattern-only-deleted, see the
     // function's own comment in backupService.js). The central temp here
@@ -590,7 +590,7 @@ describe("createBackup archive safety", () => {
 
 });
 
-// 2026-08-27, operator directive relayed by god: "make sure backups works" --
+// 2026-08-27, decision recorded here: "make sure backups works" --
 // prove the whole create -> list -> restore lifecycle with actual content,
 // not status codes. Every test above either restores a hand-built archive
 // (writeValidBackup) or checks the archive's entry NAMES ("includes every

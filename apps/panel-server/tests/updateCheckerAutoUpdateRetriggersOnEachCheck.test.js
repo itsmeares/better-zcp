@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// 2026-09-04, overnight bug hunt (Angela's fence: update*/panelUpdate*):
+// 2026-09-04, overnight regression (the fence: update*/panelUpdate*):
 // scheduleAutoUpdate() used to be called only on the RISING EDGE of
 // updateInfo.updateAvailable (checkForUpdates()'s own `if (!wasAvailable)`
 // gate) -- the first check that finds an update transitioning false/null ->

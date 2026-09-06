@@ -5,7 +5,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { serverApi, serversApi, rconApi, configApi, type ServerInstance } from '@/lib/api'
 
-// bug-hunt-2026-09-04: this page loaded the active server once on mount and
+// regression: this page loaded the active server once on mount and
 // never again -- unlike Settings.tsx/Dashboard.tsx/Servers.tsx/WorldMap.tsx/
 // Layout.tsx, which all listen for activeServerChanged. Switching servers
 // elsewhere left Console showing the PREVIOUS server's name and RCON/

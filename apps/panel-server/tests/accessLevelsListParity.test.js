@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACCESS_LEVELS } from "../utils/commands.js";
 
-// hunt-wave13-2026-08-30: ACCESS_LEVELS used to be curated from "the
+// regression-2026-08-30: ACCESS_LEVELS used to be curated from "the
 // official PZ Admin Commands wiki (Build 42.17.0)" -- a citation with its
 // own expiry date, and it was wrong in both directions. 'overseer' is a
 // declared getDefaultForOverseer() method in the real server jar's
@@ -35,7 +35,7 @@ const EXPECTED_ACCESS_LEVELS = ["admin", "moderator", "gm", "observer", "priorit
 // server, or one that has never started) -- see
 // apps/panel-server/tests/playersAccessLevelsRoute.test.js for that route's own
 // coverage of the dynamic-list and fallback paths.
-describe("ACCESS_LEVELS: pin (hunt-wave13 drift gate)", () => {
+describe("ACCESS_LEVELS: pin (regression drift gate)", () => {
   it("apps/panel-server/utils/commands.js's ACCESS_LEVELS matches the pinned, jar-derived list exactly", () => {
     expect(ACCESS_LEVELS).toEqual(EXPECTED_ACCESS_LEVELS);
   });

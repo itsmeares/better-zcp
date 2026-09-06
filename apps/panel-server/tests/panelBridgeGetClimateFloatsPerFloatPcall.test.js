@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 2, item 1 (the highest of the three
+// 2026-08-30, regression, item 1 (the highest of the three
 // pcall-boundary-width findings). handlers.getClimateFloats' loop over its
 // 13 known ClimateFloat ids had NO pcall protection at all -- not merely a
 // wide boundary shared across all 13 (the getWeather/getPlayerDetails

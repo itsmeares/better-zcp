@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import jwt from "jsonwebtoken";
 
-// Auth/sessions security hunt (hunt-wave7, 2026-08-29). Suspect 1 verdict:
+// Auth/sessions security hunt (regression, 2026-08-29). case 1 verdict:
 // logout() only ever revokes the refresh SESSION (removes it from
 // user.refreshSessions) -- it never touches tokenGen, and
 // authenticateAccessToken() (the check that runs on every single
@@ -12,7 +12,7 @@ import jwt from "jsonwebtoken";
 // window, and it used to be 24h because ACCESS_TOKEN_EXPIRY was 24h despite
 // this file's own top comment calling that "short-lived."
 //
-// RULING (god): shorten ACCESS_TOKEN_EXPIRY to 15m rather than binding
+// RULING (testing): shorten ACCESS_TOKEN_EXPIRY to 15m rather than binding
 // access tokens to sessions (would require creating a session for every
 // login including non-remember-me, plus a session-liveness DB lookup on
 // every request -- reintroducing exactly what stateless tokens exist to
@@ -41,7 +41,7 @@ import jwt from "jsonwebtoken";
 //      required -- proving a session really can survive a token expiry
 //      without the user re-entering credentials. (The client-side half --
 //      that api.ts actually calls this in response to a 401 -- was read
-//      directly, not re-tested here: client/ is Angela's file this wave,
+//      directly, not re-tested here: client/ is the file this wave,
 //      and the client mechanism itself is unchanged by this server-side
 //      TTL edit.)
 //   5. Role changes and account deletion ALREADY take effect on the very
@@ -50,7 +50,7 @@ import jwt from "jsonwebtoken";
 //      user's role/existence from the live database on every call, never
 //      from the token payload. Deletion already has its own dedicated
 //      test (deleteUser.test.js); this file adds the role-change case
-//      god explicitly asked to have stated rather than assumed.
+//      the test required to have stated rather than assumed.
 
 const settings = new Map();
 const db = { data: { users: [], roles: [] } };
@@ -216,7 +216,7 @@ describe("The server-side refresh contract apps/panel-client/src/lib/api.ts's tr
   });
 });
 
-describe("Admin-initiated revocation already takes effect immediately, not at token expiry -- stated explicitly per god's follow-up question", () => {
+describe("Admin-initiated revocation already takes effect immediately, not at token expiry -- stated explicitly per the follow-up question", () => {
   beforeEach(() => {
     resetWith({
       roles: [ADMIN_ROLE, TECHNICIAN_ROLE],

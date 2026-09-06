@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { regenerateStartupScriptsWithBackup } from "../routes/server.js";
 
-// 2026-08-26 bug hunt: POST /start regenerates StartServer_<name>.bat and
+// 2026-08-26 regression: POST /start regenerates StartServer_<name>.bat and
 // start-server_<name>.sh from the DB record on every stopped-to-started
 // transition ("so config changes take effect" -- confirmed live: it's the
 // same block that makes minMemory/maxMemory/useDebug/adminPassword reach a

@@ -638,7 +638,7 @@ export class BackupService {
         }
 
         // Clean up old backups -- but NEVER as part of a pre-restore or
-        // pre-wipe safety backup. bug hunt 2026-09-05 (backup-restore-
+        // pre-wipe safety backup. regression 2026-09-05 (backup-restore-
         // round-trip sweep, item #1): this used to run unconditionally,
         // "including the mandatory pre-wipe and pre-restore ones" per the
         // comment that used to be here -- which meant restoring your OLDEST
@@ -1222,7 +1222,7 @@ export class BackupService {
         // running silently -- restore no longer looks stalled during what can
         // be the longest part of the whole operation.
         const preBackupResult = await this.createBackup({ isPreRestore: true, io });
-        // 2026-08-26 bug hunt: createBackup can return success:true while
+        // 2026-08-26 regression: createBackup can return success:true while
         // having silently skipped files that vanished mid-archive (a real
         // race on a live PZ directory) -- it surfaces that via
         // skippedFiles rather than deciding policy itself, because the same

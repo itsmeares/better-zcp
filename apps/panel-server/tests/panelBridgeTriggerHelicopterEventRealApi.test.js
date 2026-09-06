@@ -7,7 +7,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // to try four fallback tiers -- HelicopterClass.getInstance()+
 // activateForPlayer, RZSUtil.triggerRandomEvent, addHelicopter,
 // ServerCheatInterface.triggerHelicopter -- ALL FOUR verified absent
-// against the real B42 jar (Kevin's audit): not a B41/B42 divergence, not
+// against the real B42 jar (the audit): not a B41/B42 divergence, not
 // a near-miss name, none of them exist on any build. It always fell
 // through to error("No helicopter API available in this build").
 //

@@ -20,7 +20,7 @@ const {
 
 // Node has no swap API at all (os.totalmem/freemem are RAM only), so this is
 // genuinely platform-specific. The whole point of this feature (2026-08-26,
-// Discord report from Tonin96: a 95%-red host-memory reading with no swap
+// Discord report from testing: a 95%-red host-memory reading with no swap
 // context to say whether that's fine or an emergency) is that a failed or
 // unsupported lookup must never look like "zero swap" -- these tests pin
 // all three states (real reading / genuinely none / could not determine)

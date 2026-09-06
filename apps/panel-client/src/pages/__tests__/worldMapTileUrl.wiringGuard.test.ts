@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-// hunt-wave12-2026-08-30 follow-up: worldMapTileUrl.test.ts proves
+// regression-2026-08-30 follow-up: worldMapTileUrl.test.ts proves
 // buildTileQuery() itself is correct (7 cases, break-verified). It does
 // NOT prove WorldMap.tsx and ChunkCleaner.tsx actually CALL it with the
 // right args -- a full-render integration test for that hit a genuine

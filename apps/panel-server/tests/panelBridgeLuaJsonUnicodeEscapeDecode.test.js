@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31 bug hunt (PanelBridge Lua mod + bridge protocol): json.decode's
+// 2026-08-31 regression (PanelBridge Lua mod + bridge protocol): json.decode's
 // string-escape handling recognized \n \r \t \b \f \" \\ \/ but had no case
 // for \uXXXX -- the ONE JSON escape that isn't a single literal character.
 // Falling into the `else result = result .. escape end` fallback appended

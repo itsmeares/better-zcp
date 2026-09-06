@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-// GET /diagnostics's mods.thumbnailResolution check -- spec from Jim (via
-// god, conv-debugjs-diagnostics): mod thumbnails silently fail (the
+// GET /diagnostics's mods.thumbnailResolution check -- specification from the test (via
+// testing, regression): mod thumbnails silently fail (the
 // endpoint returns HTTP 200 with a 1x1 transparent GIF on every failure
 // path), so this is the only place a failed resolution is ever surfaced.
 // Tests the extracted pure function directly (buildThumbnailResolutionCheck)

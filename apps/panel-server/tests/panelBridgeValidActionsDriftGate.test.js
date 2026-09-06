@@ -8,7 +8,7 @@ import { VALID_ACTIONS, BRIDGE_ACTION_CAPABILITY } from "../routes/panelBridge.j
 // names. The gap that leaves open: the moment a fifth moderation-tier
 // action is added to VALID_ACTIONS, it inherits the exact bypass just
 // closed, silently, and nothing here objects -- an instance fix, not a
-// gate, same distinction Pam's permissionsDescriptionRegistry.test.js draws
+// gate, same distinction the permissionsDescriptionRegistry.test.js draws
 // for capability descriptions.
 //
 // WHY THIS IS A PIN, NOT A SEMANTIC "LOOKS MODERATION-TIER" DETECTOR:

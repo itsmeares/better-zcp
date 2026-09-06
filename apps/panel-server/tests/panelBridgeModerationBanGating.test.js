@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
 // Regression coverage from the deferred safehouse/faction/moderation class
-// of the full handler-verification audit. god's instruction: for each
+// of the full handler-verification audit. the instruction: for each
 // handler, verify whether a real read-back exists in the actual B42 API
 // (don't assume) before deciding whether to gate.
 //

@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, bridge-vehicle-parts-wrong-receiver (Kevin's jar audit):
+// 2026-08-30, bridge-vehicle-parts-wrong-receiver (the jar audit):
 // getPartCount, getPartByIndex, getPartById, getBattery and getBatteryCharge
 // are NOT on zombie.vehicles.BaseVehicle -- they live on a separate class,
 // zombie.vehicles.VehicleParts, reachable only via vehicle:getParts(). Every

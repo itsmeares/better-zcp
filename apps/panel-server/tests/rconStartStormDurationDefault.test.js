@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { RconService } from "../services/rcon.js";
 
-// 2026-08-26 bug hunt (divergent-behavior thread, seeded by god after the
+// 2026-08-26 regression (divergent-behavior thread, seeded by testing after the
 // RCON-vs-PanelBridge guard/confirmation-parity sweeps came back clean):
 // RCON's startStorm sent a bare "startstorm" with no duration when the
 // caller omitted one, leaving PZ's own internal default to decide the

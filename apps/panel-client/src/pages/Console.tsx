@@ -251,11 +251,11 @@ export default function Console() {
   // Only meaningful while rconConnected === false -- distinguishes three
   // different reasons the banner below needs different words for:
   // 'unreachable' (host never reachable), 'auth_failed' (reachable, but the
-  // saved password is wrong -- see 2026-08-26 bug hunt finding 1), and
+  // saved password is wrong -- see 2026-08-26 regression finding 1), and
   // 'dropped' (a mid-session transport drop detected from a failed command,
   // not a fresh probe -- host/port/password were just proven correct
   // seconds ago, so telling this operator to go re-check them is
-  // confidently wrong advice; see 2026-08-31 bug hunt).
+  // confidently wrong advice; see 2026-08-31 regression).
   const [rconFailureReason, setRconFailureReason] = useState<'unreachable' | 'auth_failed' | 'dropped' | null>(null)
   const [testingConnection, setTestingConnection] = useState(false)
   const [announcement, setAnnouncement] = useState('')

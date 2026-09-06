@@ -4,10 +4,10 @@ import os from "os";
 import path from "path";
 import archiver from "archiver";
 
-// Concurrency hunt 2026-08-29 (conversation hunt-wave5-2026-08-29): god's brief
+// Concurrency regression 2026-08-29 (conversation regression-2026-08-29): the brief
 // flagged "a restart racing a backup, a backup racing a wipe" as an angle to
 // check. restoreBackup() already refuses a second restore AND a concurrent
-// createBackup() (bug-hunt-2026-08-27, see backupRestoreSafety.test.js line
+// createBackup() (regression, see backupRestoreSafety.test.js line
 // ~368 and the `if (this.backupInProgress)` guard at the top of
 // restoreBackup()). But that guard is one-directional: createBackup() itself
 // (backupService.js line ~355) only ever checks `this.backupInProgress`,
@@ -117,7 +117,7 @@ describe("createBackup() while a restore is in progress", () => {
   });
 });
 
-// Note (kevin, hunt-wave5-2026-08-29): I also tried to pin down what a
+// Note (testing, regression-2026-08-29): I also tried to pin down what a
 // concurrent backup actually CONTAINS when it slips through this gap --
 // archiver's directory() (readdir-glob) walks the live tree incrementally,
 // so in principle a file not yet reached when restore's swap (two

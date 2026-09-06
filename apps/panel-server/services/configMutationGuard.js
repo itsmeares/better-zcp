@@ -150,7 +150,7 @@ export async function warnRunningForLocalConfigEdit(req, res, next) {
     // failure and NO warning was shown -- the exact opposite of this
     // function's own documented policy ("cannot verify is treated the same
     // as running... defaulting to warn is the harmless direction"). Found
-    // in the 2026-08-26 bug hunt: two functions in this one file, one
+    // in the 2026-08-26 regression: two functions in this one file, one
     // hardened to getServerProcessDetails() and one never migrated.
     if (typeof serverManager?.getServerProcessDetails !== "function") {
       req.configEditRestartWarning = true;

@@ -5,7 +5,7 @@ import http from "http";
 // but did not actually check/confirm anything" gaps found by sweeping the
 // updater for the same defect family as the runAutoUpdate build-verification
 // fix. Both are honest-reporting fixes, not the full docker reconcile
-// (carded separately, deliberately not built here -- the process that
+// (tracked separately, deliberately not built here -- the process that
 // requests a docker update is the one whose own container gets torn down
 // mid-update, so it cannot poll for its own answer; that needs new state and
 // a boot-time check in the NEW container, a scoped feature, not a bug fix).
@@ -15,7 +15,7 @@ const { DockerUpdateProxy } = await import("../services/dockerUpdateProxy.js");
 
 describe("preflight() no longer reports a fabricated clean bill of health for docker mode", () => {
   it("stays ok:true (no known blocker), keeps the honest checksPerformed:false, and explains why via an informational field -- not the warnings channel", async () => {
-    // 2026-09-04, god's review of 2b043928: checksPerformed:false is the
+    // 2026-09-04, the review of 2b043928: checksPerformed:false is the
     // honest, machine-readable core of the fix and must stay. But a sentence
     // that fires on EVERY docker preflight forever, regardless of the
     // operator's actual setup, isn't a warning -- it's a label, and it

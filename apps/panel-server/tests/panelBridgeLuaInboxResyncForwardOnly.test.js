@@ -37,7 +37,7 @@ end
 // 2026-08-30 (bridge-resync-threshold-transport-aware): tryResyncInboxCursor
 // (PanelBridge.lua, ~line 1666) reads the panel's declared write position
 // from .queue-state-node.json and, once the inbox has been stalled long
-// enough to suspect a genuine desync, adopts it as this process's own
+// enough to case a genuine desync, adopts it as this process's own
 // lastCommandSeq. Before this fix it did so UNCONDITIONALLY -- if that
 // file's value was ever lower than what this process had already
 // legitimately processed (a stale read, or a second writer overwriting it

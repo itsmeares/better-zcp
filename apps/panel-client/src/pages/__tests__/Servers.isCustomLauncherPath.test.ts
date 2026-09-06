@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { isCustomLauncherPath } from '../Servers'
 
-// Operator ruling 2026-08-27 (card
+// decision 2026-08-27 (card
 // custom-launcher-as-a-real-supported-mode-not-an-accident): a
 // serverPath/installPath ending in .bat/.sh/.exe is CUSTOM LAUNCHER mode --
 // real and supported, not an accident. This is the client-side mirror of

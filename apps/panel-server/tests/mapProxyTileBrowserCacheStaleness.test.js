@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 
-// hunt-wave10-2026-08-29, suspect 4 (REAL): serveTile() set
+// regression-2026-08-29, case 4 (REAL): serveTile() set
 // Cache-Control: public, max-age=604800 (7 days) on every tile response,
 // but the browser-facing URL (/api/map/tiles/:level/:tile) has no
 // component identifying WHICH resolved B42 build (getB42Dir()) produced
@@ -10,7 +10,7 @@ import fs from "fs";
 // while a browser still holds a 7-day-old cached response for the same
 // URL, that browser keeps showing bytes from the OLD build indefinitely
 // (up to the rest of the 7-day window) -- "operator regenerates map,
-// browser keeps showing the old world", the exact shape god's card named.
+// browser keeps showing the old world", the exact shape the card named.
 //
 // Fix: bound the browser-facing Cache-Control to the same freshness
 // window as /resolve's own descriptor (1h), so staleness can never
@@ -204,7 +204,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("suspect 4 (REAL): tile Cache-Control must not outlive the build-resolution freshness window", () => {
+describe("case 4 (REAL): tile Cache-Control must not outlive the build-resolution freshness window", () => {
   it("/tiles: a fresh upstream fetch (tier-3 miss) is capped at the /resolve freshness window, not 7 days", async () => {
     mockCurlForB42_20_0();
     const originalFetch = global.fetch;
@@ -375,7 +375,7 @@ describe("suspect 4 (REAL): tile Cache-Control must not outlive the build-resolu
   });
 });
 
-// hunt-wave12-2026-08-30 (version-the-tile-url-by-resolved-b42-build): the
+// regression-2026-08-30 (version-the-tile-url-by-resolved-b42-build): the
 // 1h cap above bounds staleness, it doesn't eliminate it. The complete fix
 // is to put the resolved B42 build into the browser-facing tile URL
 // (WorldMap.tsx / ChunkCleaner.tsx append `?v=<b42Dir>` once they know it --
@@ -391,7 +391,7 @@ describe("suspect 4 (REAL): tile Cache-Control must not outlive the build-resolu
 // request). /b41tiles never switches regardless of `v` -- its directory is
 // a hardcoded literal, never dynamically resolved, so there's nothing to
 // version there.
-describe("suspect 4 follow-up (REAL): a versioned request (?v=<build>) gets a long-lived Cache-Control, matching the accurate cache key", () => {
+describe("case 4 follow-up (REAL): a versioned request (?v=<build>) gets a long-lived Cache-Control, matching the accurate cache key", () => {
   it("/tiles: a request WITH ?v= gets the long/immutable Cache-Control instead of the bounded fallback", async () => {
     mockCurlForB42_20_0();
     const originalFetch = global.fetch;

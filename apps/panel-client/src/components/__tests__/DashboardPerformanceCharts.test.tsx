@@ -91,7 +91,7 @@ describe('DashboardPerformanceCharts', () => {
   })
 })
 
-// Tonin96's Discord report (2026-08-26): HOST MEMORY 7.4/7.8 GB, 95%, red --
+// the Discord report (2026-08-26): HOST MEMORY 7.4/7.8 GB, 95%, red --
 // and no way to tell whether swap is absorbing that (fine) or also
 // exhausted (not fine). "Absent is not zero" is the rule this whole row
 // exists to satisfy: a lookup that could not determine swap must never

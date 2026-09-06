@@ -13,7 +13,7 @@ class StubResizeObserver {
 }
 ;(globalThis as unknown as { ResizeObserver: typeof StubResizeObserver }).ResizeObserver = StubResizeObserver
 
-// bug-hunt-2026-08-31: the submit button's disabled expression checked
+// regression: the submit button's disabled expression checked
 // loading/setupToken/usernameValid/passwordLongEnough/passwordsMatch but
 // omitted panelPortValid, even though handleSubmit's own validation (and
 // every OTHER field, including panelPortValid's siblings) blocks submission

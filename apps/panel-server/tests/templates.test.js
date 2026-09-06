@@ -107,7 +107,7 @@ describe("validateTemplate", () => {
     expect(errors.join(" ")).toMatch(/RCONPassword/);
   });
 
-  // 2026-08-24 conv-template-privesc: validateTemplate used to read
+  // 2026-08-24 regression: validateTemplate used to read
   // template.iniExclusions AS the exclusion list rather than adding it to
   // DEFAULT_INI_EXCLUSIONS, so a template supplying its own empty list
   // disabled the leaked-key check entirely and validated clean with
@@ -230,7 +230,7 @@ describe("built-in templates", () => {
     expect(templates.map((template) => template.meta.id)).not.toContain("vanilla-apocalypse");
   });
 
-  // 2026-08-31 bug hunt (templates-builtin-hidden-with-no-restore-path):
+  // 2026-08-31 regression (templates-builtin-hidden-with-no-restore-path):
   // deleteTemplate's hide path (above) only ever added an id to the
   // setting -- nothing ever read the list back out, so a hidden built-in
   // was invisible everywhere: listTemplates filtered it out, getTemplate
@@ -477,7 +477,7 @@ describe("previewTemplate / applyTemplate", () => {
     expect(ini).toContain("PauseEmpty=true");
   });
 
-  // 2026-08-24 conv-template-privesc: the apply-time write path
+  // 2026-08-24 regression: the apply-time write path
   // (prepareIniChange) had its OWN independent read of iniExclusions
   // (`template.iniExclusions || DEFAULT_INI_EXCLUSIONS`) -- a second,
   // separately-broken copy of the same mistake validateTemplate made. `[]`

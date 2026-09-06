@@ -5,7 +5,7 @@ import path from "path";
 import { EventEmitter } from "events";
 import { setSetting } from "../database/init.js";
 
-// 2026-08-26 install-failure hunt findings #6 and #1. #6: the game files
+// 2026-08-26 install-failure regression findings #6 and #1. #6: the game files
 // installing is the expensive, hard-to-redo part -- a failure in an
 // auxiliary write AFTER that (the RCON .ini pre-create, the startup
 // script) used to only log.warn() server-side while install:complete still
@@ -317,7 +317,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     });
   });
 
-  // 2026-08-26 bug hunt: SteamCMD exiting 0 was trusted as sufficient proof
+  // 2026-08-26 regression: SteamCMD exiting 0 was trusted as sufficient proof
   // the game files were actually installed -- it can exit 0 after a
   // rate-limited, interrupted, or otherwise incomplete download. This test
   // removes the marker beforeEach wrote (simulating exactly that: SteamCMD
@@ -412,7 +412,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
   });
 });
 
-// 2026-08-26, same-night follow-up: the wizard's UPnP checkbox saved a
+// 2026-08-26, same pass follow-up: the wizard's UPnP checkbox saved a
 // global legacy setting (setSetting("useUpnp", ...)) that nothing ever
 // read -- the actual mechanism, a real UPnP= line in the server's own
 // .ini, only ever got written by the separate /configure-network endpoint,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 bug hunt: createBackup surfaces skipped files (ones that
+// 2026-08-26 regression: createBackup surfaces skipped files (ones that
 // vanished mid-archive -- a real race on a live PZ directory) rather than
 // deciding policy itself, since the same skip means different things
 // depending on why the backup exists. This is the routine/manual path

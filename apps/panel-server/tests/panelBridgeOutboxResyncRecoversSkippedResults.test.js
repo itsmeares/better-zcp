@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { PanelBridge } from "../services/panelBridge.js";
 
-// 2026-08-31 bug hunt, queue/resync follow-up (god's specific ask: "whether
+// 2026-08-31 regression, queue/resync follow-up (the specific ask: "whether
 // a resync can silently drop a pending command rather than failing it").
 //
 // tryResyncOutboxCursor jumps lastConsumedResultSeq straight to the mod's

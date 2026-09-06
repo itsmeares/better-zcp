@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29 hunt (god): backup-and-restore, suspect 4 (retention/pruning).
+// 2026-08-29 hunt (testing): backup-and-restore, case 4 (retention/pruning).
 // Same root cause already fixed once in configBackup.js's listBackupsFor()
 // (see apps/panel-server/tests/linuxBackupPrunerDegenerateTimestamp.test.js) -- this
 // is the sibling case for backupService.js's own, SEPARATE

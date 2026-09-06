@@ -6,8 +6,8 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Chat from '../Chat'
 import { panelBridgeApi, playersApi, configApi } from '@/lib/api'
 
-// bug-hunt-2026-08-27 Tier-3 capability-gating sweep, later split
-// 2026-08-27 (operator ruling on ranked-bug #5): three genuinely different
+// regression Tier-3 capability-gating sweep, later split
+// 2026-08-27 (decision on prioritized issue #5): three genuinely different
 // capabilities gate this one page. Sending on the 'server' channel (plain
 // broadcast, POST /panel-bridge/message) requires server.world_events, the
 // same capability that gates weather/zombie/climate tools. Sending on
@@ -20,7 +20,7 @@ import { panelBridgeApi, playersApi, configApi } from '@/lib/api'
 // players.endanger_or_impersonate or panel.settings by default, so this is
 // a live stock-role gap, not a hypothetical one.
 //
-// The Enter-key path is the sharpest risk here (Angela's Console.tsx
+// The Enter-key path is the sharpest risk here (the Console.tsx
 // finding tonight: a disabled button alone is not a gate if a keypress
 // reaches the handler directly) -- sendMessage() is called both by the
 // Send button's onClick AND by handleKeyDown's Enter path, and
@@ -160,7 +160,7 @@ describe("Chat.tsx: sending on the 'server' channel (default) gates on server.wo
     const input = await screen.findByRole('textbox', { name: 'Chat message' })
     const sendButton = screen.getByRole('button', { name: 'send' })
 
-    // bug-hunt-2026-08-27 (Angela's fixture-masking finding): Send's
+    // regression (the fixture-masking finding): Send's
     // disabled expression is `sending || !message.trim() ||
     // !canSendChat` -- with the input still empty, `!message.trim()`
     // alone already disables it regardless of the capability check, so
@@ -282,7 +282,7 @@ describe('Chat.tsx: quick-broadcast preset management gates on panel.settings', 
     await screen.findByText('Test preset')
     fireEvent.click(screen.getByRole('button', { name: 'Edit presets' }))
 
-    // bug-hunt-2026-08-27 (Angela's fixture-masking finding): Add's
+    // regression (the fixture-masking finding): Add's
     // disabled expression is `!newPresetDraft.trim() ||
     // !canManagePresets` -- with the draft still empty,
     // `!newPresetDraft.trim()` alone already disables it regardless of

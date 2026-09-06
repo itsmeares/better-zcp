@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// hunt-wave10-2026-08-29, suspect #1 (coordinate math, boundaries as the
+// regression-2026-08-29, case #1 (coordinate math, boundaries as the
 // priority) and the negative-axis question specifically.
 //
 // chunksDeletionLogic.test.js already proves delete-region only touches
@@ -39,7 +39,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 //
 // Whether real B42/B41 saves actually contain negative directory/file
 // names could NOT be established with certainty from this machine (no real
-// PZ install or save is available here — see kevin's memory.md, the
+// PZ install or save is available here — see the memory.md, the
 // jar-audit access noted there no longer exists on this host). Best
 // available evidence points the other way: this codebase's own map-tile
 // renderer (ChunkCleaner.tsx's DZI tile math) clamps its column/row index

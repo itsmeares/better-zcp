@@ -155,7 +155,7 @@ describe("template mutation routes", () => {
     expect(applyTemplate).not.toHaveBeenCalled();
   });
 
-  // 2026-08-24 conv-template-privesc: the running-state guard above only
+  // 2026-08-24 regression: the running-state guard above only
   // ever ran inside the "target IS the active server" branch, so applying a
   // template to any OTHER configured server skipped it entirely -- no
   // check ran at all, and the apply proceeded unconditionally. serverManager
@@ -232,7 +232,7 @@ describe("template mutation routes", () => {
     expect(response.status).not.toHaveBeenCalledWith(503);
   });
 
-  // 2026-08-31 bug hunt (templates-builtin-hidden-with-no-restore-path):
+  // 2026-08-31 regression (templates-builtin-hidden-with-no-restore-path):
   // GET /hidden + POST /:id/unhide are the routes that make a hidden
   // built-in template reachable again. Both gated on templates.manage --
   // same permission as deleting/hiding one.

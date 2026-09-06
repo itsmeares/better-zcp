@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 bug hunt: POST /stop's graceful (RCON) path used to report
+// 2026-08-26 regression: POST /stop's graceful (RCON) path used to report
 // success:true and broadcast server:status {running:false} the instant
 // rconService.quit() returned -- which only proves PZ accepted the "quit"
 // command (a reset RCON connection is the NORMAL symptom of a real

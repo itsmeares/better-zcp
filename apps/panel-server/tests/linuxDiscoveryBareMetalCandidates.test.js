@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Linux bug hunt 2026-08-29, server-discovery card. mountDiscovery.js's
+// Linux regression 2026-08-29, server-discovery card. mountDiscovery.js's
 // COMMON_MOUNT_CANDIDATES are all container-internal Docker bind-mount
 // conventions (/pz-server, /serverdata/serverfiles, /steam/pz) -- real paths
 // only inside a container built to that convention. The panel also runs

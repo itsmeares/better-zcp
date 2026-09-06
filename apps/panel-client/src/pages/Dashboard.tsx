@@ -712,7 +712,7 @@ export default function Dashboard() {
         throw new Error(result.error || result.message || t('toasts.actionFailedFallback'))
       }
       const copy = getDashboardSuccessCopy(t, action)
-      // 2026-08-26 bug hunt: POST /start regenerates the startup script on
+      // 2026-08-26 regression: POST /start regenerates the startup script on
       // every stopped-to-started transition and now backs up + reports any
       // existing content it didn't itself last write (a hand-edit, or a
       // pre-fix install) instead of silently discarding it. A silent log
@@ -721,7 +721,7 @@ export default function Dashboard() {
       const scriptWarnings = action === 'Start server' && result && typeof result === 'object'
         ? (result as { scriptWarnings?: string[] }).scriptWarnings
         : undefined
-      // 2026-08-26 bug hunt: POST /stop used to report success:true (and this
+      // 2026-08-26 regression: POST /stop used to report success:true (and this
       // toast used to say "Server stopped") the instant rconService.quit()
       // returned -- which only proves PZ accepted the quit command, not that
       // its save-and-exit has actually finished. Now the server marks this
@@ -731,7 +731,7 @@ export default function Dashboard() {
       // the watchdog genuinely observes the process gone.
       const stopUnconfirmed = action === 'Stop server' && result && typeof result === 'object'
         && (result as { confirmed?: boolean }).confirmed === false
-      // 2026-08-26 bug hunt: Force Stop now attempts a bounded, fail-open save
+      // 2026-08-26 regression: Force Stop now attempts a bounded, fail-open save
       // before killing the server (server.js's attemptBoundedSaveBeforeForceStop)
       // and reports the outcome as saveOutcome -- but the generic success toast
       // read nothing from the response, so a failed/timed-out/skipped save was

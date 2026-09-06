@@ -6,7 +6,7 @@ import {
   clearInstallInFlightMarker,
 } from '../ServerSetup'
 
-// 2026-08-26 install-failure hunt, finding #7: install:complete/install:log
+// 2026-08-26 install-failure regression, finding #7: install:complete/install:log
 // are heard by exactly one file in the whole client (ServerSetup.tsx itself)
 // -- so a tab closed or reloaded mid-download loses the eventual outcome
 // entirely, with no persisted state anywhere to say an install was even

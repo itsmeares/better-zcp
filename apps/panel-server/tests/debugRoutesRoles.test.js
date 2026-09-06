@@ -112,7 +112,7 @@ describe("debug.js: every route is admin-only except the one documented exceptio
   });
 
   it("does not refuse an admin at the role gate for the routes named explicitly as the risk (may still do real work downstream)", async () => {
-    // These three are the ones god called out by name as the reason
+    // These three are the ones the test identified by name as the reason
     // debug.js mattered: an admin must still be able to do them.
     for (const [routePath, method] of [
       ["/database/backup", "post"],

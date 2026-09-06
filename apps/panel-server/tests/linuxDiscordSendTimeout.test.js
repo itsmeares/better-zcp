@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-// hunt-wave5-2026-08-29: the panel's only outbound alerting is Discord, and
+// regression-2026-08-29: the panel's only outbound alerting is Discord, and
 // nobody had tested what happens when Discord stops answering. Traced (and
 // confirmed against a real, unmocked discord.js REST manager talking to a
 // local mock Discord API) that @discordjs/rest retries a 429 response

@@ -3,12 +3,12 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Concurrency hunt hunt-wave6-2026-08-29, direct continuation of
+// Concurrency regression regression-2026-08-29, direct continuation of
 // startServerBlockedDuringSteamOperation.test.js (serverManager.js's
 // startServer() guard against a JVM launch racing a live SteamCMD write).
-// Kevin's enumeration there covered every real caller of startServer(), but
+// the enumeration there covered every real caller of startServer(), but
 // flagged that updateChecker.js runs SteamCMD ITSELF, independent of that
-// guard entirely. god's own check found TWO such call sites with zero hits
+// guard entirely. the own check found TWO such call sites with zero hits
 // for activeSteamOperations anywhere in this file:
 //   - getLatestBuildInfo() (checkForUpdates()'s read-only version query)
 //   - runAutoUpdate()'s own real `+app_update ... validate` spawn -- the
@@ -88,7 +88,7 @@ afterEach(() => {
   }
 });
 
-// Found while verifying an unrelated build-packaging card (hunt-wave6): all
+// Found while verifying an unrelated build-packaging card (regression): all
 // six tests below fail outright on Windows, but not for the reason it looks
 // like at first ("Windows can't execute a shebang script"). makeFakeSteamcmd()
 // only ever creates a steamcmd.sh -- updateChecker.js's own resolution
@@ -106,7 +106,7 @@ afterEach(() => {
 // assertion only checks that no operation is left claimed, which is
 // trivially true when nothing was ever claimed because resolution failed
 // immediately and its own .catch(() => {}) swallows that. That's the exact
-// right-by-luck shape god named floor-wide tonight (MSYS tar marking
+// right-by-luck shape the test identified floor-wide tonight (MSYS tar marking
 // start.sh executable by extension, not by the chmod under test) -- a
 // green result here would prove nothing about claim/release, so it gets
 // skipped too rather than left as a silent false pass.

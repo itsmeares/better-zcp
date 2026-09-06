@@ -189,7 +189,7 @@ describe('routes/oidc.js: /callback', () => {
     await getHandler('get', '/callback')(callbackReq(), res);
     expect(res.redirectedTo).toBe('/?oidcError=not_configured');
     // The title's second claim ("never touches the flow cookie") had no
-    // assertion of its own -- bug hunt 2026-08-31, mechanical sweep for
+    // assertion of its own -- regression 2026-08-31, mechanical sweep for
     // tests whose own name promises more than their body checks. The
     // not_configured branch returns before the route's later
     // res.clearCookie(FLOW_COOKIE_NAME, ...) call, so this must stay empty.

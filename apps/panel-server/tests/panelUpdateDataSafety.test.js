@@ -27,7 +27,7 @@ describe("standalone update data safety", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-update-data-"));
     tempDirs.push(dir);
     expect(createUpdateDataBackup({ dbPath: path.join(dir, "db.json") }, "1.2.9")).toBeNull();
-    // bug hunt 2026-08-31-c (under-coverage sweep): the title claims no
+    // regression 2026-08-31-c (under-coverage sweep): the title claims no
     // snapshot is CREATED, which is a filesystem claim -- the return-value
     // check above only proves the function reported nothing, not that
     // nothing was actually written to disk.

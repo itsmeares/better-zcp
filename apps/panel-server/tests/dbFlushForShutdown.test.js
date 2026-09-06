@@ -118,7 +118,7 @@ describe("flushForShutdown()", () => {
     // a minute) and not an infinite retry loop. This is a call count, not
     // a clock, so it cannot flake under CPU contention the way the
     // previous version of this test did (2026-08-30: measured 3138ms vs a
-    // 2000ms bound on god's gate while running alongside the full client
+    // 2000ms bound on the gate while running alongside the full client
     // suite -- a real, reproducible contention flake on this exact
     // assertion, not a one-off).
     expect(renameCalls).toBe(SHUTDOWN_FLUSH_MAX_ATTEMPTS);

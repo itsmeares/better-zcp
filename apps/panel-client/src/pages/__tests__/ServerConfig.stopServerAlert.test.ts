@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import enServerConfig from '../../locales/en/serverconfig.json'
 
-// conv-hunt-pages-2 lens 3: this banner shows above the Server Settings tabs
+// regression lens 3: this banner shows above the Server Settings tabs
 // whenever the server is running, for all four of ini/sandbox/spawnpoints/
 // spawnregions, with one fixed claim: "They won't reach the running game
 // until the server restarts."
@@ -28,7 +28,7 @@ describe('ServerConfig -- "server is running" banner copy', () => {
     )
   })
 
-  // bug-hunt-2026-08-26: the banner now also shows when the provider-aware
+  // regression: the banner now also shows when the provider-aware
   // lookup can't determine state (fail-closed -- see
   // apps/panel-client/src/lib/serverStatus.ts's resolveServerRunning). It must not
   // reuse the confirmed-running copy for that case, which flatly asserts

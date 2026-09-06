@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import dgram from "dgram";
 import { queryServerInfo } from "../routes/serverFinder.js";
 
-// hunt-wave10-2026-08-29, apps/panel-server/routes/serverFinder.js, suspect 5: does a
+// regression-2026-08-29, apps/panel-server/routes/serverFinder.js, case 5: does a
 // truncated/malformed A2S_INFO reply from an untrusted game server produce a
 // clean null (via onFailureReason) or an unhandled throw that escapes and
 // 500s the caller? parseA2SInfoResponse() has no explicit bounds checks on
@@ -11,7 +11,7 @@ import { queryServerInfo } from "../routes/serverFinder.js";
 // serverFinder.js) genuinely contains the RangeError a too-short buffer
 // throws, rather than relying on it never being hit in practice.
 
-describe("queryServerInfo: a truncated A2S_INFO reply is contained, not thrown (hunt-wave10 suspect 5)", () => {
+describe("queryServerInfo: a truncated A2S_INFO reply is contained, not thrown (regression case 5)", () => {
   let server;
   afterEach(() => server?.close());
 

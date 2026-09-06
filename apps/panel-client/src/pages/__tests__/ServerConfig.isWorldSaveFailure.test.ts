@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { isWorldSaveFailure } from '../ServerConfig'
 
-// bug-hunt-2026-08-27 (Pam's sweep, closed here): PanelBridge.lua's
+// regression (the sweep, closed here): PanelBridge.lua's
 // setSandboxOption handler calls world:saveWorld() to make a live sandbox
 // change durable and reports the outcome as `persisted`/`saveError`
 // (b376b2c) -- added specifically to stop a failed world save from

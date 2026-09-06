@@ -42,7 +42,7 @@ function createRequest(body, rconService) {
   return { body, app: { get: () => rconService } };
 }
 
-// Root cause (Angela): RconService.execute() resolves {success:false} rather
+// Root cause (testing): RconService.execute() resolves {success:false} rather
 // than throwing when RCON is unreachable (server offline / mid-restart) — the
 // exact moment an operator is most likely to be banning someone. Every route
 // below used to write its persistent record (the SteamID ban list, or the
@@ -135,7 +135,7 @@ describe("players routes: persistent records only written on RCON success", () =
 
       expect(removeSteamIdBan).not.toHaveBeenCalled();
       expect(logPlayerAction).not.toHaveBeenCalled();
-      // bug hunt 2026-08-31-c (under-coverage sweep): the title's own second
+      // regression 2026-08-31-c (under-coverage sweep): the title's own second
       // clause -- "the panel must not claim someone is unbanned" -- is a
       // claim about the HTTP response, which nothing above checks. Same
       // shape as the /banid failure test above, and the same reason:
@@ -204,7 +204,7 @@ describe("players routes: persistent records only written on RCON success", () =
       });
     });
 
-    // Regression for the mismatch god verified directly: banPlayer() (see
+    // Regression for the mismatch testing verified directly: banPlayer() (see
     // services/rcon.js) folds/transliterates the reason before it reaches
     // RCON and returns what actually went out as `sentReason` -- this route
     // used to log the raw, pre-fold `reason` instead, so an accented French
@@ -315,7 +315,7 @@ describe("players routes: persistent records only written on RCON success", () =
 
   // Already correct before this fix -- gated on result.success and returns
   // 400 rather than 200 on failure. Locked in here as a regression guard,
-  // not touched, since Angela confirmed all five routes share the same
+  // not touched, since the test confirmed all five routes share the same
   // client-side wrapper and this one was the one that already got it right.
   describe("POST /adduser (already correct — regression guard only)", () => {
     it("logs the action when RCON succeeds", async () => {

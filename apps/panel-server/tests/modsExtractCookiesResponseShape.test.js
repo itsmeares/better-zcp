@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 bug hunt: POST /collection/extract-cookies used to return the
+// 2026-08-26 regression: POST /collection/extract-cookies used to return the
 // raw, live Steam sessionid/steamLoginSecure directly in the response body.
 // Traced the client and found the values were never displayed -- they were
 // immediately POSTed straight back to a save endpoint. Fixed by having the

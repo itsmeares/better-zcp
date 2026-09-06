@@ -17,7 +17,7 @@ import readline from "node:readline";
 // shutdown shape as index.js's real gracefulShutdown() post-fix, using the
 // real, unmocked database/init.js -- in its OWN isolated temp data dir
 // (never the repo's real data/), forces the exact EPERM contention proven
-// in the original hunt-wave13 diagnosis by holding an ordinary read handle
+// in the original regression diagnosis by holding an ordinary read handle
 // on the child's own db.json from THIS process, and sends a real SIGTERM.
 const HARNESS = path.join(import.meta.dirname, "fixtures", "shutdownRaceHarness.mjs");
 

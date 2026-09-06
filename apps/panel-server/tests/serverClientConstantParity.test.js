@@ -8,7 +8,7 @@ import { USER_ROLES } from "../services/auth.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..", "..");
 
-// hunt-wave14-2026-08-30: generalizes accessLevelsListParity.test.js's
+// regression-2026-08-30: generalizes accessLevelsListParity.test.js's
 // technique after that survey found two MORE server/client constant pairs
 // that are hand-duplicated (a different array, by hand, in a different
 // language, because server code isn't in the client bundle) with nothing
@@ -35,12 +35,12 @@ function extractArrayLiteral(relativePath, constName) {
 describe("TEMPLATE_INI_EXCLUSIONS (client) vs DEFAULT_INI_EXCLUSIONS (server): parity", () => {
   // DEFAULT_INI_EXCLUSIONS's own comment (apps/panel-server/utils/templateSchema.js)
   // documents a real past incident in this exact domain (2026-08-24
-  // conv-template-privesc): a template's own (attacker-controlled)
+  // regression): a template's own (attacker-controlled)
   // iniExclusions list was once trusted as authoritative at the apply-time
   // write site, letting an empty list disable the RCONPassword/port/
   // ServerName protection entirely. Fixed there by resolveIniExclusions()
   // always unioning in DEFAULT_INI_EXCLUSIONS unconditionally -- confirmed
-  // (hunt-wave14) that the SAME unconditional union backs
+  // (regression) that the SAME unconditional union backs
   // validateTemplate()'s check on every saveTemplate()/importTemplate()
   // call, so a drifted CLIENT copy cannot itself leak a secret into a
   // saved/exported template: the server independently rejects (400,
@@ -83,8 +83,8 @@ describe("LEGACY_USER_ROLES (client) vs USER_ROLES (server): parity", () => {
   });
 });
 
-// hunt-wave16-2026-08-30: closes out duplication-survey-uncovered-remainder
-// (the not-covered list hunt-wave14's survey named rather than glossing
+// regression-2026-08-30: closes out duplication-survey-uncovered-remainder
+// (the not-covered list regression's survey named rather than glossing
 // over). Two more real pairs found by finally scanning apps/panel-server/routes/*.js
 // and apps/panel-server/index.js (never checked before) and opening the remaining
 // name-scanned-but-unopened client constants. Both confirmed IN SYNC as of

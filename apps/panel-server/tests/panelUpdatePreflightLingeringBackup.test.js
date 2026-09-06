@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-// 2026-09-04, Dwight's finding: this preflight probe checked for a
+// 2026-09-04, the finding: this preflight probe checked for a
 // ".old" backup file, a suffix nothing has written since the bundle-journal
 // rewrite renamed it to ".bundle-previous" (see updateBundle.js's
 // backupBinaryPath and scripts/release/build.mjs's BIN_BACKUP). The check could therefore

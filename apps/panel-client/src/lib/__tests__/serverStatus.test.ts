@@ -34,8 +34,8 @@ describe('resolveClientProvider', () => {
   })
 })
 
-// A ServerConfig.tsx save-guard's un-hardened sibling (bug-hunt-2026-08-26,
-// found by Dwight): ServerConfig.tsx used to trust serverApi.getStatus()
+// A ServerConfig.tsx save-guard's un-hardened sibling (regression,
+// found by testing): ServerConfig.tsx used to trust serverApi.getStatus()
 // (the raw local scan) unconditionally, the same GH#114 root cause, so a
 // live docker container could compute serverRunning=false and silently
 // suppress its "stop the server before editing" guard. resolveServerRunning

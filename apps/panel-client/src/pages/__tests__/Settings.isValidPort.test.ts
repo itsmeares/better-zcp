@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { isValidPort } from '../Settings'
 
-// conv-hunt-pages-2 lens 4, confirmed instance: the General tab's Panel Port
+// regression lens 4, confirmed instance: the General tab's Panel Port
 // field, and the HTTPS tab's HTTPS Port field right next to it, both accept
 // any numeric string with no range check -- updateSetting() only rejects
 // non-numeric input, never an out-of-range one, and handleSave() submits

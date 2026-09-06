@@ -7,7 +7,7 @@ import { modsApi } from '@/lib/api'
 import type { DepSearchState } from '@/lib/modsShared'
 import type { ConflictScanResult } from '@/types'
 
-// bughunt-2026-08-31-b (Dwight traced the server half, Jim's slice for the
+// regression (testing traced the server half, the slice for the
 // client half): handleFixAll used to mark EVERY requested row 'added' the
 // instant POST /add-all-resolved-deps resolved without throwing, ignoring
 // that each row's own workshop-add can succeed while its Mod ID resolution

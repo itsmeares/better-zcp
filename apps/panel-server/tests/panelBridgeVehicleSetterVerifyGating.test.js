@@ -14,7 +14,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // a mutation.
 //
 // CORRECTED 2026-08-30 (panelbridge-audit): the siren half of that claim was
-// itself wrong, undetected until Kevin's real-jar audit -- getLightbarSirenMode
+// itself wrong, undetected until the real-jar audit -- getLightbarSirenMode
 // does not exist anywhere on BaseVehicle in the real B42 jar (confirmed by
 // two independent classfile scans); getLightbarSirenModeObject() is the real
 // accessor, returning a LightbarSirenMode wrapper whose own get():int is the
@@ -30,7 +30,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // table (see below) since they live on VehicleParts, not the vehicle -- and a
 // THIRD instance of this file's own pattern (a stub built from what the code
 // believed rather than what the jar declares) surfaced while checking for it:
-// Kevin's Pass 2 audit already found setRemainingFuelPercentage absent from
+// the Pass 2 audit already found setRemainingFuelPercentage absent from
 // the entire B42 vehicle API too, dead-but-harmless only because the real
 // GasTank-container path (routed through getPartById, now fixed) works. This
 // stub's old FakeVehicleParts.getPartById returned nil unconditionally, so
@@ -80,7 +80,7 @@ end
 function FakeVehicle:setTrunkLocked(v) if self.sticks then self.trunkLocked = v end end
 function FakeVehicle:isTrunkLocked() return self.trunkLocked end
 -- setRemainingFuelPercentage does not exist anywhere in the real B42 vehicle
--- API (Kevin's Pass 2 jar audit) -- kept here only because
+-- API (the Pass 2 jar audit) -- kept here only because
 -- handlers.vehicleSetFuel still attempts it as a B41 fallback when the
 -- GasTank path is unavailable; this stub models the (unrealistic) case where
 -- it happens to work, same as it always implicitly did before that finding.

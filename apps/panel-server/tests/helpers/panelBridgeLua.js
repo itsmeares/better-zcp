@@ -12,7 +12,7 @@
 // shapes them." It does NOT mean "verified against Project Zomboid." If a
 // stub's shape is wrong -- PZ renames a method, changes an arg, changes what
 // a getter returns on some game version -- every test built on that stub can
-// stay green while the real mod is broken. Kevin's PZ-B42-jar-verified
+// stay green while the real mod is broken. the PZ-B42-jar-verified
 // (receiver, method) findings and the corresponding real B42 jar audit are
 // the actual verified-against-truth work; this harness tests logic sitting
 // on top of that, not the truth of the API surface itself.

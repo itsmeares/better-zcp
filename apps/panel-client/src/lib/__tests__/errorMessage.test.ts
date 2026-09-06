@@ -253,7 +253,7 @@ describe('getUserErrorMessage — generic wrapper for an uncoded 5xx', () => {
 
   it('wraps a 500 with no registered code translation, preserving the raw detail', () => {
     const error = new ApiError('EACCES: permission denied, open [path]', { status: 500, code: 'HTTP_500' })
-    // bug-hunt-2026-08-31: the raw detail doesn't end in terminal
+    // regression: the raw detail doesn't end in terminal
     // punctuation, so wrapUncodedServerError appends a period before
     // interpolating -- without it this read as one run-on sentence with no
     // boundary ("...open [path] Ce n'était pas attendu...").

@@ -394,7 +394,7 @@ export default function Layout({ children }: LayoutProps) {
   // ACCEPTED (both run in the background and used to report success:true
   // unconditionally); this is the one place the actual result reaches the
   // client at all instead of only being discoverable by someone who thinks
-  // to go check Schedule History (2026-08-26 bug hunt, scheduler
+  // to go check Schedule History (2026-08-26 regression, scheduler
   // blind-success family). Global, not page-scoped, because a restart's
   // countdown + graceful shutdown can run long enough that the user has
   // already navigated elsewhere by the time it resolves.

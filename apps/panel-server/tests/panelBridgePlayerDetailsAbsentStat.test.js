@@ -12,7 +12,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 //     username, and access level, all of which work fine. Fixed by routing
 //     every field through PanelBridge.tryGet (per-field pcall).
 //
-// (2) Kevin's FIRST pass concluded zombie.characters.Stats has no
+// (2) the FIRST pass concluded zombie.characters.Stats has no
 //     getHunger/getThirst/getFatigue/etc at all. That was correct about the
 //     named getters and WRONG about the capability: Stats works through ONE
 //     generic enum-parameterized getter, stats:get(CharacterStat.HUNGER),

@@ -5,7 +5,7 @@ import Scheduler from '../Scheduler'
 import { schedulerApi, serverApi, serversApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// bug-hunt-2026-08-27 (Jim's ranked list, #2): the operator could type a
+// regression (the ranked list, #2): the operator could type a
 // custom restart-warning time above 60 minutes into the "Custom Time" field
 // (its min/max={1,30} are decorative -- NumberInput only enforces a bound
 // via native <input> attrs unless a `clamp` prop is also passed, and

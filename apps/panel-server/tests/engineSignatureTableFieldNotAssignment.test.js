@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { resolveAllCallSites } from "../../../scripts/lib/engine-signature-core.mjs";
 
-// 2026-08-31 bug hunt (scripts/**, god's directive): engine-signature-core.mjs's Pass-1 variable-
+// 2026-08-31 regression (scripts/**, the directive): engine-signature-core.mjs's Pass-1 variable-
 // type resolver had no way to tell a real Lua assignment (`local cell = getWorld():getCell()`)
 // apart from a TABLE CONSTRUCTOR FIELD of the identical shape (`{ cell = someExpr, ... }`). The
 // regex's only precondition on the char before the identifier -- "not `.` or a word character" --
@@ -118,7 +118,7 @@ end
     // with no table-constructor guard would" -- verified directly in
     // scripts/check-engine-signatures.mjs's own baseline/manifest history (2026-08-31: 178 resolved
     // pre-fix vs 178 post-fix on THIS specific file was the surprising, verified-by-effect result
-    // -- see the bug-hunt commit message for the full before/after). What must never regress is
+    // -- see the regression commit message for the full before/after). What must never regress is
     // that every already-reviewed baseline finding is still found (the fix must not make the
     // checker blind to something it used to catch).
     const baselinePath = path.join(process.cwd(), "scripts", "engine-signatures.baseline.json");

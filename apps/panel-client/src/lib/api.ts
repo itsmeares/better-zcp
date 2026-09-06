@@ -1286,7 +1286,7 @@ export const modsApi = {
       }>;
     }>,
   // On success the server extracts AND saves the credentials in one step
-  // (2026-08-26 bug hunt: the raw values never need to cross the wire, since
+  // (2026-08-26 regression: the raw values never need to cross the wire, since
   // nothing displays them) -- `saved: true` and no sessionid/steamLoginSecure
   // fields. On failure the shape is unchanged: no credentials were found or
   // extractable, so there's nothing to omit.

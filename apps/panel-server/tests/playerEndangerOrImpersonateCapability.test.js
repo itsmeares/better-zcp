@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-27, operator ruling on ranked-bug #5 (chat impersonation gated on
+// 2026-08-27, decision on prioritized issue #5 (chat impersonation gated on
 // the same capability as changing the weather): server.world_events used to
 // cover BOTH genuinely world-wide effects (weather, climate, zombie
 // clear-all, ...) AND routes that target a specific named player --

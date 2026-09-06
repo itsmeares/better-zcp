@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// LINUX BUG HUNT (2026-08-29, hunt-wave5, card 9fe76d): "OVERLAP -- can a
+// LINUX regression (2026-08-29, regression, card 9fe76d): "OVERLAP -- can a
 // scheduled restart start while a previous one is still running, or while a
 // backup is mid-write?"
 //
@@ -112,7 +112,7 @@ describe("Scheduler: scheduled backup defers to an in-progress restart", () => {
 });
 
 describe("Scheduler.getStatus(): surfaces the timezone every cron.schedule() call actually uses", () => {
-  // Suspect 1 (timezone): no cron.schedule() call in this file passes an
+  // case 1 (timezone): no cron.schedule() call in this file passes an
   // explicit `timezone` option, so node-cron resolves every schedule --
   // task jobs, the backup job, AUTO_RESTART_CRON -- against the PROCESS's
   // own default timezone (Intl.DateTimeFormat().resolvedOptions().timeZone).

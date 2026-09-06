@@ -881,7 +881,7 @@ describe("POST /api/scheduler/restart-now labels its Schedule History entry as m
   });
 });
 
-// bug-hunt-2026-08-27 (Pam's undersell pass, routed as a bypass row): unlike
+// regression (the undersell pass, routed as a bypass row): unlike
 // POST /tasks, PUT /tasks/:id and POST /tasks/:id/run above, restart-now has
 // no stored command to classify via requiredCapabilityForScheduledCommand()
 // -- it calls scheduler.performRestart() directly, the exact same live

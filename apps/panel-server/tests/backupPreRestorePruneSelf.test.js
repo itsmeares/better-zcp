@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import archiver from "archiver";
 
-// bug hunt 2026-09-05 (backup-restore-round-trip sweep, item #1): the
+// regression 2026-09-05 (backup-restore-round-trip sweep, item #1): the
 // mandatory pre-restore backup's completion runs cleanupOldBackups() --
 // the SAME retention prune a routine scheduled backup runs -- with no
 // awareness that one of the backups on disk right now is the very archive

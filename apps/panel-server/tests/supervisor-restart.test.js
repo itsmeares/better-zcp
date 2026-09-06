@@ -24,7 +24,7 @@ import { generateStartBat as generateStartBatForStaticChecks } from "../../../sc
 // which then satisfies Get-FileHash too regardless of any PSModulePath
 // shim aimed only at that one cmdlet -- confirmed empirically while
 // building this test. A plain textual guard is what actually catches a
-// regression here, including god's specific warning that a fully-qualified
+// regression here, including the specific warning that a fully-qualified
 // `Microsoft.PowerShell.Utility\Get-FileHash` would NOT be enough -- that
 // still contains the name, so it still fails this.
 describe("Start.bat never depends on the Get-FileHash cmdlet for staged-bundle integrity", () => {
@@ -241,7 +241,7 @@ function allowDelete(targetPath) {
   });
 }
 
-// Reproduces Dwight's actual finding (a read handle held on a file inside
+// Reproduces the actual finding (a read handle held on a file inside
 // client\\dist, opened without FILE_SHARE_DELETE) so that renaming the
 // directory itself fails with a clean sharing violation -- the way an AV
 // scan or an editor with the file open would. An icacls deny-delete ACE on
@@ -727,7 +727,7 @@ describe.skipIf(!!skipReason)(
     it(
       "refuses to apply a staged binary whose hash no longer matches the journal, instead of installing it over a working install",
       async () => {
-        // 2026-09-04, Dwight's finding (code-grounded, not live-tested at
+        // 2026-09-04, the finding (code-grounded, not live-tested at
         // the time): the Windows apply path only ever checked that a file
         // named right existed -- never that its CONTENT still matched what
         // was staged. A file partially overwritten or corrupted in the
@@ -742,7 +742,7 @@ describe.skipIf(!!skipReason)(
         setupPendingUpdate(dir);
 
         // Corrupt the staged binary AFTER setupPendingUpdate() already
-        // hashed and journaled the good copy -- exactly Dwight's window: a
+        // hashed and journaled the good copy -- exactly the window: a
         // file that still exists under the right name (passes the
         // presence check) but no longer matches what was staged.
         const stagedBinaryPath = path.join(dir, "ZomboidControlPanel.exe.new");
@@ -792,7 +792,7 @@ describe.skipIf(!!skipReason)(
       async () => {
         // 2026-09-05, client-bundle-integrity: the staged binary has always
         // been hash-verified (see the test above); the staged CLIENT bundle
-        // never was, on either platform -- same corruption window Dwight
+        // never was, on either platform -- same corruption window testing
         // measured for the binary applies here too, and a corrupt client
         // bundle is arguably worse (a panel that starts and serves a broken
         // UI, instead of failing loudly).
@@ -847,7 +847,7 @@ describe.skipIf(!!skipReason)(
 
     // main-is-red, 2026-09-05: a genuine (not Get-FileHash-related) client
     // hash mismatch reproduced on a clean GitHub windows-2022 runner and
-    // never once locally -- god's candidate theories were Resolve-Path
+    // never once locally -- the candidate theories were Resolve-Path
     // canonicalizing a runner temp path (case, 8.3 short name, trailing
     // separator) into something that no longer lines up with
     // Get-ChildItem's own FullName values, corrupting the
@@ -1071,7 +1071,7 @@ describe.skipIf(!!skipReason)(
     it(
       "does not report a rollback failure when the frontend backup step itself never ran",
       async () => {
-        // 2026-09-04, Dwight's finding, god-dispatched: the inverse of the
+        // 2026-09-04, the finding, regression follow-up: the inverse of the
         // two tests above -- the log said broken, the state was fine. He
         // forced the client\\dist backup MOVE itself to fail (a locked file
         // inside it); a failed move leaves its source exactly where it was,
@@ -1144,7 +1144,7 @@ describe.skipIf(!!skipReason)(
     it(
       "bounds the rollback-retry loop and halts visibly, naming the three recovery files, instead of looping forever",
       async () => {
-        // 2026-09-04, god's design review of Angela's :rollback_update
+        // 2026-09-04, the design review of the :rollback_update
         // proposal: a stuck .update-applying re-triggers ROLLBACK on every
         // RELAUNCH (not every restart, unlike .update-pending), against an
         // identical already-failed state each time. Unlike the

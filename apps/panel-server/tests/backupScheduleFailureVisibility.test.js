@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-// 2026-08-29 backlog card (god): backup-card-not-bridged-to-scheduler-
+// 2026-08-29 issue (testing): backup-card-not-bridged-to-scheduler-
 // failure-logging. Confirmed the premise still holds at current main: the
 // Backups page's "Auto-Backup" status card reads only `settings.enabled`
 // (a toggle) and `lastBackup` (only ever updated on a SUCCESSFUL backup) --

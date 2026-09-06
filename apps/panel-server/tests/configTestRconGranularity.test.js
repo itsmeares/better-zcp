@@ -17,7 +17,7 @@ const { RCON_UNREACHABLE_DETAIL, RCON_AUTH_FAILED_DETAIL } = await import(
 // EVERY failure (host genuinely unreachable, or host reachable but the
 // saved password is stale) into one generic "Failed to connect to RCON"
 // message, which Console.tsx's banner then rendered as "host unreachable"
-// even for a wrong password (2026-08-26 bug hunt finding 1). This locks in
+// even for a wrong password (2026-08-26 regression finding 1). This locks in
 // the fix: /test-rcon must report the same two canonical detail strings and
 // codes /rcon/test and /rcon/connect already use.
 

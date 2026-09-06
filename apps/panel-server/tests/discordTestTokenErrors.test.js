@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Bug-hunt regression coverage: POST /discord/test used to collapse every
+// regression regression coverage: POST /discord/test used to collapse every
 // non-2xx response from Discord's API into a single "Invalid token" message,
 // so a rate-limited or Discord-outage request looked identical to a genuinely
 // bad token -- the exact "three causes, one message" class the hunt was

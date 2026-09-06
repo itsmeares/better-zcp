@@ -133,18 +133,18 @@ describe("backup.js POST /restore/:name: failure messages are sanitized surgical
   it("redacts a filesystem path out of an ordinary/unexpected failure message", async () => {
     restoreBackup.mockResolvedValueOnce({
       success: false,
-      message: "ENOENT: no such file or directory, rename 'C:\\Users\\Sacha\\AppData\\Local\\ZomboidPanel\\Saves' -> 'C:\\Users\\Sacha\\AppData\\Local\\ZomboidPanel\\Saves.replaced-123'",
+      message: "ENOENT: no such file or directory, rename 'C:\\Users\\test-user\\AppData\\Local\\ZomboidPanel\\Saves' -> 'C:\\Users\\test-user\\AppData\\Local\\ZomboidPanel\\Saves.replaced-123'",
     });
 
     const res = await postRestore(STOPPED_SERVER_MANAGER);
 
     expect(res.getStatusCode()).toBe(400);
-    expect(res.getBody().message).not.toContain("C:\\Users\\Sacha");
+    expect(res.getBody().message).not.toContain("C:\\Users\\test-user");
     expect(res.getBody().message).toContain("[path]");
   });
 
   it("does NOT redact the rollback-failure message -- the recovery path must survive intact", async () => {
-    const recoveryPath = "C:\\Users\\Sacha\\AppData\\Local\\ZomboidPanel\\Saves.replaced-1735500000000";
+    const recoveryPath = "C:\\Users\\test-user\\AppData\\Local\\ZomboidPanel\\Saves.replaced-1735500000000";
     restoreBackup.mockResolvedValueOnce({
       success: false,
       message: `Restore failed and the previous save could not be put back automatically. It is preserved at ${recoveryPath}.`,

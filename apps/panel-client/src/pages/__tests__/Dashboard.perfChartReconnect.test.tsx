@@ -8,7 +8,7 @@ import {
   debugApi, panelUpdateApi, modsApi, schedulerApi, updateApi, type ServerInstance,
 } from '@/lib/api'
 
-// bug-hunt-2026-09-04: 'subscribe:perf' was only ever emitted once, when the
+// regression: 'subscribe:perf' was only ever emitted once, when the
 // perf-subscription effect first ran. Room membership is server-side
 // per-connection state, lost on every socket.io disconnect/reconnect even
 // though the client reuses the same Socket object -- after any reconnect the

@@ -8,7 +8,7 @@ import {
   parseCustomStartCommand,
 } from "../services/serverManager.js";
 
-// 2026-09-04, carded during the P0 review (2026-09-04T18-24-34-745Z),
+// 2026-09-04, tracked during the P0 review (2026-09-04T18-24-34-745Z),
 // pre-existing bug, NOT a regression of the P0 fix itself:
 //
 // serverManager.js's custom-start-command tokenizer
@@ -92,7 +92,7 @@ function runCmd(cmdArgs, cwd, opts = {}) {
       cleanupDirs = [];
     });
 
-    it("REPRODUCES the carded bug: the old first/last-only strip leaves an unbalanced quote, cmd exits 0 with NO log (before)", async () => {
+    it("REPRODUCES the tracked bug: the old first/last-only strip leaves an unbalanced quote, cmd exits 0 with NO log (before)", async () => {
       const { tmpRoot, batPath, launchLogPath } = makeFixture("before");
       cleanupDirs.push(tmpRoot);
 
@@ -179,7 +179,7 @@ function runCmd(cmdArgs, cwd, opts = {}) {
       expect(logContent).toMatch(/MARKER_STARTED/);
     });
 
-    // 2026-09-04, widened-class chain-coverage follow-up (Angela's audit):
+    // 2026-09-04, widened-class chain-coverage follow-up (the audit):
     // windowsQuoteArgIfNeeded's widened trigger set is
     // `/[\s"&<>()^|,;=]/` -- of those, `=` and space were already proven
     // all the way through parseCustomStartCommand -> buildWindowsCmdLine ->

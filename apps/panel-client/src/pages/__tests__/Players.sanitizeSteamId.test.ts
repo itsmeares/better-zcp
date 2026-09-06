@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { sanitizeSteamId } from '../Players'
 
-// conv-hunt-pages-2 lens 4, confirmed instance: apps/panel-server/routes/players.js
+// regression lens 4, confirmed instance: apps/panel-server/routes/players.js
 // requires SteamID64 to match /^\d{17}$/ on both /banid and /unbanid (400
 // "Invalid SteamID format (must be 17 digits)" otherwise). The allowlist's
 // SteamID field already enforced this by stripping non-digits and clamping

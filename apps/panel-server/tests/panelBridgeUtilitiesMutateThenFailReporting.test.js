@@ -3,8 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 3, item 2 (mutate-then-fail) --
-// panelbridge-total-audit-2026-08-30. handlers.restoreUtilities/
+// 2026-08-30, regression, item 2 (mutate-then-fail) --
+// panelbridge-regression-2026-08-30. handlers.restoreUtilities/
 // shutOffUtilities each wrap their whole mutation sequence (SandboxVars,
 // Java sync, world:setHydroPowerOn) in one pcall. A throw partway through
 // used to return `false, nil, err` -- discarding debugInfo, which already

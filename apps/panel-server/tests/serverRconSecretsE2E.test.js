@@ -7,7 +7,7 @@ import path from "path";
 // into an isolated temp root for the whole run, so exercising the real
 // fs-backed write/read pipeline here is safe.
 //
-// This is the test god specifically asked for: not "the secret left
+// This is the test this test covers for: not "the secret left
 // db.json" in isolation, but that the EXISTING masked-placeholder flow in
 // routes/servers.js (save real value -> GET shows masked -> PATCH an
 // unrelated field with the masked placeholder echoed back -> the real

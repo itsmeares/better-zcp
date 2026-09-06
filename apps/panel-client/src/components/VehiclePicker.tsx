@@ -14,7 +14,7 @@ export interface CatalogVehicle {
   // Both optional, not a stray gap: PanelBridge.lua only sets these on a
   // successful pcall -- getSeatNumber() is a known B42 Kahlua thrower, so
   // getMass()/the seat-count getters can genuinely come back unset (server/
-  // backlog card
+  // issue
   // api-ts-declares-catalog-weight-mass-seats-non-optional-but-lua-guards-them,
   // 2026-08-29). A missing value is a real, expected runtime shape, not a
   // bug to paper over with a fallback of 0.

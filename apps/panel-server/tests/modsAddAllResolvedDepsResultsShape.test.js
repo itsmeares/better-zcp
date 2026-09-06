@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// Bug hunt 2026-08-31 (server-routes slice): POST /add-all-resolved-deps
+// regression 2026-08-31 (server-routes slice): POST /add-all-resolved-deps
 // resolves each dep's PZ mod ID via a best-effort Steam-description scrape
 // (fetchModIdFromWorkshop) that routinely returns null -- many workshop
 // items don't declare a Mod ID in their description, which is exactly why
@@ -14,7 +14,7 @@ import path from "path";
 // diagnostic for. The response used to report only aggregate wsAdded/
 // modIdsAdded counts and success:true, with no way for a caller to tell
 // WHICH dep (if any) failed to resolve. Paired with ConflictsPanel.tsx's
-// handleFixAll (apps/panel-client/src/components/mods -- Jim's slice, not fixed here),
+// handleFixAll (apps/panel-client/src/components/mods -- the slice, not fixed here),
 // which marked every requested row "added" on any non-throwing response,
 // this made the panel report a fix that hadn't actually happened for that
 // one dependency. This test locks in the new per-item `results[]` field

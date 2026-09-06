@@ -93,7 +93,7 @@ describe("POST /api/server/wipe backs up before deleting (default createBackup: 
     expect(fs.existsSync(path.join(saveDir, "map", "0_0.bin"))).toBe(true);
   });
 
-  // 2026-08-26 bug hunt: createBackup can return success:true while having
+  // 2026-08-26 regression: createBackup can return success:true while having
   // silently skipped files (a file that vanished mid-archive, or -- since
   // 445c15a5, 2026-08-29 -- a symbolic link deliberately not followed) -- it
   // surfaces that via skippedFiles rather than deciding policy itself. This
@@ -234,7 +234,7 @@ describe("POST /api/server/wipe backs up before deleting (default createBackup: 
   });
 });
 
-// 2026-08-26 bug hunt (partial-failure-state): the map/leftovers/accounts
+// 2026-08-26 regression (partial-failure-state): the map/leftovers/accounts
 // deletion steps aren't individually try/caught the way players/world's
 // root-file loops are, so a throw partway through used to reach the outer
 // catch and reply with a bare {error}, telling the operator neither what
@@ -317,7 +317,7 @@ describe("POST /api/server/wipe with createBackup: false", () => {
   });
 });
 
-// Bug hunt 2026-08-31 (server-routes slice): unlike map/leftovers/accounts
+// regression 2026-08-31 (server-routes slice): unlike map/leftovers/accounts
 // above, the players/world root-file delete loops used to wrap
 // readdirSync+unlinkSync in their OWN inner try/catch that only logged a
 // warning server-side -- a throw there never reached the outer catch, so it

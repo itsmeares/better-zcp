@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 
-// 2026-08-29, live-evidence hunt: god found four db.json.<pid>.<rand>.tmp
+// 2026-08-29, live-evidence regression: the test found four db.json.<pid>.<rand>.tmp
 // files (~630KB each) accumulating from a single LIVE process in the real
 // data/ directory. flushWrites() computes a brand-new tmpPath on every call
 // and never unlinked it on a failed rename -- the next attempt makes a

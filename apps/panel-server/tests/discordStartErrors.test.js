@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Bug-hunt follow-up (conv-userbugs): a live user's screenshot showed the
+// regression follow-up (regression): a live user's screenshot showed the
 // generic "Failed to start bot - check configuration" banner. Tracing the
 // actual POST /start path (not /test, which discordTestTokenErrors.test.js
 // already covers) found the same "three causes, one message" class, worse

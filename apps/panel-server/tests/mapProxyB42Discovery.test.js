@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Regression/coverage for getB42Map()'s dynamic B42 build discovery
-// (conv-mapbuild): the endpoint it used to call (build_list.json) is dead,
+// (regression): the endpoint it used to call (build_list.json) is dead,
 // and every JSON/XML descriptor path this needs is behind a Cloudflare
 // challenge for Node's own TLS stack (fetch AND https alike) that curl gets
 // through far more reliably -- see the header comment in
 // apps/panel-server/routes/mapProxy.js. This proves BOTH branches by forcing them, per
-// god's dispatch: (a) discovery succeeds and resolves the build pzmap.org
+// the dispatch: (a) discovery succeeds and resolves the build pzmap.org
 // itself flags as default via /api/builds/default, including the reversed
 // (newest-first) full-list walk when that specific build isn't rendered
 // yet; (b) discovery fails outright and the panel still serves the
 // hardcoded fallback AND reports it honestly via getB42ResolutionStatus().
 // Two source states only: 'dynamic' | 'fallback' -- a client-resolve tier
-// was proposed, investigated, and explicitly rejected (see conv-mapbuild)
+// was proposed, investigated, and explicitly rejected (see regression)
 // because its own success rate couldn't be verified through Cloudflare from
 // any browser, and shipping unverifiable fallback machinery would repeat
 // the exact "looks healthy, isn't" shape this feature exists to fix.
@@ -211,7 +211,7 @@ describe("getB42ResolutionStatus() contract shape", () => {
   });
 });
 
-// Regression for conv-mapcleanup-perf: on a cold cache, EVERY concurrent
+// Regression for regression: on a cold cache, EVERY concurrent
 // tile request called getB42Map()/getB42TopFormat() independently, each one
 // re-running the full curl-based discovery instead of sharing the one
 // already in flight. Measured against a real isolated server: 80 concurrent

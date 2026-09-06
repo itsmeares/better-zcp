@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 
-// 2026-08-29 Linux auth/session/DB bug hunt (god): "what mode does db.json
+// 2026-08-29 Linux auth/session/DB regression (testing): "what mode does db.json
 // actually end up with on Linux, and is the write crash-safe" -- real stat
 // output and a real fault-injected crash on real ext4 (WSL2), not reasoning
 // about the code. Uses the real database/init.js (not mocked) against the

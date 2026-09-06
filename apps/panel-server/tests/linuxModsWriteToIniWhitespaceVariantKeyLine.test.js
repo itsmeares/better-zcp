@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.js";
 
-// 2026-08-29 hunt-wave13 follow-up (god's lead, verified real): POST
+// 2026-08-29 regression follow-up (the lead, verified real): POST
 // /write-to-ini decided whether Mods=/WorkshopItems=/Map= already exist via
 // a bare /^Mods=.*/m (etc.) match with NO whitespace tolerance, then used
 // the SAME pattern to replace in place. A hand-edited file with "Mods = foo"
@@ -22,7 +22,7 @@ import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.js";
 // keeping this route's strict match working. edda9ca6 correctly stops that
 // unrelated rewrite, which removes the accidental repair and widens the
 // window this bug is reachable in -- pre-existing, not introduced, but
-// worth closing in the same session per god's instruction.
+// worth closing in the same session per the instruction.
 
 vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),

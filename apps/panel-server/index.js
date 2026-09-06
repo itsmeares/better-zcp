@@ -337,7 +337,7 @@ let httpsServer = null;
 // port) so a later check (the boot-banner URL list, the protocol string
 // used to build the printed panel URL) never reports HTTPS as available
 // after it's actually failed closed. Exported narrowly so a test can
-// observe this specific state transition -- bug hunt 2026-08-31-c
+// observe this specific state transition -- regression 2026-08-31-c
 // (under-coverage sweep): a prior test asserted "does NOT crash" and
 // "fails closed" correctly via the returned server object's own
 // `.listening` property, but had no way to see whether this MODULE-level
@@ -1237,7 +1237,7 @@ rconService.on("connected", async () => {
 rconService.on("disconnected", () => {
   // When RCON disconnects, check if server actually stopped. This gives
   // faster detection than the 10s watchdog interval. Routes through
-  // checkServerStatusNow() (2026-08-31 bug hunt consolidation -- see that
+  // checkServerStatusNow() (2026-08-31 regression consolidation -- see that
   // function's own header comment) instead of independently reading,
   // comparing, mutating and emitting: this handler used to be a second,
   // independent writer of `lastKnownRunning` that would not have inherited
@@ -2054,7 +2054,7 @@ io.on("connection", (socket) => {
   // Subscribe to logs. Mirrors GET /api/debug/logs (debug.js), which
   // requires diagnostics.manage -- that route's own gate is what this
   // socket has to match. Not "every route in debug.js requires it": that
-  // was asserted here once (bughunt-2026-08-31-b, completeness-claims
+  // was asserted here once (regression, completeness-claims
   // audit) and was already false the day it was written -- POST
   // /debug/client-errors is a deliberate, separately-documented
   // unauthenticated exception (write-only crash-report intake, returns no
@@ -2066,7 +2066,7 @@ io.on("connection", (socket) => {
   // could get the identical live log stream just by connecting a socket
   // instead of calling the HTTP route. RCON command
   // text used to ride along in this room too (rcon.js's rcon:response
-  // event) -- moved to its own rcon-live room below (2026-08-31 bug hunt),
+  // event) -- moved to its own rcon-live room below (2026-08-31 regression),
   // since that content is gated rcon.execute everywhere else it's exposed
   // (see /rcon/history's own header comment) and diagnostics.manage is a
   // different, broader capability that never mentions RCON at all.
@@ -2093,7 +2093,7 @@ io.on("connection", (socket) => {
   // every admin/technician's past RCON console session and every
   // whitelist password ever set. The live broadcast of the identical
   // content class must not reopen that through a narrower-looking but
-  // still-too-broad gate (2026-08-31 bug hunt).
+  // still-too-broad gate (2026-08-31 regression).
   socket.on("subscribe:rcon", async () => {
     if (!(await socketHasCapability(socket, "rcon.execute"))) return;
     socket.join("rcon-live");
@@ -2513,7 +2513,7 @@ export async function getObservedServerRunning() {
 // not yet "shutdown confirmed" -- can ask for a prompt re-check instead of
 // emitting its own competing server:status claim.
 //
-// 2026-08-26 bug hunt: that second option is what /stop used to do, and it
+// 2026-08-26 regression: that second option is what /stop used to do, and it
 // created exactly the desync this function exists to prevent. A route-level
 // io.emit("server:status", {running:false}) told every client the server
 // was down the instant rconService.quit() returned -- which only proves the

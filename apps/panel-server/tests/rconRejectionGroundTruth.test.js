@@ -48,7 +48,7 @@ const FIXTURE_PATH = path.resolve(__dirname, "../__fixtures__/pzRconRejectionStr
 const KNOWN_BROKEN_PATTERNS = new Map([
   [
     "can be executed only from the game",
-    "Verbatim-confirmed by Kevin 2026-08-23, absent from the entire jar as of this extraction (2026-08-27, build 24909800). See this file's own comment block above.",
+    "Confirmed absent from the entire jar as of this extraction (2026-08-27, build 24909800). See this file's own comment block above.",
   ],
 ]);
 
@@ -69,7 +69,7 @@ const allStrings = fixture ? Object.values(fixture.classes).flat() : [];
 // The known, resolved denominator: 72 classes (every zombie/commands/
 // serverCommands/*.class, the GameServer.class dispatcher, plus
 // BanSystem.class and ServerWorldDatabase.class + its LogonResult inner
-// class) as of the 2026-08-29 (hunt-wave11) extraction, same build
+// class) as of the 2026-08-29 (regression) extraction, same build
 // (24909800) as the prior 2026-08-27/69-class extraction -- this jump from
 // 69 is a DELIBERATE scope widening (banuser/unbanuser/adduser/
 // removeuserfromwhitelist's own command classes carry no rejection text of

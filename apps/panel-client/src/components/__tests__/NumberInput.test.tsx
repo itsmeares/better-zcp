@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { NumberInput } from '../NumberInput'
 
-// GH silent-default sweep (conv-install-idiot-proofing-2026-08, god's follow-up
+// GH silent-default sweep (regression, the follow-up
 // to f1ce821): every plain numeric <Input> in the client used to run
 // `onChange={(e) => setX(parseInt(e.target.value) || DEFAULT)}` -- clearing
 // the field snapped it back to DEFAULT under the operator's own cursor
@@ -124,7 +124,7 @@ describe('NumberInput', () => {
 
   // Settings.tsx's backup-max-count field (site 14): a bounded count, not a
   // port -- there is no isValidInstallPort()-style submit path for it to
-  // fall through to, so god's dispatch required this component to still let
+  // fall through to, so the dispatch required this component to still let
   // the caller commit the field to a sane value itself. It does this via a
   // plain onBlur passthrough, layered on top of (not replacing) this
   // component's own focus bookkeeping.

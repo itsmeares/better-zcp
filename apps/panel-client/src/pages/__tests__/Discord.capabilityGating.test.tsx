@@ -5,7 +5,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Discord from '../Discord'
 import { discordApi } from '@/lib/api'
 
-// bug-hunt-2026-08-27 Tier-3 capability-gating sweep: every mutating route
+// regression Tier-3 capability-gating sweep: every mutating route
 // this page touches sits behind one whole-file server gate --
 // router.use(requirePermission("integrations.manage")) in
 // apps/panel-server/routes/discord.js:41, no per-route override, confirmed by reading
@@ -17,7 +17,7 @@ import { discordApi } from '@/lib/api'
 // every action. Each handler now has an early-return guard
 // (`if (!canManageIntegrations) return`) as the real gate, in addition to
 // the disabled+DisabledReason affordance on the visible control -- per
-// tonight's floor rule (Angela's Console.tsx finding) that a disabled
+// tonight's floor rule (the Console.tsx finding) that a disabled
 // button alone is not a gate. This file asserts the ACTION is unreachable
 // (mocked API never called on click), not merely that a control renders
 // with the disabled attribute.
@@ -113,7 +113,7 @@ describe('Discord.tsx: every mutating control gates on integrations.manage', () 
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Stop Bot' })).toBeInTheDocument())
 
-    // bug-hunt-2026-08-27 (Angela's fixture-masking finding): Verify
+    // regression (the fixture-masking finding): Verify
     // Token's disabled expression is `testing || !token ||
     // !canManageIntegrations` -- with no token typed, `!token` alone
     // already disables it regardless of the capability check, so a denied

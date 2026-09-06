@@ -122,7 +122,7 @@ describe("loadOrCreateJwtSecret", () => {
     await expect(loadOrCreateJwtSecret({})).rejects.toThrow(/at least 32/i);
   });
 
-  // god's explicit ask: these two must not share a branch.
+  // the explicit ask: these two must not share a branch.
   it("file ABSENT (no legacy, no env) -> generates", async () => {
     expect(fs.existsSync(getJwtSecretPath())).toBe(false);
     const result = await loadOrCreateJwtSecret({});

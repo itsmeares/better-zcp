@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 bug hunt, scheduler blind-success family: POST /restart-now and
+// 2026-08-26 regression, scheduler blind-success family: POST /restart-now and
 // POST /tasks/:id/run both used to run their real action fire-and-forget
 // (only a server-side log on failure) and answer {success:true} regardless
 // of what actually happened -- a genuine failure was swallowed, discoverable
@@ -156,7 +156,7 @@ describe("scheduler:action_result socket emission", () => {
     });
   });
 
-  // bug-hunt-2026-08-26 backlog, dispatched 2026-08-27 (Jim's ranked #2):
+  // regression backlog, dispatched 2026-08-27 (the ranked #2):
   // the operator could type a custom restart-warning time above the
   // server's 60-minute cap, and the immediate response never said the
   // value was substituted -- the client's toast just echoed back whatever

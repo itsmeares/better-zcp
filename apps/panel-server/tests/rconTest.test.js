@@ -217,7 +217,7 @@ describe('RCON route malformed request handling', () => {
   });
 });
 
-// 2026-08-27 bug hunt: POST /execute broadcasts its command AND response to
+// 2026-08-27 regression: POST /execute broadcasts its command AND response to
 // a socket room via rcon:response, and separately logs the command via
 // log.info -- both were the raw, unredacted string. logCommand()
 // (database/init.js) already redacts an adduser password before persisting
@@ -227,7 +227,7 @@ describe('RCON route malformed request handling', () => {
 // Wire-level coverage: calls the real handler and asserts on what actually
 // got emitted/logged, not on source text.
 //
-// 2026-08-31 bug hunt: the broadcast target moved from "logs" (gated
+// 2026-08-31 regression: the broadcast target moved from "logs" (gated
 // diagnostics.manage in index.js) to "rcon-live" (gated rcon.execute) --
 // the same content class GET /api/rcon/history has always gated rcon.execute
 // alone, per this file's own header comment above. diagnostics.manage is a

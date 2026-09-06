@@ -29,7 +29,7 @@ describe('getIniKeyLabel / getSandboxKeyLabel', () => {
     expect(getSandboxKeyLabel('SomeBrandNewSetting')).toBe('Some Brand New Setting')
   })
 
-  // bug-hunt-2026-08-31: PZ's own SandboxVars.lua genuinely reuses the same
+  // regression: PZ's own SandboxVars.lua genuinely reuses the same
   // key across two unrelated tables -- 'Farming' is both settings.Farming
   // (a 1-5 Agriculture-skill-growth select) and MultiplierConfig.Farming (a
   // 0.001-1000 XP multiplier). Without `section`, getSandboxKeyLabel('Farming')

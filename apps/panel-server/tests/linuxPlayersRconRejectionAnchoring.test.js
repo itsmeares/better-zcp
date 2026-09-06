@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { RconService } from "../services/rcon.js";
 
-// 2026-08-29 hunt (god): players.js moderation/GM-tools, suspects 1 (player
+// 2026-08-29 hunt (testing): players.js moderation/GM-tools, cases 1 (player
 // name escaping into the command string) and 2 (does a failed RCON command
 // look like success to the operator) turning out to be the SAME defect seen
 // from two sides. classifyRconResponse() ran an UNANCHORED .test() against

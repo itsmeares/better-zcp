@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import dgram from "dgram";
 import { queryServerInfo } from "../routes/serverFinder.js";
 
-// hunt-wave11-2026-08-29, apps/panel-server/routes/serverFinder.js follow-up card.
+// regression-2026-08-29, apps/panel-server/routes/serverFinder.js follow-up card.
 // queryServerInfo() had the SAME unconnected-socket shape queryMasterServer()
-// had (hunt-wave10): it processed an A2S_INFO reply from ANY sender on its
+// had (regression): it processed an A2S_INFO reply from ANY sender on its
 // local port, not just the ip:port it was told to query. Lower severity
 // than the master-server gap (by the time this runs, `ip` has already
 // passed validateQueryIp or the isPrivateIp filter -- see the comment above
@@ -15,7 +15,7 @@ import { queryServerInfo } from "../routes/serverFinder.js";
 //
 // Fix: socket.connect(port, ip) -- same treatment as queryMasterServer.
 //
-// Applying the hard-won lesson from hunt-wave10's own test bug: a rejection
+// Applying the hard-won lesson from regression's own test bug: a rejection
 // test only means something if the attacker's packet gets an UNCONTESTED
 // window before the genuine reply is sent. The first draft of the
 // queryMasterServer spoof test had the legit reply sent from the same
@@ -42,7 +42,7 @@ function buildA2SInfoResponse(name) {
   ]);
 }
 
-describe("queryServerInfo: response sender is now authenticated (hunt-wave11 follow-up, fixed)", () => {
+describe("queryServerInfo: response sender is now authenticated (regression follow-up, fixed)", () => {
   let legitServer;
   let attackerSocket;
 

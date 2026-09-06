@@ -4,7 +4,7 @@ import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeLuaAtomic } from "../utils/embeddedLua.js";
 
-// 2026-08-29 Linux PanelBridge install-path hunt (god): the PZ dedicated
+// 2026-08-29 Linux PanelBridge install-path regression (testing): the PZ dedicated
 // server process is very often a DIFFERENT, unprivileged user than the
 // panel. Confirmed on real Linux with two real users (useradd panelsvc +
 // pzgame, a shared group, a fake install tree) that a plausible hardened

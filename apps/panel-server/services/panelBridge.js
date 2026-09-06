@@ -31,7 +31,7 @@ const RESULT_FILE_PATTERN = /^res-(\d+)\.json(?:\.txt)?$/;
 // below) both go through a temp-then-rename pattern, so a *.tmp file this
 // sweep sees can genuinely be mid-write, not just orphaned. Deleting it out
 // from under the writer silently drops a queued command or its result --
-// same defect shape as database/init.js's db.json.*.tmp sweep (bughunt
+// same defect shape as database/init.js's db.json.*.tmp sweep (regression
 // single-signal-sweep-2026-09-02), same fix: gate on age, matching
 // database/init.js's MIN_ORPHAN_AGE_MS convention. The cleanup sweep itself
 // only runs once per cleanupIntervalMs (60s), so a genuinely orphaned file

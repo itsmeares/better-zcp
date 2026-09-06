@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 1, item 2 (Kevin's jar-verified spec):
+// 2026-08-30, regression, item 2 (the jar-verified spec):
 // world:saveWorld() does not exist anywhere in the real B42 jar. The real
 // save call is saveGame(), a bare global -- same LuaManager$GlobalObject
 // binding tier as getWorld()/getCell(), both already called elsewhere in

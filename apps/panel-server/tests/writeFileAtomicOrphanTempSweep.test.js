@@ -4,7 +4,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29, config hunt follow-up. Pam found writeFileAtomic's own
+// 2026-08-29, config regression follow-up. the test found writeFileAtomic's own
 // .{filename}.{pid}.{random}.tmp orphans (left behind only when the
 // process dies between the write and the rename/unlink that normally
 // follows) have no sweep anywhere -- cosmetic, correctly not fixed there

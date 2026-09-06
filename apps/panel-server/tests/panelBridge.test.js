@@ -332,7 +332,7 @@ describe('PanelBridge player healing compatibility', () => {
     expect(killStart).toBeGreaterThanOrEqual(0);
     expect(godModeStart).toBeGreaterThan(killStart);
     expect(killHandler).toContain('PanelBridge.invoke(player, "Kill", nil)');
-    // 2026-08-30 (total-audit return-contract fix): the old single
+    // 2026-08-30 (regression return-contract fix): the old single
     // `return isDead, { ... }` never populated a third (error) value on
     // failure, so the dispatcher forwarded a null error to the panel while
     // the real reason sat unread in data.message. Now branches explicitly

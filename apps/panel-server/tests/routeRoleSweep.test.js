@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 // Covers the "12 unguarded files" sweep: routes that relied on the central
 // login gate alone (any authenticated role reached them) now have an
 // explicit role decision, one way or the other. The important property per
-// god's brief is NOT just "a moderator is refused" -- a sweep that locks
+// the brief is NOT just "a moderator is refused" -- a sweep that locks
 // everything to admin passes every refusal test while quietly making
 // technician and moderator useless. So every describe block below checks
 // BOTH directions: the excluded role is refused, and the role that's
@@ -17,7 +17,7 @@ import { describe, expect, it, vi } from "vitest";
 // cost has been landing inside THIS test's own 5000ms budget rather than
 // amortized into collection, producing an intermittent timeout that three
 // different agents independently re-investigated tonight before finding out
-// it was the same known cause each time (root-caused by Dwight). The role
+// it was the same known cause each time (root-caused in testing). The role
 // gate below has no legitimate reason to load a real Discord client at all
 // -- it only inspects router.stack -- so stub the dependency out rather than
 // just relocating the cost (e.g. to its own file, paid once elsewhere): the
@@ -68,7 +68,7 @@ function createResponse() {
 // instead of hand-rolling them at every call site, and let a caller
 // override any of them (see the mods.js /thumbnail/ cases below) --
 // fixing the double, not the production code it was misrepresenting
-// (conv-mods-thumbnails: bb3e778's routeRoleSweep red gate).
+// (regression: bb3e778's routeRoleSweep red gate).
 function fakeRequest(req) {
   return { path: "/", url: "/", method: "GET", ...req };
 }
@@ -116,7 +116,7 @@ describe("mods.js: admin+technician (mods/config is technician's job, not modera
     expect(calledNext).toBe(true);
   });
 
-  // conv-mods-thumbnails (bb3e778): the two tests above prove the gate
+  // regression (bb3e778): the two tests above prove the gate
   // refuses, but prove nothing about whether the /thumbnail/ carve-out is
   // actually narrow -- that it's scoped to one path, not a blanket bypass
   // of the router's role check. Even a role this describe block otherwise
@@ -263,8 +263,8 @@ describe("rcon.js: mixed -- /execute, connection lifecycle and /history are admi
     // it returns the verbatim command_history log, which stores the exact
     // command string sent -- including e.g. a whitelist password from
     // `adduser "player" "password"`, or anything typed into /execute
-    // itself. Was in OPEN below; fixed alongside the route (kevin,
-    // bug-hunt pass) once that stopped being true.
+    // itself. Was in OPEN below; fixed alongside the route (testing,
+    // regression pass) once that stopped being true.
     ["/history", "get"],
   ];
   const OPEN = [
@@ -334,7 +334,7 @@ describe("auth.js: recovery codes are admin-only, not delegable to users.manage 
   // technician using nothing but their own ordinary login could pull fresh
   // PLAINTEXT admin recovery codes and use one (via the unauthenticated
   // POST /recover-with-code) to set the admin account's own password.
-  // Fixed alongside the route (kevin, bug-hunt pass).
+  // Fixed alongside the route (testing, regression pass).
   const ROUTES = [
     ["/recovery-codes", "get"],
     ["/recovery-codes", "post"],

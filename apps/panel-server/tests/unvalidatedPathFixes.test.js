@@ -17,7 +17,7 @@ vi.mock("child_process", async (importOriginal) => {
 // route in server.js that skipped the isValidPath() check every sibling
 // route applies. Once role-gated to admin+technician that was reachable
 // authority to run an attacker-chosen binary as the panel process, not just
-// a known one in a validated location (per god's ruling: identical role
+// a known one in a validated location (per the ruling: identical role
 // labels hiding different authority is how an escalation stays invisible).
 // Same class of bug existed in panelBridge.js's /configure and /auto-detect,
 // which fed an unvalidated path straight into bridge.configure()/autoDetect()

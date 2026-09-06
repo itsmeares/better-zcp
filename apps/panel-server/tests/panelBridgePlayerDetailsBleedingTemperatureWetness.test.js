@@ -3,8 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 2, item 2 -- three of getPlayerDetails'
-// health fields were always nil on the real B42 jar (Kevin's audit):
+// 2026-08-30, regression, item 2 -- three of getPlayerDetails'
+// health fields were always nil on the real B42 jar (the audit):
 //
 // isBleeding -- getIsBleeding() does not exist; no boolean bleeding getter
 //   exists at all. The real method is getNumPartsBleeding() -> int. `> 0`

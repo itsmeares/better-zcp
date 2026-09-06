@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 // Coverage for worldmap.tiles.buildDetect's two getB42ResolutionStatus()
-// source states (conv-mapbuild). A third 'client' state -- the operator's
+// source states (regression). A third 'client' state -- the operator's
 // browser resolving the build the panel host couldn't -- was proposed,
 // built, and then cancelled within the same task: pzmap.org sends no CORS
 // headers on one host, and the CORS-open host challenged every browser
@@ -30,7 +30,7 @@ const { default: debugRouter } = await import("../routes/debug.js");
 // The /worldmap handler calls getB42Dir()/getB42TopFormat() for real
 // (unrelated to the buildDetect check these tests target) and then probes
 // three tile URLs with a real fetch(), each under its own 5s timeout.
-// Jim's curl-based discovery in mapProxy.js is correct but genuinely slower
+// the curl-based discovery in mapProxy.js is correct but genuinely slower
 // than the old fetch-based version, and under a full 132-file suite run
 // (shared CPU/network with everything else) that pushed this test right up
 // against vitest's own per-test timeout -- flaky under load, reliably green

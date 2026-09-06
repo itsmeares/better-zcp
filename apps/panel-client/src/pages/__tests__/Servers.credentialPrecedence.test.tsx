@@ -8,7 +8,7 @@ import Servers from '../Servers'
 import { serversApi, serversDetectApi, dockerApi, configApi, updateApi } from '@/lib/api'
 import en from '../../locales/en/servers.json'
 
-// bug-hunt-2026-08-26: god flagged that Servers.tsx's Add Existing Server
+// regression: the test flagged that Servers.tsx's Add Existing Server
 // form has an invisible credential-precedence rule -- manual RCON password
 // entry always wins over an auto-detected INI import -- with nothing in the
 // code shape enforcing it and zero test coverage on the page at all. Traced
@@ -33,7 +33,7 @@ import en from '../../locales/en/servers.json'
 // No rule found here looked wrong -- both the UI-level and submit-level
 // checks default to requiring a real password (fail closed) when no import
 // is available, and there is no path that sends both credentials or an
-// empty rconPassword string. Confirmed with god before writing (see reply
+// empty rconPassword string. confirmed in testing before writing (see reply
 // to 2026-08-27T04-52-25-949Z-bf9c01): pinning behaviour, not chasing
 // coverage, so only the credential-precedence rule and its immediate
 // siblings (import unavailable -> manual entry required) are covered here.
@@ -47,7 +47,7 @@ import en from '../../locales/en/servers.json'
 // Added the same toast (verbatim copy, reused rather than re-written) to
 // the auto-scan path and pinned it below.
 
-// bug-hunt-2026-08-27 (Tier 3 gating sweep): Servers.tsx never called
+// regression (Tier 3 gating sweep): Servers.tsx never called
 // useAuth() before this sweep, so this suite never needed an AuthProvider.
 // Adding capability gating makes it throw outside one -- can() fails open
 // (true) here since this file's assertions are about credential precedence,

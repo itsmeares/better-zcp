@@ -5,7 +5,7 @@ import i18n from '@/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import ServerFinder from '../ServerFinder'
 
-// bug-hunt-2026-08-27: fetchServers() called the raw apiFetch() primitive
+// regression: fetchServers() called the raw apiFetch() primitive
 // (which, unlike lib/api's xApi.method() calls, never runs handleResponse())
 // and threw a plain Error on failure -- discarding response.status entirely
 // before getUserErrorMessage() could ever translate it. Same shape as the

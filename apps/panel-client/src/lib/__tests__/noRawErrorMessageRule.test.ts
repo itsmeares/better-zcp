@@ -63,7 +63,7 @@ describe('local/no-raw-error-message', () => {
       "toast({ description: result.message })",
       "setStatus(data?.message)",
 
-      // JSX sink (Jim, 2026-08-26), legitimate use: a non-error-like chain
+      // JSX sink (testing, 2026-08-26), legitimate use: a non-error-like chain
       // rendered straight into markup -- not excluded by sink, excluded by
       // the object not being error-like.
       'const el = <p>{data.message}</p>',
@@ -137,7 +137,7 @@ describe('local/no-raw-error-message', () => {
       },
       {
         // Shape 2 nested inside a functional state update -- the
-        // setCollectionStatus/setDepSearchData shape Kevin found on
+        // setCollectionStatus/setDepSearchData shape the test found on
         // Mods.tsx, one Property/ObjectExpression level deep.
         code: "setCollectionStatus((s) => ({ ...s, loading: false, error: err?.message || 'Network error' }))",
         errors: [{ messageId: 'rawMessage' }],
@@ -161,7 +161,7 @@ describe('local/no-raw-error-message', () => {
         errors: [{ messageId: 'rawMessage' }],
       },
       {
-        // The JSX-sink gap (Jim, 2026-08-26): `{error.message}` rendered
+        // The JSX-sink gap (testing, 2026-08-26): `{error.message}` rendered
         // straight into markup, never a toast()/set*() argument at all --
         // the exact shape that was structurally invisible before this rule
         // learned to recognize JSXExpressionContainer as a sink.

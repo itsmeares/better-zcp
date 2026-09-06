@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-31 bug hunt (PanelBridge Lua mod + bridge protocol), god's ruling:
+// 2026-08-31 regression (PanelBridge Lua mod + bridge protocol), the ruling:
 // handlers.runEventSequence pcall-wraps and honestly records each chained
 // step's own success/error into a per-step `results` array, but its OWN
 // top-level return used to be a hardcoded `return true, {...results...}` --

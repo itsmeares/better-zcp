@@ -84,7 +84,7 @@ describe("redactRconSecretsForWrite", () => {
     expect(fs.statSync(filePath).mtimeMs).toBe(mtimeBefore);
   });
 
-  // bughunt-2026-08-31-c (apps/panel-server/utils sweep): the truthy check this used
+  // regression (apps/panel-server/utils sweep): the truthy check this used
   // to be (`if (server.rconPassword)`) treated an operator clearing the
   // password via PUT /servers/:id -- which persists an explicit "" the
   // same as any other value -- identically to the field never having been
@@ -197,7 +197,7 @@ describe("redact -> rehydrate round trip (simulates a full restart)", () => {
     expect(rehydrated.servers[0].rconPassword).toBe("survives-a-restart");
   });
 
-  // bughunt-2026-08-31-c: the scenario the two "clearing to ''" tests above
+  // regression: the scenario the two "clearing to ''" tests above
   // exist to prevent, run end to end the way an operator would actually hit
   // it -- set a password, restart (persists it), clear it, restart again.
   // Pre-fix this failed at the last line: rconPassword came back as

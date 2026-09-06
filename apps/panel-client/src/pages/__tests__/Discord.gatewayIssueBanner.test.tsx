@@ -5,7 +5,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Discord from '../Discord'
 import { discordApi } from '@/lib/api'
 
-// hunt-wave6-2026-08-29 follow-up 2 (operator-visible signal): getStatus()
+// regression-2026-08-29 follow-up 2 (operator-visible signal): getStatus()
 // now carries gatewayIssue/gatewayDegradedSince (apps/panel-server/services/discordBot.js,
 // debounced against a routine ~2-3s self-healing reconnect -- see
 // linuxDiscordGatewayResilience.test.js). This file is the client half: the

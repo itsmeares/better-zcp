@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// 2026-08-26 bug hunt, scheduler blind-success family, third site: POST
+// 2026-08-26 regression, scheduler blind-success family, third site: POST
 // /server/restart (this file) is a SECOND, independent client entry point
 // to the exact same scheduler.performRestart() call that scheduler.js's
 // POST /restart-now already had fixed earlier tonight -- Dashboard's

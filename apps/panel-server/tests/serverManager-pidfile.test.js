@@ -125,7 +125,7 @@ describe('ServerManager pidfile fast path', () => {
   });
 
   it('falls back to the OS scan when the PID is alive with a dedicated-server cmdline that carries no identifying info at all (score 0, unattributable) -- weaker evidence than the fast path may trust', async () => {
-    // 2026-09-04, overnight bug hunt: scoreServerProcessOwnership() returns
+    // 2026-09-04, overnight regression: scoreServerProcessOwnership() returns
     // 0 (not -1) for a live PZ-looking process whose command line has
     // neither -servername nor -cachedir, or whose install path doesn't
     // appear in it either -- e.g. another operator's server on the same

@@ -5,7 +5,7 @@ import os from "os";
 import path from "path";
 import { cleanupOrphanBackupTemps, isBackupTempOwnerAlive } from "../services/backupService.js";
 
-// hunt-wave11-2026-08-29 follow-up. Dwight found this while copying
+// regression-2026-08-29 follow-up. the test found this while copying
 // cleanupOrphanBackupTemps as the model for fileWriteQueue.js's own sweep
 // (531dfd8d) -- his copy came out stronger than the original. The original
 // deleted on FILENAME PATTERN ALONE, with no check that the process which
@@ -62,7 +62,7 @@ describe("cleanupOrphanBackupTemps", () => {
     expect(fs.existsSync(orphan)).toBe(false);
   });
 
-  it("NEVER removes a .central-*.tmp file whose pid is still running, even though it matches the exact same name shape -- the bug Dwight found", () => {
+  it("NEVER removes a .central-*.tmp file whose pid is still running, even though it matches the exact same name shape -- the bug the test found", () => {
     // Our own pid -- unambiguously alive for the duration of this test.
     const liveOrphan = path.join(dir, centralName(process.pid));
     fs.writeFileSync(liveOrphan, "a backup genuinely still in flight");

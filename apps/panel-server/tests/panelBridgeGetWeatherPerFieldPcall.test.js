@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 3, item 1 -- the highest-ranked of the four
+// 2026-08-30, regression, item 1 -- the highest-ranked of the four
 // remaining items (identical shape to getClimateFloats, which needed a real
 // fix earlier tonight for a real observed crash). handlers.getWeather wrapped
 // all 15 field reads (12 of them bare direct calls with no PanelBridge.safeGet)

@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, god's foundation-lens follow-up to ce29ee63: that commit fixed
+// 2026-08-30, the foundation-lens follow-up to ce29ee63: that commit fixed
 // handlers.triggerHelicopterEvent to use the one real, zero-arg API
 // (testHelicopter()) but deliberately did not expose its adjacent sibling,
 // endHelicopter() -- an operator could start a server-wide helicopter event

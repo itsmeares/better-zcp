@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit lens (c)#2, batch 1 -- god's own words: "healPlayer's
+// 2026-08-30, regression lens (c)#2, batch 1 -- the own words: "healPlayer's
 // failure branch is NEVER TAKEN -- unconditional `return true` with failures
 // buried in a nested errors array. Zero parts healed reads as clean success."
 //

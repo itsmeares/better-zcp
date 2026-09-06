@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import ChunkCleaner from '../ChunkCleaner'
 import { chunksApi, serversApi, panelBridgeApi, mapApi } from '@/lib/api'
 
-// 2026-08-31 bug hunt: handleDelete's "remove already-loaded vehicles live"
+// 2026-08-31 regression: handleDelete's "remove already-loaded vehicles live"
 // step (ChunkCleaner.tsx ~2004-2043) built ONE rectangular bounding box
 // across every selected chunk's extent, not the actual selected-chunk set.
 // For a non-contiguous selection (individual click-toggle, Select All,

@@ -146,7 +146,7 @@ describe("versioned panel update bundles", () => {
 
   // 2026-09-05, client-bundle-integrity: the staged BINARY has always been
   // hash-verified before every apply -- the staged CLIENT bundle never was,
-  // on either platform. A file corrupted in the same window Dwight measured
+  // on either platform. A file corrupted in the same window the test measured
   // for the binary (staged, present under the right name, but no longer
   // matching what was staged) passed straight through and got activated.
   it("rejects a staged client bundle whose content no longer matches what was staged, before changing either live artifact", () => {

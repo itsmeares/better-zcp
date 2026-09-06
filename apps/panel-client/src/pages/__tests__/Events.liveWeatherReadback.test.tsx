@@ -6,7 +6,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// panelbridge-audit-2026-08-30: getWeather was confirmed working (Kevin's
+// regression: getWeather was confirmed working (the
 // audit) but had no caller anywhere in apps/panel-client/src. Most of its payload
 // (temperature, humidity, fog, cloud, precipitation, dayLight, nightStrength,
 // desaturation, viewDistance, ambient) is the exact same ClimateFloat data

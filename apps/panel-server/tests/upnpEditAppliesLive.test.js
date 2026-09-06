@@ -4,13 +4,13 @@ import os from "os";
 import path from "path";
 import { createServer, setActiveServer, getActiveServer, deleteServer } from "../database/init.js";
 
-// 2026-08-26, same-night follow-up to d8f7ddc: adding useUpnp to
+// 2026-08-26, same pass follow-up to d8f7ddc: adding useUpnp to
 // ALLOWED_SERVER_UPDATE_FIELDS alone would have recreated the exact bug
-// being fixed, one layer over -- Dwight's audit caught this on the diff
+// being fixed, one layer over -- the audit caught this on the diff
 // before it shipped. Grepped confirmed: nothing server-side ever reads a
 // per-server useUpnp column back out. Persisting the field is necessary
 // but not sufficient; the actual runtime toggle is the UPnP= line in the
-// server's own .ini. This file proves the STRONGER property Dwight/god
+// server's own .ini. This file proves the STRONGER property the test
 // asked for: a field the user can set through the edit screen has a real
 // runtime consumer, not just a database column nobody reads. A test that
 // only checked persistence (like createServerFieldParity.test.js's own
@@ -115,7 +115,7 @@ describe("PUT /servers/:id -- editing useUpnp actually changes the server's own 
     // PZ only reads the ini at its own boot -- the write above is
     // immediate, its effect on a currently-running server is not. The
     // response must say so rather than implying the change is already
-    // live (2026-08-26: named explicitly after a same-night review caught
+    // live (2026-08-26: named explicitly after a same pass review caught
     // this as the same "confident status the app cannot back" class as the
     // two earlier fixes tonight).
     const body = res.getBody();

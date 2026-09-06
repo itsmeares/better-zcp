@@ -5,13 +5,13 @@ import Players from '../Players'
 import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-// bug-hunt-2026-08-27: Players.tsx had zero client-side capability gating.
+// regression: Players.tsx had zero client-side capability gating.
 // Every mutating action reaches one of TWO distinct server gates --
 // players.moderate (kick/ban/whitelist/access-level/notes) and
 // players.gm_tools (teleport/spawn items+vehicles/xp/character import-export,
 // AND godmode/invisible/noclip/heal -- these route through the generic
 // PanelBridge passthrough, POST /panel-bridge/command, gated on
-// players.gm_tools alone there per an operator ruling, bug-hunt-2026-08-27;
+// players.gm_tools alone there per an decision, regression;
 // see apps/panel-server/routes/panelBridge.js's GM_TOOLS_ONLY_ACTIONS). Kill joined
 // the same players.gm_tools gate when wired up killplayer-ui-2026-08-30,
 // but via its own dedicated route (not the passthrough) -- see that
@@ -258,10 +258,10 @@ describe('Players.tsx: capability gating', () => {
     const spawnVehicleButton = screen.getByText('Spawn vehicles').closest('button')
     expect(giveItemButton).toBeDisabled()
     expect(spawnVehicleButton).toBeDisabled()
-    // Give XP is NOT asserted here (bug-hunt-2026-08-27 gating-test audit):
+    // Give XP is NOT asserted here (regression gating-test audit):
     // it's also gated on !selectedPerk, and no perk is selected in this
     // fixture, so .toBeDisabled() would pass regardless of canGmTools --
-    // exactly the fixture-masking shape Angela found on Dashboard's Wipe
+    // exactly the fixture-masking shape the test found on Dashboard's Wipe
     // button. Confirmed empirically (not assumed) that a real Select pick
     // can't drive this in jsdom either: fireEvent.pointerDown+click on the
     // combobox throws inside @radix-ui/react-select itself
@@ -269,7 +269,7 @@ describe('Players.tsx: capability gating', () => {
     // candidate?.scrollIntoView is not a function) -- genuine missing jsdom
     // APIs, not a wrong-event mistake like Tabs/DropdownMenu turned out to
     // be. A real, confirmed (not just suspected) jsdom limitation for Radix
-    // Select specifically, matching Kevin's original ChunkCleaner
+    // Select specifically, matching the original ChunkCleaner
     // reasoning -- see zzHighRiskDiagnostic's throwaway run for the full
     // stack. Give XP's canGmTools gate is untested here as a result; the
     // other three gm_tools triggers on this tab (Teleport, Give Items,
@@ -320,7 +320,7 @@ describe('Players.tsx: capability gating', () => {
     expect(teleport).not.toHaveBeenCalled()
   })
 
-  // bug-hunt-2026-08-31: a71c947a added `!canModerate` to the wrapping
+  // regression: a71c947a added `!canModerate` to the wrapping
   // <button disabled={...}> for Kick/Ban/Access Level (correctly blocking
   // the click, confirmed by the toBeDisabled() assertions above) but never
   // extended ActionTile's OWN `disabled` prop to match -- ActionTile is a
@@ -375,7 +375,7 @@ describe('Players.tsx: capability gating', () => {
     expect(screen.getByRole('button', { name: 'Kill' })).not.toBeDisabled()
   })
 
-  // bug-hunt-2026-08-27, operator ruling (supersedes server commit c3083d5
+  // regression, decision (supersedes server commit c3083d5
   // from earlier the same day): setGodMode/setInvisible/setNoclip/healPlayer
   // are gated on players.gm_tools ALONE again, not "gm_tools AND
   // bridge.command". c3083d5's combined requirement was itself a fix for a
@@ -437,7 +437,7 @@ describe('Players.tsx: capability gating', () => {
     expect(screen.getByRole('button', { name: /^Teleport\b/ })).not.toBeDisabled()
   })
 
-  // bug-hunt-2026-08-27: Radix's DropdownMenuItem composes the caller's
+  // regression: Radix's DropdownMenuItem composes the caller's
   // onClick with its own select handler and runs it UNCONDITIONALLY --
   // the internal disabled check only guards Radix's own side effect, never
   // the onClick prop. All six capability-gated items in the dossier "..."

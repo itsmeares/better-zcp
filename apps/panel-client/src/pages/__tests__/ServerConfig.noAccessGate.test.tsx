@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import ServerConfig from '../ServerConfig'
 import { serverFilesApi, serversApi } from '@/lib/api'
 
-// bug-hunt-2026-08-27: proving the client-capability-gating pattern (the
+// regression: proving the client-capability-gating pattern (the
 // same can() idiom Settings.tsx already uses to hide whole tabs) on a
 // ROUTINE, non-destructive capability -- serverfiles.manage -- rather than
 // a rare/destructive one, per the severity judgement from the sweep: a

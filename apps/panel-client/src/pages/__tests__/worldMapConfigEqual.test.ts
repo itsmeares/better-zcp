@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mapConfigsEqual } from "../worldMapConfigEqual";
 import type { MapConfig } from "../WorldMap";
 
-// conv-worldmap-black-2026-08-31: detectServerVersion's "skip if nothing
+// regression: detectServerVersion's "skip if nothing
 // changed" guard used to compare a hand-picked field list (label, tileSize,
 // fullWidth, isoX0, isoY0) instead of the whole config -- renderedMaxLevel,
 // maxLevel, and fullHeight all sat outside that list, so a resolve response

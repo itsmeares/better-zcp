@@ -6277,7 +6277,7 @@ export {
   buildManagedServiceLogsText,
 };
 // Exported for direct unit testing of the support-bundle raw-log redaction
-// (operator ruling, support-bundle-2026-08-30 follow-up) -- see
+// (decision, support-bundle regression follow-up) -- see
 // apps/panel-server/tests/supportBundleRedaction.test.js.
 export {
   redactRawLogText,

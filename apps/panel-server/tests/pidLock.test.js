@@ -4,12 +4,12 @@ import os from "os";
 import path from "path";
 import { spawnSync } from "child_process";
 
-// bughunt-2026-08-31-c: pidLock.js had no test file at all. It also carried
+// regression: pidLock.js had no test file at all. It also carried
 // its own separate isProcessAlive() (now removed, folded onto the shared
 // isPidAlive() in utils/pidLiveness.js) that got the ambiguous-signal
 // direction backwards -- it treated any process.kill() error OTHER than
 // EPERM as "not alive," i.e. safe to proceed and start a second panel
-// instance. Operator ruling: this must fail the OTHER way -- an
+// instance. decision: this must fail the OTHER way -- an
 // inconclusive liveness signal has to refuse to start, not proceed, because
 // a false proceed risks the port-conflict/db.json-corruption pair this file
 // exists to prevent, while a false refusal is a one-step recovery (delete
@@ -26,7 +26,7 @@ import { spawnSync } from "child_process";
 function makeDeadPid() {
   // A real pid guaranteed to have exited by the time this returns --
   // spawnSync only returns once the child is gone. Same technique as
-  // jimBackupOrphanTempPidLiveness.test.js's makeDeadPid().
+  // backupOrphanTempPidLiveness.test.js's makeDeadPid().
   const result = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
   return result.pid;
 }

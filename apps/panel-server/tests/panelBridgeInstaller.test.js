@@ -209,7 +209,7 @@ describe('installBridge', () => {
   });
 });
 
-// bughunt-2026-08-31-c, launcher-extension-case-sensitivity: index.js's
+// regression, launcher-extension-case-sensitivity: index.js's
 // PanelBridge auto-update and routes/panelBridge.js's mod auto-install both
 // used to reimplement this same launcher-extension check inline, without the
 // lowercasing below -- a launcher saved as e.g. "Launch.BAT" resolved its

@@ -6,7 +6,7 @@ import type { Socket } from 'socket.io-client'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } from '@/lib/api'
 
-// 2026-08-31 bug hunt: handleCreateBackup's optimistic 'preparing' state
+// 2026-08-31 regression: handleCreateBackup's optimistic 'preparing' state
 // (kicked off by clicking Create Backup) never clears any PENDING
 // progressTimeoutRef left over from a PREVIOUS backup's 'complete'/'error'
 // socket event -- only the socket handler itself and the catch branch do

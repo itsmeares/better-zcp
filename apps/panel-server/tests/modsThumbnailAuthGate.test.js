@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import http from "http";
 import express from "express";
 
-// conv-mods-thumbnails / 9c6ce2e (shipped in v1.2.0): routes/mods.js gates
+// regression / 9c6ce2e (shipped in v1.2.0): routes/mods.js gates
 // its whole router with requirePermission("mods.manage"), which 401s on a
 // missing req.user *before* it ever looks at capability -- and
 // services/auth.js deliberately never sets req.user for

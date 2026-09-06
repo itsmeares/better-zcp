@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import ServerConfig from '../ServerConfig'
 import { serverFilesApi, serversApi } from '@/lib/api'
 
-// bug-hunt-2026-09-04 (overnight sweep, reported by god as the worst
+// regression (overnight sweep, reported by testing as the worst
 // unrouted finding of the night): GET/PUT /server-files/ini and /sandbox
 // both resolve "the active server" fresh on the server per-request rather
 // than taking a server id, and this page never listened for

@@ -5,7 +5,7 @@ import fs from "fs";
 // countDir(dir) -- fs.readdirSync/fs.statSync, no concurrency, no cap --
 // to walk every MAP_DIRS folder (map, chunkdata, isoregiondata, zpop, apop,
 // metagrid, map_visited_server) when the operator ticked "map" before
-// wiping. Jim measured 20.7 SECONDS for map/ alone on a 147,136-file save
+// wiping. the test measured 20.7 SECONDS for map/ alone on a 147,136-file save
 // (SSD), fully blocking the Node event loop for that whole time -- not just
 // the requester's own page, but RCON, player polling, and every other
 // admin's session on the panel at once.

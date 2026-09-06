@@ -54,7 +54,7 @@ function getUpdateHandler() {
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-// HARDEN (operator ruling 2026-08-27, card
+// HARDEN (decision 2026-08-27, card
 // custom-launcher-as-a-real-supported-mode-not-an-accident): neither
 // installPath nor serverPath was validated at all before this -- an
 // unvalidated path that silently changes launch behavior (MANAGED vs

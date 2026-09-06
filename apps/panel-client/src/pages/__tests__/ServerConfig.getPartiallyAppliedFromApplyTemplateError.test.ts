@@ -3,7 +3,7 @@ import { ApiError } from '@/lib/api'
 import { getPartiallyAppliedFromApplyTemplateError } from '../ServerConfig'
 
 // 2026-08-27, templates-apply-partiallyapplied-flag-unverified (operator
-// ruling: this was #1 on Jim's risk-ranked backlog). apps/panel-server/routes/
+// ruling: this was #1 on the risk-ranked backlog). apps/panel-server/routes/
 // serverFiles.js's POST /templates/:id/apply attaches `partiallyApplied` to
 // its 500 body when INI succeeded before Sandbox threw -- the server DOES
 // know what landed. This function is the client-side decision that used to

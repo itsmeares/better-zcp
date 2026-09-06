@@ -12,7 +12,7 @@ import {
   restorePreUpdateDataBackup,
 } from "../services/panelUpdateChecker.js";
 
-// 2026-08-29, PR #122 rebase (operator ruling: fix in-house rather than
+// 2026-08-29, PR #122 rebase (decision: fix in-house rather than
 // send back to the contributor). #122 restructured the panel's self-update
 // into a journaled bundle transaction (updateBundle.js) but branched before
 // main picked up createUpdateDataBackup() -- the pre-update db.json
@@ -159,7 +159,7 @@ describe("pre-update database backup lifecycle around a real bundle transaction"
   });
 
   it("the mid-apply rollback path (new binary never ran) needs no database restore at all", () => {
-    // Contrast case for the same question god asked ("should the database
+    // Contrast case for the same question the test checks ("should the database
     // snapshot participate in the rollback path?") -- the OTHER rollback
     // path, inside applyUpdateBundle() itself, runs entirely BEFORE the new
     // binary is ever executed, so nothing could have touched the database.

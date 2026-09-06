@@ -5,7 +5,7 @@ import os from "os";
 import path from "path";
 import { waitForArchiveEntry, appendDirectoryToArchive } from "../services/backupService.js";
 
-// 2026-08-26 bug hunt: node-archiver emits a 'warning' with code ENOENT for
+// 2026-08-26 regression: node-archiver emits a 'warning' with code ENOENT for
 // a file that vanished between the initial scan and the moment archiving
 // actually tries to read it -- a real race on a live PZ directory (the game
 // process rotates/deletes temp files, logs and lock files while a backup

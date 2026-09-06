@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// chunks-routes-have-no-tests (Dwight's original finding, predates tonight):
+// chunks-routes-have-no-tests (the original finding, predates tonight):
 // chunks.js gates three routes on chunks.manage -- /save-path, /delete-chunks
 // and /delete-region. Re-checked rather than re-derived (per the dispatch):
 // delete-chunks/delete-region turned out to be fully covered by two existing

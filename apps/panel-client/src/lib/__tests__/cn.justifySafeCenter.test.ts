@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { cn } from '../utils'
 
-// bughunt-2026-08-31: cn() = twMerge(clsx(inputs)) used bare twMerge, which
+// regression: cn() = twMerge(clsx(inputs)) used bare twMerge, which
 // has no idea the hand-written .justify-safe-center class (index.css --
 // Tailwind's justifyContent corePlugin has no arbitrary-value support in
 // this version, so this class exists to give TabsList's base an overflow-

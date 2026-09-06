@@ -225,7 +225,7 @@ describe("panelBridge.js: server.world_events (world-wide GM effects, folded in 
   // /sound/near-player, /sound/gunshot, /sound/alarm, /sound/noise,
   // /zombies/spawn-near, /zombies/spawn-behind, /chat/admin and
   // /chat/general used to be in this list -- moved out 2026-08-27 (operator
-  // ruling on ranked-bug #5) to players.endanger_or_impersonate, see the
+  // ruling on prioritized issue #5) to players.endanger_or_impersonate, see the
   // describe block below. Each takes an optional target (a username, or in
   // chat/general's case an arbitrary custom author name) and can spawn
   // zombies/sound at a named player or make a chat message read as if they

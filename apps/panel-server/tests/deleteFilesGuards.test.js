@@ -47,7 +47,7 @@ describe("POST /api/server/delete-files safety guards", () => {
       loadConfig: async () => {},
       getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
     };
-    // bug-hunt-2026-08-27: deletePath must now also match a configured
+    // regression: deletePath must now also match a configured
     // server's own installPath -- the marker-file check alone was
     // trivially satisfiable. Default every test to a configured server
     // pointing at installDir, so the existing guard tests (which exercise
@@ -74,7 +74,7 @@ describe("POST /api/server/delete-files safety guards", () => {
 
     expect(response.status).toHaveBeenCalledWith(400);
     expect(response.json).toHaveBeenCalledWith(
-      // Own code as of 2026-08-26 bug hunt round 2 -- used to share
+      // Own code as of 2026-08-26 regression round 2 -- used to share
       // WIPE_CONFIRM_REQUIRED with /wipe; split out, see errorCodes.js.
       expect.objectContaining({ code: "DELETE_FILES_CONFIRM_REQUIRED" }),
     );
@@ -131,7 +131,7 @@ describe("POST /api/server/delete-files safety guards", () => {
     expect(fs.existsSync(installDir)).toBe(false);
   });
 
-  // bug-hunt-2026-08-27: hasPzInstallMarker() only checked whether a
+  // regression: hasPzInstallMarker() only checked whether a
   // marker FILENAME exists in the target directory -- trivially satisfied
   // by creating an empty file with that name anywhere on the host. This
   // was never an authorization check, just a "does this look like a PZ
@@ -201,7 +201,7 @@ describe("POST /api/server/delete-files safety guards", () => {
     });
   });
 
-  // 2026-08-26 bug hunt round 2, Pam's finding 2: the entry check happens
+  // 2026-08-26 regression round 2, the finding 2: the entry check happens
   // once, but everything after it (path/marker validation) is synchronous --
   // getServerProcessDetails() itself is the only part of this route that
   // yields, so a server that starts DURING that scan (a second admin
@@ -254,7 +254,7 @@ describe("POST /api/server/delete-files safety guards", () => {
     });
   });
 
-  // 2026-08-26 bug hunt round 2 follow-up, Michelle's UX audit: "Delete
+  // 2026-08-26 regression round 2 follow-up, Michelle's UX audit: "Delete
   // Everything" in Servers.tsx uses this exact endpoint on installPath, with
   // only a checkbox and one click -- fine for the DEFAULT layout, where
   // resolveZomboidPaths keeps the Zomboid data folder at a sibling

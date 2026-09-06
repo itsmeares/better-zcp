@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-// 2026-09-04, Dwight's finding: `if (free !== null && free < needed)` reads
+// 2026-09-04, the finding: `if (free !== null && free < needed)` reads
 // as careful, but the other half was silent -- a null free (statfs
 // unsupported, or a swallowed error) or a thrown error both fell through
 // with no warning at all, identical to no check having run. This is the

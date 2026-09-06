@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// conv-mods-thumbnails follow-up (the "one-gate-per-router blindness" card):
+// regression follow-up (the "one-gate-per-router blindness" card):
 // routeRoleSweep.test.js's runFirstUseLayer() (and every router.stack.find()
 // -based helper in that suite) only ever reaches the FIRST router.use()
 // layer of any router. serverFiles.js has FOUR: the requirePermission gate

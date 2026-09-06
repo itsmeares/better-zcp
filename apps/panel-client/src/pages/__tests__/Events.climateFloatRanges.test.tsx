@@ -6,7 +6,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi } from '@/lib/api'
 
-// bug-hunt-2026-08-26: getClimateFloats() reports each ClimateFloat's real,
+// regression: getClimateFloats() reports each ClimateFloat's real,
 // server-authoritative min/max (PanelBridge.lua handlers.getClimateFloats ->
 // cf:getMin()/cf:getMax()), and the route/api layer passed it through
 // untouched. Events.tsx fetched the response, read only `.value` off each

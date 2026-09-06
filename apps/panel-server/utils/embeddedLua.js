@@ -56,7 +56,7 @@ export function compareModVersions(a, b) {
 // Creates `dir` and any missing parents, giving each NEWLY created level an
 // explicit 0755 -- never touching a directory that already existed. The PZ
 // server process is very often a different, unprivileged user than the
-// panel (2026-08-29 Linux PanelBridge hunt), so a directory this function
+// panel (2026-08-29 Linux PanelBridge regression), so a directory this function
 // creates must stay traversable by "other" regardless of the panel's
 // process umask; an already-existing directory (the overwhelmingly common
 // case -- PZ itself creates media/lua/server/ at first launch) is left
@@ -81,7 +81,7 @@ function ensureReadableDirTree(dir) {
  * If the rename itself fails (Windows file lock, antivirus), we clean up
  * the temp file and propagate the error.
  *
- * Mode is unconditionally 0644 (2026-08-29 Linux PanelBridge hunt): this is
+ * Mode is unconditionally 0644 (2026-08-29 Linux PanelBridge regression): this is
  * a mod the PZ server process must be able to read, and that process is
  * very often a DIFFERENT, unprivileged user than the panel -- confirmed on
  * real Linux with two real users (panelsvc writing, pzgame reading) that a

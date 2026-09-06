@@ -6,10 +6,10 @@ import { modsApi, serversApi, ApiError } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmProvider } from '@/contexts/ConfirmContext'
 
-// bug-hunt-2026-08-27: mods.js gates every route (including reads) behind
+// regression: mods.js gates every route (including reads) behind
 // mods.manage via a whole-file router.use, except GET /thumbnail/:workshopId
 // -- every mutating action on this page needed mods.manage, but Mods.tsx had
-// zero client-side awareness of that (confirmed via Kevin's floor-wide sweep:
+// zero client-side awareness of that (confirmed via the floor-wide sweep:
 // 13 of 18 pages had no client-side capability gating even though the server
 // routes were already correctly gated -- a UX defect, not a hole, but one
 // that hands an operator a fully-enabled button the server will 403). The
@@ -20,7 +20,7 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 // Every gated handler in Mods.tsx carries an early-return guard INSIDE the
 // function itself (`if (!canManageMods) return`), not just a disabled
 // attribute on the visible button -- per tonight's floor lesson from
-// Angela's Console.tsx work: a disabled button is not a gate if some other
+// the Console.tsx work: a disabled button is not a gate if some other
 // path reaches the same handler. These tests assert the underlying API is
 // never called when the capability is denied, not merely that a button has
 // the `disabled` attribute.
@@ -121,11 +121,11 @@ async function waitForLoaded() {
   await waitFor(() => expect(getTrackedMods).toHaveBeenCalled())
 }
 
-// bug-hunt-2026-08-27 follow-up: a plain fireEvent.click never opens a
+// regression follow-up: a plain fireEvent.click never opens a
 // Radix DropdownMenu -- it opens on pointerdown, not click (same quirk
-// family as TabsTrigger switching on mousedown). Pam's floor-wide finding:
+// family as TabsTrigger switching on mousedown). the floor-wide finding:
 // "the menu won't open under fireEvent" was a wrong-event problem, not a
-// real tooling limitation -- Angela's Dashboard.capabilityGating.test.tsx
+// real tooling limitation -- the Dashboard.capabilityGating.test.tsx
 // openMoreActionsMenu() already had the fix. Reused here rather than
 // re-deriving it, and used to click-through the "More actions" dropdown's
 // two dialog-opening items (Import Collection, Auto-Restart Settings) --
@@ -315,7 +315,7 @@ describe('Mods.tsx capability gating -- servers.manage (Fix Path outlier)', () =
   })
 })
 
-// bug-hunt-2026-08-27 (Angela's stock-role hunt): mods.js gates its whole
+// regression (the stock-role regression): mods.js gates its whole
 // router -- reads included -- behind mods.manage as one whole-file
 // router.use, so a role lacking it (e.g. the stock MODERATOR role) gets
 // all five of fetchData's mount-time calls rejecting with a real 403 at
@@ -366,7 +366,7 @@ describe('Mods.tsx: a real 403 on every mount-time fetch shows a permission-deni
   })
 })
 
-// bug-hunt-2026-08-27 (Angela's stock-role hunt, second finding on this
+// regression (the stock-role regression, second finding on this
 // page): the Deactivated tab's "Delete Selected/All" tracking-cleanup
 // button had NO capability check at all -- no disabled state, no
 // tooltip -- and handleBulkRemove's own guard (`if (... || !canManageMods)

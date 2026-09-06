@@ -3,8 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit lens (return-contract sweep) -- flagged by god
-// before Jim's first client call site for killPlayer shipped, so this
+// 2026-08-30, regression lens (return-contract sweep) -- flagged by testing
+// before the first client call site for killPlayer shipped, so this
 // mattered before anyone could observe it live.
 //
 // handlers.killPlayer used to end with `return isDead, { message = ...,

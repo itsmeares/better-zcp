@@ -6,8 +6,8 @@ import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import Events from '../Events'
 import { playersApi, panelBridgeApi, ApiError } from '@/lib/api'
 
-// bughunt-2026-08-31-c (events-bridgeresultdisplay-needs-a-partial-state):
-// Kevin's 4570b52f made PanelBridge.lua's runEventSequence report
+// regression (events-bridgeresultdisplay-needs-a-partial-state):
+// the 4570b52f made PanelBridge.lua's runEventSequence report
 // ok = (no step failed) instead of an unconditional true, and added
 // failedCount/executed alongside the always-present per-step `results`
 // array. Shipped deliberately WITHOUT the UI half -- BridgeResultDisplay

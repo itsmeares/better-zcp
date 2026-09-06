@@ -95,7 +95,7 @@ function expandCronField(field, max) {
   return values.size > 0 ? values : null;
 }
 
-// bughunt-2026-08-31-c (apps/panel-server/utils sweep): the wrap-around check used to
+// regression (apps/panel-server/utils sweep): the wrap-around check used to
 // fire only when `hour === "*"` literally -- so "0,58 5,6 * * *" (fires at
 // 5:58 and 6:00, 2 minutes apart) sailed through the 5-minute floor this
 // function exists to enforce, because the hour field is the discrete list

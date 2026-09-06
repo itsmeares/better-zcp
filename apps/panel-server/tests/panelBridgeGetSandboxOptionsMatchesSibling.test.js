@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 1, item 1 (operator ruling + Kevin's
+// 2026-08-30, regression, item 1 (decision + the
 // jar-verified spec): handlers.getSandboxOptions used to read 11 hand-picked
 // getters (getZombieCount, getZombieSpeed, getDayLength, ...) that do not
 // exist ANYWHERE on SandboxOptions in the real B42 jar. Each was wrapped in
@@ -11,7 +11,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // a clean `true, { options = {} }` success reporting nothing, on every call.
 //
 // getSandboxOptions has an api.ts wrapper but zero UI callers (confirmed by
-// god before this fix), so there was no flat-shape compatibility to
+// testing before this fix), so there was no flat-shape compatibility to
 // preserve. The fix makes it a thin delegate to handlers.getAllSandboxOptions
 // -- whose primary enumeration path (getNumOptions()+getOptionByIndex(i)) is
 // jar-confirmed real on the same sandbox object -- instead of hand-picking a

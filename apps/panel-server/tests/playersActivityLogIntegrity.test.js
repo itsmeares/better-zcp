@@ -345,7 +345,7 @@ describe("players toggle routes: enabled must remain a boolean", () => {
       expect(response.status).toHaveBeenCalledWith(400);
       expect(response.json).toHaveBeenCalledWith({
         error: "enabled must be a boolean",
-        // 2026-08-26 bug hunt round 2: players.js adopted the ErrorCode registry.
+        // 2026-08-26 regression round 2: players.js adopted the ErrorCode registry.
         code: "PLAYERS_INVALID_ENABLED_FLAG",
       });
       expect(rconService[method]).not.toHaveBeenCalled();
@@ -366,7 +366,7 @@ describe("player notes: persisted values must keep their documented shape", () =
     expect(response.status).toHaveBeenCalledWith(400);
     expect(response.json).toHaveBeenCalledWith({
       error: "Note must be text",
-      // 2026-08-26 bug hunt round 2: players.js adopted the ErrorCode registry.
+      // 2026-08-26 regression round 2: players.js adopted the ErrorCode registry.
       code: "PLAYERS_NOTE_MUST_BE_TEXT",
     });
     expect(upsert).not.toHaveBeenCalled();

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import ChunkCleaner from '../ChunkCleaner'
 import { chunksApi, serversApi, panelBridgeApi, ApiError } from '@/lib/api'
 
-// 2026-08-27 bug-hunt (god's f7ac68): ChunkCleaner had exactly one test file
+// 2026-08-27 regression (the f7ac68): ChunkCleaner had exactly one test file
 // before this one, ChunkCleaner.canvasKeyboardClaim.test.ts, which pins
 // locale copy and never renders the component -- its own comment says
 // mounting was judged not worth the cost at the time. The page was gated
@@ -67,7 +67,7 @@ const sendCommand = vi.mocked(panelBridgeApi.sendCommand)
 // jsdom has no ResizeObserver. Unlike WorldMap, nothing under test here
 // (Select All / the Delete button / the confirm dialog) lives inside the
 // canvas or depends on a real measured size, so a no-op stub is enough --
-// the same "stub only as strong as the code path traversed" rule god
+// the same "stub only as strong as the code path traversed" rule testing
 // confirmed for the Events.tsx Slider stub.
 class NoopResizeObserver {
   observe() {}

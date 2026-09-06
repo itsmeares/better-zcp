@@ -125,7 +125,7 @@ describe('Console.tsx: RCON disconnect detection reacts to the code, not the pro
     await screen.findByText(enConsole.rcon.offline)
   })
 
-  // bughunt-2026-08-31-b (Angela): setUp()'s testRcon mock resolves
+  // regression (testing): setUp()'s testRcon mock resolves
   // connected:true, so rconConnected starts true here -- unlike the test
   // above and every other Console fixture, which start from a probe that
   // never succeeded (127.0.0.1:1 in the real tour demo profile) and so can
@@ -184,7 +184,7 @@ describe('Console.tsx: RCON disconnect detection reacts to the code, not the pro
     await runCommand('players')
     await screen.findByText(enConsole.rcon.offline)
 
-    // 2026-08-31 (bughunt-2026-08-31-b): this used to retry by clicking Run
+    // 2026-08-31 (regression): this used to retry by clicking Run
     // again directly. Console.tsx's disabled-input fix now correctly
     // disables Run (and the command input) the instant rconConnected flips
     // false -- a page reading HOST UNREACHABLE can't also offer a live

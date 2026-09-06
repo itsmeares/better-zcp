@@ -6,7 +6,7 @@ import { contentSecurityPolicy } from "helmet";
 import { computeInlineScriptCspHash } from "../utils/cspScriptHash.js";
 import { applyUpdateBundle, stageUpdateBundle } from "../services/updateBundle.js";
 
-// Linux bug hunt 2026-08-29, CSP inline-script hash card. The card's literal
+// Linux regression 2026-08-29, CSP inline-script hash card. The card's literal
 // claim -- "the hash mismatches on every single page load" -- does NOT
 // reproduce: a real `pnpm run build` + real server + real headless Chromium
 // (verified manually, see outbox report) shows zero CSP violations for the

@@ -6,7 +6,7 @@ import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 // Regression coverage for items 4/5 of the full handler-verification audit:
 // setGodMode/setInvisible already computed a `verified` read-back and threw
 // it away (always returned ok=true regardless); setNoclip didn't compute one
-// at all. Per god's ruling: these already had (or needed) the read-back --
+// at all. Per the ruling: these already had (or needed) the read-back --
 // the fix is gating `ok` on it, not adding new capability.
 //
 // Also covers a correctness bug found while making this fix: the original

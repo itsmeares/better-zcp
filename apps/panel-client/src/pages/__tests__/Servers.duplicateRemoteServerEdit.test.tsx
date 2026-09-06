@@ -8,10 +8,10 @@ import Servers from '../Servers'
 import { serversApi, serversDetectApi, dockerApi, configApi, updateApi } from '@/lib/api'
 import en from '../../locales/en/servers.json'
 
-// bug-hunt-2026-08-31 follow-up: f557c795 blocked Add Remote Server from
+// regression follow-up: f557c795 blocked Add Remote Server from
 // creating an exact duplicate (name + RCON host + RCON port), but only on
 // the Add path (handleAddExistingServer). apps/panel-server/routes/servers.js has no
-// uniqueness enforcement of its own (confirmed by god -- grepped the whole
+// uniqueness enforcement of its own (confirmed by testing -- grepped the whole
 // file for duplicate/already-exists/unique, only hits are a required-fields
 // list and rconFieldsChanged), so editing an EXISTING remote server's
 // name/host/port to collide with another server (handleSaveEdit,
@@ -171,7 +171,7 @@ describe('Servers -- Edit Server duplicate detection (extends f557c795 to the up
     expect(update).not.toHaveBeenCalled()
   })
 
-  it('keeps a persistent invalid marker on the two colliding fields after the blocked-save toast fades (Angela\'s servers:duplicate-edit finding)', async () => {
+  it('keeps a persistent invalid marker on the two colliding fields after the blocked-save toast fades (the servers:duplicate-edit finding)', async () => {
     renderServers()
     await openEditDialogFor('Server Two')
 

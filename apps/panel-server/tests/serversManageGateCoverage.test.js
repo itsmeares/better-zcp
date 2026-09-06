@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// bug-hunt-2026-08-27 card if-your-change-is-in-middleware-a-handler-only-
+// regression card if-your-change-is-in-middleware-a-handler-only-
 // test-is-blind-to-it: servers.js's POST /, PUT /:id and POST /:id/activate
 // are all gated requirePermission("servers.manage") ahead of the real
 // handler, but every existing test that exercises these three routes
@@ -10,7 +10,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 // crossProducerShapeGate.test.js's invokeJson) grabs ONLY the LAST handler
 // in the route's stack (`layer.route.stack[layer.route.stack.length - 1]`)
 // -- structurally skipping the gate middleware ahead of it, same blind spot
-// Pam found on POST /panel-bridge/command. serversRoute.test.js even has a
+// the test found on POST /panel-bridge/command. serversRoute.test.js even has a
 // comment claiming "see roles.test.js for coverage of that gate itself" --
 // FALSE: roles.test.js only imports routes/auth.js and routes/docker.js,
 // never routes/servers.js at all. So a regression that weakened or removed

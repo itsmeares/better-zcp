@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import path from 'path';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, total-audit batch 2, item 3 (god's own foundation-lens
+// 2026-08-30, regression, item 3 (the own foundation-lens
 // finding). getAllSandboxOptions had a real 300000ms TTL cache entry, but
 // was never in the separate LIVE_STATE_CACHE_KEYS list that
 // invalidateLiveStateCache() walked -- so a successful setSandboxOption

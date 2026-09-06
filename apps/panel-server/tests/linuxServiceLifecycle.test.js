@@ -130,7 +130,7 @@ describe("Linux managed-service lifecycle", () => {
     );
   });
 
-  // god's addendum to hunt-wave5-2026-08-29: assert against path.posix
+  // the addendum to regression-2026-08-29: assert against path.posix
   // computed here, not a hand-typed expected string, and prove the check
   // actually discriminates (path.win32 genuinely produces something
   // different for these same segments) rather than being vacuously true --

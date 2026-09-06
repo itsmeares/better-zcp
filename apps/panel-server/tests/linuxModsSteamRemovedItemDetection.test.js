@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// 2026-08-29 hunt follow-up (god): mods/workshop hunt suspect 5 (failure
+// 2026-08-29 hunt follow-up (testing): mods/workshop regression case 5 (failure
 // visibility), the data-model half, which must land BEFORE any UI work
 // because a surface can't show a distinction its data doesn't carry.
 //
@@ -106,10 +106,10 @@ describe("fetchSteamTimestamps: distinguishing removed-upstream from a batch fai
   });
 
   it("getStatus() surfaces unknown-result-code workshop IDs WITH their raw code, next to (not merged into) removedWorkshopIds", async () => {
-    // 2026-08-29 addendum (god): a surface that shows a healthy indicator
+    // 2026-08-29 addendum (testing): a surface that shows a healthy indicator
     // plus a removed-mods list implies those are the only two outcomes --
     // an id stuck on an unrecognized code would otherwise appear in
-    // NEITHER list and read as fine by omission. Angela is waiting on this
+    // NEITHER list and read as fine by omission. this remains on this
     // to unblock the client-side status surface.
     global.fetch = vi.fn(async () =>
       steamResponse([

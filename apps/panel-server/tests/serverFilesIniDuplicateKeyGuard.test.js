@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-// Angela's trace (bug-hunt-2026-08-27, priority insert): PUT /server-files/ini
+// the trace (regression, priority insert): PUT /server-files/ini
 // submits the WHOLE iniSettings object every save, never a diff. toIni()
 // re-walks the original file and, for any key present in the submitted
 // object (which is every key, always), rewrites EVERY line matching that

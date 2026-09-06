@@ -159,7 +159,7 @@ beforeEach(() => {
     zomboidDataPath: dataRoot,
     isRemote: false,
   });
-  // bug-hunt-2026-08-27: delete-chunks/delete-region now require a
+  // regression: delete-chunks/delete-region now require a
   // customPath to match a configured server's zomboidDataPath (or an
   // OS-standard candidate) via assertKnownSaveRoot -- default to none
   // configured, so tests that use customPath must opt in explicitly.
@@ -665,7 +665,7 @@ describe("delete-chunks/delete-region: an undetermined server state must refuse,
   });
 });
 
-// bug-hunt-2026-08-27, item (C): a customPath used to only need to LOOK
+// regression, item (C): a customPath used to only need to LOOK
 // Zomboid-related (inspectZomboidPath's hasZomboidMarker/isInsideSavesDir
 // signals are pure substring matches on the path string, satisfiable with
 // zero real filesystem structure). Verified empirically that tightening
@@ -754,7 +754,7 @@ describe("customPath must resolve to a location the panel already recognizes", (
   });
 });
 
-// bug-hunt-2026-08-27, card delete-region-two-completeness-gaps-vs-its-
+// regression, card delete-region-two-completeness-gaps-vs-its-
 // sibling (ranked #4/46): delete-region did measurably less of the same
 // destructive cleanup than /delete-chunks -- silently, since both return a
 // plain success response either way. Two gaps named by the card, both

@@ -10,12 +10,12 @@ const { checkServerStatusNow, io } = await import("../index.js");
 const { ServerManager } = await import("../services/serverManager.js");
 const { onLog } = await import("../utils/logger.js");
 
-// Bug hunt 2026-08-31 (consolidation, carded by Pam's completeness-claims
+// regression 2026-08-31 (consolidation, tracked by the completeness-claims
 // audit): checkServerStatusNow() gained an optional `detectionReason`
 // parameter so the rconService "disconnected" handler (index.js:1219) can
 // route through this ONE function instead of independently reading,
 // comparing, mutating and emitting `lastKnownRunning` itself -- the
-// duplicated-logic gap Pam's audit found in the function's own "no second
+// duplicated-logic gap the audit found in the function's own "no second
 // copy" claim. This locks in that the reason reaches BOTH message sites
 // (the shared "state changed" log line, and -- for a stop specifically --
 // the persisted logServerEvent() message), which is the one thing that's

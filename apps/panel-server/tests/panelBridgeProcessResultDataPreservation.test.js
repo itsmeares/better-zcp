@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PanelBridge } from '../services/panelBridge.js';
 
-// 2026-08-30, panelbridge-total-audit-2026-08-30 (Finding A): processResult's
+// 2026-08-30, panelbridge-regression-2026-08-30 (Finding A): processResult's
 // failure branch discarded result.data entirely, for all 101 actions -- a
 // transport bug, not a handler bug. killPlayer's not-dead path returns no
 // error string at all (only data.message), so callers saw the generic

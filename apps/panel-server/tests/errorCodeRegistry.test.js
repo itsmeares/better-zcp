@@ -146,7 +146,7 @@ const KNOWN_CLIENT_ONLY_LOCALE_KEYS = new Set([
 // `_one`/`_other` plural-suffixed key convention (e.g. splitting
 // ROLE_HAS_MEMBERS into ROLE_HAS_MEMBERS_one / ROLE_HAS_MEMBERS_other)
 // fails this test -- the bare constant-name key it looks for is missing,
-// even though a real, working pair of plural keys exists. Angela hit this
+// even though a real, working pair of plural keys exists. testing hit this
 // for ROLE_HAS_MEMBERS and correctly kept the source text's manual
 // "user(s)" style instead, documenting it as a constraint rather than
 // fighting the test. This is intentional, not a gap to fix: exact-match is

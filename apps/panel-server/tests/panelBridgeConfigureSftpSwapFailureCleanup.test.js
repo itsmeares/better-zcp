@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-// 2026-09-04, overnight bug hunt (Angela's fence: panelBridge*):
+// 2026-09-04, overnight regression (the fence: panelBridge*):
 // configureSftp() connects a brand-new PanelBridgeSftpTransport FIRST (its
 // own try/catch already handles that failing cleanly, leaving the old
 // bridge untouched -- see the comment above it). But once that new

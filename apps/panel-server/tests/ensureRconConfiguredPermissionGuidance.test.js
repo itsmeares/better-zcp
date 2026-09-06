@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-// LINUX BUG HUNT (2026-08-29, "raw EACCES with no pointer to the fix"):
+// LINUX regression (2026-08-29, "raw EACCES with no pointer to the fix"):
 // operator report -- EACCES: permission denied, open '/pz-server/servertest.ini'
 // -- with nothing anywhere pointing at PUID/PGID, even though docker-
 // compose.yml's own Quick Start comments document it right above the

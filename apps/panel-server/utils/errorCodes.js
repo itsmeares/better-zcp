@@ -754,7 +754,7 @@ export const ErrorCode = Object.freeze({
   /** apps/panel-server/routes/server.js -- POST /api/server/wipe, caller didn't pass
    * `confirm: true`. /delete-files used to share this code too (own English
    * text, same code) -- split out as DELETE_FILES_CONFIRM_REQUIRED above
-   * (2026-08-26 bug hunt round 2): unlike WIPE_SERVER_RUNNING above, which
+   * (2026-08-26 regression round 2): unlike WIPE_SERVER_RUNNING above, which
    * really is one condition meaning the same thing at both call sites,
    * "confirm required" here was never a shared concept, just a borrowed
    * code -- this one stays exactly what its name always said, /wipe's own. */

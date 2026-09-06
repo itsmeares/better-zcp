@@ -51,7 +51,7 @@ function getRouteHandler(method, routePath) {
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-// End-to-end reproduction of Angela's finding: with the database genuinely
+// End-to-end reproduction of the finding: with the database genuinely
 // empty, GET /api/server-files/paths (and every sibling route — they all
 // share the same two path/name resolvers) must say nothing is configured,
 // not present a fabricated "servertest" server as if it were real.

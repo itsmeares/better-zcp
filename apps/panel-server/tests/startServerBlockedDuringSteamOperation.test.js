@@ -6,8 +6,8 @@ import {
   clearActiveSteamOperation,
 } from "../services/activeSteamOperations.js";
 
-// Concurrency hunt hunt-wave6-2026-08-29, landing "item 4" (update-apply
-// racing Start/Restart) from the hunt-wave5 table. god's own review of the
+// Concurrency regression regression-2026-08-29, landing "item 4" (update-apply
+// racing Start/Restart) from the regression table. the own review of the
 // evidence agreed the finding was real and structural (activeSteamOperations
 // was a module-private Map in routes/server.js, referenced ONLY by
 // /install and /steam-update -- zero hits anywhere in serverManager.js),

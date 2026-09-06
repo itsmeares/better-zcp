@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import ServerConfig from '../ServerConfig'
 import { serverFilesApi, serversApi, ApiError } from '@/lib/api'
 
-// 2026-08-31 quality-pass finding: apps/panel-server/routes/serverFiles.js's
+// 2026-08-31 regression finding: apps/panel-server/routes/serverFiles.js's
 // getServerConfigPath() throws the SAME SERVER_NOT_CONFIGURED error for a
 // genuinely-unconfigured panel AND for an active REMOTE server with no SFTP
 // transport configured -- the isRemote branch falls through to the same
@@ -72,7 +72,7 @@ describe('ServerConfig.tsx: active-server-is-remote load-error messaging', () =>
     expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument()
   })
 
-  // bug-hunt-2026-08-31: the Settings/Sandbox tab badges independently read
+  // regression: the Settings/Sandbox tab badges independently read
   // pathsInfo?.exists.{ini,sandbox} to decide whether to show a "file
   // missing" warning icon -- pathsInfo is null here for the SAME reason the
   // banner above exists (nothing was confirmed missing, the remote host was

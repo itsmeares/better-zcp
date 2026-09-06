@@ -117,9 +117,9 @@ const CANNOT_VERIFY_OR_EQUIVALENT = {
   // so the panel offers two actions that cannot work on B42. The existing
   // guard/pcall already fail safely and honestly (ok=false, not a false
   // success) rather than crashing -- which is also exactly why nobody
-  // noticed from the logs. Carded to Pam (owns Events.tsx) with this
+  // noticed from the logs. Tracked as a regression with this
   // evidence attached.
-  createFaction: 'BUG, not a verification limit: Faction.createFaction does not exist ANYWHERE in the real B42 jar (zero hits across all 23,740 class files). Events.tsx advertises this operation to the operator; it cannot work on B42. Carded to Pam.',
+  createFaction: 'BUG, not a verification limit: Faction.createFaction does not exist ANYWHERE in the real B42 jar (zero hits across all 23,740 class files). Events.tsx advertises this operation to the operator; it cannot work on B42. Tracked as a regression.',
   removeFaction: 'BUG, not a verification limit: faction:removeFaction does not exist ANYWHERE in the real B42 jar -- same finding, same Events.tsx exposure, same card as createFaction.',
 
   // Explicitly NOT gated by design -- gating would hide real partial data.
@@ -145,7 +145,7 @@ const CANNOT_VERIFY_OR_EQUIVALENT = {
   stopHelicopterEvent: 'Same ceiling as triggerHelicopterEvent, same reason: no exposed query for helicopter-event state exists anywhere in the confirmed jar, so pcall-not-throwing on the single real API (endHelicopter(), zero-arg, void return, confirmed 2026-08-30 via javap against the real B42 jar) is the ceiling.',
   triggerLightning: 'Genuinely unverifiable, confirmed via javap -c against the real jar (ThunderStorm.triggerThunderEvent): when GameServer.server is true it only writes to an internal networkThunderEvent struct and transmits a packet -- no ThunderCloud is created synchronously (that only happens client-side on packet receipt), no boolean or count changes, nothing to read back. Same ceiling class as playWorldSound/triggerGunshot -- pcall-not-throwing is the real ceiling. Was PROVISIONAL; now a confirmed, permanent limit, not a follow-up.',
 
-  // 2026-08-31 bug hunt: the "PROVISIONAL, not yet re-audited against
+  // 2026-08-31 regression: the "PROVISIONAL, not yet re-audited against
   // getFinalValue()/isEnableAdmin()" climate/weather block that used to
   // live here (generateWeather, triggerBlizzard/TropicalStorm/Storm,
   // stopWeather, setSnow, startRain, stopRain, setDayLight,
@@ -207,7 +207,7 @@ const CANNOT_VERIFY_OR_EQUIVALENT = {
   // Both now emit a literal `verified` field, so neither needs an exemption
   // anymore.
   //
-  // 2026-09-04 (overnight-bug-hunt, Kevin): removeVehiclesInArea used to be
+  // 2026-09-04 (regression, testing): removeVehiclesInArea used to be
   // listed here too, with the reason "already counts only real per-vehicle
   // invoke-confirmed removals (fixed from this exact defect once before)".
   // That reasoning was itself the exact mistake this whole audit exists to

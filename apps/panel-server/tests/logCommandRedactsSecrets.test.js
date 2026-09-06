@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "fs";
 
-// bug-hunt-2026-08-27: proves the redaction actually reaches disk, not just
+// regression: proves the redaction actually reaches disk, not just
 // the pure regex in isolation (rconCommandRedaction.test.js covers that).
 // REAL, UNMOCKED database/init.js -- same per-file temp dataDir isolation
 // as debugDatabaseRoutesRealExecution.test.js (vitest.perFileDataDir.setup.mjs,

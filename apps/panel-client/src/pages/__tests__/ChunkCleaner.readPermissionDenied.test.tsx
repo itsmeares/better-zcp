@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import ChunkCleaner from '../ChunkCleaner'
 import { chunksApi, serversApi, mapApi, ApiError } from '@/lib/api'
 
-// hunt-wave13-2026-08-30: 41fa20a3 gated chunks.js's previously-open READ
+// regression-2026-08-30: 41fa20a3 gated chunks.js's previously-open READ
 // routes (/saves, /suggested-paths, /chunks/:saveName, /stats/:saveName,
 // /browse) behind chunks.manage. ChunkCleaner.tsx had NO gate on its READ
 // fetches -- only the Delete button and save-path form were ever disabled
@@ -85,7 +85,7 @@ function renderChunkCleaner() {
   vi.stubGlobal('ResizeObserver', NoopResizeObserver)
   getResolvedActive.mockResolvedValue({ server: null })
   suggestedPaths.mockResolvedValue({ candidates: [] })
-  // Unrelated to this fix (hunt-wave12's tile-URL versioning wiring) but
+  // Unrelated to this fix (regression's tile-URL versioning wiring) but
   // unmocked here would hit a real, unreachable network fetch in jsdom on
   // every mount -- caught harmlessly by ChunkCleaner's own .catch(), but
   // noisy (retry logging) and slow. Mocked cleanly instead of relying on
@@ -111,7 +111,7 @@ describe('ChunkCleaner.tsx: read routes gated behind chunks.manage (41fa20a3 fol
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   })
 
-  // bug-hunt-2026-08-31: this page's EmptyState (ChunkCleaner.tsx:2249) is
+  // regression: this page's EmptyState (ChunkCleaner.tsx:2249) is
   // one of 8 call sites that overrode `icon` to ShieldAlert without a
   // matching `type`, so the eyebrow fell through to the 'noData' default --
   // "No Data" above an icon that says the opposite. Second real-render

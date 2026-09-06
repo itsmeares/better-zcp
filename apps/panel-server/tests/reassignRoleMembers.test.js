@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-// Real database/init.js, not mocked -- Kevin found reassignRoleMembers only
+// Real database/init.js, not mocked -- the test found reassignRoleMembers only
 // updated user.role when the TARGET role was seeded, leaving it stale for a
 // custom one. That mattered because requirePermission() resolves
 // capabilities via getRoleByName(req.user.role), not roleId (roleId is

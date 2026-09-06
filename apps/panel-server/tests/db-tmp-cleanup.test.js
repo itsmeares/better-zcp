@@ -85,7 +85,7 @@ describe("sweepOrphanedTmpFiles", () => {
 
   // 2026-09-02, single-signal-sweep, REAL DEFECT fix: this sweep used to
   // carry its own local isPidAlive(), a THIRD undeduplicated copy of the
-  // exact bug already fixed once in pidLock.js (bughunt-2026-08-31-c) --
+  // exact bug already fixed once in pidLock.js (regression) --
   // it resolved any signal-0 probe error OTHER than EPERM to "dead",
   // instead of failing toward "still alive" for anything short of a
   // confirmed ESRCH. Now imports the shared, correctly-directioned

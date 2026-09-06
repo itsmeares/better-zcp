@@ -6,9 +6,9 @@ import { modsApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmProvider } from '@/contexts/ConfirmContext'
 
-// hunt-wave7-2026-08-29: modChecker.js's getStatus() has carried
+// regression-2026-08-29: modChecker.js's getStatus() has carried
 // steamApiHealthy/lastSteamApiFailureAt/removedWorkshopIds for a while with
-// ZERO consumers anywhere in apps/panel-client/src (confirmed by Pam's grep) -- not
+// ZERO consumers anywhere in apps/panel-client/src (confirmed by the grep) -- not
 // even declared on the ModStatus interface. This file covers the two new
 // quiet/warning indicators built on those fields: a Steam-API-unreachable
 // notice (quiet, dismissible, re-surfaces on the next failed cycle) and a
@@ -210,7 +210,7 @@ describe('Mods -- unknown Steam result (third state, must not collapse into remo
     expect(screen.getByText(/code 15/i)).toBeInTheDocument()
   })
 
-  it('the SAME batch producing a removed id and an unknown id renders both, in their own distinct sections, matching Pam\'s server-side discriminating fixture', async () => {
+  it('the SAME batch producing a removed id and an unknown id renders both, in their own distinct sections, matching the server-side discriminating fixture', async () => {
     primeReadMocks(
       {
         removedWorkshopIds: ['999888777'],

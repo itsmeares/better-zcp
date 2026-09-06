@@ -3,13 +3,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadPanelBridge } from './helpers/panelBridgeLua.js';
 
-// 2026-08-30, operator ruling on bridge-getvehicles-runtime-type-unknown:
+// 2026-08-30, decision on bridge-getvehicles-runtime-type-unknown:
 // IsoCell.getVehicles()'s compile-time descriptor declares java.util.Set --
 // no get(int) at all -- yet this file has always called size()/get(i)
 // unconditionally, matching real vanilla CLIENT Lua (ISVehicleBloodUI.lua)
 // which does the exact same thing. PZ's Lua binding reflects against the
 // RUNTIME object, not the descriptor, so which shape actually comes back on
-// a live server was left correctly unresolved by Kevin's jar audit -- it
+// a live server was left correctly unresolved by the jar audit -- it
 // cannot be settled from static analysis alone.
 //
 // The operator did not ask for that answer. He asked for the code to stop
