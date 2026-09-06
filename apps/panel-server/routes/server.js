@@ -37,7 +37,7 @@ import { ErrorCode } from "../utils/errorCodes.ts";
 import { ProgressCode } from "../utils/progressCodes.ts";
 import { invalidateMapFolderScan } from "./chunks.js";
 import { emitActionResult } from "./scheduler.js";
-import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.js";
+import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
 import { isContainerized } from "../utils/dockerDetect.ts";

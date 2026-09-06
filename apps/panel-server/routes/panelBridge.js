@@ -33,7 +33,7 @@ import {
   installBridge,
   isBridgeVersionBehindBundled,
   resolveInstallDir,
-} from "../services/panelBridgeInstaller.js";
+} from "../services/panelBridgeInstaller.ts";
 import { createLogger } from "../utils/logger.ts";
 import {
   getSftpCachePath,

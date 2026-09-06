@@ -28,7 +28,7 @@ import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
-import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.js";
+import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.ts";
 import { refreshWorkshopChecker } from "../services/modChecker.js";
 import {
   parseBoundedInteger,

@@ -18,7 +18,7 @@ vi.mock("../database/init.js", () => ({
 
 const { default: router } = await import("../routes/panelBridge.js");
 const { getBundledBridgeVersion } = await import(
-  "../services/panelBridgeInstaller.js"
+  "../services/panelBridgeInstaller.ts"
 );
 
 function getHandler(routePath, method) {

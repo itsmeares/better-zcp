@@ -11,7 +11,7 @@ import {
   isBridgeVersionBehindBundled,
   resolveInstallDir,
   resolveSourcePath,
-} from '../services/panelBridgeInstaller.js';
+} from '../services/panelBridgeInstaller.ts';
 
 let tmpDir;
 

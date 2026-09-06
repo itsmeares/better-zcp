@@ -14,7 +14,7 @@ vi.mock("../services/managedContainer.ts", () => ({ runManagedLifecycle }));
 
 const { default: router } = await import("../routes/server.js");
 const { resolveSourcePath } = await import(
-  "../services/panelBridgeInstaller.js"
+  "../services/panelBridgeInstaller.ts"
 );
 
 function getHandler(routePath, method) {

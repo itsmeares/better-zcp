@@ -76,7 +76,7 @@ import { loadOrCreateCerts } from "./utils/certs.ts";
 import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";
 import { ErrorCode } from "./utils/errorCodes.ts";
 import { getSftpCachePath } from "./services/panelBridgeSftp.js";
-import { resolveInstallDir } from "./services/panelBridgeInstaller.js";
+import { resolveInstallDir } from "./services/panelBridgeInstaller.ts";
 import {
   getEmbeddedPanelBridgeLua,
   compareModVersions,

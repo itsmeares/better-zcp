@@ -10,7 +10,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const VERSION_REGEX = /VERSION\s*=\s*"([^"]+)"/;
 
-function sourceCandidates() {
+interface PanelBridgeServer {
+  serverPath?: string | null;
+  installPath?: string | null;
+  isRemote?: boolean;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function sourceCandidates(): string[] {
   return [
     path.join(__dirname, '..', '..', '..', 'integrations', 'panelbridge', 'PanelBridge', 'media', 'lua', 'server', 'PanelBridge.lua'),
     path.join(path.dirname(process.execPath), 'pz-mod', 'PanelBridge', 'media', 'lua', 'server', 'PanelBridge.lua'),
@@ -22,9 +32,9 @@ export function resolveSourcePath() {
   return sourceCandidates().find((candidate) => fs.existsSync(candidate)) || null;
 }
 
-export function resolveInstallDir(server) {
+export function resolveInstallDir(server?: PanelBridgeServer | null): string | null {
   let dir = server?.serverPath || server?.installPath;
-  if (!dir) return null;
+  if (typeof dir !== 'string' || !dir) return null;
   const lower = dir.toLowerCase();
   if (lower.endsWith('.bat') || lower.endsWith('.sh') || lower.endsWith('.exe')) {
     dir = path.dirname(dir);
@@ -32,12 +42,12 @@ export function resolveInstallDir(server) {
   return dir;
 }
 
-export function resolveTargetPath(server) {
+export function resolveTargetPath(server?: PanelBridgeServer | null): string | null {
   const installDir = resolveInstallDir(server);
   return installDir ? path.join(installDir, 'media', 'lua', 'server', 'PanelBridge.lua') : null;
 }
 
-function isWritableDir(dirPath) {
+function isWritableDir(dirPath: string): boolean {
   try {
     if (!fs.statSync(dirPath).isDirectory()) return false;
     fs.accessSync(dirPath, fs.constants.W_OK);
@@ -47,7 +57,7 @@ function isWritableDir(dirPath) {
   }
 }
 
-export function canAutoInstall(server) {
+export function canAutoInstall(server?: PanelBridgeServer | null): boolean {
   if (!server || server.isRemote) return false;
   const installDir = resolveInstallDir(server);
   if (!installDir || !fs.existsSync(installDir) || !isWritableDir(installDir)) {
@@ -56,30 +66,30 @@ export function canAutoInstall(server) {
   return Boolean(resolveSourcePath());
 }
 
-function extractVersion(content) {
+function extractVersion(content: string): string | null {
   return (content.match(VERSION_REGEX) || [])[1] || null;
 }
 
-function readContent(filePath) {
+function readContent(filePath: string): string | null {
   try {
     return fs.readFileSync(filePath, 'utf8');
   } catch (error) {
-    log.debug(`Could not read ${filePath}: ${error.message}`);
+    log.debug(`Could not read ${filePath}: ${errorMessage(error)}`);
     return null;
   }
 }
 
-function readVersion(filePath) {
+function readVersion(filePath: string): string | null {
   const content = readContent(filePath);
   return content ? extractVersion(content) : null;
 }
 
-export function checkBridgeInstalled(server) {
+export function checkBridgeInstalled(server?: PanelBridgeServer | null) {
   const sourcePath = resolveSourcePath();
   const targetPath = resolveTargetPath(server);
   const installed = Boolean(targetPath && fs.existsSync(targetPath));
   const sourceContent = sourcePath ? readContent(sourcePath) : null;
-  const targetContent = installed ? readContent(targetPath) : null;
+  const targetContent = targetPath && installed ? readContent(targetPath) : null;
   const targetVersion = targetContent ? extractVersion(targetContent) : null;
   const needsUpdate = Boolean(
     installed && sourceContent !== null &&
@@ -89,17 +99,17 @@ export function checkBridgeInstalled(server) {
   return { installed, version: targetVersion, needsUpdate, sourcePath, targetPath };
 }
 
-function matchOwnership(targetPath, referencePath) {
+function matchOwnership(targetPath: string, referencePath: string | null) {
   if (process.platform === 'win32' || !referencePath) return;
   try {
     const { uid, gid } = fs.statSync(referencePath);
     fs.chownSync(targetPath, uid, gid);
   } catch (error) {
-    log.debug(`Could not match ownership for ${targetPath}: ${error.message}`);
+    log.debug(`Could not match ownership for ${targetPath}: ${errorMessage(error)}`);
   }
 }
 
-export function installBridge(server) {
+export function installBridge(server?: PanelBridgeServer | null) {
   const sourcePath = resolveSourcePath();
   const targetPath = resolveTargetPath(server);
   if (!sourcePath) {
@@ -161,12 +171,13 @@ export function installBridge(server) {
     log.info(`PanelBridge installed at ${targetPath} (v${version || 'unknown'})`);
     return { success: true, targetPath, version, updated: true };
   } catch (error) {
-    log.warn(`PanelBridge install failed: ${error.message}`);
-    return { success: false, error: error.message };
+    const message = errorMessage(error);
+    log.warn(`PanelBridge install failed: ${message}`);
+    return { success: false, error: message };
   }
 }
 
-export function autoInstallBridgeIfNeeded(server) {
+export function autoInstallBridgeIfNeeded(server?: PanelBridgeServer | null): void {
   try {
     if (!canAutoInstall(server)) return;
     const status = checkBridgeInstalled(server);
@@ -181,7 +192,7 @@ export function autoInstallBridgeIfNeeded(server) {
       log.warn(`PanelBridge auto-install failed: ${result.error}`);
     }
   } catch (error) {
-    log.warn(`PanelBridge auto-install check failed: ${error.message}`);
+    log.warn(`PanelBridge auto-install check failed: ${errorMessage(error)}`);
   }
 }
 
@@ -190,7 +201,7 @@ export function getBundledBridgeVersion() {
   return sourcePath ? readVersion(sourcePath) : null;
 }
 
-export function isBridgeVersionBehindBundled(liveVersion) {
+export function isBridgeVersionBehindBundled(liveVersion?: string | null): boolean {
   const bundled = getBundledBridgeVersion();
   if (!bundled || !liveVersion) return false;
   return compareModVersions(liveVersion, bundled) < 0;
