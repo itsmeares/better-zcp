@@ -13,7 +13,11 @@ vi.mock("../utils/paths.js", async () => {
 
 vi.mock("../database/init.js", async () => {
   const actual = await vi.importActual("../database/init.js");
-  return { ...actual, getRoleByName: mockGetRoleByName };
+  return {
+    ...actual,
+    getRoleByName: mockGetRoleByName,
+    getDatabaseFilePath: () => getDataPaths().dbPath,
+  };
 });
 
 const { default: router } = await import("../routes/debug.js");
