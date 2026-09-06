@@ -21,8 +21,8 @@ vi.mock("../utils/paths.js", () => ({
   getDataPaths: () => ({ dataDir: tmpDir, logsDir: tmpDir }),
 }));
 
-const { default: oidcRouter } = await import("../routes/oidc.js");
-const { resetOidcConfigCache, getOidcConfig } = await import("../services/oidc.js");
+const { default: oidcRouter } = await import("../routes/oidc.ts");
+const { resetOidcConfigCache, getOidcConfig } = await import("../services/oidc.ts");
 
 const ENV_KEYS = [
   "PANEL_OIDC_ISSUER_URL",

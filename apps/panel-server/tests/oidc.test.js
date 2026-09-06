@@ -7,7 +7,7 @@ import {
   buildOidcAuthorizationRequest,
   handleOidcCallback,
   _resetOidcConfigCacheForTests,
-} from '../services/oidc.js';
+} from '../services/oidc.ts';
 import { makeSigningKey, startMockOidcProvider } from './helpers/mockOidcProvider.js';
 
 const ENV_KEYS = [

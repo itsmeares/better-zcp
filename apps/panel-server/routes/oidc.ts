@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import rateLimit from "express-rate-limit";
 import authService from "../services/auth.js";
 import { createLogger } from "../utils/logger.js";
@@ -12,7 +12,9 @@ import {
   handleOidcCallback,
   resetOidcConfigCache,
   testOidcDiscovery,
-} from "../services/oidc.js";
+  type OidcSettings,
+  type OidcSettingsUpdates,
+} from "../services/oidc.ts";
 import { getRefreshCookieOptions } from "../utils/refreshCookie.ts";
 import { requirePermission } from "../services/permissions.js";
 
@@ -34,7 +36,7 @@ const callbackRateLimiter = makeOidcLimiter();
 const FLOW_COOKIE_NAME = "oidcFlow";
 const FLOW_COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
 
-function getFlowCookieOptions(req) {
+function getFlowCookieOptions(req: Request) {
   const forceSecureCookies =
     process.env.HTTPS === "true" || process.env.FORCE_HSTS === "true";
   const requestIsSecure =
@@ -42,10 +44,14 @@ function getFlowCookieOptions(req) {
   return {
     httpOnly: true,
     secure: forceSecureCookies || requestIsSecure,
-    sameSite: "lax",
+    sameSite: "lax" as const,
     path: "/api/auth/oidc",
     maxAge: FLOW_COOKIE_MAX_AGE_MS,
   };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 router.get("/status", async (_req, res) => {
@@ -72,8 +78,8 @@ router.get("/login", loginRateLimiter, async (req, res) => {
       getFlowCookieOptions(req),
     );
     res.redirect(authorizationUrl);
-  } catch (error) {
-    log.warn(`OIDC login start failed: ${error.message}`);
+  } catch (error: unknown) {
+    log.warn(`OIDC login start failed: ${errorMessage(error)}`);
     res.status(502).json({
       error: sanitizeError(
         "Could not reach the identity provider. Try local sign-in, or contact your administrator.",
@@ -110,8 +116,8 @@ router.get("/callback", callbackRateLimiter, async (req, res) => {
   let claims;
   try {
     claims = await handleOidcCallback(currentUrl, flow);
-  } catch (error) {
-    log.warn(`OIDC callback rejected: ${error.message}`);
+  } catch (error: unknown) {
+    log.warn(`OIDC callback rejected: ${errorMessage(error)}`);
     return res.redirect("/?oidcError=invalid_token");
   }
 
@@ -121,8 +127,8 @@ router.get("/callback", callbackRateLimiter, async (req, res) => {
       { issuer: claims.iss, subject: claims.sub, email: claims.email },
       true,
     );
-  } catch (error) {
-    log.error(`OIDC session issuance failed: ${error.message}`);
+  } catch (error: unknown) {
+    log.error(`OIDC session issuance failed: ${errorMessage(error)}`);
     return res.redirect("/?oidcError=session_failed");
   }
 
@@ -136,7 +142,7 @@ router.get("/callback", callbackRateLimiter, async (req, res) => {
   }
 
   res.cookie("refreshToken", result.refreshToken, getRefreshCookieOptions(req));
-  log.info(`OIDC sign-in: ${result.user.username} (sub=${claims.sub})`);
+  log.info(`OIDC sign-in: ${result.user?.username ?? "unknown"} (sub=${claims.sub})`);
   res.redirect("/");
 });
 
@@ -144,7 +150,11 @@ router.get("/callback", callbackRateLimiter, async (req, res) => {
 const MAX_SCOPE_LENGTH = 500;
 const MAX_PROVIDER_NAME_LENGTH = 100;
 
-function looksLikeUrl(value, { allowHttp }) {
+function looksLikeUrl(
+  value: unknown,
+  { allowHttp }: { allowHttp: boolean },
+): boolean {
+  if (typeof value !== "string") return false;
   try {
     const url = new URL(value);
     if (url.protocol === "https:") return true;
@@ -155,7 +165,7 @@ function looksLikeUrl(value, { allowHttp }) {
   }
 }
 
-function publicSettingsShape(settings) {
+function publicSettingsShape(settings: OidcSettings) {
   return {
     issuerUrl: settings.issuerUrl,
     clientId: settings.clientId,
@@ -181,7 +191,7 @@ router.put("/settings", requirePermission("panel.settings"), async (req, res) =>
   try {
     const body = req.body || {};
     const current = await getOidcSettings();
-    const updates = {};
+    const updates: OidcSettingsUpdates = {};
 
     if (body.issuerUrl !== undefined) {
       const value = String(body.issuerUrl).trim();
@@ -256,9 +266,10 @@ router.put("/settings", requirePermission("panel.settings"), async (req, res) =>
       `OIDC settings updated (fields: ${Object.keys(updates).join(", ") || "none"})`,
     );
     res.json({ success: true, ...publicSettingsShape(settings) });
-  } catch (error) {
-    log.error(`Failed to update OIDC settings: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    log.error(`Failed to update OIDC settings: ${message}`);
+    res.status(500).json({ error: sanitizeError(message) });
   }
 });
 

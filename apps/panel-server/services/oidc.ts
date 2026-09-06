@@ -7,13 +7,46 @@ import { ErrorCode } from "../utils/errorCodes.js";
 
 const log = createLogger("OIDC");
 
+export interface OidcSettings {
+  issuerUrl: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  scope: string;
+  providerName: string;
+  allowInsecureHttp: boolean;
+}
 
-function readEnv(name) {
+export interface OidcSettingsUpdates {
+  issuerUrl?: string;
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+  scope?: string;
+  providerName?: string;
+  allowInsecureHttp?: boolean;
+}
+
+export interface OidcDiscoveryOptions {
+  issuerUrl: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  allowInsecureHttp: boolean;
+}
+
+interface OidcFlow {
+  state: string;
+  nonce: string;
+  codeVerifier: string;
+}
+
+function readEnv(name: string): string {
   const value = process.env[name];
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
-const ENV_BACKED_FIELDS = [
+const ENV_BACKED_FIELDS: Array<[string, string, string]> = [
   ["PANEL_OIDC_ISSUER_URL", "oidcIssuerUrl", ""],
   ["PANEL_OIDC_CLIENT_ID", "oidcClientId", ""],
   ["PANEL_OIDC_REDIRECT_URI", "oidcRedirectUri", ""],
@@ -21,8 +54,8 @@ const ENV_BACKED_FIELDS = [
   ["PANEL_OIDC_PROVIDER_NAME", "oidcProviderName", "SSO"],
 ];
 
-export async function getOidcSettings() {
-  const resolved = {};
+export async function getOidcSettings(): Promise<OidcSettings> {
+  const resolved: Record<string, string> = {};
   for (const [envVar, settingKey, defaultValue] of ENV_BACKED_FIELDS) {
     const envValue = readEnv(envVar);
     if (envValue) {
@@ -54,8 +87,8 @@ export async function getOidcSettings() {
   };
 }
 
-export function getOidcEnvOverrides() {
-  const overrides = {};
+export function getOidcEnvOverrides(): Record<string, boolean> {
+  const overrides: Record<string, boolean> = {};
   for (const [envVar, settingKey] of ENV_BACKED_FIELDS) {
     overrides[settingKey.replace(/^oidc/, "").replace(/^./, (c) => c.toLowerCase())] =
       Boolean(readEnv(envVar));
@@ -65,7 +98,9 @@ export function getOidcEnvOverrides() {
   return overrides;
 }
 
-export async function setOidcSettings(updates) {
+export async function setOidcSettings(
+  updates: OidcSettingsUpdates,
+): Promise<void> {
   if (updates.issuerUrl !== undefined) await setSetting("oidcIssuerUrl", updates.issuerUrl);
   if (updates.clientId !== undefined) await setSetting("oidcClientId", updates.clientId);
   if (updates.redirectUri !== undefined) await setSetting("oidcRedirectUri", updates.redirectUri);
@@ -75,7 +110,7 @@ export async function setOidcSettings(updates) {
   if (updates.clientSecret !== undefined) writeUiSecretFile("oidcClientSecret", updates.clientSecret);
 }
 
-export function isOidcConfigured(settings) {
+export function isOidcConfigured(settings: OidcSettings): boolean {
   return Boolean(
     settings.issuerUrl &&
       settings.clientId &&
@@ -84,9 +119,9 @@ export function isOidcConfigured(settings) {
   );
 }
 
-let _configPromise = null;
+let _configPromise: Promise<client.Configuration> | null = null;
 
-export async function getOidcConfig() {
+export async function getOidcConfig(): Promise<client.Configuration | null> {
   const settings = await getOidcSettings();
   if (!isOidcConfigured(settings)) return null;
 
@@ -102,9 +137,11 @@ export async function getOidcConfig() {
         undefined,
         { execute },
       )
-      .catch((error) => {
+      .catch((error: unknown) => {
         _configPromise = null;
-        log.warn(`OIDC discovery against ${settings.issuerUrl} failed: ${error.message}`);
+        log.warn(
+          `OIDC discovery against ${settings.issuerUrl} failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
         throw error;
       });
   }
@@ -117,7 +154,7 @@ export function resetOidcConfigCache() {
 
 export const _resetOidcConfigCacheForTests = resetOidcConfigCache;
 
-function describeDiscoveredMetadata(config) {
+function describeDiscoveredMetadata(config: client.Configuration) {
   const metadata = config.serverMetadata();
   return {
     issuer: metadata.issuer,
@@ -135,7 +172,7 @@ export async function testOidcDiscovery({
   clientSecret,
   redirectUri,
   allowInsecureHttp,
-}) {
+}: OidcDiscoveryOptions): Promise<Record<string, unknown>> {
   if (!issuerUrl || !clientId || !clientSecret) {
     return {
       success: false,
@@ -156,9 +193,10 @@ export async function testOidcDiscovery({
   let config;
   try {
     config = await client.discovery(issuer, clientId, clientSecret, undefined, { execute });
-  } catch (error) {
-    log.warn(`OIDC test-connection discovery against ${issuerUrl} failed: ${error.message}`);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    log.warn(`OIDC test-connection discovery against ${issuerUrl} failed: ${message}`);
+    return { success: false, error: message };
   }
 
   const bogusCode = `zcp-test-connection-${client.randomState()}`;
@@ -168,7 +206,7 @@ export async function testOidcDiscovery({
       ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     });
     return { success: true, metadata: describeDiscoveredMetadata(config) };
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof client.ResponseBodyError) {
       if (error.error === "invalid_grant") {
         return { success: true, metadata: describeDiscoveredMetadata(config) };
@@ -192,19 +230,26 @@ export async function testOidcDiscovery({
       };
     }
     log.warn(
-      `OIDC test-connection credential check against ${issuerUrl} failed outside the OAuth error shape: ${error.message}`,
+      `OIDC test-connection credential check against ${issuerUrl} failed outside the OAuth error shape: ${error instanceof Error ? error.message : String(error)}`,
     );
     return {
       success: false,
       code: ErrorCode.OIDC_TEST_UNDETERMINED,
-      error: `The issuer is reachable, but the credential check itself failed unexpectedly: ${error.message}`,
-      params: sanitizeErrorParams({ reason: sanitizeError(error.message) }),
+      error: `The issuer is reachable, but the credential check itself failed unexpectedly: ${error instanceof Error ? error.message : String(error)}`,
+      params: sanitizeErrorParams({
+        reason: sanitizeError(error instanceof Error ? error.message : String(error)),
+      }),
     };
   }
 }
 
 
-export async function buildOidcAuthorizationRequest() {
+export async function buildOidcAuthorizationRequest(): Promise<{
+  authorizationUrl: string;
+  state: string;
+  nonce: string;
+  codeVerifier: string;
+}> {
   const config = await getOidcConfig();
   if (!config) {
     throw new Error("OIDC is not configured");
@@ -229,7 +274,10 @@ export async function buildOidcAuthorizationRequest() {
 }
 
 
-export async function handleOidcCallback(currentUrl, flow) {
+export async function handleOidcCallback(
+  currentUrl: URL,
+  flow: OidcFlow,
+): Promise<client.IDToken> {
   const config = await getOidcConfig();
   if (!config) {
     throw new Error("OIDC is not configured");

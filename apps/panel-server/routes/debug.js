@@ -42,7 +42,7 @@ import {
   getOidcSettings,
   getOidcEnvOverrides,
   isOidcConfigured,
-} from "../services/oidc.js";
+} from "../services/oidc.ts";
 import {
   PZ_TILES_ROOT,
   getB42Dir,

@@ -2,8 +2,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import jwt from 'jsonwebtoken';
 import authService from '../services/auth.js';
 import * as dbModule from '../database/init.js';
-import { _resetOidcConfigCacheForTests } from '../services/oidc.js';
-import oidcRoutes from '../routes/oidc.js';
+import { _resetOidcConfigCacheForTests } from '../services/oidc.ts';
+import oidcRoutes from '../routes/oidc.ts';
 import { startMockOidcProvider } from './helpers/mockOidcProvider.js';
 
 const ENV_KEYS = [

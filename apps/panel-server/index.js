@@ -71,7 +71,7 @@ import authService from "./services/auth.js";
 import { getRoleByName } from "./services/permissions.js";
 import { requireRole } from "./services/auth.js";
 import authRoutes from "./routes/auth.js";
-import oidcRoutes from "./routes/oidc.js";
+import oidcRoutes from "./routes/oidc.ts";
 import { loadOrCreateCerts } from "./utils/certs.ts";
 import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";
 import { ErrorCode } from "./utils/errorCodes.js";
