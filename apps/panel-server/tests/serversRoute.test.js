@@ -284,10 +284,10 @@ describe("server discovery port parsing", () => {
     },
   );
 
-  it("agrees with mountDiscovery.js's readServerIniSettings on a signed port -- the real bug this proves", async () => {
+  it("agrees with mountDiscovery.ts's readServerIniSettings on a signed port -- the real bug this proves", async () => {
     expect(parseDiscoveredPort("+27015", 27015)).toBeNull();
 
-    const { readServerIniSettings } = await import("../services/mountDiscovery.js");
+    const { readServerIniSettings } = await import("../services/mountDiscovery.ts");
     const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "auto-scan-port-sign-"));
     try {
       const serverDir = path.join(tmpRoot, "Server");

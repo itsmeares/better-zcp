@@ -10,7 +10,7 @@ const readServerIniSettings = vi.fn();
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 vi.mock("../database/init.js", () => ({ createServer, getRoleByName: mockGetRoleByName }));
-vi.mock("../services/mountDiscovery.js", () => ({
+vi.mock("../services/mountDiscovery.ts", () => ({
   discoverMounts,
   discoverMountIssues,
   probeInstallPath,

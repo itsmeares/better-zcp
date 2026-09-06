@@ -47,7 +47,7 @@ describe("discoverMounts(): bare-metal Linux SteamCMD layouts", () => {
       buildInstall(installDir);
       buildData(dataDir);
 
-      const { discoverMounts } = await import("../services/mountDiscovery.js");
+      const { discoverMounts } = await import("../services/mountDiscovery.ts");
       const mounts = discoverMounts();
 
       expect(mounts).toContainEqual(
@@ -72,7 +72,7 @@ describe("discoverMounts(): bare-metal Linux SteamCMD layouts", () => {
       buildData(nestedData, "nested-server");
       buildData(homeData, "home-server");
 
-      const { discoverMounts } = await import("../services/mountDiscovery.js");
+      const { discoverMounts } = await import("../services/mountDiscovery.ts");
       const mounts = discoverMounts();
       const found = mounts.find((m) => m.installPath === installDir);
 
@@ -85,7 +85,7 @@ describe("discoverMounts(): bare-metal Linux SteamCMD layouts", () => {
     "does not report a bare-metal candidate when nothing is there (no false positive on a clean host)",
     async () => {
       tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-discovery-home-"));
-      const { discoverMounts } = await import("../services/mountDiscovery.js");
+      const { discoverMounts } = await import("../services/mountDiscovery.ts");
       const mounts = discoverMounts();
       expect(mounts.some((m) => m.source === "linux-bare-metal")).toBe(false);
     },
@@ -102,7 +102,7 @@ describe("discoverMounts(): bare-metal Linux SteamCMD layouts", () => {
         "#!/bin/bash\n",
       );
 
-      const { probeInstallPath } = await import("../services/mountDiscovery.js");
+      const { probeInstallPath } = await import("../services/mountDiscovery.ts");
       const result = probeInstallPath(installDir);
       expect(result.valid).toBe(true);
       expect(result.hasStartScript).toBe(true);

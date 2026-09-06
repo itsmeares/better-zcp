@@ -89,7 +89,7 @@ import {
   resolveClientDistPath,
 } from "./utils/embeddedClient.ts";
 import { resolveObservedServerRunning } from "./utils/serverStatus.ts";
-import { discoverMounts } from "./services/mountDiscovery.js";
+import { discoverMounts } from "./services/mountDiscovery.ts";
 import { shouldAutoOpenBrowser } from "./utils/browserLaunch.ts";
 import { isLinuxPanelSupervisor } from "./utils/restartSupervisor.ts";
 import { acquireLifecycleLock } from "./services/lifecycleCoordinator.ts";

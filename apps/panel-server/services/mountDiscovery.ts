@@ -8,7 +8,52 @@ const INI_SUFFIX_BLOCKLIST = [
   "_spawnregions.ini",
 ];
 
-function safeReaddir(dir) {
+type DirectoryState = "missing" | "not-a-directory" | "inaccessible" | "ok";
+
+interface InstallProbeResult {
+  valid: boolean;
+  reason?: "permission-denied";
+  serverNames: string[];
+  hasStartScript: boolean;
+  hasPanelBridge: boolean;
+}
+
+interface DataProbeResult {
+  valid: boolean;
+  reason?: "permission-denied";
+  path: string | null;
+  serverNames: string[];
+}
+
+interface MountCandidate {
+  install?: string;
+  data?: string;
+  source: string;
+}
+
+interface DiscoveredMount {
+  installPath: string;
+  dataPath: string | null;
+  source: string;
+  serverNames: string[];
+  hasStartScript: boolean;
+  hasPanelBridge: boolean;
+}
+
+interface MountIssue {
+  path: string;
+  source: string;
+  reason: "permission-denied";
+}
+
+interface ServerIniSettings {
+  rconPort: number;
+  rconPassword: string;
+  serverPort: number;
+  publicName: string;
+}
+
+function safeReaddir(dir: string): string[] {
   try {
     return fs.readdirSync(dir);
   } catch {
@@ -16,21 +61,23 @@ function safeReaddir(dir) {
   }
 }
 
-function classifyDir(dirPath) {
+function classifyDir(dirPath: string | null | undefined): DirectoryState {
   if (!dirPath) return "missing";
   try {
     return fs.statSync(dirPath).isDirectory() ? "ok" : "not-a-directory";
   } catch (err) {
-    return err && err.code === "ENOENT" ? "missing" : "inaccessible";
+    return (err as NodeJS.ErrnoException)?.code === "ENOENT"
+      ? "missing"
+      : "inaccessible";
   }
 }
 
-function safeIsDir(dirPath) {
+function safeIsDir(dirPath: string | null | undefined): boolean {
   return classifyDir(dirPath) === "ok";
 }
 
-function readServerNames(serverDir) {
-  if (!safeIsDir(serverDir)) return [];
+function readServerNames(serverDir: string | null | undefined): string[] {
+  if (!serverDir || !safeIsDir(serverDir)) return [];
   return safeReaddir(serverDir)
     .filter(
       (f) =>
@@ -40,9 +87,11 @@ function readServerNames(serverDir) {
     .map((f) => f.replace(/\.ini$/, ""));
 }
 
-export function probeInstallPath(installPath) {
+export function probeInstallPath(
+  installPath: string | null | undefined,
+): InstallProbeResult {
   const dirState = classifyDir(installPath);
-  if (dirState !== "ok") {
+  if (typeof installPath !== "string" || dirState !== "ok") {
     return {
       valid: false,
       reason: dirState === "inaccessible" ? "permission-denied" : undefined,
@@ -70,9 +119,9 @@ export function probeInstallPath(installPath) {
   };
 }
 
-export function probeDataPath(dataPath) {
+export function probeDataPath(dataPath: string | null | undefined): DataProbeResult {
   const dirState = classifyDir(dataPath);
-  if (dirState !== "ok") {
+  if (typeof dataPath !== "string" || dirState !== "ok") {
     return {
       valid: false,
       reason: dirState === "inaccessible" ? "permission-denied" : undefined,
@@ -92,7 +141,7 @@ export function probeDataPath(dataPath) {
   };
 }
 
-export function findDataPath(installPath) {
+export function findDataPath(installPath: string | null | undefined): string | null {
   if (!installPath) return null;
   const candidate = path.join(installPath, "Zomboid");
   return safeIsDir(candidate) ? candidate : null;
@@ -108,7 +157,7 @@ const COMMON_MOUNT_CANDIDATES = [
   { install: "/steam/pz", data: "/steam/pz/Zomboid", source: "steam-mount" },
 ];
 
-function envCandidates() {
+function envCandidates(): MountCandidate[] {
   return [
     {
       install: process.env.PZ_SERVER_PATH,
@@ -118,7 +167,7 @@ function envCandidates() {
   ];
 }
 
-function bareMetalLinuxCandidates() {
+function bareMetalLinuxCandidates(): MountCandidate[] {
   if (process.platform === "win32") return [];
   const home = os.homedir();
   const roots = [];
@@ -128,7 +177,7 @@ function bareMetalLinuxCandidates() {
   return roots.map((install) => ({ install, source: "linux-bare-metal" }));
 }
 
-function allCandidates() {
+function allCandidates(): MountCandidate[] {
   return [
     ...envCandidates(),
     ...COMMON_MOUNT_CANDIDATES,
@@ -136,7 +185,7 @@ function allCandidates() {
   ];
 }
 
-function resolveDataPathCandidate(candidate) {
+function resolveDataPathCandidate(candidate: MountCandidate): string | null {
   if (candidate.data) return candidate.data;
   const nested = findDataPath(candidate.install);
   if (nested) return nested;
@@ -147,9 +196,9 @@ function resolveDataPathCandidate(candidate) {
   return null;
 }
 
-export function discoverMounts() {
-  const candidates = [];
-  const seen = new Set();
+export function discoverMounts(): DiscoveredMount[] {
+  const candidates: DiscoveredMount[] = [];
+  const seen = new Set<string>();
 
   for (const candidate of allCandidates()) {
     if (!candidate.install || seen.has(candidate.install)) continue;
@@ -176,9 +225,9 @@ export function discoverMounts() {
   return candidates;
 }
 
-export function discoverMountIssues() {
-  const issues = [];
-  const seen = new Set();
+export function discoverMountIssues(): MountIssue[] {
+  const issues: MountIssue[] = [];
+  const seen = new Set<string>();
 
   for (const candidate of allCandidates()) {
     if (!candidate.install || seen.has(candidate.install)) continue;
@@ -196,7 +245,7 @@ export function discoverMountIssues() {
     if (!installResult.valid) continue;
 
     const dataPath = resolveDataPathCandidate(candidate);
-    if (probeDataPath(dataPath).reason === "permission-denied") {
+    if (dataPath && probeDataPath(dataPath).reason === "permission-denied") {
       issues.push({
         path: dataPath,
         source: candidate.source,
@@ -208,8 +257,8 @@ export function discoverMountIssues() {
   return issues;
 }
 
-function parseIni(content) {
-  const result = {};
+function parseIni(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
   for (const line of content.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";")) continue;
@@ -221,7 +270,11 @@ function parseIni(content) {
   return result;
 }
 
-function parsePort(value, fallback, max = 65535) {
+function parsePort(
+  value: string | null | undefined,
+  fallback: number,
+  max = 65535,
+): number | null {
   if (value === undefined || value === null || value.trim() === "") {
     return fallback;
   }
@@ -230,7 +283,10 @@ function parsePort(value, fallback, max = 65535) {
   return Number.isInteger(port) && port >= 1 && port <= max ? port : null;
 }
 
-export function readServerIniSettings(dataPath, serverName) {
+export function readServerIniSettings(
+  dataPath: string,
+  serverName: string,
+): ServerIniSettings | null {
   const iniPath = path.join(dataPath, "Server", `${serverName}.ini`);
   if (!fs.existsSync(iniPath)) return null;
 

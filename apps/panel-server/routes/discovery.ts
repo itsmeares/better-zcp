@@ -12,7 +12,7 @@ import {
   probeInstallPath,
   probeDataPath,
   readServerIniSettings,
-} from "../services/mountDiscovery.js";
+} from "../services/mountDiscovery.ts";
 
 const router = express.Router();
 const SERVER_NAME_RE = /^[a-zA-Z0-9_-][a-zA-Z0-9_ -]*[a-zA-Z0-9_-]$|^[a-zA-Z0-9_-]$/;
@@ -53,10 +53,14 @@ router.post("/create-from-discovery", requirePermission("servers.discover"), asy
     const discovered = discoverMounts().find(
       (mount) =>
         normalizePath(mount.installPath) === normalizePath(installPath) &&
+        typeof mount.dataPath === "string" &&
         normalizePath(mount.dataPath) === normalizePath(dataPath),
     );
     if (!discovered) {
       return res.status(400).json({ error: "Mount is not a discovered PZ server" });
+    }
+    if (typeof discovered.dataPath !== "string") {
+      return res.status(400).json({ error: "Discovered mount has no data path" });
     }
 
     const installResult = probeInstallPath(discovered.installPath);
