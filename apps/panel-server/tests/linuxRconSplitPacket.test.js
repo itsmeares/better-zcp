@@ -1,6 +1,6 @@
 import { describe, expect, it, afterEach } from "vitest";
 import net from "net";
-import { SourceRconClient } from "../utils/sourceRcon.js";
+import { SourceRconClient } from "../utils/sourceRcon.ts";
 
 
 function encodePacket(id, type, body) {

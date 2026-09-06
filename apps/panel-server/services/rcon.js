@@ -8,7 +8,7 @@ import {
   getActiveServer,
   getServer,
 } from "../database/init.js";
-import { SourceRconClient } from "../utils/sourceRcon.js";
+import { SourceRconClient } from "../utils/sourceRcon.ts";
 import { readSecret } from "../utils/secrets.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";

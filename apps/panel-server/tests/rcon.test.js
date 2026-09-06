@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { RconService } from '../services/rcon.js';
-import { PacketReader } from '../utils/sourceRcon.js';
+import { PacketReader } from '../utils/sourceRcon.ts';
 
 describe('RCON packet framing', () => {
   const packet = (id, type, body) => {
