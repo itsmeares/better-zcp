@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.js";
+import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 
 
 describe("redactRconCommandSecrets", () => {

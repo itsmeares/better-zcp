@@ -13,9 +13,9 @@ import {
   redactRconSecretsForWrite,
   deleteServerSecret,
 } from "../utils/serverRconSecrets.js";
-import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.js";
+import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.js";
-import { isPidAlive } from "../utils/pidLiveness.js";
+import { isPidAlive } from "../utils/pidLiveness.ts";
 const log = createLogger("DB");
 
 
@@ -54,8 +54,17 @@ const MAX_BACKUPS = 5;
 
 const paths = getDataPaths();
 const dataDir = paths.dataDir;
-const dbPath = paths.dbPath;
+const useSqliteDatabase = process.env.PANEL_DATABASE_DRIVER === "sqlite";
+const legacyDbPath = paths.dbPath;
+const dbPath = useSqliteDatabase
+  ? path.join(dataDir, "db.sqlite")
+  : legacyDbPath;
+const dbFileExtension = useSqliteDatabase ? ".sqlite" : ".json";
 const backupDir = path.join(dataDir, "backups");
+
+export function getDatabaseFilePath() {
+  return dbPath;
+}
 
 for (const dir of [dataDir, backupDir]) {
   if (!fs.existsSync(dir)) {
@@ -230,6 +239,22 @@ let _lastWriteError = null;
 let _circuitFailCount = 0;
 let _backupTimer = null;
 let _shutdownRegistered = false;
+let createSqliteSnapshotStore;
+
+async function createSqliteAdapter() {
+  createSqliteSnapshotStore ??= (
+    await import("./sqlite/snapshotStore.js")
+  ).createSqliteSnapshotStore;
+  const store = createSqliteSnapshotStore(dbPath);
+  return {
+    read: () => store.read(),
+    write: (data) =>
+      store.write(
+        redactPanelBridgeSftpPasswordForWrite(redactRconSecretsForWrite(data)),
+      ),
+    close: () => store.close(),
+  };
+}
 
 function scheduleWrite() {
   _dirty = true;
@@ -268,6 +293,17 @@ export async function flushWrites() {
   let tmpWriteSucceeded = false;
   _writePromise = (async () => {
     try {
+      if (useSqliteDatabase) {
+        await db.write();
+        _writeRetries = 0;
+        _lastWriteError = null;
+        _circuitFailCount = 0;
+        log.debug(
+          `DB flushed (SQLite, ${Math.round(JSON.stringify(db.data).length / 1024)}KB)`,
+        );
+        return;
+      }
+
       tmpPath = `${dbPath}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
       const data = JSON.stringify(
         redactPanelBridgeSftpPasswordForWrite(redactRconSecretsForWrite(db.data)),
@@ -384,11 +420,14 @@ function createBackup(label = "") {
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const suffix = label ? `-${label}` : "";
-    let backupFile = path.join(backupDir, `db-${timestamp}${suffix}.json`);
+    let backupFile = path.join(
+      backupDir,
+      `db-${timestamp}${suffix}${dbFileExtension}`,
+    );
     for (let collision = 2; fs.existsSync(backupFile); collision++) {
       backupFile = path.join(
         backupDir,
-        `db-${timestamp}${suffix}-${collision}.json`,
+        `db-${timestamp}${suffix}-${collision}${dbFileExtension}`,
       );
     }
 
@@ -411,7 +450,7 @@ const BACKUP_COLLISION_SUFFIX_RE = /^(.*)-(\d+)$/;
 function sortBackupFilenamesNewestFirst(filenames) {
   return filenames
     .map((name) => {
-      const withoutExt = name.slice(0, -".json".length);
+      const withoutExt = name.slice(0, -dbFileExtension.length);
       const match = withoutExt.match(BACKUP_COLLISION_SUFFIX_RE);
       return match
         ? { name, key: match[1], suffix: parseInt(match[2], 10) }
@@ -429,7 +468,7 @@ function pruneBackups() {
     const files = sortBackupFilenamesNewestFirst(
       fs
         .readdirSync(backupDir)
-        .filter((f) => f.startsWith("db-") && f.endsWith(".json")),
+        .filter((f) => f.startsWith("db-") && f.endsWith(dbFileExtension)),
     );
 
     for (const file of files.slice(MAX_BACKUPS)) {
@@ -444,7 +483,7 @@ function listBackupsNewestFirst() {
   try {
     const files = fs
       .readdirSync(backupDir)
-      .filter((f) => f.startsWith("db-") && f.endsWith(".json"));
+      .filter((f) => f.startsWith("db-") && f.endsWith(dbFileExtension));
     return sortBackupFilenamesNewestFirst(files).map((f) =>
       path.join(backupDir, f),
     );
@@ -496,6 +535,7 @@ function registerShutdownHandlers() {
     }
     await flushForShutdown();
     createBackup("shutdown");
+    if (useSqliteDatabase) db.adapter.close();
   };
 
   process.on("SIGINT", () => shutdown("SIGINT"));
@@ -609,6 +649,16 @@ function compactData(data) {
 
 export async function getDb() {
   if (!db) {
+    if (
+      useSqliteDatabase &&
+      !fs.existsSync(dbPath) &&
+      fs.existsSync(legacyDbPath)
+    ) {
+      throw new Error(
+        `SQLite driver is enabled but ${path.basename(dbPath)} is missing while ${path.basename(legacyDbPath)} exists. Run the explicit legacy importer before starting with PANEL_DATABASE_DRIVER=sqlite.`,
+      );
+    }
+
     sweepOrphanedTmpFiles();
 
     if (fs.existsSync(dbPath)) {
@@ -620,7 +670,7 @@ export async function getDb() {
     }
     try {
       for (const f of fs.readdirSync(backupDir)) {
-        if (f.startsWith("db-") && f.endsWith(".json")) {
+        if (f.startsWith("db-") && f.endsWith(dbFileExtension)) {
           try {
             fs.chmodSync(path.join(backupDir, f), 0o600);
           } catch (_) {
@@ -632,7 +682,9 @@ export async function getDb() {
       /* backupDir may not be readable yet on first run */
     }
 
-    const adapter = new JSONFile(dbPath);
+    const adapter = useSqliteDatabase
+      ? await createSqliteAdapter()
+      : new JSONFile(dbPath);
     db = new Low(adapter, defaultData);
 
     let loadedCleanly = false;
@@ -641,6 +693,10 @@ export async function getDb() {
       loadedCleanly = true;
     } catch (err) {
       log.error(`Failed to read database: ${err.message}`);
+
+      if (useSqliteDatabase) {
+        db.adapter.close();
+      }
 
       if (err.code === "EACCES" || err.code === "EPERM") {
         checkAndExitIfOwnershipBlocked([dataDir, dbPath, backupDir]);
@@ -659,7 +715,7 @@ export async function getDb() {
         try {
           const corruptPath = path.join(
             backupDir,
-            `corrupt-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
+            `corrupt-${new Date().toISOString().replace(/[:.]/g, "-")}${dbFileExtension}`,
           );
           fs.copyFileSync(dbPath, corruptPath);
           try {
@@ -676,6 +732,9 @@ export async function getDb() {
           log.warn(`Attempting recovery from ${path.basename(backup)}...`);
           try {
             fs.copyFileSync(backup, dbPath);
+            if (useSqliteDatabase) {
+              db.adapter = await createSqliteAdapter();
+            }
             await db.read();
             log.info(
               `Database recovery successful from ${path.basename(backup)}!`,
@@ -683,16 +742,29 @@ export async function getDb() {
             recovered = true;
             break;
           } catch (recoverErr) {
+            if (useSqliteDatabase) {
+              db.adapter.close();
+            }
             log.error(
               `Recovery from ${path.basename(backup)} failed: ${recoverErr.message}`,
             );
           }
         }
         if (!recovered) {
+          if (useSqliteDatabase) {
+            throw new Error(
+              "SQLite database recovery failed; refusing to replace it with a fresh database.",
+            );
+          }
           log.error("All backups failed to recover — starting fresh");
           db.data = { ...defaultData };
         }
       } else {
+        if (useSqliteDatabase) {
+          throw new Error(
+            "SQLite database could not be read and has no backup; refusing to start with an empty database.",
+          );
+        }
         log.warn("No backup found, starting with fresh database.");
         db.data = { ...defaultData };
       }
@@ -741,7 +813,7 @@ function getDatabaseStatsSync() {
   try {
     backupCount = fs
       .readdirSync(backupDir)
-      .filter((f) => f.startsWith("db-") && f.endsWith(".json")).length;
+      .filter((f) => f.startsWith("db-") && f.endsWith(dbFileExtension)).length;
   } catch (e) {
     log.debug(`Backup dir read failed: ${e.message}`);
   }

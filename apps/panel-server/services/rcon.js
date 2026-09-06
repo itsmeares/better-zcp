@@ -11,7 +11,7 @@ import {
 import { SourceRconClient } from "../utils/sourceRcon.js";
 import { readSecret } from "../utils/secrets.js";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
-import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.js";
+import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import { ErrorCode } from "../utils/errorCodes.js";
 
 const RCON_ERROR_CLASSIFICATIONS = [

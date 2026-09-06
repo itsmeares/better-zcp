@@ -8,7 +8,7 @@ import {
   parseClampedInteger,
 } from '../utils/queryNumbers.ts';
 import { sanitizeError } from '../utils/sanitize.js';
-import { redactRconCommandSecrets } from '../utils/rconCommandRedaction.js';
+import { redactRconCommandSecrets } from '../utils/rconCommandRedaction.ts';
 import {
   testRconConnection,
   checkTcpReachable,

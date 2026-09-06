@@ -22,7 +22,7 @@ function createDrizzleDatabase(client) {
     }
 
     const rows = rowsAsArrays(statement, params);
-    return { rows: method === "get" ? rows[0] || [] : rows };
+    return { rows: method === "get" ? rows[0] : rows };
   });
 }
 
@@ -44,20 +44,26 @@ export function createSqliteSnapshotStore(filePath) {
   const resolvedPath = path.resolve(filePath);
   ensureParentDirectory(resolvedPath);
   const client = new DatabaseSync(resolvedPath);
-  client.exec(`
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE IF NOT EXISTS panel_state (
-      key TEXT PRIMARY KEY NOT NULL,
-      value TEXT NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-  `);
+  let schemaReady = false;
+  const ensureSchema = () => {
+    if (schemaReady) return;
+    client.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE IF NOT EXISTS panel_state (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `);
+    schemaReady = true;
+  };
 
   const database = createDrizzleDatabase(client);
   let closed = false;
 
   return {
     async read() {
+      ensureSchema();
       const row = await database
         .select()
         .from(panelState)
@@ -73,6 +79,7 @@ export function createSqliteSnapshotStore(filePath) {
     },
 
     async write(data) {
+      ensureSchema();
       const value = JSON.stringify(data);
       await database
         .insert(panelState)

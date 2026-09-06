@@ -197,7 +197,10 @@ export async function importLegacyDatabase({ sourcePath, targetPath, apply = fal
     store = null;
 
     createdSecretFiles = writeSecretFiles(path.dirname(target), prepared.secretFiles);
-    fs.renameSync(temporaryTarget, target);
+    // A hard link gives us rename-without-replace semantics: a target that
+    // appears after the initial existence check is never overwritten.
+    fs.linkSync(temporaryTarget, target);
+    fs.unlinkSync(temporaryTarget);
     return { ...summary, applied: true };
   } catch (error) {
     store?.close();

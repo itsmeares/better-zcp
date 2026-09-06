@@ -6,7 +6,12 @@ import https from "https";
 import crypto from "crypto";
 import { spawn } from "child_process";
 import { createLogger } from "../utils/logger.js";
-import { getSetting, setSetting } from "../database/init.js";
+import {
+  getSetting,
+  setSetting,
+  getDb,
+  getDatabaseFilePath,
+} from "../database/init.js";
 import { getDataPaths } from "../utils/paths.js";
 import { DockerUpdateProxy } from "./dockerUpdateProxy.js";
 import { isContainerized } from "../utils/dockerDetect.js";
@@ -1195,10 +1200,14 @@ export class PanelUpdateChecker {
 
     const dataPaths = getDataPaths();
     info.dataDir = dataPaths.dataDir;
-    info.dbPath = dataPaths.dbPath;
-    if (fs.existsSync(dataPaths.dbPath)) {
+    info.dbPath = getDatabaseFilePath();
+    const databaseName = path.basename(info.dbPath);
+    if (fs.existsSync(info.dbPath)) {
       try {
-        const parsed = JSON.parse(fs.readFileSync(dataPaths.dbPath, "utf8"));
+        const parsed =
+          process.env.PANEL_DATABASE_DRIVER === "sqlite"
+            ? (await getDb()).data
+            : JSON.parse(fs.readFileSync(info.dbPath, "utf8"));
         info.databaseUsers = Array.isArray(parsed.users) ? parsed.users.length : 0;
         info.databaseServers = Array.isArray(parsed.servers) ? parsed.servers.length : 0;
         info.databaseReadable = true;
@@ -1219,7 +1228,7 @@ export class PanelUpdateChecker {
         warningDetails,
         "updates.preflight.databaseMissing",
         {},
-        "No data/db.json was found beside the running panel. This looks like a fresh install; verify the data folder before applying the update.",
+        `No data/${databaseName} was found beside the running panel. This looks like a fresh install; verify the data folder before applying the update.`,
       );
     }
 

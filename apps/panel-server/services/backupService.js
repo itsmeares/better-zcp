@@ -5,7 +5,7 @@ import archiver from "archiver";
 import { createReadStream } from "fs";
 import { crc32 } from "zlib";
 import { createLogger } from "../utils/logger.js";
-import { isPidAlive } from "../utils/pidLiveness.js";
+import { isPidAlive } from "../utils/pidLiveness.ts";
 const log = createLogger("Backup");
 import {
   getActiveServer,
@@ -14,6 +14,7 @@ import {
   logServerEvent,
   getLatestScheduleExecutionByCommand,
   flushWrites,
+  getDatabaseFilePath,
 } from "../database/init.js";
 import { sanitizeError } from "../utils/sanitize.js";
 import { captureBackupSnapshot } from "../utils/backupSnapshot.js";
@@ -430,8 +431,7 @@ export class BackupService {
     let dbPathToInclude = null;
     if (options.includeDb) {
       await flushWrites();
-      const { getDataPaths } = await import("../utils/paths.js");
-      const dbPath = getDataPaths().dbPath;
+      const dbPath = getDatabaseFilePath();
       if (fs.existsSync(dbPath)) {
         dbPathToInclude = dbPath;
         totalFiles++;
@@ -607,10 +607,11 @@ export class BackupService {
           if (snapshotResult.skipped) skippedFiles.push("panel-server-snapshot.json");
 
           if (dbPathToInclude) {
+            const databaseName = path.basename(dbPathToInclude);
             const dbResult = await waitForArchiveEntry(archive, () =>
-              archive.file(dbPathToInclude, { name: "db.json" }),
+              archive.file(dbPathToInclude, { name: databaseName }),
             );
-            if (dbResult.skipped) skippedFiles.push("db.json");
+            if (dbResult.skipped) skippedFiles.push(databaseName);
           }
 
           await archive.finalize();

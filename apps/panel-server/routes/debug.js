@@ -30,6 +30,7 @@ import {
   getAllSettings,
   getCircuitBreakerStatus,
   getRoleByName,
+  getDatabaseFilePath,
 } from "../database/init.js";
 import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils/sanitize.js";
 import { ErrorCode } from "../utils/errorCodes.js";
@@ -60,7 +61,7 @@ import {
   getLifecycleServiceName,
   isManagedLifecycleProvider,
 } from "../services/linuxServiceLifecycle.js";
-import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.js";
+import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import {
   collectKnownSecretValues,
   redactKnownSecrets,
@@ -120,6 +121,7 @@ router.get("/ram", requirePermission("diagnostics.manage"), async (req, res) => 
 router.get("/system", requirePermission("diagnostics.manage"), async (req, res) => {
   try {
     const paths = getDataPaths();
+    const databasePath = getDatabaseFilePath();
 
     const redactPath = (p) => {
       if (!p) return "Not configured";
@@ -134,8 +136,8 @@ router.get("/system", requirePermission("diagnostics.manage"), async (req, res) 
       platform: process.platform,
       uptime: process.uptime(),
       memoryUsage: process.memoryUsage(),
-      dbPath: fs.existsSync(paths.dbPath)
-        ? redactPath(paths.dbPath)
+      dbPath: fs.existsSync(databasePath)
+        ? redactPath(databasePath)
         : "Not found",
       logsPath: fs.existsSync(paths.logsDir)
         ? redactPath(paths.logsDir)
@@ -2365,6 +2367,9 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
 
     const checks = [];
     const paths = getDataPaths();
+    const databasePath = getDatabaseFilePath();
+    const databaseName = path.basename(databasePath);
+    const databaseExtension = path.extname(databasePath);
 
     const serverStatePromise = getServerProcessState(
       serverManager,
@@ -3814,26 +3819,26 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
     }
 
     try {
-      const exists = await safePathExists(paths.dbPath);
+      const exists = await safePathExists(databasePath);
       if (!exists) {
         checks.push(
           diagFail(
             "db.exists",
             "Database file missing",
-            "data/db.json does not exist. Panel cannot persist any settings.",
+            `${databaseName} does not exist. Panel cannot persist any settings.`,
             { category: "storage" },
           ),
         );
-      } else if (!(await safePathWritable(paths.dbPath))) {
+      } else if (!(await safePathWritable(databasePath))) {
         if (process.platform === "linux") {
           checks.push(
             diagFail(
               "db.writable",
               "Database not writable",
-              "db.json exists but is read-only. Settings changes will fail.",
+              `${databaseName} exists but is read-only. Settings changes will fail.`,
               {
                 category: "storage",
-                hint: "Run: chmod u+w data/db.json (and check the data/ directory is owned by the panel user)",
+                hint: `Run: chmod u+w data/${databaseName} (and check the data/ directory is owned by the panel user)`,
                 variant: "linux",
               },
             ),
@@ -3843,10 +3848,10 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
             diagFail(
               "db.writable",
               "Database not writable",
-              "db.json exists but is read-only. Settings changes will fail.",
+              `${databaseName} exists but is read-only. Settings changes will fail.`,
               {
                 category: "storage",
-                hint: "Check file permissions on data/db.json",
+                hint: `Check file permissions on data/${databaseName}`,
                 variant: "other",
               },
             ),
@@ -3874,7 +3879,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
         diagWarn(
           "db.exists",
           "Database check failed",
-          `Could not inspect db.json: ${reason}`,
+          `Could not inspect ${databaseName}: ${reason}`,
           { category: "storage", params: { reason } },
         ),
       );
@@ -3896,7 +3901,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
         } else {
           const stats = await Promise.all(
             files
-              .filter((f) => f.endsWith(".json"))
+              .filter((f) => f.startsWith("db-") && f.endsWith(databaseExtension))
               .map(async (f) => {
                 const st = await safeStat(path.join(backupsDir, f));
                 return st ? st.mtimeMs : 0;
@@ -3909,7 +3914,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
               diagWarn(
                 "db.backup",
                 "No database backups",
-                "No db.json backups found. Manual backup recommended before risky changes.",
+                `No ${databaseName} backups found. Manual backup recommended before risky changes.`,
                 {
                   category: "storage",
                   hint: "Debug → Database → Create Backup",
@@ -5427,8 +5432,7 @@ router.post(
         });
       }
 
-      const paths = getDataPaths();
-      const targetPath = paths.dbPath;
+      const targetPath = getDatabaseFilePath();
       if (!(await safePathExists(targetPath))) {
         return res.status(404).json({
           error: "Database file does not exist",

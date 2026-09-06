@@ -41,6 +41,7 @@ import {
   flushForShutdown,
   recordPerformanceSnapshot,
   logServerEvent,
+  getDatabaseFilePath,
 } from "./database/init.js";
 import { RconService } from "./services/rcon.js";
 import { ServerManager } from "./services/serverManager.js";
@@ -1147,7 +1148,7 @@ app.post("/api/panel/restart", requireRole("admin"), async (req, res) => {
   if (isPackaged && staged) {
     try {
       const dataBackupPath = createUpdateDataBackup(
-        getDataPaths(),
+        { ...getDataPaths(), dbPath: getDatabaseFilePath() },
         staged.version,
       );
       if (dataBackupPath) {
@@ -2560,7 +2561,12 @@ async function start() {
             refreshInlineScriptCspHash();
             try {
               const backupPath = await getSetting("preUpdateDataBackupPath");
-              if (restorePreUpdateDataBackup(getDataPaths(), backupPath)) {
+              if (
+                restorePreUpdateDataBackup(
+                  { ...getDataPaths(), dbPath: getDatabaseFilePath() },
+                  backupPath,
+                )
+              ) {
                 log.warn(
                   `Restored the pre-update database snapshot after a version-mismatch rollback: ${backupPath}`,
                 );
