@@ -32,7 +32,7 @@ const {
   getCollectionContents,
   addItemToCollection,
   setSteamSessionCredentials,
-} = await import("../services/workshopCollectionSync.js");
+} = await import("../services/workshopCollectionSync.ts");
 
 describe("workshopCollectionSync — sub-collection children", () => {
   let originalFetch;

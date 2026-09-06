@@ -36,7 +36,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 vi.mock("../services/steamApiKey.ts", () => ({ getSteamApiKey: vi.fn() }));
-vi.mock("../services/workshopCollectionSync.js", () => ({
+vi.mock("../services/workshopCollectionSync.ts", () => ({
   getCollectionContents: vi.fn(),
   addItemToCollection: vi.fn(),
   removeItemFromCollection: vi.fn(),

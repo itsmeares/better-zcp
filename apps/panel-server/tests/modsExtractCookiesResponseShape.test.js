@@ -18,7 +18,7 @@ vi.mock("../utils/browserCookies.js", () => ({
   listAvailableBrowsers,
   extractSteamCookies,
 }));
-vi.mock("../services/workshopCollectionSync.js", () => ({
+vi.mock("../services/workshopCollectionSync.ts", () => ({
   getCollectionContents: vi.fn(),
   addItemToCollection: vi.fn(),
   removeItemFromCollection: vi.fn(),

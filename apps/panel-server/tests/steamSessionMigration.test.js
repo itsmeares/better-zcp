@@ -28,7 +28,7 @@ vi.mock("../utils/logger.ts", () => ({
 }));
 
 const { getSteamSessionCredentials, setSteamSessionCredentials } =
-  await import("../services/workshopCollectionSync.js");
+  await import("../services/workshopCollectionSync.ts");
 const { readUiSecretFile, writeUiSecretFile } = await import("../utils/uiSecretFile.ts");
 
 describe("Steam session cookie pair — migration out of db.json", () => {

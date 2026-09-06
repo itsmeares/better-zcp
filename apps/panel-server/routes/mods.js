@@ -45,7 +45,7 @@ import {
   fetchPublishedFileTitles,
   getSteamSessionCredentials,
   setSteamSessionCredentials,
-} from "../services/workshopCollectionSync.js";
+} from "../services/workshopCollectionSync.ts";
 import {
   listAvailableBrowsers,
   extractSteamCookies,
