@@ -1,5 +1,24 @@
 import crypto from "crypto";
 
+type TemplateObject = Record<string, unknown>;
+type TemplateChange = {
+  key?: string;
+  section?: string;
+  from: unknown;
+  to: unknown;
+};
+type CreateTemplateOptions = {
+  name?: unknown;
+  description?: unknown;
+  tags?: unknown;
+  pzBuild?: unknown;
+  sandboxVars?: unknown;
+  serverIni?: unknown;
+  mods?: unknown;
+  map?: unknown;
+  difficulty?: unknown;
+};
+
 export const TEMPLATE_SCHEMA_VERSION = 1;
 
 export const SANDBOX_SECTIONS = [
@@ -22,10 +41,13 @@ export const DEFAULT_INI_EXCLUSIONS = [
   "server_browser_announced_ip",
 ];
 
-export function resolveIniExclusions(template) {
-  const extra = Array.isArray(template?.iniExclusions)
-    ? template.iniExclusions
-    : [];
+function asRecord(value: unknown): TemplateObject {
+  return value && typeof value === "object" ? (value as TemplateObject) : {};
+}
+
+export function resolveIniExclusions(template: unknown): unknown[] {
+  const object = asRecord(template);
+  const extra = Array.isArray(object.iniExclusions) ? object.iniExclusions : [];
   return [...new Set([...DEFAULT_INI_EXCLUSIONS, ...extra])];
 }
 
@@ -39,7 +61,7 @@ export function createTemplate({
   mods,
   map,
   difficulty,
-} = {}) {
+}: CreateTemplateOptions = {}): TemplateObject {
   return {
     schemaVersion: TEMPLATE_SCHEMA_VERSION,
     meta: {
@@ -59,15 +81,19 @@ export function createTemplate({
   };
 }
 
-function isPlainObject(value) {
+function isPlainObject(value: unknown): value is TemplateObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isPrimitive(value) {
+function isPrimitive(value: unknown): value is string | number | boolean {
   return ["string", "number", "boolean"].includes(typeof value);
 }
 
-function validateFlatValueMap(obj, label, errors) {
+function validateFlatValueMap(
+  obj: unknown,
+  label: string,
+  errors: string[],
+): void {
   if (!isPlainObject(obj)) {
     errors.push(`${label} must be an object`);
     return;
@@ -79,8 +105,11 @@ function validateFlatValueMap(obj, label, errors) {
   }
 }
 
-export function validateTemplate(template) {
-  const errors = [];
+export function validateTemplate(template: unknown): {
+  valid: boolean;
+  errors: string[];
+} {
+  const errors: string[] = [];
   if (!isPlainObject(template)) {
     return { valid: false, errors: ["Template must be an object"] };
   }
@@ -108,7 +137,9 @@ export function validateTemplate(template) {
   if (!isPlainObject(template.sandboxVars ?? {})) {
     errors.push("sandboxVars must be an object");
   } else {
-    for (const [section, values] of Object.entries(template.sandboxVars || {})) {
+    for (const [section, values] of Object.entries(
+      asRecord(template.sandboxVars),
+    )) {
       if (!SANDBOX_SECTIONS.includes(section)) {
         errors.push(`sandboxVars.${section} is not a known section`);
         continue;
@@ -142,26 +173,40 @@ export function validateTemplate(template) {
   return { valid: errors.length === 0, errors };
 }
 
-function valuesEqual(a, b) {
+function valuesEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a === undefined || b === undefined) return false;
   return String(a).trim() === String(b).trim();
 }
 
-export function diffTemplate(template, currentConfig = {}) {
+export function diffTemplate(
+  template: unknown,
+  currentConfig: unknown = {},
+): {
+  serverIni: TemplateChange[];
+  sandboxVars: TemplateChange[];
+  summary: { iniChanges: number; sandboxChanges: number; totalChanges: number };
+} {
+  const templateObject = asRecord(template);
+  const currentObject = asRecord(currentConfig);
   const exclusions = resolveIniExclusions(template);
+  const currentServerIni = asRecord(currentObject.serverIni);
 
-  const serverIni = [];
-  for (const [key, to] of Object.entries(template?.serverIni || {})) {
+  const serverIni: TemplateChange[] = [];
+  for (const [key, to] of Object.entries(asRecord(templateObject.serverIni))) {
     if (exclusions.includes(key)) continue;
-    const from = currentConfig?.serverIni?.[key];
+    const from = currentServerIni[key];
     if (!valuesEqual(from, to)) serverIni.push({ key, from, to });
   }
 
-  const sandboxVars = [];
-  for (const [section, values] of Object.entries(template?.sandboxVars || {})) {
-    for (const [key, to] of Object.entries(values || {})) {
-      const from = currentConfig?.sandboxVars?.[section]?.[key];
+  const sandboxVars: TemplateChange[] = [];
+  const currentSandboxVars = asRecord(currentObject.sandboxVars);
+  for (const [section, values] of Object.entries(
+    asRecord(templateObject.sandboxVars),
+  )) {
+    const currentSection = asRecord(currentSandboxVars[section]);
+    for (const [key, to] of Object.entries(asRecord(values))) {
+      const from = currentSection[key];
       if (!valuesEqual(from, to)) sandboxVars.push({ section, key, from, to });
     }
   }

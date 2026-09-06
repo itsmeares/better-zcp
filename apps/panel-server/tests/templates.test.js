@@ -7,7 +7,7 @@ import {
   createTemplate,
   validateTemplate,
   diffTemplate,
-} from "../utils/templateSchema.js";
+} from "../utils/templateSchema.ts";
 
 let userTemplates;
 

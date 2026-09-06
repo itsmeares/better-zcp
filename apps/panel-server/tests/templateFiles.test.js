@@ -11,7 +11,7 @@ import {
   backupFile,
   writeFile,
   writeFilesTransaction,
-} from "../utils/templateFiles.js";
+} from "../utils/templateFiles.ts";
 
 describe("ini helpers", () => {
   const iniContent = "PVP=true\nMaxPlayers=16\n";

@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_INI_EXCLUSIONS } from "../utils/templateSchema.js";
+import { DEFAULT_INI_EXCLUSIONS } from "../utils/templateSchema.ts";
 import { USER_ROLES } from "../services/auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -17,7 +17,7 @@ import {
   validateTemplate,
   diffTemplate as computeDiff,
   resolveIniExclusions,
-} from "../utils/templateSchema.js";
+} from "../utils/templateSchema.ts";
 import {
   readIniValues,
   mergeIniValues,
@@ -25,7 +25,7 @@ import {
   mergeSandboxSections,
   backupFile,
   writeFilesTransaction,
-} from "../utils/templateFiles.js";
+} from "../utils/templateFiles.ts";
 import { withFileLock } from "../utils/fileWriteQueue.ts";
 
 const log = createLogger("TemplateService");

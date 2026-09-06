@@ -21,7 +21,7 @@ import { getActiveServer, getSetting, setSetting } from "../database/init.js";
 import { loadUiSecret, writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { describeStartFailure } from "./discordStartFailure.ts";
-import { readIniValues } from "../utils/templateFiles.js";
+import { readIniValues } from "../utils/templateFiles.ts";
 import { runManagedLifecycle } from "./managedContainer.js";
 import { resolveObservedServerRunning } from "../utils/serverStatus.ts";
 import {
