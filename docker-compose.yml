@@ -1,52 +1,5 @@
-# Zomboid Control Panel - Docker Compose
-#
-# Don't have Project Zomboid running anywhere yet? This is the wrong file —
-# use infra/docker/all-in-one instead, which installs and runs PZ *and* the panel
-# in one container. Full comparison of all three Docker paths, with
-# step-by-step walkthroughs: docs/install/docker.md
-#
-# ============================================================================
-# WHAT THIS RUNS
-# ============================================================================
-# This compose file runs the *control panel only*. It does NOT include a
-# Project Zomboid dedicated server. PZ has to run somewhere the panel can reach.
-#
-# Two realistic topologies:
-#
-#   1) PZ server on the host, panel in Docker (most common)
-#      - PZ runs natively on the same Linux host (systemd, screen, tmux, etc.)
-#      - Panel container bind-mounts the PZ install + Zomboid user data
-#      - Panel talks to PZ via RCON over localhost (use host.docker.internal
-#        or the host's LAN IP)
-#
-#   2) Remote PZ server, panel in Docker
-#      - PZ can run on another machine or in a separate container on this host
-#      - Panel talks to it over RCON (use the PZ Compose service name when both
-#        containers are on the same Docker network)
-#      - For PanelBridge, either share the Zomboid folder over NFS/SMB and
-#        bind-mount it here, or configure the SFTP bridge in Settings
-#
-# ============================================================================
-# QUICK START
-# ============================================================================
-#   1. Edit the volumes / environment section below to match your host paths
-#   2. (Linux) Set PUID/PGID in .env to match the owner of shared mounts.
-#      The published image applies them at runtime; rebuilding is not needed.
-#   3. Bring it up:
-#        docker compose up -d
-#   4. Open http://localhost:3001 and create the admin account
-#   5. In Settings, point the panel at /pz-server and /zomboid (the container
-#      paths from the volumes below), not your host paths
-#
-# All available env vars are documented in .env.example.
-# ============================================================================
-
 services:
   panel:
-    # Prebuilt image (published by .github/workflows/docker-publish.yml on tag push).
-    # If the pull fails (e.g. before the first tagged release, or on a private fork),
-    # `build:` below kicks in automatically and the locally built image is tagged with
-    # this same name so subsequent `up -d` calls don't try to pull again.
     image: ghcr.io/itsmeares/better-zcp:latest
     build:
       context: .
@@ -57,51 +10,17 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
-    # On Linux, add `host.docker.internal` so the panel can reach PZ RCON on the host
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      # Panel state (database, JWT secret, backups). Docker manages ownership,
-      # so first launch does not fail when the image runs as UID 1000.
       - panel-data:/app/data
       - panel-logs:/app/logs
-
-      # --- Topology 1: PZ server on the host ---
-      # Uncomment and adjust the host paths to where your PZ install lives.
-      # Both mounts must be writable when the panel installs, updates, or starts PZ.
-      # Use `:ro` for the install mount only with an externally managed PZ server.
-      # - /opt/pzserver:/pz-server:z
-      # - /home/pzuser/Zomboid:/zomboid:z
-
-      # --- Topology 2: Remote PZ server over NFS/SMB ---
-      # Mount the remote share on the host first, then bind it in:
-      # - /mnt/pz-remote/install:/pz-server:ro
-      # - /mnt/pz-remote/Zomboid:/zomboid:z
-
-      # --- Optional: control a PZ container through the Docker socket ---
-      # Enable only for a trusted, local panel. The socket grants control over
-      # every container on this Docker host.
-      # - /var/run/docker.sock:/var/run/docker.sock
-
-    # Uncomment this with the numeric group ID of /var/run/docker.sock when
-    # PUID/PGID do not already belong to that group. The entrypoint preserves
-    # this supplementary group before dropping privileges.
-    # group_add:
-    #   - "${DOCKER_GID:-999}"
 
     environment:
       - NODE_ENV=production
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - PANEL_DOCKER_CONTROL_ENABLED=${PANEL_DOCKER_CONTROL_ENABLED:-false}
-      # Optional overrides (see .env.example for the full list):
-      # - PORT=3001
-      # - PZ_SERVER_PATH=/pz-server
-      # - PZ_SAVE_PATH=/zomboid
-      # - PZ_SERVER_BAT=start-server.sh
-      # Before first setup through a reverse proxy, set its exact public origin:
-      # - CORS_ORIGINS=https://panel.example.com
-      # - HTTPS=true
       - TRUST_PROXY=${TRUST_PROXY:-false}
 
 volumes:

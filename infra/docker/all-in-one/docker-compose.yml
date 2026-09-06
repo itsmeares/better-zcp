@@ -8,8 +8,6 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
-      # PZ DefaultPort and UDPPort. The all-in-one installer owns the game
-      # server, so these must be published here rather than added by hand.
       - "16261:16261/udp"
       - "16262:16262/udp"
     environment:

@@ -4,51 +4,30 @@ After=network.target
 
 [Service]
 Type=simple
-# Create this user first: sudo useradd -r -m -s /bin/false pzuser
 User=pzuser
 Group=pzuser
 WorkingDirectory=/opt/zomboid-panel
 ExecStart=/opt/zomboid-panel/start.sh
 Restart=on-failure
 RestartSec=5
-# The launcher forwards shutdown only to the panel's isolated process group.
-# Project Zomboid is intentionally detached and must survive panel updates.
 KillMode=process
 StandardOutput=journal
 StandardError=journal
 
-# If nginx or another reverse proxy is in front, trust only its hop/address so
-# express-rate-limit can identify the real client IP. Leave commented when the
-# panel is accessed directly. Examples: TRUST_PROXY=1 or TRUST_PROXY=127.0.0.1
-# Environment=TRUST_PROXY=1
 
-# Resource limits (important for CentOS/RHEL)
 LimitNOFILE=65536
 LimitNPROC=4096
 
-# Security hardening
 NoNewPrivileges=true
-# Use 'full' instead of 'strict' — strict breaks pkg binaries on CentOS (needs /usr/lib64)
 ProtectSystem=full
 ProtectHome=read-only
-# Self-update replaces the binary, web assets, launcher, and bundled unit
-# template inside this directory. It never writes the installed /etc unit.
 ReadWritePaths=/opt/zomboid-panel
 PrivateTmp=true
 PrivateDevices=true
 RestrictRealtime=true
 
-# If PZ server data is outside /opt, add its path here (uncomment and adjust):
-# ReadWritePaths=/opt/zomboid-panel /home/pzuser/Zomboid
 
-# SELinux (CentOS/RHEL): If SELinux blocks access, run:
-#   sudo semanage fcontext -a -t admin_home_t "/opt/zomboid-panel(/.*)?"
-#   sudo restorecon -Rv /opt/zomboid-panel
-# Or set the service to permissive for its domain:
-#   sudo semanage permissive -a init_t
 
-# Firewall: Open port 3001 if firewalld is active:
-#   sudo firewall-cmd --permanent --add-port=3001/tcp && sudo firewall-cmd --reload
 
 [Install]
 WantedBy=multi-user.target

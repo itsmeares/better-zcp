@@ -1,4 +1,3 @@
-# Generated files replace every {{...}} placeholder with a validated value.
 # X-Zomboid-Panel-Server-ID: {{SERVER_ID}}
 [Unit]
 Description=Project Zomboid server {{SERVER_NAME}}

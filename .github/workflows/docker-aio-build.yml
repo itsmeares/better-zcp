@@ -1,21 +1,5 @@
 name: Build AIO Docker Image
 
-# CI + publish for infra/docker/all-in-one/Dockerfile (Debian-based: panel +
-# SteamCMD + the PZ dedicated server in one image). Deliberately kept as its
-# own workflow, independent of docker-publish.yml: that workflow publishes
-# the standard panel-only image. The AIO image uses separate tags in the same
-# repository package, so it cannot overwrite the panel-only tags.
-#
-# Pull requests build both images without publishing. Main publishes moving
-# `aio` / `updater` tags, while release tags publish immutable version tags
-# consumed by bootstrap.sh. The installer falls back to local builds if a tag
-# is still being published or predates this workflow.
-#
-# amd64-only: the base image (cm2network/steamcmd:root) and SteamCMD itself
-# have no arm64 build, so there is no usable arm64 target for this image
-# (unlike the panel-only Dockerfile, which supports arm64 for remote-only
-# administration).
-
 on:
   push:
     branches:
@@ -52,19 +36,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
       - name: Extract all-in-one image metadata
         id: panel-meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
         with:
           images: ghcr.io/itsmeares/better-zcp
-          # metadata-action otherwise creates a moving `latest` tag for the
-          # semver source, which would let the AIO image overwrite the
-          # panel-only image consumed by the generic Compose installer.
           flavor: latest=false
           tags: |
             type=raw,value=aio,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
@@ -73,30 +54,25 @@ jobs:
 
       - name: Extract updater image metadata
         id: updater-meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
         with:
           images: ghcr.io/itsmeares/better-zcp
-          # The updater is published in the shared GHCR package, so it must
-          # never claim the package's generic `latest` tag.
           flavor: latest=false
           tags: |
             type=raw,value=updater,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
             type=semver,pattern={{version}},prefix=updater-
             type=sha,format=short,prefix=updater-
 
-      # Only log in / push outside pull_request — a PR from a fork gets a
-      # read-only GITHUB_TOKEN, and even a same-repo PR shouldn't publish an
-      # image before the change has actually merged.
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build (and publish on push/dispatch) AIO image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
           context: .
           file: infra/docker/all-in-one/Dockerfile
@@ -108,12 +84,10 @@ jobs:
           labels: ${{ steps.panel-meta.outputs.labels }}
           cache-from: type=gha,scope=aio
           cache-to: type=gha,mode=max,scope=aio
-          # Same reasoning as docker-publish.yml: avoid the phantom
-          # "unknown/unknown" provenance manifest on GHCR.
           provenance: false
 
       - name: Build (and publish on push/dispatch) updater image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
           context: .
           file: infra/docker/all-in-one/updater/Dockerfile
