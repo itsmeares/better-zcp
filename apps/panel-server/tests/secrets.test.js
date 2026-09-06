@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { readSecret } from "../utils/secrets.ts";
-import { getSteamApiKey } from "../services/steamApiKey.js";
+import { getSteamApiKey } from "../services/steamApiKey.ts";
 
 const savedEnvironment = {
   RCON_PASSWORD: process.env.RCON_PASSWORD,

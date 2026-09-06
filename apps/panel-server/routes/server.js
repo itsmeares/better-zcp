@@ -32,7 +32,7 @@ import { runManagedLifecycle } from "../services/managedContainer.js";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
-} from "../services/lifecycleCoordinator.js";
+} from "../services/lifecycleCoordinator.ts";
 import { ErrorCode } from "../utils/errorCodes.js";
 import { ProgressCode } from "../utils/progressCodes.ts";
 import { invalidateMapFolderScan } from "./chunks.js";

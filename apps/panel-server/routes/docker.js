@@ -7,7 +7,7 @@ import { ErrorCode } from "../utils/errorCodes.js";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
-} from "../services/lifecycleCoordinator.js";
+} from "../services/lifecycleCoordinator.ts";
 
 const router = express.Router();
 

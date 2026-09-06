@@ -1,12 +1,26 @@
 export const LIFECYCLE_IN_PROGRESS_CODE = "SERVER_LIFECYCLE_IN_PROGRESS";
 
-let activeLock = null;
+interface LifecycleToken {
+  id: number;
+  operation: string;
+  serverName: string | null;
+}
+
+export interface LifecycleLock {
+  operation: string;
+  release: () => void;
+}
+
+let activeLock: LifecycleToken | null = null;
 let nextLockId = 0;
 
-export function acquireLifecycleLock(operation = "lifecycle", serverName = null) {
+export function acquireLifecycleLock(
+  operation: unknown = "lifecycle",
+  serverName: unknown = null,
+): LifecycleLock | null {
   if (activeLock) return null;
 
-  const token = {
+  const token: LifecycleToken = {
     id: ++nextLockId,
     operation: String(operation || "lifecycle"),
     serverName:
@@ -27,7 +41,10 @@ export function acquireLifecycleLock(operation = "lifecycle", serverName = null)
   };
 }
 
-export function lifecycleInProgressResponse() {
+export function lifecycleInProgressResponse(): {
+  error: string;
+  code: string;
+} {
   const holder = activeLock;
   const error =
     holder?.operation && holder?.serverName
@@ -38,6 +55,6 @@ export function lifecycleInProgressResponse() {
   return { error, code: LIFECYCLE_IN_PROGRESS_CODE };
 }
 
-export function isLifecycleLocked() {
+export function isLifecycleLocked(): boolean {
   return activeLock !== null;
 }

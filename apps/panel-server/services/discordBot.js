@@ -20,7 +20,7 @@ const log = createLogger("Discord");
 import { getActiveServer, getSetting, setSetting } from "../database/init.js";
 import { loadUiSecret, writeUiSecretFile } from "../utils/uiSecretFile.js";
 import { sanitizeError } from "../utils/sanitize.js";
-import { describeStartFailure } from "./discordStartFailure.js";
+import { describeStartFailure } from "./discordStartFailure.ts";
 import { readIniValues } from "../utils/templateFiles.js";
 import { runManagedLifecycle } from "./managedContainer.js";
 import { resolveObservedServerRunning } from "../utils/serverStatus.js";
@@ -31,7 +31,7 @@ import {
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
-} from "./lifecycleCoordinator.js";
+} from "./lifecycleCoordinator.ts";
 
 async function _resolveDiscordBody(body) {
   if (body == null) return null;

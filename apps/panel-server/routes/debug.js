@@ -66,7 +66,7 @@ import {
   collectKnownSecretValues,
   redactKnownSecrets,
 } from "../utils/discordMessageRedaction.js";
-import { getSteamApiKey } from "../services/steamApiKey.js";
+import { getSteamApiKey } from "../services/steamApiKey.ts";
 import { hasActiveSteamOperation } from "../services/activeSteamOperations.js";
 import { Transform } from "stream";
 

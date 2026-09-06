@@ -2,7 +2,7 @@ import express from "express";
 import { createLogger } from "../utils/logger.js";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.js";
 import { normalizeChatRelayScope } from "../services/discordBot.js";
-import { describeStartFailure } from "../services/discordStartFailure.js";
+import { describeStartFailure } from "../services/discordStartFailure.ts";
 import { requirePermission, getRoleByName } from "../services/permissions.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 const log = createLogger("API:Discord");

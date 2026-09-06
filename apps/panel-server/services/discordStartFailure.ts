@@ -1,8 +1,17 @@
 import { sanitizeError } from "../utils/sanitize.js";
 
+interface StartError {
+  kind?: unknown;
+  message?: unknown;
+}
 
-export function describeStartFailure(lastStartError) {
-  const kind = lastStartError?.kind;
+function asStartError(value: unknown): StartError {
+  return value && typeof value === "object" ? value : {};
+}
+
+export function describeStartFailure(lastStartError: unknown): string {
+  const error = asStartError(lastStartError);
+  const kind = error.kind;
   if (kind === "NoToken") {
     return "No bot token is configured. Add one below and save.";
   }
@@ -15,8 +24,8 @@ export function describeStartFailure(lastStartError) {
   if (kind === "ReadyTimeout") {
     return "Discord didn't respond within 30 seconds. This usually means a network problem between the panel and Discord, not your configuration -- try again in a moment.";
   }
-  if (lastStartError?.message) {
-    return `Failed to start bot: ${sanitizeError(lastStartError.message)}`;
+  if (typeof error.message === "string" && error.message) {
+    return `Failed to start bot: ${sanitizeError(error.message)}`;
   }
   return "Failed to start bot - check configuration";
 }

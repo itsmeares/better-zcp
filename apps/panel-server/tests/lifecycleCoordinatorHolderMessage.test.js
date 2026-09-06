@@ -3,7 +3,7 @@ import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
   LIFECYCLE_IN_PROGRESS_CODE,
-} from "../services/lifecycleCoordinator.js";
+} from "../services/lifecycleCoordinator.ts";
 
 
 describe("lifecycleCoordinator: refusal message names the holder", () => {

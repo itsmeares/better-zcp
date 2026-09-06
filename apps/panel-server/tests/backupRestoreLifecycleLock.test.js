@@ -8,7 +8,7 @@ const { default: router } = await import("../routes/backup.js");
 const {
   acquireLifecycleLock,
   isLifecycleLocked,
-} = await import("../services/lifecycleCoordinator.js");
+} = await import("../services/lifecycleCoordinator.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

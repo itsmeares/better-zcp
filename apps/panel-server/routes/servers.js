@@ -27,7 +27,7 @@ import { requirePermission } from "../services/permissions.js";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
-} from "../services/lifecycleCoordinator.js";
+} from "../services/lifecycleCoordinator.ts";
 import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.js";
 import { refreshWorkshopChecker } from "../services/modChecker.js";
 import {

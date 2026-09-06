@@ -10,7 +10,7 @@ import { runManagedLifecycle } from "./managedContainer.js";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
-} from "./lifecycleCoordinator.js";
+} from "./lifecycleCoordinator.ts";
 import { createBackupIfChanged } from "../utils/configBackup.js";
 import {
   candidateIniPaths,

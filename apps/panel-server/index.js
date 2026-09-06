@@ -92,7 +92,7 @@ import { resolveObservedServerRunning } from "./utils/serverStatus.js";
 import { discoverMounts } from "./services/mountDiscovery.js";
 import { shouldAutoOpenBrowser } from "./utils/browserLaunch.ts";
 import { isLinuxPanelSupervisor } from "./utils/restartSupervisor.ts";
-import { acquireLifecycleLock } from "./services/lifecycleCoordinator.js";
+import { acquireLifecycleLock } from "./services/lifecycleCoordinator.ts";
 
 (function maybeReexecViaSupervisor() {
   try {

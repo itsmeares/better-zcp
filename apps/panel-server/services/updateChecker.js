@@ -11,7 +11,7 @@ import {
   getActiveSteamOperations,
   clearActiveSteamOperation,
 } from "./activeSteamOperations.js";
-import { acquireLifecycleLock } from "./lifecycleCoordinator.js";
+import { acquireLifecycleLock } from "./lifecycleCoordinator.ts";
 
 export function parseAutoUpdateWarningMinutes(value) {
   if (value === null || value === undefined) return 15;

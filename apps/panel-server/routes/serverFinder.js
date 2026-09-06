@@ -2,7 +2,7 @@ import express from 'express';
 import dgram from 'dgram';
 import { createLogger } from '../utils/logger.js';
 const log = createLogger('API:Finder');
-import { getSteamApiKey } from '../services/steamApiKey.js';
+import { getSteamApiKey } from '../services/steamApiKey.ts';
 import { sanitizeError } from '../utils/sanitize.js';
 import { requirePermission } from '../services/permissions.js';
 

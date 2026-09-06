@@ -9,7 +9,7 @@ import { listBackupRecords } from "../services/backupRecords.js";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
-} from "../services/lifecycleCoordinator.js";
+} from "../services/lifecycleCoordinator.ts";
 import { ErrorCode } from "../utils/errorCodes.js";
 import {
   isCronTooFrequent,
