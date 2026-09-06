@@ -6,7 +6,7 @@ import {
   applyUpdateBundle,
   acknowledgeUpdateBundle,
   stageUpdateBundle,
-} from "../services/updateBundle.js";
+} from "../services/updateBundle.ts";
 import {
   createUpdateDataBackup,
   restorePreUpdateDataBackup,

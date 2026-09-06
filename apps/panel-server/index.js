@@ -64,7 +64,7 @@ import {
   inspectPendingUpdateBundle,
   PANEL_API_CONTRACT_VERSION as DEFAULT_API_CONTRACT_VERSION,
   recoverInterruptedUpdateBundle,
-} from "./services/updateBundle.js";
+} from "./services/updateBundle.ts";
 import { LogTailer } from "./services/logTailer.ts";
 import { DiskMonitor } from "./services/diskMonitor.ts";
 import authService from "./services/auth.js";

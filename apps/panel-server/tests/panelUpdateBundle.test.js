@@ -11,7 +11,7 @@ import {
   recoverInterruptedUpdateBundle,
   stageUpdateBundle,
   validateBuildCompatibility,
-} from "../services/updateBundle.js";
+} from "../services/updateBundle.ts";
 
 let installDir;
 

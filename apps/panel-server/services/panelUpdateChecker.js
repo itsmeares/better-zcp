@@ -15,7 +15,7 @@ import {
 import { getDataPaths } from "../utils/paths.ts";
 import { DockerUpdateProxy } from "./dockerUpdateProxy.ts";
 import { isContainerized } from "../utils/dockerDetect.ts";
-import { stageUpdateBundle } from "./updateBundle.js";
+import { stageUpdateBundle } from "./updateBundle.ts";
 
 const log = createLogger("PanelUpdater");
 

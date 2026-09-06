@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { contentSecurityPolicy } from "helmet";
 import { computeInlineScriptCspHash } from "../utils/cspScriptHash.ts";
-import { applyUpdateBundle, stageUpdateBundle } from "../services/updateBundle.js";
+import { applyUpdateBundle, stageUpdateBundle } from "../services/updateBundle.ts";
 
 
 function writeFile(filePath, contents) {
