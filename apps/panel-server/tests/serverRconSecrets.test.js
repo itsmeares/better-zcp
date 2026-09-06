@@ -13,7 +13,7 @@ const {
   rehydrateRconSecrets,
   redactRconSecretsForWrite,
   deleteServerSecret,
-} = await import("../utils/serverRconSecrets.js");
+} = await import("../utils/serverRconSecrets.ts");
 
 describe("redactRconSecretsForWrite", () => {
   beforeEach(() => {

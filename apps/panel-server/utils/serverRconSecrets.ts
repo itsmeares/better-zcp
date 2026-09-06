@@ -1,19 +1,34 @@
-
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { getDataPaths } from "./paths.js";
 import { readUiSecretFile, writeUiSecretFile } from "./uiSecretFile.js";
 
-function secretsDir() {
+interface Logger {
+  warn?: (message: string) => unknown;
+}
+
+interface ServerRecord {
+  id?: string | number;
+  rconPassword?: unknown;
+  [key: string]: unknown;
+}
+
+export interface DatabaseData {
+  servers?: ServerRecord[];
+  settings?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+function secretsDir(): string {
   return path.join(getDataPaths().dataDir, "server-secrets");
 }
 
-function serverSecretPath(serverId) {
+function serverSecretPath(serverId: string | number): string {
   const safeId = String(serverId).replace(/[^a-zA-Z0-9_-]/g, "_");
   return path.join(secretsDir(), `${safeId}.secret`);
 }
 
-function ensureSecretsDir() {
+function ensureSecretsDir(): void {
   const dir = secretsDir();
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   try {
@@ -23,23 +38,26 @@ function ensureSecretsDir() {
   }
 }
 
-function readServerSecret(serverId, log) {
+function readServerSecret(
+  serverId: string | number,
+  log?: Logger | null,
+): string | null {
   const filePath = serverSecretPath(serverId);
   if (!fs.existsSync(filePath)) return null;
   try {
     const value = fs.readFileSync(filePath, "utf8").trim();
     return value || null;
-  } catch (err) {
+  } catch (error) {
     log?.warn?.(
       `Could not read the RCON password file for server ${serverId} ` +
-        `(${filePath}): ${err.message}. Treating it as unset — re-enter ` +
+        `(${filePath}): ${error instanceof Error ? error.message : String(error)}. Treating it as unset — re-enter ` +
         "it in the server's settings.",
     );
     return null;
   }
 }
 
-function writeServerSecret(serverId, value) {
+function writeServerSecret(serverId: string | number, value: unknown): void {
   const filePath = serverSecretPath(serverId);
   if (value == null || value === "") {
     try {
@@ -50,12 +68,12 @@ function writeServerSecret(serverId, value) {
     return;
   }
   try {
-    if (fs.readFileSync(filePath, "utf8") === value) return;
+    if (fs.readFileSync(filePath, "utf8") === String(value)) return;
   } catch {
     /* doesn't exist yet or unreadable — fall through and write it */
   }
   ensureSecretsDir();
-  fs.writeFileSync(filePath, value, { encoding: "utf8", mode: 0o600 });
+  fs.writeFileSync(filePath, String(value), { encoding: "utf8", mode: 0o600 });
   try {
     fs.chmodSync(filePath, 0o600);
   } catch {
@@ -63,7 +81,7 @@ function writeServerSecret(serverId, value) {
   }
 }
 
-export function deleteServerSecret(serverId) {
+export function deleteServerSecret(serverId: string | number): void {
   try {
     fs.unlinkSync(serverSecretPath(serverId));
   } catch {
@@ -71,9 +89,12 @@ export function deleteServerSecret(serverId) {
   }
 }
 
-export function rehydrateRconSecrets(data, log) {
+export function rehydrateRconSecrets(
+  data: DatabaseData,
+  log?: Logger | null,
+): DatabaseData {
   for (const server of data.servers || []) {
-    if (!server.rconPassword && server.id) {
+    if (!server.rconPassword && server.id !== undefined) {
       const fromFile = readServerSecret(server.id, log);
       if (fromFile) server.rconPassword = fromFile;
     }
@@ -86,9 +107,9 @@ export function rehydrateRconSecrets(data, log) {
   return data;
 }
 
-export function redactRconSecretsForWrite(data) {
+export function redactRconSecretsForWrite(data: DatabaseData): DatabaseData {
   const redactedServers = (data.servers || []).map((server) => {
-    if (server.rconPassword !== undefined) {
+    if (server.rconPassword !== undefined && server.id !== undefined) {
       writeServerSecret(server.id, server.rconPassword);
       const { rconPassword: _rconPassword, ...rest } = server;
       return rest;

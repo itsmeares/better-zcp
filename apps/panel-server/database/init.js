@@ -12,7 +12,7 @@ import {
   rehydrateRconSecrets,
   redactRconSecretsForWrite,
   deleteServerSecret,
-} from "../utils/serverRconSecrets.js";
+} from "../utils/serverRconSecrets.ts";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.js";
 import { isPidAlive } from "../utils/pidLiveness.ts";
