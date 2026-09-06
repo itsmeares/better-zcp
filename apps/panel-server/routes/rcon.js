@@ -6,7 +6,7 @@ import { PZ_COMMANDS } from '../utils/commands.js';
 import {
   parseBoundedInteger,
   parseClampedInteger,
-} from '../utils/queryNumbers.js';
+} from '../utils/queryNumbers.ts';
 import { sanitizeError } from '../utils/sanitize.js';
 import { redactRconCommandSecrets } from '../utils/rconCommandRedaction.js';
 import {

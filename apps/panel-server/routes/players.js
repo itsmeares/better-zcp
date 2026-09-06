@@ -1,4 +1,4 @@
-import { parseClampedInteger } from "../utils/queryNumbers.js";
+import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import express from 'express';
 import { createLogger } from '../utils/logger.js';
 const log = createLogger('API:Players');

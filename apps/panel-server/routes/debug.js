@@ -1,4 +1,4 @@
-import { parseClampedInteger } from "../utils/queryNumbers.js";
+import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import express from "express";
 import os from "os";
 import v8 from "v8";

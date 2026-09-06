@@ -1,4 +1,9 @@
-export function parseBoundedInteger(value, fallback, min = 0, max = Number.MAX_SAFE_INTEGER) {
+export function parseBoundedInteger<T>(
+  value: unknown,
+  fallback: T,
+  min = 0,
+  max = Number.MAX_SAFE_INTEGER,
+): number | T {
   const parsed =
     typeof value === "number"
       ? value
@@ -12,17 +17,12 @@ export function parseBoundedInteger(value, fallback, min = 0, max = Number.MAX_S
   return parsed;
 }
 
-export function parseClampedInteger(
-  value,
-  fallback,
+export function parseClampedInteger<T>(
+  value: unknown,
+  fallback: T,
   min = 0,
   max = Number.MAX_SAFE_INTEGER,
-) {
-  const parsed = parseBoundedInteger(
-    value,
-    null,
-    min,
-    Number.MAX_SAFE_INTEGER,
-  );
+): number | T {
+  const parsed = parseBoundedInteger(value, null, min, Number.MAX_SAFE_INTEGER);
   return parsed === null ? fallback : Math.min(parsed, max);
 }

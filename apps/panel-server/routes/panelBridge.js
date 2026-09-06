@@ -19,7 +19,7 @@ import { sanitizeError, sanitizeErrorParams, isMaskedSecret } from "../utils/san
 import { getDataPaths } from "../utils/paths.js";
 import { persistSandboxValues } from "./serverFiles.js";
 import { requirePermission } from "../services/permissions.js";
-import { parseClampedInteger } from "../utils/queryNumbers.js";
+import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import {
   getEmbeddedPanelBridgeLua,
   compareModVersions,

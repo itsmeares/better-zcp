@@ -7,7 +7,7 @@ import { createLogger } from "../utils/logger.js";
 import { getDataPaths } from "../utils/paths.js";
 import { getActiveServer } from "../database/init.js";
 import { listPersistedVehicles } from "../utils/vehiclesDb.js";
-import { parseBoundedInteger } from "../utils/queryNumbers.js";
+import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 const log = createLogger("API:MapProxy");
 const execFileAsync = promisify(execFile);
 

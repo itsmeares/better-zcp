@@ -16,7 +16,7 @@ import {
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.js";
 import { escapeRegExp } from "../utils/regex.js";
 import { getDataPaths } from "../utils/paths.js";
-import { parseBoundedInteger } from "../utils/queryNumbers.js";
+import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import {
   createLinuxServiceLifecycle,
   isManagedLifecycleProvider,

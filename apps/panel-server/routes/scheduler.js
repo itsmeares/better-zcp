@@ -21,7 +21,7 @@ import {
   isCronTooFrequent,
   isValidIanaTimezone,
 } from '../utils/cronValidation.js';
-import { parseBoundedInteger, parseClampedInteger } from '../utils/queryNumbers.js';
+import { parseBoundedInteger, parseClampedInteger } from '../utils/queryNumbers.ts';
 
 export { hasUnsupportedCronFieldCount };
 

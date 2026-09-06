@@ -38,7 +38,7 @@ import { ProgressCode } from "../utils/progressCodes.js";
 import { invalidateMapFolderScan } from "./chunks.js";
 import { emitActionResult } from "./scheduler.js";
 import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.js";
-import { parseBoundedInteger } from "../utils/queryNumbers.js";
+import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { confineToRoots } from "../utils/browseRoots.js";
 import { isContainerized } from "../utils/dockerDetect.js";
 

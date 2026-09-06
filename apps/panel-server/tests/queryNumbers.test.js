@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseBoundedInteger,
   parseClampedInteger,
-} from "../utils/queryNumbers.js";
+} from "../utils/queryNumbers.ts";
 
 describe("parseBoundedInteger", () => {
   it.each(["12junk", "1.5", "-1", "1e2", "", null, undefined])(

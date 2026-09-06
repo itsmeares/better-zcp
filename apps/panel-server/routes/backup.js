@@ -15,7 +15,7 @@ import {
   isCronTooFrequent,
   isSupportedFiveFieldCron,
 } from "../utils/cronValidation.js";
-import { parseClampedInteger } from "../utils/queryNumbers.js";
+import { parseClampedInteger } from "../utils/queryNumbers.ts";
 const log = createLogger("API:Backup");
 
 const router = express.Router();

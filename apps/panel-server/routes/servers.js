@@ -33,7 +33,7 @@ import { refreshWorkshopChecker } from "../services/modChecker.js";
 import {
   parseBoundedInteger,
   parseClampedInteger,
-} from "../utils/queryNumbers.js";
+} from "../utils/queryNumbers.ts";
 import { normalizeMemoryGb } from "../utils/memory.js";
 import { GAME_PORT_MAX, applyUpnpToIni } from "./server.js";
 import {
