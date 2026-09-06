@@ -16,7 +16,7 @@ const {
   parseLinuxMeminfo,
   parseMacSwapusage,
   parseWindowsPageFileOutput,
-} = await import("../utils/swapInfo.js");
+} = await import("../utils/swapInfo.ts");
 
 
 const originalPlatform = process.platform;
