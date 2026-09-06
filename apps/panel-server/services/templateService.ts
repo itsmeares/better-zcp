@@ -32,17 +32,93 @@ const log = createLogger("TemplateService");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUILTIN_DIR = path.join(__dirname, "../data/templates");
 
-let builtinCache = null;
+type TemplateValues = Record<string, unknown>;
+
+interface TemplateMeta {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
+interface TemplateRecord {
+  schemaVersion: number;
+  meta: TemplateMeta;
+  serverIni?: TemplateValues;
+  sandboxVars?: Record<string, TemplateValues>;
+  iniExclusions?: unknown[];
+  mods?: unknown[];
+  map?: TemplateValues;
+  difficulty?: TemplateValues;
+  [key: string]: unknown;
+}
+
+type BuiltinTemplate = TemplateRecord & { isBuiltin: boolean };
+
+interface ServerProfile {
+  id: string | number;
+  serverConfigPath?: string | null;
+  zomboidDataPath?: string | null;
+  serverName?: string | null;
+  isRemote?: boolean;
+}
+
+interface ServerPaths {
+  iniPath: string;
+  sandboxPath: string;
+}
+
+interface TemplateFileChange {
+  filePath: string;
+  content: string;
+  original: string;
+  existed: boolean;
+}
+
+interface ApplyResult {
+  success: true;
+  ini: { appliedKeys: string[]; skippedKeys: string[] } | null;
+  sandbox: {
+    applied: Array<{ section: string; key: string }>;
+    skipped: Array<{ section: string; key: string }>;
+  } | { skipped: true; reason: string } | null;
+  backups: string[];
+}
+
+interface ApplyOptions {
+  backup?: boolean;
+  applyIni?: boolean;
+  applySandbox?: boolean;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isTemplateRecord(value: unknown): value is TemplateRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const meta = record.meta;
+  return (
+    typeof record.schemaVersion === "number" &&
+    Boolean(meta) &&
+    typeof meta === "object" &&
+    !Array.isArray(meta) &&
+    typeof (meta as Record<string, unknown>).id === "string" &&
+    typeof (meta as Record<string, unknown>).name === "string"
+  );
+}
+
+let builtinCache: BuiltinTemplate[] | null = null;
 const HIDDEN_BUILTIN_TEMPLATES_SETTING = "hiddenBuiltinTemplateIds";
 
-async function getHiddenBuiltinTemplateIds() {
+async function getHiddenBuiltinTemplateIds(): Promise<Set<string>> {
   const stored = await getSetting(HIDDEN_BUILTIN_TEMPLATES_SETTING);
   return Array.isArray(stored)
     ? new Set(stored.filter((id) => typeof id === "string"))
     : new Set();
 }
 
-function loadBuiltinTemplates() {
+function loadBuiltinTemplates(): BuiltinTemplate[] {
   if (builtinCache) return builtinCache;
   const files = fs.existsSync(BUILTIN_DIR)
     ? fs.readdirSync(BUILTIN_DIR).filter((f) => f.endsWith(".json"))
@@ -50,14 +126,15 @@ function loadBuiltinTemplates() {
   builtinCache = files
     .map((f) => {
       try {
-        const raw = JSON.parse(fs.readFileSync(path.join(BUILTIN_DIR, f), "utf-8"));
+        const raw: unknown = JSON.parse(fs.readFileSync(path.join(BUILTIN_DIR, f), "utf-8"));
+        if (!isTemplateRecord(raw)) throw new Error("invalid template shape");
         return { ...raw, isBuiltin: true };
       } catch (err) {
-        log.error(`Failed to load built-in template ${f}: ${err.message}`);
+        log.error(`Failed to load built-in template ${f}: ${errorMessage(err)}`);
         return null;
       }
     })
-    .filter(Boolean);
+    .filter((template): template is BuiltinTemplate => template !== null);
   return builtinCache;
 }
 
@@ -65,29 +142,42 @@ export function _resetBuiltinCacheForTests() {
   builtinCache = null;
 }
 
-export async function listTemplates() {
+export async function listTemplates(): Promise<Array<TemplateRecord | BuiltinTemplate>> {
   const hiddenBuiltinIds = await getHiddenBuiltinTemplateIds();
   const builtins = loadBuiltinTemplates().filter(
     (template) => !hiddenBuiltinIds.has(template.meta.id),
   );
-  const userTemplates = (await getUserTemplates()).map((t) => ({
+  const userTemplates = (await getUserTemplates() as TemplateRecord[]).map((t) => ({
     ...t,
     isBuiltin: false,
   }));
   return [...builtins, ...userTemplates];
 }
 
-export async function getTemplate(id) {
+export async function getTemplate(id: string): Promise<TemplateRecord | BuiltinTemplate | null> {
   const hiddenBuiltinIds = await getHiddenBuiltinTemplateIds();
   const builtin = loadBuiltinTemplates().find((t) => t.meta.id === id);
   if (builtin) return hiddenBuiltinIds.has(id) ? null : builtin;
   const userTemplate = await getUserTemplate(id);
-  return userTemplate ? { ...userTemplate, isBuiltin: false } : null;
+  return userTemplate
+    ? { ...(userTemplate as TemplateRecord), isBuiltin: false }
+    : null;
 }
 
-export async function saveTemplate(input) {
-  const hasId = typeof input?.meta?.id === "string" && input.meta.id;
-  if (hasId && loadBuiltinTemplates().some((t) => t.meta.id === input.meta.id)) {
+export async function saveTemplate(input: unknown) {
+  const inputRecord =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : null;
+  const inputMeta =
+    inputRecord?.meta &&
+    typeof inputRecord.meta === "object" &&
+    !Array.isArray(inputRecord.meta)
+      ? (inputRecord.meta as Record<string, unknown>)
+      : null;
+  const inputId = typeof inputMeta?.id === "string" ? inputMeta.id : "";
+  const hasId = Boolean(inputId);
+  if (hasId && loadBuiltinTemplates().some((t) => t.meta.id === inputId)) {
     return {
       success: false,
       error: "Cannot overwrite a built-in template",
@@ -95,7 +185,15 @@ export async function saveTemplate(input) {
     };
   }
 
-  const template = hasId && input.schemaVersion ? input : createTemplate(input || {});
+  const template = (
+    hasId && inputRecord && "schemaVersion" in inputRecord
+      ? inputRecord
+      : createTemplate(
+          inputRecord
+            ? (inputRecord as Parameters<typeof createTemplate>[0])
+            : {},
+        )
+  ) as TemplateRecord;
   const { valid, errors } = validateTemplate(template);
   if (!valid) {
     const joined = errors.join("; ");
@@ -111,7 +209,7 @@ export async function saveTemplate(input) {
   return { success: true, template: saved };
 }
 
-export async function deleteTemplate(id) {
+export async function deleteTemplate(id: string) {
   if (loadBuiltinTemplates().some((t) => t.meta.id === id)) {
     const hiddenBuiltinIds = await getHiddenBuiltinTemplateIds();
     hiddenBuiltinIds.add(id);
@@ -124,7 +222,7 @@ export async function deleteTemplate(id) {
     : { success: false, error: "Template not found", code: ErrorCode.SIM_TEMPLATE_NOT_FOUND };
 }
 
-export async function listHiddenBuiltinTemplates() {
+export async function listHiddenBuiltinTemplates(): Promise<BuiltinTemplate[]> {
   const hiddenBuiltinIds = await getHiddenBuiltinTemplateIds();
   if (hiddenBuiltinIds.size === 0) return [];
   return loadBuiltinTemplates().filter((template) =>
@@ -132,7 +230,7 @@ export async function listHiddenBuiltinTemplates() {
   );
 }
 
-export async function unhideTemplate(id) {
+export async function unhideTemplate(id: string) {
   const hiddenBuiltinIds = await getHiddenBuiltinTemplateIds();
   if (!hiddenBuiltinIds.has(id)) {
     return { success: false, error: "Template not found", code: ErrorCode.SIM_TEMPLATE_NOT_FOUND };
@@ -142,7 +240,7 @@ export async function unhideTemplate(id) {
   return { success: true };
 }
 
-export async function exportTemplate(id) {
+export async function exportTemplate(id: string) {
   const template = await getTemplate(id);
   if (!template) {
     return { success: false, error: "Template not found", code: ErrorCode.SIM_TEMPLATE_NOT_FOUND };
@@ -151,7 +249,7 @@ export async function exportTemplate(id) {
   return { success: true, template: exportable };
 }
 
-export async function importTemplate(json) {
+export async function importTemplate(json: unknown) {
   const { valid, errors } = validateTemplate(json);
   if (!valid) {
     const joined = errors.join("; ");
@@ -163,12 +261,17 @@ export async function importTemplate(json) {
     };
   }
 
-  const template = { ...json, meta: { ...json.meta, id: randomUUID() } };
+  const template = {
+    ...(json as TemplateRecord),
+    meta: { ...(json as TemplateRecord).meta, id: randomUUID() },
+  } satisfies TemplateRecord;
   const saved = await saveUserTemplate(template);
   return { success: true, template: saved };
 }
 
-function resolveServerPaths(server) {
+function resolveServerPaths(
+  server: ServerProfile | null | undefined,
+): ServerPaths | null {
   const configDir = server?.serverConfigPath
     ? server.serverConfigPath
     : server?.zomboidDataPath
@@ -189,34 +292,38 @@ function resolveServerPaths(server) {
   };
 }
 
-async function readCurrentConfig(template, paths) {
-  const serverIni = {};
+async function readCurrentConfig(
+  template: TemplateRecord | BuiltinTemplate,
+  paths: ServerPaths,
+) {
+  const serverIni: TemplateValues = {};
   if (fs.existsSync(paths.iniPath)) {
     const content = fs.readFileSync(paths.iniPath, "utf-8");
     Object.assign(serverIni, readIniValues(content, Object.keys(template.serverIni || {})));
   }
 
-  const sandboxVars = {};
+  const sandboxVars: Record<string, TemplateValues> = {};
   if (fs.existsSync(paths.sandboxPath)) {
     const content = fs.readFileSync(paths.sandboxPath, "utf-8");
     for (const [section, values] of Object.entries(template.sandboxVars || {})) {
-      sandboxVars[section] = {};
+      const sectionValues: TemplateValues = {};
       for (const key of Object.keys(values || {})) {
-        sandboxVars[section][key] = readSandboxValue(content, section, key);
+        sectionValues[key] = readSandboxValue(content, section, key);
       }
+      sandboxVars[section] = sectionValues;
     }
   }
 
   return { serverIni, sandboxVars };
 }
 
-export async function previewTemplate(templateId, serverId) {
+export async function previewTemplate(templateId: string, serverId: string) {
   const template = await getTemplate(templateId);
   if (!template) {
     return { success: false, error: "Template not found", code: ErrorCode.SIM_TEMPLATE_NOT_FOUND };
   }
 
-  const server = await getServer(serverId);
+  const server = (await getServer(serverId)) as ServerProfile | null;
   if (!server) {
     return { success: false, error: "Server not found", code: ErrorCode.SIM_TEMPLATE_SERVER_NOT_FOUND };
   }
@@ -234,7 +341,11 @@ export async function previewTemplate(templateId, serverId) {
   return { success: true, diff: computeDiff(template, currentConfig) };
 }
 
-function prepareIniChange(template, paths, result) {
+function prepareIniChange(
+  template: TemplateRecord | BuiltinTemplate,
+  paths: ServerPaths,
+  result: ApplyResult,
+): TemplateFileChange | null {
   const exclusions = resolveIniExclusions(template);
   const requested = Object.fromEntries(
     Object.entries(template.serverIni || {}).filter(([key]) => !exclusions.includes(key)),
@@ -264,7 +375,11 @@ function prepareIniChange(template, paths, result) {
   };
 }
 
-function prepareSandboxChange(template, paths, result) {
+function prepareSandboxChange(
+  template: TemplateRecord | BuiltinTemplate,
+  paths: ServerPaths,
+  result: ApplyResult,
+): TemplateFileChange | null {
   if (Object.keys(template.sandboxVars || {}).length === 0) return null;
 
   if (!fs.existsSync(paths.sandboxPath)) {
@@ -287,12 +402,17 @@ function prepareSandboxChange(template, paths, result) {
   };
 }
 
-function applyTemplateLocked(template, paths, backup, options) {
-  const result = { success: true, ini: null, sandbox: null, backups: [] };
+function applyTemplateLocked(
+  template: TemplateRecord | BuiltinTemplate,
+  paths: ServerPaths,
+  backup: boolean,
+  options: ApplyOptions,
+): ApplyResult {
+  const result: ApplyResult = { success: true, ini: null, sandbox: null, backups: [] };
   const changes = [
     options.applyIni === false ? null : prepareIniChange(template, paths, result),
     options.applySandbox === false ? null : prepareSandboxChange(template, paths, result),
-  ].filter(Boolean);
+  ].filter((change): change is TemplateFileChange => change !== null);
 
   if (backup) {
     for (const change of changes) {
@@ -304,13 +424,17 @@ function applyTemplateLocked(template, paths, backup, options) {
   return result;
 }
 
-export async function applyTemplate(templateId, serverId, options = {}) {
+export async function applyTemplate(
+  templateId: string,
+  serverId: string,
+  options: ApplyOptions = {},
+) {
   const template = await getTemplate(templateId);
   if (!template) {
     return { success: false, error: "Template not found", code: ErrorCode.SIM_TEMPLATE_NOT_FOUND };
   }
 
-  const server = await getServer(serverId);
+  const server = (await getServer(serverId)) as ServerProfile | null;
   if (!server) {
     return { success: false, error: "Server not found", code: ErrorCode.SIM_TEMPLATE_SERVER_NOT_FOUND };
   }

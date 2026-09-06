@@ -15,7 +15,7 @@ import {
   importTemplate,
   previewTemplate,
   applyTemplate,
-} from "../services/templateService.js";
+} from "../services/templateService.ts";
 
 const log = createLogger("API:Templates");
 const router = express.Router();

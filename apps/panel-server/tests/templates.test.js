@@ -31,7 +31,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { getServer, getSetting, setSetting } = await import("../database/init.js");
-const templateService = await import("../services/templateService.js");
+const templateService = await import("../services/templateService.ts");
 
 const BUILTIN_IDS = [
   "vanilla-apocalypse",

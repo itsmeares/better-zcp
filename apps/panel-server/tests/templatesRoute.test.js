@@ -9,7 +9,7 @@ const unhideTemplate = vi.fn();
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 vi.mock("../database/init.js", () => ({ getActiveServer, getRoleByName: mockGetRoleByName }));
-vi.mock("../services/templateService.js", () => ({
+vi.mock("../services/templateService.ts", () => ({
   listTemplates: vi.fn(),
   listHiddenBuiltinTemplates,
   getTemplate: vi.fn(),
