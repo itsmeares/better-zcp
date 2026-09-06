@@ -15,7 +15,7 @@ vi.mock("../database/init.js", () => ({
   logServerEvent: async () => {},
 }));
 
-vi.mock("../services/backupRecords.js", () => ({
+vi.mock("../services/backupRecords.ts", () => ({
   addBackupRecord: async () => {},
   removeBackupRecord: async () => {},
   listBackupRecords: async () => [],

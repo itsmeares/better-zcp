@@ -37,7 +37,7 @@ import { ErrorCode } from "../utils/errorCodes.js";
 import { checkSandboxBraceBalance } from "./serverFiles.js";
 import panelBridgeService from "../services/panelBridge.js";
 import authService from "../services/auth.js";
-import { listBackupRecords } from "../services/backupRecords.js";
+import { listBackupRecords } from "../services/backupRecords.ts";
 import {
   getOidcSettings,
   getOidcEnvOverrides,

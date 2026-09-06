@@ -4,7 +4,7 @@ const listBackupRecords = vi.fn();
 
 vi.mock("../database/init.js", () => ({ getActiveServer: vi.fn() }));
 vi.mock("../services/auth.js", () => ({ requireRole: () => (_req, _res, next) => next() }));
-vi.mock("../services/backupRecords.js", () => ({ listBackupRecords }));
+vi.mock("../services/backupRecords.ts", () => ({ listBackupRecords }));
 
 const { default: router } = await import("../routes/backup.js");
 

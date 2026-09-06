@@ -6,7 +6,7 @@ const setSetting = vi.fn();
 vi.mock("../database/init.js", () => ({ getSetting, setSetting }));
 
 const { addBackupRecord, listBackupRecords, removeBackupRecord } =
-  await import("../services/backupRecords.js");
+  await import("../services/backupRecords.ts");
 
 beforeEach(() => {
   getSetting.mockReset();
