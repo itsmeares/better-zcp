@@ -2114,7 +2114,7 @@ async function start() {
     }
 
     try {
-      const { acquireLock } = await import("./utils/pidLock.js");
+      const { acquireLock } = await import("./utils/pidLock.ts");
       const { getDataPaths } = await import("./utils/paths.js");
       const { dataDir } = getDataPaths();
       const lockResult = acquireLock(dataDir);

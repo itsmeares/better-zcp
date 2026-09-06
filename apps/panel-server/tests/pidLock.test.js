@@ -19,7 +19,7 @@ describe("acquireLock / releaseLock", () => {
   beforeEach(async () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-pidlock-"));
     vi.resetModules();
-    ({ acquireLock, releaseLock } = await import("../utils/pidLock.js"));
+    ({ acquireLock, releaseLock } = await import("../utils/pidLock.ts"));
   });
 
   afterEach(() => {
@@ -28,9 +28,16 @@ describe("acquireLock / releaseLock", () => {
   });
 
   it("acquires the lock when no lock file exists yet, and writes this process's own pid into it", () => {
+    const writeSpy = vi.spyOn(fs, "writeFileSync");
     const result = acquireLock(dataDir);
     expect(result.acquired).toBe(true);
     expect(fs.readFileSync(result.lockPath, "utf8")).toBe(String(process.pid));
+    expect(writeSpy).toHaveBeenCalledWith(
+      result.lockPath,
+      String(process.pid),
+      expect.objectContaining({ flag: "wx" }),
+    );
+    writeSpy.mockRestore();
   });
 
   it("acquires the lock when the existing lock file names this SAME process's pid (re-entrant start)", () => {
