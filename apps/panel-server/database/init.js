@@ -240,6 +240,7 @@ let _lastWriteError = null;
 let _circuitFailCount = 0;
 let _backupTimer = null;
 let _shutdownRegistered = false;
+let _shutdownPromise = null;
 let createSqliteSnapshotStore;
 
 async function createSqliteAdapter() {
@@ -532,15 +533,29 @@ function registerShutdownHandlers() {
   if (_shutdownRegistered) return;
   _shutdownRegistered = true;
 
-  const shutdown = async (signal) => {
-    log.info(`${signal} received — flushing writes...`);
-    if (_backupTimer) {
-      clearInterval(_backupTimer);
-      _backupTimer = null;
+  const shutdown = (signal) => {
+    if (_shutdownPromise) {
+      if (signal === "beforeExit" && useSqliteDatabase && db) {
+        return _shutdownPromise.then(() => db?.adapter.close());
+      }
+      return _shutdownPromise;
     }
-    await flushForShutdown();
-    createBackup("shutdown");
-    if (useSqliteDatabase) db.adapter.close();
+
+    _shutdownPromise = (async () => {
+      log.info(`${signal} received — flushing writes...`);
+      if (_backupTimer) {
+        clearInterval(_backupTimer);
+        _backupTimer = null;
+      }
+      await flushForShutdown();
+      createBackup("shutdown");
+      // The main application's shutdown path closes SQLite after all of its
+      // own async cleanup has finished. Closing here would race that flush.
+      if (signal === "beforeExit" && useSqliteDatabase && db) {
+        db.adapter.close();
+      }
+    })();
+    return _shutdownPromise;
   };
 
   process.on("SIGINT", () => shutdown("SIGINT"));

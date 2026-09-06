@@ -197,6 +197,7 @@ async function gracefulShutdown(signal) {
     }
 
     await flushForShutdown();
+    closeDatabase();
 
     httpServer.close(() => {
       log.info("HTTP server closed");
