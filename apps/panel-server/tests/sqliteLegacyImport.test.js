@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSqliteSnapshotStore } from "../database/sqlite/snapshotStore.ts";
 import {
@@ -35,6 +36,39 @@ describe("SQLite snapshot store", () => {
     await store.write(data);
     expect(await store.read()).toEqual(data);
     store.close();
+    const database = new DatabaseSync(path.join(directory, "db.sqlite"));
+    const tables = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+      .all()
+      .map((row) => row.name);
+    expect(tables).toEqual(
+      expect.arrayContaining([
+        "panel_state",
+        "panel_records",
+        "servers",
+        "users",
+        "roles",
+        "settings",
+        "scheduled_tasks",
+      ]),
+    );
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM servers")
+        .get().count,
+    ).toBe(1);
+    expect(database.prepare("SELECT id FROM servers").get().id).toBe("srv-1");
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM settings")
+        .get().count,
+    ).toBe(1);
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM panel_state WHERE key = 'main'")
+        .get().count,
+    ).toBe(0);
+    database.close();
     expect(fs.statSync(path.join(directory, "db.sqlite")).mode & 0o777).toBe(0o600);
   });
 });
