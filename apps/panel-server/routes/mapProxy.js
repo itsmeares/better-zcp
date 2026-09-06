@@ -4,7 +4,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { createLogger } from "../utils/logger.ts";
-import { getDataPaths } from "../utils/paths.js";
+import { getDataPaths } from "../utils/paths.ts";
 import { getActiveServer } from "../database/init.js";
 import { listPersistedVehicles } from "../utils/vehiclesDb.js";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";

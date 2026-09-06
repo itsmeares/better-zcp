@@ -1,6 +1,6 @@
 import fs from "fs";
 import { execSync } from "child_process";
-import { getDataPaths } from "./paths.js";
+import { getDataPaths } from "./paths.ts";
 
 type OwnershipDiagnostic = {
   paths: string[];

@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 
-const { getDataPaths, setDataPaths } = await import("../utils/paths.js");
+const { getDataPaths, setDataPaths } = await import("../utils/paths.ts");
 
 function freshDir(label) {
   return fs.mkdtempSync(path.join(os.tmpdir(), `zcp-setpaths-${label}-`));

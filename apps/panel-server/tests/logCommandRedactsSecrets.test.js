@@ -3,7 +3,7 @@ import fs from "fs";
 
 
 const { logCommand, getCommandHistory, flushWrites } = await import("../database/init.js");
-const { getDataPaths } = await import("../utils/paths.js");
+const { getDataPaths } = await import("../utils/paths.ts");
 
 describe("logCommand redacts RCON secrets before persisting", () => {
   it("never writes an adduser password to db.json on disk", async () => {

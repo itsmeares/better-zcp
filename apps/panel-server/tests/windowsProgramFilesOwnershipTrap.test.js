@@ -7,7 +7,7 @@ const describeWindowsOnly = process.platform === "win32" ? describe : describe.s
 
 async function freshPathsModule() {
   vi.resetModules();
-  return import("../utils/paths.js");
+  return import("../utils/paths.ts");
 }
 
 function setExecPath(p) {

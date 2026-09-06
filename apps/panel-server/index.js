@@ -1636,7 +1636,7 @@ onLog((logEntry) => {
   io.to("logs").emit("log:entry", logEntry);
 });
 
-import { getDataPaths } from "./utils/paths.js";
+import { getDataPaths } from "./utils/paths.ts";
 
 async function autoExportPlayer(username) {
   try {
@@ -2116,7 +2116,7 @@ async function start() {
 
     try {
       const { acquireLock } = await import("./utils/pidLock.ts");
-      const { getDataPaths } = await import("./utils/paths.js");
+      const { getDataPaths } = await import("./utils/paths.ts");
       const { dataDir } = getDataPaths();
       const lockResult = acquireLock(dataDir);
       if (!lockResult.acquired) {

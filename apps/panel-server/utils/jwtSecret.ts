@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { getDataPaths } from "./paths.js";
+import { getDataPaths } from "./paths.ts";
 import { readSecret } from "./secrets.ts";
 import { checkAndExitIfOwnershipBlocked } from "./firstRunOwnershipCheck.ts";
 

@@ -5,7 +5,7 @@ import path from "path";
 const { getCircuitBreakerStatus, commitNow, getDb } = await import(
   "../database/init.js"
 );
-const { getDataPaths } = await import("../utils/paths.js");
+const { getDataPaths } = await import("../utils/paths.ts");
 
 const MAX_WRITE_RETRIES = 5;
 

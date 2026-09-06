@@ -18,7 +18,7 @@ describe.skipIf(isWindows)(
     beforeEach(async () => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-discord-token-lifecycle-"));
       vi.resetModules();
-      vi.doMock("../utils/paths.js", () => ({
+      vi.doMock("../utils/paths.ts", () => ({
         getDataPaths: () => ({ dataDir: tmpDir }),
       }));
     });
@@ -28,7 +28,7 @@ describe.skipIf(isWindows)(
         process.umask(originalUmask);
         originalUmask = undefined;
       }
-      vi.doUnmock("../utils/paths.js");
+      vi.doUnmock("../utils/paths.ts");
       fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 

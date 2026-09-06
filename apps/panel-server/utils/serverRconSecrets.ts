@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getDataPaths } from "./paths.js";
+import { getDataPaths } from "./paths.ts";
 import { readUiSecretFile, writeUiSecretFile } from "./uiSecretFile.ts";
 
 interface Logger {

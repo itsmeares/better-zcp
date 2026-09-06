@@ -17,7 +17,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 let tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-oidc-settings-seed-"));
-vi.mock("../utils/paths.js", () => ({
+vi.mock("../utils/paths.ts", () => ({
   getDataPaths: () => ({ dataDir: tmpDir, logsDir: tmpDir }),
 }));
 

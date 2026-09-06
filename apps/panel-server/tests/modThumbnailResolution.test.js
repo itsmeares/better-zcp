@@ -9,7 +9,7 @@ vi.mock("../database/init.js", () => ({
   setModPreviewUrl: vi.fn(),
 }));
 
-vi.mock("../utils/paths.js", () => ({
+vi.mock("../utils/paths.ts", () => ({
   getDataPaths: vi.fn(),
 }));
 
@@ -76,7 +76,7 @@ async function runThumbnailRoute(router, workshopId) {
 
 async function freshModule(tempRoot) {
   vi.resetModules();
-  const { getDataPaths } = await import("../utils/paths.js");
+  const { getDataPaths } = await import("../utils/paths.ts");
   getDataPaths.mockReturnValue({ dataDir: tempRoot, logsDir: tempRoot });
   return await import("../routes/mods.js");
 }

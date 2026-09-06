@@ -10,7 +10,7 @@ vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => null),
 }));
 
-vi.mock("../utils/paths.js", () => ({
+vi.mock("../utils/paths.ts", () => ({
   getDataPaths: vi.fn(() => ({
     dataDir: "/tmp/mods-conflict-scan-event-loop-test",
     logsDir: "/tmp/mods-conflict-scan-event-loop-test",

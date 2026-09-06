@@ -10,7 +10,7 @@ const {
   rehydratePanelBridgeSftpPassword,
   redactPanelBridgeSftpPasswordForWrite,
 } = await import("../database/init.js");
-const { getDataPaths } = await import("../utils/paths.js");
+const { getDataPaths } = await import("../utils/paths.ts");
 const { readUiSecretFile, writeUiSecretFile } = await import(
   "../utils/uiSecretFile.ts"
 );

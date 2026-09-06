@@ -5,8 +5,8 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 const setDataPaths = vi.fn();
 const getServers = vi.fn();
 
-vi.mock("../utils/paths.js", async () => {
-  const actual = await vi.importActual("../utils/paths.js");
+vi.mock("../utils/paths.ts", async () => {
+  const actual = await vi.importActual("../utils/paths.ts");
   return { ...actual, setDataPaths };
 });
 

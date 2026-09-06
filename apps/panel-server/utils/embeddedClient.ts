@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
-import { getDataPaths } from "./paths.js";
+import { getDataPaths } from "./paths.ts";
 
 declare const PANEL_VERSION: string;
 declare const PANEL_BUILD_SHA: string;

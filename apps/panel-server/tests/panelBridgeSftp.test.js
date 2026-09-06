@@ -8,7 +8,7 @@ const mockDataPaths = vi.hoisted(() => {
   const fn = () => ({ dataDir: base + '/data', logsDir: base + '/logs' });
   return { current: fn };
 });
-vi.mock('../utils/paths.js', () => ({ getDataPaths: (...args) => mockDataPaths.current(...args) }));
+vi.mock('../utils/paths.ts', () => ({ getDataPaths: (...args) => mockDataPaths.current(...args) }));
 
 const { getSftpErrorGuidance, classifySftpErrorCode, PanelBridgeSftpTransport, validateSftpBridgeConfig, getSftpCachePath } =
   await import('../services/panelBridgeSftp.js');
@@ -180,8 +180,8 @@ describe('getSftpCachePath: follows the configured data directory, not process.c
     expect(a).not.toBe(c);
   });
 
-  it('the real (unmocked) default paths.js resolution still works', async () => {
-    const real = await vi.importActual('../utils/paths.js');
+  it('the real (unmocked) default paths.ts resolution still works', async () => {
+    const real = await vi.importActual('../utils/paths.ts');
     mockDataPaths.current = real.getDataPaths;
 
     const cachePath = getSftpCachePath(valid);

@@ -26,7 +26,7 @@ import {
   addIgnoredModPair,
   removeIgnoredModPair,
 } from "../database/init.js";
-import { getDataPaths } from "../utils/paths.js";
+import { getDataPaths } from "../utils/paths.ts";
 import { getSteamApiKey } from "../services/steamApiKey.ts";
 import {
   sanitizeError,

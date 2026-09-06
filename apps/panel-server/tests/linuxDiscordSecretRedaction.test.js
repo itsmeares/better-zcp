@@ -67,13 +67,13 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-discord-redaction-"));
     vi.resetModules();
-    vi.doMock("../utils/paths.js", () => ({
+    vi.doMock("../utils/paths.ts", () => ({
       getDataPaths: () => ({ dataDir: tmpDir }),
     }));
   });
 
   afterEach(() => {
-    vi.doUnmock("../utils/paths.js");
+    vi.doUnmock("../utils/paths.ts");
     vi.doUnmock("../database/init.js");
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

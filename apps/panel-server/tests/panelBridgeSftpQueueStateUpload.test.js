@@ -7,7 +7,7 @@ const mockDataPaths = vi.hoisted(() => {
   const base = (process.env.TEMP || process.env.TMPDIR || '/tmp') + '/panel-bridge-sftp-queuestate-test-default';
   return { current: () => ({ dataDir: base + '/data', logsDir: base + '/logs' }) };
 });
-vi.mock('../utils/paths.js', () => ({ getDataPaths: (...args) => mockDataPaths.current(...args) }));
+vi.mock('../utils/paths.ts', () => ({ getDataPaths: (...args) => mockDataPaths.current(...args) }));
 
 const { PanelBridgeSftpTransport, validateSftpBridgeConfig } = await import('../services/panelBridgeSftp.js');
 

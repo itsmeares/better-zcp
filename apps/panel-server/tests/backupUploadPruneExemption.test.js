@@ -23,7 +23,7 @@ vi.mock("../services/backupRecords.ts", () => ({
 
 const initDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-backup-prune-seed-"));
 let tmpDir = initDir;
-vi.mock("../utils/paths.js", () => ({
+vi.mock("../utils/paths.ts", () => ({
   getDataPaths: () => ({ dataDir: tmpDir, logsDir: tmpDir }),
 }));
 

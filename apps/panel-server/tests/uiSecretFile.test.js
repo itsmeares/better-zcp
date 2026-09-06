@@ -5,7 +5,7 @@ import path from "path";
 
 let tmpDir;
 
-vi.mock("../utils/paths.js", () => ({
+vi.mock("../utils/paths.ts", () => ({
   getDataPaths: () => ({ dataDir: tmpDir }),
 }));
 

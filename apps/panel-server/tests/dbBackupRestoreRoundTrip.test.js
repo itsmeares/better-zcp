@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 
-const { getDataPaths } = await import("../utils/paths.js");
+const { getDataPaths } = await import("../utils/paths.ts");
 const { dataDir, dbPath } = getDataPaths();
 const backupDir = path.join(dataDir, "backups");
 

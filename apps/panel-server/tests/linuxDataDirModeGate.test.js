@@ -31,7 +31,7 @@ async function freshPathsModule(dataDir, logsDir) {
   );
   process.env.PANEL_PATHS_CONFIG_PATH = configPath;
   vi.resetModules();
-  return import("../utils/paths.js");
+  return import("../utils/paths.ts");
 }
 
 function modeBits(dir) {

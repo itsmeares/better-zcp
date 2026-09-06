@@ -9,7 +9,7 @@ vi.mock("../database/init.js", async () => {
   return { ...actual, getRoleByName: mockGetRoleByName };
 });
 
-const { getDataPaths } = await import("../utils/paths.js");
+const { getDataPaths } = await import("../utils/paths.ts");
 const { default: debugRouter, formatDbAccessibleMessage } = await import("../routes/debug.js");
 
 function createResponse() {

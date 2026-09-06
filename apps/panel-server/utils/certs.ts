@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";
 import { writeFileAtomic } from "./fileWriteQueue.ts";
-import { getDataPaths } from "../utils/paths.js";
+import { getDataPaths } from "../utils/paths.ts";
 
 const log = createLogger("HTTPS");
 

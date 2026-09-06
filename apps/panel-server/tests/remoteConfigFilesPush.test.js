@@ -7,7 +7,7 @@ const mockDataPaths = vi.hoisted(() => {
   const base = (process.env.TEMP || process.env.TMPDIR || '/tmp') + '/remote-config-push-test';
   return { dataDir: base + '/data', logsDir: base + '/logs' };
 });
-vi.mock('../utils/paths.js', () => ({ getDataPaths: () => mockDataPaths }));
+vi.mock('../utils/paths.ts', () => ({ getDataPaths: () => mockDataPaths }));
 
 const sftpInstances = vi.hoisted(() => ({ current: [] }));
 vi.mock('ssh2-sftp-client', () => {

@@ -11,7 +11,7 @@ vi.mock("../database/init.js", () => ({ getSetting, setSetting }));
 const mockLogsDir = {
   dir: fs.mkdtempSync(path.join(os.tmpdir(), "panel-update-logsdir-")),
 };
-vi.mock("../utils/paths.js", () => ({
+vi.mock("../utils/paths.ts", () => ({
   getDataPaths: () => ({ logsDir: mockLogsDir.dir, dataDir: mockLogsDir.dir }),
 }));
 

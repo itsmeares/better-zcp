@@ -5,7 +5,7 @@ import path from "path";
 const { getDb, commitNow, deleteServer } = await import(
   "../database/init.js"
 );
-const { getDataPaths } = await import("../utils/paths.js");
+const { getDataPaths } = await import("../utils/paths.ts");
 
 const { dataDir, dbPath } = getDataPaths();
 

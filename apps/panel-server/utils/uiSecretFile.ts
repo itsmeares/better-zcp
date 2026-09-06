@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getDataPaths } from "./paths.js";
+import { getDataPaths } from "./paths.ts";
 
 export interface UiSecretLogger {
   warn?: (message: string) => void;

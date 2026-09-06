@@ -12,7 +12,7 @@ import { createLogger } from "../utils/logger.ts";
 import { getDiskFree } from "../utils/diskSpace.ts";
 import { resolveLaunchMode } from "../services/serverManager.js";
 const log = createLogger("API:Debug");
-import { getDataPaths, setDataPaths } from "../utils/paths.js";
+import { getDataPaths, setDataPaths } from "../utils/paths.ts";
 import {
   getPerformanceHistory,
   recordPerformanceSnapshot,
@@ -1101,7 +1101,7 @@ function buildBundleReadme() {
     "1. `support-bundle-info.txt` — high-level summary, paths used.",
     "2. `system-info.json` — panel version, OS, RAM, disk free, whether the dedicated server process was running when this bundle was generated, and which UI language the browser reported when requesting this bundle (`uiLanguage`; \"not reported\" if the request didn't include it — never guessed).",
     "3. `panel-config.json` — sanitized settings + servers list (passwords/tokens masked). Also where backup schedule/retention and scheduled-task configuration live (`settings.backupSchedule`, `settings.backupMaxCount`, `scheduledTasks`).",
-    "4. `zomboid-paths.json` — what the panel thinks the data/install paths are, all probed candidates, and dir listings of `Saves/`, `Saves/Multiplayer/`, `Server/`, `Logs/`, etc.",
+    "4. `zomboid-paths.tson` — what the panel thinks the data/install paths are, all probed candidates, and dir listings of `Saves/`, `Saves/Multiplayer/`, `Server/`, `Logs/`, etc.",
     "5. `bridge-status.json` — PanelBridge connection, IPC file ages, and active transport.",
     "6. `sftp-diagnostics.json` — sanitized remote SFTP configuration and the last SFTP attempt, including failures after local fallback.",
     "7. `recent-events.json` — last server starts/stops, RCON commands, player join/leave, scheduled task runs (`scheduleHistory` is the last-result history for scheduler entries).",
@@ -1167,7 +1167,7 @@ async function buildBundleDiagnostics(activeServer, req, knownSecrets) {
   const results = await Promise.all([
     wrap("system-info.json", () => buildSystemInfo(activeServer, serverManager, uiLanguage)),
     wrap("panel-config.json", () => buildPanelConfig(activeServer)),
-    wrap("zomboid-paths.json", () => buildZomboidPaths(activeServer)),
+    wrap("zomboid-paths.tson", () => buildZomboidPaths(activeServer)),
     wrap("recent-events.json", () => buildRecentEvents()),
     wrap("performance-history.json", () => buildPerformanceHistory()),
     wrap("db-stats.json", () => buildDbStats()),

@@ -923,7 +923,7 @@ router.get('/stats/:playerName', requirePermission("players.view"), async (req, 
 
 import fs from 'fs';
 import path from 'path';
-import { getDataPaths } from '../utils/paths.js';
+import { getDataPaths } from '../utils/paths.ts';
 
 router.get('/exports', requirePermission("players.gm_tools"), async (req, res) => {
   try {

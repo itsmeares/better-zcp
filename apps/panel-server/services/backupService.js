@@ -269,7 +269,7 @@ export class BackupService {
       }
 
       if (!basePath) {
-        const { getDataPaths } = await import("../utils/paths.js");
+        const { getDataPaths } = await import("../utils/paths.ts");
         basePath = getDataPaths().dataDir;
       }
 

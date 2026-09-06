@@ -18,33 +18,71 @@ const configPath = process.env.PANEL_PATHS_CONFIG_PATH
   ? path.resolve(process.env.PANEL_PATHS_CONFIG_PATH)
   : path.join(baseDir, 'paths.config.json');
 
-let currentPaths = null;
+interface DataPaths {
+  dataDir: string;
+  logsDir: string;
+  /** The pre-SQLite database location, kept for explicit legacy import checks. */
+  dbPath: string;
+  configPath: string;
+}
 
-export function getDataPaths() {
+interface PathsConfig {
+  dataDir?: string;
+  logsDir?: string;
+}
+
+interface SetDataPathsInput {
+  dataDir?: string;
+  logsDir?: string;
+}
+
+interface SetDataPathsOptions {
+  extraBlockedPaths?: unknown;
+}
+
+type SetDataPathsResult =
+  | { success: false; error: string }
+  | { success: true; paths: DataPaths; filesMoved: { data: boolean; logs: boolean } };
+
+let currentPaths: DataPaths | null = null;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function configuredPath(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+export function getDataPaths(): DataPaths {
   if (currentPaths) {
     return currentPaths;
   }
 
-  let config = {};
+  let config: PathsConfig = {};
 
   if (fs.existsSync(configPath)) {
     try {
       const configData = fs.readFileSync(configPath, 'utf8');
-      config = JSON.parse(configData);
+      const parsed: unknown = JSON.parse(configData);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        config = parsed as PathsConfig;
+      }
     } catch (e) {
-      console.error(`[PATHS] Failed to load paths config (${configPath}): ${e.stack || e.message}`);
+      console.error(`[PATHS] Failed to load paths config (${configPath}): ${errorMessage(e)}`);
     }
   }
 
-  const dataDir = config.dataDir || defaultDataDir;
-  const logsDir = config.logsDir || defaultLogsDir;
+  const dataDir = configuredPath(config.dataDir, defaultDataDir);
+  const logsDir = configuredPath(config.logsDir, defaultLogsDir);
 
   for (const dir of [dataDir, logsDir]) {
     if (fs.existsSync(dir)) continue;
     try {
       fs.mkdirSync(dir, { recursive: true, ...(dir === dataDir ? { mode: 0o700 } : {}) });
     } catch (err) {
-      if (process.platform === 'win32' && (err.code === 'EPERM' || err.code === 'EACCES')) {
+      const error = err as NodeJS.ErrnoException;
+      if (process.platform === 'win32' && (error.code === 'EPERM' || error.code === 'EACCES')) {
         console.error(
           `\nRefusing to start: could not create "${dir}".\n\n` +
           `This almost always means the panel is installed somewhere your Windows account ` +
@@ -52,7 +90,7 @@ export function getDataPaths() {
           `Fix one of these, then restart:\n` +
           `  - Move the panel folder somewhere your account can write to (for example C:\\ZomboidPanel), or\n` +
           `  - Right-click Start.bat and choose "Run as administrator".\n\n` +
-          `Underlying error: ${err.message}\n`
+          `Underlying error: ${errorMessage(err)}\n`
         );
         process.exit(77);
       }
@@ -76,7 +114,7 @@ export function getDataPaths() {
   return currentPaths;
 }
 
-function copyDirSync(src, dest) {
+function copyDirSync(src: string, dest: string): boolean {
   if (!fs.existsSync(src)) return false;
 
   fs.mkdirSync(dest, { recursive: true });
@@ -97,12 +135,12 @@ function copyDirSync(src, dest) {
   return true;
 }
 
-function normalizeForCompare(p) {
+function normalizeForCompare(p: string): string {
   const resolved = path.resolve(p);
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-function pathsOverlap(a, b) {
+function pathsOverlap(a: string, b: string): boolean {
   const na = normalizeForCompare(a);
   const nb = normalizeForCompare(b);
   if (na === nb) return true;
@@ -113,11 +151,17 @@ function pathsOverlap(a, b) {
   return aContainsB || bContainsA;
 }
 
-export async function setDataPaths(newPaths, moveFiles = false, options = {}) {
+export async function setDataPaths(
+  newPaths: SetDataPathsInput,
+  moveFiles = false,
+  options: SetDataPathsOptions = {},
+): Promise<SetDataPathsResult> {
   const current = getDataPaths();
   const filesMoved = { data: false, logs: false };
   const extraBlockedPaths = Array.isArray(options.extraBlockedPaths)
-    ? options.extraBlockedPaths.filter((p) => typeof p === 'string' && p.trim())
+    ? options.extraBlockedPaths.filter(
+        (p): p is string => typeof p === 'string' && Boolean(p.trim()),
+      )
     : [];
 
   const BLOCKED_PREFIXES = process.platform === 'win32'
@@ -172,14 +216,15 @@ export async function setDataPaths(newPaths, moveFiles = false, options = {}) {
       fs.unlinkSync(testPath);
     }
   } catch (e) {
-    return { success: false, error: `Invalid path: ${e.message}` };
+    return { success: false, error: `Invalid path: ${errorMessage(e)}` };
   }
 
   if (moveFiles) {
     try {
-      if (newPaths.dataDir && newPaths.dataDir !== current.dataDir) {
+      const newDataDir = newPaths.dataDir;
+      if (newDataDir && newDataDir !== current.dataDir) {
         if (fs.existsSync(current.dataDir)) {
-          copyDirSync(current.dataDir, newPaths.dataDir);
+          copyDirSync(current.dataDir, newDataDir);
           filesMoved.data = true;
 
           const databaseFiles = ['db.sqlite', 'db.json'];
@@ -187,7 +232,7 @@ export async function setDataPaths(newPaths, moveFiles = false, options = {}) {
             fs.existsSync(path.join(current.dataDir, name)),
           );
           const destinationHasDatabase = databaseFiles.some((name) =>
-            fs.existsSync(path.join(newPaths.dataDir, name)),
+            fs.existsSync(path.join(newDataDir, name)),
           );
           if (sourceHasDatabase && !destinationHasDatabase) {
             return {
@@ -205,14 +250,14 @@ export async function setDataPaths(newPaths, moveFiles = false, options = {}) {
         }
       }
     } catch (e) {
-      return { success: false, error: `Failed to move files: ${e.message}` };
+      return { success: false, error: `Failed to move files: ${errorMessage(e)}` };
     }
   }
 
   try {
     fs.writeFileSync(configPath, JSON.stringify(updatedConfig, null, 2));
   } catch (e) {
-    return { success: false, error: `Failed to save config: ${e.message}` };
+    return { success: false, error: `Failed to save config: ${errorMessage(e)}` };
   }
 
   currentPaths = null;

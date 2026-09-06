@@ -17,7 +17,7 @@ import {
   getRoleByName,
 } from "../database/init.js";
 import { sanitizeError, sanitizeErrorParams, isMaskedSecret } from "../utils/sanitize.ts";
-import { getDataPaths } from "../utils/paths.js";
+import { getDataPaths } from "../utils/paths.ts";
 import { persistSandboxValues } from "./serverFiles.js";
 import { requirePermission } from "../services/permissions.js";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";

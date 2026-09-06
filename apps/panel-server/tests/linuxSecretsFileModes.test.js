@@ -8,7 +8,7 @@ const mockDataPaths = vi.hoisted(() => {
     (process.env.TEMP || process.env.TMPDIR || "/tmp") + "/linux-secrets-modes-test";
   return { dataDir: base + "/data", logsDir: base + "/logs" };
 });
-vi.mock("../utils/paths.js", () => ({ getDataPaths: () => mockDataPaths }));
+vi.mock("../utils/paths.ts", () => ({ getDataPaths: () => mockDataPaths }));
 
 vi.mock("ssh2-sftp-client", () => ({
   default: vi.fn().mockImplementation(function () {

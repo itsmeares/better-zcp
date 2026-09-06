@@ -3,7 +3,7 @@ import { JSONFile } from "lowdb/node";
 import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
-import { getDataPaths } from "../utils/paths.js";
+import { getDataPaths } from "../utils/paths.ts";
 import { checkAndExitIfOwnershipBlocked } from "../utils/firstRunOwnershipCheck.ts";
 import { createLogger } from "../utils/logger.ts";
 import { normalizeMemoryGb } from "../utils/memory.ts";

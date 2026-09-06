@@ -2,7 +2,7 @@ import winston from 'winston';
 import TransportStream from 'winston-transport';
 import path from 'path';
 import fs from 'fs';
-import { getDataPaths } from './paths.js';
+import { getDataPaths } from './paths.ts';
 
 const paths = getDataPaths();
 const logsDir = paths.logsDir;
