@@ -1,13 +1,10 @@
-import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useState, useCallback, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DirectionProvider } from '@radix-ui/react-direction'
 import type { Socket } from 'socket.io-client'
 import Layout from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import {
-  FeatureErrorBoundary,
-} from './components/FeatureErrorBoundary'
 import { Toaster } from './components/ui/toaster'
 import { SocketContext, ConnectionStatus, ConnectionStatusContext } from './contexts/SocketContext'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -168,24 +165,6 @@ const AUTH_BOOT_STEPS = [
   { code: 'OK  ', label: 'Standing by' },
 ]
 
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const Players = lazy(() => import('./pages/Players'))
-const Console = lazy(() => import('./pages/Console'))
-const Scheduler = lazy(() => import('./pages/Scheduler'))
-const Mods = lazy(() => import('./pages/Mods'))
-const ChunkCleaner = lazy(() => import('./pages/ChunkCleaner'))
-const Discord = lazy(() => import('./pages/Discord'))
-const Settings = lazy(() => import('./pages/Settings'))
-const ServerSetup = lazy(() => import('./pages/ServerSetup'))
-const Servers = lazy(() => import('./pages/Servers'))
-const ServerConfig = lazy(() => import('./pages/ServerConfig'))
-const Templates = lazy(() => import('./pages/Templates'))
-const Debug = lazy(() => import('./pages/Debug'))
-const ServerFinder = lazy(() => import('./pages/ServerFinder'))
-const Events = lazy(() => import('./pages/Events'))
-const Chat = lazy(() => import('./pages/Chat'))
-const Backups = lazy(() => import('./pages/Backups'))
-const WorldMap = lazy(() => import('./pages/WorldMap'))
 const Login = lazy(() => import('./pages/Login'))
 const Setup = lazy(() => import('./pages/Setup'))
 
@@ -347,7 +326,7 @@ function AuthScreenLoader() {
   )
 }
 
-function NotFoundRoute() {
+export function NotFoundRoute() {
   return (
     <div className="space-y-6 page-transition">
       <div className="rounded-xl border border-border/70 bg-card/70 p-6">
@@ -369,7 +348,6 @@ function NotFoundRoute() {
 }
 
 function AppContent() {
-  const { t } = useTranslation('shell')
   const demoMode = isDemoMode()
   const [socket, setSocket] = useState<Socket | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
@@ -528,33 +506,7 @@ function AppContent() {
         <Layout>
           <ScrollToTop />
           <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/" element={<FeatureErrorBoundary featureName={t('nav.dashboard')}><Dashboard /></FeatureErrorBoundary>} />
-              <Route path="/dashboard" element={<Navigate to="/" replace />} />
-              <Route path="/players" element={<FeatureErrorBoundary featureName={t('nav.items.onlinePlayers')}><Players /></FeatureErrorBoundary>} />
-              <Route path="/console" element={<FeatureErrorBoundary featureName={t('nav.items.serverConsole')}><Console /></FeatureErrorBoundary>} />
-              <Route path="/scheduler" element={<FeatureErrorBoundary featureName={t('nav.items.scheduledTasks')}><Scheduler /></FeatureErrorBoundary>} />
-              <Route path="/mods" element={<FeatureErrorBoundary featureName={t('nav.items.modManager')}><Mods /></FeatureErrorBoundary>} />
-              <Route path="/templates" element={<FeatureErrorBoundary featureName={t('nav.items.templates')}><Templates /></FeatureErrorBoundary>} />
-              <Route path="/chunks" element={<FeatureErrorBoundary featureName={t('nav.items.mapCleanup')}><ChunkCleaner /></FeatureErrorBoundary>} />
-              <Route path="/chunk-cleaner" element={<Navigate to="/chunks" replace />} />
-              <Route path="/discord" element={<FeatureErrorBoundary featureName={t('nav.items.discord')}><Discord /></FeatureErrorBoundary>} />
-              <Route path="/settings" element={<FeatureErrorBoundary featureName={t('nav.items.panelSettings')}><Settings /></FeatureErrorBoundary>} />
-              <Route path="/roles" element={<Navigate to="/settings?tab=roles" replace />} />
-              <Route path="/users" element={<Navigate to="/settings?tab=users" replace />} />
-              <Route path="/sso" element={<Navigate to="/settings?tab=sso" replace />} />
-              <Route path="/server-setup" element={<FeatureErrorBoundary featureName={t('nav.items.serverSetup')}><ServerSetup /></FeatureErrorBoundary>} />
-              <Route path="/servers" element={<FeatureErrorBoundary featureName={t('nav.items.myServers')}><Servers /></FeatureErrorBoundary>} />
-              <Route path="/server-config" element={<FeatureErrorBoundary featureName={t('nav.items.serverConfiguration')}><ServerConfig /></FeatureErrorBoundary>} />
-              <Route path="/serverconfig" element={<Navigate to="/server-config" replace />} />
-              <Route path="/server-finder" element={<FeatureErrorBoundary featureName={t('nav.items.browsePublic')}><ServerFinder /></FeatureErrorBoundary>} />
-              <Route path="/debug" element={<FeatureErrorBoundary featureName={t('nav.items.debugLogs')}><Debug /></FeatureErrorBoundary>} />
-              <Route path="/events" element={<FeatureErrorBoundary featureName={t('nav.items.eventsWeather')}><Events /></FeatureErrorBoundary>} />
-              <Route path="/world-map" element={<FeatureErrorBoundary featureName={t('nav.items.worldMap')}><WorldMap /></FeatureErrorBoundary>} />
-              <Route path="/chat" element={<FeatureErrorBoundary featureName={t('nav.items.inGameChat')}><Chat /></FeatureErrorBoundary>} />
-              <Route path="/backups" element={<FeatureErrorBoundary featureName={t('nav.items.worldBackups')}><Backups /></FeatureErrorBoundary>} />
-              <Route path="*" element={<NotFoundRoute />} />
-            </Routes>
+            <Outlet />
           </Suspense>
         </Layout>
         <Toaster />

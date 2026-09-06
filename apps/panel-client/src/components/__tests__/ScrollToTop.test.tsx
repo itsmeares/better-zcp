@@ -1,6 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, fireEvent, screen } from '@testing-library/react'
-import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { ScrollToTop } from '../ScrollToTop'
 
 function PageA() {
@@ -8,16 +8,15 @@ function PageA() {
   return <button onClick={() => navigate('/b')}>go to b</button>
 }
 
+function RoutedContent() {
+  const { pathname } = useLocation()
+  return <><ScrollToTop /><main>{pathname === '/a' ? <PageA /> : <div>page b</div>}</main></>
+}
+
 function App() {
   return (
     <MemoryRouter initialEntries={['/a']}>
-      <ScrollToTop />
-      <main>
-        <Routes>
-          <Route path="/a" element={<PageA />} />
-          <Route path="/b" element={<div>page b</div>} />
-        </Routes>
-      </main>
+      <RoutedContent />
     </MemoryRouter>
   )
 }
