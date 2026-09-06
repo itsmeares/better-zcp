@@ -6,7 +6,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 
 const writeFileAtomic = vi.fn();
-vi.mock("../utils/fileWriteQueue.js", async (importOriginal) => {
+vi.mock("../utils/fileWriteQueue.ts", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, writeFileAtomic };
 });

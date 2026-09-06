@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { createLogger } from "./logger.js";
-import { writeFileAtomic } from "./fileWriteQueue.js";
+import { writeFileAtomic } from "./fileWriteQueue.ts";
 
 const log = createLogger("Utils:ConfigBackup");
 

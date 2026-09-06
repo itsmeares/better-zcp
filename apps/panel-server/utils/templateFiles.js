@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { escapeRegExp } from "./regex.js";
-import { writeFileAtomic } from "./fileWriteQueue.js";
+import { writeFileAtomic } from "./fileWriteQueue.ts";
 
 function escapeLuaString(str) {
   return String(str).replace(/[\\"'\n\r\t]/g, (c) => {

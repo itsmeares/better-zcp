@@ -14,7 +14,7 @@ import {
   isMaskedSecret,
   maskSecretValue,
 } from "../utils/sanitize.ts";
-import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.js";
+import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
 import {
   getBackupPath,
   createBackup,

@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-const { writeFileAtomic } = await import("../utils/fileWriteQueue.js");
+const { writeFileAtomic } = await import("../utils/fileWriteQueue.ts");
 
 function eperm() {
   const err = new Error("EPERM: operation not permitted, rename");

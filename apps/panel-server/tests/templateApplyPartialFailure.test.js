@@ -13,7 +13,7 @@ const withFileLock = vi.fn(async (filePath, fn) => {
 });
 const writeFileAtomic = vi.fn();
 
-vi.mock("../utils/fileWriteQueue.js", () => ({ withFileLock, writeFileAtomic }));
+vi.mock("../utils/fileWriteQueue.ts", () => ({ withFileLock, writeFileAtomic }));
 
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", () => ({

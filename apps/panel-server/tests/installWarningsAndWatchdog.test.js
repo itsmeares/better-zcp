@@ -22,7 +22,7 @@ const { writeFileAtomicMock, realHolder } = vi.hoisted(() => ({
   writeFileAtomicMock: vi.fn(),
   realHolder: { fn: null },
 }));
-vi.mock("../utils/fileWriteQueue.js", async (importOriginal) => {
+vi.mock("../utils/fileWriteQueue.ts", async (importOriginal) => {
   const actual = await importOriginal();
   realHolder.fn = actual.writeFileAtomic;
   return {

@@ -52,7 +52,7 @@ import {
 } from "../utils/browserCookies.js";
 import { requirePermission } from "../services/permissions.js";
 import { ErrorCode } from "../utils/errorCodes.js";
-import { withFileLock } from "../utils/fileWriteQueue.js";
+import { withFileLock } from "../utils/fileWriteQueue.ts";
 import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.js";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";

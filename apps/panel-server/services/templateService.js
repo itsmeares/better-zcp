@@ -26,7 +26,7 @@ import {
   backupFile,
   writeFilesTransaction,
 } from "../utils/templateFiles.js";
-import { withFileLock } from "../utils/fileWriteQueue.js";
+import { withFileLock } from "../utils/fileWriteQueue.ts";
 
 const log = createLogger("TemplateService");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
