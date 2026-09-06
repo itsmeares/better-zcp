@@ -11,7 +11,7 @@ import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
 } from "./lifecycleCoordinator.ts";
-import { createBackupIfChanged } from "../utils/configBackup.js";
+import { createBackupIfChanged } from "../utils/configBackup.ts";
 import {
   candidateIniPaths,
   refreshLaunchTargetBeforeStart,

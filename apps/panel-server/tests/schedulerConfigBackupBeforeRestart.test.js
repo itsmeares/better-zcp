@@ -14,13 +14,13 @@ vi.mock("../database/init.js", () => ({
   getServer: (...args) => getServer(...args),
 }));
 
-vi.mock("../utils/configBackup.js", async (importOriginal) => {
+vi.mock("../utils/configBackup.ts", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, createBackupIfChanged: vi.fn(actual.createBackupIfChanged) };
 });
 
 const { Scheduler } = await import("../services/scheduler.js");
-const { createBackupIfChanged } = await import("../utils/configBackup.js");
+const { createBackupIfChanged } = await import("../utils/configBackup.ts");
 
 describe("Scheduler._backupConfigBeforeRestart()", () => {
   let root;

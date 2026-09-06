@@ -20,7 +20,7 @@ import {
   createBackup,
   backupWarningFor,
   writeIniWithBackup,
-} from "../utils/configBackup.js";
+} from "../utils/configBackup.ts";
 import { escapeRegExp } from "../utils/regex.ts";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";

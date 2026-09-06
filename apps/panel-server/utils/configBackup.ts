@@ -5,7 +5,19 @@ import { writeFileAtomic } from "./fileWriteQueue.ts";
 
 const log = createLogger("Utils:ConfigBackup");
 
-async function pathExists(candidatePath) {
+export interface BackupResult {
+  backedUp: boolean;
+  reason?: "no-source" | "failed" | "unchanged";
+  name?: string;
+  error?: string;
+}
+
+interface ParsedBackupName {
+  timestampKey: string;
+  suffix: number;
+}
+
+async function pathExists(candidatePath: string): Promise<boolean> {
   try {
     await fs.promises.access(candidatePath);
     return true;
@@ -14,13 +26,13 @@ async function pathExists(candidatePath) {
   }
 }
 
-export async function getBackupPath(configPath) {
+export async function getBackupPath(configPath: string): Promise<string> {
   return path.join(configPath, "backups");
 }
 
 const COLLISION_SUFFIX_RE = /^(.*Z)-(\d+)$/;
 
-function parseBackupName(filename, name) {
+function parseBackupName(filename: string, name: string): ParsedBackupName {
   const rest = name.slice(filename.length + 1, name.length - ".bak".length);
   const match = rest.match(COLLISION_SUFFIX_RE);
   return match
@@ -28,15 +40,18 @@ function parseBackupName(filename, name) {
     : { timestampKey: rest, suffix: 1 };
 }
 
-async function listBackupsFor(backupDir, filename) {
-  let files;
+async function listBackupsFor(
+  backupDir: string,
+  filename: string,
+): Promise<string[]> {
+  let files: string[];
   try {
     files = await fs.promises.readdir(backupDir);
   } catch {
     return [];
   }
   const candidateNames = files.filter(
-    (f) => f.startsWith(filename + ".") && f.endsWith(".bak"),
+    (file) => file.startsWith(filename + ".") && file.endsWith(".bak"),
   );
   return candidateNames
     .map((name) => ({ name, ...parseBackupName(filename, name) }))
@@ -46,17 +61,24 @@ async function listBackupsFor(backupDir, filename) {
       }
       return b.suffix - a.suffix;
     })
-    .map((c) => c.name);
+    .map((candidate) => candidate.name);
 }
 
-export async function createBackup(configPath, filename) {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export async function createBackup(
+  configPath: string,
+  filename: string,
+): Promise<BackupResult> {
   const backupDir = await getBackupPath(configPath);
   const filePath = path.join(configPath, filename);
 
   try {
     await fs.promises.access(filePath);
-  } catch (e) {
-    log.debug(`Config backup source not found: ${filePath} — ${e.message}`);
+  } catch (error: unknown) {
+    log.debug(`Config backup source not found: ${filePath} — ${errorMessage(error)}`);
     return { backedUp: false, reason: "no-source" };
   }
 
@@ -83,28 +105,34 @@ export async function createBackup(configPath, filename) {
           filesToDelete.map((old) =>
             fs.promises
               .unlink(path.join(backupDir, old))
-              .catch((e) =>
-                log.warn(`Failed to delete old backup ${old}: ${e.message}`),
+              .catch((error: unknown) =>
+                log.warn(
+                  `Failed to delete old backup ${old}: ${errorMessage(error)}`,
+                ),
               ),
           ),
         );
       }
-    } catch (cleanupError) {
+    } catch (cleanupError: unknown) {
       log.warn(
-        `Backup cleanup failed (new backup ${backupName} is still safe): ${cleanupError.message}`,
+        `Backup cleanup failed (new backup ${backupName} is still safe): ${errorMessage(cleanupError)}`,
       );
     }
 
     return { backedUp: true, name: backupName };
-  } catch (error) {
-    log.error(`Backup creation failed: ${error.message}`);
-    return { backedUp: false, reason: "failed", error: error.message };
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    log.error(`Backup creation failed: ${message}`);
+    return { backedUp: false, reason: "failed", error: message };
   }
 }
 
-export async function createBackupIfChanged(configPath, filename) {
+export async function createBackupIfChanged(
+  configPath: string,
+  filename: string,
+): Promise<BackupResult> {
   const filePath = path.join(configPath, filename);
-  let liveContent;
+  let liveContent: Buffer;
   try {
     liveContent = await fs.promises.readFile(filePath);
   } catch {
@@ -121,9 +149,9 @@ export async function createBackupIfChanged(configPath, filename) {
       if (Buffer.compare(liveContent, mostRecent) === 0) {
         return { backedUp: false, reason: "unchanged" };
       }
-    } catch (e) {
+    } catch (error: unknown) {
       log.debug(
-        `Could not compare against most recent backup of ${filename}, backing up anyway: ${e.message}`,
+        `Could not compare against most recent backup of ${filename}, backing up anyway: ${errorMessage(error)}`,
       );
     }
   }
@@ -131,12 +159,17 @@ export async function createBackupIfChanged(configPath, filename) {
   return createBackup(configPath, filename);
 }
 
-export function backupWarningFor(backup) {
+export function backupWarningFor(
+  backup: BackupResult | null | undefined,
+): string | null {
   if (!backup || backup.backedUp || backup.reason === "no-source") return null;
   return `Could not back up the previous version before saving: ${backup.error}. Your change was saved, but there is no safety copy of what was there before.`;
 }
 
-export async function writeIniWithBackup(iniPath, content) {
+export async function writeIniWithBackup(
+  iniPath: string,
+  content: string | NodeJS.ArrayBufferView,
+): Promise<BackupResult> {
   const configPath = path.dirname(iniPath);
   const filename = path.basename(iniPath);
   const backup = await createBackup(configPath, filename);

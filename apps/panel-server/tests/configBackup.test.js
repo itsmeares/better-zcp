@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { createBackup, createBackupIfChanged } from "../utils/configBackup.js";
+import { createBackup, createBackupIfChanged } from "../utils/configBackup.ts";
 
 describe("createBackup() -- backup filename collisions", () => {
   let root;

@@ -53,7 +53,7 @@ import {
 import { requirePermission } from "../services/permissions.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 import { withFileLock } from "../utils/fileWriteQueue.ts";
-import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.js";
+import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.ts";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 
