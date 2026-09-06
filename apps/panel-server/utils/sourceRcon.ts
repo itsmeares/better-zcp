@@ -1,3 +1,4 @@
+import dns from "dns/promises";
 import net from "net";
 
 const TYPE_AUTH = 3;
@@ -37,6 +38,13 @@ let nextRequestId = 1;
 function allocRequestId(): number {
   nextRequestId = (nextRequestId % 0x7fffffff) + 1;
   return nextRequestId;
+}
+
+async function resolveHostAddress(host: string): Promise<string> {
+  if (net.isIP(host)) return host;
+  const { address } = await dns.lookup(host, { verbatim: true });
+  if (!net.isIP(address)) throw new Error("RCON host did not resolve to an IP address");
+  return address;
 }
 
 function encodePacket(
@@ -148,39 +156,42 @@ export class SourceRconClient {
         }
       });
 
-      // RCON targets are operator-configured; request-provided overrides are gated by servers.manage in routes/rcon.js.
-      // codeql[js/request-forgery]
-      socket.connect(this.port, this.host, () => {
-        clearTimeout(connectTimer);
-        socket.setNoDelay(true);
+      void resolveHostAddress(this.host)
+        .then((address) => {
+          if (settled) return;
+          socket.connect(this.port, address, () => {
+            clearTimeout(connectTimer);
+            socket.setNoDelay(true);
 
-        socket.on("data", (chunk: Buffer) => this._onData(chunk));
-        socket.on("close", () => this._onClose());
-        socket.on("error", (error: Error) => this._onSocketError(error));
+            socket.on("data", (chunk: Buffer) => this._onData(chunk));
+            socket.on("close", () => this._onClose());
+            socket.on("error", (error: Error) => this._onSocketError(error));
 
-        const authId = allocRequestId();
-        const authTimer = setTimeout(() => {
-          if (this._authPending) {
-            this._authPending = null;
-            fail(new Error("RCON authentication timed out"));
-          }
-        }, this.timeout);
+            const authId = allocRequestId();
+            const authTimer = setTimeout(() => {
+              if (this._authPending) {
+                this._authPending = null;
+                fail(new Error("RCON authentication timed out"));
+              }
+            }, this.timeout);
 
-        this._authPending = {
-          id: authId,
-          resolve: () => {
-            settled = true;
-            clearTimeout(authTimer);
-            resolve();
-          },
-          reject: (error: Error) => {
-            clearTimeout(authTimer);
-            fail(error);
-          },
-        };
+            this._authPending = {
+              id: authId,
+              resolve: () => {
+                settled = true;
+                clearTimeout(authTimer);
+                resolve();
+              },
+              reject: (error: Error) => {
+                clearTimeout(authTimer);
+                fail(error);
+              },
+            };
 
-        socket.write(encodePacket(authId, TYPE_AUTH, password));
-      });
+            socket.write(encodePacket(authId, TYPE_AUTH, password));
+          });
+        })
+        .catch(fail);
     });
   }
 
