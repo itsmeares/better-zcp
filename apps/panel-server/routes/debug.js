@@ -67,7 +67,7 @@ import {
   redactKnownSecrets,
 } from "../utils/discordMessageRedaction.js";
 import { getSteamApiKey } from "../services/steamApiKey.ts";
-import { hasActiveSteamOperation } from "../services/activeSteamOperations.js";
+import { hasActiveSteamOperation } from "../services/activeSteamOperations.ts";
 import { Transform } from "stream";
 
 const __filename = fileURLToPath(import.meta.url);

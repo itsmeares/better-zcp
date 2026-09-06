@@ -24,7 +24,7 @@ import {
   clearActiveSteamOperation,
   hasActiveSteamOperation,
   STEAM_OPERATION_IDLE_TIMEOUT_MS,
-} from "../services/activeSteamOperations.js";
+} from "../services/activeSteamOperations.ts";
 import { normalizeMemoryGb } from "../utils/memory.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.js";
 import { requirePermission } from "../services/permissions.js";

@@ -21,7 +21,7 @@ const { UpdateChecker } = await import("../services/updateChecker.js");
 const {
   getActiveSteamOperations,
   clearActiveSteamOperation,
-} = await import("../services/activeSteamOperations.js");
+} = await import("../services/activeSteamOperations.ts");
 const dbModule = await import("../database/init.js");
 
 const tempDirs = [];

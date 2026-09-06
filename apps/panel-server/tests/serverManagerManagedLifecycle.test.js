@@ -18,7 +18,7 @@ const { ServerManager } = await import("../services/serverManager.js");
 const {
   getActiveSteamOperations,
   clearActiveSteamOperation,
-} = await import("../services/activeSteamOperations.js");
+} = await import("../services/activeSteamOperations.ts");
 
 const profile = {
   id: "managed-1",

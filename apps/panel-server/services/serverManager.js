@@ -21,7 +21,7 @@ import {
   createLinuxServiceLifecycle,
   isManagedLifecycleProvider,
 } from "./linuxServiceLifecycle.js";
-import { hasActiveSteamOperation } from "./activeSteamOperations.js";
+import { hasActiveSteamOperation } from "./activeSteamOperations.ts";
 
 const isWindows = process.platform === "win32";
 const PUBLIC_IP_CACHE_TTL_MS = 6 * 60 * 60 * 1000;

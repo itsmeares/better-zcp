@@ -4,7 +4,7 @@ import { ServerManager } from "../services/serverManager.js";
 import {
   getActiveSteamOperations,
   clearActiveSteamOperation,
-} from "../services/activeSteamOperations.js";
+} from "../services/activeSteamOperations.ts";
 
 
 const server = {

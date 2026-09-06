@@ -10,7 +10,7 @@ import {
   hasActiveSteamOperation,
   getActiveSteamOperations,
   clearActiveSteamOperation,
-} from "./activeSteamOperations.js";
+} from "./activeSteamOperations.ts";
 import { acquireLifecycleLock } from "./lifecycleCoordinator.ts";
 
 export function parseAutoUpdateWarningMinutes(value) {

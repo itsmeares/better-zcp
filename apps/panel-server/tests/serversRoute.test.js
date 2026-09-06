@@ -42,7 +42,7 @@ const {
 } = await import(
   "../routes/server.js"
 );
-const { isSteamOperationIdle } = await import("../services/activeSteamOperations.js");
+const { isSteamOperationIdle } = await import("../services/activeSteamOperations.ts");
 
 function createResponse() {
   const response = {
