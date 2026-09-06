@@ -87,7 +87,7 @@ import {
   getEmbeddedClientDistPath,
   readClientDistMetadata,
   resolveClientDistPath,
-} from "./utils/embeddedClient.js";
+} from "./utils/embeddedClient.ts";
 import { resolveObservedServerRunning } from "./utils/serverStatus.ts";
 import { discoverMounts } from "./services/mountDiscovery.js";
 import { shouldAutoOpenBrowser } from "./utils/browserLaunch.ts";

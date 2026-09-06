@@ -1,13 +1,37 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
-import { gunzipSync } from "zlib";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { getDataPaths } from "./paths.js";
 
-let decodedBundle;
-let materializedPath;
+declare const PANEL_VERSION: string;
+declare const PANEL_BUILD_SHA: string;
+declare const PANEL_API_CONTRACT_VERSION: number;
+declare const PANEL_CLIENT_DIST_B64: string;
 
-function readCompileTimeMetadata() {
+declare global {
+  namespace NodeJS {
+    interface Process {
+      pkg?: unknown;
+    }
+  }
+}
+
+export interface BuildMetadata {
+  panelVersion: string;
+  buildSha: string;
+  apiContractVersion: number;
+}
+
+interface EmbeddedClientBundle {
+  schemaVersion: 1;
+  files: Record<string, string>;
+}
+
+let decodedBundle: EmbeddedClientBundle | null | undefined;
+let materializedPath: string | null | undefined;
+
+function readCompileTimeMetadata(): BuildMetadata | null {
   const panelVersion =
     typeof PANEL_VERSION !== "undefined" ? String(PANEL_VERSION) : "";
   const buildSha =
@@ -16,32 +40,58 @@ function readCompileTimeMetadata() {
     typeof PANEL_API_CONTRACT_VERSION !== "undefined"
       ? Number(PANEL_API_CONTRACT_VERSION)
       : null;
-  if (!panelVersion || !buildSha || !Number.isInteger(apiContractVersion)) {
+  if (
+    !panelVersion ||
+    !buildSha ||
+    typeof apiContractVersion !== "number" ||
+    !Number.isInteger(apiContractVersion)
+  ) {
     return null;
   }
   return { panelVersion, buildSha, apiContractVersion };
 }
 
-function decodeBundle(encoded) {
-  if (!encoded) return null;
-  const bundle = JSON.parse(
-    gunzipSync(Buffer.from(encoded, "base64")).toString("utf8"),
-  );
+function metadataFromUnknown(value: unknown): BuildMetadata | null {
+  if (!value || typeof value !== "object") return null;
+  const metadata = value as Record<string, unknown>;
   if (
-    !bundle ||
-    bundle.schemaVersion !== 1 ||
-    !bundle.files ||
-    typeof bundle.files !== "object" ||
-    Array.isArray(bundle.files) ||
-    typeof bundle.files["index.html"] !== "string" ||
-    typeof bundle.files["build-info.json"] !== "string"
+    typeof metadata.panelVersion !== "string" ||
+    typeof metadata.buildSha !== "string" ||
+    !Number.isInteger(Number(metadata.apiContractVersion))
+  ) {
+    return null;
+  }
+  return {
+    panelVersion: metadata.panelVersion,
+    buildSha: metadata.buildSha,
+    apiContractVersion: Number(metadata.apiContractVersion),
+  };
+}
+
+function decodeBundle(encoded: string): EmbeddedClientBundle | null {
+  if (!encoded) return null;
+  const parsed = JSON.parse(
+    gunzipSync(Buffer.from(encoded, "base64")).toString("utf8"),
+  ) as { schemaVersion?: unknown; files?: unknown };
+  const files = parsed?.files;
+  if (
+    !parsed ||
+    parsed.schemaVersion !== 1 ||
+    !files ||
+    typeof files !== "object" ||
+    Array.isArray(files) ||
+    typeof (files as Record<string, unknown>)["index.html"] !== "string" ||
+    typeof (files as Record<string, unknown>)["build-info.json"] !== "string"
   ) {
     throw new Error("Embedded client bundle is invalid");
   }
-  return bundle;
+  return {
+    schemaVersion: 1,
+    files: files as Record<string, string>,
+  };
 }
 
-function getEmbeddedBundle() {
+function getEmbeddedBundle(): EmbeddedClientBundle | null {
   if (decodedBundle !== undefined) return decodedBundle;
   try {
     const encoded =
@@ -49,39 +99,35 @@ function getEmbeddedBundle() {
         ? PANEL_CLIENT_DIST_B64
         : "";
     decodedBundle = decodeBundle(encoded);
-  } catch (error) {
-    throw new Error(`Could not decode embedded client bundle: ${error.message}`, {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not decode embedded client bundle: ${message}`, {
       cause: error,
     });
   }
   return decodedBundle;
 }
 
-function readBundleMetadata(bundle) {
+function readBundleMetadata(bundle: EmbeddedClientBundle): BuildMetadata {
   try {
-    const metadata = JSON.parse(
+    const parsed = JSON.parse(
       Buffer.from(bundle.files["build-info.json"], "base64").toString("utf8"),
     );
-    if (
-      typeof metadata?.panelVersion !== "string" ||
-      typeof metadata?.buildSha !== "string" ||
-      !Number.isInteger(Number(metadata?.apiContractVersion))
-    ) {
-      throw new Error("build-info.json is invalid");
-    }
-    return {
-      panelVersion: metadata.panelVersion,
-      buildSha: metadata.buildSha,
-      apiContractVersion: Number(metadata.apiContractVersion),
-    };
-  } catch (error) {
-    throw new Error(`Embedded client metadata is invalid: ${error.message}`, {
+    const metadata = metadataFromUnknown(parsed);
+    if (!metadata) throw new Error("build-info.json is invalid");
+    return metadata;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Embedded client metadata is invalid: ${message}`, {
       cause: error,
     });
   }
 }
 
-function metadataMatches(actual, expected) {
+function metadataMatches(
+  actual: BuildMetadata | null,
+  expected: BuildMetadata | null,
+): boolean {
   if (!actual) return false;
   return (
     !expected ||
@@ -91,48 +137,42 @@ function metadataMatches(actual, expected) {
   );
 }
 
-export function readClientDistMetadata(clientDistPath) {
+export function readClientDistMetadata(
+  clientDistPath: string,
+): BuildMetadata | null {
   try {
-    const metadata = JSON.parse(
+    const parsed = JSON.parse(
       fs.readFileSync(path.join(clientDistPath, "build-info.json"), "utf8"),
     );
-    if (
-      typeof metadata?.panelVersion !== "string" ||
-      typeof metadata?.buildSha !== "string" ||
-      !Number.isInteger(Number(metadata?.apiContractVersion))
-    ) {
-      return null;
-    }
-    return {
-      panelVersion: metadata.panelVersion,
-      buildSha: metadata.buildSha,
-      apiContractVersion: Number(metadata.apiContractVersion),
-    };
+    return metadataFromUnknown(parsed);
   } catch {
     return null;
   }
 }
 
-export function clientDistMatchesMetadata(clientDistPath, expectedMetadata) {
+export function clientDistMatchesMetadata(
+  clientDistPath: string,
+  expectedMetadata: BuildMetadata | null,
+): boolean {
   const actualMetadata = readClientDistMetadata(clientDistPath);
   return Boolean(actualMetadata && metadataMatches(actualMetadata, expectedMetadata));
 }
 
-function safeBundleName(metadata) {
+function safeBundleName(metadata: BuildMetadata): string {
   const bundleName = `${metadata.panelVersion}-${metadata.buildSha}`
     .replace(/[^a-zA-Z0-9._-]/g, "-")
     .slice(0, 100);
   return `zomboid-panel-client-${bundleName}`;
 }
 
-function defaultMaterializationRoot() {
+function defaultMaterializationRoot(): string {
   if (typeof process.pkg !== "undefined") {
     return path.join(getDataPaths().dataDir, ".embedded-client");
   }
   return os.tmpdir();
 }
 
-function resolveBundleFile(tempPath, relativePath) {
+function resolveBundleFile(tempPath: string, relativePath: string): string {
   const normalized = String(relativePath).replace(/\\/g, "/");
   if (
     !normalized ||
@@ -150,7 +190,11 @@ function resolveBundleFile(tempPath, relativePath) {
   return destination;
 }
 
-function usableMaterializedBundle(targetPath, bundle, metadata) {
+function usableMaterializedBundle(
+  targetPath: string,
+  bundle: EmbeddedClientBundle,
+  metadata: BuildMetadata,
+): boolean {
   if (
     !fs.existsSync(path.join(targetPath, ".ready")) ||
     !fs.existsSync(path.join(targetPath, "index.html"))
@@ -171,8 +215,8 @@ function usableMaterializedBundle(targetPath, bundle, metadata) {
   }
 }
 
-function removeStaleMaterializedBundles(rootDir, keepPath) {
-  let entries;
+function removeStaleMaterializedBundles(rootDir: string, keepPath: string): void {
+  let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(rootDir, { withFileTypes: true });
   } catch {
@@ -206,10 +250,10 @@ function removeStaleMaterializedBundles(rootDir, keepPath) {
 }
 
 export function materializeEmbeddedClientBundle(
-  bundle,
-  expectedMetadata = null,
-  rootDir = defaultMaterializationRoot(),
-) {
+  bundle: EmbeddedClientBundle,
+  expectedMetadata: BuildMetadata | null = null,
+  rootDir: string = defaultMaterializationRoot(),
+): string {
   const actualMetadata = readBundleMetadata(bundle);
   if (!metadataMatches(actualMetadata, expectedMetadata)) {
     throw new Error("Embedded client metadata does not match the executable");
@@ -251,7 +295,7 @@ export function materializeEmbeddedClientBundle(
   return temporaryPath;
 }
 
-export function getEmbeddedClientDistPath() {
+export function getEmbeddedClientDistPath(): string | null {
   const bundle = getEmbeddedBundle();
   if (!bundle) return null;
 
@@ -260,7 +304,10 @@ export function getEmbeddedClientDistPath() {
   if (!metadataMatches(actualMetadata, expectedMetadata)) {
     throw new Error("Embedded client metadata does not match the executable");
   }
-  if (materializedPath && usableMaterializedBundle(materializedPath, bundle, actualMetadata)) {
+  if (
+    materializedPath &&
+    usableMaterializedBundle(materializedPath, bundle, actualMetadata)
+  ) {
     return materializedPath;
   }
   materializedPath = materializeEmbeddedClientBundle(
@@ -275,6 +322,10 @@ export function resolveClientDistPath({
   packaged,
   embeddedPath,
   externalPath,
-}) {
+}: {
+  packaged: boolean;
+  embeddedPath: string | null;
+  externalPath: string;
+}): string {
   return packaged && embeddedPath ? embeddedPath : externalPath;
 }

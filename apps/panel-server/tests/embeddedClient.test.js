@@ -5,7 +5,7 @@ import path from "path";
 import {
   materializeEmbeddedClientBundle,
   resolveClientDistPath,
-} from "../utils/embeddedClient.js";
+} from "../utils/embeddedClient.ts";
 
 let rootDir;
 
