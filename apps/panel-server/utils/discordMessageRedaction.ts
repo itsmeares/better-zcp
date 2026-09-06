@@ -1,22 +1,31 @@
-
+import fs from "node:fs";
+import path from "node:path";
 import { getServers, getSetting } from "../database/init.js";
-import { readUiSecretFile } from "./uiSecretFile.ts";
 import { readIniValues } from "./templateFiles.js";
-import fs from "fs";
-import path from "path";
+import { readUiSecretFile } from "./uiSecretFile.ts";
 
 const REDACTED_PLACEHOLDER = "[REDACTED]";
 
-function readServerJoinPassword(server) {
+interface ServerLike {
+  serverName?: unknown;
+  serverConfigPath?: unknown;
+  zomboidDataPath?: unknown;
+  rconPassword?: unknown;
+}
+
+function readServerJoinPassword(server: ServerLike | null | undefined): string | null {
   try {
-    const serverName = server?.serverName;
+    const serverName =
+      typeof server?.serverName === "string" ? server.serverName : null;
     const configPath =
-      server?.serverConfigPath ||
-      (server?.zomboidDataPath ? path.join(server.zomboidDataPath, "Server") : null);
+      typeof server?.serverConfigPath === "string"
+        ? server.serverConfigPath
+        : typeof server?.zomboidDataPath === "string"
+          ? path.join(server.zomboidDataPath, "Server")
+          : null;
     if (
       !configPath ||
       !serverName ||
-      typeof serverName !== "string" ||
       path.basename(serverName) !== serverName ||
       serverName.includes("..")
     ) {
@@ -25,18 +34,19 @@ function readServerJoinPassword(server) {
     const iniPath = path.join(configPath, `${serverName}.ini`);
     if (!fs.existsSync(iniPath)) return null;
     const content = fs.readFileSync(iniPath, "utf8");
-    const value = readIniValues(content, ["Password"]).Password;
+    const value = (readIniValues(content, ["Password"]) as { Password?: string })
+      .Password;
     return value || null;
   } catch {
     return null;
   }
 }
 
-export async function collectKnownSecretValues() {
-  const values = new Set();
+export async function collectKnownSecretValues(): Promise<string[]> {
+  const values = new Set<string>();
 
   try {
-    const servers = await getServers();
+    const servers = (await getServers()) as ServerLike[];
     for (const server of servers) {
       if (server?.rconPassword) values.add(String(server.rconPassword));
       const joinPassword = readServerJoinPassword(server);
@@ -71,12 +81,15 @@ export async function collectKnownSecretValues() {
   return [...values];
 }
 
-export function redactKnownSecrets(text, secretValues) {
+export function redactKnownSecrets(
+  text: unknown,
+  secretValues: readonly string[] | null | undefined,
+): unknown {
   if (typeof text !== "string" || !text || !secretValues?.length) return text;
   let result = text;
   for (const secret of secretValues) {
     if (!secret) continue;
-    let escaped;
+    let escaped: string | null;
     try {
       escaped = JSON.stringify(secret).slice(1, -1);
     } catch {

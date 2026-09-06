@@ -27,7 +27,7 @@ import { resolveObservedServerRunning } from "../utils/serverStatus.ts";
 import {
   collectKnownSecretValues,
   redactKnownSecrets,
-} from "../utils/discordMessageRedaction.js";
+} from "../utils/discordMessageRedaction.ts";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,

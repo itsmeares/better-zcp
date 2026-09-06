@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("redactKnownSecrets() -- pure redaction logic", () => {
   it("replaces every exact occurrence of a known secret with a placeholder", async () => {
-    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.js");
+    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.ts");
     const result = redactKnownSecrets(
       "before hunter2 middle hunter2 after",
       ["hunter2"],
@@ -15,7 +15,7 @@ describe("redactKnownSecrets() -- pure redaction logic", () => {
   });
 
   it("redacts a short, common-word secret with no length exemption -- an operator's weak password is still a real secret", async () => {
-    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.js");
+    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.ts");
     const result = redactKnownSecrets(
       "the access level is admin now",
       ["admin"],
@@ -24,7 +24,7 @@ describe("redactKnownSecrets() -- pure redaction logic", () => {
   });
 
   it("redacts the JSON-string-escaped form too, since this runs on already-serialized request bodies", async () => {
-    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.js");
+    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.ts");
     const secret = 'pass"word\\with\nspecial';
     const serializedBody = JSON.stringify({ content: `leaked: ${secret}` });
     const result = redactKnownSecrets(serializedBody, [secret]);
@@ -33,7 +33,7 @@ describe("redactKnownSecrets() -- pure redaction logic", () => {
   });
 
   it("multiple distinct secrets in the same text are all redacted", async () => {
-    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.js");
+    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.ts");
     const result = redactKnownSecrets(
       "rcon=alpha discord=beta sftp=gamma",
       ["alpha", "beta", "gamma"],
@@ -42,13 +42,13 @@ describe("redactKnownSecrets() -- pure redaction logic", () => {
   });
 
   it("empty/null secret values in the list are skipped, never treated as a match-everything wildcard", async () => {
-    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.js");
+    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.ts");
     const result = redactKnownSecrets("completely ordinary text", ["", null, undefined]);
     expect(result).toBe("completely ordinary text");
   });
 
   it("a non-string body (e.g. null, or a FormData for a file upload) passes through untouched", async () => {
-    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.js");
+    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.ts");
     expect(redactKnownSecrets(null, ["secret"])).toBeNull();
     expect(redactKnownSecrets(undefined, ["secret"])).toBeUndefined();
     const fd = new FormData();
@@ -56,7 +56,7 @@ describe("redactKnownSecrets() -- pure redaction logic", () => {
   });
 
   it("an empty secrets list is a no-op, not an error", async () => {
-    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.js");
+    const { redactKnownSecrets } = await import("../utils/discordMessageRedaction.ts");
     expect(redactKnownSecrets("hello world", [])).toBe("hello world");
   });
 });
@@ -86,7 +86,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
       ],
       getSetting: async () => null,
     }));
-    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.js");
+    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.ts");
 
     const values = await collectKnownSecretValues();
 
@@ -99,7 +99,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
       getServers: async () => [],
       getSetting: async (key) => (key === "rconPassword" ? "legacy-mirror-secret" : null),
     }));
-    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.js");
+    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.ts");
 
     const values = await collectKnownSecretValues();
 
@@ -117,7 +117,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
     writeUiSecretFile("steamSessionId", "steam-session-secret");
     writeUiSecretFile("steamLoginSecure", "steam-login-secure-secret");
 
-    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.js");
+    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.ts");
     const values = await collectKnownSecretValues();
 
     expect(values).toContain("bot-token-secret");
@@ -139,7 +139,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
       getSetting: async () => null,
     }));
 
-    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.js");
+    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.ts");
     const values = await collectKnownSecretValues();
 
     expect(values).toContain("live-ini-join-password");
@@ -156,7 +156,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
     const { writeUiSecretFile } = await import("../utils/uiSecretFile.ts");
     writeUiSecretFile("discordBotToken", "still-collected-token");
 
-    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.js");
+    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.ts");
     const values = await collectKnownSecretValues();
 
     expect(values).toContain("still-collected-token");
@@ -167,7 +167,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
       getServers: async () => [{ id: "s1", rconPassword: "shared-value" }],
       getSetting: async (key) => (key === "rconPassword" ? "shared-value" : null),
     }));
-    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.js");
+    const { collectKnownSecretValues } = await import("../utils/discordMessageRedaction.ts");
 
     const values = await collectKnownSecretValues();
 

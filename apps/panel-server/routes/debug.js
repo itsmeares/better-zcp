@@ -65,7 +65,7 @@ import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import {
   collectKnownSecretValues,
   redactKnownSecrets,
-} from "../utils/discordMessageRedaction.js";
+} from "../utils/discordMessageRedaction.ts";
 import { getSteamApiKey } from "../services/steamApiKey.ts";
 import { hasActiveSteamOperation } from "../services/activeSteamOperations.ts";
 import { Transform } from "stream";
