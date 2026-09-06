@@ -8,6 +8,7 @@ import bridge from "../services/panelBridge.js";
 import {
   getActiveServer,
   getServer,
+  getServers,
   getAllSettings,
   setSetting,
   getDb,
@@ -2823,10 +2824,11 @@ router.post("/install-mod-auto", requirePermission("bridge.setup"), async (req, 
   }
 });
 
-router.post("/install-mod", requirePermission("bridge.setup"), (req, res) => {
-  const { serverLuaPath } = req.body || {};
+router.post("/install-mod", requirePermission("bridge.setup"), async (req, res) => {
+  const body = req.body || {};
+  const { serverLuaPath } = body;
 
-  const targetPath = serverLuaPath || req.body.serverModsPath;
+  const targetPath = serverLuaPath || body.serverModsPath;
 
   if (!targetPath) {
     return res
@@ -2886,6 +2888,54 @@ router.post("/install-mod", requirePermission("bridge.setup"), (req, res) => {
       });
   }
 
+  let allowedTarget = null;
+  try {
+    const servers = await getServers();
+    const normalizePath = (value) => {
+      const resolved = path.resolve(value);
+      return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+    };
+    const normalizedResolvedTarget = normalizePath(realTarget);
+
+    for (const server of servers) {
+      if (server?.isRemote) continue;
+      let installDir;
+      try {
+        installDir = resolveInstallDir(server);
+      } catch {
+        continue;
+      }
+      if (!installDir || !path.isAbsolute(installDir) || !fs.existsSync(installDir)) {
+        continue;
+      }
+
+      const canonicalInstallDir = fs.realpathSync(installDir);
+      const candidate = path.join(
+        canonicalInstallDir,
+        "media",
+        "lua",
+        "server",
+      );
+      const canonicalCandidate = fs.existsSync(candidate)
+        ? fs.realpathSync(candidate)
+        : candidate;
+      if (normalizePath(canonicalCandidate) === normalizedResolvedTarget) {
+        allowedTarget = canonicalCandidate;
+        break;
+      }
+    }
+  } catch (error) {
+    log.debug(`Configured PanelBridge target validation failed: ${error.message}`);
+  }
+
+  if (!allowedTarget) {
+    return res.status(400).json({
+      error:
+        "Path must match the media/lua/server directory of a configured local server",
+      code: ErrorCode.PANELBRIDGE_SERVER_LUA_PATH_NOT_CONFIGURED,
+    });
+  }
+
   try {
     let srcContent = getEmbeddedPanelBridgeLua();
 
@@ -2917,11 +2967,11 @@ router.post("/install-mod", requirePermission("bridge.setup"), (req, res) => {
       });
     }
 
-    if (!fs.existsSync(realTarget)) {
-      fs.mkdirSync(realTarget, { recursive: true, mode: 0o755 });
+    if (!fs.existsSync(allowedTarget)) {
+      fs.mkdirSync(allowedTarget, { recursive: true, mode: 0o755 });
     }
 
-    const destPath = path.join(realTarget, "PanelBridge.lua");
+    const destPath = path.join(allowedTarget, "PanelBridge.lua");
     writeLuaAtomic(destPath, srcContent);
 
     res.json({

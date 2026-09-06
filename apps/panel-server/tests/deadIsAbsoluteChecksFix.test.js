@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
+const getServers = vi.fn(async () => []);
 vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
+  getServers,
 }));
 
 function createResponse() {
@@ -66,5 +71,37 @@ describe("dead isAbsolute(resolve(x)) checks now reject a relative path before r
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ error: "Must be an absolute path" }),
     );
+  });
+
+  it("panelBridge.js POST /install-mod refuses an absolute path outside configured local servers", async () => {
+    const { default: panelBridgeRouter } = await import("../routes/panelBridge.js");
+    getServers.mockResolvedValue([]);
+    const res = await runRoute(panelBridgeRouter, "/install-mod", "post", {
+      body: { serverLuaPath: path.join(os.tmpdir(), "media", "lua", "server") },
+      user: { role: "admin" },
+    });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "PANELBRIDGE_SERVER_LUA_PATH_NOT_CONFIGURED",
+      }),
+    );
+  });
+
+  it("panelBridge.js POST /install-mod writes only to a configured local server target", async () => {
+    const { default: panelBridgeRouter } = await import("../routes/panelBridge.js");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "panelbridge-allowlist-"));
+    try {
+      getServers.mockResolvedValue([{ installPath: root, isRemote: false }]);
+      const target = path.join(root, "media", "lua", "server");
+      const res = await runRoute(panelBridgeRouter, "/install-mod", "post", {
+        body: { serverLuaPath: target },
+        user: { role: "admin" },
+      });
+      expect(res.status).not.toHaveBeenCalledWith(400);
+      expect(fs.existsSync(path.join(target, "PanelBridge.lua"))).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
