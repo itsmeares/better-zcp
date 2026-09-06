@@ -2,7 +2,14 @@ import fs from "fs";
 import { execSync } from "child_process";
 import { getDataPaths } from "./paths.js";
 
-function resolveAccountName(uid) {
+type OwnershipDiagnostic = {
+  paths: string[];
+  runningAs: string;
+  owningAccounts: string;
+  fixCommand: string;
+};
+
+function resolveAccountName(uid: number): string | null {
   try {
     const name = execSync(`id -un ${uid}`, {
       encoding: "utf8",
@@ -14,25 +21,32 @@ function resolveAccountName(uid) {
   }
 }
 
-function resolveRunningGroup() {
+function resolveRunningGroup(): string {
+  const fallback =
+    typeof process.getgid === "function" ? String(process.getgid()) : "unknown";
   try {
     const name = execSync("id -gn", {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
-    return name || String(process.getgid());
+    return name || fallback;
   } catch {
-    return String(process.getgid());
+    return fallback;
   }
 }
 
-function describeAccount(uid) {
+function describeAccount(uid: number): string {
   const name = resolveAccountName(uid);
   return name ? `${name} (uid ${uid})` : `uid ${uid}`;
 }
 
-export function formatOwnershipDiagnostic({ paths, runningAs, owningAccounts, fixCommand }) {
-  const list = paths.map((p) => `  - ${p}`).join("\n");
+export function formatOwnershipDiagnostic({
+  paths,
+  runningAs,
+  owningAccounts,
+  fixCommand,
+}: OwnershipDiagnostic): string {
+  const list = paths.map((entry) => `  - ${entry}`).join("\n");
   return (
     `Refusing to start: the following path(s) exist but are not readable/writable ` +
     `by the account currently running the panel:\n${list}\n\n` +
@@ -51,18 +65,18 @@ export function formatOwnershipDiagnostic({ paths, runningAs, owningAccounts, fi
   );
 }
 
-export function checkAndExitIfOwnershipBlocked(candidatePaths) {
+export function checkAndExitIfOwnershipBlocked(candidatePaths: string[]): boolean {
   if (process.platform === "win32" || typeof process.getuid !== "function") {
     return false;
   }
 
-  const offending = [];
-  const ownerUidByPath = {};
+  const offending: string[] = [];
+  const ownerUidByPath: Record<string, number> = {};
 
-  for (const p of candidatePaths) {
-    let stat;
+  for (const entry of candidatePaths) {
+    let stat: fs.Stats;
     try {
-      stat = fs.statSync(p);
+      stat = fs.statSync(entry);
     } catch {
       continue;
     }
@@ -70,10 +84,10 @@ export function checkAndExitIfOwnershipBlocked(candidatePaths) {
       ? fs.constants.R_OK | fs.constants.W_OK | fs.constants.X_OK
       : fs.constants.R_OK | fs.constants.W_OK;
     try {
-      fs.accessSync(p, mask);
+      fs.accessSync(entry, mask);
     } catch {
-      offending.push(p);
-      ownerUidByPath[p] = stat.uid;
+      offending.push(entry);
+      ownerUidByPath[entry] = stat.uid;
     }
   }
 
@@ -81,12 +95,14 @@ export function checkAndExitIfOwnershipBlocked(candidatePaths) {
 
   const myUid = process.getuid();
   const runningAs = describeAccount(myUid);
-  const owningAccounts = [...new Set(offending.map((p) => ownerUidByPath[p]))]
+  const owningAccounts = [...new Set(offending.map((entry) => ownerUidByPath[entry]))]
     .map(describeAccount)
     .join(", ");
   const runningUser = resolveAccountName(myUid) || String(myUid);
   const runningGroup = resolveRunningGroup();
-  const fixCommand = `chown -R ${runningUser}:${runningGroup} ${offending.map((p) => `"${p}"`).join(" ")}`;
+  const fixCommand = `chown -R ${runningUser}:${runningGroup} ${offending
+    .map((entry) => `"${entry}"`)
+    .join(" ")}`;
 
   const message = formatOwnershipDiagnostic({
     paths: offending,
@@ -99,8 +115,9 @@ export function checkAndExitIfOwnershipBlocked(candidatePaths) {
   return true;
 }
 
-export function checkDataPathOwnership() {
-  let dataDir, logsDir;
+export function checkDataPathOwnership(): void {
+  let dataDir: string;
+  let logsDir: string;
   try {
     ({ dataDir, logsDir } = getDataPaths());
   } catch {

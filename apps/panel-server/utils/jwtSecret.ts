@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { getDataPaths } from "./paths.js";
 import { readSecret } from "./secrets.ts";
-import { checkAndExitIfOwnershipBlocked } from "./firstRunOwnershipCheck.js";
+import { checkAndExitIfOwnershipBlocked } from "./firstRunOwnershipCheck.ts";
 
 export function getJwtSecretPath(): string {
   return path.join(getDataPaths().dataDir, "jwt.secret");

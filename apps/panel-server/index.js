@@ -1,4 +1,4 @@
-import "./utils/firstRunOwnershipCheck.js";
+import "./utils/firstRunOwnershipCheck.ts";
 import express from "express";
 import compression from "compression";
 import cors from "cors";

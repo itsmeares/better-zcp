@@ -31,7 +31,7 @@ function mkTempDir(label) {
 
 describe("formatOwnershipDiagnostic(): pure message formatting (no fs, no mocking)", () => {
   it("names every offending path, both accounts, and a single chown -R fix command", async () => {
-    const { formatOwnershipDiagnostic } = await import("../utils/firstRunOwnershipCheck.js");
+    const { formatOwnershipDiagnostic } = await import("../utils/firstRunOwnershipCheck.ts");
 
     const message = formatOwnershipDiagnostic({
       paths: ["/opt/panel/data", "/opt/panel/logs"],
@@ -55,7 +55,7 @@ describe("checkAndExitIfOwnershipBlocked(): real filesystem, zero permission moc
     "positive control: a directory this process genuinely owns and can access produces NO diagnosis",
     async () => {
       const { checkAndExitIfOwnershipBlocked } = await import(
-        "../utils/firstRunOwnershipCheck.js"
+        "../utils/firstRunOwnershipCheck.ts"
       );
       const dir = mkTempDir("owned");
       const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
@@ -73,7 +73,7 @@ describe("checkAndExitIfOwnershipBlocked(): real filesystem, zero permission moc
     "POSITIVE CONTROL, REGULAR FILE: a normally-owned 0600 file (jwt.secret/db.json's own mode) owned by the running user MUST NOT be reported as offending -- catches the X_OK-on-a-regular-file bug (regression, 2026-08-29): X_OK checks the execute bit, which a 0600 file correctly never has, so R_OK|W_OK|X_OK against ANY correctly-owned secret/database file threw 100% of the time, even for root against a root-owned file. This assertion failed against the pre-fix code -- that's what makes it worth having.",
     async () => {
       const { checkAndExitIfOwnershipBlocked } = await import(
-        "../utils/firstRunOwnershipCheck.js"
+        "../utils/firstRunOwnershipCheck.ts"
       );
       const dir = mkTempDir("file-owned");
       const filePath = path.join(dir, "db.json");
@@ -93,7 +93,7 @@ describe("checkAndExitIfOwnershipBlocked(): real filesystem, zero permission moc
     "REAL (unmocked) access denial on a REGULAR FILE: a 0600 file whose owner-read bit this process just cleared is detected -- proves R_OK|W_OK (not R_OK|W_OK|X_OK) is still a real, working check for files, not a mask that never fires",
     async () => {
       const { checkAndExitIfOwnershipBlocked } = await import(
-        "../utils/firstRunOwnershipCheck.js"
+        "../utils/firstRunOwnershipCheck.ts"
       );
       const dir = mkTempDir("file-locked");
       const filePath = path.join(dir, "jwt.secret");
@@ -115,7 +115,7 @@ describe("checkAndExitIfOwnershipBlocked(): real filesystem, zero permission moc
   );
 
   it("a path that doesn't exist yet is skipped, not treated as blocked (normal fresh-install case)", async () => {
-    const { checkAndExitIfOwnershipBlocked } = await import("../utils/firstRunOwnershipCheck.js");
+    const { checkAndExitIfOwnershipBlocked } = await import("../utils/firstRunOwnershipCheck.ts");
     const dir = mkTempDir("parent");
     const neverCreated = path.join(dir, "does-not-exist");
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
@@ -129,7 +129,7 @@ describe("checkAndExitIfOwnershipBlocked(): real filesystem, zero permission moc
   });
 
   it("is a no-op on platforms without process.getuid (Windows) -- never exits, never throws", async () => {
-    const { checkAndExitIfOwnershipBlocked } = await import("../utils/firstRunOwnershipCheck.js");
+    const { checkAndExitIfOwnershipBlocked } = await import("../utils/firstRunOwnershipCheck.ts");
     const dir = mkTempDir("winlike");
     Object.defineProperty(process, "getuid", { value: undefined, configurable: true });
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
@@ -146,7 +146,7 @@ describe("checkAndExitIfOwnershipBlocked(): real filesystem, zero permission moc
     "REAL (unmocked) access denial: a directory whose owner-bits this process just cleared is detected, diagnosed by name, and exits(77) -- exercises the exact detection path the root-first-run trap hits, under a genuine kernel-level EACCES",
     async () => {
       const { checkAndExitIfOwnershipBlocked } = await import(
-        "../utils/firstRunOwnershipCheck.js"
+        "../utils/firstRunOwnershipCheck.ts"
       );
       const dir = mkTempDir("locked");
       fs.chmodSync(dir, 0o000);
