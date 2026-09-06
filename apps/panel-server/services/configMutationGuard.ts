@@ -4,9 +4,42 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("ConfigMutationGuard");
 
-function resolveLocalPathReachability(server) {
+interface ServerProfile {
+  installPath?: string | null;
+  zomboidDataPath?: string | null;
+  isRemote?: boolean;
+}
+
+interface ProcessDetails {
+  running?: boolean;
+  scanFailed?: boolean;
+}
+
+interface ServerManager {
+  getServerProcessDetails?: () => Promise<ProcessDetails>;
+}
+
+interface RequestLike {
+  app?: { get?: (name: string) => unknown };
+  configEditRestartWarning?: boolean;
+}
+
+interface ResponseLike {
+  status: (code: number) => { json: (body: Record<string, string>) => unknown };
+}
+
+type Next = () => unknown;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function resolveLocalPathReachability(
+  server: ServerProfile | null | undefined,
+): { pathsConfigured: boolean; pathsExistLocally: boolean } {
   const installPath = server?.installPath || process.env.PZ_SERVER_PATH || "";
-  const zomboidDataPath = server?.zomboidDataPath || process.env.PZ_SAVE_PATH || null;
+  const zomboidDataPath =
+    server?.zomboidDataPath || process.env.PZ_SAVE_PATH || null;
   const pathsConfigured = Boolean(installPath || zomboidDataPath);
   const pathsExistLocally =
     Boolean(installPath && fs.existsSync(installPath)) ||
@@ -14,11 +47,19 @@ function resolveLocalPathReachability(server) {
   return { pathsConfigured, pathsExistLocally };
 }
 
-export async function requireStoppedForLocalConfigMutation(req, res, next) {
+export async function requireStoppedForLocalConfigMutation(
+  req: RequestLike,
+  res: ResponseLike,
+  next: Next,
+): Promise<unknown> {
   try {
-    const activeServer = await getActiveServer();
+    const activeServer = (await getActiveServer()) as
+      | ServerProfile
+      | null
+      | undefined;
 
-    const { pathsConfigured, pathsExistLocally } = resolveLocalPathReachability(activeServer);
+    const { pathsConfigured, pathsExistLocally } =
+      resolveLocalPathReachability(activeServer);
     if (pathsConfigured && !pathsExistLocally) {
       return res.status(503).json({
         code: "SERVER_STATE_UNKNOWN",
@@ -27,7 +68,9 @@ export async function requireStoppedForLocalConfigMutation(req, res, next) {
     }
     if (activeServer?.isRemote) return next();
 
-    const serverManager = req.app?.get?.("serverManager");
+    const serverManager = req.app?.get?.("serverManager") as
+      | ServerManager
+      | undefined;
     if (typeof serverManager?.getServerProcessDetails !== "function") {
       return res.status(503).json({
         code: "SERVER_STATE_UNKNOWN",
@@ -51,9 +94,9 @@ export async function requireStoppedForLocalConfigMutation(req, res, next) {
     }
 
     return next();
-  } catch (error) {
+  } catch (error: unknown) {
     log.warn(
-      `Could not verify server state before config mutation: ${error.message}`,
+      `Could not verify server state before config mutation: ${errorMessage(error)}`,
     );
     return res.status(503).json({
       code: "SERVER_STATE_UNKNOWN",
@@ -62,18 +105,28 @@ export async function requireStoppedForLocalConfigMutation(req, res, next) {
   }
 }
 
-export async function warnRunningForLocalConfigEdit(req, res, next) {
+export async function warnRunningForLocalConfigEdit(
+  req: RequestLike,
+  _res: ResponseLike,
+  next: Next,
+): Promise<unknown> {
   try {
-    const activeServer = await getActiveServer();
+    const activeServer = (await getActiveServer()) as
+      | ServerProfile
+      | null
+      | undefined;
 
-    const { pathsConfigured, pathsExistLocally } = resolveLocalPathReachability(activeServer);
+    const { pathsConfigured, pathsExistLocally } =
+      resolveLocalPathReachability(activeServer);
     if (pathsConfigured && !pathsExistLocally) {
       req.configEditRestartWarning = true;
       return next();
     }
     if (activeServer?.isRemote) return next();
 
-    const serverManager = req.app?.get?.("serverManager");
+    const serverManager = req.app?.get?.("serverManager") as
+      | ServerManager
+      | undefined;
     if (typeof serverManager?.getServerProcessDetails !== "function") {
       req.configEditRestartWarning = true;
       return next();
@@ -85,9 +138,9 @@ export async function warnRunningForLocalConfigEdit(req, res, next) {
     req.configEditRestartWarning =
       processDetails.scanFailed || processDetails.running !== false;
     return next();
-  } catch (error) {
+  } catch (error: unknown) {
     log.warn(
-      `Could not verify server state before config edit: ${error.message}`,
+      `Could not verify server state before config edit: ${errorMessage(error)}`,
     );
     req.configEditRestartWarning = true;
     return next();

@@ -25,7 +25,7 @@ const {
   isLocalConfigOverwrite,
 } = await import("../routes/serverFiles.js");
 const { requireStoppedForLocalConfigMutation, warnRunningForLocalConfigEdit } =
-  await import("../services/configMutationGuard.js");
+  await import("../services/configMutationGuard.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

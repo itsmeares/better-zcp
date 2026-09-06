@@ -36,7 +36,7 @@ import {
 import {
   requireStoppedForLocalConfigMutation,
   warnRunningForLocalConfigEdit,
-} from "../services/configMutationGuard.js";
+} from "../services/configMutationGuard.ts";
 import { requirePermission } from "../services/permissions.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 

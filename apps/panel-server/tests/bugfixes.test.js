@@ -28,7 +28,7 @@ import { parseAutoUpdateWarningMinutes } from "../services/updateChecker.js";
 import { BackupService } from "../services/backupService.js";
 import authService from "../services/auth.js";
 import { parsePlayerExportFile } from "../routes/players.js";
-import { requireStoppedForLocalConfigMutation } from "../services/configMutationGuard.js";
+import { requireStoppedForLocalConfigMutation } from "../services/configMutationGuard.ts";
 
 
 describe("Restart timeout pattern", () => {
