@@ -12,7 +12,7 @@ import {
 } from "../database/init.js";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { requirePermission, getRoleByName } from "../services/permissions.js";
-import { deleteVehiclesInBoxes } from "../utils/vehiclesDb.js";
+import { deleteVehiclesInBoxes } from "../utils/vehiclesDb.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
 import {
   normalizeUserPath,

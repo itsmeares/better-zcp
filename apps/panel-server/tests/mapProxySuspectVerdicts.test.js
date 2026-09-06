@@ -12,7 +12,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const mockListPersistedVehicles = vi.fn();
-vi.mock("../utils/vehiclesDb.js", () => ({
+vi.mock("../utils/vehiclesDb.ts", () => ({
   listPersistedVehicles: (...args) => mockListPersistedVehicles(...args),
 }));
 

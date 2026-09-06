@@ -7,10 +7,40 @@ import { createLogger } from './logger.ts';
 
 const log = createLogger('VehiclesDB');
 
-let sqlPromise = null;
+interface VehicleBox {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  wx0?: number;
+  wx1?: number;
+  wy0?: number;
+  wy1?: number;
+}
 
-function locateWasm() {
-  const candidates = [];
+interface VehicleChunk {
+  x: number;
+  y: number;
+}
+
+interface VehicleDeleteOptions {
+  backupPath?: string;
+}
+
+interface VehicleRecord {
+  id: number;
+  x: number;
+  y: number;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+let sqlPromise: Promise<import('sql.js').SqlJsStatic> | null = null;
+
+function locateWasm(): string | null {
+  const candidates: string[] = [];
 
   if (process.pkg) {
     const execDir = path.dirname(process.execPath);
@@ -34,7 +64,7 @@ function locateWasm() {
   return null;
 }
 
-async function getSQL() {
+async function getSQL(): Promise<import('sql.js').SqlJsStatic> {
   if (!sqlPromise) {
     sqlPromise = initSqlJs({
       locateFile: (file) => {
@@ -47,7 +77,10 @@ async function getSQL() {
   return sqlPromise;
 }
 
-async function withDatabase(dbPath, fn) {
+async function withDatabase<T>(
+  dbPath: string,
+  fn: (db: import('sql.js').Database) => T | Promise<T>,
+): Promise<T> {
   const SQL = await getSQL();
   const buffer = await fs.promises.readFile(dbPath);
   const db = new SQL.Database(buffer);
@@ -63,7 +96,10 @@ async function withDatabase(dbPath, fn) {
   }
 }
 
-async function withReadOnlyDatabase(dbPath, fn) {
+async function withReadOnlyDatabase<T>(
+  dbPath: string,
+  fn: (db: import('sql.js').Database) => T | Promise<T>,
+): Promise<T> {
   const SQL = await getSQL();
   const buffer = await fs.promises.readFile(dbPath);
   const db = new SQL.Database(buffer);
@@ -74,7 +110,10 @@ async function withReadOnlyDatabase(dbPath, fn) {
   }
 }
 
-export async function listPersistedVehicles(savePath, limit = 10000) {
+export async function listPersistedVehicles(
+  savePath: string,
+  limit = 10000,
+): Promise<VehicleRecord[]> {
   const dbPath = path.join(savePath, 'vehicles.db');
   if (!fs.existsSync(dbPath)) return [];
   const safeLimit = Math.max(1, Math.min(50000, Math.floor(limit) || 10000));
@@ -83,7 +122,7 @@ export async function listPersistedVehicles(savePath, limit = 10000) {
       const stmt = db.prepare(
         'SELECT id, x, y FROM vehicles WHERE x IS NOT NULL AND y IS NOT NULL LIMIT ?'
       );
-      const vehicles = [];
+      const vehicles: VehicleRecord[] = [];
       try {
         stmt.bind([safeLimit]);
         while (stmt.step()) {
@@ -101,12 +140,15 @@ export async function listPersistedVehicles(savePath, limit = 10000) {
       return vehicles;
     });
   } catch (err) {
-    log.warn(`listPersistedVehicles failed on ${dbPath}: ${err.message}`);
+    log.warn(`listPersistedVehicles failed on ${dbPath}: ${errorMessage(err)}`);
     return [];
   }
 }
 
-export async function countVehiclesInBoxes(savePath, boxes) {
+export async function countVehiclesInBoxes(
+  savePath: string,
+  boxes: VehicleBox[],
+): Promise<number> {
   const dbPath = path.join(savePath, 'vehicles.db');
   if (!fs.existsSync(dbPath)) return 0;
   if (!Array.isArray(boxes) || boxes.length === 0) return 0;
@@ -131,12 +173,16 @@ export async function countVehiclesInBoxes(savePath, boxes) {
       return total;
     });
   } catch (err) {
-    log.warn(`countVehiclesInBoxes failed on ${dbPath}: ${err.message}`);
+    log.warn(`countVehiclesInBoxes failed on ${dbPath}: ${errorMessage(err)}`);
     return 0;
   }
 }
 
-export async function deleteVehiclesInBoxes(savePath, boxes, opts = {}) {
+export async function deleteVehiclesInBoxes(
+  savePath: string,
+  boxes: VehicleBox[],
+  opts: VehicleDeleteOptions = {},
+) {
   const dbPath = path.join(savePath, 'vehicles.db');
   if (!fs.existsSync(dbPath)) {
     return { deleted: 0, skipped: true, reason: 'vehicles.db not found (no persisted vehicles)' };
@@ -158,8 +204,9 @@ export async function deleteVehiclesInBoxes(savePath, boxes, opts = {}) {
       await fs.promises.mkdir(path.dirname(opts.backupPath), { recursive: true });
       await fs.promises.copyFile(dbPath, opts.backupPath);
     } catch (err) {
-      log.warn(`Failed to backup vehicles.db to ${opts.backupPath}: ${err.message}`);
-      return { deleted: 0, skipped: true, reason: `backup failed: ${err.message}` };
+      const message = errorMessage(err);
+      log.warn(`Failed to backup vehicles.db to ${opts.backupPath}: ${message}`);
+      return { deleted: 0, skipped: true, reason: `backup failed: ${message}` };
     }
   }
 
@@ -171,7 +218,7 @@ export async function deleteVehiclesInBoxes(savePath, boxes, opts = {}) {
         probe.free();
         hasTable = true;
       } catch (e) {
-        log.warn(`vehicles.db at ${dbPath} has no 'vehicles' table (${e.message}) — skipping`);
+        log.warn(`vehicles.db at ${dbPath} has no 'vehicles' table (${errorMessage(e)}) — skipping`);
       }
       if (!hasTable) {
         return { deleted: 0, skipped: true, reason: 'no vehicles table' };
@@ -207,10 +254,13 @@ export async function deleteVehiclesInBoxes(savePath, boxes, opts = {}) {
           );
           try {
             for (const b of boxes) {
-              if (!Number.isFinite(b.wx0) || !Number.isFinite(b.wx1)
-                || !Number.isFinite(b.wy0) || !Number.isFinite(b.wy1)
-                || b.wx1 <= b.wx0 || b.wy1 <= b.wy0) continue;
-              chunkStmt.bind([b.wx0, b.wx1, b.wy0, b.wy1]);
+              const { wx0, wx1, wy0, wy1 } = b;
+              if (typeof wx0 !== 'number' || typeof wx1 !== 'number'
+                || typeof wy0 !== 'number' || typeof wy1 !== 'number'
+                || !Number.isFinite(wx0) || !Number.isFinite(wx1)
+                || !Number.isFinite(wy0) || !Number.isFinite(wy1)
+                || wx1 <= wx0 || wy1 <= wy0) continue;
+              chunkStmt.bind([wx0, wx1, wy0, wy1]);
               chunkStmt.step();
               chunkStmt.reset();
               deleted += db.getRowsModified();
@@ -228,12 +278,17 @@ export async function deleteVehiclesInBoxes(savePath, boxes, opts = {}) {
       return { deleted, skipped: false };
     });
   } catch (err) {
-    log.error(`deleteVehiclesInBoxes failed on ${dbPath}: ${err.message}`);
+    log.error(`deleteVehiclesInBoxes failed on ${dbPath}: ${errorMessage(err)}`);
     throw err;
   }
 }
 
-export async function deleteVehiclesInChunks(savePath, chunks, tilesPerChunk, opts = {}) {
+export async function deleteVehiclesInChunks(
+  savePath: string,
+  chunks: VehicleChunk[],
+  tilesPerChunk: number,
+  opts: VehicleDeleteOptions = {},
+) {
   if (!Array.isArray(chunks) || chunks.length === 0) {
     return { deleted: 0, skipped: true, reason: 'no chunks provided' };
   }

@@ -19,7 +19,7 @@ import {
 import { VEHICLES, PERKS, PERK_CATALOG, ACCESS_LEVELS } from '../utils/commands.ts';
 import { sanitizeError } from '../utils/sanitize.ts';
 import bridge from '../services/panelBridge.js';
-import { listWhitelistAccounts, listServerRoleNames } from '../utils/whitelistDb.js';
+import { listWhitelistAccounts, listServerRoleNames } from '../utils/whitelistDb.ts';
 import { requirePermission } from '../services/permissions.js';
 import { ErrorCode } from '../utils/errorCodes.ts';
 

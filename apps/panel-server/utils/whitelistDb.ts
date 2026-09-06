@@ -5,7 +5,7 @@ import initSqlJs from "sql.js";
 import { createLogger } from "./logger.ts";
 
 const log = createLogger("WhitelistDB");
-const ROLE_NAMES = new Map([
+const ROLE_NAMES = new Map<number, string>([
   [1, "banned"],
   [2, "user"],
   [3, "priority"],
@@ -15,10 +15,25 @@ const ROLE_NAMES = new Map([
   [7, "admin"],
 ]);
 
-let sqlPromise;
+interface WhitelistAccount {
+  id: number;
+  username: string;
+  lastConnection: string | null;
+  role: string;
+  authType: number;
+  steamId: string | null;
+  ownerId: string | null;
+  displayName: string | null;
+}
 
-function locateWasm() {
-  const candidates = [];
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+let sqlPromise: Promise<import("sql.js").SqlJsStatic> | null = null;
+
+function locateWasm(): string | null {
+  const candidates: string[] = [];
   if (process.pkg) {
     const execDir = path.dirname(process.execPath);
     candidates.push(path.join(execDir, "sql-wasm.wasm"));
@@ -35,7 +50,7 @@ function locateWasm() {
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
-async function getSql() {
+async function getSql(): Promise<import("sql.js").SqlJsStatic> {
   if (!sqlPromise) {
     sqlPromise = initSqlJs({
       locateFile: (file) => locateWasm() || file,
@@ -44,7 +59,10 @@ async function getSql() {
   return sqlPromise;
 }
 
-export function getWhitelistDatabasePath(zomboidDataPath, serverName) {
+export function getWhitelistDatabasePath(
+  zomboidDataPath: unknown,
+  serverName: unknown,
+): string | null {
   if (
     typeof zomboidDataPath !== "string" ||
     !zomboidDataPath ||
@@ -59,7 +77,7 @@ export function getWhitelistDatabasePath(zomboidDataPath, serverName) {
   return path.join(zomboidDataPath, "db", `${serverName}.db`);
 }
 
-function loadRoleMap(db) {
+function loadRoleMap(db: import("sql.js").Database): Map<number, string> {
   const roles = new Map(ROLE_NAMES);
   const roleResult = db.exec("SELECT id, name FROM role");
   for (const [id, name] of roleResult[0]?.values || []) {
@@ -70,7 +88,10 @@ function loadRoleMap(db) {
   return roles;
 }
 
-export async function listWhitelistAccounts(zomboidDataPath, serverName) {
+export async function listWhitelistAccounts(
+  zomboidDataPath: string | null | undefined,
+  serverName: string | null | undefined,
+) {
   const dbPath = getWhitelistDatabasePath(zomboidDataPath, serverName);
   if (!dbPath) {
     return { available: false, accounts: [], reason: "Invalid server database path" };
@@ -83,8 +104,8 @@ export async function listWhitelistAccounts(zomboidDataPath, serverName) {
     const SQL = await getSql();
     const db = new SQL.Database(await fs.promises.readFile(dbPath));
     try {
-      const accounts = [];
-      const allowedSteamIds = [];
+      const accounts: WhitelistAccount[] = [];
+      const allowedSteamIds: string[] = [];
       const roles = loadRoleMap(db);
 
       const statement = db.prepare(
@@ -96,13 +117,15 @@ export async function listWhitelistAccounts(zomboidDataPath, serverName) {
           const row = statement.getAsObject();
           accounts.push({
             id: Number(row.id),
-            username: row.username || "",
-            lastConnection: row.lastConnection || null,
+            username: typeof row.username === "string" ? row.username : "",
+            lastConnection:
+              typeof row.lastConnection === "string" ? row.lastConnection : null,
             role: roles.get(Number(row.role)) || `role-${Number(row.role)}`,
             authType: Number(row.authType) || 0,
-            steamId: row.steamid || null,
-            ownerId: row.ownerid || null,
-            displayName: row.displayName || null,
+            steamId: typeof row.steamid === "string" ? row.steamid : null,
+            ownerId: typeof row.ownerid === "string" ? row.ownerid : null,
+            displayName:
+              typeof row.displayName === "string" ? row.displayName : null,
           });
         }
       } finally {
@@ -117,19 +140,22 @@ export async function listWhitelistAccounts(zomboidDataPath, serverName) {
           }
         }
       } catch (error) {
-        log.debug(`Allowed SteamID table is unavailable in ${dbPath}: ${error.message}`);
+        log.debug(`Allowed SteamID table is unavailable in ${dbPath}: ${errorMessage(error)}`);
       }
       return { available: true, accounts, allowedSteamIds };
     } finally {
       db.close();
     }
   } catch (error) {
-    log.warn(`Could not read whitelist database ${dbPath}: ${error.message}`);
+    log.warn(`Could not read whitelist database ${dbPath}: ${errorMessage(error)}`);
     return { available: false, accounts: [], reason: "Whitelist database could not be read" };
   }
 }
 
-export async function listServerRoleNames(zomboidDataPath, serverName) {
+export async function listServerRoleNames(
+  zomboidDataPath: string | null | undefined,
+  serverName: string | null | undefined,
+) {
   const dbPath = getWhitelistDatabasePath(zomboidDataPath, serverName);
   if (!dbPath) {
     return { available: false, roleNames: [], reason: "Invalid server database path" };
@@ -148,7 +174,7 @@ export async function listServerRoleNames(zomboidDataPath, serverName) {
       db.close();
     }
   } catch (error) {
-    log.warn(`Could not read role table from ${dbPath}: ${error.message}`);
+    log.warn(`Could not read role table from ${dbPath}: ${errorMessage(error)}`);
     return { available: false, roleNames: [], reason: "Server database could not be read" };
   }
 }

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import initSqlJs from "sql.js";
-import { getWhitelistDatabasePath, listWhitelistAccounts, listServerRoleNames } from "../utils/whitelistDb.js";
+import { getWhitelistDatabasePath, listWhitelistAccounts, listServerRoleNames } from "../utils/whitelistDb.ts";
 
 let root;
 const SQL_WASM_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../node_modules/sql.js/dist/sql-wasm.wasm");

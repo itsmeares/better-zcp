@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 import initSqlJs from 'sql.js';
 import { fileURLToPath } from 'node:url';
-import { deleteVehiclesInBoxes, countVehiclesInBoxes, deleteVehiclesInChunks } from '../utils/vehiclesDb.js';
+import { deleteVehiclesInBoxes, countVehiclesInBoxes, deleteVehiclesInChunks } from '../utils/vehiclesDb.ts';
 
 
 const FIXTURES = [

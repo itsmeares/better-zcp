@@ -18,7 +18,7 @@ vi.mock("../database/init.js", () => ({
   removeSteamIdBan: vi.fn(),
 }));
 
-vi.mock("../utils/whitelistDb.js", () => ({ listWhitelistAccounts: vi.fn(), listServerRoleNames }));
+vi.mock("../utils/whitelistDb.ts", () => ({ listWhitelistAccounts: vi.fn(), listServerRoleNames }));
 vi.mock("../services/panelBridge.js", () => ({ isRunning: false }));
 
 const { default: router } = await import("../routes/players.js");
