@@ -6,7 +6,7 @@
 entrypoint.sh text eol=lf
 # The service file is copied verbatim into Linux release packages and must
 # remain LF-only on Windows checkouts too.
-zomboid-panel.service text eol=lf
+infra/services/linux/zomboid-panel.service text eol=lf
 
 # Keep the CSP source stable for script-hash calculation.
-client/index.html text eol=lf
+apps/panel-client/index.html text eol=lf

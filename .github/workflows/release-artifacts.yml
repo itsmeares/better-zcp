@@ -53,7 +53,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: node build.js ${{ matrix.build_arg }}
+        run: node scripts/release/build.mjs ${{ matrix.build_arg }}
 
       - name: Verify release version parity
         run: node scripts/verify-release-version.mjs "${{ github.ref_name }}"
@@ -80,7 +80,7 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path release\* -DestinationPath ${{ matrix.archive_file }}
 
-      # Linux packaging is no longer a separate step: build.js itself writes
+      # Linux packaging is no longer a separate step: scripts/release/build.mjs writes
       # ZomboidControlPanel-linux.tar.gz with explicit per-entry mode bits as
       # part of the "Build" step above, so this leg exercises the exact same
       # packaging code a developer runs locally via `pnpm run build:exe:linux`

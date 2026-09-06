@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v2.*'
+      - "v2.*"
   workflow_dispatch:
 
 permissions:
@@ -58,7 +58,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           # Pass the commit sha in: the image has no .git and no git binary, so
-          # server/index.js cannot shell out for it. Without this the backend
+          # apps/panel-server/index.js cannot shell out for it. Without this the backend
           # reports an unknown build sha, which the frontend/backend
           # compatibility gate then treats as a mismatch.
           build-args: |

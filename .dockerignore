@@ -1,6 +1,6 @@
 node_modules/
-client/node_modules/
-client/dist/
+apps/panel-client/node_modules/
+apps/panel-client/dist/
 dist-exe/
 release/
 data/db.json
@@ -10,8 +10,8 @@ logs/*.log
 .git/
 .github/
 docs/assets/screenshots/
-server/tests/
-build.js
+apps/panel-server/tests/
+scripts/release/build.mjs
 *.md
 docker-compose.yml
 Dockerfile

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Attempts to classify each RCON command server/services/rcon.js sends as
+// Attempts to classify each RCON command apps/panel-server/services/rcon.js sends as
 // INFORMATIVE (the RCON reply carries real content -- a list, a dump) or
 // NO_LOOP_EVIDENCE (this script found no positive signal either way -- that
 // includes genuine bare-ack commands like save/quit AND any informative
@@ -41,7 +41,7 @@ if (!jarPath) {
   process.exit(1);
 }
 
-// Every command server/services/rcon.js sends, mapped to its real command
+// Every command apps/panel-server/services/rcon.js sends, mapped to its real command
 // class (from scan-rcon-commands.mjs's output) -- hand-curated, same
 // limitation as scan-lua-calls.mjs's receiver map: update by hand if
 // rcon.js starts calling something new.

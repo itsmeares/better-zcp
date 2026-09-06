@@ -1,6 +1,6 @@
 name: Build AIO Docker Image
 
-# CI + publish for docker/all-in-one/Dockerfile (Debian-based: panel +
+# CI + publish for infra/docker/all-in-one/Dockerfile (Debian-based: panel +
 # SteamCMD + the PZ dedicated server in one image). Deliberately kept as its
 # own workflow, independent of docker-publish.yml: that workflow publishes
 # the standard panel-only image. The AIO image uses separate tags in the same
@@ -21,26 +21,26 @@ on:
     branches:
       - main
     tags:
-      - 'v2.*'
+      - "v2.*"
     paths:
-      - 'docker/all-in-one/**'
-      - 'server/**'
-      - 'client/**'
-      - 'pz-mod/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/docker-aio-build.yml'
+      - "infra/docker/all-in-one/**"
+      - "apps/panel-server/**"
+      - "apps/panel-client/**"
+      - "integrations/panelbridge/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/docker-aio-build.yml"
   pull_request:
     paths:
-      - 'docker/all-in-one/**'
-      - 'server/**'
-      - 'client/**'
-      - 'pz-mod/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/docker-aio-build.yml'
+      - "infra/docker/all-in-one/**"
+      - "apps/panel-server/**"
+      - "apps/panel-client/**"
+      - "integrations/panelbridge/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/docker-aio-build.yml"
   workflow_dispatch:
 
 permissions:
@@ -99,7 +99,7 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: .
-          file: docker/all-in-one/Dockerfile
+          file: infra/docker/all-in-one/Dockerfile
           build-args: |
             PANEL_BUILD_SHA=${{ github.sha }}
           platforms: linux/amd64
@@ -116,7 +116,7 @@ jobs:
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: .
-          file: docker/all-in-one/updater/Dockerfile
+          file: infra/docker/all-in-one/updater/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.updater-meta.outputs.tags }}

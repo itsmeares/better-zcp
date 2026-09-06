@@ -1,48 +1,258 @@
 {
-  "note": "Every SUSPICIOUS FRENCH DUPLICATE scripts/i18n-check.mjs --all currently reports (client/src/locales/fr/*.json vs en/*.json), keyed by namespace+frValue -- not by key name or line number, so a rename or reformat doesn't need a baseline update, and a NEW key elsewhere that happens to reuse an already-baselined FR string for the same namespace is intentionally absorbed too (same trade-off as scripts/engine-signatures.baseline.json: the checker prints this baseline's own coverage every run so absorption stays visible, not silent). All 44 raw findings as of 2026-08-31 were read individually in context (schema + both locale files), not rubber-stamped from the summary line alone -- one of the 44 was a real mistranslation (zombieLore.Strength.label, fixed in commit 1d5d7893, not baselined) and is NOT an entry here. Of the other 43, one (worldMap's dropFailedTitle/airdropFailedTitle pair) was initially misclassified as en-source-inconsistency and baselined, then re-investigated by tracing both call sites in WorldMap.tsx: Airdrop (preset supply drop, callAirdrop) and Custom Drop (ad-hoc item drop, callCustomDrop) are two genuinely different features, correctly named in English -- de/es/zh-CN all keep them terminologically distinct throughout, French alone collapsed both to \"Largage\" everywhere, including the success-path titles. Not an English bug; fixed on the French side instead (dropFailedTitle -> \"Échec du largage personnalisé\", reusing the exact phrase the Custom Drop feature already uses for itself at dropDialog.title/customDrop) and removed from this baseline. The remaining 42 are legitimate: reviewed and classified into the 7 categories below. Methodology note: initial informal review sampled ~20% (10 of the original 53 raw findings, before 6 of those 53 were fixed across three earlier commits) before escalating to this full, exhaustive pass over the remaining set -- the 20% figure describes how the triage STARTED, not the coverage of this file, which is 100% of what remained.\n\nTriage rule, one sentence: the real bug shape is the same French string covering genuinely different domains where the string is wrong in at least one of them; everything baselined here is a string that is independently CORRECT in every place it appears, and the categories below just describe WHY two independently-correct English concepts ended up sharing one French rendering.\n\nCategories:\n  synonym-reuse: different English wording for the same action/state (Retry vs Try Again, Add User vs Add a user) -- one correct French phrase legitimately covers both.\n  phrasing-variant: same concept, different English capitalization/word-order/article/hyphenation (Import Collection vs Import a Collection; install path vs installation path) -- not a translator choice, a source-string inconsistency the French correctly ignores.\n  plural-invariance: an EN _one/_other pair whose French rendering does not change with count (French pluralizes via the article/count elsewhere in the sentence, not by inflecting a noun like \"ID\").\n  language-convergence: French has one correct word/phrase where English draws a finer distinction between two adjacent concepts (paramètres = both settings and parameters; sauvegarde = both backup and world save; diffusion = both streaming and broadcast) -- not a translation gap, a real difference in how the two languages carve up the concept.\n  24h-time-convergence: a specific, individually-verified case of language-convergence -- sandboxPz's \"X heures\" duplicate group is simultaneously the correct 24-hour-clock rendering of a PM time (2 PM -> 14 heures, verified against every one of the 7 flagged pairs by converting to 24h format) AND the correct duration label for the same numeral in Hours -- both independently correct, colliding only because 24h clock notation and duration counts share the same numeral space.\n  scale-vocabulary-reuse: the same correct scale-adjective (Aucun, Rare, Beaucoup, Faible, Quelques-uns) is the right rendering across multiple INDEPENDENT PZ option scales measuring frequency/amount/intensity -- each occurrence checked against its own scale's full option list (not just the flagged pair) to confirm the position is NOT shifted, the same verification that caught the two real CarSpawnRate/AnimalAgeModifier bugs fixed in commit 31bfaeec; these are position-correct.\n\nAdding a NEW entry here should be rare and deliberate, same rule as the engine-signatures baseline: it means 'I looked at this specific finding and confirmed the French is independently correct in both places', not 'suppress this to turn the gate green'.",
+  "note": "Every SUSPICIOUS FRENCH DUPLICATE scripts/i18n-check.mjs --all currently reports (apps/panel-client/src/locales/fr/*.json vs en/*.json), keyed by namespace+frValue -- not by key name or line number, so a rename or reformat doesn't need a baseline update, and a NEW key elsewhere that happens to reuse an already-baselined FR string for the same namespace is intentionally absorbed too (same trade-off as scripts/engine-signatures.baseline.json: the checker prints this baseline's own coverage every run so absorption stays visible, not silent). All 44 raw findings as of 2026-08-31 were read individually in context (schema + both locale files), not rubber-stamped from the summary line alone -- one of the 44 was a real mistranslation (zombieLore.Strength.label, fixed in commit 1d5d7893, not baselined) and is NOT an entry here. Of the other 43, one (worldMap's dropFailedTitle/airdropFailedTitle pair) was initially misclassified as en-source-inconsistency and baselined, then re-investigated by tracing both call sites in WorldMap.tsx: Airdrop (preset supply drop, callAirdrop) and Custom Drop (ad-hoc item drop, callCustomDrop) are two genuinely different features, correctly named in English -- de/es/zh-CN all keep them terminologically distinct throughout, French alone collapsed both to \"Largage\" everywhere, including the success-path titles. Not an English bug; fixed on the French side instead (dropFailedTitle -> \"Échec du largage personnalisé\", reusing the exact phrase the Custom Drop feature already uses for itself at dropDialog.title/customDrop) and removed from this baseline. The remaining 42 are legitimate: reviewed and classified into the 7 categories below. Methodology note: initial informal review sampled ~20% (10 of the original 53 raw findings, before 6 of those 53 were fixed across three earlier commits) before escalating to this full, exhaustive pass over the remaining set -- the 20% figure describes how the triage STARTED, not the coverage of this file, which is 100% of what remained.\n\nTriage rule, one sentence: the real bug shape is the same French string covering genuinely different domains where the string is wrong in at least one of them; everything baselined here is a string that is independently CORRECT in every place it appears, and the categories below just describe WHY two independently-correct English concepts ended up sharing one French rendering.\n\nCategories:\n  synonym-reuse: different English wording for the same action/state (Retry vs Try Again, Add User vs Add a user) -- one correct French phrase legitimately covers both.\n  phrasing-variant: same concept, different English capitalization/word-order/article/hyphenation (Import Collection vs Import a Collection; install path vs installation path) -- not a translator choice, a source-string inconsistency the French correctly ignores.\n  plural-invariance: an EN _one/_other pair whose French rendering does not change with count (French pluralizes via the article/count elsewhere in the sentence, not by inflecting a noun like \"ID\").\n  language-convergence: French has one correct word/phrase where English draws a finer distinction between two adjacent concepts (paramètres = both settings and parameters; sauvegarde = both backup and world save; diffusion = both streaming and broadcast) -- not a translation gap, a real difference in how the two languages carve up the concept.\n  24h-time-convergence: a specific, individually-verified case of language-convergence -- sandboxPz's \"X heures\" duplicate group is simultaneously the correct 24-hour-clock rendering of a PM time (2 PM -> 14 heures, verified against every one of the 7 flagged pairs by converting to 24h format) AND the correct duration label for the same numeral in Hours -- both independently correct, colliding only because 24h clock notation and duration counts share the same numeral space.\n  scale-vocabulary-reuse: the same correct scale-adjective (Aucun, Rare, Beaucoup, Faible, Quelques-uns) is the right rendering across multiple INDEPENDENT PZ option scales measuring frequency/amount/intensity -- each occurrence checked against its own scale's full option list (not just the flagged pair) to confirm the position is NOT shifted, the same verification that caught the two real CarSpawnRate/AnimalAgeModifier bugs fixed in commit 31bfaeec; these are position-correct.\n\nAdding a NEW entry here should be rare and deliberate, same rule as the engine-signatures baseline: it means 'I looked at this specific finding and confirmed the French is independently correct in both places', not 'suppress this to turn the gate green'.",
   "keyedBy": "namespace+frValue",
   "entries": [
-    { "ns": "backups", "value": "Dossier de sauvegardes de jeu introuvable", "category": "synonym-reuse", "reason": "\"Saves folder not found\" vs \"No saves folder found\" -- same event, two English phrasings, one correct French sentence." },
-    { "ns": "backups", "value": "Supprimer les anciennes sauvegardes", "category": "phrasing-variant", "reason": "\"Delete Old Backups\" (dialog title) vs \"Delete older backups\" (confirm button) -- same action, title-case vs sentence-case source." },
-    { "ns": "console", "value": "diffusion", "category": "language-convergence", "reason": "\"streaming\" (log tab) vs \"broadcast\" (message toggle) -- \"diffusion\" is the correct French word for both; genuinely different features, coincidentally sharing one correct noun." },
-    { "ns": "dashboard", "value": "Arrêt forcé du serveur", "category": "synonym-reuse", "reason": "\"Force stop server\" (confirm dialog title) vs \"Server force stopped\" (success notice) -- same event, prompt vs completed-action framing; French noun phrase correctly serves both." },
-    { "ns": "dashboard", "value": "en attente", "category": "language-convergence", "reason": "\"standby\" (telemetry status) vs \"pending\" (connection status) -- \"en attente\" (waiting) is the correct French for both; different status displays, same underlying idea." },
-    { "ns": "debug", "value": "Rien à changer pour {{count}} ID.", "category": "plural-invariance", "reason": "workshopNothingToChange_one/_other -- \"ID.\" does not inflect for plural in French the way \"ID.\"/\"IDs.\" does in English; identical rendering is correct for both counts." },
-    { "ns": "debug", "value": "Indisponible", "category": "synonym-reuse", "reason": "\"Unavailable\" (system tab) vs \"Not available\" (bridge tab) -- same state, two English phrasings, one correct French adjective." },
-    { "ns": "discord", "value": "ID du serveur", "category": "language-convergence", "reason": "\"Server IDs\" (general list label) vs \"Guild ID\" (wizard field) -- Discord's own UI renamed \"Guild\" to \"Server\" in French as in English; \"ID du serveur\" is the correct, Discord-terminology-matching translation for both." },
-    { "ns": "errors", "value": "Paramètres invalides", "category": "language-convergence", "reason": "\"Invalid settings\" vs \"Invalid parameters\" -- French does not distinguish these the way English does; \"paramètres\" is the single correct word for both." },
-    { "ns": "errors", "value": "Sauvegarde introuvable", "category": "language-convergence", "reason": "\"Backup not found\" vs \"Save not found\" (a world/chunk save) -- \"sauvegarde\" is the standard, correct French gaming term for both a backup file and a world save." },
-    { "ns": "errors", "value": "Chemin d'installation invalide", "category": "phrasing-variant", "reason": "\"Invalid install path\" vs \"Invalid installation path\" -- same concept, English abbreviates \"installation\" to \"install\" in only one source string." },
-    { "ns": "events", "value": "pluie", "category": "phrasing-variant", "reason": "\"rain\" (noun label) vs \"raining\" (present-tense state) -- same weather condition, different English part of speech; French noun form correctly covers both." },
-    { "ns": "events", "value": "orage", "category": "language-convergence", "reason": "\"storm\" vs \"thunderstorm\" -- \"orage\" specifically means thunderstorm in French (a storm without thunder would be \"tempête\"); correct for both English words in this weather-toggle context." },
-    { "ns": "events", "value": "neige", "category": "phrasing-variant", "reason": "\"snow toggle\" vs \"snowing\" -- same weather condition, toggle-label vs present-tense state; French noun form covers both." },
-    { "ns": "featureErrorBoundary", "value": "Réessayer", "category": "synonym-reuse", "reason": "\"Retry\" vs \"Try Again\" -- same action, two English button-label conventions, one correct French verb." },
-    { "ns": "mods", "value": "Importer une collection", "category": "phrasing-variant", "reason": "\"Import Collection\" / \"Import collection\" / \"Import a Collection\" -- same menu action across 3 UI locations, minor article/capitalization variance in the English sources." },
-    { "ns": "mods", "value": "{{count}} mods trouvés", "category": "phrasing-variant", "reason": "\"Found {{count}} mods\" vs \"{{count}} mods found\" -- same information, different English word order; one natural French sentence covers both." },
-    { "ns": "mods", "value": "Collection synchronisée", "category": "phrasing-variant", "reason": "\"Collection in sync\" vs \"Collection synced\" -- same state, different English tense/phrasing." },
-    { "ns": "mods", "value": "{{count}} ID en double", "category": "plural-invariance", "reason": "activeMods.duplicateId_one/_other -- same plural-invariance shape as debug's workshopNothingToChange above." },
-    { "ns": "players", "value": "Donner de l'XP", "category": "synonym-reuse", "reason": "\"Give XP\" vs \"Add XP\" -- same action (granting XP to a player), two English verbs, one correct French phrase." },
-    { "ns": "sandboxPz", "value": "2 heures", "category": "24h-time-convergence", "reason": "DayLength \"2 Hours\" (duration) vs StartTime \"2 AM\" (02:00 in 24h format) -- both independently correct; verified the numeral matches in every flagged 24h-time pair." },
-    { "ns": "sandboxPz", "value": "5 heures", "category": "24h-time-convergence", "reason": "DayLength \"5 Hours\" vs StartTime \"5 AM\" (05:00) -- see \"2 heures\" entry for the verification method." },
-    { "ns": "sandboxPz", "value": "7 heures", "category": "24h-time-convergence", "reason": "DayLength \"7 Hours\" vs StartTime \"7 AM\" (07:00) -- see \"2 heures\" entry." },
-    { "ns": "sandboxPz", "value": "9 heures", "category": "24h-time-convergence", "reason": "DayLength \"9 Hours\" vs StartTime \"9 AM\" (09:00) -- see \"2 heures\" entry." },
-    { "ns": "sandboxPz", "value": "14 heures", "category": "24h-time-convergence", "reason": "DayLength \"14 Hours\" vs StartTime \"2 PM\" -- 2 PM = 14:00 in 24h format, the standard French clock notation; verified by conversion, not assumed." },
-    { "ns": "sandboxPz", "value": "17 heures", "category": "24h-time-convergence", "reason": "DayLength \"17 Hours\" vs StartTime \"5 PM\" -- 5 PM = 17:00 in 24h format; verified by conversion." },
-    { "ns": "sandboxPz", "value": "21 heures", "category": "24h-time-convergence", "reason": "DayLength \"21 Hours\" vs StartTime \"9 PM\" -- 9 PM = 21:00 in 24h format; verified by conversion." },
-    { "ns": "sandboxPz", "value": "Faible", "category": "scale-vocabulary-reuse", "reason": "\"Low\" (zombie population/respawn scales) vs \"Weak\" (blood level, zombie strength) across 4 keys -- \"Faible\" is the correct adjective for both senses; each scale's own option list checked, no position shift." },
-    { "ns": "sandboxPz", "value": "Aucun", "category": "scale-vocabulary-reuse", "reason": "\"None\" vs \"Never\" across 8 keys -- \"Aucun\" is the consistent zero-value option label across independent PZ frequency/intensity scales by design; each scale's own option list checked, no position shift." },
-    { "ns": "sandboxPz", "value": "Jour permanent", "category": "synonym-reuse", "reason": "\"Endless Day\" vs \"Always Day\" -- same setting concept named two ways across DayNightCycle and NightLength, one correct French phrase." },
-    { "ns": "sandboxPz", "value": "Nuit permanente", "category": "synonym-reuse", "reason": "\"Endless Night\" vs \"Always Night\" -- same shape as \"Jour permanent\" above." },
-    { "ns": "sandboxPz", "value": "Très rare", "category": "scale-vocabulary-reuse", "reason": "\"Very Dry\" (rain frequency) vs \"Extremely Rare\" (probability scales) across 6 keys -- Rain's \"Very Dry\" option describes rain rarity, not literal dryness, so \"Très rare\" is the semantically correct rendering for both; positions checked against each scale's own list." },
-    { "ns": "sandboxPz", "value": "Rare", "category": "scale-vocabulary-reuse", "reason": "\"Dry\" (rain frequency) vs \"Rare\" (probability scales) across 8 keys -- same rarity-scale vocabulary as \"Très rare\" above; positions checked." },
-    { "ns": "sandboxPz", "value": "Beaucoup", "category": "scale-vocabulary-reuse", "reason": "\"High\" (amount scales) vs \"Often\" (frequency scales) across 3 keys -- \"Beaucoup\" (a lot) is correct for both; positions checked." },
-    { "ns": "sandboxPz", "value": "Quelques-uns", "category": "scale-vocabulary-reuse", "reason": "vehicles.RecentlySurvivorVehicles \"Normal\" (midpoint of a 4-level scale) vs zombieLore.CrawlUnderVehicle \"Sometimes\" (midpoint of a 7-level scale) -- both scales' FULL option lists read in order to confirm neither is index-shifted (unlike CarSpawnRate/AnimalAgeModifier, fixed in 31bfaeec); each is a correctly-ordered, position-aligned scale, \"quelques-uns\" legitimately covers both moderate-quantity midpoints." },
-    { "ns": "scheduler", "value": "Jour de la semaine", "category": "synonym-reuse", "reason": "\"Day of the week\" vs \"Weekday\" (cron-schedule context, meaning which day, not \"business day\") -- same concept, one correct French phrase." },
-    { "ns": "serverconfig", "value": "Télécharger la sauvegarde des points de spawn", "category": "phrasing-variant", "reason": "aria-label vs tooltip text for the same button -- identical content by design, not a duplication bug." },
-    { "ns": "serverconfig", "value": "Télécharger la sauvegarde des régions de spawn", "category": "phrasing-variant", "reason": "Same aria/tooltip pairing as spawn points above, for the spawn regions button." },
-    { "ns": "serverStatusBadge", "value": "Hors ligne", "category": "synonym-reuse", "reason": "\"Offline\" (full word) vs \"Down\" (short word) -- same server state, two English display lengths, one correct French adjective." },
-    { "ns": "users", "value": "Ajouter un utilisateur", "category": "phrasing-variant", "reason": "\"Add User\" (toolbar button) vs \"Add a user\" (dialog title) -- same action, article-only English variance." },
-    { "ns": "workshopCollectionPanel", "value": "Cookies Steam requis", "category": "synonym-reuse", "reason": "\"Steam cookies required\" (toast title) vs \"Need Steam cookies\" (short label) -- same state, two English phrasings." },
-    { "ns": "workshopCollectionPanel", "value": "Absents du serveur", "category": "phrasing-variant", "reason": "\"Not on the server\" vs \"Not on server\" -- same phrase, one English source drops the article." }
+    {
+      "ns": "backups",
+      "value": "Dossier de sauvegardes de jeu introuvable",
+      "category": "synonym-reuse",
+      "reason": "\"Saves folder not found\" vs \"No saves folder found\" -- same event, two English phrasings, one correct French sentence."
+    },
+    {
+      "ns": "backups",
+      "value": "Supprimer les anciennes sauvegardes",
+      "category": "phrasing-variant",
+      "reason": "\"Delete Old Backups\" (dialog title) vs \"Delete older backups\" (confirm button) -- same action, title-case vs sentence-case source."
+    },
+    {
+      "ns": "console",
+      "value": "diffusion",
+      "category": "language-convergence",
+      "reason": "\"streaming\" (log tab) vs \"broadcast\" (message toggle) -- \"diffusion\" is the correct French word for both; genuinely different features, coincidentally sharing one correct noun."
+    },
+    {
+      "ns": "dashboard",
+      "value": "Arrêt forcé du serveur",
+      "category": "synonym-reuse",
+      "reason": "\"Force stop server\" (confirm dialog title) vs \"Server force stopped\" (success notice) -- same event, prompt vs completed-action framing; French noun phrase correctly serves both."
+    },
+    {
+      "ns": "dashboard",
+      "value": "en attente",
+      "category": "language-convergence",
+      "reason": "\"standby\" (telemetry status) vs \"pending\" (connection status) -- \"en attente\" (waiting) is the correct French for both; different status displays, same underlying idea."
+    },
+    {
+      "ns": "debug",
+      "value": "Rien à changer pour {{count}} ID.",
+      "category": "plural-invariance",
+      "reason": "workshopNothingToChange_one/_other -- \"ID.\" does not inflect for plural in French the way \"ID.\"/\"IDs.\" does in English; identical rendering is correct for both counts."
+    },
+    {
+      "ns": "debug",
+      "value": "Indisponible",
+      "category": "synonym-reuse",
+      "reason": "\"Unavailable\" (system tab) vs \"Not available\" (bridge tab) -- same state, two English phrasings, one correct French adjective."
+    },
+    {
+      "ns": "discord",
+      "value": "ID du serveur",
+      "category": "language-convergence",
+      "reason": "\"Server IDs\" (general list label) vs \"Guild ID\" (wizard field) -- Discord's own UI renamed \"Guild\" to \"Server\" in French as in English; \"ID du serveur\" is the correct, Discord-terminology-matching translation for both."
+    },
+    {
+      "ns": "errors",
+      "value": "Paramètres invalides",
+      "category": "language-convergence",
+      "reason": "\"Invalid settings\" vs \"Invalid parameters\" -- French does not distinguish these the way English does; \"paramètres\" is the single correct word for both."
+    },
+    {
+      "ns": "errors",
+      "value": "Sauvegarde introuvable",
+      "category": "language-convergence",
+      "reason": "\"Backup not found\" vs \"Save not found\" (a world/chunk save) -- \"sauvegarde\" is the standard, correct French gaming term for both a backup file and a world save."
+    },
+    {
+      "ns": "errors",
+      "value": "Chemin d'installation invalide",
+      "category": "phrasing-variant",
+      "reason": "\"Invalid install path\" vs \"Invalid installation path\" -- same concept, English abbreviates \"installation\" to \"install\" in only one source string."
+    },
+    {
+      "ns": "events",
+      "value": "pluie",
+      "category": "phrasing-variant",
+      "reason": "\"rain\" (noun label) vs \"raining\" (present-tense state) -- same weather condition, different English part of speech; French noun form correctly covers both."
+    },
+    {
+      "ns": "events",
+      "value": "orage",
+      "category": "language-convergence",
+      "reason": "\"storm\" vs \"thunderstorm\" -- \"orage\" specifically means thunderstorm in French (a storm without thunder would be \"tempête\"); correct for both English words in this weather-toggle context."
+    },
+    {
+      "ns": "events",
+      "value": "neige",
+      "category": "phrasing-variant",
+      "reason": "\"snow toggle\" vs \"snowing\" -- same weather condition, toggle-label vs present-tense state; French noun form covers both."
+    },
+    {
+      "ns": "featureErrorBoundary",
+      "value": "Réessayer",
+      "category": "synonym-reuse",
+      "reason": "\"Retry\" vs \"Try Again\" -- same action, two English button-label conventions, one correct French verb."
+    },
+    {
+      "ns": "mods",
+      "value": "Importer une collection",
+      "category": "phrasing-variant",
+      "reason": "\"Import Collection\" / \"Import collection\" / \"Import a Collection\" -- same menu action across 3 UI locations, minor article/capitalization variance in the English sources."
+    },
+    {
+      "ns": "mods",
+      "value": "{{count}} mods trouvés",
+      "category": "phrasing-variant",
+      "reason": "\"Found {{count}} mods\" vs \"{{count}} mods found\" -- same information, different English word order; one natural French sentence covers both."
+    },
+    {
+      "ns": "mods",
+      "value": "Collection synchronisée",
+      "category": "phrasing-variant",
+      "reason": "\"Collection in sync\" vs \"Collection synced\" -- same state, different English tense/phrasing."
+    },
+    {
+      "ns": "mods",
+      "value": "{{count}} ID en double",
+      "category": "plural-invariance",
+      "reason": "activeMods.duplicateId_one/_other -- same plural-invariance shape as debug's workshopNothingToChange above."
+    },
+    {
+      "ns": "players",
+      "value": "Donner de l'XP",
+      "category": "synonym-reuse",
+      "reason": "\"Give XP\" vs \"Add XP\" -- same action (granting XP to a player), two English verbs, one correct French phrase."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "2 heures",
+      "category": "24h-time-convergence",
+      "reason": "DayLength \"2 Hours\" (duration) vs StartTime \"2 AM\" (02:00 in 24h format) -- both independently correct; verified the numeral matches in every flagged 24h-time pair."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "5 heures",
+      "category": "24h-time-convergence",
+      "reason": "DayLength \"5 Hours\" vs StartTime \"5 AM\" (05:00) -- see \"2 heures\" entry for the verification method."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "7 heures",
+      "category": "24h-time-convergence",
+      "reason": "DayLength \"7 Hours\" vs StartTime \"7 AM\" (07:00) -- see \"2 heures\" entry."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "9 heures",
+      "category": "24h-time-convergence",
+      "reason": "DayLength \"9 Hours\" vs StartTime \"9 AM\" (09:00) -- see \"2 heures\" entry."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "14 heures",
+      "category": "24h-time-convergence",
+      "reason": "DayLength \"14 Hours\" vs StartTime \"2 PM\" -- 2 PM = 14:00 in 24h format, the standard French clock notation; verified by conversion, not assumed."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "17 heures",
+      "category": "24h-time-convergence",
+      "reason": "DayLength \"17 Hours\" vs StartTime \"5 PM\" -- 5 PM = 17:00 in 24h format; verified by conversion."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "21 heures",
+      "category": "24h-time-convergence",
+      "reason": "DayLength \"21 Hours\" vs StartTime \"9 PM\" -- 9 PM = 21:00 in 24h format; verified by conversion."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "Faible",
+      "category": "scale-vocabulary-reuse",
+      "reason": "\"Low\" (zombie population/respawn scales) vs \"Weak\" (blood level, zombie strength) across 4 keys -- \"Faible\" is the correct adjective for both senses; each scale's own option list checked, no position shift."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "Aucun",
+      "category": "scale-vocabulary-reuse",
+      "reason": "\"None\" vs \"Never\" across 8 keys -- \"Aucun\" is the consistent zero-value option label across independent PZ frequency/intensity scales by design; each scale's own option list checked, no position shift."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "Jour permanent",
+      "category": "synonym-reuse",
+      "reason": "\"Endless Day\" vs \"Always Day\" -- same setting concept named two ways across DayNightCycle and NightLength, one correct French phrase."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "Nuit permanente",
+      "category": "synonym-reuse",
+      "reason": "\"Endless Night\" vs \"Always Night\" -- same shape as \"Jour permanent\" above."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "Très rare",
+      "category": "scale-vocabulary-reuse",
+      "reason": "\"Very Dry\" (rain frequency) vs \"Extremely Rare\" (probability scales) across 6 keys -- Rain's \"Very Dry\" option describes rain rarity, not literal dryness, so \"Très rare\" is the semantically correct rendering for both; positions checked against each scale's own list."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "Rare",
+      "category": "scale-vocabulary-reuse",
+      "reason": "\"Dry\" (rain frequency) vs \"Rare\" (probability scales) across 8 keys -- same rarity-scale vocabulary as \"Très rare\" above; positions checked."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "Beaucoup",
+      "category": "scale-vocabulary-reuse",
+      "reason": "\"High\" (amount scales) vs \"Often\" (frequency scales) across 3 keys -- \"Beaucoup\" (a lot) is correct for both; positions checked."
+    },
+    {
+      "ns": "sandboxPz",
+      "value": "Quelques-uns",
+      "category": "scale-vocabulary-reuse",
+      "reason": "vehicles.RecentlySurvivorVehicles \"Normal\" (midpoint of a 4-level scale) vs zombieLore.CrawlUnderVehicle \"Sometimes\" (midpoint of a 7-level scale) -- both scales' FULL option lists read in order to confirm neither is index-shifted (unlike CarSpawnRate/AnimalAgeModifier, fixed in 31bfaeec); each is a correctly-ordered, position-aligned scale, \"quelques-uns\" legitimately covers both moderate-quantity midpoints."
+    },
+    {
+      "ns": "scheduler",
+      "value": "Jour de la semaine",
+      "category": "synonym-reuse",
+      "reason": "\"Day of the week\" vs \"Weekday\" (cron-schedule context, meaning which day, not \"business day\") -- same concept, one correct French phrase."
+    },
+    {
+      "ns": "serverconfig",
+      "value": "Télécharger la sauvegarde des points de spawn",
+      "category": "phrasing-variant",
+      "reason": "aria-label vs tooltip text for the same button -- identical content by design, not a duplication bug."
+    },
+    {
+      "ns": "serverconfig",
+      "value": "Télécharger la sauvegarde des régions de spawn",
+      "category": "phrasing-variant",
+      "reason": "Same aria/tooltip pairing as spawn points above, for the spawn regions button."
+    },
+    {
+      "ns": "serverStatusBadge",
+      "value": "Hors ligne",
+      "category": "synonym-reuse",
+      "reason": "\"Offline\" (full word) vs \"Down\" (short word) -- same server state, two English display lengths, one correct French adjective."
+    },
+    {
+      "ns": "users",
+      "value": "Ajouter un utilisateur",
+      "category": "phrasing-variant",
+      "reason": "\"Add User\" (toolbar button) vs \"Add a user\" (dialog title) -- same action, article-only English variance."
+    },
+    {
+      "ns": "workshopCollectionPanel",
+      "value": "Cookies Steam requis",
+      "category": "synonym-reuse",
+      "reason": "\"Steam cookies required\" (toast title) vs \"Need Steam cookies\" (short label) -- same state, two English phrasings."
+    },
+    {
+      "ns": "workshopCollectionPanel",
+      "value": "Absents du serveur",
+      "category": "phrasing-variant",
+      "reason": "\"Not on the server\" vs \"Not on server\" -- same phrase, one English source drops the article."
+    }
   ]
 }

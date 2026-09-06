@@ -23,7 +23,7 @@ function argValue(flag) {
 
 // --lua/--manifest/--baseline exist for break-verification (point the checker at a synthetic
 // fixture instead of the real files) -- normal use (local, CI) always takes the defaults.
-const LUA_PATH = argValue('--lua') || path.join(ROOT, 'pz-mod/PanelBridge/media/lua/server/PanelBridge.lua');
+const LUA_PATH = argValue('--lua') || path.join(ROOT, 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
 const MANIFEST_PATH = argValue('--manifest') || path.join(__dirname, 'engine-signatures.manifest.json');
 const BASELINE_PATH = argValue('--baseline') || path.join(__dirname, 'engine-signatures.baseline.json');
 

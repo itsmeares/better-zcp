@@ -7,12 +7,12 @@ import path from "path";
 const root = path.resolve(process.argv[2] || ".");
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 
-const lua = read("pz-mod/PanelBridge/media/lua/server/PanelBridge.lua");
+const lua = read("integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua");
 const luaHandlers = new Set(
   [...lua.matchAll(/^\s*handlers\.([a-zA-Z]+)/gm)].map((m) => m[1]),
 );
 
-const routes = read("server/routes/panelBridge.js");
+const routes = read("apps/panel-server/routes/panelBridge.js");
 
 // Split the route file per router.<verb>("<path>" so each action reference can
 // be attributed to the endpoint that sends it.
@@ -79,7 +79,7 @@ if (capabilityIdx !== -1) {
 const MIN_CAPABILITY_KEYS = 10;
 if (capabilityIdx === -1) {
   console.error(
-    "ERROR: could not find BRIDGE_ACTION_CAPABILITY in server/routes/panelBridge.js at all -- " +
+    "ERROR: could not find BRIDGE_ACTION_CAPABILITY in apps/panel-server/routes/panelBridge.js at all -- " +
     "it was renamed, moved, or removed. Fix the anchor before trusting this script's output.",
   );
   process.exit(1);
@@ -110,7 +110,7 @@ if (routeActionPairs < MIN_ROUTE_ACTION_PAIRS) {
   console.error(
     `ERROR: found only ${routeActionPairs} route->action pair(s) via the router.<verb>("path" anchor ` +
     `(expected at least ${MIN_ROUTE_ACTION_PAIRS}). The route-splitting regex is almost certainly stale -- ` +
-    `server/routes/panelBridge.js's route declarations changed shape. Fix it before trusting this script's output.`,
+    `apps/panel-server/routes/panelBridge.js's route declarations changed shape. Fix it before trusting this script's output.`,
   );
   process.exit(1);
 }

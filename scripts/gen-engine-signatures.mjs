@@ -44,7 +44,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const LUA_PATH = path.join(ROOT, 'pz-mod/PanelBridge/media/lua/server/PanelBridge.lua');
+const LUA_PATH = path.join(ROOT, 'integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua');
 const MANIFEST_PATH = path.join(__dirname, 'engine-signatures.manifest.json');
 
 // A real, correct class guess for a heavily-used variable can still show <100% coverage: some of

@@ -57,7 +57,7 @@ targeting the wrong command, `kickuser`'s missing `-r` flag, and confirmed
 node scripts/jar-audit/classify-response-shapes.mjs <path-to-projectzomboid.jar>
 ```
 
-Attempts to flag which of the ~44 commands `server/services/rcon.js` sends
+Attempts to flag which of the ~44 commands `apps/panel-server/services/rcon.js` sends
 return an informative reply (a list, a dump) versus an empty/short
 acknowledgement, using ONLY the presence of `java.util.Iterator`/
 `List`/`Map` enumeration calls in the class's constant pool as a signal.

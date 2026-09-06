@@ -1,0 +1,195 @@
+{
+  "pageHeader": {
+    "title": "Konsòl",
+    "description": "Rezilta jounal sèvè ak kòmand RCON"
+  },
+  "checkingServerTarget": "n ap tcheke sib sèvè a",
+  "emptyState": {
+    "title": "Pa gen sèvè aktif konfigire",
+    "description": "Ajoute oswa chwazi yon sèvè nan Sèvè m yo anvan w louvri konsòl la."
+  },
+  "tabs": {
+    "serverLog": "jounal sèvè",
+    "rconConsole": "konsòl rcon"
+  },
+  "unavailable": {
+    "remoteTitle": "Jounal sèvè pa disponib pou sèvè aleka",
+    "remoteDesc": "Sèvè aleka montre RCON sèlman. Itilize onglè RCON la pou kòmand an dirèk.",
+    "notConfiguredTitle": "Chemen jounal sèvè pa konfigire",
+    "notConfiguredDesc": "Defini chemen enstalasyon sèvè a oswa chemen done Zomboid la nan Sèvè m yo dabò."
+  },
+  "serverLog": {
+    "pathLabel": "chemen",
+    "loadingPath": "n ap chaje…",
+    "resumeAria": "Kontinye mizajou otomatik",
+    "pauseAria": "Mete mizajou otomatik sou poz",
+    "resume": "kontinye",
+    "pause": "poz",
+    "showAllAria": "Montre tout mesaj yo (ansanm ak bri)",
+    "filterAria": "Filtre mesaj repetitif yo",
+    "hidingTooltip_one": "N ap kache {{count}} liy repetitif — klike pou montre tout",
+    "hidingTooltip_other": "N ap kache {{count}} liy repetitif — klike pou montre tout",
+    "filterOffTooltip": "Filtre mesaj repetitif yo (koneksyon, tik inaktivite, elt.)",
+    "filterWithCount": "filtè −{{count}}",
+    "filter": "filtè",
+    "all": "tout",
+    "disableAutoScrollAria": "Dezaktive defile otomatik",
+    "enableAutoScrollAria": "Aktive defile otomatik",
+    "autoScrollOnTooltip": "Defile otomatik AKTIVE — swiv dènye liy lan",
+    "autoScrollOffTooltip": "Defile otomatik DEZAKTIVE — klike pou swiv dènye liy lan",
+    "followOn": "swiv aktive",
+    "followOff": "swiv dezaktive",
+    "refreshAria": "Rafrechi jounal la",
+    "clear": "efase",
+    "clearTooltip": "Efase dosye jounal konsòl sèvè a — aksyon sa a pa ka anile",
+    "clearConfirmTitle": "Efase jounal konsòl sèvè a?",
+    "clearConfirmDesc": "Aksyon sa a efase server-console.txt nèt sou disk la, se pa jis afichaj sa a. Pa gen fason pou anile.",
+    "clearConfirmButton": "Efase dosye jounal la",
+    "streamUnavailable": "Flux jounal pa disponib — sèvè a ka òfliy",
+    "retry": "eseye ankò",
+    "notFoundTitle": "Jounal konsòl sèvè a pa jwenn",
+    "notFoundDesc": "Asire w sèvè a ap fonksyone",
+    "streamLabel": "flux",
+    "paused": "an poz",
+    "live": "an dirèk",
+    "streaming": "n ap fè flux",
+    "serverOutputAria": "Rezilta konsòl sèvè a",
+    "linesHidden_one": "{{count}} liy kache pa filtè a · ",
+    "linesHidden_other": "{{count}} liy kache pa filtè a · ",
+    "showAll": "montre tout",
+    "noStreamOutput": "Poko gen rezilta jounal — sèvè a poko ekri anyen depi vi sa a louvri.",
+    "noOutputStreamDown": "Rezilta jounal enkoni — flux la tonbe, gade erè anwo a.",
+    "shown": "afiche",
+    "hidden": "kache",
+    "loaded": "chaje",
+    "updatesSuspended": "mizajou sispann",
+    "pollInterval": "sondaj · 2s"
+  },
+  "rcon": {
+    "linkLabel": "lyen",
+    "checking": "n ap tcheke…",
+    "notConfigured": "rcon pa konfigire",
+    "unknown": "enkoni",
+    "online": "rcon anliy",
+    "offline": "rcon òfliy",
+    "recheck": "tcheke ankò",
+    "notConfiguredTitle": "rcon pa konfigire",
+    "notConfiguredDesc": "Defini lame a, pò a, ak modpas la nan Sèvè m yo anvan w itilize kòmand an dirèk.",
+    "hostUnreachableTitle": "lame pa reyachab",
+    "hostUnreachableDesc": "Demare sèvè a, epi konfime lame, pò, ak modpas RCON nan Paramèt Panèl.",
+    "authFailedTitle": "otantifikasyon echwe",
+    "authFailedDesc": "Lame a reyachab — konfime modpas RCON nan Sèvè m yo.",
+    "droppedTitle": "koneksyon tonbe",
+    "droppedDesc": "RCON dekonekte pandan l t ap egzekite yon kòmand. Lame a, pò a, ak modpas la fèk konfime kòrèk -- chwazi \"Tcheke ankò\" anwo a depi w kwè koneksyon an tounen.",
+    "outputLabel": "rezilta rcon",
+    "entries_one": "{{count}} antre",
+    "entries_other": "{{count}} antre",
+    "clear": "efase",
+    "clearTooltip": "Efase rezilta vizib la (pa efase istwa a)",
+    "outputAria": "Rezilta kòmand RCON",
+    "noCommandsTitle": "Poko gen kòmand",
+    "noCommandsDesc": "Fè kouri yon kòmand RCON pou wè repons lan isit la.",
+    "quickLabel": "rapid",
+    "commandLabel": "kòmand",
+    "commandTip": "Kòmand isit yo egzekite imedyatman sou sèvè k ap fonksyone a, san okenn etap konfimasyon — menm pou yon bagay ki rete sèvè a oswa ki retire yon jwè. Si ou pa sèten sa yon kòmand fè, verifye l anvan ou egzekite l; pifò pa gen fason pou defèt yo.",
+    "promptPrefix": "rcon $",
+    "placeholder": "tape yon kòmand…",
+    "inputAria": "Antre kòmand RCON",
+    "executeAria": "Egzekite kòmand",
+    "run": "kouri",
+    "keyboardHint": "// antre · kouri · ↑↓ istwa",
+    "noResponseFallback": "Pa gen repons",
+    "noPermission": "Wòl ou pa gen pèmisyon pou egzekite kòmand RCON.",
+    "disconnectedUseRecheck": "RCON pa aksesib kounye a -- chwazi \"Tcheke ankò\" anwo a anvan w eseye ankò."
+  },
+  "quickCommands": {
+    "players": "Jwè",
+    "save": "Sove",
+    "showOptions": "Montre Opsyon",
+    "checkMods": "Tcheke Mods",
+    "help": "Èd",
+    "serverInfo": "Enfòmasyon Sèvè",
+    "getMemory": "Jwenn Memwa"
+  },
+  "broadcast": {
+    "toggleLabel": "difizyon",
+    "toggleSubtitle": "voye mesaj bay tout moun anliy",
+    "templates": {
+      "restart15": {
+        "label": "Redemaraj 15min",
+        "message": "SÈVÈ A AP REDEMARE nan 15 minit - Tanpri jwenn yon kote sekirize!"
+      },
+      "restart5": {
+        "label": "Redemaraj 5min",
+        "message": "SÈVÈ A AP REDEMARE nan 5 minit - Sove pwogrè ou!"
+      },
+      "restart1": {
+        "label": "Redemaraj 1min",
+        "message": "SÈVÈ A AP REDEMARE nan 1 minit - Dekoneksyon prèske rive!"
+      },
+      "maintenance": {
+        "label": "Antretyen",
+        "message": "Sèvè a ap antre nan MÒD ANTRETYEN - Tanpri dekonekte"
+      },
+      "backOnline": {
+        "label": "Retounen Anliy",
+        "message": "Antretyen sèvè a fini - Byenveni tounen!"
+      },
+      "saveWarning": {
+        "label": "Avètisman Sovgad",
+        "message": "Sèvè a ap sove - Ti lag ka rive"
+      }
+    },
+    "channelTagAria": "Etikèt chanèl",
+    "channels": {
+      "all": {
+        "label": "Tout jwè",
+        "description": "Pa gen etikèt — difizyon senp"
+      },
+      "admin": {
+        "label": "Etikèt [ADMIN]",
+        "description": "Make mesaj la kòm admin"
+      },
+      "say": {
+        "label": "Etikèt [SAY]",
+        "description": "Etikèt kosmetik pou chat lokal"
+      },
+      "faction": {
+        "label": "Etikèt [FACTION]",
+        "description": "Etikèt kosmetik pou faksyon"
+      },
+      "safehouse": {
+        "label": "Etikèt [SAFEHOUSE]",
+        "description": "Etikèt kosmetik pou kay sekirize"
+      }
+    },
+    "messageAria": "Mesaj difizyon",
+    "placeholderAll": "Ekri mesaj jwè yo dwe wè…",
+    "placeholderTagged": "Make [{{tag}}] — ekri mesaj la…",
+    "sendsVia": "Voye pa <code>servermsg</code>. Etikèt yo se kosmetik — RCON pa ka voye nan vrè chanèl chat.",
+    "send": "Voye"
+  },
+  "history": {
+    "toggleLabel": "istwa",
+    "entries_one": "{{count}} antre",
+    "entries_other": "{{count}} antre",
+    "truncatedHint": "(pi resan yo -- kòmand ki pi ansyen ka pa parèt)",
+    "searchPlaceholder": "Chèche istwa kòmand yo...",
+    "searchAria": "Chèche istwa kòmand",
+    "emptyTitle": "Pa gen istwa kòmand",
+    "emptyDesc": "Kòmand ou fè kouri yo ap anrejistre isit la."
+  },
+  "toasts": {
+    "historyUnavailableTitle": "Istwa Pa Disponib",
+    "historyUnavailableDesc": "Pa t kapab chaje istwa kòmand RCON resan an.",
+    "logClearedTitle": "Jounal Efase",
+    "logClearedDesc": "Jounal konsòl sèvè a efase",
+    "errorTitle": "Erè",
+    "clearLogFailed": "Efase jounal sèvè a echwe",
+    "commandFailedFallback": "Kòmand echwe",
+    "broadcastSentTitle": "Difizyon Voye",
+    "broadcastSentAll": "Mesaj ou a voye bay tout jwè",
+    "broadcastSentTagged": "Voye ak etikèt [{{tag}}] la",
+    "broadcastFailedFallback": "Voye difizyon echwe"
+  }
+}

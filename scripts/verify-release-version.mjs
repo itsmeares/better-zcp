@@ -49,21 +49,21 @@ function verify() {
   assert(/^\d+\.\d+\.\d+$/.test(expectedVersion), `Invalid release version: ${expectedVersion}`);
 
   const rootPackage = readJson("package.json");
-  const clientPackage = readJson("client/package.json");
+  const clientPackage = readJson("apps/panel-client/package.json");
   const workspaceLock = readText("pnpm-lock.yaml");
   assert(workspaceLock.includes("lockfileVersion:"), "pnpm-lock.yaml is not a valid pnpm lockfile");
-  assert(workspaceLock.includes("\n  .:\n") && workspaceLock.includes("\n  client:\n"),
-    "pnpm-lock.yaml is missing the root or client workspace importer");
+  assert(workspaceLock.includes("\n  .:\n") && workspaceLock.includes("\n  apps/panel-client:\n"),
+    "pnpm-lock.yaml is missing the root or panel-client workspace importer");
   const versions = [
     ["package.json", rootPackage.version],
-    ["client/package.json", clientPackage.version],
+    ["apps/panel-client/package.json", clientPackage.version],
   ];
   for (const [label, version] of versions) {
     assert(version === expectedVersion, `${label} is ${version}, expected ${expectedVersion}`);
   }
 
-  const lua = readText("pz-mod/PanelBridge/media/lua/server/PanelBridge.lua");
-  const modInfo = readText("pz-mod/PanelBridge/mod.info");
+  const lua = readText("integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua");
+  const modInfo = readText("integrations/panelbridge/PanelBridge/mod.info");
   const header = [...lua.matchAll(/^\s*Version:\s*([^\r\n]+)$/gm)];
   const runtime = [...lua.matchAll(/^\s*VERSION\s*=\s*"([^"]+)"/gm)];
   const manifest = [...modInfo.matchAll(/^modversion=([^\r\n]+)$/gm)];
@@ -80,7 +80,7 @@ function verify() {
       `release-manifest.json build SHA is ${releaseManifest.buildSha}, expected ${expectedBuildSha}`);
   }
 
-  const sourceClient = readJson("client/dist/build-info.json");
+  const sourceClient = readJson("apps/panel-client/dist/build-info.json");
   const releaseClient = readJson("release/client/dist/build-info.json");
   for (const [label, metadata] of [["source client", sourceClient], ["release client", releaseClient]]) {
     assert(metadata.panelVersion === expectedVersion,
@@ -91,12 +91,12 @@ function verify() {
       `${label} API contract does not match release manifest`);
   }
 
-  const sourceFiles = collectFiles(path.join(repoDir, "client/dist"));
+  const sourceFiles = collectFiles(path.join(repoDir, "apps/panel-client/dist"));
   const manifestFiles = releaseManifest.clientFiles || {};
   const sourcePaths = Object.keys(sourceFiles).sort();
   const manifestPaths = Object.keys(manifestFiles).sort();
   assert(JSON.stringify(sourcePaths) === JSON.stringify(manifestPaths),
-    "release-manifest.json client file inventory differs from client/dist");
+    "release-manifest.json client file inventory differs from apps/panel-client/dist");
   for (const relativePath of sourcePaths) {
     assert(sourceFiles[relativePath] === manifestFiles[relativePath],
       `client file hash mismatch: ${relativePath}`);
