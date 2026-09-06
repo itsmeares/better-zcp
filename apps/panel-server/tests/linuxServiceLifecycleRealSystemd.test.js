@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { buildLifecycleTemplate } from "../services/linuxServiceLifecycle.js";
+import { buildLifecycleTemplate } from "../services/linuxServiceLifecycle.ts";
 
 function hasSystemdAnalyze() {
   try {

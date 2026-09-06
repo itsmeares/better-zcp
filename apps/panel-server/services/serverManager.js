@@ -20,7 +20,7 @@ import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import {
   createLinuxServiceLifecycle,
   isManagedLifecycleProvider,
-} from "./linuxServiceLifecycle.js";
+} from "./linuxServiceLifecycle.ts";
 import { hasActiveSteamOperation } from "./activeSteamOperations.ts";
 
 const isWindows = process.platform === "win32";

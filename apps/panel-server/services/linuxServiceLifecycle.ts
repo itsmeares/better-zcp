@@ -14,11 +14,59 @@ export const LIFECYCLE_PROVIDERS = Object.freeze([
   "openrc",
 ]);
 
-export function isManagedLifecycleProvider(provider) {
+type ManagedLifecycleProvider = "systemd" | "openrc";
+
+interface LifecycleServer {
+  id: string | number;
+  name?: string | null;
+  serverName?: string | null;
+  serverPath?: string | null;
+  installPath?: string | null;
+  startCommand?: unknown;
+}
+
+interface LifecycleOptions {
+  platform?: string;
+  containerized?: boolean;
+  serviceUser?: string;
+  homeDirectory?: string;
+  fileExists?: (filePath: string) => boolean;
+  execFile?: ExecFile;
+  readFile?: (filePath: string) => string;
+  waitForState?: boolean;
+  sleep?: (milliseconds: number) => Promise<void>;
+}
+
+interface ExecResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+  execFailed?: boolean;
+}
+
+type ExecFile = (command: string, args: string[]) => Promise<ExecResult>;
+
+interface LifecycleInspection {
+  registered: boolean;
+  running: boolean;
+  activeState: string;
+  markerMatches: boolean;
+  error: string | null;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function isManagedLifecycleProvider(
+  provider: string,
+): provider is ManagedLifecycleProvider {
   return provider === "systemd" || provider === "openrc";
 }
 
-export function getLinuxLifecycleCapabilities(options = {}) {
+export function getLinuxLifecycleCapabilities(
+  options: Pick<LifecycleOptions, "platform" | "containerized"> = {},
+) {
   const platform = options.platform || process.platform;
   const containerized = options.containerized ?? isContainerized();
   return {
@@ -31,7 +79,9 @@ export function getLinuxLifecycleCapabilities(options = {}) {
   };
 }
 
-export function getLifecycleServiceName(server) {
+export function getLifecycleServiceName(
+  server: LifecycleServer | null | undefined,
+): string {
   const id = String(server?.id ?? "").trim();
   if (!/^[A-Za-z0-9_-]+$/.test(id)) {
     throw new Error("Invalid server id for a managed lifecycle service");
@@ -39,7 +89,7 @@ export function getLifecycleServiceName(server) {
   return `zomboid-panel-server-${id.toLowerCase()}`;
 }
 
-function assertPlainValue(value, label) {
+function assertPlainValue(value: unknown, label: string): string {
   const text = String(value ?? "").trim();
   if (!text || /[\0\r\n]/.test(text)) {
     throw new Error(`${label} must be a non-empty single-line value`);
@@ -47,22 +97,25 @@ function assertPlainValue(value, label) {
   return text;
 }
 
-function quoteSystemdArg(value) {
+function quoteSystemdArg(value: string): string {
   return `"${String(value)
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
     .replace(/%/g, "%%")}"`;
 }
 
-function plainSystemdValue(value) {
+function plainSystemdValue(value: string): string {
   return String(value).replace(/%/g, "%%");
 }
 
-function quoteShellLiteral(value) {
+function quoteShellLiteral(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function resolveLaunchTarget(server, fileExists = fs.existsSync) {
+function resolveLaunchTarget(
+  server: LifecycleServer,
+  fileExists: (filePath: string) => boolean = fs.existsSync,
+) {
   if (server?.startCommand) {
     throw new Error(
       "Managed lifecycle services do not accept a custom start command. Configure a .sh launcher path instead.",
@@ -96,7 +149,11 @@ function resolveLaunchTarget(server, fileExists = fs.existsSync) {
   };
 }
 
-export function buildLifecycleTemplate(server, provider, options = {}) {
+export function buildLifecycleTemplate(
+  server: LifecycleServer,
+  provider: string,
+  options: LifecycleOptions = {},
+) {
   if (!isManagedLifecycleProvider(provider)) {
     throw new Error(`Unsupported managed lifecycle provider: ${provider}`);
   }
@@ -215,27 +272,28 @@ export function buildLifecycleTemplate(server, provider, options = {}) {
   };
 }
 
-function defaultExecFile(command, args) {
-  return new Promise((resolve) => {
+function defaultExecFile(command: string, args: string[]): Promise<ExecResult> {
+  return new Promise<ExecResult>((resolve) => {
     const uid = typeof process.getuid === "function" ? process.getuid() : null;
     const env = { ...process.env };
     if (!env.XDG_RUNTIME_DIR && Number.isInteger(uid)) {
       env.XDG_RUNTIME_DIR = `/run/user/${uid}`;
     }
     nodeExecFile(command, args, { timeout: 15000, env }, (error, stdout, stderr) => {
-      const execFailed = Boolean(error) && !Number.isInteger(error?.code);
+      const errorCode = typeof error?.code === "number" ? error.code : null;
+      const execFailed = Boolean(error) && errorCode === null;
       resolve({
-        code: Number.isInteger(error?.code) ? error.code : error ? 1 : 0,
+        code: errorCode ?? (error ? 1 : 0),
         stdout: String(stdout || ""),
-        stderr: String(stderr || error?.message || ""),
+        stderr: String(stderr || errorMessage(error) || ""),
         execFailed,
       });
     });
   });
 }
 
-function parseSystemdShow(stdout) {
-  const values = {};
+function parseSystemdShow(stdout: string): Record<string, string> {
+  const values: Record<string, string> = {};
   for (const line of String(stdout || "").split(/\r?\n/)) {
     const separator = line.indexOf("=");
     if (separator > 0) values[line.slice(0, separator)] = line.slice(separator + 1);
@@ -244,7 +302,22 @@ function parseSystemdShow(stdout) {
 }
 
 export class LinuxServiceLifecycle {
-  constructor(server, provider, options = {}) {
+  private readonly server: LifecycleServer;
+  private readonly provider: ManagedLifecycleProvider;
+  private readonly serviceName: string;
+  private readonly execFile: ExecFile;
+  private readonly fileExists: (filePath: string) => boolean;
+  private readonly readFile: (filePath: string) => string;
+  private readonly platform: string;
+  private readonly containerized: boolean;
+  private readonly waitForState: boolean;
+  private readonly sleep: (milliseconds: number) => Promise<void>;
+
+  constructor(
+    server: LifecycleServer,
+    provider: string,
+    options: LifecycleOptions = {},
+  ) {
     if (!isManagedLifecycleProvider(provider)) {
       throw new Error(`Unsupported managed lifecycle provider: ${provider}`);
     }
@@ -260,7 +333,7 @@ export class LinuxServiceLifecycle {
     this.sleep = options.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
-  assertSupported() {
+  assertSupported(): void {
     if (this.platform !== "linux") {
       throw new Error(`${this.provider} lifecycle is supported only on Linux`);
     }
@@ -271,7 +344,7 @@ export class LinuxServiceLifecycle {
     }
   }
 
-  async inspect() {
+  async inspect(): Promise<LifecycleInspection> {
     this.assertSupported();
     const marker = `ZOMBOID_PANEL_SERVER_ID=${this.server.id}`;
     if (this.provider === "systemd") {
@@ -322,7 +395,7 @@ export class LinuxServiceLifecycle {
           running: false,
           activeState: "unknown",
           markerMatches: false,
-          error: `Could not read ${initPath}: ${error.message}`,
+          error: `Could not read ${initPath}: ${errorMessage(error)}`,
         };
       }
     }
@@ -404,7 +477,7 @@ export class LinuxServiceLifecycle {
     };
   }
 
-  async run(action) {
+  async run(action: string) {
     if (!["start", "stop", "restart"].includes(action)) {
       throw new Error(`Unsupported lifecycle action: ${action}`);
     }
@@ -469,6 +542,10 @@ export class LinuxServiceLifecycle {
   }
 }
 
-export function createLinuxServiceLifecycle(server, provider, options) {
+export function createLinuxServiceLifecycle(
+  server: LifecycleServer,
+  provider: string,
+  options?: LifecycleOptions,
+) {
   return new LinuxServiceLifecycle(server, provider, options);
 }

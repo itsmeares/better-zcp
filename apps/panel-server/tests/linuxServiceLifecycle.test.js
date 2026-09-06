@@ -7,7 +7,7 @@ import {
   getLinuxLifecycleCapabilities,
   getLifecycleServiceName,
   isManagedLifecycleProvider,
-} from "../services/linuxServiceLifecycle.js";
+} from "../services/linuxServiceLifecycle.ts";
 
 const server = {
   id: "alpha-1",

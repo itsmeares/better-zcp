@@ -46,7 +46,7 @@ import {
   getLinuxLifecycleCapabilities,
   isManagedLifecycleProvider,
   LIFECYCLE_PROVIDERS,
-} from "../services/linuxServiceLifecycle.js";
+} from "../services/linuxServiceLifecycle.ts";
 
 const router = express.Router();
 const RCON_HOST_REGEX = /^[a-zA-Z0-9.-]{1,255}$/;

@@ -60,7 +60,7 @@ import { resolveProvider } from "../utils/serverStatusModel.ts";
 import {
   getLifecycleServiceName,
   isManagedLifecycleProvider,
-} from "../services/linuxServiceLifecycle.js";
+} from "../services/linuxServiceLifecycle.ts";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import {
   collectKnownSecretValues,

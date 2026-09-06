@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   LinuxServiceLifecycle,
   buildLifecycleTemplate,
-} from "../services/linuxServiceLifecycle.js";
+} from "../services/linuxServiceLifecycle.ts";
 
 const server = {
   id: "alpha-1",

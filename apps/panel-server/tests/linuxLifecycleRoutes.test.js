@@ -33,7 +33,7 @@ vi.mock("../services/serverManager.js", () => ({
   },
 }));
 
-vi.mock("../services/linuxServiceLifecycle.js", () => ({
+vi.mock("../services/linuxServiceLifecycle.ts", () => ({
   LIFECYCLE_PROVIDERS: ["direct", "systemd", "openrc"],
   getLinuxLifecycleCapabilities: () => ({
     supported: true,

@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { buildLifecycleTemplate, getLifecycleServiceName } from "../services/linuxServiceLifecycle.js";
+import { buildLifecycleTemplate, getLifecycleServiceName } from "../services/linuxServiceLifecycle.ts";
 
 const INIT_D = "/etc/init.d";
 const EXEC_TIMEOUT_MS = 15_000;
