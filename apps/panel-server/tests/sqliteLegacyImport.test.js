@@ -6,7 +6,7 @@ import { createSqliteSnapshotStore } from "../database/sqlite/snapshotStore.ts";
 import {
   importLegacyDatabase,
   prepareLegacyImport,
-} from "../database/sqlite/legacyImport.js";
+} from "../database/sqlite/legacyImport.ts";
 
 const temporaryDirectories = [];
 

@@ -1,4 +1,4 @@
-import { importLegacyDatabase } from "../database/sqlite/legacyImport.js";
+import { importLegacyDatabase } from "../database/sqlite/legacyImport.ts";
 
 function readOption(args, name) {
   const index = args.indexOf(name);
