@@ -89,8 +89,8 @@ import {
 } from "./utils/embeddedClient.js";
 import { resolveObservedServerRunning } from "./utils/serverStatus.js";
 import { discoverMounts } from "./services/mountDiscovery.js";
-import { shouldAutoOpenBrowser } from "./utils/browserLaunch.js";
-import { isLinuxPanelSupervisor } from "./utils/restartSupervisor.js";
+import { shouldAutoOpenBrowser } from "./utils/browserLaunch.ts";
+import { isLinuxPanelSupervisor } from "./utils/restartSupervisor.ts";
 import { acquireLifecycleLock } from "./services/lifecycleCoordinator.js";
 
 (function maybeReexecViaSupervisor() {

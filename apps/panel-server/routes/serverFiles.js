@@ -21,7 +21,7 @@ import {
   backupWarningFor,
   writeIniWithBackup,
 } from "../utils/configBackup.js";
-import { escapeRegExp } from "../utils/regex.js";
+import { escapeRegExp } from "../utils/regex.ts";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
 import {

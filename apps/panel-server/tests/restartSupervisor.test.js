@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLinuxPanelSupervisor } from "../utils/restartSupervisor.js";
+import { isLinuxPanelSupervisor } from "../utils/restartSupervisor.ts";
 
 describe("Linux panel supervisor detection", () => {
   it("recognizes the generated start.sh supervisor environment", () => {

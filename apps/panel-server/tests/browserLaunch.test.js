@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldAutoOpenBrowser } from "../utils/browserLaunch.js";
+import { shouldAutoOpenBrowser } from "../utils/browserLaunch.ts";
 
 describe("shouldAutoOpenBrowser", () => {
   it("opens by default", () => {
