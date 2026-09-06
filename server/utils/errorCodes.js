@@ -943,16 +943,13 @@ export const ErrorCode = Object.freeze({
   /** server/routes/mods.js -- POST /discover-mod-ids, neither workshopId nor a parseable workshopUrl
    * given. */
   MODS_DISCOVER_WORKSHOP_ID_OR_URL_REQUIRED: "MODS_DISCOVER_WORKSHOP_ID_OR_URL_REQUIRED",
-  /** server/routes/mods.js -- POST /collection/extension-push, cookie value contains
+  /** server/routes/mods.js -- POST /collection/save-cookies, cookie value contains
    * CR/LF/NUL/semicolon. */
-  MODS_EXTENSION_COOKIES_CONTROL_CHARS: "MODS_EXTENSION_COOKIES_CONTROL_CHARS",
-  /** server/routes/mods.js -- POST /collection/extension-push, sessionid/steamLoginSecure missing. */
-  MODS_EXTENSION_COOKIES_REQUIRED: "MODS_EXTENSION_COOKIES_REQUIRED",
-  /** server/routes/mods.js -- POST /collection/extension-push, cookie value exceeds 4096 chars. */
-  MODS_EXTENSION_COOKIES_TOO_LONG: "MODS_EXTENSION_COOKIES_TOO_LONG",
-  /** server/routes/mods.js -- GET /collection/extension-bundle, neither a prebuilt zip nor the
-   * browser-extension/ source folder exists on this install. */
-  MODS_EXTENSION_FILES_MISSING: "MODS_EXTENSION_FILES_MISSING",
+  MODS_COOKIE_VALUES_CONTROL_CHARS: "MODS_COOKIE_VALUES_CONTROL_CHARS",
+  /** server/routes/mods.js -- POST /collection/save-cookies, sessionid/steamLoginSecure missing. */
+  MODS_COOKIE_VALUES_REQUIRED: "MODS_COOKIE_VALUES_REQUIRED",
+  /** server/routes/mods.js -- POST /collection/save-cookies, cookie value exceeds 4096 chars. */
+  MODS_COOKIE_VALUES_TOO_LONG: "MODS_COOKIE_VALUES_TOO_LONG",
   /** server/routes/mods.js -- POST /get-mod-info, Steam's GetPublishedFileDetails returned result !== 1. */
   MODS_GET_MOD_INFO_NOT_FOUND: "MODS_GET_MOD_INFO_NOT_FOUND",
   /** server/routes/mods.js -- DELETE /ignored-pairs, modIdA/modIdB missing or fail MOD_ID_RE. Own

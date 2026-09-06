@@ -9,7 +9,7 @@ logs/*.log
 *.exe
 .git/
 .github/
-Screenshots/
+docs/assets/screenshots/
 server/tests/
 build.js
 *.md

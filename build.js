@@ -1151,28 +1151,6 @@ Recommended safe-upgrade commands:
     fs.cpSync("./pz-mod", "./release/pz-mod", { recursive: true });
   }
 
-  // Ship the browser extension folder. Users can either "Load unpacked"
-  // directly from this folder, or zip it themselves.
-  if (fs.existsSync("./browser-extension")) {
-    fs.cpSync("./browser-extension", "./release/browser-extension", {
-      recursive: true,
-    });
-
-    // Best-effort standalone zip for the GitHub release asset. Skipped on
-    // platforms without PowerShell (Linux build hosts), which is fine —
-    // the Windows release job also builds it as part of packaging.
-    if (process.platform === "win32") {
-      try {
-        execSync(
-          'powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path browser-extension/* -DestinationPath release/zomboid-panel-extension.zip -Force"',
-          { stdio: "inherit" },
-        );
-      } catch (err) {
-        console.warn("Could not build browser-extension zip:", err.message);
-      }
-    }
-  }
-
   // Ship the sql.js WASM blob next to the executable. vehiclesDb.js loads it
   // at runtime to delete rows from the save's vehicles.db. The file is tiny
   // (~660 KB) and pkg can't introspect sql.js's dynamic require, so we copy

@@ -1302,7 +1302,7 @@ export const modsApi = {
       error?: string | null;
     }>,
   collectionSaveCookies: (sessionid: string, steamLoginSecure: string) =>
-    apiPost("/mods/collection/extension-push", { sessionid, steamLoginSecure }) as Promise<{
+    apiPost("/mods/collection/save-cookies", { sessionid, steamLoginSecure }) as Promise<{
       ok: boolean;
       message: string;
     }>,

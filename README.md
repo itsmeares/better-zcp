@@ -20,7 +20,7 @@ Project Zomboid is a zombie survival game; playing it with friends means running
 
 <br />
 
-![Dashboard](Screenshots/screenshot-dashboard-v2.png)
+![Dashboard](docs/assets/screenshots/screenshot-dashboard-v2.png)
 
 > **At a glance** — server status, RCON & PanelBridge connection state, live player activity, host telemetry, disk headroom, the next scheduled maintenance action, console error count, backup readiness, and quick actions. One screen covers 80% of routine admin work.
 
@@ -33,7 +33,7 @@ Project Zomboid is a zombie survival game; playing it with friends means running
 ### 🌧️ Events & Weather
 Force-trigger blizzards, tropical storms, or rain at any intensity. Fine-grained climate sliders for fog, wind, temperature, clouds, humidity. Spawn helicopter events or lightning strikes on demand. The closest thing to PZ admin god-mode.
 
-<img src="Screenshots/screenshot-events-v2.png" alt="Events & Weather" />
+<img src="docs/assets/screenshots/screenshot-events-v2.png" alt="Events & Weather" />
 
 </td>
 <td width="50%" valign="top">
@@ -41,7 +41,7 @@ Force-trigger blizzards, tropical storms, or rain at any intensity. Fine-grained
 ### 🗺️ Live World Map
 Real-time player positions on Knox County. Multi-floor support, layer toggles, zoom & pan. Right-click any player for instant teleport, heal, kick, or message — straight from the map. Map tiles are proxied and cached by the panel itself, which also auto-detects the current PZ map build so a new release doesn't leave you looking at a stale layout.
 
-<img src="Screenshots/screenshot-worldmap-v2.png" alt="World Map" />
+<img src="docs/assets/screenshots/screenshot-worldmap-v2.png" alt="World Map" />
 
 </td>
 </tr>
@@ -51,7 +51,7 @@ Real-time player positions on Knox County. Multi-floor support, layer toggles, z
 ### 👥 Player Management
 Roster with online / offline / banned tabs. Per-player dossier with moderation, spawn loadout, powers (heal, teleport, god mode), notes & history. Voice ban, SteamID ban, manual targeting.
 
-<img src="Screenshots/screenshot-players-v2.png" alt="Players" />
+<img src="docs/assets/screenshots/screenshot-players-v2.png" alt="Players" />
 
 </td>
 <td width="50%" valign="top">
@@ -59,7 +59,7 @@ Roster with online / offline / banned tabs. Per-player dossier with moderation, 
 ### 🧩 Mod Manager
 Tracks every Workshop mod on your server and flags updates through the Steam API. Import a Steam collection and drive server membership from it — adding a mod writes `WorkshopItems=`, resolves its internal mod ID into `Mods=`, and picks up map folders on its own.
 
-<img src="Screenshots/screenshot-mods-v2.png" alt="Mod Manager" />
+<img src="docs/assets/screenshots/screenshot-mods-v2.png" alt="Mod Manager" />
 
 </td>
 </tr>
@@ -69,7 +69,7 @@ Tracks every Workshop mod on your server and flags updates through the Steam API
 ### ⚠️ Mod Conflicts & Load Order
 Scans your mod list for known incompatibilities, missing dependencies, and load-order issues. Severity-tinted findings so you see real problems before you boot the server. Load order can auto-sort from each mod's declared `require=`, with a preview of every move before anything is written.
 
-<img src="Screenshots/screenshot-mods-conflicts.png" alt="Mod Conflicts" />
+<img src="docs/assets/screenshots/screenshot-mods-conflicts.png" alt="Mod Conflicts" />
 
 </td>
 <td width="50%" valign="top">
@@ -77,7 +77,7 @@ Scans your mod list for known incompatibilities, missing dependencies, and load-
 ### ⚙️ Server Configuration
 Full in-browser INI editor for sandbox options, spawn regions, mod settings, and server flags. Searchable, structured view + raw view for power users. No more notepad-and-restart. Mod Settings edits apply live through PanelBridge while the server is running, and now save to disk correctly too — no need to stop the server just to make an edit stick.
 
-<img src="Screenshots/screenshot-config-v2.png" alt="Server Configuration" />
+<img src="docs/assets/screenshots/screenshot-config-v2.png" alt="Server Configuration" />
 
 </td>
 </tr>
@@ -87,7 +87,7 @@ Full in-browser INI editor for sandbox options, spawn regions, mod settings, and
 ### 🆕 Server Setup Wizard
 Spin up a fresh PZ server in minutes. SteamCMD install, port config, RCON setup, admin account — all stepped through with sensible defaults.
 
-<img src="Screenshots/screenshot-server-setup.png" alt="Server Setup" />
+<img src="docs/assets/screenshots/screenshot-server-setup.png" alt="Server Setup" />
 
 </td>
 <td width="50%" valign="top">
@@ -97,7 +97,7 @@ Guided wizard for creating the Discord app, getting tokens, and inviting the bot
 
 **The step that trips people up:** in the Discord Developer Portal, under your application's **Bot** page, turn on the **Server Members** and **Message Content** privileged intents. Both are off by default and have nothing to do with your token — a correct token and correct IDs will still fail to connect without them. Check both before you click Start; the panel names the exact problem if you hit it anyway, instead of a generic "check configuration."
 
-<img src="Screenshots/screenshot-discord-setup.png" alt="Discord Setup" />
+<img src="docs/assets/screenshots/screenshot-discord-setup.png" alt="Discord Setup" />
 
 </td>
 </tr>
@@ -107,7 +107,7 @@ Guided wizard for creating the Discord app, getting tokens, and inviting the bot
 ### 📊 Performance Telemetry
 Host RAM and CPU graphs, PZ process memory, player count history. Time-range selectable, exportable. Catch slow leaks and load spikes before players notice.
 
-<img src="Screenshots/screenshot-debug-performance.png" alt="Performance" />
+<img src="docs/assets/screenshots/screenshot-debug-performance.png" alt="Performance" />
 
 </td>
 <td width="50%" valign="top">
@@ -115,7 +115,7 @@ Host RAM and CPU graphs, PZ process memory, player count history. Time-range sel
 ### 🐛 Crash Logs & Diagnostics
 Java crash dumps, error logs, support bundles. One-click `.zip` export for when you need to share state with someone smarter than you. Health, environment, and activity tabs included, plus a Diagnostics tab that runs dozens of checks across the panel, the server, and PanelBridge — some fail with a one-click fix, others link straight to the setting that needs attention.
 
-<img src="Screenshots/screenshot-debug-crashes.png" alt="Crash Logs" />
+<img src="docs/assets/screenshots/screenshot-debug-crashes.png" alt="Crash Logs" />
 
 </td>
 </tr>

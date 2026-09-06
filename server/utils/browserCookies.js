@@ -372,7 +372,7 @@ async function readChromiumCookies(cookiesPath) {
   let tmpPath;
   try { tmpPath = await snapshotCookiesFile(cookiesPath); }
   catch (err) {
-    return { ok: false, error: `Could not read cookies file (${err.code || 'locked'}). Try closing the browser and retry, or use the browser extension.` };
+    return { ok: false, error: `Could not read cookies file (${err.code || 'locked'}). Try closing the browser and retry, or paste Steam cookies manually.` };
   }
   try {
     const SQL = await getSQL();
@@ -400,7 +400,7 @@ async function readFirefoxCookies(cookiesPath) {
   let tmpPath;
   try { tmpPath = await snapshotCookiesFile(cookiesPath); }
   catch (err) {
-    return { ok: false, error: `Could not read cookies file (${err.code || 'locked'}). Try closing Firefox and retry, or use the browser extension.` };
+    return { ok: false, error: `Could not read cookies file (${err.code || 'locked'}). Try closing Firefox and retry, or paste Steam cookies manually.` };
   }
   try {
     const SQL = await getSQL();
@@ -481,7 +481,7 @@ function decryptChromiumValue(encrypted, key) {
   if (!encrypted || encrypted.length === 0) return { ok: false, reason: 'empty' };
   const prefix = encrypted.slice(0, 3).toString('ascii');
   if (prefix === 'v20') {
-    return { ok: false, reason: 'app-bound (v20) — Chrome 127+ seals this cookie to the Chrome process; install the panel browser extension instead' };
+    return { ok: false, reason: 'app-bound (v20) — Chrome 127+ seals this cookie to the Chrome process; paste the cookie manually instead' };
   }
   if (prefix !== 'v10' && prefix !== 'v11') {
     return { ok: false, reason: `unsupported scheme "${prefix}"` };
@@ -502,7 +502,7 @@ function decryptChromiumValue(encrypted, key) {
 
 export async function extractSteamCookies(browserId) {
   if (process.platform !== 'win32') {
-    return { ok: false, browser: browserId, error: 'Only supported on Windows for now — use the browser extension on Linux/Mac' };
+    return { ok: false, browser: browserId, error: 'Only supported on Windows for now — paste Steam cookies manually on Linux/macOS' };
   }
   const def = BROWSER_DEFS.find((b) => b.id === browserId);
   if (!def) return { ok: false, browser: browserId, error: 'Unknown browser id' };
@@ -577,7 +577,7 @@ export async function extractSteamCookies(browserId) {
     }
   }
   if (appBoundCount > 0) {
-    notes.push(`${appBoundCount} cookie(s) are sealed by Chrome 127+ App-Bound Encryption and cannot be extracted from outside Chrome. Install the panel's browser extension instead if steamLoginSecure is missing below.`);
+    notes.push(`${appBoundCount} cookie(s) are sealed by Chrome 127+ App-Bound Encryption and cannot be extracted from outside Chrome. Paste steamLoginSecure manually if it is missing below.`);
   }
   return pickSteamCookies(browserId, decoded, notes);
 }

@@ -37,7 +37,6 @@ RUN corepack enable && corepack install && pnpm install --filter pz-server-manag
 COPY server/ ./server/
 COPY --from=client-build /src/client/dist ./client/dist
 COPY pz-mod/ ./pz-mod/
-COPY browser-extension/ ./browser-extension/
 COPY docker/all-in-one/entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh \

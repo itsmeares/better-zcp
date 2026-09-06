@@ -135,12 +135,6 @@ jobs:
           name: linux-binary
           path: .
 
-      - name: Package browser extension
-        run: |
-          set -euo pipefail
-          cd browser-extension
-          zip -r ../zomboid-panel-extension.zip . -x '*.DS_Store'
-
       - name: Generate checksums
         run: |
           sha256sum \
@@ -148,7 +142,6 @@ jobs:
             ZomboidControlPanel \
             ZomboidControlPanel-windows.zip \
             ZomboidControlPanel-linux.tar.gz \
-            zomboid-panel-extension.zip \
             docker-compose.install.yml \
             Dockerfile > checksums.txt
 
@@ -181,7 +174,6 @@ jobs:
               ZomboidControlPanel \
               ZomboidControlPanel-windows.zip \
               ZomboidControlPanel-linux.tar.gz \
-              zomboid-panel-extension.zip \
               docker-compose.install.yml \
               Dockerfile \
               checksums.txt; then

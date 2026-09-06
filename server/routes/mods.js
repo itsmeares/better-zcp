@@ -1523,12 +1523,9 @@ router.post("/collection/extract-cookies", async (req, res) => {
   }
 });
 
-// Push endpoint used by the panel browser extension. The extension reads
-// Steam cookies via the WebExtensions `cookies` API (works regardless of
-// Chrome's App-Bound Encryption) and POSTs them here. Authentication is the
-// usual JWT — the extension logs in with the panel's normal username/password
-// first to obtain a token.
-router.post("/collection/extension-push", async (req, res) => {
+// Save Steam cookies pasted by the operator. Authentication is the usual JWT
+// and the values are written directly to the panel's secret store.
+router.post("/collection/save-cookies", async (req, res) => {
   try {
     const sessionid =
       typeof req.body?.sessionid === "string" ? req.body.sessionid.trim() : "";
@@ -1542,7 +1539,7 @@ router.post("/collection/extension-push", async (req, res) => {
         .status(400)
         .json({
           error: "Both sessionid and steamLoginSecure are required",
-          code: ErrorCode.MODS_EXTENSION_COOKIES_REQUIRED,
+          code: ErrorCode.MODS_COOKIE_VALUES_REQUIRED,
         });
     }
     // Cookie values must not contain CR/LF/null/semicolon — those would break
@@ -1554,7 +1551,7 @@ router.post("/collection/extension-push", async (req, res) => {
         .status(400)
         .json({
           error: "Cookie values contain forbidden control characters",
-          code: ErrorCode.MODS_EXTENSION_COOKIES_CONTROL_CHARS,
+          code: ErrorCode.MODS_COOKIE_VALUES_CONTROL_CHARS,
         });
     }
     // Sanity-check value lengths — Steam cookies are well under 1 KB each.
@@ -1563,107 +1560,18 @@ router.post("/collection/extension-push", async (req, res) => {
         .status(400)
         .json({
           error: "Cookie values are unexpectedly long",
-          code: ErrorCode.MODS_EXTENSION_COOKIES_TOO_LONG,
+          code: ErrorCode.MODS_COOKIE_VALUES_TOO_LONG,
         });
     }
 
     await setSteamSessionCredentials(sessionid, loginSecure);
 
     log.info(
-      `Steam cookies updated via browser extension (user: ${req.user?.username || "unknown"})`,
+      `Steam cookies updated via manual entry (user: ${req.user?.username || "unknown"})`,
     );
     res.json({ ok: true, message: "Cookies saved" });
   } catch (error) {
-    log.error(`Extension push failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-// Serves the panel's browser extension as a zip. Prefers a prebuilt zip next
-// to the install, but falls back to zipping `browser-extension/` on the fly —
-// Docker images and pkg builds ship the source folder, not the zip, so
-// relying on a prebuilt artifact made this endpoint 404 for most installs.
-const EXTENSION_SOURCE_FILES = [
-  "manifest.json",
-  "popup.html",
-  "popup.css",
-  "popup.js",
-  "README.md",
-];
-
-function resolveExtensionPaths() {
-  const isPkg = typeof process.pkg !== "undefined";
-  const baseDir = isPkg
-    ? path.dirname(process.execPath)
-    : path.resolve(process.cwd());
-  const zipCandidates = [
-    path.join(baseDir, "zomboid-panel-extension.zip"),
-    path.join(baseDir, "release", "zomboid-panel-extension.zip"),
-    path.join(baseDir, "..", "release", "zomboid-panel-extension.zip"),
-  ];
-  const dirCandidates = [
-    path.join(baseDir, "browser-extension"),
-    path.join(baseDir, "..", "browser-extension"),
-  ];
-  return { zipCandidates, dirCandidates };
-}
-
-function firstExisting(candidates) {
-  for (const c of candidates) {
-    try {
-      if (fs.existsSync(c)) return c;
-    } catch {
-      /* ignore */
-    }
-  }
-  return null;
-}
-
-router.get("/collection/extension-bundle", async (req, res) => {
-  try {
-    const { zipCandidates, dirCandidates } = resolveExtensionPaths();
-
-    const zipPath = firstExisting(zipCandidates);
-    if (zipPath) {
-      const stat = fs.statSync(zipPath);
-      res.setHeader("Content-Type", "application/zip");
-      res.setHeader(
-        "Content-Disposition",
-        'attachment; filename="zomboid-panel-extension.zip"',
-      );
-      res.setHeader("Content-Length", String(stat.size));
-      fs.createReadStream(zipPath).pipe(res);
-      return;
-    }
-
-    const srcDir = firstExisting(dirCandidates);
-    if (!srcDir) {
-      return res.status(404).json({
-        error:
-          "Browser extension files are missing from this panel install. Download zomboid-panel-extension.zip from the GitHub release instead.",
-        code: ErrorCode.MODS_EXTENSION_FILES_MISSING,
-      });
-    }
-
-    const { default: archiver } = await import("archiver");
-    const archive = archiver("zip", { zlib: { level: 9 } });
-    res.setHeader("Content-Type", "application/zip");
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="zomboid-panel-extension.zip"',
-    );
-    archive.on("error", (err) => {
-      log.error(`Extension bundle zip failed: ${err.message}`);
-      res.destroy();
-    });
-    archive.pipe(res);
-    for (const name of EXTENSION_SOURCE_FILES) {
-      const filePath = path.join(srcDir, name);
-      if (fs.existsSync(filePath)) archive.file(filePath, { name });
-    }
-    await archive.finalize();
-  } catch (error) {
-    log.error(`Extension bundle serve failed: ${error.message}`);
+    log.error(`Saving Steam cookies failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
