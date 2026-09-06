@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import express from "express";
-import { parseTrustProxySetting } from "../utils/trustProxy.js";
+import { parseTrustProxySetting } from "../utils/trustProxy.ts";
 
 describe("parseTrustProxySetting", () => {
   it.each(["", "0", "false", "off", "none"])(

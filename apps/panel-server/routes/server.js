@@ -39,7 +39,7 @@ import { invalidateMapFolderScan } from "./chunks.js";
 import { emitActionResult } from "./scheduler.js";
 import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.js";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
-import { confineToRoots } from "../utils/browseRoots.js";
+import { confineToRoots } from "../utils/browseRoots.ts";
 import { isContainerized } from "../utils/dockerDetect.js";
 
 const router = express.Router();

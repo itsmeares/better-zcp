@@ -7,7 +7,7 @@ import rateLimit from "express-rate-limit";
 import { permissionsPolicy } from "./middleware/permissionsPolicy.js";
 import { logSetupTokenIfNeeded } from "./utils/setupToken.js";
 import { computeInlineScriptCspHash } from "./utils/cspScriptHash.js";
-import { parseTrustProxySetting } from "./utils/trustProxy.js";
+import { parseTrustProxySetting } from "./utils/trustProxy.ts";
 import { isUncompressedBinaryProxyPath } from "./utils/compressionFilter.js";
 import { createServer } from "http";
 import { createServer as createHttpsServer } from "https";

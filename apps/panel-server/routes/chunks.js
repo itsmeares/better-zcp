@@ -13,7 +13,7 @@ import {
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.js";
 import { requirePermission, getRoleByName } from "../services/permissions.js";
 import { deleteVehiclesInBoxes } from "../utils/vehiclesDb.js";
-import { confineToRoots } from "../utils/browseRoots.js";
+import { confineToRoots } from "../utils/browseRoots.ts";
 import {
   normalizeUserPath,
   getCandidateZomboidPaths,

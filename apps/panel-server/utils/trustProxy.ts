@@ -1,6 +1,8 @@
 const DISABLED_VALUES = new Set(["", "0", "false", "off", "none"]);
 
-export function parseTrustProxySetting(value) {
+export type TrustProxySetting = false | 1 | number | string | string[];
+
+export function parseTrustProxySetting(value: unknown): TrustProxySetting {
   const rawValue = String(value ?? "").trim();
   const normalizedValue = rawValue.toLowerCase();
 
