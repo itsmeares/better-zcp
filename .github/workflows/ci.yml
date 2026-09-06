@@ -39,6 +39,9 @@ jobs:
       - name: Lint
         run: pnpm run lint:server
 
+      - name: Typecheck
+        run: pnpm --filter @better-zcp/panel-server run typecheck
+
       - name: Tests
         shell: bash
         run: |
