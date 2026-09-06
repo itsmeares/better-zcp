@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeMemoryGb } from "../utils/memory.js";
+import { normalizeMemoryGb } from "../utils/memory.ts";
 
 describe("normalizeMemoryGb", () => {
   it.each(["4junk", "4.9", "1e2", "", 0, -1])(

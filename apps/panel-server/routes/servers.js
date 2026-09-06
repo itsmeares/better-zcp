@@ -34,7 +34,7 @@ import {
   parseBoundedInteger,
   parseClampedInteger,
 } from "../utils/queryNumbers.ts";
-import { normalizeMemoryGb } from "../utils/memory.js";
+import { normalizeMemoryGb } from "../utils/memory.ts";
 import { GAME_PORT_MAX, applyUpnpToIni } from "./server.js";
 import {
   resolveLaunchMode,
