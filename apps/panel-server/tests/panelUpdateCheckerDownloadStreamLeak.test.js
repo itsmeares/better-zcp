@@ -35,7 +35,7 @@ vi.mock("../database/init.js", () => ({
   setSetting: vi.fn(async () => {}),
 }));
 
-vi.mock("../services/dockerUpdateProxy.js", () => ({
+vi.mock("../services/dockerUpdateProxy.ts", () => ({
   DockerUpdateProxy: vi.fn(function DockerUpdateProxy() {
     this.mode = "none";
   }),

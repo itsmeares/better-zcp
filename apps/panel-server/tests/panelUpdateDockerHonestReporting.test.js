@@ -3,7 +3,7 @@ import http from "http";
 
 
 const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");
-const { DockerUpdateProxy } = await import("../services/dockerUpdateProxy.js");
+const { DockerUpdateProxy } = await import("../services/dockerUpdateProxy.ts");
 
 describe("preflight() no longer reports a fabricated clean bill of health for docker mode", () => {
   it("stays ok:true (no known blocker), keeps the honest checksPerformed:false, and explains why via an informational field -- not the warnings channel", async () => {
