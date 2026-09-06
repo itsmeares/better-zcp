@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { Transform, Readable } from "stream";
+import { Transform, Readable, type Writable } from "stream";
 import { pipeline } from "stream/promises";
 import { createDeflateRaw, crc32 } from "zlib";
 
@@ -10,25 +10,45 @@ const DATA_DESCRIPTOR_FLAG = 0x8;
 const DEFLATED = 8;
 const STORED = 0;
 
-function writeUInt16(value) {
+interface DosDateTime {
+  dosDate: number;
+  dosTime: number;
+}
+
+interface CentralHeaderOptions {
+  name: string;
+  date: DosDateTime;
+  method: number;
+  crc: number;
+  compressedSize: number;
+  size: number;
+  offset: number;
+  directory: boolean;
+}
+
+function writeUInt16(value: number): Buffer {
   const buffer = Buffer.alloc(2);
   buffer.writeUInt16LE(value, 0);
   return buffer;
 }
 
-function writeUInt32(value) {
+function writeUInt32(value: number): Buffer {
   const buffer = Buffer.alloc(4);
   buffer.writeUInt32LE(value >>> 0, 0);
   return buffer;
 }
 
-function writeUInt64(value) {
+function writeUInt64(value: number): Buffer {
   const buffer = Buffer.alloc(8);
   buffer.writeBigUInt64LE(BigInt(Math.trunc(value)), 0);
   return buffer;
 }
 
-function zip64Extra(uncompressedSize, compressedSize, offset) {
+function zip64Extra(
+  uncompressedSize: number,
+  compressedSize: number,
+  offset?: number,
+): Buffer {
   const hasOffset = offset !== undefined;
   const data = Buffer.alloc(hasOffset ? 24 : 16);
   data.writeBigUInt64LE(BigInt(Math.trunc(uncompressedSize)), 0);
@@ -38,7 +58,7 @@ function zip64Extra(uncompressedSize, compressedSize, offset) {
   return Buffer.concat([writeUInt16(1), writeUInt16(data.length), data]);
 }
 
-function dosDateTime(date) {
+function dosDateTime(date: Date): DosDateTime {
   const validDate = date instanceof Date && Number.isFinite(date.getTime())
     ? date
     : new Date();
@@ -54,7 +74,7 @@ function dosDateTime(date) {
   return { dosDate, dosTime };
 }
 
-function normalizeName(name, directory = false) {
+function normalizeName(name: string, directory = false): string {
   const normalized = String(name ?? "").replace(/\\/g, "/");
   const segments = normalized.split("/").filter(Boolean);
   if (!segments.length || segments.some((segment) => segment === "..")) {
@@ -63,35 +83,35 @@ function normalizeName(name, directory = false) {
   return `${segments.join("/")}${directory ? "/" : ""}`;
 }
 
-function writeChunk(stream, chunk) {
+function writeChunk(stream: Writable, chunk: Buffer): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const cleanup = () => stream.off("error", onError);
-    const finish = (error) => {
+    const finish = (error?: Error | null) => {
       if (settled) return;
       settled = true;
       cleanup();
       if (error) reject(error);
       else resolve();
     };
-    const onError = (error) => finish(error);
+    const onError = (error: Error) => finish(error);
 
     stream.once("error", onError);
     try {
       stream.write(chunk, (error) => finish(error));
     } catch (error) {
-      finish(error);
+      finish(error instanceof Error ? error : new Error(String(error)));
     }
   });
 }
 
-function openStream(stream) {
+function openStream(stream: fs.WriteStream): Promise<void> {
   return new Promise((resolve, reject) => {
     const onOpen = () => {
       cleanup();
       resolve();
     };
-    const onError = (error) => {
+    const onError = (error: Error) => {
       cleanup();
       reject(error);
     };
@@ -105,25 +125,25 @@ function openStream(stream) {
   });
 }
 
-function closeStream(stream) {
+function closeStream(stream: fs.WriteStream): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const cleanup = () => stream.off("error", onError);
-    const finish = (error) => {
+    const finish = (error?: Error | null) => {
       if (settled) return;
       settled = true;
       cleanup();
       if (error) reject(error);
       else resolve();
     };
-    const onError = (error) => finish(error);
+    const onError = (error: Error) => finish(error);
 
     stream.once("error", onError);
-    stream.end((error) => finish(error));
+    stream.end((error?: Error | null) => finish(error));
   });
 }
 
-function localFileHeader(name, date) {
+function localFileHeader(name: string, date: DosDateTime): Buffer {
   const nameBytes = Buffer.from(name, "utf8");
   const extra = zip64Extra(0, 0);
   const header = Buffer.alloc(30 + nameBytes.length + extra.length);
@@ -143,7 +163,7 @@ function localFileHeader(name, date) {
   return header;
 }
 
-function localDirectoryHeader(name, date) {
+function localDirectoryHeader(name: string, date: DosDateTime): Buffer {
   const nameBytes = Buffer.from(name, "utf8");
   const header = Buffer.alloc(30 + nameBytes.length);
   writeUInt32(0x04034b50).copy(header, 0);
@@ -161,7 +181,16 @@ function localDirectoryHeader(name, date) {
   return header;
 }
 
-function centralHeader({ name, date, method, crc, compressedSize, size, offset, directory }) {
+function centralHeader({
+  name,
+  date,
+  method,
+  crc,
+  compressedSize,
+  size,
+  offset,
+  directory,
+}: CentralHeaderOptions): Buffer {
   const nameBytes = Buffer.from(name, "utf8");
   const extra = directory
     ? Buffer.alloc(0)
@@ -189,7 +218,7 @@ function centralHeader({ name, date, method, crc, compressedSize, size, offset, 
   return header;
 }
 
-function dataDescriptor(crc, compressedSize, size) {
+function dataDescriptor(crc: number, compressedSize: number, size: number): Buffer {
   const needsZip64 = compressedSize > 0xfffffffe || size > 0xfffffffe;
   return Buffer.concat([
     writeUInt32(0x08074b50),
@@ -199,7 +228,11 @@ function dataDescriptor(crc, compressedSize, size) {
   ]);
 }
 
-function zip64End(entryCount, centralSize, centralOffset) {
+function zip64End(
+  entryCount: number,
+  centralSize: number,
+  centralOffset: number,
+): Buffer {
   const endOffset = centralOffset + centralSize;
   const end = Buffer.concat([
     writeUInt32(0x06064b50),
@@ -233,7 +266,17 @@ function zip64End(entryCount, centralSize, centralOffset) {
 }
 
 export class StreamingZipWriter {
-  constructor(outputPath, { level = 6 } = {}) {
+  private readonly outputPath: string;
+  private readonly centralPath: string;
+  private readonly level: number;
+  private output: fs.WriteStream | null;
+  private central: fs.WriteStream | null;
+  private centralReader: fs.ReadStream | null;
+  private offset: number;
+  private entryCount: number;
+  private finalized: boolean;
+
+  constructor(outputPath: string, { level = 6 }: { level?: number } = {}) {
     this.outputPath = outputPath;
     this.centralPath = path.join(
       path.dirname(outputPath),
@@ -263,7 +306,7 @@ export class StreamingZipWriter {
     }
   }
 
-  async addDirectory(name, date = new Date()) {
+  async addDirectory(name: string, date = new Date()): Promise<void> {
     await this.open();
     if (this.finalized) throw new Error("ZIP writer is already finalized");
     const normalizedName = normalizeName(name, true);
@@ -285,7 +328,7 @@ export class StreamingZipWriter {
     this.entryCount += 1;
   }
 
-  async addFile(filePath, name, date = null) {
+  async addFile(filePath: string, name: string, date: Date | null = null): Promise<void> {
     const stats = await fs.promises.lstat(filePath);
     if (!stats.isFile()) throw new Error(`Backup source is not a regular file: ${filePath}`);
     return this.addStream(
@@ -295,11 +338,11 @@ export class StreamingZipWriter {
     );
   }
 
-  async addBuffer(buffer, name) {
+  async addBuffer(buffer: Buffer, name: string): Promise<void> {
     return this.addStream(Readable.from([buffer]), name, new Date());
   }
 
-  async addStream(source, name, date = new Date()) {
+  async addStream(source: Readable, name: string, date = new Date()): Promise<void> {
     await this.open();
     if (this.finalized) throw new Error("ZIP writer is already finalized");
     const normalizedName = normalizeName(name);
@@ -311,13 +354,13 @@ export class StreamingZipWriter {
     let size = 0;
     let compressedSize = 0;
     const checksumTransform = new Transform({
-      transform: (chunk, _encoding, callback) => {
+      transform: (chunk: Buffer, _encoding, callback) => {
         try {
           checksum = crc32(chunk, checksum);
           size += chunk.length;
           callback(null, chunk);
         } catch (error) {
-          callback(error);
+          callback(error instanceof Error ? error : new Error(String(error)));
         }
       },
     });
@@ -353,18 +396,21 @@ export class StreamingZipWriter {
     this.entryCount += 1;
   }
 
-  async writeOutput(chunk) {
+  async writeOutput(chunk: Buffer): Promise<void> {
+    if (!this.output) throw new Error("ZIP writer output is not open");
     await writeChunk(this.output, chunk);
     this.offset += chunk.length;
   }
 
-  async writeCentral(chunk) {
+  async writeCentral(chunk: Buffer): Promise<void> {
+    if (!this.central) throw new Error("ZIP writer central directory is not open");
     await writeChunk(this.central, chunk);
   }
 
-  async finalize() {
+  async finalize(): Promise<{ size: number; entries: number }> {
     if (this.finalized) throw new Error("ZIP writer is already finalized");
     await this.open();
+    if (!this.central) throw new Error("ZIP writer central directory is not open");
     await closeStream(this.central);
     this.central = null;
     const centralOffset = this.offset;
@@ -382,6 +428,7 @@ export class StreamingZipWriter {
     await this.writeOutput(
       zip64End(this.entryCount, centralSize, centralOffset),
     );
+    if (!this.output) throw new Error("ZIP writer output is not open");
     await closeStream(this.output);
     this.output = null;
     this.finalized = true;
@@ -389,7 +436,7 @@ export class StreamingZipWriter {
     return { size: this.offset, entries: this.entryCount };
   }
 
-  async abort() {
+  async abort(): Promise<void> {
     this.centralReader?.destroy();
     this.output?.destroy();
     this.central?.destroy();

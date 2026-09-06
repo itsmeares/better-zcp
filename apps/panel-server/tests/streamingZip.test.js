@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { crc32 } from "zlib";
 import unzipper, { Open } from "unzipper";
-import { StreamingZipWriter } from "../utils/streamingZip.js";
+import { StreamingZipWriter } from "../utils/streamingZip.ts";
 
 async function extractViaParse(zipPath, destDir) {
   await new Promise((resolve, reject) => {
