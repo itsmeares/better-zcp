@@ -1,20 +1,3 @@
-# Zomboid Control Panel - Docker installer
-#
-# Download this file, then run:
-#   docker compose -f docker-compose.install.yml up -d
-#
-# The panel is available at http://localhost:3001. `pull_policy: always`
-# ensures every `up -d` fetches the newest published dashboard image.
-#
-# This installer is suitable when Project Zomboid runs on another machine, or
-# when you only need the panel first. For host PZ mounts and PanelBridge file
-# access, use the fully annotated docker-compose.yml instead. Don't have
-# Project Zomboid running anywhere yet? Use infra/docker/all-in-one instead, which
-# installs and runs PZ *and* the panel in one container.
-#
-# Full comparison of all three Docker paths, with step-by-step walkthroughs:
-# docs/install/docker.md
-
 services:
   panel:
     image: ghcr.io/itsmeares/better-zcp:latest

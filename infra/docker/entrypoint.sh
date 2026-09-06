@@ -11,9 +11,6 @@ case "$puid:$pgid" in
     ;;
 esac
 
-# Orchestrators such as Kubernetes can pin a non-root UID/GID through the pod
-# securityContext. The container is then already at its target identity and has
-# neither CAP_CHOWN nor CAP_SETGID, so chown and setpriv would both fail.
 if [ "$(id -u)" != "0" ]; then
   current_uid="$(id -u)"
   current_gid="$(id -g)"
@@ -29,14 +26,6 @@ fi
 mkdir -p /app/data /app/logs
 chown -R "$puid:$pgid" /app/data /app/logs
 
-# Carry over supplementary groups granted by `group_add` / `--group-add`. They
-# are the only way to reach a host resource whose group differs from PGID — most
-# notably /var/run/docker.sock (root:docker 0660), which the Docker lifecycle
-# controls need. `--clear-groups` alone drops them before Node starts, and the
-# panel then reports Docker as available (that check is only an existsSync)
-# while every API call fails with EACCES.
-# gid 0 is excluded: root group membership is not something to carry into an
-# unprivileged process. PGID is already applied via --regid.
 supplementary="$(id -G | tr ' ' '\n' | grep -vx '0' | grep -vx "$pgid" | paste -sd, -)"
 
 if [ -n "$supplementary" ]; then

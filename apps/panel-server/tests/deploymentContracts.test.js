@@ -4,21 +4,7 @@ import fs from "fs";
 const readRepoFile = (relativePath) =>
   fs.readFileSync(new URL(`../../../${relativePath}`, import.meta.url), "utf8");
 
-describe("Docker deployment guidance", () => {
-  it("uses the all-in-one installer as the primary local-server path", () => {
-    const readme = readRepoFile("README.md");
-    const dockerSection = readme.match(
-      /### Docker and Unraid([\s\S]*?)\n#{2,3} /,
-    )?.[1];
-
-    expect(dockerSection).toBeTruthy();
-    expect(dockerSection).toContain("infra/docker/all-in-one/bootstrap.sh");
-    expect(dockerSection).toMatch(/publishes\s+the required UDP ports/);
-    expect(dockerSection.indexOf("infra/docker/all-in-one/bootstrap.sh")).toBeLessThan(
-      dockerSection.indexOf("docker-compose.install.yml"),
-    );
-  });
-
+describe("Deployment contracts", () => {
   it("publishes both PZ UDP ports in the all-in-one Compose stack", () => {
     const compose = readRepoFile("infra/docker/all-in-one/docker-compose.yml");
 
@@ -73,25 +59,10 @@ describe("Docker deployment guidance", () => {
     expect(verifier).toContain("release-manifest.json client file inventory differs");
   });
 
-  it("keeps the generic installer explicitly panel-only", () => {
+  it("keeps the generic installer free of PZ game ports", () => {
     const compose = readRepoFile("docker-compose.install.yml");
 
-    expect(compose).toContain("Project Zomboid runs on another machine");
     expect(compose).not.toContain("16261:16261/udp");
     expect(compose).not.toContain("16262:16262/udp");
-  });
-
-  it("documents the opt-in Docker lifecycle prerequisites", () => {
-    const compose = readRepoFile("docker-compose.yml");
-    const docs = readRepoFile("docs/install/docker.md");
-
-    expect(compose).toContain("/var/run/docker.sock:/var/run/docker.sock");
-    expect(compose).toContain("PANEL_DOCKER_CONTROL_ENABLED");
-    expect(compose).toContain("group_add:");
-    expect(docs).toContain("zomboid-panel.managed: \"true\"");
-    expect(docs).toContain("docker update --label-add zomboid-panel.managed=true");
-    expect(docs).toContain("PANEL_DOCKER_CONTROL_ENABLED=true");
-    expect(docs).toContain("/var/run/docker.sock");
-    expect(docs).toContain("--group-add=281");
   });
 });

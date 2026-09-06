@@ -1,6 +1,4 @@
 #!/sbin/openrc-run
-# Generated files replace every {{...}} placeholder with a validated value,
-# already correctly quoted for this file's own use of it.
 # X-Zomboid-Panel-Server-ID: {{SERVER_ID}}
 name={{QUOTED_SERVER_NAME}}
 description={{QUOTED_SERVER_NAME}}
@@ -11,16 +9,6 @@ depend() {
   after firewall
 }
 
-# directory=/command_args= (the declarative form supervisor=supervise-daemon
-# would otherwise auto-wire up) are deliberately not used here: openrc-run.sh
-# re-evaluates those two variables a second time after sourcing this script,
-# which both word-splits an unescaped space and allows $(...)/backtick
-# command substitution to execute even when the value was correctly
-# single-quoted for the first, ordinary pass. Calling supervise-daemon
-# directly from a normal start()/stop() function body is single-pass, plain
-# bash -- the working directory and launcher path are ordinary, correctly
-# single-quoted argv entries here, not values this file's own framework
-# re-parses.
 start() {
   ebegin "Starting ${name}"
   supervise-daemon "${RC_SVCNAME}" \

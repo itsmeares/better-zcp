@@ -7,9 +7,6 @@ COPY apps/panel-client/package.json ./apps/panel-client/package.json
 COPY .husky/install.mjs ./.husky/install.mjs
 RUN corepack install && pnpm install --filter @better-zcp/panel-client --frozen-lockfile
 COPY apps/panel-client/ ./apps/panel-client/
-# Same reasoning as the root Dockerfile: the frontend and the backend must be given the SAME
-# build sha, or the build-compatibility gate compares "unknown" against a real sha and blocks
-# the UI. No .git and no git binary exists in either stage.
 ARG PANEL_BUILD_SHA=""
 ENV PANEL_BUILD_SHA=${PANEL_BUILD_SHA}
 RUN pnpm --filter @better-zcp/panel-client build

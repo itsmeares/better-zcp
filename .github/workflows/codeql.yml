@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '23 3 * * 1'
+    - cron: "23 3 * * 1"
 
 permissions:
   contents: read
@@ -21,19 +21,16 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      # In-code CodeQL suppressions document reviewed findings. They do not
-      # dismiss alerts automatically. The AlertSuppression query is loaded
-      # from the JavaScript query pack root.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@6f5948dfacef28e207b48d0905cf90c03365536d # v3
+        uses: github/codeql-action/init@6f5948dfacef28e207b48d0905cf90c03365536d
         with:
           languages: javascript-typescript
           queries: security-extended
           packs: codeql/javascript-queries:AlertSuppression.ql
 
       - name: Analyze
-        uses: github/codeql-action/analyze@6f5948dfacef28e207b48d0905cf90c03365536d # v3
+        uses: github/codeql-action/analyze@6f5948dfacef28e207b48d0905cf90c03365536d
         with:
           category: /language:javascript-typescript
