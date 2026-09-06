@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { readIniValues, readSandboxValue } from "./templateFiles.js";
 
 const INI_KEYS = [
@@ -26,14 +26,23 @@ const SANDBOX_KEYS = [
   "HoursForLootRespawn",
 ];
 
-function getConfigPath(server) {
+export interface BackupSnapshotServer {
+  id?: string | number | null;
+  serverName?: string;
+  provider?: string | null;
+  isRemote?: boolean;
+  serverConfigPath?: string | null;
+  zomboidDataPath?: string | null;
+}
+
+function getConfigPath(server: BackupSnapshotServer | null | undefined): string | null {
   if (server?.serverConfigPath) return server.serverConfigPath;
   return server?.zomboidDataPath
     ? path.join(server.zomboidDataPath, "Server")
     : null;
 }
 
-function readFileIfPresent(filePath) {
+function readFileIfPresent(filePath: string): string | null {
   try {
     return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf-8") : null;
   } catch {
@@ -41,7 +50,9 @@ function readFileIfPresent(filePath) {
   }
 }
 
-export function captureBackupSnapshot(server) {
+export function captureBackupSnapshot(
+  server: BackupSnapshotServer | null | undefined,
+) {
   const serverName = server?.serverName || "server";
   const configPath = getConfigPath(server);
   const iniContent = configPath
@@ -50,7 +61,7 @@ export function captureBackupSnapshot(server) {
   const sandboxContent = configPath
     ? readFileIfPresent(path.join(configPath, `${serverName}_SandboxVars.lua`))
     : null;
-  const sandbox = {};
+  const sandbox: Record<string, unknown> = {};
 
   for (const key of SANDBOX_KEYS) {
     const value = sandboxContent

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { captureBackupSnapshot } from "../utils/backupSnapshot.js";
+import { captureBackupSnapshot } from "../utils/backupSnapshot.ts";
 
 let root;
 

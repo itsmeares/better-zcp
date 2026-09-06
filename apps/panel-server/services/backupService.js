@@ -17,7 +17,7 @@ import {
   getDatabaseFilePath,
 } from "../database/init.js";
 import { sanitizeError } from "../utils/sanitize.js";
-import { captureBackupSnapshot } from "../utils/backupSnapshot.js";
+import { captureBackupSnapshot } from "../utils/backupSnapshot.ts";
 import { addBackupRecord, removeBackupRecord } from "./backupRecords.js";
 import { invalidateMapFolderScan } from "../routes/chunks.js";
 import {
