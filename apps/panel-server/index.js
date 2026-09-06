@@ -217,7 +217,7 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 import serverRoutes from "./routes/server.js";
-import discoveryRoutes from "./routes/discovery.js";
+import discoveryRoutes from "./routes/discovery.ts";
 import serversRoutes from "./routes/servers.js";
 import serverStatusRoutes from "./routes/serverStatus.ts";
 import serverFilesRoutes from "./routes/serverFiles.js";
@@ -235,9 +235,9 @@ import serverFinderRoutes from "./routes/serverFinder.js";
 import panelBridgeRoutes from "./routes/panelBridge.js";
 import backupRoutes from "./routes/backup.js";
 import mapProxyRoutes from "./routes/mapProxy.js";
-import systemRoutes from "./routes/system.js";
+import systemRoutes from "./routes/system.ts";
 import templatesRoutes from "./routes/templates.js";
-import dockerRoutes from "./routes/docker.js";
+import dockerRoutes from "./routes/docker.ts";
 import permissionsRoutes from "./routes/permissions.ts";
 import panelBridge from "./services/panelBridge.js";
 

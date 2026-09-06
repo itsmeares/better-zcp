@@ -11,8 +11,20 @@ import {
 
 const router = express.Router();
 
-async function mapWithConcurrency(items, limit, mapper) {
-  const results = new Array(items.length);
+interface ManagedDockerContainer {
+  Id: string;
+  Names?: string[];
+  Image?: string;
+  State?: { Running?: boolean };
+  Status?: string;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
   let nextIndex = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (nextIndex < items.length) {
@@ -24,13 +36,18 @@ async function mapWithConcurrency(items, limit, mapper) {
   return results;
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 router.get("/status", requirePermission("docker.manage"), async (req, res) => {
   try {
     const dockerClient = req.app.get("dockerClient");
     if (!dockerClient?.enabled) {
       return res.json({ enabled: false, available: false, containers: [] });
     }
-    const containers = await dockerClient.listManagedContainers();
+    const containers = (await dockerClient.listManagedContainers()) as
+      ManagedDockerContainer[];
     return res.json({
       enabled: true,
       available: dockerClient.available,
@@ -43,8 +60,8 @@ router.get("/status", requirePermission("docker.manage"), async (req, res) => {
         status: container.Status,
       })),
     });
-  } catch (error) {
-    return res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    return res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -52,12 +69,13 @@ router.get("/stats", requirePermission("docker.manage"), async (req, res) => {
   try {
     const dockerClient = req.app.get("dockerClient");
     if (!dockerClient?.enabled || !dockerClient.available) return res.json({ containers: {} });
-    const containers = await dockerClient.listManagedContainers();
+    const containers = (await dockerClient.listManagedContainers()) as
+      ManagedDockerContainer[];
     const samples = await mapWithConcurrency(containers, 3, async (container) => ({
       container,
       stats: await dockerClient.getContainerStats(container.Id),
     }));
-    const result = {};
+    const result: Record<string, unknown> = {};
     for (const { container, stats } of samples) {
       if (!stats) continue;
       result[container.Id] = stats;
@@ -65,8 +83,8 @@ router.get("/stats", requirePermission("docker.manage"), async (req, res) => {
       if (name) result[name] = stats;
     }
     return res.json({ containers: result });
-  } catch (error) {
-    return res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    return res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -134,8 +152,8 @@ router.post("/containers/:id/:action", requirePermission("docker.manage"), async
       return res.status(403).json({ ...result, error: sanitizeError(result.error) });
     }
     return res.json(result);
-  } catch (error) {
-    return res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    return res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   } finally {
     if (rconService?.connected) {
       await rconService.disconnect().catch(() => {});

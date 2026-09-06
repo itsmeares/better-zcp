@@ -8,8 +8,8 @@ const getDiskStatusForPath = vi.fn();
 vi.mock("../services/diskMonitor.ts", () => ({ getDiskStatusForPath }));
 
 const { getDataPaths } = await import("../utils/paths.js");
-const { default: router } = await import("../routes/system.js");
-const { buildRuntimeInfo } = await import("../routes/system.js");
+const { default: router } = await import("../routes/system.ts");
+const { buildRuntimeInfo } = await import("../routes/system.ts");
 
 const PANEL_DATA_STATUS = {
   path: getDataPaths().dataDir,

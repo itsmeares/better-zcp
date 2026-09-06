@@ -23,7 +23,7 @@ vi.mock("../services/rcon.js", () => ({
   },
 }));
 
-const { default: router } = await import("../routes/docker.js");
+const { default: router } = await import("../routes/docker.ts");
 
 beforeEach(() => {
   getServer.mockReset();

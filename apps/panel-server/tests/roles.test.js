@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 const { default: authRouter } = await import("../routes/auth.js");
-const { default: dockerRouter } = await import("../routes/docker.js");
+const { default: dockerRouter } = await import("../routes/docker.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

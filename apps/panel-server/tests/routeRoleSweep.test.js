@@ -313,7 +313,7 @@ describe("mapProxy.js / serverStatus.js / system.js: deliberately open to every 
   });
 
   it("system GET /disk-space and /storage-health do not refuse a moderator", async () => {
-    const { default: router } = await import("../routes/system.js");
+    const { default: router } = await import("../routes/system.ts");
     for (const [routePath, method] of [
       ["/disk-space", "get"],
       ["/storage-health", "get"],

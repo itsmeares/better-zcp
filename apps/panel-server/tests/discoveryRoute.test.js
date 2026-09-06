@@ -18,7 +18,7 @@ vi.mock("../services/mountDiscovery.js", () => ({
   readServerIniSettings,
 }));
 
-const { default: router } = await import("../routes/discovery.js");
+const { default: router } = await import("../routes/discovery.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

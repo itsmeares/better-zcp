@@ -17,17 +17,22 @@ import {
 const router = express.Router();
 const SERVER_NAME_RE = /^[a-zA-Z0-9_-][a-zA-Z0-9_ -]*[a-zA-Z0-9_-]$|^[a-zA-Z0-9_-]$/;
 
-function normalizePath(value) {
+function normalizePath(value: string): string {
   const resolved = path.resolve(value);
   return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 router.get("/discover-mounts", requirePermission("servers.discover"), async (req, res) => {
   try {
     res.json({ mounts: discoverMounts(), inaccessible: discoverMountIssues() });
-  } catch (error) {
-    log.error(`Mount discovery failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    log.error(`Mount discovery failed: ${message}`);
+    res.status(500).json({ error: sanitizeError(message) });
   }
 });
 
@@ -118,9 +123,10 @@ router.post("/create-from-discovery", requirePermission("servers.discover"), asy
         server: sanitizeServerResponse(server),
         message: "Server created from discovered mount",
       });
-  } catch (error) {
-    log.error(`create-from-discovery failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    log.error(`create-from-discovery failed: ${message}`);
+    res.status(500).json({ error: sanitizeError(message) });
   }
 });
 
