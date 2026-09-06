@@ -22,7 +22,7 @@ import {
   writeIniWithBackup,
 } from "../utils/configBackup.js";
 import { escapeRegExp } from "../utils/regex.js";
-import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.js";
+import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { confineToRoots } from "../utils/browseRoots.js";
 import {
   SFTP_CONFIG_PATH_KEY,

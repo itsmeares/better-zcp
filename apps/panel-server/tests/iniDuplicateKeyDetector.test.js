@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.js";
+import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 
 
 vi.mock("../database/init.js", () => ({

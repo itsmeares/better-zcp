@@ -54,7 +54,7 @@ import { requirePermission } from "../services/permissions.js";
 import { ErrorCode } from "../utils/errorCodes.js";
 import { withFileLock } from "../utils/fileWriteQueue.js";
 import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.js";
-import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.js";
+import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 
 const router = express.Router();

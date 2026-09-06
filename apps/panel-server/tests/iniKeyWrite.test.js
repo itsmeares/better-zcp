@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasIniKeyLine, hasIniKeyValue, setIniKeyLine } from "../utils/iniKeyWrite.js";
+import { hasIniKeyLine, hasIniKeyValue, setIniKeyLine } from "../utils/iniKeyWrite.ts";
 
 describe("iniKeyWrite -- anchored key read/write, not substring matching", () => {
   const freeTextCollision = [
