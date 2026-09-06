@@ -12,7 +12,7 @@ vi.mock("../services/panelBridge.js", () => ({ default: fakeBridge }));
 const resolveDockerHostSignal = vi.fn(async () => ({ running: false, scanFailed: true }));
 vi.mock("../services/managedContainer.ts", () => ({ resolveDockerHostSignal }));
 
-const { default: router } = await import("../routes/serverStatus.js");
+const { default: router } = await import("../routes/serverStatus.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

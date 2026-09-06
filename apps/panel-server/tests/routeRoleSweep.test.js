@@ -304,7 +304,7 @@ describe("mapProxy.js / serverStatus.js / system.js: deliberately open to every 
   });
 
   it("serverStatus GET /active/status does not refuse a moderator", async () => {
-    const { default: router } = await import("../routes/serverStatus.js");
+    const { default: router } = await import("../routes/serverStatus.ts");
     const res = await runRoute(router, "/active/status", "get", {
       user: { role: "moderator" },
       app: { get: () => undefined },

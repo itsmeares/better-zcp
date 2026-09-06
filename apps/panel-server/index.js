@@ -219,7 +219,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 import serverRoutes from "./routes/server.js";
 import discoveryRoutes from "./routes/discovery.js";
 import serversRoutes from "./routes/servers.js";
-import serverStatusRoutes from "./routes/serverStatus.js";
+import serverStatusRoutes from "./routes/serverStatus.ts";
 import serverFilesRoutes from "./routes/serverFiles.js";
 import playerRoutes from "./routes/players.js";
 import rconRoutes from "./routes/rcon.js";
@@ -238,7 +238,7 @@ import mapProxyRoutes from "./routes/mapProxy.js";
 import systemRoutes from "./routes/system.js";
 import templatesRoutes from "./routes/templates.js";
 import dockerRoutes from "./routes/docker.js";
-import permissionsRoutes from "./routes/permissions.js";
+import permissionsRoutes from "./routes/permissions.ts";
 import panelBridge from "./services/panelBridge.js";
 
 dotenv.config();

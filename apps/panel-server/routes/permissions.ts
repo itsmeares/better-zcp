@@ -13,17 +13,44 @@ import {
 const log = createLogger("API:Permissions");
 const router = express.Router();
 
+interface AuthenticatedRequest extends express.Request {
+  user?: unknown;
+}
+
 router.use(requirePermission("roles.manage"));
 
-function respondWithServiceError(res, error, fallbackMessage) {
-  if (error && error.status) {
-    const body = { error: error.message || fallbackMessage };
-    if (error.code) body.code = error.code;
-    if (error.params) body.params = sanitizeErrorParams(error.params);
-    return res.status(error.status).json(body);
+function respondWithServiceError(
+  res: express.Response,
+  error: unknown,
+  fallbackMessage: string,
+): void {
+  const serviceError =
+    error && typeof error === "object"
+      ? (error as {
+          status?: number;
+          message?: unknown;
+          code?: unknown;
+          params?: unknown;
+        })
+      : {};
+  const message =
+    typeof serviceError.message === "string" && serviceError.message
+      ? serviceError.message
+      : fallbackMessage;
+
+  if (serviceError.status) {
+    const body: { error: string; code?: string; params?: unknown } = {
+      error: message,
+    };
+    if (typeof serviceError.code === "string") body.code = serviceError.code;
+    if (serviceError.params !== undefined) {
+      body.params = sanitizeErrorParams(serviceError.params);
+    }
+    res.status(serviceError.status).json(body);
+    return;
   }
-  log.error(`${fallbackMessage}: ${error.message}`);
-  return res.status(500).json({ error: sanitizeError(error.message) });
+  log.error(`${fallbackMessage}: ${message}`);
+  res.status(500).json({ error: sanitizeError(message) });
 }
 
 router.get("/capabilities", (req, res) => {
@@ -34,7 +61,7 @@ router.get("/roles", async (req, res) => {
   try {
     const roles = await listRolesWithMemberCounts();
     res.json({ roles });
-  } catch (error) {
+  } catch (error: unknown) {
     respondWithServiceError(res, error, "Failed to list roles");
   }
 });
@@ -44,7 +71,7 @@ router.post("/roles", async (req, res) => {
     const { name, capabilities } = req.body || {};
     const role = await createRole({ name, capabilities });
     res.status(201).json({ success: true, role });
-  } catch (error) {
+  } catch (error: unknown) {
     respondWithServiceError(res, error, "Failed to create role");
   }
 });
@@ -52,13 +79,17 @@ router.post("/roles", async (req, res) => {
 router.put("/roles/:id", async (req, res) => {
   try {
     const { name, capabilities, confirmSelfCapabilityLoss } = req.body || {};
+    const updateOptions = {
+      actingUser: (req as AuthenticatedRequest).user,
+      confirmSelfCapabilityLoss: confirmSelfCapabilityLoss === true,
+    } as Parameters<typeof updateRole>[2] & Record<string, unknown>;
     const role = await updateRole(
       req.params.id,
       { name, capabilities },
-      { actingUser: req.user, confirmSelfCapabilityLoss: confirmSelfCapabilityLoss === true },
+      updateOptions,
     );
     res.json({ success: true, role });
-  } catch (error) {
+  } catch (error: unknown) {
     respondWithServiceError(res, error, "Failed to update role");
   }
 });
@@ -69,10 +100,10 @@ router.delete("/roles/:id", async (req, res) => {
       typeof req.query.reassignTo === "string" ? req.query.reassignTo : undefined;
     const result = await deleteRole(req.params.id, {
       reassignTo,
-      actingUser: req.user,
+      actingUser: (req as AuthenticatedRequest).user,
     });
     res.json({ success: true, ...result });
-  } catch (error) {
+  } catch (error: unknown) {
     respondWithServiceError(res, error, "Failed to delete role");
   }
 });

@@ -38,7 +38,7 @@ vi.mock("../database/init.js", () => ({
   },
 }));
 
-const { default: router } = await import("../routes/permissions.js");
+const { default: router } = await import("../routes/permissions.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

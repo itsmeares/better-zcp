@@ -9,6 +9,10 @@ import { resolveDockerHostSignal } from "../services/managedContainer.ts";
 const log = createLogger("API:ServerStatus");
 const router = express.Router();
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 router.get("/active/status", async (req, res) => {
   try {
     const server = await getActiveServer();
@@ -56,9 +60,10 @@ router.get("/active/status", async (req, res) => {
     });
 
     res.json(status);
-  } catch (error) {
-    log.error(`Failed to get composed server status: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    log.error(`Failed to get composed server status: ${message}`);
+    res.status(500).json({ error: sanitizeError(message) });
   }
 });
 
