@@ -12,7 +12,7 @@ vi.mock('../utils/paths.js', () => ({ getDataPaths: (...args) => mockDataPaths.c
 
 const { getSftpErrorGuidance, classifySftpErrorCode, PanelBridgeSftpTransport, validateSftpBridgeConfig, getSftpCachePath } =
   await import('../services/panelBridgeSftp.js');
-const { ErrorCode } = await import('../utils/errorCodes.js');
+const { ErrorCode } = await import('../utils/errorCodes.ts');
 
 const valid = {
   host: 'pz.example.net',
@@ -123,7 +123,7 @@ describe('classifySftpErrorCode: mirrors getSftpErrorGuidance\'s classification 
     );
   });
 
-  it('every code classifySftpErrorCode can return is registered in errorCodes.js', () => {
+  it('every code classifySftpErrorCode can return is registered in errorCodes.ts', () => {
     const messages = [
       'mkdir: _doMkdir: Permission denied /Home',
       'Permission denied (publickey).',

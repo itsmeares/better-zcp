@@ -513,4 +513,6 @@ export const ErrorCode = Object.freeze({
   WRITABILITY_TARGET_MISSING: "WRITABILITY_TARGET_MISSING",
   WRITABILITY_CHMOD_FAILED: "WRITABILITY_CHMOD_FAILED",
   WRITABILITY_STILL_BLOCKED: "WRITABILITY_STILL_BLOCKED",
-});
+} as const);
+
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

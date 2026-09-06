@@ -18,7 +18,7 @@ import {
   getRoles,
   RECOVERY_CAPABILITIES,
 } from "./permissions.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 
 const log = createLogger("Auth");
 

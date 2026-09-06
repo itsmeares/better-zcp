@@ -13,7 +13,7 @@ import {
   reassignRoleMembers,
 } from "../database/init.js";
 import { createLogger } from "../utils/logger.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 
 const log = createLogger("Permissions");
 

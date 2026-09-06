@@ -17,7 +17,7 @@ import {
   RCON_USER_ACTION_TIMEOUT_MS,
 } from '../services/rcon.js';
 import { requirePermission } from '../services/permissions.js';
-import { ErrorCode } from '../utils/errorCodes.js';
+import { ErrorCode } from '../utils/errorCodes.ts';
 
 const router = express.Router();
 

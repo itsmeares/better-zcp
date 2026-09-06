@@ -4,7 +4,7 @@ import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { normalizeChatRelayScope } from "../services/discordBot.js";
 import { describeStartFailure } from "../services/discordStartFailure.ts";
 import { requirePermission, getRoleByName } from "../services/permissions.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 const log = createLogger("API:Discord");
 
 const router = express.Router();

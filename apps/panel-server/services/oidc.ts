@@ -3,7 +3,7 @@ import { createLogger } from "../utils/logger.js";
 import { getSetting, setSetting } from "../database/init.js";
 import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 
 const log = createLogger("OIDC");
 

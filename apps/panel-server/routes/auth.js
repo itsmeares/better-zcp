@@ -13,7 +13,7 @@ import { setSetting } from "../database/init.js";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
 import { getRefreshCookieOptions } from "../utils/refreshCookie.ts";
 import { requirePermission, getCapabilitiesForRole } from "../services/permissions.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 import { z } from "zod";
 
 const log = createLogger("Auth");

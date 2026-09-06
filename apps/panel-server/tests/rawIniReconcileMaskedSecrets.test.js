@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 import { maskSecretValue } from "../utils/sanitize.ts";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 
 
 const getActiveServer = vi.fn();

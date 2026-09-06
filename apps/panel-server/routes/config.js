@@ -23,7 +23,7 @@ import {
   RCON_AUTH_FAILED_DETAIL,
   RCON_USER_ACTION_TIMEOUT_MS,
 } from "../services/rcon.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 import {
   requireIntInRange,
   BIND_PORT_MIN,

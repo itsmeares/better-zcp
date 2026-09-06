@@ -6,7 +6,7 @@ import {
   formatWritablePathError,
   formatDirectoryReadError,
 } from "../routes/server.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

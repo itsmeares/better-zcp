@@ -12,7 +12,7 @@ import { SourceRconClient } from "../utils/sourceRcon.ts";
 import { readSecret } from "../utils/secrets.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 
 const RCON_ERROR_CLASSIFICATIONS = [
   {

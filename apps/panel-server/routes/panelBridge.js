@@ -50,7 +50,7 @@ import {
   resetRemoteConfigSession,
   validateRemoteConfigTransport,
 } from "../services/remoteConfigFiles.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 const log = createLogger("API:PanelBridge");
 
 const __filename = fileURLToPath(import.meta.url);

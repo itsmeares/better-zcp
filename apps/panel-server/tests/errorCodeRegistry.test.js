@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.join(__dirname, "..");
@@ -79,7 +79,7 @@ describe("server error codes: registry membership (structure, not meaning)", () 
     expect(
       unregistered,
       unregistered.length
-        ? `Found ${unregistered.length} code literal(s) not in apps/panel-server/utils/errorCodes.js -- ` +
+        ? `Found ${unregistered.length} code literal(s) not in apps/panel-server/utils/errorCodes.ts -- ` +
             "add each one to the ErrorCode registry (with a comment saying where " +
             "it's used) instead of leaving it a bare string literal:\n" +
             unregistered
@@ -111,7 +111,7 @@ describe("server error codes: registry membership (structure, not meaning)", () 
       unused,
       unused.length
         ? `${unused.length} ErrorCode entr(y/ies) registered but never emitted: ${unused.join(", ")}. ` +
-            "Remove from errorCodes.js and its locale entries, or wire it up. If it's " +
+            "Remove from errorCodes.ts and its locale entries, or wire it up. If it's " +
             "intentionally kept (e.g. split into narrower variants), add it to " +
             "KNOWN_INTENTIONALLY_UNREFERENCED above with a comment explaining why, the " +
             "way WRITABLE_PATH_ERROR and DIRECTORY_READ_FAILED already are."
@@ -143,7 +143,7 @@ describe("server error codes: registry membership (structure, not meaning)", () 
         missing.length
           ? `apps/panel-client/src/locales/en/errors.json is missing an entry for: ${missing.join(", ")}. ` +
               "The locale key is the ErrorCode CONSTANT NAME, not its wire value " +
-              "(see apps/panel-server/utils/errorCodes.js for why those two differ for the " +
+              "(see apps/panel-server/utils/errorCodes.ts for why those two differ for the " +
               "legacy codes)."
           : "",
       ).toEqual([]);

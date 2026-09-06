@@ -4,7 +4,7 @@ import path from 'path';
 import SftpClient from 'ssh2-sftp-client';
 import { createLogger } from '../utils/logger.js';
 import { getDataPaths } from '../utils/paths.js';
-import { ErrorCode } from '../utils/errorCodes.js';
+import { ErrorCode } from '../utils/errorCodes.ts';
 
 const log = createLogger('Bridge:SFTP');
 

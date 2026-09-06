@@ -21,7 +21,7 @@ import { sanitizeError } from '../utils/sanitize.ts';
 import bridge from '../services/panelBridge.js';
 import { listWhitelistAccounts, listServerRoleNames } from '../utils/whitelistDb.js';
 import { requirePermission } from '../services/permissions.js';
-import { ErrorCode } from '../utils/errorCodes.js';
+import { ErrorCode } from '../utils/errorCodes.ts';
 
 const router = express.Router();
 

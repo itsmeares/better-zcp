@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { apiErrorHandler, handlePanelUpdateDownload } from "../index.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 
 
 function createResponse() {

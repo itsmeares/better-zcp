@@ -22,7 +22,7 @@ vi.mock("../services/panelBridgeSftp.js", async () => {
 });
 
 const router = (await import("../routes/panelBridge.js")).default;
-const { ErrorCode } = await import("../utils/errorCodes.js");
+const { ErrorCode } = await import("../utils/errorCodes.ts");
 
 function createResponse() {
   const response = {};

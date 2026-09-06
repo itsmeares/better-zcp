@@ -51,7 +51,7 @@ import {
   extractSteamCookies,
 } from "../utils/browserCookies.js";
 import { requirePermission } from "../services/permissions.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 import { withFileLock } from "../utils/fileWriteQueue.ts";
 import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.ts";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";

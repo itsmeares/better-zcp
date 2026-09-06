@@ -3,7 +3,7 @@ import { requirePermission } from "../services/permissions.js";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getServer } from "../database/init.js";
 import { RconService } from "../services/rcon.js";
-import { ErrorCode } from "../utils/errorCodes.js";
+import { ErrorCode } from "../utils/errorCodes.ts";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
