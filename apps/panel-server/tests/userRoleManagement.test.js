@@ -19,7 +19,7 @@ vi.mock("../database/init.js", () => ({
 const { default: authService, USER_ROLES } = await import(
   "../services/auth.js"
 );
-const { getOrCreateSetupToken } = await import("../utils/setupToken.js");
+const { getOrCreateSetupToken } = await import("../utils/setupToken.ts");
 
 describe("USER_ROLES", () => {
   it("is exactly admin, technician, moderator", () => {

@@ -6,7 +6,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 
 const { computeInlineScriptCspHash } = await import(
-  "../utils/cspScriptHash.js"
+  "../utils/cspScriptHash.ts"
 );
 
 function sha256Base64(text) {

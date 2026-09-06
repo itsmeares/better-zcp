@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { createLogger } from "../utils/logger.js";
 import { getSetting, setSetting, getDb, commitNow } from "../database/init.js";
-import { verifySetupToken, clearSetupToken } from "../utils/setupToken.js";
+import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
 import {
   loadOrCreateJwtSecret,
   getJwtSecretPath,

@@ -13,7 +13,7 @@ const {
   logSetupTokenIfNeeded,
   verifySetupToken,
   clearSetupToken,
-} = await import("../utils/setupToken.js");
+} = await import("../utils/setupToken.ts");
 
 describe("setupToken", () => {
   beforeEach(() => {

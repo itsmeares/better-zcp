@@ -1,18 +1,22 @@
-
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { getSetting, setSetting } from "../database/init.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("Setup");
 const TOKEN_BYTES = 32;
 
-export async function getOrCreateSetupToken() {
+interface SetupLogger {
+  warn(message: string): void;
+}
+
+export async function getOrCreateSetupToken(): Promise<string> {
   const envToken = process.env.SETUP_TOKEN;
   if (envToken && envToken.trim()) {
     return envToken.trim();
   }
 
-  let token = await getSetting("setupToken");
+  const storedToken = await getSetting("setupToken");
+  let token = typeof storedToken === "string" ? storedToken : null;
   if (!token) {
     token = crypto.randomBytes(TOKEN_BYTES).toString("hex");
     await setSetting("setupToken", token);
@@ -21,7 +25,10 @@ export async function getOrCreateSetupToken() {
   return token;
 }
 
-export async function logSetupTokenIfNeeded(needsSetup, loggerInstance = log) {
+export async function logSetupTokenIfNeeded(
+  needsSetup: boolean,
+  loggerInstance: SetupLogger = log,
+): Promise<void> {
   if (!needsSetup) return;
   const token = await getOrCreateSetupToken();
   loggerInstance.warn(
@@ -32,7 +39,7 @@ export async function logSetupTokenIfNeeded(needsSetup, loggerInstance = log) {
   );
 }
 
-export async function verifySetupToken(candidate) {
+export async function verifySetupToken(candidate: unknown): Promise<boolean> {
   if (typeof candidate !== "string" || candidate.length === 0) return false;
   const expected = await getOrCreateSetupToken();
   const a = Buffer.from(candidate, "utf8");
@@ -41,6 +48,6 @@ export async function verifySetupToken(candidate) {
   return crypto.timingSafeEqual(a, b);
 }
 
-export async function clearSetupToken() {
+export async function clearSetupToken(): Promise<void> {
   await setSetting("setupToken", null);
 }
