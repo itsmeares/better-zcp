@@ -34,7 +34,7 @@ vi.mock("../services/rcon.js", () => ({
 }));
 
 const { default: serversRouter } = await import("../routes/servers.js");
-const { default: backupRouter } = await import("../routes/backup.js");
+const { default: backupRouter } = await import("../routes/backup.ts");
 
 function getHandler(router, routePath, method) {
   const layer = router.stack.find(
@@ -238,7 +238,7 @@ describe("remoteConfigConfigured reader-count guard (justifies the exception abo
   });
 });
 
-describe("cross-producer shape gate: ServerBackupArchive (apps/panel-server/routes/backup.js)", () => {
+describe("cross-producer shape gate: ServerBackupArchive (apps/panel-server/routes/backup.ts)", () => {
   const FAKE_ARCHIVE = {
     name: "servertest_2026-08-27.zip",
     path: "/backups/servertest_2026-08-27.zip",

@@ -6,7 +6,7 @@ vi.mock("../database/init.js", () => ({ getActiveServer: vi.fn() }));
 vi.mock("../services/auth.js", () => ({ requireRole: () => (_req, _res, next) => next() }));
 vi.mock("../services/backupRecords.ts", () => ({ listBackupRecords }));
 
-const { default: router } = await import("../routes/backup.js");
+const { default: router } = await import("../routes/backup.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

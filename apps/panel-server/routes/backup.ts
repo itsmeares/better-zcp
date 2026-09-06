@@ -20,14 +20,18 @@ const log = createLogger("API:Backup");
 
 const router = express.Router();
 
-function parseBackupBoolean(value) {
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function parseBackupBoolean(value: unknown): boolean | undefined {
   if (typeof value === "boolean") return value;
   if (value === 1 || value === "1" || value === "true") return true;
   if (value === 0 || value === "0" || value === "false") return false;
   return undefined;
 }
 
-function parseBackupMaxCount(value) {
+function parseBackupMaxCount(value: unknown): number | undefined {
   const parsed =
     typeof value === "number"
       ? value
@@ -45,8 +49,8 @@ router.get("/status", async (req, res) => {
     const status = await backupService.getStatus();
     res.json(status);
   } catch (error) {
-    log.error(`Failed to get backup status: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to get backup status: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -56,8 +60,8 @@ router.get("/info", async (req, res) => {
     const info = backupService.getBackupContentsInfo();
     res.json(info);
   } catch (error) {
-    log.error(`Failed to get backup info: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to get backup info: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -67,8 +71,8 @@ router.get("/list", async (req, res) => {
     const backups = await backupService.listBackups();
     res.json({ backups });
   } catch (error) {
-    log.error(`Failed to list backups: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to list backups: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -82,13 +86,15 @@ router.get("/history", async (req, res) => {
       return res.status(400).json({ error: "Invalid history limit" });
     }
     const records = await listBackupRecords({
-      serverId: req.query.serverId,
-      limit: Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 500) : undefined,
+      serverId:
+        typeof req.query.serverId === "string" ? req.query.serverId : undefined,
+      limit:
+        typeof limit === "number" ? Math.min(Math.max(limit, 1), 500) : undefined,
     });
     res.json({ records });
   } catch (error) {
-    log.error(`Failed to list backup history: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to list backup history: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -99,8 +105,8 @@ router.get("/:name/snapshot", requirePermission("backups.manage"), async (req, r
     if (result.success) return res.json(result);
     return res.status(404).json(result);
   } catch (error) {
-    log.error(`Failed to read backup snapshot: ${error.message}`);
-    return res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to read backup snapshot: ${errorMessage(error)}`);
+    return res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -116,7 +122,7 @@ router.post("/settings", requirePermission("backups.manage"), async (req, res) =
       });
     }
 
-    const allowed = {};
+    const allowed: Record<string, unknown> = {};
     if (req.body.enabled !== undefined) {
       const enabled = parseBackupBoolean(req.body.enabled);
       if (enabled === undefined) {
@@ -169,8 +175,8 @@ router.post("/settings", requirePermission("backups.manage"), async (req, res) =
 
     res.json({ success: true, settings });
   } catch (error) {
-    log.error(`Failed to update backup settings: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to update backup settings: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -208,8 +214,8 @@ router.post("/create", requirePermission("backups.manage"), async (req, res) => 
       res.status(400).json(result);
     }
   } catch (error) {
-    log.error(`Failed to create backup: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to create backup: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -225,8 +231,8 @@ router.delete("/:name", requirePermission("backups.manage"), async (req, res) =>
       res.status(400).json(result);
     }
   } catch (error) {
-    log.error(`Failed to delete backup: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to delete backup: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -252,8 +258,8 @@ router.get("/download/:name", requirePermission("backups.download"), async (req,
 
     res.download(backupPath, safeName);
   } catch (error) {
-    log.error(`Failed to download backup: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to download backup: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -321,8 +327,8 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
       );
     }
   } catch (error) {
-    log.error(`Failed to restore backup: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to restore backup: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   } finally {
     lifecycleLock.release();
   }
@@ -348,8 +354,8 @@ router.post("/delete-older-than", requirePermission("backups.manage"), async (re
 
     res.json(result);
   } catch (error) {
-    log.error(`Failed to delete old backups: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    log.error(`Failed to delete old backups: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -440,8 +446,8 @@ router.post(
         message: `Uploaded backup saved as ${finalName}. Use Restore to apply it.`,
       });
     } catch (error) {
-      log.error(`Failed to upload backup: ${error.message}`);
-      res.status(500).json({ error: sanitizeError(error.message) });
+      log.error(`Failed to upload backup: ${errorMessage(error)}`);
+      res.status(500).json({ error: sanitizeError(errorMessage(error)) });
     }
   },
 );

@@ -5,7 +5,7 @@ vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => ({ isRemote: false })),
 }));
 
-const { default: router } = await import("../routes/backup.js");
+const { default: router } = await import("../routes/backup.ts");
 
 function getHandler(routePath, method) {
   const layer = router.stack.find(

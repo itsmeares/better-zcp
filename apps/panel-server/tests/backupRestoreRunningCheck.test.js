@@ -7,7 +7,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-const { default: router } = await import("../routes/backup.js");
+const { default: router } = await import("../routes/backup.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

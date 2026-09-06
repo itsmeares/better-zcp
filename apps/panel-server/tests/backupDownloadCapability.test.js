@@ -7,7 +7,7 @@ vi.mock("../database/init.js", () => ({
     db.data.roles.find((r) => r.name === name) || null,
 }));
 
-const { default: backupRouter } = await import("../routes/backup.js");
+const { default: backupRouter } = await import("../routes/backup.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

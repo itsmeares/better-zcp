@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("../database/init.js", () => ({ getActiveServer: vi.fn() }));
 
 const { getActiveServer } = await import("../database/init.js");
-const { default: router } = await import("../routes/backup.js");
+const { default: router } = await import("../routes/backup.ts");
 const {
   acquireLifecycleLock,
   isLifecycleLocked,

@@ -40,20 +40,20 @@ async function runGate(router, routePath, method, role) {
 
 describe("backup.js: POST /restore/:name is admin-only", () => {
   it("refuses a technician", async () => {
-    const { default: router } = await import("../routes/backup.js");
+    const { default: router } = await import("../routes/backup.ts");
     const { res, calledNext } = await runGate(router, "/restore/:name", "post", "technician");
     expect(res.getStatusCode()).toBe(403);
     expect(calledNext).toBe(false);
   });
 
   it("refuses a moderator", async () => {
-    const { default: router } = await import("../routes/backup.js");
+    const { default: router } = await import("../routes/backup.ts");
     const { res } = await runGate(router, "/restore/:name", "post", "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it("does not refuse an admin", async () => {
-    const { default: router } = await import("../routes/backup.js");
+    const { default: router } = await import("../routes/backup.ts");
     const { calledNext } = await runGate(router, "/restore/:name", "post", "admin");
     expect(calledNext).toBe(true);
   });
@@ -71,13 +71,13 @@ describe("backup.js: everything else stays admin+technician (restore is the only
   ];
 
   it.each(STILL_TECHNICIAN)("does not refuse a technician on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/backup.js");
+    const { default: router } = await import("../routes/backup.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
 
   it.each(STILL_TECHNICIAN)("still refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/backup.js");
+    const { default: router } = await import("../routes/backup.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });

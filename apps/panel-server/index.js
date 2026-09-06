@@ -234,7 +234,7 @@ import { getDiskFree } from "./utils/diskSpace.ts";
 import { getSwapInfo } from "./utils/swapInfo.ts";
 import serverFinderRoutes from "./routes/serverFinder.js";
 import panelBridgeRoutes from "./routes/panelBridge.js";
-import backupRoutes from "./routes/backup.js";
+import backupRoutes from "./routes/backup.ts";
 import mapProxyRoutes from "./routes/mapProxy.js";
 import systemRoutes from "./routes/system.ts";
 import templatesRoutes from "./routes/templates.ts";
