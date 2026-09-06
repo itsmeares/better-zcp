@@ -13,8 +13,8 @@ import { describe, expect, it } from "vitest";
 // data/db.example.json was checked as the suggested V1 shape reference and
 // found to be stale -- its only commit is the initial one, and it uses
 // field names ("mods", "activity_log") that do not match the real current
-// schema (server/database/init.js's `defaultData`: "tracked_mods", and no
-// "activity_log" field exists anywhere in server/ at all -- confirmed by
+// schema (apps/panel-server/database/init.js's `defaultData`: "tracked_mods", and no
+// "activity_log" field exists anywhere in apps/panel-server/ at all -- confirmed by
 // grep, not assumed). So this fixture is built from the real defaultData
 // field names, PLUS a couple of unrecognized/legacy-shaped extra top-level
 // fields a genuinely older V1 db might still be carrying, to prove the
@@ -27,7 +27,7 @@ const { runMigrations } = await import("../database/init.js");
 
 function makeSyntheticV1Db() {
   return {
-    // Real current-schema fields (server/database/init.js `defaultData`),
+    // Real current-schema fields (apps/panel-server/database/init.js `defaultData`),
     // each populated with realistic, non-empty, non-placeholder content so
     // a "did the contents survive" check actually means something.
     command_history: [

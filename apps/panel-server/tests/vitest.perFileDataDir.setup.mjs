@@ -1,6 +1,6 @@
 // Give every test file its own temp data root instead of sharing one root for
 // the entire `vitest run` invocation. Sharing one root meant
-// every test file importing the real, unmocked server/database/init.js (12
+// every test file importing the real, unmocked apps/panel-server/database/init.js (12
 // of them as of this fix -- adminPasswordFirstBoot, bugfixes,
 // circuitBreakerStatus, db-tmp-cleanup, oidcRoutes, reassignRoleMembers,
 // rolesMigration, rolesMigrationMatchesSeed, serverPathEnvFallback,

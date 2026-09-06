@@ -1,6 +1,6 @@
 /**
  * Hashes the panel's one inline <script> (the anti-FOUC theme-flash-
- * prevention bootstrap in client/index.html — sets the theme class before
+ * prevention bootstrap in apps/panel-client/index.html — sets the theme class before
  * first paint, see that file's own comment) so index.js's CSP can allow
  * exactly that script by a sha256 source instead of 'unsafe-inline'.
  *

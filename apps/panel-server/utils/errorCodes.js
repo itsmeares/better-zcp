@@ -1919,7 +1919,7 @@ export const ErrorCode = Object.freeze({
   DISCORD_PERMISSIONS_CAPABILITY_REQUIRED: "DISCORD_PERMISSIONS_CAPABILITY_REQUIRED",
 
   // --- apps/panel-server/routes/templates.js + apps/panel-server/services/templateService.js:
-  // the "simulation template" system (server/data/templates/*.json, sparse
+  // the "simulation template" system (apps/panel-server/data/templates/*.json, sparse
   // SandboxVars/ini overrides). NOT the same feature as TEMPLATE_NOT_FOUND
   // etc. above -- those belong to serverFiles.js's own separate, simpler
   // embedded /templates routes (a different resource, different storage,

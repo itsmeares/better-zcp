@@ -12,7 +12,7 @@ import { generateStartupScripts, isFirstBootMissingAdminPassword } from "../rout
 // the panel launched the server with no -adminpassword flag and no
 // interactive stdin for PZ to fall back to.
 //
-// ROOT CAUSE: server/database/init.js's createServer() built the persisted
+// ROOT CAUSE: apps/panel-server/database/init.js's createServer() built the persisted
 // record from an explicit field-by-field object literal that never named
 // adminPassword -- servers.js's POST / forwarded it correctly, but it was
 // dropped one layer down, on every server ever created through the panel.

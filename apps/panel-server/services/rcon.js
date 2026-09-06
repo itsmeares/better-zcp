@@ -214,7 +214,7 @@ export async function testRconConnection({ host, port, password, timeoutMs = RCO
 // after it -- a success response's own fixed text can never coincidentally
 // reproduce both boundaries regardless of what the name in between is).
 //
-// Sourced from server/__fixtures__/pzRconRejectionStrings.json (a
+// Sourced from apps/panel-server/__fixtures__/pzRconRejectionStrings.json (a
 // decompiled catalog of the actual PZ B42 server jar's command classes,
 // confirmed verbatim -- not guessed) except where noted otherwise.
 export const KNOWN_RCON_REJECTIONS = [

@@ -151,7 +151,7 @@ export function isPlayerConfirmedNotWhitelisted(
 
 // The activity log table has no pagination -- when a fetch returns exactly
 // this many rows, older entries may exist and be silently excluded (the
-// server retains up to 1000, see server/database/init.js). Shown as a hint
+// server retains up to 1000, see apps/panel-server/database/init.js). Shown as a hint
 // rather than a hard truth ("logs.length === LIMIT" could also mean the
 // real total happens to equal the limit) because there's no cheap way to
 // distinguish the two without a separate total-count query.

@@ -18,7 +18,7 @@ import { execSync } from "child_process";
 // WSL -- NOT reproducible as an automated vitest assertion, see below):
 // the actual FIRST failure today (before this card's fix) is not
 // jwtSecret.js's own error message at all -- it's an UNGUARDED
-// fs.mkdirSync at server/database/init.js's top-level module code
+// fs.mkdirSync at apps/panel-server/database/init.js's top-level module code
 // (creating data/backups/ inside the now-untraversable dataDir), which
 // throws a raw uncaught EACCES stack trace before the panel prints even
 // its version banner. Reproduction (for the record -- this is what "real

@@ -11,7 +11,7 @@ import { RconService } from "../services/rcon.js";
 // throughout -- one new pattern style would be exactly the "four consumers
 // phrasing the same thing four ways" state two of tonight's bugs came from.
 //
-// New pattern sourcing: server/__fixtures__/pzRconRejectionStrings.json
+// New pattern sourcing: apps/panel-server/__fixtures__/pzRconRejectionStrings.json
 // (decompiled PZ B42 server jar, build 24909800, same fixture Pam's patterns
 // are cross-checked against -- extended 69 -> 72 classes for this pass).
 // Automatically cross-checked by rconRejectionGroundTruth.test.js's drift

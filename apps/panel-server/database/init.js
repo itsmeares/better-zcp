@@ -2379,7 +2379,7 @@ export async function deleteModPreset(id) {
 }
 
 // ============================================
-// Simulation Templates (user-created; built-ins live under server/data/templates)
+// Simulation Templates (user-created; built-ins live under apps/panel-server/data/templates)
 // ============================================
 
 export async function getUserTemplates() {
