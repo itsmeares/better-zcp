@@ -161,12 +161,11 @@ async function update(version: string): Promise<void> {
 
 createServer(async (request, response) => {
   if (request.method === "GET" && request.url === "/health") return reply(response, 200, { status: "ok" });
+  if (!isAuthorized(request)) return reply(response, 401, { error: "Unauthorized" });
   if (request.method === "GET" && request.url === "/status") {
-    if (!isAuthorized(request)) return reply(response, 401, { error: "Unauthorized" });
     return reply(response, 200, updateState);
   }
   if (request.method !== "POST" || request.url !== "/update") return reply(response, 404, { error: "Not found" });
-  if (!isAuthorized(request)) return reply(response, 401, { error: "Unauthorized" });
   if (updateState.status === "running") return reply(response, 409, { error: "An update is already in progress" });
 
   try {
@@ -176,8 +175,8 @@ createServer(async (request, response) => {
     }
     void update(version);
     return reply(response, 202, { message: `Docker update to v${version} started` });
-  } catch (error) {
-    return reply(response, 400, { error: errorMessage(error) });
+  } catch {
+    return reply(response, 400, { error: "Invalid update request" });
   }
 }).listen(PORT, "0.0.0.0", () => {
   console.log(`Docker update controller listening on ${PORT}`);
