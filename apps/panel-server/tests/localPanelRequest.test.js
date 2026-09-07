@@ -14,7 +14,7 @@ vi.mock("os", async (importOriginal) => {
 });
 
 const { isLocalPanelRequest, isPanelBehindTrustProxy } = await import(
-  "../routes/auth.js"
+  "../routes/auth.ts"
 );
 
 function reqWithRemoteAddress(address) {

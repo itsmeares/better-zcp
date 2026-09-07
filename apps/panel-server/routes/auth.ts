@@ -1,5 +1,5 @@
 
-import { Router } from "express";
+import { Router, type Request } from "express";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import fs from "fs";
@@ -19,7 +19,29 @@ import { z } from "zod";
 const log = createLogger("Auth");
 const router = Router();
 
-function isNonEmptyString(value) {
+type AuthenticatedRequest = Request & {
+  user?: {
+    userId?: string | null;
+    username?: string | null;
+    role?: string;
+  } | null;
+};
+
+type RouteError = {
+  code?: string;
+  params?: unknown;
+  status?: number;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function routeError(error: unknown): RouteError {
+  return error && typeof error === "object" ? (error as RouteError) : {};
+}
+
+function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
@@ -46,7 +68,7 @@ const LOOPBACK_REMOTE_ADDRESSES = new Set([
   "::ffff:127.0.0.1",
 ]);
 
-function normalizeIpAddress(address) {
+function normalizeIpAddress(address: unknown): string {
   if (typeof address !== "string") return "";
   const trimmed = address
     .trim()
@@ -57,7 +79,7 @@ function normalizeIpAddress(address) {
   return withoutZone.startsWith("::ffff:") ? withoutZone.slice(7) : withoutZone;
 }
 
-function isDockerBridgeAddress(address) {
+function isDockerBridgeAddress(address: string): boolean {
   const match = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(address);
   if (!match) return false;
   const first = Number(match[1]);
@@ -90,11 +112,11 @@ function getResetTokenPath() {
   return path.join(dataDir, "reset-token.txt");
 }
 
-export function isPanelBehindTrustProxy(req) {
+export function isPanelBehindTrustProxy(req: Request): boolean {
   return Boolean(req.app?.get?.("trust proxy"));
 }
 
-export function isLocalPanelRequest(req) {
+export function isLocalPanelRequest(req: Request): boolean {
   if (isPanelBehindTrustProxy(req)) {
     return false;
   }
@@ -110,7 +132,7 @@ export function isLocalPanelRequest(req) {
   return candidateAddresses.some((address) => localAddresses.has(address));
 }
 
-export function createLocalResetResponse(message) {
+export function createLocalResetResponse(message: string) {
   return {
     success: true,
     resetAvailable: true,
@@ -160,7 +182,7 @@ function getResetTokenState() {
   return { tokenPath, available: true, reason: "ok", token, stat, ageMs };
 }
 
-async function getAuthenticatedUser(req) {
+async function getAuthenticatedUser(req: Request) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return null;
@@ -185,8 +207,8 @@ router.get("/status", async (req, res) => {
     const needsSetup = await authService.needsSetup();
     const authEnabled = await authService.isAuthEnabled();
     res.json({ needsSetup, authEnabled });
-  } catch (error) {
-    log.error(`Failed to get auth status: ${error.message}`);
+  } catch (error: unknown) {
+    log.error(`Failed to get auth status: ${errorMessage(error)}`);
     res.status(500).json({
       error: "Failed to get auth status",
       code: ErrorCode.AUTH_STATUS_CHECK_FAILED,
@@ -262,9 +284,9 @@ router.post("/setup", setupLimiter, async (req, res) => {
       user: result.user,
       accessToken: result.accessToken,
     });
-  } catch (error) {
-    log.error(`Setup failed: ${error.message}`);
-    res.status(400).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Setup failed: ${errorMessage(error)}`);
+    res.status(400).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -297,9 +319,9 @@ router.post("/login", loginLimiter, async (req, res) => {
       user: result.user,
       accessToken: result.accessToken,
     });
-  } catch (error) {
-    log.warn(`Login failed: ${error.message}`);
-    res.status(401).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.warn(`Login failed: ${errorMessage(error)}`);
+    res.status(401).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -336,8 +358,8 @@ router.post("/refresh", async (req, res) => {
       user: result.user,
       accessToken: result.accessToken,
     });
-  } catch (error) {
-    log.error(`Token refresh failed: ${error?.message || error}`);
+  } catch (error: unknown) {
+    log.error(`Token refresh failed: ${errorMessage(error)}`);
     try {
       res.clearCookie("refreshToken", getRefreshCookieOptions(req, false));
     } catch {
@@ -371,7 +393,7 @@ router.get("/me", async (req, res) => {
     res.json({
       user: { id: user.userId, username: user.username, role: user.role, capabilities },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(401).json({
       error: "Authentication error",
       code: ErrorCode.AUTHENTICATION_ERROR,
@@ -402,12 +424,18 @@ router.post("/change-password", async (req, res) => {
         code: ErrorCode.RESET_PASSWORD_TOO_LONG,
       });
     }
+    if (typeof user.userId !== "string") {
+      return res.status(401).json({
+        error: "Not authenticated",
+        code: ErrorCode.NOT_AUTHENTICATED,
+      });
+    }
     await authService.changePassword(user.userId, currentPassword, newPassword);
     res.clearCookie("refreshToken", getRefreshCookieOptions(req, false));
 
     res.json({ success: true, message: "Password changed successfully" });
-  } catch (error) {
-    res.status(400).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    res.status(400).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -415,9 +443,9 @@ router.get("/users", requirePermission("users.manage"), async (req, res) => {
   try {
     const users = await authService.getUsers();
     res.json({ users });
-  } catch (error) {
-    log.error(`Failed to list users: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to list users: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -439,9 +467,9 @@ router.post("/users", requirePermission("users.manage"), async (req, res) => {
     const user = await authService.createUser(username, password, role);
     log.info(`User created by admin: ${username} (role: ${role})`);
     res.status(201).json({ success: true, user });
-  } catch (error) {
-    log.warn(`User creation failed: ${error.message}`);
-    res.status(400).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.warn(`User creation failed: ${errorMessage(error)}`);
+    res.status(400).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -454,7 +482,7 @@ router.patch(
       let user;
       if (typeof roleId === "string" && roleId.trim()) {
         user = await authService.changeUserRoleById(
-          req.params.id,
+          String(req.params.id),
           roleId.trim(),
         );
       } else {
@@ -464,40 +492,50 @@ router.patch(
             code: ErrorCode.AUTH_INVALID_ROLE,
           });
         }
-        user = await authService.changeUserRole(req.params.id, role);
+        user = await authService.changeUserRole(String(req.params.id), role);
       }
       log.info(`Role changed by admin: ${user.username} -> ${user.role}`);
       res.json({ success: true, user });
-    } catch (error) {
-      log.warn(`Role change failed: ${error.message}`);
-      const body = { error: sanitizeError(error.message) };
-      if (error.code) body.code = error.code;
-      if (error.params) body.params = sanitizeErrorParams(error.params);
-      res.status(error.status || 400).json(body);
+    } catch (error: unknown) {
+      const details = routeError(error);
+      log.warn(`Role change failed: ${errorMessage(error)}`);
+      const body: Record<string, unknown> = {
+        error: sanitizeError(errorMessage(error)),
+      };
+      if (details.code) body.code = details.code;
+      if (details.params) body.params = sanitizeErrorParams(details.params);
+      res.status(details.status || 400).json(body);
     }
   },
 );
 
-router.delete("/users/:id", requirePermission("users.manage"), async (req, res) => {
+router.delete(
+  "/users/:id",
+  requirePermission("users.manage"),
+  async (req: AuthenticatedRequest, res) => {
   try {
-    const user = await authService.deleteUser(req.params.id, {
+    const user = await authService.deleteUser(String(req.params.id), {
       actingUserId: req.user?.userId,
     });
     log.info(`User deleted by admin: ${user.username}`);
     res.json({ success: true, user });
-  } catch (error) {
-    log.warn(`User deletion failed: ${error.message}`);
-    const body = { error: sanitizeError(error.message) };
-    if (error.code) body.code = error.code;
-    if (error.params) body.params = sanitizeErrorParams(error.params);
-    res.status(error.status || 400).json(body);
+  } catch (error: unknown) {
+    const details = routeError(error);
+    log.warn(`User deletion failed: ${errorMessage(error)}`);
+    const body: Record<string, unknown> = {
+      error: sanitizeError(errorMessage(error)),
+    };
+    if (details.code) body.code = details.code;
+    if (details.params) body.params = sanitizeErrorParams(details.params);
+    res.status(details.status || 400).json(body);
   }
-});
+  },
+);
 
 router.post(
   "/regenerate-jwt-secret",
   requireRole("admin"),
-  async (req, res) => {
+  async (req: AuthenticatedRequest, res) => {
     try {
       await authService.regenerateJwtSecret();
       log.warn(
@@ -509,9 +547,9 @@ router.post(
         message:
           "JWT signing key regenerated. Every session has been invalidated, including this one — you will need to log in again.",
       });
-    } catch (error) {
-      log.error(`JWT secret regeneration failed: ${error.message}`);
-      res.status(400).json({ error: sanitizeError(error.message) });
+    } catch (error: unknown) {
+      log.error(`JWT secret regeneration failed: ${errorMessage(error)}`);
+      res.status(400).json({ error: sanitizeError(errorMessage(error)) });
     }
   },
 );
@@ -534,7 +572,7 @@ router.get("/reset-status", async (req, res) => {
       resetAvailable: tokenState.available,
       localResetSupported: isLocalPanelRequest(req),
     });
-  } catch (error) {
+  } catch (error: unknown) {
     res.json({ resetAvailable: false, localResetSupported: false });
   }
 });
@@ -559,8 +597,8 @@ router.get("/recovery-codes", requireRole("admin"), async (req, res) => {
         code: ErrorCode.NOT_AUTHENTICATED,
       });
     res.json(await authService.getRecoveryCodeStatus());
-  } catch (error) {
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -575,8 +613,8 @@ router.post("/recovery-codes", requireRole("admin"), async (req, res) => {
     const result = await authService.generateRecoveryCodes(10);
     log.info("New recovery codes generated");
     res.json({ success: true, ...result });
-  } catch (error) {
-    res.status(400).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    res.status(400).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -605,9 +643,9 @@ router.post("/recover-with-code", resetLimiter, async (req, res) => {
       message: `Password reset for ${result.username}`,
       remaining: result.remaining,
     });
-  } catch (error) {
-    log.warn(`Recovery code redemption failed: ${error.message}`);
-    res.status(403).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.warn(`Recovery code redemption failed: ${errorMessage(error)}`);
+    res.status(403).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -644,9 +682,9 @@ router.post("/reset-token/local", localResetTokenLimiter, async (req, res) => {
     ) {
       try {
         fs.unlinkSync(tokenState.tokenPath);
-      } catch (error) {
+      } catch (error: unknown) {
         log.warn(
-          `Could not remove ${tokenState.reason} reset token file: ${error.message}`,
+          `Could not remove ${tokenState.reason} reset token file: ${errorMessage(error)}`,
         );
       }
     }
@@ -665,8 +703,8 @@ router.post("/reset-token/local", localResetTokenLimiter, async (req, res) => {
         "Recovery token created at data/reset-token.txt. Paste it below to continue.",
       ),
     );
-  } catch (error) {
-    log.error(`Local recovery token creation failed: ${error.message}`);
+  } catch (error: unknown) {
+    log.error(`Local recovery token creation failed: ${errorMessage(error)}`);
     res.status(500).json({
       error: "Could not create a recovery token on this server.",
       code: ErrorCode.LOCAL_RESET_TOKEN_CREATE_FAILED,
@@ -721,8 +759,8 @@ router.post("/reset-password", resetLimiter, async (req, res) => {
       log.warn("Password reset attempted with expired token file (>24h old)");
       try {
         fs.unlinkSync(tokenPath);
-      } catch (error) {
-        log.warn(`Could not remove expired reset token file: ${error.message}`);
+      } catch (error: unknown) {
+        log.warn(`Could not remove expired reset token file: ${errorMessage(error)}`);
       }
       return res.status(403).json({
         error:
@@ -761,8 +799,8 @@ router.post("/reset-password", resetLimiter, async (req, res) => {
 
     try {
       fs.unlinkSync(tokenPath);
-    } catch (unlinkErr) {
-      log.warn(`Could not delete reset-token.txt: ${unlinkErr.message}`);
+    } catch (unlinkErr: unknown) {
+      log.warn(`Could not delete reset-token.txt: ${errorMessage(unlinkErr)}`);
     }
 
     log.info(`Password reset successful for user: ${result.username}`);
@@ -770,9 +808,9 @@ router.post("/reset-password", resetLimiter, async (req, res) => {
       success: true,
       message: `Password reset for ${result.username}`,
     });
-  } catch (error) {
-    log.error(`Password reset failed: ${error.message}`);
-    res.status(400).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Password reset failed: ${errorMessage(error)}`);
+    res.status(400).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 

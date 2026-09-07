@@ -13,7 +13,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { default: authService, requireRole } = await import("../services/auth.ts");
-const { default: authRouter } = await import("../routes/auth.js");
+const { default: authRouter } = await import("../routes/auth.ts");
 
 describe("authService.middleware() — /api/auth/* is no longer a blanket exemption", () => {
   let middleware;

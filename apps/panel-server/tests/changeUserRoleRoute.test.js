@@ -41,7 +41,7 @@ vi.mock("../database/init.js", () => ({
   reassignRoleMembers: async () => 0,
 }));
 
-const { default: authRouter } = await import("../routes/auth.js");
+const { default: authRouter } = await import("../routes/auth.ts");
 
 const ADMIN_ROLE = {
   id: "role-admin",

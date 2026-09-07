@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 
-const { default: router } = await import("../routes/auth.js");
+const { default: router } = await import("../routes/auth.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

@@ -244,7 +244,7 @@ describe("auth.js: recovery codes are admin-only, not delegable to users.manage 
   ];
 
   it.each(ROUTES)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/auth.js");
+    const { default: router } = await import("../routes/auth.ts");
     const res = await runRoute(router, routePath, method, {
       user: { role: "moderator" },
       headers: {},
@@ -258,7 +258,7 @@ describe("auth.js: recovery codes are admin-only, not delegable to users.manage 
   it.each(ROUTES)(
     "refuses a technician too on %s %s -- users.manage-adjacent is not enough, this is admin-only",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/auth.js");
+      const { default: router } = await import("../routes/auth.ts");
       const res = await runRoute(router, routePath, method, {
         user: { role: "technician" },
         headers: {},
@@ -273,7 +273,7 @@ describe("auth.js: recovery codes are admin-only, not delegable to users.manage 
   it.each(ROUTES)(
     "does not refuse an admin at the role gate on %s %s (a missing Authorization header still 401s downstream -- this only proves the gate itself let an admin through)",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/auth.js");
+      const { default: router } = await import("../routes/auth.ts");
       const res = await runRoute(router, routePath, method, {
         user: { role: "admin" },
         headers: {},

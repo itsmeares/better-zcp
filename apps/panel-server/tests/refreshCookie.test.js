@@ -11,7 +11,7 @@ function makeReq({ secure = false, forwardedProto = null } = {}) {
   };
 }
 
-describe("getRefreshCookieOptions — the one definition routes/auth.js and routes/oidc.js both import", () => {
+describe("getRefreshCookieOptions — the one definition routes/auth.ts and routes/oidc.js both import", () => {
   const originalHttps = process.env.HTTPS;
   const originalForceHsts = process.env.FORCE_HSTS;
 

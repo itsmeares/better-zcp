@@ -6,7 +6,7 @@ import { DiscordBot } from "../services/discordBot.js";
 import {
   createLocalResetResponse,
   isLocalPanelRequest,
-} from "../routes/auth.js";
+} from "../routes/auth.ts";
 import {
   compareDefinitionSets,
   createConflictScanSnapshots,

@@ -70,7 +70,7 @@ import { DiskMonitor } from "./services/diskMonitor.ts";
 import authService from "./services/auth.ts";
 import { getRoleByName } from "./services/permissions.ts";
 import { requireRole } from "./services/auth.ts";
-import authRoutes from "./routes/auth.js";
+import authRoutes from "./routes/auth.ts";
 import oidcRoutes from "./routes/oidc.ts";
 import { loadOrCreateCerts } from "./utils/certs.ts";
 import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";

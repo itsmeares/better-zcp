@@ -13,7 +13,7 @@ vi.mock("../services/auth.ts", () => ({
   requireRole: () => (req, res, next) => next(),
 }));
 
-const { default: router } = await import("../routes/auth.js");
+const { default: router } = await import("../routes/auth.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn(), clearCookie: vi.fn() };
