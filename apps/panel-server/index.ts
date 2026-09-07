@@ -6,7 +6,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { permissionsPolicy } from "./middleware/permissionsPolicy.ts";
 import { logSetupTokenIfNeeded } from "./utils/setupToken.ts";
-import { computeInlineScriptCspHash } from "./utils/cspScriptHash.ts";
+import { computeInlineScriptCspHashes } from "./utils/cspScriptHash.ts";
 import { parseTrustProxySetting } from "./utils/trustProxy.ts";
 import { isUncompressedBinaryProxyPath } from "./utils/compressionFilter.ts";
 import { createServer } from "http";
@@ -608,20 +608,20 @@ const cspClientDistPath = resolveClientDistPath({
   embeddedPath: embeddedClientDistPath,
   externalPath: externalClientDistPath,
 });
-let inlineScriptCspSource = computeInlineScriptCspHash(
+let inlineScriptCspSources = computeInlineScriptCspHashes(
   cspClientDistPath,
   log,
 );
 function refreshInlineScriptCspHash() {
-  inlineScriptCspSource = computeInlineScriptCspHash(cspClientDistPath, log);
-  return inlineScriptCspSource;
+  inlineScriptCspSources = computeInlineScriptCspHashes(cspClientDistPath, log);
+  return inlineScriptCspSources.join(" ");
 }
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", () => inlineScriptCspSource || ""],
+        scriptSrc: ["'self'", () => inlineScriptCspSources.join(" ")],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         connectSrc: ["'self'", "ws:", "wss:"],
