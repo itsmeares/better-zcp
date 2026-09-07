@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
@@ -8,6 +9,7 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Checkbox } from '../components/ui/checkbox'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { panelHealthQueryOptions } from '../lib/panelHealth'
 import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound } from 'lucide-react'
 
 type PanelStatus = 'checking' | 'online' | 'unreachable'
@@ -24,32 +26,14 @@ function readDeviceFailureCount(): number {
 }
 
 function usePanelHealth() {
-  const [status, setStatus] = useState<PanelStatus>('checking')
-  const [version, setVersion] = useState<string | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    const controller = new AbortController()
-    const poll = async () => {
-      try {
-        const r = await fetch('/api/health', { signal: controller.signal })
-        if (!r.ok) throw new Error('http')
-        const data = await r.json()
-        if (cancelled) return
-        setStatus('online')
-        if (typeof data?.version === 'string') setVersion(data.version)
-      } catch {
-        if (!cancelled) setStatus('unreachable')
-      }
-    }
-    poll()
-    const id = window.setInterval(poll, 15000)
-    return () => {
-      cancelled = true
-      controller.abort()
-      window.clearInterval(id)
-    }
-  }, [])
-  return { status, version }
+  const { data, isPending, isError } = useQuery({
+    ...panelHealthQueryOptions(),
+    refetchInterval: 15000,
+  })
+  return {
+    status: (isPending ? 'checking' : isError ? 'unreachable' : 'online') as PanelStatus,
+    version: data?.version ?? null,
+  }
 }
 
 export default function Login() {

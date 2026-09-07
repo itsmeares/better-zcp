@@ -103,7 +103,6 @@ export default defineConfig(({ mode }) => {
     resolve: {
       dedupe: ['react', 'react-dom'],
       alias: {
-        'react-router-dom': path.resolve(__dirname, './src/lib/router.tsx'),
         '@': path.resolve(__dirname, './src'),
       },
     },

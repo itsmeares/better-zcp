@@ -1,7 +1,9 @@
-import { ReactNode, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Card, CardContent } from '../components/ui/card'
+import { panelHealthQueryOptions } from '../lib/panelHealth'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
 interface AuthScreenLayoutProps {
@@ -26,35 +28,12 @@ export function AuthScreenLayout({
   footer,
 }: AuthScreenLayoutProps) {
   const { t } = useTranslation('shell')
-  const [status, setStatus] = useState<PanelStatus>('checking')
-  const [version, setVersion] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const controller = new AbortController()
-
-    const poll = async () => {
-      try {
-        const r = await fetch('/api/health', { signal: controller.signal })
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        const data = await r.json()
-        if (cancelled) return
-        setStatus('online')
-        if (typeof data?.version === 'string') setVersion(data.version)
-      } catch {
-        if (cancelled) return
-        setStatus('unreachable')
-      }
-    }
-
-    poll()
-    const id = setInterval(poll, 15000)
-    return () => {
-      cancelled = true
-      controller.abort()
-      clearInterval(id)
-    }
-  }, [])
+  const { data, isPending, isError } = useQuery({
+    ...panelHealthQueryOptions(),
+    refetchInterval: 15000,
+  })
+  const status: PanelStatus = isPending ? 'checking' : isError ? 'unreachable' : 'online'
+  const version = data?.version ?? null
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">

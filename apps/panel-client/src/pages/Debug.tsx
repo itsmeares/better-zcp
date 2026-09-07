@@ -8,7 +8,7 @@ import {
   useMemo,
   useCallback,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@/lib/routerCompat";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { getCurrentLanguage } from "@/i18n";

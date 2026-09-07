@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from '@/lib/routerCompat'
 import Scheduler from '../Scheduler'
 import { schedulerApi, serverApi, serversApi } from '@/lib/api'
 import { TooltipProvider } from '@/components/ui/tooltip'

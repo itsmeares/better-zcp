@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from '@/lib/routerCompat'
 import { useTranslation } from 'react-i18next'
 
 export interface ShortcutDef {

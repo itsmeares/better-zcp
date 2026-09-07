@@ -1,4 +1,5 @@
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { NavLink, useNavigate, useLocation } from '@/lib/routerCompat'
 import { useCallback, useEffect, useRef, useState, useContext } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import {
@@ -53,6 +54,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp'
+import { panelHealthQueryOptions } from '@/lib/panelHealth'
 import { preloadRouteModule } from '@/lib/routePreload'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
@@ -325,19 +327,14 @@ export default function Layout({ children }: LayoutProps) {
   const [serverRunState, setServerRunState] = useState<'unknown' | 'running' | 'stopped' | 'transitioning'>('unknown')
   const [modUpdatesAvailable, setModUpdatesAvailable] = useState<number>(0)
   const [panelUpdateAvailable, setPanelUpdateAvailable] = useState<{ version: string | null } | null>(null)
-  const [panelVersion, setPanelVersion] = useState('')
+  const { data: panelHealth } = useQuery({
+    ...panelHealthQueryOptions(),
+    refetchInterval: 15000,
+  })
+  const panelVersion = panelHealth?.version ?? ''
   const socket = useContext(SocketContext)
   const { toast } = useToast()
   const { helpOpen, setHelpOpen, shortcuts } = useKeyboardShortcuts()
-
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/health')
-      .then(r => r.json())
-      .then(d => { if (!cancelled && d.version) setPanelVersion(d.version) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [])
 
   useEffect(() => {
     if (!socket) return

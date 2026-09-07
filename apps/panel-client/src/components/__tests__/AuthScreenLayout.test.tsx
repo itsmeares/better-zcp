@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { AuthScreenLayout } from '../AuthScreenLayout'
@@ -10,10 +11,13 @@ afterEach(() => {
 })
 
 function renderLayout() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <AuthScreenLayout title="Sign in" description="Access the control panel">
-      <p>form goes here</p>
-    </AuthScreenLayout>
+    <QueryClientProvider client={client}>
+      <AuthScreenLayout title="Sign in" description="Access the control panel">
+        <p>form goes here</p>
+      </AuthScreenLayout>
+    </QueryClientProvider>,
   )
 }
 

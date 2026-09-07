@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link } from '@/lib/routerCompat'
 import { cn } from '@/lib/utils'
 
 type BridgeState = 'connected' | 'waiting' | 'offline' | 'loading'

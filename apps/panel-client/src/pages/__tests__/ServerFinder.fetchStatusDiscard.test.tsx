@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from '@/lib/routerCompat'
 import i18n from '@/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import ServerFinder from '../ServerFinder'

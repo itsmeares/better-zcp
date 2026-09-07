@@ -1,6 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, fireEvent, screen } from '@testing-library/react'
-import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigate } from '@/lib/routerCompat'
 import { ScrollToTop } from '../ScrollToTop'
 
 function PageA() {

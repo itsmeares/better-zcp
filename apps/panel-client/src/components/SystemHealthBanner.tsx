@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from '@/lib/routerCompat'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ShieldAlert, HelpCircle, X } from 'lucide-react'
 import { SocketContext } from '@/contexts/SocketContext'

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from '@/lib/routerCompat'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
