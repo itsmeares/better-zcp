@@ -5,7 +5,7 @@ import {
   isPrivateIp,
   parseQueryPort,
   queryServerInfo,
-} from "../routes/serverFinder.js";
+} from "../routes/serverFinder.ts";
 import dgram from "dgram";
 
 

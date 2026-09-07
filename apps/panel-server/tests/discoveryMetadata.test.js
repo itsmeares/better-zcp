@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import {
   mapSteamServer,
-} from "../routes/serverFinder.js";
+} from "../routes/serverFinder.ts";
 import { readServerIniSettings } from "../services/mountDiscovery.ts";
 
 let temporaryRoot;

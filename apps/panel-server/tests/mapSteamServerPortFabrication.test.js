@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapSteamServer } from "../routes/serverFinder.js";
+import { mapSteamServer } from "../routes/serverFinder.ts";
 
 
 describe("mapSteamServer: port derivation is honest, never fabricated", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveMasterDiscoveryStats,
   selectMasterServersToQuery,
-} from "../routes/serverFinder.js";
+} from "../routes/serverFinder.ts";
 
 
 describe("selectMasterServersToQuery: SSRF filter", () => {

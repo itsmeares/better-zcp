@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import dgram from "dgram";
-import { queryServerInfo } from "../routes/serverFinder.js";
+import { queryServerInfo } from "../routes/serverFinder.ts";
 
 
 describe("queryServerInfo: a truncated A2S_INFO reply is contained, not thrown (regression case 5)", () => {

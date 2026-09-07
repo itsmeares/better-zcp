@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import dgram from "dgram";
-import { queryMasterServer, queryServerInfo } from "../routes/serverFinder.js";
+import { queryMasterServer, queryServerInfo } from "../routes/serverFinder.ts";
 
 
 function interceptFirstSendToThrow(count = 1) {

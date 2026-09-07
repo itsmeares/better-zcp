@@ -1,5 +1,6 @@
 import express from 'express';
 import dgram from 'dgram';
+import type { Request, Response } from 'express';
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Finder');
 import { getSteamApiKey } from '../services/steamApiKey.ts';
@@ -10,12 +11,82 @@ const router = express.Router();
 
 router.use(requirePermission('server.install'));
 
-export function isPrivateIp(ip) {
+type QueryFailureReason = keyof typeof QUERY_FAILURE_MESSAGES;
+
+type FinderServer = {
+  players?: number;
+  maxPlayers?: number;
+  [key: string]: unknown;
+};
+
+type A2SInfo = FinderServer & {
+  protocol: number;
+  name: string;
+  map: string;
+  folder: string;
+  game: string;
+  appId: number;
+  players: number;
+  maxPlayers: number;
+  bots: number;
+  serverType: string;
+  environment: string;
+  visibility: number;
+  isPrivate: boolean;
+  vac: number;
+  version: string;
+  ip?: string;
+  port?: number;
+  queryPort?: number;
+  gamePort?: number;
+  sourceTvPort?: number;
+  sourceTvName?: string;
+  keywords?: string;
+};
+
+type MasterServerEntry = { ip: string; port: number };
+type SteamServer = {
+  addr?: string;
+  gametype?: string;
+  name?: string;
+  gameport?: unknown;
+  players?: number;
+  max_players?: number;
+  map?: string;
+  secure?: boolean;
+  password?: boolean;
+  os?: string;
+  dedicated?: boolean;
+  bots?: number;
+  steamid?: string;
+  gamedir?: string;
+};
+
+type FinderResponse = {
+  success: true;
+  source: string;
+  cached: boolean;
+  count: number;
+  totalPlayers: number;
+  activeServers: number;
+  totalCapacity: number;
+  servers: FinderServer[];
+  apiKeyConfigured: boolean;
+  emptyReason?: string;
+  masterDiscovery?: Record<string, unknown>;
+  steamApiFailure?: string;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function isPrivateIp(ip: unknown): boolean {
   if (typeof ip !== 'string') return true;
-  ip = ip.trim();
-  if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return true;
-  const parts = ip.split('.').map(Number);
-  if (parts.some(p => p < 0 || p > 255 || isNaN(p))) return true;
+  const normalized = ip.trim();
+  if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(normalized)) return true;
+  const parts = normalized.split('.').map(Number);
+  if (parts.some((p: number) => p < 0 || p > 255 || isNaN(p))) return true;
   const [a, b] = parts;
   if (a === 0 || a === 10 || a === 127) return true;
   if (a === 100 && b >= 64 && b <= 127) return true;
@@ -26,13 +97,13 @@ export function isPrivateIp(ip) {
   return false;
 }
 
-function validateQueryIp(ip) {
+function validateQueryIp(ip: unknown): ip is string {
   if (!ip || typeof ip !== 'string') return false;
   if (isPrivateIp(ip)) return false;
   return true;
 }
 
-export function parseQueryPort(value) {
+export function parseQueryPort(value: unknown): number | null {
   if (typeof value === "number") {
     return Number.isInteger(value) && value >= 1 && value <= 65535
       ? value
@@ -54,7 +125,7 @@ const SERVER_QUERY_TIMEOUT = 3000;
 
 const MAX_MASTER_SERVERS_TO_QUERY = 200;
 
-export function buildA2SInfoQuery(challenge = null) {
+export function buildA2SInfoQuery(challenge: Buffer | null = null): Buffer {
   const base = Buffer.from([
     0xFF, 0xFF, 0xFF, 0xFF, 0x54,
     ...Buffer.from("Source Engine Query\0"),
@@ -68,10 +139,14 @@ export const QUERY_FAILURE_MESSAGES = {
   'unparseable-response': 'Server responded with data the panel could not parse',
 };
 
-export async function queryServerInfo(ip, port, onFailureReason) {
-  return new Promise((resolve) => {
+export async function queryServerInfo(
+  ip: string,
+  port: number,
+  onFailureReason?: (reason: QueryFailureReason) => void,
+): Promise<A2SInfo | null> {
+  return new Promise<A2SInfo | null>((resolve) => {
     const socket = dgram.createSocket('udp4');
-    let timeout = setTimeout(() => {
+    let timeout: ReturnType<typeof setTimeout> | null = setTimeout(() => {
       socket.close();
       onFailureReason?.('timeout');
       resolve(null);
@@ -79,14 +154,14 @@ export async function queryServerInfo(ip, port, onFailureReason) {
     let challengeRetried = false;
 
     socket.on('error', () => {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
       socket.close();
       onFailureReason?.('socket-error');
       resolve(null);
     });
 
     socket.on('message', (msg) => {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
       timeout = null;
       if (
         msg.length >= 9 &&
@@ -128,7 +203,7 @@ export async function queryServerInfo(ip, port, onFailureReason) {
       try {
         socket.send(buildA2SInfoQuery());
       } catch (err) {
-        clearTimeout(timeout);
+        if (timeout) clearTimeout(timeout);
         socket.close();
         onFailureReason?.('socket-error');
         resolve(null);
@@ -137,7 +212,7 @@ export async function queryServerInfo(ip, port, onFailureReason) {
   });
 }
 
-function parseA2SInfoResponse(buffer) {
+function parseA2SInfoResponse(buffer: Buffer): A2SInfo {
   let offset = 4;
 
   const header = buffer.readUInt8(offset++);
@@ -150,7 +225,7 @@ function parseA2SInfoResponse(buffer) {
     throw new Error('Invalid response header');
   }
 
-  const info = {};
+  const info = {} as A2SInfo;
 
   info.protocol = buffer.readUInt8(offset++);
 
@@ -215,10 +290,15 @@ function parseA2SInfoResponse(buffer) {
   return info;
 }
 
-export async function queryMasterServer(masterHost, masterPort, region = 0xFF, filters = '') {
-  return new Promise((resolve, reject) => {
+export async function queryMasterServer(
+  masterHost: string,
+  masterPort: number,
+  region = 0xFF,
+  filters = '',
+): Promise<MasterServerEntry[]> {
+  return new Promise<MasterServerEntry[]>((resolve, reject) => {
     const socket = dgram.createSocket('udp4');
-    const servers = [];
+    const servers: MasterServerEntry[] = [];
     let lastIp = '0.0.0.0';
     let lastPort = 0;
 
@@ -290,13 +370,13 @@ export async function queryMasterServer(masterHost, masterPort, region = 0xFF, f
   });
 }
 
-let serverCache = {
-  data: null,
-  timestamp: 0,
+let serverCache: {
+  data: SteamServer[] | null;
+  timestamp: number;
   ttl: 60000, // 1 minute cache
 };
 
-async function getServersFromSteamAPI(apiKey, useCache = true) {
+async function getServersFromSteamAPI(apiKey: string, useCache = true): Promise<SteamServer[]> {
   if (!apiKey) {
     throw new Error('Steam API Key not configured in Settings');
   }
@@ -314,7 +394,7 @@ async function getServersFromSteamAPI(apiKey, useCache = true) {
     `\\appid\\${PZ_APP_ID}\\full\\1`, // Full servers (might be missed otherwise)
   ];
 
-  const fetchWithFilter = async (filter) => {
+  const fetchWithFilter = async (filter: string): Promise<SteamServer[]> => {
     try {
       const url = `https://api.steampowered.com/IGameServersService/GetServerList/v1/?key=${apiKey}&filter=${encodeURIComponent(filter)}&limit=10000`;
       const response = await fetch(url);
@@ -324,8 +404,8 @@ async function getServersFromSteamAPI(apiKey, useCache = true) {
       }
       const data = await response.json();
       return data.response?.servers || [];
-    } catch (error) {
-      log.warn(`Steam API request failed for filter ${filter}:`, error.message);
+    } catch (error: unknown) {
+      log.warn(`Steam API request failed for filter ${filter}:`, errorMessage(error));
       return [];
     }
   };
@@ -352,7 +432,7 @@ async function getServersFromSteamAPI(apiKey, useCache = true) {
   return serverArray;
 }
 
-export function mapSteamServer(server) {
+export function mapSteamServer(server: SteamServer): FinderServer {
   const gametype = server.gametype || "";
   const tags = gametype
     .split(";")
@@ -387,7 +467,17 @@ export function mapSteamServer(server) {
   };
 }
 
-export function deriveEmptyReason({ source, serversFound, mastersReachable, mastersListedCount }) {
+export function deriveEmptyReason({
+  source,
+  serversFound,
+  mastersReachable,
+  mastersListedCount,
+}: {
+  source: string;
+  serversFound: number;
+  mastersReachable: boolean;
+  mastersListedCount: number;
+}): string | undefined {
   if (source !== 'master_server' || serversFound > 0) return undefined;
   if (!mastersReachable) return 'master-unreachable';
   return mastersListedCount > 0 ? 'no-servers-responded' : 'no-servers-listed';
@@ -399,7 +489,13 @@ export function deriveMasterDiscoveryStats({
   mastersPrivateFilteredCount,
   mastersQueriedCount,
   mastersTruncated,
-}) {
+}: {
+  source: string;
+  mastersListedCount: number;
+  mastersPrivateFilteredCount: number;
+  mastersQueriedCount: number;
+  mastersTruncated: boolean;
+}): Record<string, unknown> | undefined {
   if (source !== 'master_server') return undefined;
   return {
     listed: mastersListedCount,
@@ -409,7 +505,11 @@ export function deriveMasterDiscoveryStats({
   };
 }
 
-export function selectMasterServersToQuery(masterServers) {
+export function selectMasterServersToQuery(masterServers: MasterServerEntry[]): {
+  toQuery: MasterServerEntry[];
+  privateFilteredCount: number;
+  truncated: boolean;
+} {
   const queryable = masterServers.filter((s) => !isPrivateIp(s.ip));
   return {
     toQuery: queryable.slice(0, MAX_MASTER_SERVERS_TO_QUERY),
@@ -418,7 +518,10 @@ export function selectMasterServersToQuery(masterServers) {
   };
 }
 
-export function deriveSteamApiFailureReason({ steamApiError, serversFound }) {
+export function deriveSteamApiFailureReason({ steamApiError, serversFound }: {
+  steamApiError: string | null;
+  serversFound: number;
+}): string | undefined {
   if (!steamApiError || serversFound > 0) return undefined;
   return sanitizeError(steamApiError);
 }
@@ -426,9 +529,10 @@ export function deriveSteamApiFailureReason({ steamApiError, serversFound }) {
 router.get('/', async (req, res) => {
   try {
     log.info(`GET / (server finder): refresh=${req.query.refresh || 'false'}`);
-    let servers = [];
+    let servers: FinderServer[] = [];
     let source = 'steam_api';
-    const steamApiKey = await getSteamApiKey();
+    const rawSteamApiKey = await getSteamApiKey();
+    const steamApiKey = typeof rawSteamApiKey === 'string' ? rawSteamApiKey : null;
     let apiKeyConfigured = !!steamApiKey;
     const forceRefresh = req.query.refresh === 'true';
     let cached = false;
@@ -443,9 +547,9 @@ router.get('/', async (req, res) => {
         servers = apiServers.map(mapSteamServer);
 
         log.info(`Found ${servers.length} PZ servers via Steam API`);
-      } catch (apiError) {
-        log.warn('Steam API failed, trying master server query:', apiError.message);
-        steamApiError = apiError.message;
+      } catch (apiError: unknown) {
+        log.warn('Steam API failed, trying master server query:', errorMessage(apiError));
+        steamApiError = errorMessage(apiError);
         source = 'master_server';
       }
     }
@@ -479,18 +583,18 @@ router.get('/', async (req, res) => {
                 batch.map(s => queryServerInfo(s.ip, s.port))
               );
 
-              servers.push(...results.filter(Boolean));
+              servers.push(...results.filter((result): result is A2SInfo => result !== null));
             }
 
             if (servers.length > 0) break;
-          } catch (e) {
-            log.warn(`Master server ${master.host} query failed:`, e.message);
+          } catch (e: unknown) {
+            log.warn(`Master server ${master.host} query failed:`, errorMessage(e));
           }
         }
 
         log.info(`Found ${servers.length} PZ servers via master server`);
-      } catch (masterError) {
-        log.error('Master server query failed:', masterError.message);
+      } catch (masterError: unknown) {
+        log.error('Master server query failed:', errorMessage(masterError));
       }
     }
     const emptyReason = deriveEmptyReason({
@@ -514,7 +618,7 @@ router.get('/', async (req, res) => {
     servers.sort((a, b) => (b.players || 0) - (a.players || 0));
 
     const totalPlayers = servers.reduce((sum, s) => sum + (s.players || 0), 0);
-    const activeServers = servers.filter(s => s.players > 0).length;
+    const activeServers = servers.filter(s => (s.players ?? 0) > 0).length;
     const totalCapacity = servers.reduce((sum, s) => sum + (s.maxPlayers || 0), 0);
 
     res.json({
@@ -531,11 +635,11 @@ router.get('/', async (req, res) => {
       masterDiscovery, // undefined outside the master_server path -- see deriveMasterDiscoveryStats
       steamApiFailure, // undefined unless the Steam API threw AND the fallback also came up empty
     });
-  } catch (error) {
+  } catch (error: unknown) {
     log.error('Failed to get server list:', error);
     res.status(500).json({
       success: false,
-      error: sanitizeError(error.message),
+      error: sanitizeError(errorMessage(error)),
     });
   }
 });
@@ -567,7 +671,7 @@ router.get('/query', async (req, res) => {
   }
 
   try {
-    let reason = 'timeout';
+    let reason: QueryFailureReason = 'timeout';
     const info = await queryServerInfo(ip, portNum, (r) => { reason = r; });
 
     if (!info) {
@@ -582,11 +686,11 @@ router.get('/query', async (req, res) => {
       success: true,
       server: info,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     log.error('Failed to query server:', error);
     res.status(500).json({
       success: false,
-      error: sanitizeError(error.message),
+      error: sanitizeError(errorMessage(error)),
     });
   }
 });
@@ -637,7 +741,7 @@ router.get('/ping', async (req, res) => {
       ping,
       online: true,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     res.json({
       success: true,
       ping: null,
@@ -660,7 +764,7 @@ router.get('/debug', async (req, res) => {
       return res.status(500).json({ error: `Steam API error: ${response.status}` });
     }
 
-    const data = await response.json();
+    const data = await response.json() as { response?: { servers?: SteamServer[] } };
     const servers = data.response?.servers || [];
 
     res.json({
@@ -669,9 +773,9 @@ router.get('/debug', async (req, res) => {
       rawServers: servers,
       fieldNames: servers.length > 0 ? Object.keys(servers[0]) : [],
     });
-  } catch (error) {
+  } catch (error: unknown) {
     log.error('Debug endpoint error:', error);
-    res.status(500).json({ error: sanitizeError(error.message) });
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 

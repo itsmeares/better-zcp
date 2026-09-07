@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import dgram from "dgram";
-import { queryMasterServer, isPrivateIp } from "../routes/serverFinder.js";
+import { queryMasterServer, isPrivateIp } from "../routes/serverFinder.ts";
 
 
 describe("queryMasterServer: response sender is now authenticated (regression case 4, fixed)", () => {

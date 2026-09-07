@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveSteamApiFailureReason } from "../routes/serverFinder.js";
+import { deriveSteamApiFailureReason } from "../routes/serverFinder.ts";
 
 
 describe("deriveSteamApiFailureReason", () => {

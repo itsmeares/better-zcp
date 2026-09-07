@@ -232,7 +232,7 @@ import discordRoutes from "./routes/discord.js";
 import debugRoutes, { addLogToBuffer } from "./routes/debug.js";
 import { getDiskFree } from "./utils/diskSpace.ts";
 import { getSwapInfo } from "./utils/swapInfo.ts";
-import serverFinderRoutes from "./routes/serverFinder.js";
+import serverFinderRoutes from "./routes/serverFinder.ts";
 import panelBridgeRoutes from "./routes/panelBridge.js";
 import backupRoutes from "./routes/backup.ts";
 import mapProxyRoutes from "./routes/mapProxy.ts";
