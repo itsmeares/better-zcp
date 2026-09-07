@@ -94,7 +94,6 @@ export default defineConfig(({ mode }) => {
             if (packageName === 'socket.io-client' || packageName === 'engine.io') return 'socket'
             if (packageName.startsWith('@radix-ui/')) return 'radix-vendor'
             if (packageName === 'lucide-react') return 'icons'
-            if (packageName === 'react-router' || packageName.startsWith('react-router/')) return 'router'
 
             return 'vendor'
           },
