@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from '@/lib/routerCompat'
+import { MemoryRouter } from '@/test/router'
 import { WorkshopCollectionPanel } from '../WorkshopCollectionPanel'
 import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import { TooltipProvider } from '@/components/ui/tooltip'

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { MemoryRouter } from '@/lib/routerCompat'
+import { MemoryRouter } from '@/test/router'
 import Templates from '../Templates'
 import { templatesApi } from '@/lib/api'
 

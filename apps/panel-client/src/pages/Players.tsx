@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { Link, useSearchParams } from '@/lib/routerCompat'
+import { Link, useLocation } from '@tanstack/react-router'
 import { Trans, useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { reportClientError } from '@/lib/client-errors'
@@ -308,7 +308,8 @@ export default function Players() {
   const { t, i18n } = useTranslation('players')
   const accessLevelLabels = useMemo(() => getAccessLevelLabels(t), [t])
   const { can } = useAuth()
-  const [searchParams] = useSearchParams()
+  const { searchStr } = useLocation()
+  const searchParams = new URLSearchParams(searchStr)
   const requestedPlayer = searchParams.get('player')?.trim() || ''
   const canModerate = can('players.moderate')
   const canGmTools = can('players.gm_tools')

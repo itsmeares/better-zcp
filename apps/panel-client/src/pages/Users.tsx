@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from '@/lib/routerCompat'
+import { Link } from '@tanstack/react-router'
 import { Users as UsersIcon, UserPlus, ShieldAlert, Loader2, ArrowRight, Trash2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
@@ -374,7 +374,8 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
             </div>
             <div className="border-t border-border/40 px-4 py-3">
               <Link
-                to="/settings?tab=roles"
+                to="/settings"
+                search={{ tab: 'roles' }}
                 className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
               >
                 {t('manageRolesLink')}

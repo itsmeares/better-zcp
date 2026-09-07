@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { useSearchParams, Link as RouterLink } from "@/lib/routerCompat";
+import { Link as RouterLink, useLocation, useNavigate } from "@tanstack/react-router";
 import { usePageShortcut } from "../hooks/useKeyboardShortcuts";
 import {
   Save,
@@ -593,7 +593,9 @@ export default function Settings() {
     const resolved = legacyTabAliases[tab] ?? tab;
     return validTabs.includes(resolved) ? resolved : null;
   };
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { searchStr } = useLocation();
+  const navigate = useNavigate();
+  const searchParams = new URLSearchParams(searchStr);
   const [activeSection, setActiveSection] = useState(
     () => resolveTabId(searchParams.get("tab")) ?? "general",
   );
@@ -601,9 +603,9 @@ export default function Settings() {
   const handleTabChange = useCallback(
     (value: string) => {
       setActiveSection(value);
-      setSearchParams({ tab: value }, { replace: true });
+      void navigate({ to: "/settings", search: { tab: value }, replace: true });
     },
-    [setSearchParams],
+    [navigate],
   );
 
   useEffect(() => {
@@ -611,7 +613,7 @@ export default function Settings() {
     if (resolved && resolved !== activeSection) {
       setActiveSection(resolved);
     }
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps -- resolveTabId/activeSection intentionally excluded: recomputed fresh each render off settingsSections (stable per render), including them would re-run this on every activeSection change instead of only on external URL changes
+  }, [searchStr]); // eslint-disable-line react-hooks/exhaustive-deps -- resolveTabId/activeSection intentionally excluded: recomputed fresh each render off settingsSections (stable per render), including them would re-run this on every activeSection change instead of only on external URL changes
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from '@/lib/routerCompat'
+import { MemoryRouter } from '@/test/router'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Settings from '../Settings'
 

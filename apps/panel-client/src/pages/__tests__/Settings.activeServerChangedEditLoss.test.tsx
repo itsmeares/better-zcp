@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { MemoryRouter } from '@/lib/routerCompat'
+import { MemoryRouter } from '@/test/router'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Settings from '../Settings'
 import { configApi, serversApi } from '@/lib/api'

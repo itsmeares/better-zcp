@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from '@/lib/routerCompat'
+import { Link } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 
 type BridgeState = 'connected' | 'waiting' | 'offline' | 'loading'
@@ -78,7 +78,8 @@ export function BridgeStatusBadge({ connected, running, loading, bridgePath, sum
 
   return (
     <Link
-      to="/settings?tab=bridge"
+      to="/settings"
+      search={{ tab: 'bridge' }}
       aria-live="polite"
       aria-label={accessibleName}
       title={tooltip || undefined}

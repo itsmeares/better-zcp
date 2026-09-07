@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue, memo } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
-import { useSearchParams, Link } from '@/lib/routerCompat'
+import { Link, useLocation } from '@tanstack/react-router'
 import { copyText, cn } from '@/lib/utils'
 import {
   Settings,
@@ -747,7 +747,8 @@ export function resolveServerConfigDeepLink(searchParams: URLSearchParams) {
 export default function ServerConfig() {
   const { t, i18n } = useTranslation('serverconfig')
   const searchLocale = i18n.resolvedLanguage || i18n.language
-  const [searchParams] = useSearchParams()
+  const { searchStr } = useLocation()
+  const searchParams = new URLSearchParams(searchStr)
   const initialDeepLink = resolveServerConfigDeepLink(searchParams)
   const listSep = i18n.language.startsWith('zh') ? '、' : ', '
   const [activeTab, setActiveTab] = useState(initialDeepLink.tab)

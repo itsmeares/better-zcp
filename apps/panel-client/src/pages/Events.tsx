@@ -63,7 +63,7 @@ import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/components/ui/use-toast'
 import { rconApi, serverApi, playersApi, panelBridgeApi, ApiError } from '@/lib/api'
 import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
-import { Link } from '@/lib/routerCompat'
+import { Link } from '@tanstack/react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
 import { HelpTip } from '@/components/HelpTip'
@@ -2156,7 +2156,7 @@ export default function Events() {
                   i18nKey="bridgeOfflineAlert.description"
                   t={t}
                   components={{
-                    1: <Link to="/settings?tab=bridge" className="text-primary underline-offset-2 hover:underline" />,
+                    1: <Link to="/settings" search={{ tab: 'bridge' }} className="text-primary underline-offset-2 hover:underline" />,
                   }}
                 />
               </AlertDescription>

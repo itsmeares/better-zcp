@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
-import { useNavigate } from '@/lib/routerCompat'
+import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ShieldAlert, HelpCircle, X } from 'lucide-react'
 import { SocketContext } from '@/contexts/SocketContext'
@@ -124,7 +124,7 @@ export function SystemHealthBanner() {
       <div className="ms-auto flex items-center gap-1">
         <button
           type="button"
-          onClick={() => navigate('/debug')}
+          onClick={() => void navigate({ to: '/debug' })}
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           <HelpCircle className="h-3 w-3" aria-hidden="true" />
