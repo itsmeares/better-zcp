@@ -128,6 +128,8 @@ jobs:
   windows-packaged-updater:
     name: Windows packaged updater
     runs-on: windows-2022
+    env:
+      PKG_CACHE_PATH: ${{ runner.temp }}\pkg-cache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -150,6 +152,39 @@ jobs:
 
       - name: Exercise bundle transaction and generated supervisor
         run: pnpm --filter @better-zcp/panel-server exec vitest run tests/panelUpdateBundle.test.ts tests/supervisor-restart.test.ts tests/serverManagerSpacedPathCmdQuoting.test.ts tests/serverManagerWindowsSpawnFixes.test.ts tests/serverManagerCustomStartCommandQuoting.test.ts tests/serverManagerCommandLineRoundTrip.test.ts tests/serverManagerEmptyScanWindows.test.ts tests/serverManager-stopTimeout.test.ts tests/setDataPaths.test.ts
+
+      - name: Preload pkg Windows base binary
+        shell: pwsh
+        run: |
+          $cacheDir = Join-Path $env:PKG_CACHE_PATH "v3.6"
+          $binaryPath = Join-Path $cacheDir "fetched-v22.23.2-win-x64"
+          $downloadPath = "$binaryPath.download"
+          $url = "https://github.com/yao-pkg/pkg-fetch/releases/download/v3.6/node-v22.23.2-win-x64"
+          $expectedSha256 = "555d3dceaaf1c5628ac8fa23d1ebde46a424d2ad6782cc2412be8eed4a7a6b69"
+
+          New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+              curl.exe --fail --location --retry 3 --retry-delay 2 --output $downloadPath $url
+              if ($LASTEXITCODE -ne 0) { throw "curl exited with code $LASTEXITCODE" }
+
+              $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $downloadPath).Hash.ToLowerInvariant()
+              if ($actualSha256 -ne $expectedSha256) {
+                throw "pkg binary checksum mismatch: expected $expectedSha256, got $actualSha256"
+              }
+
+              Move-Item -Force $downloadPath $binaryPath
+              break
+            } catch {
+              if (Test-Path -LiteralPath $downloadPath) { Remove-Item -Force $downloadPath }
+              if ($attempt -eq 3) { throw }
+              Start-Sleep -Seconds 3
+            }
+          }
+
+          if (-not (Test-Path -LiteralPath $binaryPath)) {
+            throw "pkg Windows base binary was not cached"
+          }
 
       - name: Build packaged Windows executable
         run: node scripts/release/build.mjs --windows
