@@ -205,6 +205,32 @@ describe('RconService', () => {
       expect(replacement.disconnect).not.toHaveBeenCalled();
     });
 
+    it('cancels an in-flight connection when disconnected before it finishes', async () => {
+      const liveRcon = new RconService();
+      let resolveTarget;
+      liveRcon.hasConfiguredTarget = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveTarget = resolve;
+          }),
+      );
+      liveRcon.loadConfig = vi.fn().mockResolvedValue(undefined);
+      const checkPortOpen = vi
+        .spyOn(liveRcon, 'checkPortOpen')
+        .mockResolvedValue(true);
+
+      const oldConnect = liveRcon.connect();
+      await Promise.resolve();
+      await liveRcon.disconnect();
+
+      resolveTarget(true);
+      await expect(oldConnect).resolves.toBe(false);
+
+      expect(checkPortOpen).not.toHaveBeenCalled();
+      expect(liveRcon.connected).toBe(false);
+      expect(liveRcon.connecting).toBe(false);
+    });
+
     it('should return error when server is starting', async () => {
       rcon.serverStarting = true;
       const result = await rcon.execute('players');
