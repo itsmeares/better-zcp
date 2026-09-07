@@ -14,7 +14,7 @@ vi.mock("../routes/chunks.ts", () => ({
   invalidateMapFolderScan: vi.fn(),
 }));
 
-const { default: router } = await import("../routes/server.js");
+const { default: router } = await import("../routes/server.ts");
 
 const SERVER_NAME = "servertest";
 

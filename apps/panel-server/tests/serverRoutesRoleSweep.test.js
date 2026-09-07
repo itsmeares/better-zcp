@@ -38,7 +38,7 @@ async function runGate(router, routePath, method, role) {
   return { res, calledNext };
 }
 
-describe("server.js: server.control (start/stop/restart/save the running process) -- admin+technician", () => {
+describe("server.ts: server.control (start/stop/restart/save the running process) -- admin+technician", () => {
   const ROUTES = [
     ["/start", "post"],
     ["/stop", "post"],
@@ -48,19 +48,19 @@ describe("server.js: server.control (start/stop/restart/save the running process
   ];
 
   it.each(ROUTES)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ROUTES)("does not refuse a technician on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
 });
 
-describe("server.js: server.install (SteamCMD install/update, filesystem browse for setup) -- admin+technician", () => {
+describe("server.ts: server.install (SteamCMD install/update, filesystem browse for setup) -- admin+technician", () => {
   const ROUTES = [
     ["/install", "post"],
     ["/quick-setup", "post"],
@@ -73,19 +73,19 @@ describe("server.js: server.install (SteamCMD install/update, filesystem browse 
   ];
 
   it.each(ROUTES)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ROUTES)("does not refuse a technician on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
 });
 
-describe("server.js: server.configure (RCON/network .ini edits, diagnostic settings) -- admin+technician", () => {
+describe("server.ts: server.configure (RCON/network .ini edits, diagnostic settings) -- admin+technician", () => {
   const ROUTES = [
     ["/configure-rcon", "post"],
     ["/configure-network", "post"],
@@ -97,19 +97,19 @@ describe("server.js: server.configure (RCON/network .ini edits, diagnostic setti
   ];
 
   it.each(ROUTES)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ROUTES)("does not refuse a technician on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
 });
 
-describe("server.js: server.wipe (destroys the live world for everyone) -- admin only", () => {
+describe("server.ts: server.wipe (destroys the live world for everyone) -- admin only", () => {
   const ROUTES = [
     ["/wipe/preview", "post"],
     ["/wipe", "post"],
@@ -117,19 +117,19 @@ describe("server.js: server.wipe (destroys the live world for everyone) -- admin
   ];
 
   it.each(ROUTES)("refuses a technician on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { res } = await runGate(router, routePath, method, "technician");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ROUTES)("does not refuse an admin on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { calledNext } = await runGate(router, routePath, method, "admin");
     expect(calledNext).toBe(true);
   });
 });
 
-describe("server.js: only /status and /network-interfaces stay outside the matrix entirely", () => {
+describe("server.ts: only /status and /network-interfaces stay outside the matrix entirely", () => {
   const TRULY_UNGATED = [
     ["/status", "get"],
     ["/network-interfaces", "get"],
@@ -138,7 +138,7 @@ describe("server.js: only /status and /network-interfaces stay outside the matri
   it.each(TRULY_UNGATED)(
     "%s %s has no requirePermission gate ahead of its handler",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/server.js");
+      const { default: router } = await import("../routes/server.ts");
       const layer = router.stack.find(
         (entry) => entry.route?.path === routePath && entry.route.methods[method],
       );
@@ -147,7 +147,7 @@ describe("server.js: only /status and /network-interfaces stay outside the matri
   );
 });
 
-describe("server.js: server.world_events (folded in from previously-ungated GM/world routes) -- open to every role", () => {
+describe("server.ts: server.world_events (folded in from previously-ungated GM/world routes) -- open to every role", () => {
   const WORLD_EVENTS_ROUTES = [
     ["/steamcmd/detect", "get"],
     ["/console-log", "get"],
@@ -168,19 +168,19 @@ describe("server.js: server.world_events (folded in from previously-ungated GM/w
   ];
 
   it.each(WORLD_EVENTS_ROUTES)("does not refuse a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { calledNext } = await runGate(router, routePath, method, "moderator");
     expect(calledNext).toBe(true);
   });
 
   it.each(WORLD_EVENTS_ROUTES)("does not refuse a technician on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
 });
 
-describe("server.js: players.endanger_or_impersonate (targeted zombie/weather events at a named player) -- admin only, carved out of server.world_events", () => {
+describe("server.ts: players.endanger_or_impersonate (targeted zombie/weather events at a named player) -- admin only, carved out of server.world_events", () => {
   const ENDANGER_ROUTES = [
     ["/events/lightning", "post"],
     ["/events/thunder", "post"],
@@ -188,19 +188,19 @@ describe("server.js: players.endanger_or_impersonate (targeted zombie/weather ev
   ];
 
   it.each(ENDANGER_ROUTES)("refuses a moderator on %s %s (lost with the split -- intended)", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ENDANGER_ROUTES)("refuses a technician on %s %s (lost with the split -- intended)", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { res } = await runGate(router, routePath, method, "technician");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ENDANGER_ROUTES)("does not refuse an admin on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { calledNext } = await runGate(router, routePath, method, "admin");
     expect(calledNext).toBe(true);
   });

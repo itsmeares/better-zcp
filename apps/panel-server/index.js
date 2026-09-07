@@ -217,7 +217,7 @@ async function gracefulShutdown(signal) {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-import serverRoutes from "./routes/server.js";
+import serverRoutes from "./routes/server.ts";
 import discoveryRoutes from "./routes/discovery.ts";
 import serversRoutes from "./routes/servers.ts";
 import serverStatusRoutes from "./routes/serverStatus.ts";

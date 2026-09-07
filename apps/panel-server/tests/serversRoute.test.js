@@ -40,7 +40,7 @@ const {
   getSteamLoginArgs,
   hasSteamManifestAccessDeniedState,
 } = await import(
-  "../routes/server.js"
+  "../routes/server.ts"
 );
 const { isSteamOperationIdle } = await import("../services/activeSteamOperations.ts");
 

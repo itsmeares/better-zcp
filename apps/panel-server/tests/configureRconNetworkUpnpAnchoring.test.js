@@ -15,7 +15,7 @@ vi.mock("../routes/chunks.ts", () => ({
   invalidateMapFolderScan: vi.fn(),
 }));
 
-const { default: router, applyUpnpToIni } = await import("../routes/server.js");
+const { default: router, applyUpnpToIni } = await import("../routes/server.ts");
 const { getActiveServer } = await import("../database/init.ts");
 
 function getHandler(routePath) {

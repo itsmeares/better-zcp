@@ -143,7 +143,7 @@ async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) 
       ).rejects.not.toThrow(/Text file busy/);
     }, 10000);
 
-    it("startServer({skipRunningCheck: true}) ALSO waits for the busy binary to clear -- this is the flag scheduler.js's performRestart() actually uses", async () => {
+    it("startServer({skipRunningCheck: true}) ALSO waits for the busy binary to clear -- this is the flag scheduler.ts's performRestart() actually uses", async () => {
       const { spawn } = await import("child_process");
       child = spawn(javaPath, ["30"], {
         argv0: "sleep",

@@ -15,7 +15,7 @@ import { createBackupIfChanged } from "../utils/configBackup.ts";
 import {
   candidateIniPaths,
   refreshLaunchTargetBeforeStart,
-} from "../routes/server.js";
+} from "../routes/server.ts";
 import {
   getScheduledTasks,
   updateTaskLastRun,

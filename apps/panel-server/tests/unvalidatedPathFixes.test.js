@@ -42,7 +42,7 @@ function getRouteHandler(router, routePath, method) {
 
 describe("GET /api/server/branches rejects an unvalidated steamcmdPath", () => {
   it("refuses a relative path with 400 instead of deriving an executable from it", async () => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const res = createResponse();
     await getRouteHandler(router, "/branches", "get")(
       { query: { steamcmdPath: "relative/not/absolute" }, app: { get: () => undefined } },
@@ -56,7 +56,7 @@ describe("GET /api/server/branches rejects an unvalidated steamcmdPath", () => {
   });
 
   it("falls back normally for a valid absolute path that just doesn't exist", async () => {
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const res = createResponse();
     await getRouteHandler(router, "/branches", "get")(
       {
@@ -89,7 +89,7 @@ describe("GET /api/server/branches rejects an unvalidated steamcmdPath", () => {
     });
 
     try {
-      const { default: router } = await import("../routes/server.js");
+      const { default: router } = await import("../routes/server.ts");
       const res = createResponse();
       await getRouteHandler(router, "/branches", "get")(
         { query: { steamcmdPath: validPath }, app: { get: () => undefined } },
@@ -111,7 +111,7 @@ describe("GET /api/server/branches rejects an unvalidated steamcmdPath", () => {
 
 describe("server path validation rejects raw traversal segments", () => {
   it("rejects an absolute path containing a parent segment before normalization erases it", async () => {
-    const { isValidPath } = await import("../routes/server.js");
+    const { isValidPath } = await import("../routes/server.ts");
     const absolutePath =
       process.platform === "win32"
         ? "C:\\pz\\..\\Windows\\System32"

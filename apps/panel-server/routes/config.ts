@@ -34,7 +34,7 @@ import {
   MEMORY_GB_MIN,
   MIN_MEMORY_GB_MAX,
   MAX_MEMORY_GB_MAX,
-} from "./server.js";
+} from "./server.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { setSteamSessionCredentials } from "../services/steamSessionCredentials.ts";
 

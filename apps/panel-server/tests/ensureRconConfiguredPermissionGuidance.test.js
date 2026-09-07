@@ -22,7 +22,7 @@ vi.mock("../utils/logger.ts", () => ({
   createLogger: () => logSpy,
 }));
 
-const { ensureRconConfigured } = await import("../routes/server.js");
+const { ensureRconConfigured } = await import("../routes/server.ts");
 
 afterEach(() => {
   getActiveServer.mockReset();

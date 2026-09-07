@@ -270,7 +270,7 @@ describe("PUT /app-settings -- panelPort/httpsPort collision is bidirectional", 
   });
 });
 
-describe("PUT /app-settings -- the second door onto server.js's four hardened fields", () => {
+describe("PUT /app-settings -- the second door onto server.ts's four hardened fields", () => {
   it("rejects an out-of-range rconPort", async () => {
     const res = await putAppSettings({ rconPort: 99 });
     expect(res.getStatusCode()).toBe(400);

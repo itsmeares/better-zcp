@@ -36,7 +36,7 @@ import {
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { ProgressCode } from "../utils/progressCodes.ts";
 import { invalidateMapFolderScan } from "./chunks.ts";
-import { emitActionResult } from "./scheduler.js";
+import { emitActionResult } from "./scheduler.ts";
 import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
@@ -46,11 +46,14 @@ const router = express.Router();
 
 const isWindows = process.platform === "win32";
 const execAsync = promisify(exec);
+const spawnProcess: any = spawn;
 
-export async function logServerEventBestEffort(...args) {
+type AnyRecord = Record<string, any>;
+
+export async function logServerEventBestEffort(...args: any[]) {
   try {
-    await logServerEvent(...args);
-  } catch (error) {
+    await (logServerEvent as any)(...args);
+  } catch (error: any) {
     log.warn(`Could not record server event: ${error.message}`);
   }
 }
@@ -63,11 +66,11 @@ const PZ_INSTALL_MARKERS = [
   "start-server.sh",
 ];
 
-function hasPzInstallMarker(dirPath) {
+function hasPzInstallMarker(dirPath: string) {
   return PZ_INSTALL_MARKERS.some((marker) => fs.existsSync(path.join(dirPath, marker)));
 }
 
-function getSteamCmdExe(steamcmdPath) {
+function getSteamCmdExe(steamcmdPath: string): string {
   const primary = path.join(
     steamcmdPath,
     isWindows ? "steamcmd.exe" : "steamcmd.sh",
@@ -87,7 +90,7 @@ function getSteamCmdExe(steamcmdPath) {
   return primary;
 }
 
-async function saveAndResolveSteamCmdExe(candidatePath) {
+async function saveAndResolveSteamCmdExe(candidatePath: string | null) {
   if (candidatePath) {
     const current = await getSetting("steamcmdPath");
     if (current !== candidatePath) {
@@ -99,15 +102,15 @@ async function saveAndResolveSteamCmdExe(candidatePath) {
   return configuredPath ? getSteamCmdExe(configuredPath) : null;
 }
 
-function emitRawSteamCmdLine(io, event, type, text) {
+function emitRawSteamCmdLine(io: any, event: string, type: string, text: string) {
   io?.emit(event, { type, text });
 }
 
-async function ensureSteamCmdLinux(installPath, io) {
+async function ensureSteamCmdLinux(installPath: string, io: any) {
   const steamcmdExe = await saveAndResolveSteamCmdExe(installPath);
   if (steamcmdExe && fs.existsSync(steamcmdExe)) return steamcmdExe;
 
-  const emit = (event, payload) => {
+  const emit = (event: string, payload: any) => {
     try {
       io?.emit(event, payload);
     } catch {
@@ -139,7 +142,7 @@ async function ensureSteamCmdLinux(installPath, io) {
     await execAsync(`curl -sSL -o '${safeTarPath}' '${safeTarUrl}'`, {
       timeout: 120000,
     });
-  } catch (curlErr) {
+  } catch (curlErr: any) {
     log.warn(`curl download failed (${curlErr.message}), trying wget...`);
     await execAsync(`wget -q -O '${safeTarPath}' '${safeTarUrl}'`, {
       timeout: 120000,
@@ -175,6 +178,9 @@ async function ensureSteamCmdLinux(installPath, io) {
     message: "Initializing SteamCMD (first run)...",
     progressCode: ProgressCode.STEAMCMD_INITIALIZING,
   });
+  if (!steamcmdExe) {
+    throw new Error("SteamCMD executable path is unavailable after download");
+  }
   const ldPaths = [
     path.join(installPath, "linux32"),
     path.join(installPath, "linux64"),
@@ -184,18 +190,18 @@ async function ensureSteamCmdLinux(installPath, io) {
     .filter(Boolean)
     .join(":");
 
-  await new Promise((resolve, reject) => {
-    const proc = spawn(steamcmdExe, ["+quit"], {
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawnProcess(steamcmdExe, ["+quit"], {
       cwd: installPath,
       env: { ...process.env, LD_LIBRARY_PATH: ldPaths },
     });
-    proc.stdout.on("data", (d) =>
+    proc.stdout.on("data", (d: any) =>
       emitRawSteamCmdLine(io, "steamcmd:log", "stdout", d.toString()),
     );
-    proc.stderr.on("data", (d) =>
+    proc.stderr.on("data", (d: any) =>
       emitRawSteamCmdLine(io, "steamcmd:log", "stderr", d.toString()),
     );
-    proc.on("close", (code) => {
+    proc.on("close", (code: any) => {
       if (code === 0 || code === 7) {
         resolve();
       } else {
@@ -221,13 +227,13 @@ async function ensureSteamCmdLinux(installPath, io) {
   return steamcmdExe;
 }
 
-function normalizeSteamBranch(branch) {
+function normalizeSteamBranch(branch: any) {
   return !branch || branch === "stable" || branch === "public"
     ? "public"
     : branch;
 }
 
-function recoverMismatchedSteamBranchManifest(installPath, selectedBranch) {
+function recoverMismatchedSteamBranchManifest(installPath: string, selectedBranch: string) {
   const manifestPath = path.join(
     installPath,
     "steamapps",
@@ -248,11 +254,11 @@ function recoverMismatchedSteamBranchManifest(installPath, selectedBranch) {
   return { mountedBranch, targetBranch, backupPath };
 }
 
-export function hasSteamManifestAccessDeniedState(manifest) {
+export function hasSteamManifestAccessDeniedState(manifest: string) {
   return /"StateFlags"\s*"6"/.test(manifest);
 }
 
-function recoverBlockedSteamManifest(installPath) {
+function recoverBlockedSteamManifest(installPath: string) {
   const manifestPath = path.join(
     installPath,
     "steamapps",
@@ -288,7 +294,7 @@ async function findSteamCmdPath() {
 
 const activeSteamOperations = getActiveSteamOperations();
 
-export function isFirstBootMissingAdminPassword(activeServer) {
+export function isFirstBootMissingAdminPassword(activeServer: AnyRecord | null) {
   if (
     !activeServer ||
     activeServer.isRemote ||
@@ -307,7 +313,11 @@ export function isFirstBootMissingAdminPassword(activeServer) {
   return !fs.existsSync(saveDir);
 }
 
-export function candidateIniPaths(serverConfigPath, zomboidDataPath, serverName) {
+export function candidateIniPaths(
+  serverConfigPath: string,
+  zomboidDataPath: string | null,
+  serverName: string,
+) {
   const candidates = [];
   if (serverConfigPath) {
     candidates.push(path.join(serverConfigPath, `${serverName}.ini`));
@@ -321,8 +331,8 @@ export function candidateIniPaths(serverConfigPath, zomboidDataPath, serverName)
 }
 
 export async function ensureRconConfigured() {
-  let serverConfigPathKind = "install";
-  let serverConfigPath = null;
+  let serverConfigPathKind: "install" | "data" = "install";
+  let serverConfigPath: string | null = null;
   try {
     const activeServer = await getActiveServer();
     if (!activeServer) {
@@ -344,6 +354,7 @@ export async function ensureRconConfigured() {
       log.debug("ensureRconConfigured: Missing serverConfigPath or serverName");
       return false;
     }
+    const configPath = serverConfigPath;
 
     if (!rconPassword) {
       log.debug("ensureRconConfigured: No RCON password configured");
@@ -353,7 +364,7 @@ export async function ensureRconConfigured() {
     const iniPath =
       candidateIniPaths(
         serverConfigPath,
-        activeServer.zomboidDataPath,
+        activeServer.zomboidDataPath ?? null,
         serverName,
       ).find((candidate) => fs.existsSync(candidate)) ||
       path.join(serverConfigPath, `${serverName}.ini`);
@@ -364,9 +375,9 @@ export async function ensureRconConfigured() {
           `ensureRconConfigured: INI not found — pre-creating ${iniPath} with RCON settings`,
         );
         try {
-          if (!fs.existsSync(serverConfigPath)) {
-            fs.mkdirSync(serverConfigPath, { recursive: true });
-            log.info(`Created server config directory: ${serverConfigPath}`);
+          if (!fs.existsSync(configPath)) {
+            fs.mkdirSync(configPath, { recursive: true });
+            log.info(`Created server config directory: ${configPath}`);
           }
           const safePassword = sanitizeIniValue(rconPassword);
           const minimalIni = `# Auto-generated by Zomboid Control Panel\n# PZ will add remaining default settings on first server start\nRCONPort=${rconPort}\nRCONPassword=${safePassword}\n`;
@@ -376,11 +387,11 @@ export async function ensureRconConfigured() {
           });
           log.info(`Pre-created INI with RCON settings (port: ${rconPort})`);
           return true;
-        } catch (createError) {
-          if (createError.code === "EACCES" && serverConfigPath) {
+        } catch (createError: any) {
+          if (createError.code === "EACCES") {
             const guidance = formatWritablePathError(
               serverConfigPathKind,
-              serverConfigPath,
+              configPath,
             );
             log.error(
               `Failed to pre-create INI file: ${createError.message} -- ${guidance.message}`,
@@ -411,7 +422,7 @@ export async function ensureRconConfigured() {
       log.info("RCON auto-configured successfully in server .ini file");
       return true;
     });
-  } catch (error) {
+  } catch (error: any) {
     if (error.code === "EACCES" && serverConfigPath) {
       const guidance = formatWritablePathError(
         serverConfigPathKind,
@@ -445,7 +456,7 @@ async function getServerName() {
   return legacyName || null;
 }
 
-function sanitizeForBatch(str) {
+function sanitizeForBatch(str: any): string {
   if (!str) return "";
   return String(str)
     .replace(/[\x00-\x1F\x7F]/g, "")
@@ -456,7 +467,7 @@ function sanitizeForBatch(str) {
     .trim();
 }
 
-function isValidServerName(name) {
+function isValidServerName(name: any) {
   if (!name || typeof name !== "string") return false;
   const trimmed = name.trim();
   if (trimmed.length < 1 || trimmed.length > 64) return false;
@@ -465,7 +476,7 @@ function isValidServerName(name) {
   );
 }
 
-export function isValidPath(inputPath) {
+export function isValidPath(inputPath: any) {
   if (!inputPath || typeof inputPath !== "string") return false;
   if (inputPath.includes("..")) return false;
   const normalized = path.normalize(inputPath);
@@ -474,7 +485,7 @@ export function isValidPath(inputPath) {
   return true;
 }
 
-function resolveZomboidPaths(installPath, zomboidDataPath) {
+function resolveZomboidPaths(installPath: string, zomboidDataPath: string | null) {
   const defaultZomboidDataPath =
     process.env.PZ_SAVE_PATH || `${installPath}_Data`;
   const zomboidPath = zomboidDataPath || defaultZomboidDataPath;
@@ -487,7 +498,7 @@ function resolveZomboidPaths(installPath, zomboidDataPath) {
   };
 }
 
-function ensureWritableDirectory(directoryPath) {
+function ensureWritableDirectory(directoryPath: string) {
   fs.mkdirSync(directoryPath, { recursive: true });
   fs.accessSync(directoryPath, fs.constants.W_OK);
 }
@@ -498,8 +509,8 @@ const WRITABLE_PATH_LABELS = Object.freeze({
 });
 
 export function formatWritablePathError(
-  kind,
-  directoryPath,
+  kind: "install" | "data",
+  directoryPath: string,
   platformIsWindows = isWindows,
 ) {
   const label = WRITABLE_PATH_LABELS[kind];
@@ -534,8 +545,8 @@ export function formatWritablePathError(
 }
 
 export function formatDirectoryReadError(
-  directoryPath,
-  osCode,
+  directoryPath: string,
+  osCode: string | undefined,
   platformIsWindows = isWindows,
 ) {
   return {
@@ -559,13 +570,27 @@ export const MEMORY_GB_MIN = 1;
 export const MIN_MEMORY_GB_MAX = 64;
 export const MAX_MEMORY_GB_MAX = 128;
 
-function coerceIntInRange(value, min, max, defaultVal) {
+type IntegerValidation =
+  | { ok: false; message: string }
+  | { ok: true; value: number };
+
+function coerceIntInRange(
+  value: any,
+  min: number,
+  max: number,
+  defaultVal: any,
+) {
   const num = parseInt(value, 10);
   if (isNaN(num) || num < min || num > max) return defaultVal;
   return num;
 }
 
-export function requireIntInRange(value, min, max, fieldLabel) {
+export function requireIntInRange(
+  value: any,
+  min: number,
+  max: number,
+  fieldLabel: string,
+): IntegerValidation {
   const textValue = typeof value === "string" ? value.trim() : null;
   const num =
     typeof value === "number"
@@ -582,7 +607,7 @@ export function requireIntInRange(value, min, max, fieldLabel) {
   return { ok: true, value: num };
 }
 
-function buildClasspathEntries(installPath) {
+function buildClasspathEntries(installPath: string) {
   const entries = ["java/."];
   try {
     const javaDir = path.join(installPath, "java");
@@ -595,7 +620,7 @@ function buildClasspathEntries(installPath) {
         entries.push(`java/${jar}`);
       }
     }
-  } catch (e) {
+  } catch (e: any) {
     log.warn(`Could not enumerate java/ jars for classpath: ${e.message}`);
   }
   if (entries.length === 1) {
@@ -604,7 +629,7 @@ function buildClasspathEntries(installPath) {
   return entries;
 }
 
-export function generateStartupScripts(options) {
+export function generateStartupScripts(options: AnyRecord) {
   const {
     installPath,
     serverName,
@@ -740,20 +765,23 @@ export LD_LIBRARY_PATH="\${INSTDIR}/natives/:\${INSTDIR}/natives/linux64/:\${INS
 
 const SCRIPT_FINGERPRINT_FILE = ".pz-panel-scripts.json";
 
-function hashScriptContent(content) {
+function hashScriptContent(content: string) {
   return crypto.createHash("sha256").update(content, "utf8").digest("hex");
 }
 
-export function regenerateStartupScriptsWithBackup(installPath, files) {
+export function regenerateStartupScriptsWithBackup(
+  installPath: string,
+  files: Array<{ path: string; content: string }>,
+) {
   const fingerprintPath = path.join(installPath, SCRIPT_FINGERPRINT_FILE);
-  let fingerprints = {};
+  let fingerprints: Record<string, string> = {};
   try {
     fingerprints = JSON.parse(fs.readFileSync(fingerprintPath, "utf8"));
   } catch {
     fingerprints = {};
   }
 
-  const backupMessages = [];
+  const backupMessages: string[] = [];
   for (const { path: filePath, content } of files) {
     const fileName = path.basename(filePath);
     let existingContent = null;
@@ -778,7 +806,7 @@ export function regenerateStartupScriptsWithBackup(installPath, files) {
           backupMessages.push(
             `${fileName} had content the panel didn't last write (a hand-edit, or an install from before this backup existed) -- your version was saved to ${path.basename(backupPath)} before regenerating.`,
           );
-        } catch (backupErr) {
+        } catch (backupErr: any) {
           log.warn(
             `Could not back up ${filePath} before regenerating: ${backupErr.message}`,
           );
@@ -793,7 +821,7 @@ export function regenerateStartupScriptsWithBackup(installPath, files) {
         filePath.endsWith(".sh") ? { encoding: "utf8", mode: 0o750 } : "utf8",
       );
       fingerprints[fileName] = hashScriptContent(content);
-    } catch (writeErr) {
+    } catch (writeErr: any) {
       log.warn(`Could not write ${filePath}: ${writeErr.message}`);
     }
   }
@@ -804,7 +832,7 @@ export function regenerateStartupScriptsWithBackup(installPath, files) {
       JSON.stringify(fingerprints, null, 2),
       "utf8",
     );
-  } catch (fpErr) {
+  } catch (fpErr: any) {
     log.warn(`Could not persist script fingerprint file: ${fpErr.message}`);
   }
 
@@ -825,7 +853,7 @@ router.get("/status", async (req, res) => {
       ...status,
       rcon: rconStatus,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get server status: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -835,15 +863,15 @@ router.get("/network-interfaces", async (req, res) => {
   try {
     const serverManager = req.app.get("serverManager");
     res.json({ interfaces: serverManager.listNetworkInterfaces() });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to list network interfaces: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
 export async function refreshLaunchTargetBeforeStart(
-  activeServer,
-  { managedHandled = false } = {},
+  activeServer: AnyRecord | null,
+  { managedHandled = false }: { managedHandled?: boolean } = {},
 ) {
   try {
     const rconReady = await ensureRconConfigured();
@@ -854,11 +882,11 @@ export async function refreshLaunchTargetBeforeStart(
         "Could not pre-configure RCON — will retry during startup polling",
       );
     }
-  } catch (rconErr) {
+  } catch (rconErr: any) {
     log.warn(`RCON pre-configuration failed: ${rconErr.message}`);
   }
 
-  let scriptBackupWarnings = [];
+  let scriptBackupWarnings: string[] = [];
   const launchMode = resolveLaunchMode(activeServer);
   if (
     !managedHandled &&
@@ -909,14 +937,20 @@ export async function refreshLaunchTargetBeforeStart(
         );
       }
       log.info("Regenerated startup scripts with current server config");
-    } catch (scriptErr) {
+    } catch (scriptErr: any) {
       log.warn(`Could not regenerate startup scripts: ${scriptErr.message}`);
     }
   }
   return { scriptBackupWarnings };
 }
 
-async function waitForRconAfterStart({ rconService, discordBot }) {
+async function waitForRconAfterStart({
+  rconService,
+  discordBot,
+}: {
+  rconService: any;
+  discordBot: any;
+}) {
   log.info("Waiting for RCON to be ready - starting port polling...");
 
   await rconService.loadConfig();
@@ -980,7 +1014,7 @@ async function waitForRconAfterStart({ rconService, discordBot }) {
         );
         await new Promise((r) => setTimeout(r, 5000));
       }
-    } catch (e) {
+    } catch (e: any) {
       log.warn(`RCON connection attempt failed: ${e.message}`);
       await new Promise((r) => setTimeout(r, 5000));
     }
@@ -990,7 +1024,7 @@ async function waitForRconAfterStart({ rconService, discordBot }) {
     log.info("RCON startup sequence completed - connected");
     discordBot
       ?.sendEventNotification("serverStart", {})
-      .catch((err) =>
+      .catch((err: any) =>
         log.debug(`Discord serverStart notification failed: ${err.message}`),
       );
   } else {
@@ -1034,6 +1068,9 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
         code: ErrorCode.SERVER_START_REMOTE_REFUSED,
       });
     }
+    if (!activeServer) {
+      return res.status(404).json({ error: "No active server configured" });
+    }
 
     const serverManager = req.app.get("serverManager");
     const rconService = req.app.get("rconService");
@@ -1062,7 +1099,7 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
 
     const { scriptBackupWarnings } = await refreshLaunchTargetBeforeStart(
       activeServer,
-      { managedHandled: managed.handled },
+      { managedHandled: Boolean(managed.handled) },
     );
 
     const result = managed.handled
@@ -1090,7 +1127,7 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
         rconService,
         discordBot: req.app.get("discordBot"),
       })
-        .catch((err) =>
+        .catch((err: any) =>
           log.error(`Post-start RCON wait failed: ${err.message}`),
         )
         .finally(() => releaseLifecycleLock());
@@ -1148,7 +1185,7 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
           }
           log.warn("Server start polling timed out");
         }
-      } catch (err) {
+      } catch (err: any) {
         pollCleared = true;
         clearInterval(pollInterval);
         releaseLifecycleLock();
@@ -1163,7 +1200,7 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
     lifecycleLockTransferred = true;
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to start server: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   } finally {
@@ -1247,7 +1284,7 @@ router.post("/stop", requirePermission("server.control"), async (req, res) => {
       const io = req.app.get("io");
       const checkServerStatusNow = req.app.get("checkServerStatusNow");
       if (typeof checkServerStatusNow === "function") {
-        Promise.resolve(checkServerStatusNow("managed-stop")).catch((err) =>
+        Promise.resolve(checkServerStatusNow("managed-stop")).catch((err: any) =>
           log.debug(`Post-stop status re-check failed: ${err.message}`),
         );
       } else if (io) {
@@ -1262,7 +1299,7 @@ router.post("/stop", requirePermission("server.control"), async (req, res) => {
       req.app
         .get("discordBot")
         ?.sendEventNotification("serverStop", {})
-        .catch((err) =>
+        .catch((err: any) =>
           log.debug(`Discord serverStop notification failed: ${err.message}`),
         );
     } else {
@@ -1284,7 +1321,7 @@ router.post("/stop", requirePermission("server.control"), async (req, res) => {
     }
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to stop server: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   } finally {
@@ -1295,7 +1332,7 @@ router.post("/stop", requirePermission("server.control"), async (req, res) => {
 const FORCE_STOP_SAVE_TIMEOUT_MS = 3000;
 const GRACEFUL_STOP_CONFIRMATION_TIMEOUT_MS = 5 * 60 * 1000;
 
-function monitorGracefulStop(serverManager, releaseLifecycleLock) {
+function monitorGracefulStop(serverManager: any, releaseLifecycleLock: any) {
   if (typeof serverManager?.getServerProcessDetails !== "function") {
     releaseLifecycleLock();
     return;
@@ -1309,7 +1346,7 @@ function monitorGracefulStop(serverManager, releaseLifecycleLock) {
         releaseLifecycleLock();
         return;
       }
-    } catch (error) {
+    } catch (error: any) {
       log.debug(`Graceful stop confirmation failed: ${error.message}`);
     }
 
@@ -1328,7 +1365,7 @@ function monitorGracefulStop(serverManager, releaseLifecycleLock) {
   void poll();
 }
 
-async function attemptBoundedSaveBeforeForceStop(rconService) {
+async function attemptBoundedSaveBeforeForceStop(rconService: any) {
   if (!rconService?.connected) return "skipped";
   try {
     const saveResult = await Promise.race([
@@ -1411,7 +1448,7 @@ router.post("/force-stop", requirePermission("server.control"), async (req, res)
     }
 
     res.json({ ...result, saveOutcome });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to force stop server: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   } finally {
@@ -1490,7 +1527,7 @@ router.post("/restart", requirePermission("server.control"), async (req, res) =>
           ? `Restart initiated with ${warningMinutes} minute warning`
           : "Immediate restart initiated",
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to restart server: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   } finally {
@@ -1503,7 +1540,7 @@ router.post("/save", requirePermission("server.control"), async (req, res) => {
     const rconService = req.app.get("rconService");
     const result = await rconService.save();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to save world: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1529,7 +1566,7 @@ router.post("/message", requirePermission("server.world_events"), async (req, re
 
     const result = await rconService.serverMessage(safeMessage);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to send message: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1541,7 +1578,7 @@ router.post("/weather/start-rain", requirePermission("server.world_events"), asy
     const { intensity } = req.body || {};
     const result = await rconService.startRain(intensity);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1551,7 +1588,7 @@ router.post("/weather/stop-rain", requirePermission("server.world_events"), asyn
     const rconService = req.app.get("rconService");
     const result = await rconService.stopRain();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1562,7 +1599,7 @@ router.post("/weather/start-storm", requirePermission("server.world_events"), as
     const { duration } = req.body || {};
     const result = await rconService.startStorm(duration);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1572,7 +1609,7 @@ router.post("/weather/stop", requirePermission("server.world_events"), async (re
     const rconService = req.app.get("rconService");
     const result = await rconService.stopWeather();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1582,7 +1619,7 @@ router.post("/events/chopper", requirePermission("server.world_events"), async (
     const rconService = req.app.get("rconService");
     const result = await rconService.triggerChopper();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1592,7 +1629,7 @@ router.post("/events/gunshot", requirePermission("server.world_events"), async (
     const rconService = req.app.get("rconService");
     const result = await rconService.triggerGunshot();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1606,7 +1643,7 @@ router.post("/events/lightning", requirePermission("players.endanger_or_imperson
     }
     const result = await rconService.triggerLightning(username);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1620,7 +1657,7 @@ router.post("/events/thunder", requirePermission("players.endanger_or_impersonat
     }
     const result = await rconService.triggerThunder(username);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1635,7 +1672,7 @@ router.post("/events/horde", requirePermission("players.endanger_or_impersonate"
     }
     const result = await rconService.createHorde(safeCount, username);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1665,7 +1702,7 @@ router.get("/steamcmd/detect", requirePermission("server.world_events"), async (
       executable: getSteamCmdExe(steamcmdPath),
       message: "SteamCMD found automatically",
     });
-  } catch (error) {
+  } catch (error: any) {
     log.warn(`Failed to detect SteamCMD: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1710,8 +1747,8 @@ router.get("/branches", requirePermission("server.install"), async (req, res) =>
       "+quit",
     ];
 
-    const result = await new Promise((resolve, reject) => {
-      const branchSpawnOpts = { cwd: steamcmdPath, timeout: 60000 };
+    const result = await new Promise<{ code: any; stdout: string; stderr: string }>((resolve, reject) => {
+      const branchSpawnOpts: AnyRecord = { cwd: steamcmdPath, timeout: 60000 };
       if (!isWindows) {
         const ldPaths = [
           path.join(steamcmdPath, "linux32"),
@@ -1723,7 +1760,7 @@ router.get("/branches", requirePermission("server.install"), async (req, res) =>
           .join(":");
         branchSpawnOpts.env = { ...process.env, LD_LIBRARY_PATH: ldPaths };
       }
-      const steamcmd = spawn(steamcmdExe, steamcmdArgs, branchSpawnOpts);
+      const steamcmd = spawnProcess(steamcmdExe, steamcmdArgs, branchSpawnOpts);
 
       let stdout = "";
       let stderr = "";
@@ -1737,15 +1774,15 @@ router.get("/branches", requirePermission("server.install"), async (req, res) =>
         }
       }, 30000);
 
-      steamcmd.stdout.on("data", (data) => {
+      steamcmd.stdout.on("data", (data: any) => {
         stdout += data.toString();
       });
 
-      steamcmd.stderr.on("data", (data) => {
+      steamcmd.stderr.on("data", (data: any) => {
         stderr += data.toString();
       });
 
-      steamcmd.on("close", (code) => {
+      steamcmd.on("close", (code: any) => {
         if (!completed) {
           completed = true;
           clearTimeout(timeoutId);
@@ -1753,7 +1790,7 @@ router.get("/branches", requirePermission("server.install"), async (req, res) =>
         }
       });
 
-      steamcmd.on("error", (err) => {
+      steamcmd.on("error", (err: any) => {
         if (!completed) {
           completed = true;
           clearTimeout(timeoutId);
@@ -1777,7 +1814,7 @@ router.get("/branches", requirePermission("server.install"), async (req, res) =>
       source: "steam",
       message: "Branches fetched from Steam",
     });
-  } catch (error) {
+  } catch (error: any) {
     log.warn(`Failed to fetch Steam branches: ${error.message}`);
     res.json({
       branches: FALLBACK_BRANCHES,
@@ -1787,8 +1824,13 @@ router.get("/branches", requirePermission("server.install"), async (req, res) =>
   }
 });
 
-function parseSteamBranches(output) {
-  const branches = [];
+function parseSteamBranches(output: string) {
+  const branches: Array<{
+    name: string;
+    description: string;
+    buildId: string | null;
+    timeUpdated: string | null;
+  }> = [];
 
   try {
 
@@ -1801,7 +1843,8 @@ function parseSteamBranches(output) {
       return branches;
     }
 
-    const branchesSection = (branchesMatch || altMatch)[1];
+    const branchesSection = (branchesMatch || altMatch)?.[1];
+    if (!branchesSection) return branches;
 
     const branchRegex = /^\s*"([^"]+)"\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/gm;
     let match;
@@ -1845,14 +1888,14 @@ function parseSteamBranches(output) {
       if (b.name === "public") return 1;
       return a.name.localeCompare(b.name);
     });
-  } catch (err) {
+  } catch (err: any) {
     log.warn(`Failed to parse Steam branches: ${err.message}`);
   }
 
   return branches;
 }
 
-function getBetaArgs(branch) {
+function getBetaArgs(branch: string | boolean) {
   if (!branch || branch === "stable" || branch === "public") return [];
   if (branch === true) return ["-beta", "unstable"];
   return ["-beta", branch];
@@ -1926,7 +1969,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
 
     try {
       ensureWritableDirectory(installPath);
-    } catch (directoryError) {
+    } catch (directoryError: any) {
       const writableError = formatWritablePathError("install", installPath);
       return res.status(400).json({
         error: writableError.message,
@@ -1937,7 +1980,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
 
     try {
       ensureWritableDirectory(serverConfigPath);
-    } catch (directoryError) {
+    } catch (directoryError: any) {
       const writableError = formatWritablePathError("data", zomboidPath);
       return res.status(400).json({
         error: writableError.message,
@@ -1981,7 +2024,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
           steamcmdPath,
           req.app.get("io"),
         );
-      } catch (dlErr) {
+      } catch (dlErr: any) {
         return res.status(500).json({
           error: `SteamCMD not found and auto-download failed: ${sanitizeError(dlErr.message)}`,
           code: ErrorCode.STEAMCMD_AUTO_DOWNLOAD_FAILED,
@@ -2026,7 +2069,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
 
     const io = req.app.get("io");
 
-    const spawnOpts = { cwd: steamcmdPath };
+    const spawnOpts: AnyRecord = { cwd: steamcmdPath };
     if (!isWindows) {
       const ldPaths = [
         path.join(steamcmdPath, "linux32"),
@@ -2038,10 +2081,14 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
         .join(":");
       spawnOpts.env = { ...process.env, LD_LIBRARY_PATH: ldPaths };
     }
-    const steamcmd = spawn(steamcmdExe, steamcmdArgs, spawnOpts);
-    activeSteamOperations.get(normalizedPath).pid = steamcmd.pid;
+    const steamcmd = spawnProcess(steamcmdExe, steamcmdArgs, spawnOpts);
+    const installOperation = activeSteamOperations.get(normalizedPath);
+    if (!installOperation) {
+      throw new Error("SteamCMD operation state disappeared before install started");
+    }
+    installOperation.pid = steamcmd.pid;
     let killedByWatchdog = false;
-    activeSteamOperations.get(normalizedPath).watchdog = setInterval(() => {
+    const installWatchdog = setInterval(() => {
       const activeOperation = activeSteamOperations.get(normalizedPath);
       if (!activeOperation) return;
       if (!isSteamOperationIdle(activeOperation)) return;
@@ -2052,13 +2099,14 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
       killedByWatchdog = true;
       steamcmd.kill();
     }, 30_000);
-    activeSteamOperations.get(normalizedPath).watchdog.unref?.();
+    installOperation.watchdog = installWatchdog;
+    installWatchdog.unref?.();
 
     let output = "";
     let stdoutBuffer = "";
     let stderrBuffer = "";
 
-    steamcmd.stdout.on("data", (data) => {
+    steamcmd.stdout.on("data", (data: any) => {
       const operation = activeSteamOperations.get(normalizedPath);
       if (operation) operation.lastOutputAt = Date.now();
       const text = data.toString();
@@ -2076,7 +2124,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
       }
     });
 
-    steamcmd.stderr.on("data", (data) => {
+    steamcmd.stderr.on("data", (data: any) => {
       const operation = activeSteamOperations.get(normalizedPath);
       if (operation) operation.lastOutputAt = Date.now();
       const text = data.toString();
@@ -2094,7 +2142,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
       }
     });
 
-    steamcmd.on("close", async (code) => {
+    steamcmd.on("close", async (code: any) => {
       if (stdoutBuffer.trim()) {
         emitRawSteamCmdLine(io, "install:log", "stdout", stdoutBuffer.trim());
         log.info(`SteamCMD: ${stdoutBuffer.trim()}`);
@@ -2132,7 +2180,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
           }
 
           await setSetting("serverConfigPath", serverConfigPath);
-        } catch (settingsError) {
+        } catch (settingsError: any) {
           log.error(`Failed to save install settings: ${settingsError.message}`);
           warnings.push({
             progressCode: ProgressCode.INSTALL_SETTINGS_SAVE_FAILED,
@@ -2143,7 +2191,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
 
         try {
           ensureWritableDirectory(serverConfigPath);
-        } catch (dirError) {
+        } catch (dirError: any) {
           log.error(
             `Data folder is not writable: ${zomboidPath} (${dirError.message})`,
           );
@@ -2181,7 +2229,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
               progressCode: ProgressCode.RCON_SETTINGS_SAVED,
               params: { port: rconPort },
             });
-          } catch (rconSettingsError) {
+          } catch (rconSettingsError: any) {
             log.error(`Failed to save RCON settings: ${rconSettingsError.message}`);
             warnings.push({
               progressCode: ProgressCode.INSTALL_SETTINGS_SAVE_FAILED,
@@ -2225,7 +2273,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
                   progressCode: ProgressCode.INI_PRECREATED_WITH_UPNP,
                 });
           }
-        } catch (iniError) {
+        } catch (iniError: any) {
           log.warn(`Failed to pre-create INI: ${iniError.message}`);
           const permissionHint =
             iniError.code === "EACCES"
@@ -2278,7 +2326,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
             progressCode: ProgressCode.STARTUP_SCRIPT_CREATED,
             params: { scriptName },
           });
-        } catch (batchError) {
+        } catch (batchError: any) {
           log.warn(`Failed to create startup scripts: ${batchError.message}`);
           warnings.push({
             progressCode: ProgressCode.INSTALL_STARTUP_SCRIPT_FAILED,
@@ -2342,7 +2390,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
               log.info("PanelBridge mod auto-installed to server");
             }
           }
-        } catch (modError) {
+        } catch (modError: any) {
           log.warn(
             `Failed to auto-install PanelBridge mod: ${modError.message}`,
           );
@@ -2390,7 +2438,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
       clearActiveSteamOperation(normalizedPath);
     });
 
-    steamcmd.on("error", (error) => {
+    steamcmd.on("error", (error: any) => {
       clearActiveSteamOperation(normalizedPath);
 
       log.error(`SteamCMD error: ${error.message}`);
@@ -2408,7 +2456,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
       installPath,
       branch: selectedBranch,
     });
-  } catch (error) {
+  } catch (error: any) {
     if (activeOperationPath) {
       activeSteamOperations.delete(activeOperationPath);
     }
@@ -2477,7 +2525,7 @@ router.post("/quick-setup", requirePermission("server.install"), async (req, res
 
     try {
       ensureWritableDirectory(installPath);
-    } catch (directoryError) {
+    } catch (directoryError: any) {
       const writableError = formatWritablePathError("install", installPath);
       return res.status(400).json({
         error: writableError.message,
@@ -2488,7 +2536,7 @@ router.post("/quick-setup", requirePermission("server.install"), async (req, res
 
     try {
       ensureWritableDirectory(serverConfigPath);
-    } catch (directoryError) {
+    } catch (directoryError: any) {
       const writableError = formatWritablePathError("data", zomboidPath);
       return res.status(400).json({
         error: writableError.message,
@@ -2545,7 +2593,7 @@ router.post("/quick-setup", requirePermission("server.install"), async (req, res
 
     try {
       ensureWritableDirectory(serverConfigPath);
-    } catch (dirError) {
+    } catch (dirError: any) {
       log.error(
         `Data folder is not writable: ${zomboidPath} (${dirError.message})`,
       );
@@ -2580,7 +2628,7 @@ router.post("/quick-setup", requirePermission("server.install"), async (req, res
           });
           log.info(`Pre-created INI with RCON settings at ${iniPath}`);
         }
-      } catch (iniError) {
+      } catch (iniError: any) {
         log.warn(`Failed to pre-create INI: ${iniError.message}`);
         const permissionHint =
           iniError.code === "EACCES"
@@ -2658,7 +2706,7 @@ router.post("/quick-setup", requirePermission("server.install"), async (req, res
           log.info("PanelBridge mod auto-installed to server");
         }
       }
-    } catch (modError) {
+    } catch (modError: any) {
       log.warn(`Failed to auto-install PanelBridge mod: ${modError.message}`);
     }
 
@@ -2683,7 +2731,7 @@ router.post("/quick-setup", requirePermission("server.install"), async (req, res
       panelBridgeInstalled,
       warnings,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Quick setup error: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2741,13 +2789,17 @@ router.post("/configure-rcon", requirePermission("server.configure"), async (req
       message: `RCON configured successfully. Restart the server for changes to take effect.`,
       iniPath,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to configure RCON: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
-export async function applyUpnpToIni(serverConfigPath, serverName, useUpnp) {
+export async function applyUpnpToIni(
+  serverConfigPath: string,
+  serverName: string,
+  useUpnp: boolean,
+) {
   const iniPath = path.join(serverConfigPath, `${serverName}.ini`);
   if (!fs.existsSync(iniPath)) {
     return { applied: false, reason: `Server config not found at ${iniPath}` };
@@ -2760,7 +2812,7 @@ export async function applyUpnpToIni(serverConfigPath, serverName, useUpnp) {
       writeFileAtomic(iniPath, content, { encoding: "utf-8", mode: 0o600 });
     });
     return { applied: true };
-  } catch (error) {
+  } catch (error: any) {
     return { applied: false, reason: sanitizeError(error.message) };
   }
 }
@@ -2825,7 +2877,7 @@ router.post("/configure-network", requirePermission("server.configure"), async (
         upnp: useUpnp,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to configure network settings: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2837,7 +2889,7 @@ router.post("/alarm", requirePermission("server.world_events"), async (req, res)
     const result = await rconService.alarm();
     await logServerEventBestEffort("alarm");
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to trigger alarm: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2849,7 +2901,7 @@ router.post("/removezombies", requirePermission("server.world_events"), async (r
     const result = await rconService.removeZombies();
     await logServerEventBestEffort("removezombies");
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to remove zombies: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2871,7 +2923,7 @@ router.post("/reloadlua", requirePermission("server.configure"), async (req, res
     const result = await rconService.reloadLua(filename);
     await logServerEventBestEffort("reloadlua", filename);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to reload Lua: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2937,7 +2989,7 @@ router.post("/log", requirePermission("server.configure"), async (req, res) => {
 
     const result = await rconService.setLogLevel(type, level);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to set log level: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2963,7 +3015,7 @@ router.post("/stats", requirePermission("server.configure"), async (req, res) =>
 
     const result = await rconService.setStats(mode, validPeriod);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to set stats: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2974,7 +3026,7 @@ router.post("/releasesafehouse", requirePermission("server.world_events"), async
     const rconService = req.app.get("rconService");
     const result = await rconService.releaseSafehouse();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to release safehouse: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3027,7 +3079,7 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
           code: ErrorCode.STEAM_UPDATE_SERVER_RUNNING,
         });
       }
-    } catch (e) {
+    } catch (e: any) {
       log.warn(`Could not verify server status before update: ${e.message}`);
       return res.status(503).json({
         error: "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
@@ -3047,7 +3099,7 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
           steamcmdPath,
           req.app.get("io"),
         );
-      } catch (dlErr) {
+      } catch (dlErr: any) {
         return res.status(500).json({
           error: `SteamCMD not found and auto-download failed: ${sanitizeError(dlErr.message)}`,
           code: ErrorCode.STEAMCMD_AUTO_DOWNLOAD_FAILED,
@@ -3065,7 +3117,7 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
           `Reset stale SteamCMD branch manifest (${recovery.mountedBranch} -> ${recovery.targetBranch}); backup: ${recovery.backupPath}`,
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       log.warn(`Could not inspect SteamCMD branch manifest: ${error.message}`);
     }
 
@@ -3076,7 +3128,7 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
           `Reset SteamCMD manifest stuck in access-denied state 0x6; backup: ${recovery.backupPath}`,
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       log.warn(`Could not reset blocked SteamCMD manifest: ${error.message}`);
     }
 
@@ -3123,7 +3175,7 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
         : ProgressCode.STEAM_START_UPDATE,
     });
 
-    const updateSpawnOpts = { cwd: steamcmdPath };
+    const updateSpawnOpts: AnyRecord = { cwd: steamcmdPath };
     if (!isWindows) {
       const ldPaths = [
         path.join(steamcmdPath, "linux32"),
@@ -3135,9 +3187,13 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
         .join(":");
       updateSpawnOpts.env = { ...process.env, LD_LIBRARY_PATH: ldPaths };
     }
-    const steamcmd = spawn(steamcmdExe, steamcmdArgs, updateSpawnOpts);
-    activeSteamOperations.get(normalizedPath).pid = steamcmd.pid;
-    activeSteamOperations.get(normalizedPath).watchdog = setInterval(() => {
+    const steamcmd = spawnProcess(steamcmdExe, steamcmdArgs, updateSpawnOpts);
+    const updateOperation = activeSteamOperations.get(normalizedPath);
+    if (!updateOperation) {
+      throw new Error("SteamCMD operation state disappeared before update started");
+    }
+    updateOperation.pid = steamcmd.pid;
+    const updateWatchdog = setInterval(() => {
       const activeOperation = activeSteamOperations.get(normalizedPath);
       if (!activeOperation) return;
       if (!isSteamOperationIdle(activeOperation)) return;
@@ -3147,13 +3203,14 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
       );
       steamcmd.kill();
     }, 30_000);
-    activeSteamOperations.get(normalizedPath).watchdog.unref?.();
+    updateOperation.watchdog = updateWatchdog;
+    updateWatchdog.unref?.();
 
     let output = "";
     let stdoutBuffer = "";
     let stderrBuffer = "";
 
-    steamcmd.stdout.on("data", (data) => {
+    steamcmd.stdout.on("data", (data: any) => {
       const operation = activeSteamOperations.get(normalizedPath);
       if (operation) operation.lastOutputAt = Date.now();
       const text = data.toString();
@@ -3171,7 +3228,7 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
       }
     });
 
-    steamcmd.stderr.on("data", (data) => {
+    steamcmd.stderr.on("data", (data: any) => {
       const operation = activeSteamOperations.get(normalizedPath);
       if (operation) operation.lastOutputAt = Date.now();
       const text = data.toString();
@@ -3189,7 +3246,7 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
       }
     });
 
-    steamcmd.on("close", (code) => {
+    steamcmd.on("close", (code: any) => {
       if (stdoutBuffer.trim()) {
         emitRawSteamCmdLine(io, "steam:log", "stdout", stdoutBuffer.trim());
       }
@@ -3237,7 +3294,7 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
           if (updateChecker) {
             setTimeout(() => updateChecker.checkForUpdates(true), 3000);
           }
-        } catch (e) {
+        } catch (e: any) {
           // Non-critical
         }
       }
@@ -3245,12 +3302,12 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
       logServerEvent(
         success ? "server_update" : "server_update_failed",
         `Server ${operation} ${success ? "completed" : "failed"}`,
-      ).catch((e) => log.error("Failed to log server event:", e));
+      ).catch((e: any) => log.error("Failed to log server event:", e));
 
       log.info(`SteamCMD ${operation} finished with code ${code}`);
     });
 
-    steamcmd.on("error", (error) => {
+    steamcmd.on("error", (error: any) => {
       clearActiveSteamOperation(normalizedPath);
 
       io.emit("steam:complete", {
@@ -3266,7 +3323,7 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
       success: true,
       message: `Server ${operation} started`,
     });
-  } catch (error) {
+  } catch (error: any) {
     if (activeOperationPath) {
       activeSteamOperations.delete(activeOperationPath);
     }
@@ -3323,7 +3380,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
 
       const file = fs.createWriteStream(zipPath);
 
-      const handleDownloadError = (err) => {
+      const handleDownloadError = (err: any) => {
         file.close();
         fs.unlink(zipPath, () => {});
         io.emit("steamcmd:status", {
@@ -3335,7 +3392,11 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
         log.error(`SteamCMD download failed: ${err.message}`);
       };
 
-      const downloadAndExtract = (url) => {
+      const downloadAndExtract = (url: string | undefined) => {
+        if (!url) {
+          handleDownloadError(new Error("SteamCMD redirect did not include a URL"));
+          return;
+        }
         https
           .get(url, (response) => {
             if (response.statusCode === 301 || response.statusCode === 302) {
@@ -3350,7 +3411,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
             file.on("close", async () => {
               try {
                 await extractAndSetup(zipPath);
-              } catch (unexpectedError) {
+              } catch (unexpectedError: any) {
                 log.error(`SteamCMD self-setup failed unexpectedly: ${unexpectedError.message}`);
                 io.emit("steamcmd:status", {
                   status: "error",
@@ -3366,7 +3427,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
 
       downloadAndExtract(steamcmdUrl);
 
-      async function extractAndSetup(zipFile) {
+      async function extractAndSetup(zipFile: string) {
         try {
           io.emit("steamcmd:status", {
             status: "extracting",
@@ -3382,7 +3443,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
 
           fs.unlinkSync(zipFile);
           runFirstTimeSetup();
-        } catch (extractError) {
+        } catch (extractError: any) {
           io.emit("steamcmd:status", {
             status: "error",
             message: `Extraction failed: ${sanitizeError(extractError.message)}`,
@@ -3410,8 +3471,8 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
       const curlCmd = `curl -sSL -o '${safeTarPath}' '${safeTarUrl}'`;
       const wgetCmd = `wget -q -O '${safeTarPath}' '${safeTarUrl}'`;
 
-      const tryDownload = (cmd, fallbackCmd) => {
-        execCb(cmd, { timeout: 120000 }, (dlErr) => {
+      const tryDownload = (cmd: string, fallbackCmd: string | null) => {
+        execCb(cmd, { timeout: 120000 }, (dlErr: any) => {
           if (dlErr && fallbackCmd) {
             log.warn(
               `Download with ${cmd.split(" ")[0]} failed, trying fallback...`,
@@ -3450,7 +3511,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
           (tarErr) => {
             try {
               fs.unlinkSync(tarPath);
-            } catch (e) {
+            } catch (e: any) {
               /* ignore */
             }
 
@@ -3468,13 +3529,13 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
             const steamcmdSh = path.join(installPath, "steamcmd.sh");
             try {
               fs.chmodSync(steamcmdSh, 0o755);
-            } catch (e) {
+            } catch (e: any) {
               /* ignore */
             }
             const steamcmdBin = path.join(installPath, "steamcmd");
             try {
               fs.chmodSync(steamcmdBin, 0o755);
-            } catch (e) {
+            } catch (e: any) {
               /* ignore */
             }
 
@@ -3512,7 +3573,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
       log.info("Running SteamCMD first-time setup...");
 
       const steamcmdExe = getSteamCmdExe(installPath);
-      const firstRunOpts = { cwd: installPath };
+      const firstRunOpts: AnyRecord = { cwd: installPath };
       if (!isWindows) {
         const ldPaths = [
           path.join(installPath, "linux32"),
@@ -3524,17 +3585,17 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
           .join(":");
         firstRunOpts.env = { ...process.env, LD_LIBRARY_PATH: ldPaths };
       }
-      const steamcmd = spawn(steamcmdExe, ["+quit"], firstRunOpts);
+      const steamcmd = spawnProcess(steamcmdExe, ["+quit"], firstRunOpts);
 
-      steamcmd.stdout.on("data", (data) => {
+      steamcmd.stdout.on("data", (data: any) => {
         emitRawSteamCmdLine(io, "steamcmd:log", "stdout", data.toString());
       });
 
-      steamcmd.stderr.on("data", (data) => {
+      steamcmd.stderr.on("data", (data: any) => {
         emitRawSteamCmdLine(io, "steamcmd:log", "stderr", data.toString());
       });
 
-      steamcmd.on("close", (code) => {
+      steamcmd.on("close", (code: any) => {
         if (code === 0 || code === 7) {
           io.emit("steamcmd:status", {
             status: "complete",
@@ -3554,7 +3615,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
         }
       });
 
-      steamcmd.on("error", (error) => {
+      steamcmd.on("error", (error: any) => {
         io.emit("steamcmd:status", {
           status: "error",
           message: `Failed to run SteamCMD: ${sanitizeError(error.message)}`,
@@ -3566,7 +3627,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
     }
 
     res.json({ success: true, message: "SteamCMD download started" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`SteamCMD download failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3574,7 +3635,8 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
 
 router.get("/steamcmd/check", requirePermission("server.install"), async (req, res) => {
   try {
-    const { path: checkPath } = req.query;
+    const checkPath =
+      typeof req.query.path === "string" ? req.query.path : null;
 
     if (!checkPath || !isValidPath(checkPath)) {
       return res.json({ exists: false, message: "Invalid path" });
@@ -3591,12 +3653,12 @@ router.get("/steamcmd/check", requirePermission("server.install"), async (req, r
         ? "SteamCMD found"
         : "SteamCMD not found at this location",
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
-async function checkServerConfirmedStopped(serverManager, actionLabel) {
+async function checkServerConfirmedStopped(serverManager: any, actionLabel: string) {
   const processDetails = await serverManager.getServerProcessDetails();
   if (processDetails.scanFailed) {
     return {
@@ -3695,7 +3757,7 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
 
     log.info(`Successfully deleted server files at: ${deletePath}`);
     res.json({ success: true, message: "Server files deleted" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to delete server files: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3724,7 +3786,7 @@ router.post("/list-directory", requirePermission("server.install"), async (req, 
                 1,
               );
               label = `${letter}: — ${freeGB} GB free of ${totalGB} GB`;
-            } catch (e) {
+            } catch (e: any) {
               log.debug(`Drive stat failed for ${letter}: ${e.message}`);
             }
             drives.push({
@@ -3733,7 +3795,7 @@ router.post("/list-directory", requirePermission("server.install"), async (req, 
               label,
               isDrive: true,
             });
-          } catch (e) {
+          } catch (e: any) {
             // Drive not accessible
           }
         }
@@ -3769,7 +3831,7 @@ router.post("/list-directory", requirePermission("server.install"), async (req, 
     let items;
     try {
       items = fs.readdirSync(normalized, { withFileTypes: true });
-    } catch (e) {
+    } catch (e: any) {
       const osCode = e && typeof e === "object" && "code" in e ? e.code : "UNKNOWN";
       const readError = formatDirectoryReadError(normalized, osCode);
       return res.status(403).json({
@@ -3806,7 +3868,7 @@ router.post("/list-directory", requirePermission("server.install"), async (req, 
       currentPath: normalized,
       parentPath: hasParent ? parentPath : null,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`List directory failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3883,7 +3945,7 @@ $result = $dialog.ShowDialog()
 if ($result -eq 'OK') { Write-Output $dialog.SelectedPath } else { Write-Output '' }
 `;
 
-    const powershell = spawn(
+    const powershell = spawnProcess(
       "powershell",
       ["-NoProfile", "-STA", "-Command", psScript],
       {
@@ -3894,15 +3956,15 @@ if ($result -eq 'OK') { Write-Output $dialog.SelectedPath } else { Write-Output 
     let output = "";
     let errorOutput = "";
 
-    powershell.stdout.on("data", (data) => {
+    powershell.stdout.on("data", (data: any) => {
       output += data.toString();
     });
 
-    powershell.stderr.on("data", (data) => {
+    powershell.stderr.on("data", (data: any) => {
       errorOutput += data.toString();
     });
 
-    powershell.on("close", (code) => {
+    powershell.on("close", (code: any) => {
       const selectedPath = output.trim();
 
       if (code !== 0 || errorOutput) {
@@ -3916,11 +3978,11 @@ if ($result -eq 'OK') { Write-Output $dialog.SelectedPath } else { Write-Output 
       });
     });
 
-    powershell.on("error", (error) => {
+    powershell.on("error", (error: any) => {
       log.error(`Folder browser error: ${error.message}`);
       res.status(500).json({ error: "Failed to open folder browser", code: ErrorCode.BROWSE_FOLDER_OPEN_FAILED });
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Browse folder failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3964,7 +4026,7 @@ const CONSOLE_LOG_IMPORTANT_PATTERNS = [
   /ISBuildIsoEntity/,
 ];
 
-function filterConsoleLogLines(lines, filterLevel = "filtered") {
+function filterConsoleLogLines(lines: string[], filterLevel = "filtered") {
   if (filterLevel === "all") {
     return lines;
   }
@@ -4022,7 +4084,8 @@ router.get("/console-log", requirePermission("server.world_events"), async (req,
       });
     }
 
-    const filterLevel = req.query.filter || "filtered";
+    const filterLevel =
+      typeof req.query.filter === "string" ? req.query.filter : "filtered";
 
     const maxLines = parseBoundedInteger(req.query.lines, 500, 1, 2000);
 
@@ -4038,7 +4101,7 @@ router.get("/console-log", requirePermission("server.world_events"), async (req,
       } finally {
         try {
           fs.closeSync(fd);
-        } catch (_) {
+        } catch (_: any) {
           /* ignore */
         }
       }
@@ -4065,13 +4128,16 @@ router.get("/console-log", requirePermission("server.world_events"), async (req,
       lastModified: stats.mtime.toISOString(),
       size: stats.size,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to read server console log: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
-let errorCountCache = { at: 0, value: null };
+let errorCountCache: { at: number; value: AnyRecord | null } = {
+  at: 0,
+  value: null,
+};
 const ERROR_COUNT_TTL_MS = 20000;
 
 router.get("/console-log/error-count", requirePermission("server.world_events"), async (req, res) => {
@@ -4110,7 +4176,7 @@ router.get("/console-log/error-count", requirePermission("server.world_events"),
       } finally {
         try {
           fs.closeSync(fd);
-        } catch (_) {
+        } catch (_: any) {
           /* ignore */
         }
       }
@@ -4143,7 +4209,7 @@ router.get("/console-log/error-count", requirePermission("server.world_events"),
     };
     errorCountCache = { at: now, value: payload };
     res.json(payload);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to count console log errors: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4168,7 +4234,8 @@ router.get("/console-log/stream", requirePermission("server.world_events"), asyn
       return res.json({ success: true, newLines: [], exists: false });
     }
 
-    const filterLevel = req.query.filter || "filtered";
+    const filterLevel =
+      typeof req.query.filter === "string" ? req.query.filter : "filtered";
 
     const lastSize = parseBoundedInteger(
       req.query.lastSize,
@@ -4210,7 +4277,7 @@ router.get("/console-log/stream", requirePermission("server.world_events"), asyn
     } finally {
       try {
         fs.closeSync(fd);
-      } catch (_) {
+      } catch (_: any) {
         /* ignore */
       }
     }
@@ -4226,7 +4293,7 @@ router.get("/console-log/stream", requirePermission("server.world_events"), asyn
       filterLevel,
       lastModified: stats.mtime.toISOString(),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to stream server console log: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4253,7 +4320,7 @@ router.post("/console-log/clear", requirePermission("server.configure"), async (
     }
 
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to clear server console log: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4275,7 +4342,7 @@ router.get("/update-check", requirePermission("server.world_events"), async (req
     } else {
       res.json(await updateChecker.getStatus());
     }
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Update check failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4289,7 +4356,7 @@ router.get("/update-check/status", requirePermission("server.world_events"), asy
     }
 
     res.json(await updateChecker.getStatus());
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -4303,7 +4370,7 @@ router.post("/update-check/auto-update-result/dismiss", requirePermission("serve
 
     await updateChecker.dismissAutoUpdateResult();
     res.json(await updateChecker.getStatus());
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -4322,7 +4389,7 @@ router.post("/update-check/interval", requirePermission("server.configure"), asy
 
     await updateChecker.setInterval(minutes);
     res.json({ success: true, intervalMinutes: minutes });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to set update check interval: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4332,7 +4399,7 @@ router.post("/update-check/interval", requirePermission("server.configure"), asy
 let wipeInProgress = false;
 
 const WIPE_PREVIEW_WALK_CONCURRENCY = 8;
-async function runWithConcurrencyBounded(items, limit, worker) {
+async function runWithConcurrencyBounded(items: any[], limit: number, worker: any) {
   const results = new Array(items.length);
   let nextIndex = 0;
   const runners = Array.from(
@@ -4349,7 +4416,7 @@ async function runWithConcurrencyBounded(items, limit, worker) {
   return results;
 }
 
-export async function countDir(dir, budget) {
+export async function countDir(dir: string, budget: any) {
   if (budget.truncated || Date.now() >= budget.deadline || budget.visited >= budget.maxEntries) {
     budget.truncated = true;
     return { files: 0, size: 0 };
@@ -4357,14 +4424,14 @@ export async function countDir(dir, budget) {
   let entries;
   try {
     entries = await fs.promises.readdir(dir, { withFileTypes: true });
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`countDir readdir failed for ${dir}: ${e.message}`);
     return { files: 0, size: 0 };
   }
   const results = await runWithConcurrencyBounded(
     entries,
     WIPE_PREVIEW_WALK_CONCURRENCY,
-    async (entry) => {
+    async (entry: fs.Dirent) => {
       if (budget.truncated || Date.now() >= budget.deadline || budget.visited >= budget.maxEntries) {
         budget.truncated = true;
         return { files: 0, size: 0 };
@@ -4378,7 +4445,7 @@ export async function countDir(dir, budget) {
       try {
         const stat = await fs.promises.stat(fullPath);
         size = stat.size;
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Stat failed for ${fullPath}: ${e.message}`);
       }
       return { files: 1, size };
@@ -4416,7 +4483,6 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
         code: ErrorCode.WIPE_PREVIEW_INVALID_TARGETS,
       });
     }
-
     const savePath = serverManager.savePath;
     const serverName = serverManager.serverName || "servertest";
     if (!savePath) {
@@ -4433,7 +4499,7 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
         .json({ error: `Save directory not found: ${serverName}`, code: ErrorCode.WIPE_SAVE_DIRECTORY_NOT_FOUND });
     }
 
-    const preview = {};
+    const preview: AnyRecord = {};
     let totalFiles = 0;
     let totalSize = 0;
     const budget = {
@@ -4484,14 +4550,14 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
             playerFiles++;
             try {
               playerSize += fs.statSync(path.join(saveDir, entry.name)).size;
-            } catch (e) {
+            } catch (e: any) {
               log.debug(
                 `Stat failed for player file ${entry.name}: ${e.message}`,
               );
             }
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Player file scan failed: ${e.message}`);
       }
       preview.players = { files: playerFiles, size: playerSize };
@@ -4517,14 +4583,14 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
             worldFiles++;
             try {
               worldSize += fs.statSync(path.join(saveDir, entry.name)).size;
-            } catch (e) {
+            } catch (e: any) {
               log.debug(
                 `Stat failed for world file ${entry.name}: ${e.message}`,
               );
             }
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`World file scan failed: ${e.message}`);
       }
       preview.world = { files: worldFiles, size: worldSize };
@@ -4555,12 +4621,12 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
             extraFiles++;
             try {
               extraSize += fs.statSync(fullPath).size;
-            } catch (e) {
+            } catch (e: any) {
               log.debug(`Stat failed for ${entry.name}: ${e.message}`);
             }
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Leftover scan failed: ${e.message}`);
       }
       preview.leftovers = { files: extraFiles, size: extraSize };
@@ -4577,7 +4643,7 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
           accountFiles++;
           try {
             accountSize += fs.statSync(dbFile).size;
-          } catch (e) {
+          } catch (e: any) {
             log.debug(`Stat failed for ${dbFile}: ${e.message}`);
           }
         }
@@ -4597,7 +4663,7 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
       totalSize,
       truncated: budget.truncated,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Wipe preview failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4614,8 +4680,8 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
 
   let serverName = null;
   let backupResult = null;
-  let results = {};
-  let targets = null;
+  let results: AnyRecord = {};
+  let targets: string[] | null = null;
 
   try {
     const serverManager = req.app.get("serverManager");
@@ -4636,7 +4702,9 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
     }
 
     let confirm, createBackup;
-    ({ targets, confirm, createBackup = true } = req.body || {});
+    const requestedTargets = req.body?.targets;
+    ({ confirm, createBackup = true } = req.body || {});
+    targets = requestedTargets as string[];
     if (confirm !== true) {
       return res.status(400).json({ error: "Wipe requires confirm: true", code: ErrorCode.WIPE_CONFIRM_REQUIRED });
     }
@@ -4656,6 +4724,7 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
         .status(400)
         .json({ error: `Invalid targets: ${invalid.join(", ")}`, code: ErrorCode.WIPE_INVALID_TARGETS });
     }
+    const wipeTargets = targets;
 
     const savePath = serverManager.savePath;
     serverName = serverManager.serverName || "servertest";
@@ -4716,7 +4785,7 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
               );
             }
           }
-        } catch (e) {
+        } catch (e: any) {
           return res.status(500).json({
             error: `Wipe aborted: could not back up the accounts database (${e.message}). Nothing was deleted.`,
             code: ErrorCode.WIPE_BACKUP_FAILED,
@@ -4796,7 +4865,7 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
           deletedCount > 0 ? `deleted ${deletedCount} items` : "not found";
       }
 
-      if (SAVE_TARGETS.every((t) => targets.includes(t))) {
+      if (SAVE_TARGETS.every((t) => wipeTargets.includes(t))) {
         let leftovers = 0;
         for (const entry of fs.readdirSync(saveDir, { withFileTypes: true })) {
           log.warn(`WIPE: Deleting leftover ${entry.name}`);
@@ -4844,7 +4913,7 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
       backupName: backupResult?.backup?.name || null,
       message: `Server "${serverName}" wiped: ${targets.join(", ")}`,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Wipe failed: ${error.message}`);
     log.warn(`WIPE PARTIAL: server=${serverName || "unknown"}, results=${JSON.stringify(results)}`);
     await logServerEventBestEffort(

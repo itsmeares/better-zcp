@@ -12,7 +12,7 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 const { generateStartupScripts, regenerateStartupScriptsWithBackup, refreshLaunchTargetBeforeStart } =
-  await import("../routes/server.js");
+  await import("../routes/server.ts");
 
 describe("a Settings-UI config change now reaches the script a scheduled restart will use", () => {
   let tmpRoot;

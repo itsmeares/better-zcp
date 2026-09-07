@@ -11,11 +11,11 @@ import {
   MEMORY_GB_MIN,
   MIN_MEMORY_GB_MAX,
   MAX_MEMORY_GB_MAX,
-} from "../routes/server.js";
+} from "../routes/server.ts";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SERVER_JS = path.join(__dirname, "..", "routes", "server.js");
+const SERVER_JS = path.join(__dirname, "..", "routes", "server.ts");
 const CONFIG_JS = path.join(__dirname, "..", "routes", "config.js");
 
 describe("BIND_PORT_MIN/MAX, DESTINATION_PORT_MIN/MAX, GAME_PORT_MAX, MEMORY_GB_MIN/MIN_MEMORY_GB_MAX/MAX_MEMORY_GB_MAX", () => {
@@ -55,7 +55,7 @@ function findLiteralRangeCallSites(filePath) {
 }
 
 describe("requireIntInRange call sites use named constants, not hand-typed literals", () => {
-  it("server.js has no bare numeric min/max at a requireIntInRange call site", () => {
+  it("server.ts has no bare numeric min/max at a requireIntInRange call site", () => {
     const offenders = findLiteralRangeCallSites(SERVER_JS);
     expect(
       offenders,

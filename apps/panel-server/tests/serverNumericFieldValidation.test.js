@@ -15,7 +15,7 @@ vi.mock("../routes/chunks.ts", () => ({
   invalidateMapFolderScan: vi.fn(),
 }));
 
-const { default: router, requireIntInRange } = await import("../routes/server.js");
+const { default: router, requireIntInRange } = await import("../routes/server.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

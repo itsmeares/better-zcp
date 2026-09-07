@@ -20,7 +20,7 @@ vi.mock("../utils/logger.ts", () => ({
   createLogger: () => logSpy,
 }));
 
-const { refreshLaunchTargetBeforeStart } = await import("../routes/server.js");
+const { refreshLaunchTargetBeforeStart } = await import("../routes/server.ts");
 
 describe("resolveLaunchMode()", () => {
   it("a directory-shaped installPath is MANAGED", () => {

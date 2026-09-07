@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateStartupScripts } from "../routes/server.js";
+import { generateStartupScripts } from "../routes/server.ts";
 
 describe("sanitizeForBatch CR/LF injection (generateStartupScripts)", () => {
   const baseOptions = {

@@ -12,7 +12,7 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(async () => {}),
 }));
 
-const { refreshLaunchTargetBeforeStart } = await import("../routes/server.js");
+const { refreshLaunchTargetBeforeStart } = await import("../routes/server.ts");
 
 describe("refreshLaunchTargetBeforeStart()", () => {
   let root;

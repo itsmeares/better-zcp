@@ -12,7 +12,7 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(async () => {}),
 }));
 
-const { ensureRconConfigured } = await import("../routes/server.js");
+const { ensureRconConfigured } = await import("../routes/server.ts");
 
 describe("ensureRconConfigured() -- INI path resolution", () => {
   let root;

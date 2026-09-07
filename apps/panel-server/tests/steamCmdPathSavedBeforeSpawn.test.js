@@ -70,7 +70,7 @@ describe("GET /api/server/branches: a per-request steamcmdPath is saved before i
     });
 
     try {
-      const { default: router } = await import("../routes/server.js");
+      const { default: router } = await import("../routes/server.ts");
       const res = createResponse();
       await getRouteHandler(router, "/branches", "get")(
         { query: { steamcmdPath: candidate }, app: { get: () => undefined } },

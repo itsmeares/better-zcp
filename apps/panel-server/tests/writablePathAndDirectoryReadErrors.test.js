@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import {
   formatWritablePathError,
   formatDirectoryReadError,
-} from "../routes/server.js";
+} from "../routes/server.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 

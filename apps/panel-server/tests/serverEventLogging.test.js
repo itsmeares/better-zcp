@@ -6,7 +6,7 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent,
 }));
 
-const { logServerEventBestEffort } = await import("../routes/server.js");
+const { logServerEventBestEffort } = await import("../routes/server.ts");
 
 describe("server event logging", () => {
   it("does not turn a completed operation into a rejected request when logging fails", async () => {

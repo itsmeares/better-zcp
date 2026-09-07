@@ -12,7 +12,7 @@ vi.mock("../database/init.ts", () => ({
 const runManagedLifecycle = vi.fn();
 vi.mock("../services/managedContainer.ts", () => ({ runManagedLifecycle }));
 
-const { default: router } = await import("../routes/server.js");
+const { default: router } = await import("../routes/server.ts");
 const { resolveSourcePath } = await import(
   "../services/panelBridgeInstaller.ts"
 );

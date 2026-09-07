@@ -104,7 +104,7 @@ describe("discord.js: admin+technician (integration config, not player authority
   });
 });
 
-describe("scheduler.js: admin+technician (task automation operates the server)", () => {
+describe("scheduler.ts: admin+technician (task automation operates the server)", () => {
   it("refuses a moderator", async () => {
     const { default: router } = await import("../routes/scheduler.ts");
     const { res } = await runFirstUseLayer(router, { user: { role: "moderator" } });

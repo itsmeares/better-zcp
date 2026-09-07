@@ -60,11 +60,11 @@ const PANEL_BRIDGE_TARGETED_ROUTES = [
   ["/chat/general", "post"],
 ];
 
-describe("server.js: /events/lightning, /events/thunder, /events/horde moved to players.endanger_or_impersonate", () => {
+describe("server.ts: /events/lightning, /events/thunder, /events/horde moved to players.endanger_or_impersonate", () => {
   it.each(SERVER_JS_TARGETED_ROUTES)(
     "refuses a world_events-only caller on %s %s",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/server.js");
+      const { default: router } = await import("../routes/server.ts");
       const { res } = await runGate(router, routePath, method, "world_events_only");
       expect(res.getStatusCode()).toBe(403);
     },
@@ -73,7 +73,7 @@ describe("server.js: /events/lightning, /events/thunder, /events/horde moved to 
   it.each(SERVER_JS_TARGETED_ROUTES)(
     "does not refuse a players.endanger_or_impersonate-only caller on %s %s",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/server.js");
+      const { default: router } = await import("../routes/server.ts");
       const { calledNext } = await runGate(router, routePath, method, "endanger_only");
       expect(calledNext).toBe(true);
     },
@@ -101,14 +101,14 @@ describe("panelBridge.js: sound/zombie-targeting and chat-impersonation routes m
 });
 
 describe("narrowness check: the split did not over-reach into untouched cosmetic routes", () => {
-  it("world_events_only is still allowed on server.js POST /message (untouched, world-wide)", async () => {
-    const { default: router } = await import("../routes/server.js");
+  it("world_events_only is still allowed on server.ts POST /message (untouched, world-wide)", async () => {
+    const { default: router } = await import("../routes/server.ts");
     const { calledNext } = await runGate(router, "/message", "post", "world_events_only");
     expect(calledNext).toBe(true);
   });
 
-  it("endanger_only is refused on server.js POST /message (new capability must not also grant cosmetic routes)", async () => {
-    const { default: router } = await import("../routes/server.js");
+  it("endanger_only is refused on server.ts POST /message (new capability must not also grant cosmetic routes)", async () => {
+    const { default: router } = await import("../routes/server.ts");
     const { res } = await runGate(router, "/message", "post", "endanger_only");
     expect(res.getStatusCode()).toBe(403);
   });

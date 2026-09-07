@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 
 
-const { countDir } = await import("../routes/server.js");
+const { countDir } = await import("../routes/server.ts");
 
 beforeEach(() => {
   vi.useFakeTimers();

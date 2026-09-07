@@ -39,7 +39,7 @@ describe("buildFileIndex() global entry cap", () => {
     fs.rmSync(serverPath, { recursive: true, force: true });
   });
 
-  it("production default is 300,000 entries -- matches server.js's wipe-preview countDir() budget convention", () => {
+  it("production default is 300,000 entries -- matches server.ts's wipe-preview countDir() budget convention", () => {
     expect(FILE_INDEX_MAX_ENTRIES).toBe(300_000);
   });
 

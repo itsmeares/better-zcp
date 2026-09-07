@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { regenerateStartupScriptsWithBackup } from "../routes/server.js";
+import { regenerateStartupScriptsWithBackup } from "../routes/server.ts";
 
 describe("regenerateStartupScriptsWithBackup()", () => {
   let tmpRoot;

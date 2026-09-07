@@ -15,7 +15,7 @@ vi.mock("../services/managedContainer.ts", () => ({
   runManagedLifecycle: (...args) => runManagedLifecycleMock(...args),
 }));
 
-const { default: router } = await import("../routes/server.js");
+const { default: router } = await import("../routes/server.ts");
 
 function getHandler(routePath, method) {
   const layer = router.stack.find(

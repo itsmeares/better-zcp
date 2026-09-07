@@ -126,7 +126,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       return fakeProc;
     });
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
@@ -151,7 +151,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       if (key === "serverPath") throw new Error("EBUSY: database locked");
     });
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
@@ -181,7 +181,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       if (key === "rconPassword") throw new Error("EBUSY: database locked");
     });
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
@@ -211,7 +211,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       return realHolder.fn(targetPath, ...rest);
     });
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
@@ -243,7 +243,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       return realHolder.fn(targetPath, ...rest);
     });
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
@@ -271,7 +271,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       return fakeProc;
     });
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
@@ -299,7 +299,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
       return fakeProc;
     });
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
@@ -322,7 +322,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     });
     spawnMock.mockImplementation(() => fakeProc);
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     const handlerDone = getRouteHandler(router, "/install", "post")(
@@ -398,7 +398,7 @@ describe("POST /api/server/install -- UPnP reaches the server's own .ini, not ju
       return fakeProc;
     });
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
@@ -422,7 +422,7 @@ describe("POST /api/server/install -- UPnP reaches the server's own .ini, not ju
       return fakeProc;
     });
 
-    const { default: router } = await import("../routes/server.js");
+    const { default: router } = await import("../routes/server.ts");
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(

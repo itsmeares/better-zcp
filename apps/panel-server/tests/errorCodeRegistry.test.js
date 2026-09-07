@@ -62,7 +62,7 @@ const KNOWN_INTENTIONALLY_UNREFERENCED = new Set([
 const KNOWN_CLIENT_ONLY_LOCALE_KEYS = new Set([
   // apps/panel-client/src/lib/errorMessage.ts's wrapUncodedServerError() wraps ANY
   // ApiError with status >= 500 and no code that resolves to a registered
-  // translation (2026-08-26: the panelBridge.js/server.js generic
+  // translation (2026-08-26: the panelBridge.js/server.ts generic
   // catch-all convention -- uncoded 500s stay uncoded by design). It
   // exists for every route file's uncoded catch-all at once, so unlike
   // every other entry in this registry it has no single server call site

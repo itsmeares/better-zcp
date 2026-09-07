@@ -7,7 +7,7 @@ import { ProgressCode } from "../utils/progressCodes.ts";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.join(__dirname, "..");
 const REPO_ROOT = path.join(SERVER_DIR, "..", "..");
-const SERVER_JS_PATH = path.join(SERVER_DIR, "routes", "server.js");
+const SERVER_JS_PATH = path.join(SERVER_DIR, "routes", "server.ts");
 const EN_LOCALE_PATH = path.join(
   REPO_ROOT,
   "apps/panel-client/src/locales/en/installProgress.json",
@@ -38,7 +38,7 @@ describe("install/SteamCMD progress codes: registry membership (structure, not m
     expect(referencedCodes.has("STEAM_START_VERIFY")).toBe(true);
   });
 
-  it("every ProgressCode.* reference in apps/panel-server/routes/server.js is a registered ProgressCode value", () => {
+  it("every ProgressCode.* reference in apps/panel-server/routes/server.ts is a registered ProgressCode value", () => {
     const unregistered = [...referencedCodes].filter(
       (code) => !registryCodes.has(code),
     );
@@ -50,7 +50,7 @@ describe("install/SteamCMD progress codes: registry membership (structure, not m
     ).toEqual([]);
   });
 
-  it("every registered ProgressCode value is referenced at least once in apps/panel-server/routes/server.js", () => {
+  it("every registered ProgressCode value is referenced at least once in apps/panel-server/routes/server.ts", () => {
     const unused = [...registryCodes].filter(
       (code) => !referencedCodes.has(code),
     );
