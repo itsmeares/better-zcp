@@ -49,7 +49,7 @@ async function runGate(gate, user) {
 
 describe("requirePermission() fails closed", () => {
   it("refuses when asked for a capability that does not exist in the catalogue -- not a role gate, the check itself", async () => {
-    const { requirePermission } = await import("../services/permissions.js");
+    const { requirePermission } = await import("../services/permissions.ts");
     rolesById.clear();
     rolesById.set("role-admin", {
       id: "role-admin",
@@ -70,7 +70,7 @@ describe("requirePermission() fails closed", () => {
   });
 
   it("refuses when the role row's capabilities field is missing", async () => {
-    const { requirePermission } = await import("../services/permissions.js");
+    const { requirePermission } = await import("../services/permissions.ts");
     rolesById.clear();
     rolesById.set("role-broken", { id: "role-broken", name: "broken", isSeeded: true });
 
@@ -82,7 +82,7 @@ describe("requirePermission() fails closed", () => {
   });
 
   it("refuses when the role row's capabilities field is not an array (a string, an object, null)", async () => {
-    const { requirePermission } = await import("../services/permissions.js");
+    const { requirePermission } = await import("../services/permissions.ts");
     for (const malformed of ["server.control", { "server.control": true }, null, 42]) {
       rolesById.clear();
       rolesById.set("role-broken", {
@@ -101,7 +101,7 @@ describe("requirePermission() fails closed", () => {
   });
 
   it("refuses when the user's role no longer resolves to any row at all (role renamed or deleted out from under an active session)", async () => {
-    const { requirePermission } = await import("../services/permissions.js");
+    const { requirePermission } = await import("../services/permissions.ts");
     rolesById.clear();
 
     const gate = requirePermission("server.control");
@@ -112,7 +112,7 @@ describe("requirePermission() fails closed", () => {
   });
 
   it("refuses when the role exists but does not grant the requested capability (the ordinary case, still verified end to end)", async () => {
-    const { requirePermission } = await import("../services/permissions.js");
+    const { requirePermission } = await import("../services/permissions.ts");
     rolesById.clear();
     rolesById.set("role-moderator", {
       id: "role-moderator",
@@ -129,7 +129,7 @@ describe("requirePermission() fails closed", () => {
   });
 
   it("POSITIVE CONTROL: does not refuse a real capability a real role genuinely grants -- proves the middleware isn't just permanently closed", async () => {
-    const { requirePermission } = await import("../services/permissions.js");
+    const { requirePermission } = await import("../services/permissions.ts");
     rolesById.clear();
     rolesById.set("role-technician", {
       id: "role-technician",
@@ -145,7 +145,7 @@ describe("requirePermission() fails closed", () => {
   });
 
   it("refuses (401) when req.user is absent -- this used to pass through and was the exact shape of a real, live, unauthenticated-admin-creation bug (2026-08-22) once authService.middleware() started exempting a whole URL prefix from authentication without also exempting it from this gate. middleware() now always sets an explicit req.user (real or an explicit auth-disabled sentinel), so absence can only ever mean 'not authenticated' here", async () => {
-    const { requirePermission } = await import("../services/permissions.js");
+    const { requirePermission } = await import("../services/permissions.ts");
     rolesById.clear();
 
     const gate = requirePermission("server.control");

@@ -44,7 +44,7 @@ vi.mock("../database/init.js", () => ({
   },
 }));
 
-const { createRole, updateRole, deleteRole } = await import("../services/permissions.js");
+const { createRole, updateRole, deleteRole } = await import("../services/permissions.ts");
 
 beforeEach(() => {
   rolesById.clear();

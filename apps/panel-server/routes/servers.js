@@ -23,7 +23,7 @@ import {
 } from "../database/init.js";
 import { isRemoteConfigConfigured } from "../services/remoteConfigFiles.ts";
 import { normalizeUserPath, inspectZomboidPath } from "../utils/zomboidPaths.ts";
-import { requirePermission } from "../services/permissions.js";
+import { requirePermission } from "../services/permissions.ts";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,

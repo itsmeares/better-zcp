@@ -3,7 +3,7 @@ import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { normalizeChatRelayScope } from "../services/discordBot.js";
 import { describeStartFailure } from "../services/discordStartFailure.ts";
-import { requirePermission, getRoleByName } from "../services/permissions.js";
+import { requirePermission, getRoleByName } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 const log = createLogger("API:Discord");
 

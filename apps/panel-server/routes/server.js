@@ -27,7 +27,7 @@ import {
 } from "../services/activeSteamOperations.ts";
 import { normalizeMemoryGb } from "../utils/memory.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
-import { requirePermission } from "../services/permissions.js";
+import { requirePermission } from "../services/permissions.ts";
 import { runManagedLifecycle } from "../services/managedContainer.ts";
 import {
   acquireLifecycleLock,

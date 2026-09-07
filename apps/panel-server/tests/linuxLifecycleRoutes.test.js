@@ -19,7 +19,7 @@ vi.mock("../database/init.js", () => ({
   setSetting: vi.fn(),
 }));
 
-vi.mock("../services/permissions.js", () => ({
+vi.mock("../services/permissions.ts", () => ({
   requirePermission: () => (_req, _res, next) => next(),
 }));
 

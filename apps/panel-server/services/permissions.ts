@@ -12,13 +12,59 @@ import {
   getUsersForRoleAccounting,
   reassignRoleMembers,
 } from "../database/init.js";
+import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { createLogger } from "../utils/logger.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 const log = createLogger("Permissions");
 
+type Capability = {
+  key: string;
+  group: string;
+  label: string;
+  description: string;
+};
 
-export const CAPABILITIES = [
+type Role = {
+  id: string | number;
+  name: string;
+  capabilities: string[];
+  isSeeded?: boolean;
+  [key: string]: unknown;
+};
+
+type User = {
+  role: string;
+  roleId?: string | number | null;
+  [key: string]: unknown;
+};
+
+type ActingUser = {
+  role?: string;
+} | null | undefined;
+
+type PermissionRequest = Request & {
+  user?: ActingUser;
+};
+
+type CapabilityValidationError = {
+  message: string;
+  capability?: string;
+};
+
+type RoleUpdateOptions = {
+  actingUser?: ActingUser;
+  confirmSelfCapabilityLoss?: boolean;
+};
+
+type PermissionServiceError = Error & {
+  code: string | null;
+  status: number;
+  params?: unknown;
+};
+
+
+export const CAPABILITIES: Capability[] = [
   {
     key: "users.manage",
     group: "Users & Roles",
@@ -231,15 +277,18 @@ export const CAPABILITIES = [
 
 const CAPABILITY_KEYS = new Set(CAPABILITIES.map((c) => c.key));
 
-export function isKnownCapability(key) {
+export function isKnownCapability(key: unknown): key is string {
   return typeof key === "string" && CAPABILITY_KEYS.has(key);
 }
 
-export function listCapabilitiesGrouped() {
-  const groups = new Map();
+export function listCapabilitiesGrouped(): Array<{
+  group: string;
+  capabilities: Array<Pick<Capability, "key" | "label" | "description">>;
+}> {
+  const groups = new Map<string, Array<Pick<Capability, "key" | "label" | "description">>>();
   for (const cap of CAPABILITIES) {
     if (!groups.has(cap.group)) groups.set(cap.group, []);
-    groups.get(cap.group).push({
+    groups.get(cap.group)!.push({
       key: cap.key,
       label: cap.label,
       description: cap.description,
@@ -291,12 +340,12 @@ export const DEFAULT_ROLE_CAPABILITIES = Object.freeze({
 });
 
 
-export function requirePermission(capability) {
+export function requirePermission(capability: string): RequestHandler {
   if (!isKnownCapability(capability)) {
     log.error(
       `requirePermission() called with an unregistered capability: "${capability}" -- refusing every request to this route until fixed.`,
     );
-    return (req, res) => {
+    return (req: Request, res: Response) => {
       res.status(403).json({
         error: "Insufficient permissions",
         code: ErrorCode.PERMISSION_DENIED,
@@ -304,8 +353,9 @@ export function requirePermission(capability) {
     };
   }
 
-  return async (req, res, next) => {
-    if (!req.user) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as PermissionRequest).user;
+    if (!user) {
       return res.status(401).json({
         error: "Authentication required",
         code: ErrorCode.AUTH_REQUIRED,
@@ -313,7 +363,7 @@ export function requirePermission(capability) {
     }
 
     try {
-      const role = await getRoleByName(req.user.role);
+      const role = await getRoleByName(user.role);
       if (!role || !Array.isArray(role.capabilities)) {
         return res.status(403).json({
           error: "Insufficient permissions",
@@ -327,8 +377,8 @@ export function requirePermission(capability) {
         });
       }
       return next();
-    } catch (error) {
-      log.error(`requirePermission("${capability}") failed: ${error.message}`);
+    } catch (error: unknown) {
+      log.error(`requirePermission("${capability}") failed: ${error instanceof Error ? error.message : String(error)}`);
       return res.status(403).json({
         error: "Insufficient permissions",
         code: ErrorCode.PERMISSION_DENIED,
@@ -337,10 +387,10 @@ export function requirePermission(capability) {
   };
 }
 
-async function getCapabilitiesForRole(roleName) {
+async function getCapabilitiesForRole(roleName: string): Promise<string[] | null> {
   try {
     const role = await getRoleByName(roleName);
-    return role && Array.isArray(role.capabilities) ? role.capabilities : null;
+    return role && Array.isArray(role.capabilities) ? role.capabilities as string[] : null;
   } catch {
     return null;
   }
@@ -355,9 +405,12 @@ export {
   RECOVERY_CAPABILITIES,
 };
 
-async function countUsersWithCapability(capability, excludingRoleId = null) {
-  const roles = await getRoles();
-  const users = await getUsersForRoleAccounting();
+async function countUsersWithCapability(
+  capability: string,
+  excludingRoleId: string | number | null = null,
+): Promise<number> {
+  const roles = await getRoles() as Role[];
+  const users = await getUsersForRoleAccounting() as User[];
   const grantingRoleIds = new Set(
     roles
       .filter(
@@ -387,19 +440,27 @@ async function countUsersWithCapability(capability, excludingRoleId = null) {
   return count;
 }
 
-function validateCapabilitiesArray(capabilities) {
+function validateCapabilitiesArray(capabilities: unknown): CapabilityValidationError | null {
   if (!Array.isArray(capabilities)) {
     return { message: "capabilities must be an array" };
   }
-  const unknown = capabilities.filter((c) => !isKnownCapability(c));
+  const unknown = (capabilities as unknown[]).filter((c) => !isKnownCapability(c));
   if (unknown.length > 0) {
-    return { message: `Unknown capability: ${unknown[0]}`, capability: unknown[0] };
+    return {
+      message: `Unknown capability: ${unknown[0]}`,
+      capability: String(unknown[0]),
+    };
   }
   return null;
 }
 
-function makeError(code, message, status = 400, params) {
-  const err = new Error(message);
+function makeError(
+  code: string | null,
+  message: string,
+  status = 400,
+  params?: unknown,
+): PermissionServiceError {
+  const err = new Error(message) as PermissionServiceError;
   err.code = code;
   err.status = status;
   if (params) err.params = params;
@@ -407,9 +468,9 @@ function makeError(code, message, status = 400, params) {
 }
 
 
-export async function listRolesWithMemberCounts() {
-  const roles = await getRoles();
-  const withCounts = [];
+export async function listRolesWithMemberCounts(): Promise<Array<Role & { memberCount: number }>> {
+  const roles = await getRoles() as Role[];
+  const withCounts: Array<Role & { memberCount: number }> = [];
   for (const role of roles) {
     const members = await getUsersForRole(role);
     withCounts.push({ ...role, memberCount: members.length });
@@ -417,7 +478,10 @@ export async function listRolesWithMemberCounts() {
   return withCounts;
 }
 
-export async function createRole({ name, capabilities }) {
+export async function createRole({ name, capabilities }: {
+  name: unknown;
+  capabilities: unknown;
+}): Promise<Role> {
   if (typeof name !== "string" || !name.trim()) {
     throw makeError(null, "name is required", 400);
   }
@@ -432,7 +496,7 @@ export async function createRole({ name, capabilities }) {
     );
   }
 
-  const existingRoles = await getRoles();
+  const existingRoles = await getRoles() as Role[];
   if (existingRoles.some((r) => r.name === trimmedName)) {
     throw makeError(
       ErrorCode.ROLE_NAME_TAKEN,
@@ -442,10 +506,10 @@ export async function createRole({ name, capabilities }) {
     );
   }
 
-  const role = {
+  const role: Role = {
     id: `role-${randomToken()}`,
     name: trimmedName,
-    capabilities: [...new Set(capabilities)],
+    capabilities: [...new Set(capabilities as string[])],
     isSeeded: false,
     createdAt: new Date().toISOString(),
   };
@@ -459,7 +523,13 @@ async function checkLockoutRulesForCapabilityChange({
   nextCapabilities,
   actingUser,
   confirmSelfCapabilityLoss,
-}) {
+}: {
+  roleId: string | number;
+  existingCapabilities: string[];
+  nextCapabilities: string[];
+  actingUser?: ActingUser;
+  confirmSelfCapabilityLoss: boolean;
+}): Promise<void> {
   for (const capability of RECOVERY_CAPABILITIES) {
     const currentlyGrants = existingCapabilities.includes(capability);
     const willStillGrant = nextCapabilities.includes(capability);
@@ -496,11 +566,11 @@ async function checkLockoutRulesForCapabilityChange({
 }
 
 export async function updateRole(
-  id,
-  { name, capabilities },
-  { actingUser, confirmSelfCapabilityLoss = false } = {},
-) {
-  const roles = await getRoles();
+  id: string | number,
+  { name, capabilities }: { name?: unknown; capabilities?: unknown },
+  { actingUser, confirmSelfCapabilityLoss = false }: RoleUpdateOptions = {},
+): Promise<Role> {
+  const roles = await getRoles() as Role[];
   const existing = roles.find((r) => String(r.id) === String(id));
   if (!existing) {
     throw makeError(ErrorCode.ROLE_NOT_FOUND, "Role not found", 404);
@@ -532,7 +602,7 @@ export async function updateRole(
         capError.capability !== undefined ? { capability: capError.capability } : undefined,
       );
     }
-    nextCapabilities = [...new Set(capabilities)];
+    nextCapabilities = [...new Set(capabilities as string[])];
 
     await checkLockoutRulesForCapabilityChange({
       roleId: id,
@@ -556,7 +626,7 @@ export async function updateRole(
 
   if (nextName !== existing.name) {
     const db = await getDb();
-    const users = db.data.users || [];
+    const users = (db.data.users || []) as User[];
     let changed = false;
     for (const u of users) {
       if (String(u.roleId) === String(existing.id)) {
@@ -570,8 +640,11 @@ export async function updateRole(
   return updated;
 }
 
-export async function deleteRole(id, { reassignTo, actingUser } = {}) {
-  const role = await getRoleById(id);
+export async function deleteRole(
+  id: string | number,
+  { reassignTo, actingUser }: { reassignTo?: string | number; actingUser?: ActingUser } = {},
+): Promise<{ deleted: true; reassigned: number; reassignedTo: string | number | null }> {
+  const role = await getRoleById(id) as Role | null;
   if (!role) {
     throw makeError(ErrorCode.ROLE_NOT_FOUND, "Role not found", 404);
   }
@@ -593,7 +666,7 @@ export async function deleteRole(id, { reassignTo, actingUser } = {}) {
     );
   }
 
-  let targetRole = null;
+  let targetRole: Role | null = null;
   if (reassignTo) {
     targetRole = await getRoleById(reassignTo);
     if (!targetRole) {
@@ -613,7 +686,7 @@ export async function deleteRole(id, { reassignTo, actingUser } = {}) {
 
   let reassigned = 0;
   if (targetRole) {
-    reassigned = await reassignRoleMembers(role, targetRole);
+    reassigned = await reassignRoleMembers(role, targetRole) as number;
   }
 
   const removed = await removeRoleById(id);

@@ -2,7 +2,7 @@ import express from "express";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
-import { requirePermission } from "../services/permissions.js";
+import { requirePermission } from "../services/permissions.ts";
 import { getActiveServer } from "../database/init.js";
 import {
   listTemplates,
@@ -166,7 +166,7 @@ router.post("/:id/apply", requirePermission("templates.manage"), async (req, res
       });
     }
 
-    const result = await applyTemplate(req.params.id, serverId, options || {});
+    const result = await applyTemplate(req.params.id as string, serverId, options || {});
     if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error: unknown) {
@@ -178,7 +178,7 @@ router.post("/:id/apply", requirePermission("templates.manage"), async (req, res
 
 router.delete("/:id", requirePermission("templates.manage"), async (req, res) => {
   try {
-    const result = await deleteTemplate(req.params.id);
+    const result = await deleteTemplate(req.params.id as string);
     if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error: unknown) {
@@ -190,7 +190,7 @@ router.delete("/:id", requirePermission("templates.manage"), async (req, res) =>
 
 router.post("/:id/unhide", requirePermission("templates.manage"), async (req, res) => {
   try {
-    const result = await unhideTemplate(req.params.id);
+    const result = await unhideTemplate(req.params.id as string);
     if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error: unknown) {

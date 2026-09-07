@@ -68,7 +68,7 @@ import {
 import { LogTailer } from "./services/logTailer.ts";
 import { DiskMonitor } from "./services/diskMonitor.ts";
 import authService from "./services/auth.js";
-import { getRoleByName } from "./services/permissions.js";
+import { getRoleByName } from "./services/permissions.ts";
 import { requireRole } from "./services/auth.js";
 import authRoutes from "./routes/auth.js";
 import oidcRoutes from "./routes/oidc.ts";

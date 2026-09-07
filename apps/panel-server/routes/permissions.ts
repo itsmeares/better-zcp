@@ -8,13 +8,13 @@ import {
   createRole,
   updateRole,
   deleteRole,
-} from "../services/permissions.js";
+} from "../services/permissions.ts";
 
 const log = createLogger("API:Permissions");
 const router = express.Router();
 
 interface AuthenticatedRequest extends express.Request {
-  user?: unknown;
+  user?: { role?: string } | null;
 }
 
 router.use(requirePermission("roles.manage"));

@@ -5,7 +5,7 @@ const log = createLogger("API:Discovery");
 import { sanitizeError, sanitizeServerResponse } from "../utils/sanitize.ts";
 import { normalizeRconHost } from "../services/rcon.js";
 import { createServer } from "../database/init.js";
-import { requirePermission } from "../services/permissions.js";
+import { requirePermission } from "../services/permissions.ts";
 import {
   discoverMounts,
   discoverMountIssues,

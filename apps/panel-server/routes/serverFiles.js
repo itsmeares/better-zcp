@@ -37,7 +37,7 @@ import {
   requireStoppedForLocalConfigMutation,
   warnRunningForLocalConfigEdit,
 } from "../services/configMutationGuard.ts";
-import { requirePermission } from "../services/permissions.js";
+import { requirePermission } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 const router = express.Router();

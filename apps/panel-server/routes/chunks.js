@@ -11,7 +11,7 @@ import {
   getServers,
 } from "../database/init.js";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
-import { requirePermission, getRoleByName } from "../services/permissions.js";
+import { requirePermission, getRoleByName } from "../services/permissions.ts";
 import { deleteVehiclesInBoxes } from "../utils/vehiclesDb.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
 import {

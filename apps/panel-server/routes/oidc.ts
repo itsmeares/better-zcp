@@ -16,7 +16,7 @@ import {
   type OidcSettingsUpdates,
 } from "../services/oidc.ts";
 import { getRefreshCookieOptions } from "../utils/refreshCookie.ts";
-import { requirePermission } from "../services/permissions.js";
+import { requirePermission } from "../services/permissions.ts";
 
 const log = createLogger("OIDC");
 const router = Router();

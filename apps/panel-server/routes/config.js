@@ -11,7 +11,7 @@ import {
   maskSensitiveObject,
 } from "../utils/sanitize.ts";
 import net from "net";
-import { requirePermission, getRoleByName } from "../services/permissions.js";
+import { requirePermission, getRoleByName } from "../services/permissions.ts";
 import {
   MOD_CHECK_INTERVAL_MINUTES_MAX,
   MOD_CHECK_INTERVAL_MINUTES_MIN,

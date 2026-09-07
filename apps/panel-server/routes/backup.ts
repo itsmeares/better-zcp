@@ -4,7 +4,7 @@ import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.js";
-import { requirePermission } from "../services/permissions.js";
+import { requirePermission } from "../services/permissions.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
 import {
   acquireLifecycleLock,
@@ -245,7 +245,7 @@ router.get("/download/:name", requirePermission("backups.download"), async (req,
       return res.status(404).json({ error: "Backups folder not found", code: ErrorCode.BACKUPS_FOLDER_NOT_FOUND });
     }
 
-    const safeName = path.basename(req.params.name);
+    const safeName = path.basename(req.params.name as string);
     if (!safeName.endsWith(".zip")) {
       return res.status(400).json({ error: "Invalid backup file", code: ErrorCode.BACKUP_INVALID_FILE });
     }
@@ -287,7 +287,7 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
     const backupService = req.app.get("backupService");
     const serverManager = req.app.get("serverManager");
 
-    const safeName = path.basename(req.params.name);
+    const safeName = path.basename(req.params.name as string);
     if (!safeName.endsWith(".zip")) {
       return res.status(400).json({ error: "Invalid backup file", code: ErrorCode.BACKUP_INVALID_FILE });
     }

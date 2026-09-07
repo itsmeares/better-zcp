@@ -30,7 +30,7 @@ vi.mock("../database/init.js", () => ({
   reassignRoleMembers: async () => 0,
 }));
 
-const { updateRole, deleteRole } = await import("../services/permissions.js");
+const { updateRole, deleteRole } = await import("../services/permissions.ts");
 
 beforeEach(() => {
   rolesById.clear();

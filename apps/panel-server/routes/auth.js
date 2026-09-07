@@ -12,7 +12,7 @@ import { getDataPaths } from "../utils/paths.ts";
 import { setSetting } from "../database/init.js";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
 import { getRefreshCookieOptions } from "../utils/refreshCookie.ts";
-import { requirePermission, getCapabilitiesForRole } from "../services/permissions.js";
+import { requirePermission, getCapabilitiesForRole } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { z } from "zod";
 

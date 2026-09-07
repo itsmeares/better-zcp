@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { CAPABILITIES } from "../services/permissions.js";
+import { CAPABILITIES } from "../services/permissions.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROLES_EN_PATH = path.join(
@@ -39,7 +39,7 @@ function normalizeDashes(value) {
 
 const KNOWN_CONTENT_DIVERGENCES = new Map([]);
 
-describe("permission capability descriptions: apps/panel-server/services/permissions.js vs apps/panel-client/src/locales/en/roles.json", () => {
+describe("permission capability descriptions: apps/panel-server/services/permissions.ts vs apps/panel-client/src/locales/en/roles.json", () => {
   const roles = JSON.parse(fs.readFileSync(ROLES_EN_PATH, "utf8"));
   const localeDescriptions = flattenCapabilityDescriptions(roles.capabilities);
   const serverDescriptions = new Map(CAPABILITIES.map((c) => [c.key, c.description]));

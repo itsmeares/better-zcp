@@ -14,7 +14,7 @@ import {
   getActiveServer,
   getServer
 } from '../database/init.js';
-import { requirePermission } from '../services/permissions.js';
+import { requirePermission } from '../services/permissions.ts';
 import { requiredCapabilityForScheduledCommand } from '../services/scheduler.js';
 import {
   hasUnsupportedCronFieldCount,

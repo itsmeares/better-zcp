@@ -50,7 +50,7 @@ import {
   listAvailableBrowsers,
   extractSteamCookies,
 } from "../utils/browserCookies.ts";
-import { requirePermission } from "../services/permissions.js";
+import { requirePermission } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { withFileLock } from "../utils/fileWriteQueue.ts";
 import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.ts";

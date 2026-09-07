@@ -4,7 +4,7 @@ import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Finder');
 import { getSteamApiKey } from '../services/steamApiKey.ts';
 import { sanitizeError } from '../utils/sanitize.ts';
-import { requirePermission } from '../services/permissions.js';
+import { requirePermission } from '../services/permissions.ts';
 
 const router = express.Router();
 

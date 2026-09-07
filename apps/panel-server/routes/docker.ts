@@ -1,5 +1,5 @@
 import express from "express";
-import { requirePermission } from "../services/permissions.js";
+import { requirePermission } from "../services/permissions.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getServer } from "../database/init.js";
 import { RconService } from "../services/rcon.js";
@@ -128,7 +128,7 @@ router.post("/containers/:id/:action", requirePermission("docker.manage"), async
         code: ErrorCode.CONTAINER_NOT_MANAGED,
       });
     }
-    if (["stop", "restart"].includes(req.params.action) && container.State?.Running) {
+    if (["stop", "restart"].includes(req.params.action as string) && container.State?.Running) {
       rconService = new RconService();
       await rconService.loadConfig(server.id);
       if (!(await rconService.connect())) {
