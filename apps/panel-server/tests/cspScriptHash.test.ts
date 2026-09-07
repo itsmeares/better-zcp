@@ -5,9 +5,12 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 
-const { computeInlineScriptCspHash, computeInlineScriptCspHashes } = await import(
-  "../utils/cspScriptHash.ts"
-);
+const {
+  appendCspScriptHashes,
+  computeInlineScriptCspHash,
+  computeInlineScriptCspHashes,
+  computeInlineScriptCspHashesFromHtml,
+} = await import("../utils/cspScriptHash.ts");
 
 function sha256Base64(text) {
   return crypto.createHash("sha256").update(text, "utf8").digest("base64");
@@ -125,5 +128,26 @@ describe("computeInlineScriptCspHash — not found, must not fall back to unsafe
     expect(() =>
       computeInlineScriptCspHash(path.join(tmpDir, "nope")),
     ).not.toThrow();
+  });
+});
+
+describe("SSR CSP helpers", () => {
+  it("hashes inline scripts directly from a rendered HTML response", () => {
+    const html = `<script>const rendered = 1;</script><script src="/app.js"></script>`;
+
+    expect(computeInlineScriptCspHashesFromHtml(html)).toEqual([
+      `'sha256-${sha256Base64("const rendered = 1;")}'`,
+    ]);
+  });
+
+  it("adds rendered hashes to script-src without enabling unsafe-inline", () => {
+    const existing = "default-src 'self'; script-src 'self' 'sha256-old'";
+
+    expect(
+      appendCspScriptHashes(existing, ["'sha256-new'", "'sha256-old'"]),
+    ).toBe("default-src 'self'; script-src 'self' 'sha256-old' 'sha256-new'");
+    expect(appendCspScriptHashes(existing, ["'sha256-new'"])).not.toContain(
+      "unsafe-inline",
+    );
   });
 });

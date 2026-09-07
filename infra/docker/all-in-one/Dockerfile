@@ -34,6 +34,7 @@ RUN corepack enable && corepack install && pnpm install --filter @better-zcp/pan
 
 COPY apps/panel-server/ ./apps/panel-server/
 COPY --from=client-build /src/apps/panel-client/dist ./apps/panel-client/dist
+COPY --from=client-build /src/apps/panel-client/dist-start-server ./apps/panel-client/dist-start-server
 COPY integrations/panelbridge/ ./pz-mod/
 COPY infra/docker/all-in-one/entrypoint.sh /entrypoint.sh
 

@@ -30,4 +30,4 @@ chown -R ${STEAM_UID}:${STEAM_GID} /pz-server
 chmod +x /pz-server/start-server.sh 2>/dev/null || true
 
 cd /app
-exec su steam -s /bin/bash -c "export HOME='$STEAM_HOME'; cd /app && exec node apps/panel-server/index.js"
+exec su steam -s /bin/bash -c "export HOME='$STEAM_HOME'; cd /app && exec node --experimental-strip-types apps/panel-server/index.ts"

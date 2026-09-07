@@ -882,12 +882,26 @@ async function main() {
     process.exit(1);
   }
 
-  const embeddedClientDistB64 = createEmbeddedClientBundle("./apps/panel-client/dist", {
+  const clientDistPath = "./apps/panel-client/dist";
+  const startServerDistPath = "./apps/panel-client/dist-start-server";
+  const embeddedClientDistB64 = createEmbeddedClientBundle(clientDistPath, {
     panelVersion,
     buildSha,
     apiContractVersion,
   });
-  const clientDistFileHashes = getClientDistFileHashes("./apps/panel-client/dist");
+  if (!fs.existsSync(path.join(startServerDistPath, "server.js"))) {
+    throw new Error(
+      `TanStack Start server build is missing: ${path.join(startServerDistPath, "server.js")}`,
+    );
+  }
+  const packagedStartServerPath = path.join(clientDistPath, ".start-server");
+  fs.rmSync(packagedStartServerPath, { recursive: true, force: true });
+  fs.cpSync(startServerDistPath, packagedStartServerPath, { recursive: true });
+  fs.writeFileSync(
+    path.join(packagedStartServerPath, "package.json"),
+    '{"type":"module"}\n',
+  );
+  const clientDistFileHashes = getClientDistFileHashes(clientDistPath);
   console.log(
     `Embedded client bundle prepared (${embeddedClientDistB64.length} base64 chars)`,
   );
@@ -992,7 +1006,7 @@ async function main() {
 
   console.log("Creating release package...");
 
-  const clientDist = "./apps/panel-client/dist";
+  const clientDist = clientDistPath;
   const targetClientDist = "./release/client/dist";
   if (fs.existsSync(clientDist)) {
     fs.cpSync(clientDist, targetClientDist, { recursive: true });

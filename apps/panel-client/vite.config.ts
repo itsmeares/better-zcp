@@ -59,6 +59,9 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
+    ssr: {
+      noExternal: true,
+    },
     environments: {
       client: {
         build: { outDir: 'dist' },
