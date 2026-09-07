@@ -5,13 +5,13 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const source = fs.readFileSync(
-  path.join(__dirname, "../routes/serverFiles.js"),
+  path.join(__dirname, "../routes/serverFiles.ts"),
   "utf8",
 );
 
 function extractFn(name) {
   const start = source.indexOf(`function ${name}(`);
-  if (start === -1) throw new Error(`${name} not found in serverFiles.js`);
+  if (start === -1) throw new Error(`${name} not found in serverFiles.ts`);
   let depth = 0;
   let i = source.indexOf("{", start);
   const open = i;

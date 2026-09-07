@@ -20,7 +20,7 @@ vi.mock("../services/remoteConfigFiles.ts", () => ({
   validateRemoteConfigTransport: vi.fn(() => null),
 }));
 
-const { default: router } = await import("../routes/serverFiles.js");
+const { default: router } = await import("../routes/serverFiles.ts");
 
 function getUseLayers() {
   return router.stack.filter((entry) => !entry.route).map((entry) => entry.handle);
@@ -56,7 +56,7 @@ async function runLayer(handle, req) {
   return { res, nextCalledWith };
 }
 
-describe("serverFiles.js router.use layers beyond the requirePermission gate", () => {
+describe("serverFiles.ts router.use layers beyond the requirePermission gate", () => {
   beforeEach(() => {
     getActiveServer.mockReset();
     getAllSettings.mockReset().mockResolvedValue({});

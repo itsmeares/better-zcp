@@ -19,7 +19,7 @@ vi.mock("../services/remoteConfigFiles.ts", () => ({
   validateRemoteConfigTransport: vi.fn(),
 }));
 
-const { applySandboxChanges, parseSandboxVars } = await import("../routes/serverFiles.js");
+const { applySandboxChanges, parseSandboxVars } = await import("../routes/serverFiles.ts");
 
 describe("sandbox nested table preservation", () => {
   const content = [

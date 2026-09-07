@@ -28,7 +28,7 @@ const {
   RemoteConfigNotConfiguredError,
   parseIni,
   toIni,
-} = await import("../routes/serverFiles.js");
+} = await import("../routes/serverFiles.ts");
 
 describe("getServerName (Finding 2: path traversal via serverName)", () => {
   beforeEach(() => {

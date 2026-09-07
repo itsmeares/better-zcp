@@ -14,7 +14,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-const { default: router } = await import("../routes/serverFiles.js");
+const { default: router } = await import("../routes/serverFiles.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -105,7 +105,7 @@ function backupCount() {
   return fs.readdirSync(backupDir).filter((f) => f.endsWith(".bak")).length;
 }
 
-describe("serverFiles.js GET /raw/ini: secret-shaped lines are masked, format preserved", () => {
+describe("serverFiles.ts GET /raw/ini: secret-shaped lines are masked, format preserved", () => {
   it("masks RCONPassword and Password values only, leaves keys/other lines untouched", async () => {
     const res = await getRawIni();
     expect(res.getStatusCode()).toBe(200);
@@ -119,7 +119,7 @@ describe("serverFiles.js GET /raw/ini: secret-shaped lines are masked, format pr
   });
 });
 
-describe("serverFiles.js PUT /raw/ini: unmodified masked lines are preserved, not written as placeholders", () => {
+describe("serverFiles.ts PUT /raw/ini: unmodified masked lines are preserved, not written as placeholders", () => {
   it("round-trips the masked GET response unchanged without corrupting the live secrets", async () => {
     const { content: masked } = (await getRawIni()).getBody();
     const res = await putRawIni(masked);
@@ -186,7 +186,7 @@ describe("serverFiles.js PUT /raw/ini: unmodified masked lines are preserved, no
   });
 });
 
-describe("serverFiles.js PUT /raw/ini: ambiguous or destructive cases REFUSE the save and write nothing", () => {
+describe("serverFiles.ts PUT /raw/ini: ambiguous or destructive cases REFUSE the save and write nothing", () => {
   it("refuses when the masked key appears TWICE in the submitted content", async () => {
     const { content: masked } = (await getRawIni()).getBody();
     const duplicated = masked + `\nRCONPassword=${MASKED_RCON}\n`;

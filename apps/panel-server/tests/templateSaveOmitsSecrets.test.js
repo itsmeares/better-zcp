@@ -18,7 +18,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-const { default: router } = await import("../routes/serverFiles.js");
+const { default: router } = await import("../routes/serverFiles.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -98,7 +98,7 @@ function readSavedTemplateRaw(id) {
   return fs.readFileSync(path.join(configDir, "templates", `${id}.json`), "utf-8");
 }
 
-describe("serverFiles.js POST /templates: secret-shaped INI keys never reach the saved snapshot", () => {
+describe("serverFiles.ts POST /templates: secret-shaped INI keys never reach the saved snapshot", () => {
   it("omits RCONPassword and Password from both the parsed and raw copies", async () => {
     const res = await postSave();
     expect(res.getStatusCode()).toBe(200);
@@ -140,7 +140,7 @@ describe("serverFiles.js POST /templates: secret-shaped INI keys never reach the
   });
 });
 
-describe("serverFiles.js POST /templates/:id/apply: applying a secret-stripped template is a safe no-crash outcome, not a masked-value outage", () => {
+describe("serverFiles.ts POST /templates/:id/apply: applying a secret-stripped template is a safe no-crash outcome, not a masked-value outage", () => {
   it("applies the remaining fields and leaves the live ini with no RCONPassword line at all (not a placeholder string)", async () => {
     const saveRes = await postSave();
     const id = saveRes.getBody().id;

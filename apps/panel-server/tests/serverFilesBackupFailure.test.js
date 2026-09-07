@@ -22,7 +22,7 @@ vi.mock("../services/remoteConfigFiles.ts", () => ({
   validateRemoteConfigTransport: vi.fn(),
 }));
 
-const { default: router } = await import("../routes/serverFiles.js");
+const { default: router } = await import("../routes/serverFiles.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

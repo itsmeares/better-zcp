@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 const { applySandboxChanges, parseSandboxVars, findUnpersistedSandboxKeys } =
-  await import("../routes/serverFiles.js");
+  await import("../routes/serverFiles.ts");
 
 describe("findUnpersistedSandboxKeys", () => {
   const content = [

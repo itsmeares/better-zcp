@@ -22,7 +22,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-const { default: router } = await import("../routes/serverFiles.js");
+const { default: router } = await import("../routes/serverFiles.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -96,7 +96,7 @@ function postApply() {
   });
 }
 
-describe("serverFiles.js POST /templates/:id/apply: a partial apply must not read as total failure", () => {
+describe("serverFiles.ts POST /templates/:id/apply: a partial apply must not read as total failure", () => {
   it("reports which settings actually landed when the INI write succeeds but the Sandbox write then fails", async () => {
     const res = await postApply();
 

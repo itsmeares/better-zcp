@@ -23,7 +23,7 @@ const {
   isLocalConfigMutation,
   isLocalConfigEdit,
   isLocalConfigOverwrite,
-} = await import("../routes/serverFiles.js");
+} = await import("../routes/serverFiles.ts");
 const { requireStoppedForLocalConfigMutation, warnRunningForLocalConfigEdit } =
   await import("../services/configMutationGuard.ts");
 

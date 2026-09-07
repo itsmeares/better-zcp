@@ -18,7 +18,7 @@ import {
 } from "../database/init.js";
 import { sanitizeError, sanitizeErrorParams, isMaskedSecret } from "../utils/sanitize.ts";
 import { getDataPaths } from "../utils/paths.ts";
-import { persistSandboxValues } from "./serverFiles.js";
+import { persistSandboxValues } from "./serverFiles.ts";
 import { requirePermission } from "../services/permissions.ts";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import {

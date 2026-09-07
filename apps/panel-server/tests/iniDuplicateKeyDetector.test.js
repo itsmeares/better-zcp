@@ -87,7 +87,7 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
     fs.rmSync(dataRoot, { recursive: true, force: true });
   });
 
-  it("serverFiles.js's GET /ini reports duplicateKeys for a real duplicated file", async () => {
+  it("serverFiles.ts's GET /ini reports duplicateKeys for a real duplicated file", async () => {
     vi.resetModules();
     const { getActiveServer } = await import("../database/init.js");
     dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ini-dup-serverfiles-"));
@@ -104,7 +104,7 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
       isRemote: false,
     });
 
-    const { default: router } = await import("../routes/serverFiles.js");
+    const { default: router } = await import("../routes/serverFiles.ts");
     const res = await invokeLastHandler(router, "/ini", "get", {});
 
     expect(res.getStatusCode()).toBe(200);

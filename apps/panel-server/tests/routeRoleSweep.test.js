@@ -117,14 +117,14 @@ describe("scheduler.js: admin+technician (task automation operates the server)",
   });
 });
 
-describe("serverFiles.js: admin+technician (config/backups), ahead of the file's own unconfigured-server gate", () => {
+describe("serverFiles.ts: admin+technician (config/backups), ahead of the file's own unconfigured-server gate", () => {
   it("refuses a moderator", async () => {
-    const { default: router } = await import("../routes/serverFiles.js");
+    const { default: router } = await import("../routes/serverFiles.ts");
     const { res } = await runFirstUseLayer(router, { user: { role: "moderator" } });
     expect(res.getStatusCode()).toBe(403);
   });
   it("does not refuse a technician", async () => {
-    const { default: router } = await import("../routes/serverFiles.js");
+    const { default: router } = await import("../routes/serverFiles.ts");
     const { calledNext } = await runFirstUseLayer(router, { user: { role: "technician" } });
     expect(calledNext).toBe(true);
   });

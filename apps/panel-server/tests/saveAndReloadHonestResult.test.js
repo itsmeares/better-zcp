@@ -8,7 +8,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-const { default: router } = await import("../routes/serverFiles.js");
+const { default: router } = await import("../routes/serverFiles.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -56,7 +56,7 @@ function postSaveAndReload(rconService) {
   });
 }
 
-describe("serverFiles.js POST /save-and-reload: the response must reflect what RCON actually reported", () => {
+describe("serverFiles.ts POST /save-and-reload: the response must reflect what RCON actually reported", () => {
   it("reports success:false and the real error when RCON's reloadoptions call itself failed", async () => {
     const res = await postSaveAndReload({
       isConnected: () => true,

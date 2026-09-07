@@ -34,7 +34,7 @@ import {
 } from "../database/init.js";
 import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
-import { checkSandboxBraceBalance } from "./serverFiles.js";
+import { checkSandboxBraceBalance } from "./serverFiles.ts";
 import panelBridgeService from "../services/panelBridge.js";
 import authService from "../services/auth.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";

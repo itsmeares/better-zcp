@@ -14,7 +14,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-const { default: router } = await import("../routes/serverFiles.js");
+const { default: router } = await import("../routes/serverFiles.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -97,7 +97,7 @@ function putIni(settings) {
   return runRoute("/ini", "put", { user: { role: "admin" }, body: { settings } });
 }
 
-describe("serverFiles.js GET /ini: secret-shaped keys never reach the response in plaintext", () => {
+describe("serverFiles.ts GET /ini: secret-shaped keys never reach the response in plaintext", () => {
   it("masks RCONPassword and Password, keeps everything else as-is", async () => {
     const res = await getIni();
     expect(res.getStatusCode()).toBe(200);
@@ -109,7 +109,7 @@ describe("serverFiles.js GET /ini: secret-shaped keys never reach the response i
   });
 });
 
-describe("serverFiles.js PUT /ini: an unmodified masked value never overwrites the stored secret", () => {
+describe("serverFiles.ts PUT /ini: an unmodified masked value never overwrites the stored secret", () => {
   it("preserves the live RCONPassword/Password when the client echoes the mask back unchanged", async () => {
     const { settings: loaded } = (await getIni()).getBody();
 
