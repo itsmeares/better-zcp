@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import {
   assessBuildCompatibility,
   compiledBuildMetadata,
@@ -6,45 +7,47 @@ import {
 } from '../lib/buildCompatibility'
 import { isDemoMode } from '../lib/demo'
 
-type GateState =
-  | { status: 'checking' | 'compatible' }
-  | { status: 'mismatch'; backend: BackendBuildMetadata }
+async function fetchBackendBuildMetadata(signal: AbortSignal): Promise<BackendBuildMetadata> {
+  const timeoutController = new AbortController()
+  const timeoutId = window.setTimeout(() => timeoutController.abort(), 8_000)
+  const abortForQuery = () => timeoutController.abort(signal.reason)
+
+  if (signal.aborted) abortForQuery()
+  else signal.addEventListener('abort', abortForQuery, { once: true })
+
+  try {
+    const response = await fetch('/api/health', {
+      signal: timeoutController.signal,
+      cache: 'no-store',
+    })
+    if (!response.ok) throw new Error(`Health check returned ${response.status}`)
+    return await response.json() as BackendBuildMetadata
+  } finally {
+    window.clearTimeout(timeoutId)
+    signal.removeEventListener('abort', abortForQuery)
+  }
+}
 
 export function BuildCompatibilityGate({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<GateState>({ status: 'checking' })
+  const demoMode = isDemoMode()
+  const { data: backend, isPending, isError } = useQuery({
+    queryKey: ['build-compatibility'],
+    queryFn: ({ signal }) => fetchBackendBuildMetadata(signal),
+    enabled: !demoMode,
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  })
 
-  useEffect(() => {
-    if (isDemoMode()) {
-      setState({ status: 'compatible' })
-      return
-    }
-    const controller = new AbortController()
-    const timer = window.setTimeout(() => controller.abort(), 8_000)
-    fetch('/api/health', { signal: controller.signal, cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Health check returned ${response.status}`)
-        return response.json() as Promise<BackendBuildMetadata>
-      })
-      .then((backend) => {
-        const result = assessBuildCompatibility(compiledBuildMetadata(), backend)
-        setState(result.compatible ? { status: 'compatible' } : { status: 'mismatch', backend })
-      })
-      .catch(() => {
-        setState({ status: 'compatible' })
-      })
-      .finally(() => window.clearTimeout(timer))
-    return () => {
-      window.clearTimeout(timer)
-      controller.abort()
-    }
-  }, [])
-
-  if (state.status === 'checking') {
+  if (!demoMode && isPending) {
     return <main className="min-h-screen bg-background" aria-label="Checking panel compatibility" />
   }
-  if (state.status === 'mismatch') {
+  if (demoMode || isError || !backend) return <>{children}</>
+
+  const result = assessBuildCompatibility(compiledBuildMetadata(), backend)
+  if (!result.compatible) {
     const frontend = compiledBuildMetadata()
-    const backendVersion = state.backend.panelVersion || state.backend.version || 'unknown'
+    const backendVersion = backend.panelVersion || backend.version || 'unknown'
     return (
       <main className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
         <section className="w-full max-w-xl rounded-lg border border-destructive/40 bg-card p-6 shadow-lg">
@@ -55,7 +58,7 @@ export function BuildCompatibilityGate({ children }: { children: ReactNode }) {
           </p>
           <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             <dt>Frontend</dt><dd className="font-mono">{frontend.panelVersion} ({frontend.buildSha.slice(0, 12)})</dd>
-            <dt>Backend</dt><dd className="font-mono">{backendVersion} ({String(state.backend.buildSha || 'unknown').slice(0, 12)})</dd>
+            <dt>Backend</dt><dd className="font-mono">{backendVersion} ({String(backend.buildSha || 'unknown').slice(0, 12)})</dd>
           </dl>
           <button className="mt-6 rounded-md bg-primary px-4 py-2 text-primary-foreground" onClick={() => window.location.reload()}>
             Check again

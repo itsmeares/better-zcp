@@ -3,13 +3,18 @@ import path from "path";
 
 const root = path.resolve(process.argv[2] || ".");
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+const readFirst = (...rels) => {
+  const rel = rels.find((candidate) => fs.existsSync(path.join(root, candidate)));
+  if (!rel) throw new Error(`None of these files exist: ${rels.join(", ")}`);
+  return read(rel);
+};
 
 const lua = read("integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua");
 const luaHandlers = new Set(
   [...lua.matchAll(/^\s*handlers\.([a-zA-Z]+)/gm)].map((m) => m[1]),
 );
 
-const routes = read("apps/panel-server/routes/panelBridge.js");
+const routes = readFirst("apps/panel-server/routes/panelBridge.ts", "apps/panel-server/routes/panelBridge.js");
 
 const segments = [];
 const routeRe = /router\.(get|post|put|delete)\(\s*"([^"]+)"/g;
@@ -46,11 +51,12 @@ for (const segment of segments) {
   }
 }
 
-const capabilityAnchor = "export const BRIDGE_ACTION_CAPABILITY = {";
+const capabilityAnchor = "export const BRIDGE_ACTION_CAPABILITY";
 const capabilityIdx = routes.indexOf(capabilityAnchor);
 const capabilityActions = [];
 if (capabilityIdx !== -1) {
-  const block = routes.slice(capabilityIdx + capabilityAnchor.length);
+  const openingBrace = routes.indexOf("{", capabilityIdx);
+  const block = routes.slice(openingBrace === -1 ? capabilityIdx : openingBrace + 1);
   const closeIdx = block.indexOf("\n};");
   const body = closeIdx === -1 ? block : block.slice(0, closeIdx);
   for (const m of body.matchAll(/^\s*([a-zA-Z]+):\s*"/gm)) {
@@ -61,7 +67,7 @@ if (capabilityIdx !== -1) {
 const MIN_CAPABILITY_KEYS = 10;
 if (capabilityIdx === -1) {
   console.error(
-    "ERROR: could not find BRIDGE_ACTION_CAPABILITY in apps/panel-server/routes/panelBridge.js at all -- " +
+    "ERROR: could not find BRIDGE_ACTION_CAPABILITY in the PanelBridge route file at all -- " +
     "it was renamed, moved, or removed. Fix the anchor before trusting this script's output.",
   );
   process.exit(1);
@@ -88,7 +94,7 @@ if (routeActionPairs < MIN_ROUTE_ACTION_PAIRS) {
   console.error(
     `ERROR: found only ${routeActionPairs} route->action pair(s) via the router.<verb>("path" anchor ` +
     `(expected at least ${MIN_ROUTE_ACTION_PAIRS}). The route-splitting regex is almost certainly stale -- ` +
-    `apps/panel-server/routes/panelBridge.js's route declarations changed shape. Fix it before trusting this script's output.`,
+    "the PanelBridge route declarations changed shape. Fix it before trusting this script's output.",
   );
   process.exit(1);
 }

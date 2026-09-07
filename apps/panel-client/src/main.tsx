@@ -1,13 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, HashRouter } from 'react-router-dom'
-import App from './App'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { RouterProvider } from '@tanstack/react-router'
 import './index.css'
 import './i18n'
 import { isDemoMode, installDemoFetchShim } from './lib/demo'
 import { BuildCompatibilityGate } from './components/BuildCompatibilityGate'
-
-const Router = isDemoMode() ? HashRouter : BrowserRouter
+import { queryClient } from './lib/queryClient'
+import { router } from './router'
 
 if (isDemoMode()) {
   installDemoFetchShim()
@@ -18,10 +18,10 @@ if (isDemoMode()) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <Router>
+    <QueryClientProvider client={queryClient}>
       <BuildCompatibilityGate>
-        <App />
+        <RouterProvider router={router} />
       </BuildCompatibilityGate>
-    </Router>
+    </QueryClientProvider>
   </React.StrictMode>,
 )

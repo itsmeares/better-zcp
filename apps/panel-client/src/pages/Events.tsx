@@ -1028,6 +1028,8 @@ interface ActivityEntry {
   at: string
 }
 
+let nextActivityKey = 0
+
 export default function Events() {
   const { t, i18n } = useTranslation('events')
   const vehicles = useMemo(() => getVehiclePresets(t), [t])
@@ -1455,7 +1457,7 @@ export default function Events() {
 
   const pushActivity = useCallback((label: string, ok: boolean) => {
     setActivity((prev) => [
-      { key: Date.now() + Math.random(), label, ok, at: formatPanelTimestamp(new Date(), i18n.language) },
+      { key: nextActivityKey++, label, ok, at: formatPanelTimestamp(new Date(), i18n.language) },
       ...prev,
     ].slice(0, 6))
   }, [i18n.language])
@@ -1591,7 +1593,9 @@ export default function Events() {
     const explicit = getTargetPlayer()
     if (explicit) return explicit
     if (players.length === 0) throw new Error(t('toasts.noPlayersOnlineError'))
-    return players[Math.floor(Math.random() * players.length)].name
+    const random = new Uint32Array(1)
+    globalThis.crypto.getRandomValues(random)
+    return players[random[0] % players.length].name
   }
 
   const hordeToastOverride = (

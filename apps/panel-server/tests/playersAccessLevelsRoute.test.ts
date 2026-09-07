@@ -1,0 +1,161 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const getActiveServer = vi.fn();
+const listServerRoleNames = vi.fn();
+
+vi.mock("../database/init.ts", () => ({
+  getActiveServer,
+  logPlayerAction: vi.fn(),
+  getPlayerLogs: vi.fn(),
+  getPlayerNotes: vi.fn(),
+  getPlayerNote: vi.fn(),
+  upsertPlayerNote: vi.fn(),
+  deletePlayerNote: vi.fn(),
+  getPlayerStats: vi.fn(),
+  getPlayerStat: vi.fn(),
+  getSteamIdBans: vi.fn(),
+  addSteamIdBan: vi.fn(),
+  removeSteamIdBan: vi.fn(),
+}));
+
+vi.mock("../utils/whitelistDb.ts", () => ({ listWhitelistAccounts: vi.fn(), listServerRoleNames }));
+vi.mock("../services/panelBridge.ts", () => ({ isRunning: false }));
+
+const { default: router } = await import("../routes/players.ts");
+
+function getHandler(routePath, method) {
+  const layer = router.stack.find(
+    (entry) => entry.route?.path === routePath && entry.route.methods[method],
+  );
+  return layer.route.stack.at(-1).handle;
+}
+
+function createResponse() {
+  const response = { status: vi.fn(), json: vi.fn() };
+  response.status.mockReturnValue(response);
+  return response;
+}
+
+function createRequest(body = {}, rconService = {}) {
+  return {
+    body,
+    app: { get: () => rconService },
+  };
+}
+
+describe("GET /players/access-levels", () => {
+  beforeEach(() => {
+    getActiveServer.mockReset();
+    listServerRoleNames.mockReset();
+  });
+
+  it("returns the live role table's names plus 'none' when the server's db is available", async () => {
+    getActiveServer.mockResolvedValue({
+      id: "server-1",
+      serverName: "DoomerZ",
+      zomboidDataPath: "/zomboid",
+      isRemote: false,
+    });
+    listServerRoleNames.mockResolvedValue({
+      available: true,
+      roleNames: ["user", "admin", "vip"],
+    });
+    const response = createResponse();
+
+    await getHandler("/access-levels", "get")({}, response);
+
+    expect(listServerRoleNames).toHaveBeenCalledWith("/zomboid", "DoomerZ");
+    expect(response.json).toHaveBeenCalledWith({
+      levels: ["user", "admin", "vip", "none"],
+      available: true,
+    });
+  });
+
+  it("falls back to the static list when the server's db is unavailable, without erroring", async () => {
+    getActiveServer.mockResolvedValue({
+      id: "server-1",
+      serverName: "NeverStartedServer",
+      zomboidDataPath: "/zomboid",
+      isRemote: false,
+    });
+    listServerRoleNames.mockResolvedValue({
+      available: false,
+      roleNames: [],
+      reason: "Server database not found",
+    });
+    const response = createResponse();
+
+    await getHandler("/access-levels", "get")({}, response);
+
+    const payload = response.json.mock.calls[0][0];
+    expect(payload.available).toBe(false);
+    expect(payload.reason).toBe("Server database not found");
+    expect(payload.levels).toEqual(
+      expect.arrayContaining(["admin", "moderator", "gm", "observer", "priority", "user", "none"]),
+    );
+  });
+
+  it("falls back to the static list for a remote server without calling the local db reader", async () => {
+    getActiveServer.mockResolvedValue({
+      id: "server-1",
+      serverName: "RemoteBox",
+      zomboidDataPath: "/zomboid",
+      isRemote: true,
+    });
+    const response = createResponse();
+
+    await getHandler("/access-levels", "get")({}, response);
+
+    expect(listServerRoleNames).not.toHaveBeenCalled();
+    const payload = response.json.mock.calls[0][0];
+    expect(payload.available).toBe(false);
+    expect(payload.levels).toContain("none");
+  });
+});
+
+describe("POST /players/access-level: validation gate matches what GET /access-levels just offered", () => {
+  beforeEach(() => {
+    getActiveServer.mockReset();
+    listServerRoleNames.mockReset();
+  });
+
+  it("accepts a custom role the live table has but the static list does not", async () => {
+    getActiveServer.mockResolvedValue({
+      id: "server-1",
+      serverName: "DoomerZ",
+      zomboidDataPath: "/zomboid",
+      isRemote: false,
+    });
+    listServerRoleNames.mockResolvedValue({ available: true, roleNames: ["user", "admin", "vip"] });
+    const setAccessLevel = vi.fn().mockResolvedValue({ success: true });
+    const response = createResponse();
+
+    await getHandler("/access-level", "post")(
+      createRequest({ username: "Alice", level: "vip" }, { setAccessLevel }),
+      response,
+    );
+
+    expect(setAccessLevel).toHaveBeenCalledWith("Alice", "vip");
+    expect(response.status).not.toHaveBeenCalledWith(400);
+  });
+
+  it("still rejects a level that is neither in the live table nor the static fallback", async () => {
+    getActiveServer.mockResolvedValue({
+      id: "server-1",
+      serverName: "DoomerZ",
+      zomboidDataPath: "/zomboid",
+      isRemote: false,
+    });
+    listServerRoleNames.mockResolvedValue({ available: true, roleNames: ["user", "admin"] });
+    const setAccessLevel = vi.fn();
+    const response = createResponse();
+
+    await getHandler("/access-level", "post")(
+      createRequest({ username: "Alice", level: "nonexistent" }, { setAccessLevel }),
+      response,
+    );
+
+    expect(setAccessLevel).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(400);
+  });
+});

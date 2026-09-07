@@ -39,6 +39,9 @@ jobs:
       - name: Lint
         run: pnpm run lint:server
 
+      - name: Typecheck
+        run: pnpm --filter @better-zcp/panel-server run typecheck
+
       - name: Tests
         shell: bash
         run: |
@@ -146,7 +149,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Exercise bundle transaction and generated supervisor
-        run: pnpm --filter @better-zcp/panel-server exec vitest run tests/panelUpdateBundle.test.js tests/supervisor-restart.test.js tests/serverManagerSpacedPathCmdQuoting.test.js tests/serverManagerWindowsSpawnFixes.test.js tests/serverManagerCustomStartCommandQuoting.test.js tests/serverManagerCommandLineRoundTrip.test.js tests/serverManagerEmptyScanWindows.test.js tests/serverManager-stopTimeout.test.js tests/setDataPaths.test.js
+        run: pnpm --filter @better-zcp/panel-server exec vitest run tests/panelUpdateBundle.test.ts tests/supervisor-restart.test.ts tests/serverManagerSpacedPathCmdQuoting.test.ts tests/serverManagerWindowsSpawnFixes.test.ts tests/serverManagerCustomStartCommandQuoting.test.ts tests/serverManagerCommandLineRoundTrip.test.ts tests/serverManagerEmptyScanWindows.test.ts tests/serverManager-stopTimeout.test.ts tests/setDataPaths.test.ts
 
       - name: Build packaged Windows executable
         run: node scripts/release/build.mjs --windows

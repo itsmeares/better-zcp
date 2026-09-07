@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { readFileSync } from 'fs'
@@ -24,6 +25,7 @@ function resolveBuildSha() {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const basePath = env.VITE_BASE_PATH || '/'
+  const isStaticClientBuild = mode === 'static-client'
   const buildSha = resolveBuildSha()
   const parsedApiContractVersion = Number(process.env.PANEL_API_CONTRACT_VERSION)
   const apiContractVersion = Number.isInteger(parsedApiContractVersion) && parsedApiContractVersion > 0
@@ -38,6 +40,14 @@ export default defineConfig(({ mode }) => {
       __PANEL_API_CONTRACT_VERSION__: JSON.stringify(apiContractVersion),
     },
     plugins: [
+      ...(!isStaticClientBuild
+        ? [
+            tanstackStart({
+              spa: { enabled: false },
+              prerender: { enabled: false },
+            }),
+          ]
+        : []),
       react(),
       {
         name: 'panel-build-info',
@@ -54,6 +64,18 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
+    ...(isStaticClientBuild
+      ? {}
+      : {
+          environments: {
+            client: {
+              build: { outDir: 'dist' },
+            },
+            ssr: {
+              build: { outDir: 'dist-start-server' },
+            },
+          },
+        }),
     esbuild: {
       drop: ['console', 'debugger'],
     },
@@ -63,11 +85,16 @@ export default defineConfig(({ mode }) => {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined
 
-            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-')) return 'charts'
-            if (id.includes('socket.io-client') || id.includes('engine.io')) return 'socket'
-            if (id.includes('@radix-ui')) return 'radix-vendor'
-            if (id.includes('lucide-react')) return 'icons'
-            if (id.includes('react-router')) return 'router'
+            const packagePath = id.replaceAll('\\', '/').split('/node_modules/').pop() || ''
+            const packageName = packagePath.startsWith('@')
+              ? packagePath.split('/').slice(0, 2).join('/')
+              : packagePath.split('/')[0]
+
+            if (packageName === 'recharts' || packageName.startsWith('d3-') || packageName.startsWith('victory-')) return 'charts'
+            if (packageName === 'socket.io-client' || packageName === 'engine.io') return 'socket'
+            if (packageName.startsWith('@radix-ui/')) return 'radix-vendor'
+            if (packageName === 'lucide-react') return 'icons'
+            if (packageName === 'react-router' || packageName.startsWith('react-router/')) return 'router'
 
             return 'vendor'
           },
@@ -77,6 +104,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       dedupe: ['react', 'react-dom'],
       alias: {
+        'react-router-dom': path.resolve(__dirname, './src/lib/router.tsx'),
         '@': path.resolve(__dirname, './src'),
       },
     },

@@ -1,0 +1,114 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
+
+
+vi.mock("../database/init.ts", () => ({
+  getActiveServer: vi.fn(),
+  getSetting: vi.fn(async () => null),
+  getTrackedMods: vi.fn(async () => []),
+  addTrackedMod: vi.fn(),
+  removeTrackedMod: vi.fn(),
+  clearModUpdates: vi.fn(),
+  getModPresets: vi.fn(async () => []),
+  createModPreset: vi.fn(),
+  updateModPreset: vi.fn(),
+  deleteModPreset: vi.fn(),
+  addIgnoredMod: vi.fn(),
+  getIgnoredMods: vi.fn(async () => []),
+  removeIgnoredMod: vi.fn(),
+  clearAllIgnoredMods: vi.fn(),
+  isModIgnored: vi.fn(async () => false),
+  getIgnoredModPairs: vi.fn(async () => []),
+  addIgnoredModPair: vi.fn(),
+  removeIgnoredModPair: vi.fn(),
+}));
+
+const { getActiveServer } = await import("../database/init.ts");
+const { default: router } = await import("../routes/mods.ts");
+
+function createResponse() {
+  const response = { status: () => response, json: () => response };
+  let statusCode = 200;
+  let body = null;
+  response.status = (code) => {
+    statusCode = code;
+    return response;
+  };
+  response.json = (payload) => {
+    body = payload;
+    return response;
+  };
+  response.getStatusCode = () => statusCode;
+  response.getBody = () => body;
+  return response;
+}
+
+function getRouteHandlers(routePath, method) {
+  const layer = router.stack.find(
+    (entry) => entry.route?.path === routePath && entry.route.methods[method],
+  );
+  if (!layer) throw new Error(`No ${method.toUpperCase()} ${routePath} route registered`);
+  return layer.route.stack.map((s) => s.handle);
+}
+
+async function runRoute(routePath, method, req) {
+  const handlers = getRouteHandlers(routePath, method);
+  const res = createResponse();
+  let idx = -1;
+  const next = async (err) => {
+    idx++;
+    if (err) throw err;
+    if (idx < handlers.length) await handlers[idx](req, res, next);
+  };
+  await next();
+  return res;
+}
+
+describe("POST /write-to-ini: existing key line with whitespace around '='", () => {
+  let dataRoot;
+  let iniPath;
+
+  beforeEach(() => {
+    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mods-write-to-ini-ws-"));
+    const configPath = path.join(dataRoot, "Server");
+    fs.mkdirSync(configPath, { recursive: true });
+    iniPath = path.join(configPath, "TestServer.ini");
+    fs.writeFileSync(iniPath, "Mods = OldMod\nWorkshopItems = 1111111111\n");
+    getActiveServer.mockReset().mockResolvedValue({
+      id: "server-1",
+      serverConfigPath: configPath,
+      serverName: "TestServer",
+      isRemote: false,
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(dataRoot, { recursive: true, force: true });
+  });
+
+  it("replaces the existing Mods=/WorkshopItems= line in place instead of appending a duplicate", async () => {
+    const res = await runRoute("/write-to-ini", "post", {
+      body: {
+        mods: [{ workshopId: "2222222222", modId: "NewMod" }],
+      },
+    });
+
+    expect(res.getStatusCode()).toBe(200);
+
+    const after = fs.readFileSync(iniPath, "utf-8");
+
+    const modsLines = after.split(/\r?\n/).filter((l) => /^\s*Mods\s*=/.test(l));
+    const workshopLines = after
+      .split(/\r?\n/)
+      .filter((l) => /^\s*WorkshopItems\s*=/.test(l));
+    expect(modsLines).toHaveLength(1);
+    expect(workshopLines).toHaveLength(1);
+    expect(modsLines[0]).toBe("Mods=NewMod");
+    expect(workshopLines[0]).toBe("WorkshopItems=2222222222");
+
+    expect(findDuplicateIniKeys(after)).toEqual([]);
+  });
+});

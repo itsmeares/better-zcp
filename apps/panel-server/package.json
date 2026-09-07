@@ -7,13 +7,15 @@
     "node": ">=22"
   },
   "type": "module",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
-    "dev": "nodemon index.js",
-    "start": "node index.js",
+    "dev": "nodemon --ext ts,js,json --exec \"node --experimental-strip-types\" index.ts",
+    "start": "node --experimental-strip-types index.ts",
+    "db:import": "node --experimental-strip-types scripts/import-legacy-db.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "archiver": "^7.0.1",
@@ -23,6 +25,7 @@
     "cors": "^2.8.6",
     "discord.js": "^14.26.4",
     "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
@@ -36,15 +39,25 @@
     "undici": "^8.10.0",
     "unzipper": "^0.12.5",
     "uuid": "^13.0.0",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "winston-transport": "^4.9.0",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.20.1",
     "eslint": "^9.39.5",
     "fengari": "^0.1.5",
     "globals": "^14.0.0",
     "jose": "^6.2.10",
     "nodemon": "^3.1.14",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.11",
     "ws": "^8.21.0"
   }

@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import globals from "globals";
+import tseslint from "typescript-eslint";
 import requireResultHandling from "../../scripts/eslint-rules/require-result-handling.js";
 
 export default [
@@ -14,11 +15,12 @@ export default [
     ],
   },
   {
-    files: ["**/*.js"],
+    files: ["**/*.{js,ts,mts}"],
     plugins: {
       local: { rules: { "require-result-handling": requireResultHandling } },
     },
     languageOptions: {
+      parser: tseslint.parser,
       ecmaVersion: 2023,
       sourceType: "module",
       globals: {
@@ -71,7 +73,16 @@ export default [
     },
   },
   {
-    files: ["tests/**/*.js"],
+    files: ["**/*.ts"],
+    rules: {
+      // TypeScript's compiler owns type names and declaration merging.
+      "no-undef": "off",
+      "no-redeclare": "off",
+      "no-unused-vars": "off",
+    },
+  },
+  {
+    files: ["tests/**/*.{ts,mts}"],
     rules: {
       // A test calls these for their effect on a stub, not for the result.
       "local/require-result-handling": "off",

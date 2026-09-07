@@ -1,0 +1,167 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "fs";
+import os from "os";
+import path from "path";
+
+
+vi.mock("../database/init.ts", () => ({
+  getActiveServer: vi.fn(),
+  getSetting: vi.fn(async () => null),
+}));
+
+const { getActiveServer } = await import("../database/init.ts");
+const { default: router } = await import("../routes/mods.ts");
+
+function createResponse() {
+  const response = { status: () => response, json: () => response };
+  let statusCode = 200;
+  let body = null;
+  response.status = (code) => {
+    statusCode = code;
+    return response;
+  };
+  response.json = (payload) => {
+    body = payload;
+    return response;
+  };
+  response.getStatusCode = () => statusCode;
+  response.getBody = () => body;
+  return response;
+}
+
+function getRouteHandlers(routePath, method) {
+  const layer = router.stack.find(
+    (entry) => entry.route?.path === routePath && entry.route.methods[method],
+  );
+  if (!layer) throw new Error(`No ${method.toUpperCase()} ${routePath} route registered`);
+  return layer.route.stack.map((s) => s.handle);
+}
+
+async function runRoute(routePath, method, req) {
+  const handlers = getRouteHandlers(routePath, method);
+  const res = createResponse();
+  let idx = -1;
+  const next = async (err) => {
+    idx++;
+    if (err) throw err;
+    if (idx < handlers.length) await handlers[idx](req, res, next);
+  };
+  await next();
+  return res;
+}
+
+const REAL_MOD_ID = "3519629457";
+const WS_ID = "9999999999";
+
+describe("toggle/batch-toggle: disk-verified numeric mod IDs", () => {
+  let dataRoot;
+  let iniPath;
+  let installPath;
+
+  beforeEach(() => {
+    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mods-toggle-numeric-"));
+    const configPath = path.join(dataRoot, "Server");
+    fs.mkdirSync(configPath, { recursive: true });
+    iniPath = path.join(configPath, "TestServer.ini");
+
+    installPath = path.join(dataRoot, "install");
+    const modFolder = path.join(
+      installPath,
+      "steamapps",
+      "workshop",
+      "content",
+      "108600",
+      WS_ID,
+      "mods",
+      "TearAllClothes",
+    );
+    fs.mkdirSync(modFolder, { recursive: true });
+    fs.writeFileSync(
+      path.join(modFolder, "mod.info"),
+      `name=Tear All Clothes\nid=${REAL_MOD_ID}\n`,
+    );
+
+    getActiveServer.mockReset().mockResolvedValue({
+      id: "server-1",
+      serverConfigPath: configPath,
+      serverName: "TestServer",
+      installPath,
+      isRemote: false,
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(dataRoot, { recursive: true, force: true });
+  });
+
+  it("POST /toggle-mod-id allows enabling a numeric mod ID once it's disk-verified", async () => {
+    fs.writeFileSync(iniPath, `Mods=\nWorkshopItems=${WS_ID}\n`);
+
+    const res = await runRoute("/toggle-mod-id", "post", {
+      body: { modId: REAL_MOD_ID, enabled: true },
+    });
+
+    expect(res.getStatusCode()).toBe(200);
+    const content = fs.readFileSync(iniPath, "utf-8");
+    const ids = (content.match(/^Mods=(.*)$/m)?.[1] || "").split(";").filter(Boolean);
+    expect(ids).toContain(REAL_MOD_ID);
+  });
+
+  it("POST /toggle-mod-id still rejects a numeric modId that cannot be disk-verified", async () => {
+    fs.writeFileSync(iniPath, `Mods=\nWorkshopItems=${WS_ID}\n`);
+
+    const res = await runRoute("/toggle-mod-id", "post", {
+      body: { modId: "1234567890", enabled: true },
+    });
+
+    expect(res.getStatusCode()).toBe(400);
+    const content = fs.readFileSync(iniPath, "utf-8");
+    const ids = (content.match(/^Mods=(.*)$/m)?.[1] || "").split(";").filter(Boolean);
+    expect(ids).not.toContain("1234567890");
+  });
+
+  it("POST /toggle-mod-id does not collaterally delete a pre-existing disk-verified numeric mod when toggling an unrelated mod", async () => {
+    fs.writeFileSync(
+      iniPath,
+      `Mods=AlphaMod;${REAL_MOD_ID}\nWorkshopItems=${WS_ID}\n`,
+    );
+
+    const res = await runRoute("/toggle-mod-id", "post", {
+      body: { modId: "BetaMod", enabled: true },
+    });
+
+    expect(res.getStatusCode()).toBe(200);
+    const content = fs.readFileSync(iniPath, "utf-8");
+    const ids = (content.match(/^Mods=(.*)$/m)?.[1] || "").split(";").filter(Boolean);
+    expect(ids).toEqual(["AlphaMod", REAL_MOD_ID, "BetaMod"]);
+  });
+
+  it("POST /batch-toggle-mod-ids allows enabling a numeric mod ID once it's disk-verified", async () => {
+    fs.writeFileSync(iniPath, `Mods=\nWorkshopItems=${WS_ID}\n`);
+
+    const res = await runRoute("/batch-toggle-mod-ids", "post", {
+      body: { changes: [{ modId: REAL_MOD_ID, enabled: true }] },
+    });
+
+    expect(res.getStatusCode()).toBe(200);
+    const content = fs.readFileSync(iniPath, "utf-8");
+    const ids = (content.match(/^Mods=(.*)$/m)?.[1] || "").split(";").filter(Boolean);
+    expect(ids).toContain(REAL_MOD_ID);
+  });
+
+  it("POST /batch-toggle-mod-ids does not collaterally delete a pre-existing disk-verified numeric mod when toggling an unrelated mod", async () => {
+    fs.writeFileSync(
+      iniPath,
+      `Mods=AlphaMod;${REAL_MOD_ID}\nWorkshopItems=${WS_ID}\n`,
+    );
+
+    const res = await runRoute("/batch-toggle-mod-ids", "post", {
+      body: { changes: [{ modId: "BetaMod", enabled: true }] },
+    });
+
+    expect(res.getStatusCode()).toBe(200);
+    const content = fs.readFileSync(iniPath, "utf-8");
+    const ids = (content.match(/^Mods=(.*)$/m)?.[1] || "").split(";").filter(Boolean);
+    expect(ids).toEqual(["AlphaMod", REAL_MOD_ID, "BetaMod"]);
+  });
+});
