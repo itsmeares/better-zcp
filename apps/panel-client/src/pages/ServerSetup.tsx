@@ -34,7 +34,7 @@ import { NumberInput } from "@/components/NumberInput";
 import { DisabledReason } from "@/components/DisabledReason";
 import { getInstallProgressMessage } from "@/lib/installProgressMessage";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/lib/routerCompat";
 import {
   Card,
   CardContent,

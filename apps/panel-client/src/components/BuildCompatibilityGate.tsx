@@ -3,38 +3,15 @@ import type { ReactNode } from 'react'
 import {
   assessBuildCompatibility,
   compiledBuildMetadata,
-  type BackendBuildMetadata,
 } from '../lib/buildCompatibility'
 import { isDemoMode } from '../lib/demo'
-
-async function fetchBackendBuildMetadata(signal: AbortSignal): Promise<BackendBuildMetadata> {
-  const timeoutController = new AbortController()
-  const timeoutId = window.setTimeout(() => timeoutController.abort(), 8_000)
-  const abortForQuery = () => timeoutController.abort(signal.reason)
-
-  if (signal.aborted) abortForQuery()
-  else signal.addEventListener('abort', abortForQuery, { once: true })
-
-  try {
-    const response = await fetch('/api/health', {
-      signal: timeoutController.signal,
-      cache: 'no-store',
-    })
-    if (!response.ok) throw new Error(`Health check returned ${response.status}`)
-    return await response.json() as BackendBuildMetadata
-  } finally {
-    window.clearTimeout(timeoutId)
-    signal.removeEventListener('abort', abortForQuery)
-  }
-}
+import { panelHealthQueryOptions } from '../lib/panelHealth'
 
 export function BuildCompatibilityGate({ children }: { children: ReactNode }) {
   const demoMode = isDemoMode()
   const { data: backend, isPending, isError } = useQuery({
-    queryKey: ['build-compatibility'],
-    queryFn: ({ signal }) => fetchBackendBuildMetadata(signal),
+    ...panelHealthQueryOptions(),
     enabled: !demoMode,
-    retry: false,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   })

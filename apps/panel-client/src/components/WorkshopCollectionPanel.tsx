@@ -1,6 +1,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from '@/lib/routerCompat'
 import { Trans, useTranslation } from 'react-i18next'
 import {
   AlertTriangle,

@@ -3,7 +3,7 @@ import { withTranslation, type WithTranslation } from 'react-i18next'
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card'
-import { Link } from 'react-router-dom'
+import { Link } from '@/lib/routerCompat'
 import { reportClientError } from '@/lib/client-errors'
 import { getRecoveryUrl, rawErrorMessageIntentional } from '@/lib/errorMessage'
 

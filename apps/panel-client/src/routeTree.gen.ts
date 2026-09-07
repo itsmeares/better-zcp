@@ -11,6 +11,23 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
+import { Route as BackupsRouteImport } from './routes/backups'
+import { Route as ChatRouteImport } from './routes/chat'
+import { Route as ChunksRouteImport } from './routes/chunks'
+import { Route as ConsoleRouteImport } from './routes/console'
+import { Route as DebugRouteImport } from './routes/debug'
+import { Route as DiscordRouteImport } from './routes/discord'
+import { Route as EventsRouteImport } from './routes/events'
+import { Route as ModsRouteImport } from './routes/mods'
+import { Route as PlayersRouteImport } from './routes/players'
+import { Route as SchedulerRouteImport } from './routes/scheduler'
+import { Route as ServerConfigRouteImport } from './routes/server-config'
+import { Route as ServerFinderRouteImport } from './routes/server-finder'
+import { Route as ServerSetupRouteImport } from './routes/server-setup'
+import { Route as ServersRouteImport } from './routes/servers'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as TemplatesRouteImport } from './routes/templates'
+import { Route as WorldMapRouteImport } from './routes/world-map'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +39,242 @@ const SplatRoute = SplatRouteImport.update({
   path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BackupsRoute = BackupsRouteImport.update({
+  id: '/backups',
+  path: '/backups',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChunksRoute = ChunksRouteImport.update({
+  id: '/chunks',
+  path: '/chunks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConsoleRoute = ConsoleRouteImport.update({
+  id: '/console',
+  path: '/console',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DebugRoute = DebugRouteImport.update({
+  id: '/debug',
+  path: '/debug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiscordRoute = DiscordRouteImport.update({
+  id: '/discord',
+  path: '/discord',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventsRoute = EventsRouteImport.update({
+  id: '/events',
+  path: '/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModsRoute = ModsRouteImport.update({
+  id: '/mods',
+  path: '/mods',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlayersRoute = PlayersRouteImport.update({
+  id: '/players',
+  path: '/players',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SchedulerRoute = SchedulerRouteImport.update({
+  id: '/scheduler',
+  path: '/scheduler',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServerConfigRoute = ServerConfigRouteImport.update({
+  id: '/server-config',
+  path: '/server-config',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServerFinderRoute = ServerFinderRouteImport.update({
+  id: '/server-finder',
+  path: '/server-finder',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServerSetupRoute = ServerSetupRouteImport.update({
+  id: '/server-setup',
+  path: '/server-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServersRoute = ServersRouteImport.update({
+  id: '/servers',
+  path: '/servers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplatesRoute = TemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorldMapRoute = WorldMapRouteImport.update({
+  id: '/world-map',
+  path: '/world-map',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/backups': typeof BackupsRoute
+  '/chat': typeof ChatRoute
+  '/chunks': typeof ChunksRoute
+  '/console': typeof ConsoleRoute
+  '/debug': typeof DebugRoute
+  '/discord': typeof DiscordRoute
+  '/events': typeof EventsRoute
+  '/mods': typeof ModsRoute
+  '/players': typeof PlayersRoute
+  '/scheduler': typeof SchedulerRoute
+  '/server-config': typeof ServerConfigRoute
+  '/server-finder': typeof ServerFinderRoute
+  '/server-setup': typeof ServerSetupRoute
+  '/servers': typeof ServersRoute
+  '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
+  '/world-map': typeof WorldMapRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/backups': typeof BackupsRoute
+  '/chat': typeof ChatRoute
+  '/chunks': typeof ChunksRoute
+  '/console': typeof ConsoleRoute
+  '/debug': typeof DebugRoute
+  '/discord': typeof DiscordRoute
+  '/events': typeof EventsRoute
+  '/mods': typeof ModsRoute
+  '/players': typeof PlayersRoute
+  '/scheduler': typeof SchedulerRoute
+  '/server-config': typeof ServerConfigRoute
+  '/server-finder': typeof ServerFinderRoute
+  '/server-setup': typeof ServerSetupRoute
+  '/servers': typeof ServersRoute
+  '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
+  '/world-map': typeof WorldMapRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/backups': typeof BackupsRoute
+  '/chat': typeof ChatRoute
+  '/chunks': typeof ChunksRoute
+  '/console': typeof ConsoleRoute
+  '/debug': typeof DebugRoute
+  '/discord': typeof DiscordRoute
+  '/events': typeof EventsRoute
+  '/mods': typeof ModsRoute
+  '/players': typeof PlayersRoute
+  '/scheduler': typeof SchedulerRoute
+  '/server-config': typeof ServerConfigRoute
+  '/server-finder': typeof ServerFinderRoute
+  '/server-setup': typeof ServerSetupRoute
+  '/servers': typeof ServersRoute
+  '/settings': typeof SettingsRoute
+  '/templates': typeof TemplatesRoute
+  '/world-map': typeof WorldMapRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$'
+  fullPaths:
+    | '/'
+    | '/$'
+    | '/backups'
+    | '/chat'
+    | '/chunks'
+    | '/console'
+    | '/debug'
+    | '/discord'
+    | '/events'
+    | '/mods'
+    | '/players'
+    | '/scheduler'
+    | '/server-config'
+    | '/server-finder'
+    | '/server-setup'
+    | '/servers'
+    | '/settings'
+    | '/templates'
+    | '/world-map'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$'
-  id: '__root__' | '/' | '/$'
+  to:
+    | '/'
+    | '/$'
+    | '/backups'
+    | '/chat'
+    | '/chunks'
+    | '/console'
+    | '/debug'
+    | '/discord'
+    | '/events'
+    | '/mods'
+    | '/players'
+    | '/scheduler'
+    | '/server-config'
+    | '/server-finder'
+    | '/server-setup'
+    | '/servers'
+    | '/settings'
+    | '/templates'
+    | '/world-map'
+  id:
+    | '__root__'
+    | '/'
+    | '/$'
+    | '/backups'
+    | '/chat'
+    | '/chunks'
+    | '/console'
+    | '/debug'
+    | '/discord'
+    | '/events'
+    | '/mods'
+    | '/players'
+    | '/scheduler'
+    | '/server-config'
+    | '/server-finder'
+    | '/server-setup'
+    | '/servers'
+    | '/settings'
+    | '/templates'
+    | '/world-map'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
+  BackupsRoute: typeof BackupsRoute
+  ChatRoute: typeof ChatRoute
+  ChunksRoute: typeof ChunksRoute
+  ConsoleRoute: typeof ConsoleRoute
+  DebugRoute: typeof DebugRoute
+  DiscordRoute: typeof DiscordRoute
+  EventsRoute: typeof EventsRoute
+  ModsRoute: typeof ModsRoute
+  PlayersRoute: typeof PlayersRoute
+  SchedulerRoute: typeof SchedulerRoute
+  ServerConfigRoute: typeof ServerConfigRoute
+  ServerFinderRoute: typeof ServerFinderRoute
+  ServerSetupRoute: typeof ServerSetupRoute
+  ServersRoute: typeof ServersRoute
+  SettingsRoute: typeof SettingsRoute
+  TemplatesRoute: typeof TemplatesRoute
+  WorldMapRoute: typeof WorldMapRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +293,148 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/backups': {
+      id: '/backups'
+      path: '/backups'
+      fullPath: '/backups'
+      preLoaderRoute: typeof BackupsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chunks': {
+      id: '/chunks'
+      path: '/chunks'
+      fullPath: '/chunks'
+      preLoaderRoute: typeof ChunksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/console': {
+      id: '/console'
+      path: '/console'
+      fullPath: '/console'
+      preLoaderRoute: typeof ConsoleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/debug': {
+      id: '/debug'
+      path: '/debug'
+      fullPath: '/debug'
+      preLoaderRoute: typeof DebugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/discord': {
+      id: '/discord'
+      path: '/discord'
+      fullPath: '/discord'
+      preLoaderRoute: typeof DiscordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/events': {
+      id: '/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof EventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mods': {
+      id: '/mods'
+      path: '/mods'
+      fullPath: '/mods'
+      preLoaderRoute: typeof ModsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/players': {
+      id: '/players'
+      path: '/players'
+      fullPath: '/players'
+      preLoaderRoute: typeof PlayersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scheduler': {
+      id: '/scheduler'
+      path: '/scheduler'
+      fullPath: '/scheduler'
+      preLoaderRoute: typeof SchedulerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/server-config': {
+      id: '/server-config'
+      path: '/server-config'
+      fullPath: '/server-config'
+      preLoaderRoute: typeof ServerConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/server-finder': {
+      id: '/server-finder'
+      path: '/server-finder'
+      fullPath: '/server-finder'
+      preLoaderRoute: typeof ServerFinderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/server-setup': {
+      id: '/server-setup'
+      path: '/server-setup'
+      fullPath: '/server-setup'
+      preLoaderRoute: typeof ServerSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/servers': {
+      id: '/servers'
+      path: '/servers'
+      fullPath: '/servers'
+      preLoaderRoute: typeof ServersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/templates': {
+      id: '/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof TemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/world-map': {
+      id: '/world-map'
+      path: '/world-map'
+      fullPath: '/world-map'
+      preLoaderRoute: typeof WorldMapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
+  BackupsRoute: BackupsRoute,
+  ChatRoute: ChatRoute,
+  ChunksRoute: ChunksRoute,
+  ConsoleRoute: ConsoleRoute,
+  DebugRoute: DebugRoute,
+  DiscordRoute: DiscordRoute,
+  EventsRoute: EventsRoute,
+  ModsRoute: ModsRoute,
+  PlayersRoute: PlayersRoute,
+  SchedulerRoute: SchedulerRoute,
+  ServerConfigRoute: ServerConfigRoute,
+  ServerFinderRoute: ServerFinderRoute,
+  ServerSetupRoute: ServerSetupRoute,
+  ServersRoute: ServersRoute,
+  SettingsRoute: SettingsRoute,
+  TemplatesRoute: TemplatesRoute,
+  WorldMapRoute: WorldMapRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

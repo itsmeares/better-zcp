@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { useSearchParams, Link as RouterLink } from "react-router-dom";
+import { useSearchParams, Link as RouterLink } from "@/lib/routerCompat";
 import { usePageShortcut } from "../hooks/useKeyboardShortcuts";
 import {
   Save,

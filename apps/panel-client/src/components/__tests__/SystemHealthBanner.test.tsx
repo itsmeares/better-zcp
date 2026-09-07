@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from '@/lib/routerCompat'
 import { SystemHealthBanner } from '../SystemHealthBanner'
 import { systemApi, type StorageHealth } from '@/lib/api'
 import en from '@/locales/en/systemHealthBanner.json'

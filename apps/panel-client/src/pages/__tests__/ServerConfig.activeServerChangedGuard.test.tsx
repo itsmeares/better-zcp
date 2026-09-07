@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, fireEvent, act } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from '@/lib/routerCompat'
 import ServerConfig from '../ServerConfig'
 import { serverFilesApi, serversApi } from '@/lib/api'
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from '@/lib/routerCompat'
 import { Trans, useTranslation } from 'react-i18next'
 import { getCurrentLanguage, isRTL } from '@/i18n'
 import { useTheme } from '@/contexts/ThemeContext'

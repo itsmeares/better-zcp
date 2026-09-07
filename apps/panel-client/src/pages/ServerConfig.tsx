@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue, memo } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, Link } from '@/lib/routerCompat'
 import { copyText, cn } from '@/lib/utils'
 import {
   Settings,

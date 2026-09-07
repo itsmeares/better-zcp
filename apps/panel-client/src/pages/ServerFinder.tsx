@@ -45,7 +45,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Link } from 'react-router-dom'
+import { Link } from '@/lib/routerCompat'
 import { useToast } from '@/components/ui/use-toast'
 import { apiFetch, ApiError } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'

@@ -19,8 +19,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "react-router-dom": ["./src/lib/router.tsx"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],
