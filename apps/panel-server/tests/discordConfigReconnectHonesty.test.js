@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 
-vi.mock("../services/discordBot.js", () => ({
+vi.mock("../services/discordBot.ts", () => ({
   normalizeChatRelayScope: vi.fn((value) => value),
 }));
 

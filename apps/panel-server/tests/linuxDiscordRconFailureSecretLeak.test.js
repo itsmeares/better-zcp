@@ -11,7 +11,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { RconService } = await import("../services/rcon.js");
-const { DiscordBot } = await import("../services/discordBot.js");
+const { DiscordBot } = await import("../services/discordBot.ts");
 
 describe("layer 1 -- RconService.getUserFriendlyError() neutralizes an interpolated timeout message on contact", () => {
   it("a raw sourceRcon.js-shaped timeout message containing the password never survives the classifier", () => {

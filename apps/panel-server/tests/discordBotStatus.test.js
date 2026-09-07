@@ -7,7 +7,7 @@ vi.mock("../database/init.js", () => ({
   setSetting: async () => {},
 }));
 
-const { DiscordBot } = await import("../services/discordBot.js");
+const { DiscordBot } = await import("../services/discordBot.ts");
 
 describe("DiscordBot.getStatus() — lastStartError", () => {
   it("is null when nothing has failed to start", () => {
@@ -33,5 +33,5 @@ describe("DiscordBot.getStatus() — lastStartError", () => {
   // lastStartError (the clientReady handler inside start() does this).
   // Exercising that honestly needs a real Discord gateway connection to
   // succeed, which is out of reach for a unit test -- verified by reading
-  // start()'s clientReady handler instead (apps/panel-server/services/discordBot.js).
+  // start()'s clientReady handler instead (apps/panel-server/services/discordBot.ts).
 });

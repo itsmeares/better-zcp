@@ -7,7 +7,7 @@ vi.mock("../database/init.js", () => ({
   setSetting: async () => {},
 }));
 
-const { DiscordBot } = await import("../services/discordBot.js");
+const { DiscordBot } = await import("../services/discordBot.ts");
 
 function makeBot() {
   return new DiscordBot(null, null, null, null);

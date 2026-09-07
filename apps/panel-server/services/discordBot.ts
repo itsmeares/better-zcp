@@ -33,7 +33,13 @@ import {
   lifecycleInProgressResponse,
 } from "./lifecycleCoordinator.ts";
 
-async function _resolveDiscordBody(body) {
+type AnyRecord = Record<string, any>;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function _resolveDiscordBody(body: any): Promise<any> {
   if (body == null) return null;
   if (typeof body === "string") return body;
   if (types.isUint8Array(body)) return body;
@@ -51,14 +57,14 @@ async function _resolveDiscordBody(body) {
   throw new TypeError("Unable to resolve body.");
 }
 
-async function _safeDiscordMakeRequest(url, init) {
+async function _safeDiscordMakeRequest(url: string, init: AnyRecord): Promise<any> {
   let body = await _resolveDiscordBody(init.body);
   if (typeof body === "string" && body) {
     try {
       const secrets = await collectKnownSecretValues();
       body = redactKnownSecrets(body, secrets);
-    } catch (err) {
-      log.error(`Discord outbound redaction check failed, blocking this send: ${err.message}`);
+    } catch (err: any) {
+      log.error(`Discord outbound redaction check failed, blocking this send: ${errorMessage(err)}`);
       throw err;
     }
   }
@@ -74,14 +80,16 @@ async function _safeDiscordMakeRequest(url, init) {
     get bodyUsed() {
       return res.body.bodyUsed;
     },
-    headers: new UndiciHeaders(Object.fromEntries(Object.entries(res.headers))),
+    headers: new UndiciHeaders(
+      Object.fromEntries(Object.entries(res.headers)) as Record<string, string>,
+    ),
     status: res.statusCode,
     statusText: STATUS_CODES[res.statusCode] ?? "",
     ok: res.statusCode >= 200 && res.statusCode < 300,
   };
 }
 
-async function _resolveDiscordApplicationId(token) {
+async function _resolveDiscordApplicationId(token: string | null): Promise<string | null> {
   if (!token) return null;
 
   const response = await fetch("https://discord.com/api/v10/users/@me", {
@@ -113,11 +121,13 @@ const NO_YELL_CHAT_TYPES = new Set(
 const GENERAL_ONLY_CHAT_TYPES = new Set(["General"]);
 const CHAT_RELAY_SCOPES = new Set(["public", "no-yell", "general"]);
 
-export function normalizeChatRelayScope(value) {
-  return CHAT_RELAY_SCOPES.has(value) ? value : "public";
+export function normalizeChatRelayScope(value: unknown): string {
+  return value === "public" || value === "no-yell" || value === "general"
+    ? value
+    : "public";
 }
 
-export function allowedChatTypesForScope(scope) {
+export function allowedChatTypesForScope(scope: string): Set<string> {
   if (scope === "general") return GENERAL_ONLY_CHAT_TYPES;
   if (scope === "no-yell") return NO_YELL_CHAT_TYPES;
   return PUBLIC_CHAT_TYPES;
@@ -140,8 +150,38 @@ const PLAYER_PRESENCE_INTERVAL_MS = 60_000;
 const GATEWAY_DEGRADED_THRESHOLD_MS = 30_000;
 
 export class DiscordBot {
-  constructor(rconService, serverManager, scheduler, logTailer = null) {
-    this.client = null;
+  client: any = null;
+  rconService: any;
+  serverManager: any;
+  scheduler: any;
+  logTailer: any;
+  token: string | null = null;
+  guildId: string | null = null;
+  adminRoleId: string | null = null;
+  modRoleId: string | null = null;
+  channelId: string | null = null;
+  isRunning = false;
+  lastStartError: AnyRecord | null = null;
+  webhookEvents: AnyRecord = {};
+  commandPermissions: Record<string, string> = { ...DEFAULT_COMMAND_PERMISSIONS };
+  chatRelayEnabled = true;
+  chatRelayChannelId: string | null = null;
+  chatRelayScope = "public";
+  _presenceInterval: NodeJS.Timeout | null = null;
+  _presenceUpdateInFlight: Promise<void> | null = null;
+  _channelBreakers = new Map<string, AnyRecord>();
+  _gatewayDegradedSince: number | null = null;
+  _lastLifecycleState: string | null = null;
+  _lastLifecycleAt = 0;
+  _bridgeOfflineNoticeAt = 0;
+  _registerInFlight: Promise<any> | null = null;
+  _registeredGuildId: string | null = null;
+  _onGameChat: ((data: any) => void) | null = null;
+  _chatRelayChain: Promise<void> = Promise.resolve();
+  _chatRelayPending = 0;
+  _chatRelayDropped = 0;
+
+  constructor(rconService: any, serverManager: any, scheduler: any, logTailer: any = null) {
     this.rconService = rconService;
     this.serverManager = serverManager;
     this.scheduler = scheduler;
@@ -185,7 +225,7 @@ export class DiscordBot {
     }
   }
 
-  _queueGameChat(data) {
+  _queueGameChat(data: any): void {
     const MAX_PENDING = 40;
     if (this._chatRelayPending >= MAX_PENDING) {
       this._chatRelayDropped++;
@@ -199,7 +239,9 @@ export class DiscordBot {
     this._chatRelayPending++;
     this._chatRelayChain = this._chatRelayChain
       .then(() => this.handleGameChat(data))
-      .catch((e) => log.debug(`Game chat relay failed: ${e.message}`))
+      .catch((e: any) => {
+        log.debug(`Game chat relay failed: ${errorMessage(e)}`);
+      })
       .finally(() => {
         this._chatRelayPending--;
         if (this._chatRelayPending === 0 && this._chatRelayDropped > 0) {
@@ -211,7 +253,7 @@ export class DiscordBot {
       });
   }
 
-  async handleGameChat(data) {
+  async handleGameChat(data: any): Promise<void> {
     if (!this.chatRelayEnabled || !this.isRunning || !this.client) return;
 
     const allowed = allowedChatTypesForScope(this.chatRelayScope);
@@ -258,7 +300,7 @@ export class DiscordBot {
     );
   }
 
-  async loadConfig() {
+  async loadConfig(): Promise<void> {
     log.info("Loading Discord bot config...");
     this.token = await loadUiSecret("discordBotToken", {
       legacyValue: await getSetting("discordBotToken"),
@@ -276,7 +318,7 @@ export class DiscordBot {
         const parsed =
           typeof savedPerms === "string" ? JSON.parse(savedPerms) : savedPerms;
         this.commandPermissions = { ...DEFAULT_COMMAND_PERMISSIONS, ...parsed };
-      } catch (e) {
+      } catch (e: any) {
         this.commandPermissions = { ...DEFAULT_COMMAND_PERMISSIONS };
       }
     }
@@ -300,18 +342,21 @@ export class DiscordBot {
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
           this.webhookEvents = parsed;
         }
-      } catch (e) {
+      } catch (e: any) {
         log.warn(`Failed to parse saved webhookEvents: ${e.message}`);
       }
     }
   }
 
-  async saveWebhookEvents(events) {
+  async saveWebhookEvents(events: AnyRecord): Promise<void> {
     this.webhookEvents = events;
     await setSetting("discordWebhookEvents", JSON.stringify(events));
   }
 
-  async sendEventNotification(eventType, variables = {}) {
+  async sendEventNotification(
+    eventType: string,
+    variables: AnyRecord = {},
+  ): Promise<void> {
     if (!this.isRunning || !this.channelId) return;
 
     const isLifecycle =
@@ -341,7 +386,7 @@ export class DiscordBot {
     if (keys.length > 0) {
       const escaped = keys.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
       const re = new RegExp(`\\{(${escaped.join("|")})\\}`, "g");
-      message = message.replace(re, (_, k) => {
+      message = message.replace(re, (_: string, k: string) => {
         const v = variables[k];
         if (v === undefined || v === null) return "";
         return typeof v === "string" ? v : String(v);
@@ -369,7 +414,13 @@ export class DiscordBot {
     }
   }
 
-  async updateConfig(token, guildId, adminRoleId, channelId, modRoleId) {
+  async updateConfig(
+    token: string,
+    guildId: string,
+    adminRoleId: string | null,
+    channelId: string | null,
+    modRoleId: string | null,
+  ): Promise<void> {
     writeUiSecretFile("discordBotToken", token);
     await setSetting("discordGuildId", guildId);
     await setSetting("discordAdminRoleId", adminRoleId || "");
@@ -396,7 +447,7 @@ export class DiscordBot {
         const rest = new REST({
           version: "10",
           makeRequest: _safeDiscordMakeRequest,
-        }).setToken(this.token);
+        }).setToken(token);
         await rest.put(
           Routes.applicationGuildCommands(this.client.user.id, previousGuildId),
           { body: [] },
@@ -404,7 +455,7 @@ export class DiscordBot {
         log.info(
           `Cleared slash commands from previous guild ${previousGuildId}`,
         );
-      } catch (e) {
+      } catch (e: any) {
         log.warn(
           `Failed to clear commands from previous guild ${previousGuildId}: ${e.message}`,
         );
@@ -415,13 +466,17 @@ export class DiscordBot {
     if (rolesChanged && this.isRunning && this.client?.user) {
       try {
         await this.registerCommands();
-      } catch (e) {
+      } catch (e: any) {
         log.warn(`Failed to re-register commands after role change: ${e.message}`);
       }
     }
   }
 
-  async updateChatRelay(enabled, channelId, scope) {
+  async updateChatRelay(
+    enabled: boolean,
+    channelId: string | null,
+    scope: unknown,
+  ): Promise<void> {
     this.chatRelayEnabled = enabled;
     this.chatRelayChannelId = channelId || null;
     this.chatRelayScope = normalizeChatRelayScope(scope);
@@ -450,7 +505,7 @@ export class DiscordBot {
           );
           log.info(`Cleared slash commands from guild ${guildId}`);
         }
-      } catch (error) {
+      } catch (error: any) {
         log.warn(
           `Failed to clear slash commands during Discord reset: ${error.message}`,
         );
@@ -492,10 +547,10 @@ export class DiscordBot {
     this._lastLifecycleAt = 0;
   }
 
-  async updateCommandPermissions(permissions) {
+  async updateCommandPermissions(permissions: AnyRecord): Promise<Record<string, string>> {
     const validLevels = ["everyone", "moderator", "admin"];
     const validCommands = Object.keys(DEFAULT_COMMAND_PERMISSIONS);
-    const cleaned = {};
+    const cleaned: Record<string, string> = {};
     for (const [cmd, level] of Object.entries(permissions)) {
       if (validCommands.includes(cmd) && validLevels.includes(level)) {
         cleaned[cmd] = level;
@@ -654,7 +709,7 @@ export class DiscordBot {
         );
         this._registeredGuildId = targetGuildId;
         log.info(`Registered ${commands.length} Discord commands`);
-      } catch (error) {
+      } catch (error: any) {
         log.error(
           `Failed to register Discord commands: ${error.stack || error.message}`,
         );
@@ -667,7 +722,7 @@ export class DiscordBot {
     return this._registerInFlight;
   }
 
-  hasRole(interaction, roleId) {
+  hasRole(interaction: any, roleId: string | null): boolean {
     if (!roleId) return false;
     const member = interaction.member;
     if (!member) return false;
@@ -680,7 +735,7 @@ export class DiscordBot {
     return false;
   }
 
-  checkPermission(interaction, commandName) {
+  checkPermission(interaction: any, commandName: string): boolean {
     const level = this.commandPermissions[commandName] || "admin";
 
     if (level === "everyone") return true;
@@ -713,7 +768,7 @@ export class DiscordBot {
     return false;
   }
 
-  async handleInteraction(interaction) {
+  async handleInteraction(interaction: any): Promise<void> {
     if (!interaction.isChatInputCommand()) return;
 
     const { commandName } = interaction;
@@ -766,7 +821,7 @@ export class DiscordBot {
             flags: MessageFlags.Ephemeral,
           });
       }
-    } catch (error) {
+    } catch (error: any) {
       log.error(`command error: ${error.stack || error.message}`);
       try {
         const content = `❌ Error: ${sanitizeError(error.message)}`;
@@ -778,7 +833,7 @@ export class DiscordBot {
         } else {
           await interaction.reply({ content, flags: MessageFlags.Ephemeral });
         }
-      } catch (replyError) {
+      } catch (replyError: any) {
         log.error(
           `Failed to send error reply: ${replyError.stack || replyError.message}`,
         );
@@ -786,7 +841,7 @@ export class DiscordBot {
     }
   }
 
-  async handleStatus(interaction) {
+  async handleStatus(interaction: any): Promise<void> {
     await interaction.deferReply();
 
     const status = await this.serverManager.getServerStatus();
@@ -831,7 +886,7 @@ export class DiscordBot {
             inline: true,
           });
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Discord status: RCON error for player count: ${e.message}`);
       }
     }
@@ -839,7 +894,7 @@ export class DiscordBot {
     await interaction.editReply({ embeds: [embed] });
   }
 
-  async handlePlayers(interaction) {
+  async handlePlayers(interaction: any): Promise<void> {
     await interaction.deferReply();
 
     const observedRunning = await resolveObservedServerRunning(
@@ -907,7 +962,7 @@ export class DiscordBot {
     await interaction.editReply({ embeds: [embed] });
   }
 
-  async handleStart(interaction) {
+  async handleStart(interaction: any): Promise<void> {
     await interaction.deferReply();
     const activeServerForLock = await getActiveServer();
     const lifecycleLock = acquireLifecycleLock(
@@ -962,7 +1017,7 @@ export class DiscordBot {
     }
   }
 
-  async handleStop(interaction) {
+  async handleStop(interaction: any): Promise<void> {
     await interaction.deferReply();
     const activeServerForLock = await getActiveServer();
     const lifecycleLock = acquireLifecycleLock(
@@ -1025,7 +1080,7 @@ export class DiscordBot {
     }
   }
 
-  async handleRestart(interaction) {
+  async handleRestart(interaction: any): Promise<void> {
     await interaction.deferReply();
     const lifecycleLock = acquireLifecycleLock(
       "discord-restart",
@@ -1081,7 +1136,7 @@ export class DiscordBot {
             `❌ Restart did not complete: ${sanitizeError(result?.message || "unknown error")}`,
           );
         }
-      } catch (error) {
+      } catch (error: any) {
         log.error(`restart failed: ${error.message}`);
         await this._reportRestartOutcome(
           interaction,
@@ -1093,7 +1148,7 @@ export class DiscordBot {
     }
   }
 
-  async _reportRestartOutcome(interaction, text) {
+  async _reportRestartOutcome(interaction: any, text: string): Promise<void> {
     try {
       await interaction.editReply(text);
     } catch {
@@ -1101,7 +1156,7 @@ export class DiscordBot {
     }
   }
 
-  async handleSave(interaction) {
+  async handleSave(interaction: any): Promise<void> {
     await interaction.deferReply();
 
     if (!this.rconService?.connected) {
@@ -1120,7 +1175,7 @@ export class DiscordBot {
     }
   }
 
-  async handleBroadcast(interaction) {
+  async handleBroadcast(interaction: any): Promise<void> {
     const message = interaction.options.getString("message");
 
     await interaction.deferReply();
@@ -1149,7 +1204,7 @@ export class DiscordBot {
     }
   }
 
-  async handleKick(interaction) {
+  async handleKick(interaction: any): Promise<void> {
     const player = interaction.options.getString("player");
     const reason = interaction.options.getString("reason") || "No reason given";
 
@@ -1182,7 +1237,7 @@ export class DiscordBot {
     }
   }
 
-  async handleRcon(interaction) {
+  async handleRcon(interaction: any): Promise<void> {
     const command = interaction.options.getString("command");
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -1210,7 +1265,7 @@ export class DiscordBot {
     await interaction.editReply(response);
   }
 
-  async sendNotification(message) {
+  async sendNotification(message: any): Promise<boolean> {
     if (!this.channelId || !this.client) return false;
     log.info(
       `Sending Discord notification: ${String(message).substring(0, 80)}`,
@@ -1220,7 +1275,11 @@ export class DiscordBot {
     });
   }
 
-  async _sendToChannel(channelId, message, { label = "message" } = {}) {
+  async _sendToChannel(
+    channelId: string,
+    message: any,
+    { label = "message" }: { label?: string } = {},
+  ): Promise<boolean> {
     if (!channelId || !this.client) return false;
 
     const FAILURE_THRESHOLD = 3;
@@ -1263,7 +1322,7 @@ export class DiscordBot {
         breaker.suppressed = 0;
       }
       return true;
-    } catch (error) {
+    } catch (error: any) {
       breaker.failures++;
       const transient =
         (typeof error.status === "number" &&
@@ -1289,7 +1348,7 @@ export class DiscordBot {
     }
   }
 
-  _breakerFor(channelId) {
+  _breakerFor(channelId: string): AnyRecord {
     let breaker = this._channelBreakers.get(channelId);
     if (!breaker) {
       breaker = { failures: 0, openUntil: 0, suppressed: 0 };
@@ -1298,7 +1357,7 @@ export class DiscordBot {
     return breaker;
   }
 
-  async getConfiguredMaxPlayers() {
+  async getConfiguredMaxPlayers(): Promise<number | null> {
     try {
       const activeServer = await getActiveServer();
       const serverName = activeServer?.serverName || (await getSetting("serverName"));
@@ -1330,13 +1389,13 @@ export class DiscordBot {
         10,
       );
       return Number.isInteger(maxPlayers) && maxPlayers > 0 ? maxPlayers : null;
-    } catch (error) {
+    } catch (error: any) {
       log.debug(`Could not read MaxPlayers for Discord presence: ${error.message}`);
       return null;
     }
   }
 
-  async updatePlayerPresence() {
+  async updatePlayerPresence(): Promise<void> {
     if (!this.isRunning || !this.client?.user || !this.serverManager) return;
     if (this._presenceUpdateInFlight) return this._presenceUpdateInFlight;
 
@@ -1371,7 +1430,7 @@ export class DiscordBot {
             type: ActivityType.Playing,
           });
         }
-      } catch (error) {
+      } catch (error: any) {
         log.debug(`Discord presence update failed: ${error.message}`);
       } finally {
         this._presenceUpdateInFlight = null;
@@ -1381,7 +1440,7 @@ export class DiscordBot {
     return this._presenceUpdateInFlight;
   }
 
-  _startPresenceUpdates() {
+  _startPresenceUpdates(): void {
     if (this._presenceInterval || !this.client?.user) return;
     void this.updatePlayerPresence();
     this._presenceInterval = setInterval(() => {
@@ -1389,7 +1448,7 @@ export class DiscordBot {
     }, PLAYER_PRESENCE_INTERVAL_MS);
   }
 
-  _stopPresenceUpdates() {
+  _stopPresenceUpdates(): void {
     if (this._presenceInterval) {
       clearInterval(this._presenceInterval);
       this._presenceInterval = null;
@@ -1428,8 +1487,8 @@ export class DiscordBot {
 
     const CHAT_BRIDGE_LIMIT = 5;
     const CHAT_BRIDGE_WINDOW_MS = 10_000;
-    const chatBridgeRate = new Map();
-    this.client.on("messageCreate", async (message) => {
+    const chatBridgeRate = new Map<string, number[]>();
+    this.client.on("messageCreate", async (message: any) => {
       if (!this.isRunning || message.author.bot) return;
       if (message.system) return;
 
@@ -1464,17 +1523,17 @@ export class DiscordBot {
 
             let resolved = content
               // User mentions: <@id> or <@!id>
-              .replace(/<@!?(\d+)>/g, (_, id) => {
+              .replace(/<@!?(\d+)>/g, (_: string, id: string) => {
                 const u = message.mentions?.users?.get(id);
                 return u ? `@${u.username}` : "@user";
               })
               // Role mentions: <@&id>
-              .replace(/<@&(\d+)>/g, (_, id) => {
+              .replace(/<@&(\d+)>/g, (_: string, id: string) => {
                 const r = message.mentions?.roles?.get(id);
                 return r ? `@${r.name}` : "@role";
               })
               // Channel mentions: <#id>
-              .replace(/<#(\d+)>/g, (_, id) => {
+              .replace(/<#(\d+)>/g, (_: string, id: string) => {
                 const c = message.mentions?.channels?.get(id);
                 return c ? `#${c.name}` : "#channel";
               })
@@ -1505,28 +1564,28 @@ export class DiscordBot {
               );
             }
           }
-        } catch (e) {
+        } catch (e: any) {
           log.warn(`Failed to bridge message to server: ${e.message}`);
         }
       }
     });
 
-    this.client.on("interactionCreate", async (interaction) => {
+    this.client.on("interactionCreate", async (interaction: any) => {
       try {
         await this.handleInteraction(interaction);
-      } catch (error) {
+      } catch (error: any) {
         log.error(`interaction handler error: ${error.message}`);
       }
     });
 
-    this.client.on("error", (error) => {
+    this.client.on("error", (error: any) => {
       log.error(`client error: ${error.stack || error.message}`);
     });
 
     this.client.on("shardReconnecting", () => {
       if (!this._gatewayDegradedSince) this._gatewayDegradedSince = Date.now();
     });
-    this.client.on("shardDisconnect", (event) => {
+    this.client.on("shardDisconnect", (event: any) => {
       if (!this._gatewayDegradedSince) this._gatewayDegradedSince = Date.now();
       log.error(
         `Discord gateway shard disconnected and will not reconnect on its own (code ${event?.code}).`,
@@ -1540,7 +1599,7 @@ export class DiscordBot {
     });
 
     try {
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           const timeoutError = new Error("Bot ready timeout after 30s");
           timeoutError.code = "ReadyTimeout";
@@ -1551,7 +1610,7 @@ export class DiscordBot {
           log.info(`bot logged in as ${this.client.user.tag}`);
           try {
             await this.registerCommands();
-          } catch (e) {
+          } catch (e: any) {
             log.warn(`Failed to register slash commands: ${e.message}`);
           }
           this.isRunning = true;
@@ -1559,13 +1618,13 @@ export class DiscordBot {
           this._startPresenceUpdates();
           resolve();
         });
-        this.client.login(this.token).catch((err) => {
+        this.client.login(this.token).catch((err: any) => {
           clearTimeout(timeout);
           reject(err);
         });
       });
       return true;
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Failed to start Discord bot: ${error.message}`);
       this.lastStartError = { kind: error.code || null, message: error.message };
       if (this.logTailer && this._onGameChat) {
@@ -1579,7 +1638,7 @@ export class DiscordBot {
       if (this.client) {
         try {
           this.client.destroy();
-        } catch (destroyError) {
+        } catch (destroyError: any) {
           log.debug(`Discord client destroy failed: ${destroyError.message}`);
         }
         this.client = null;
@@ -1633,7 +1692,7 @@ export class DiscordBot {
         : null,
       gatewayIssue,
       gatewayDegradedSince: gatewayIssue
-        ? new Date(this._gatewayDegradedSince).toISOString()
+        ? new Date(this._gatewayDegradedSince!).toISOString()
         : null,
     };
   }

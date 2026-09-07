@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { DiscordBot } from "../services/discordBot.js";
+import { DiscordBot } from "../services/discordBot.ts";
 import {
   createLocalResetResponse,
   isLocalPanelRequest,
@@ -849,7 +849,7 @@ describe("Discord chat relay scope", () => {
 
   it("falls back to the full public scope for an unknown stored value", async () => {
     const { normalizeChatRelayScope } = await import(
-      "../services/discordBot.js"
+      "../services/discordBot.ts"
     );
     expect(normalizeChatRelayScope("no-yell")).toBe("no-yell");
     expect(normalizeChatRelayScope("general")).toBe("general");

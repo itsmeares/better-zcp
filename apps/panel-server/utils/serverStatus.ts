@@ -53,7 +53,7 @@ export function isServerObservedRunning({
 export async function resolveObservedServerRunning(
   serverManager: ServerManagerLike | null | undefined,
   rconService: RconServiceLike | null | undefined,
-  dockerClient: DockerControl | null | undefined,
+  dockerClient: DockerControl | null | undefined = null,
 ): Promise<boolean | null> {
   const activeServer = (await getActiveServer()) as ActiveServerLike | null;
   if (activeServer?.isRemote) {

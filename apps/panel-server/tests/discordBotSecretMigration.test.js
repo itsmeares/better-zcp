@@ -28,7 +28,7 @@ vi.mock("../utils/logger.ts", () => ({
   }),
 }));
 
-const { DiscordBot } = await import("../services/discordBot.js");
+const { DiscordBot } = await import("../services/discordBot.ts");
 const { readUiSecretFile } = await import("../utils/uiSecretFile.ts");
 
 describe("DiscordBot config — discordBotToken migration out of db.json", () => {

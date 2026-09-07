@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 
-vi.mock("../services/discordBot.js", () => ({
+vi.mock("../services/discordBot.ts", () => ({
   normalizeChatRelayScope: vi.fn((value) => value),
 }));
 

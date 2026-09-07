@@ -12,7 +12,7 @@ vi.mock("../services/managedContainer.ts", () => ({
   runManagedLifecycle: vi.fn(async () => ({ handled: false })),
 }));
 
-const { DiscordBot } = await import("../services/discordBot.js");
+const { DiscordBot } = await import("../services/discordBot.ts");
 
 function makeInteraction() {
   const replies = [];

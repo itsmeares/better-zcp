@@ -2,7 +2,7 @@ import express from "express";
 import type { Request } from "express";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
-import { normalizeChatRelayScope } from "../services/discordBot.js";
+import { normalizeChatRelayScope } from "../services/discordBot.ts";
 import { describeStartFailure } from "../services/discordStartFailure.ts";
 import { requirePermission, getRoleByName } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";

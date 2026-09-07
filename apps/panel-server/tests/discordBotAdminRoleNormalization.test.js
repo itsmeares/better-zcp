@@ -29,7 +29,7 @@ vi.mock("../utils/logger.ts", () => ({
   }),
 }));
 
-const { DiscordBot } = await import("../services/discordBot.js");
+const { DiscordBot } = await import("../services/discordBot.ts");
 
 function runningBot() {
   const bot = new DiscordBot(null, null, null, null);

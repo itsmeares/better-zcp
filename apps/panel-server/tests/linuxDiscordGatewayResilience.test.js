@@ -213,7 +213,7 @@ describe.skipIf(isWindows || !opensslAvailable)(
     });
 
     async function startBot() {
-      const { DiscordBot } = await import("../services/discordBot.js");
+      const { DiscordBot } = await import("../services/discordBot.ts");
       const { writeUiSecretFile } = await import("../utils/uiSecretFile.ts");
       writeUiSecretFile("discordBotToken", "mock.token.value-not-real");
       const bot = new DiscordBot(
