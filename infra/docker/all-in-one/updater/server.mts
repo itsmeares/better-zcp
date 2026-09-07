@@ -142,7 +142,8 @@ async function update(version: string): Promise<void> {
     await fs.rm(backupSource, { recursive: true, force: true });
     updateState = { status: "success", version, message: `Updated to v${version}`, startedAt: updateState.startedAt, completedAt: new Date().toISOString() };
   } catch (error) {
-    let message = errorMessage(error);
+    console.error(`Docker update failed: ${errorMessage(error)}`);
+    let rollbackFailed = false;
     if (sourceSwapped) {
       try {
         await fs.rm(SOURCE_DIR, { recursive: true, force: true });
@@ -150,10 +151,17 @@ async function update(version: string): Promise<void> {
         await run("docker", ["tag", rollbackImage, PANEL_IMAGE]);
         await recreatePanelContainer(PANEL_CONTAINER, ["--env-file", path.join(BUILD_ROOT, "ctx", ".env"), "-f", COMPOSE_FILE, "up", "-d", "--no-build", "--no-deps", "--force-recreate", PANEL_SERVICE], run);
       } catch (rollbackError) {
-        message = `${message}; rollback failed: ${errorMessage(rollbackError)}`;
+        rollbackFailed = true;
+        console.error(`Docker update rollback failed: ${errorMessage(rollbackError)}`);
       }
     }
-    updateState = { status: "failed", version, message, startedAt: updateState.startedAt, completedAt: new Date().toISOString() };
+    updateState = {
+      status: "failed",
+      version,
+      message: rollbackFailed ? "Update failed; rollback failed" : "Update failed",
+      startedAt: updateState.startedAt,
+      completedAt: new Date().toISOString(),
+    };
   } finally {
     await fs.rm(workDir, { recursive: true, force: true });
   }
