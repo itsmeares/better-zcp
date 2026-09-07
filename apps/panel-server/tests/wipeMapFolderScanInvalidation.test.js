@@ -13,7 +13,7 @@ vi.mock("../database/init.js", () => ({
 const { invalidateMapFolderScanMock } = vi.hoisted(() => ({
   invalidateMapFolderScanMock: vi.fn(),
 }));
-vi.mock("../routes/chunks.js", () => ({
+vi.mock("../routes/chunks.ts", () => ({
   invalidateMapFolderScan: invalidateMapFolderScanMock,
 }));
 
@@ -52,7 +52,7 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-describe("POST /api/server/wipe invalidates chunks.js's cached map/ folder scan", () => {
+describe("POST /api/server/wipe invalidates chunks.ts's cached map/ folder scan", () => {
   it("invalidates the map/ scan cache after wiping the map target", async () => {
     const serverManager = {
       loadConfig: async () => {},

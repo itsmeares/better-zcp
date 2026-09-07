@@ -11,7 +11,7 @@ vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(async () => null),
 }));
 
-vi.mock("../routes/chunks.js", () => ({
+vi.mock("../routes/chunks.ts", () => ({
   invalidateMapFolderScan: vi.fn(),
 }));
 

@@ -227,7 +227,7 @@ import rconRoutes from "./routes/rcon.ts";
 import configRoutes from "./routes/config.ts";
 import schedulerRoutes from "./routes/scheduler.ts";
 import modsRoutes from "./routes/mods.js";
-import chunksRoutes from "./routes/chunks.js";
+import chunksRoutes from "./routes/chunks.ts";
 import discordRoutes from "./routes/discord.ts";
 import debugRoutes, { addLogToBuffer } from "./routes/debug.js";
 import { getDiskFree } from "./utils/diskSpace.ts";

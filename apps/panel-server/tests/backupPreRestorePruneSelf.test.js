@@ -15,7 +15,7 @@ vi.mock("../database/init.js", () => ({
   flushWrites: vi.fn(async () => {}),
 }));
 
-vi.mock("../routes/chunks.js", () => ({
+vi.mock("../routes/chunks.ts", () => ({
   invalidateMapFolderScan: vi.fn(),
 }));
 

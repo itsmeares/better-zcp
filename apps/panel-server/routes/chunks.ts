@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";
@@ -26,7 +26,38 @@ export { normalizeUserPath, getCandidateZomboidPaths, invalidateMapFolderScan };
 
 const router = express.Router();
 
-async function runWithConcurrency(items, limit, worker) {
+type AnyRecord = Record<string, any>;
+type Chunk = AnyRecord;
+type ProgressEmitter = (
+  scanned: number,
+  total: number,
+  found: number,
+  options?: { force?: boolean },
+) => void;
+
+declare global {
+  interface Error {
+    statusCode?: number;
+    details?: AnyRecord;
+    code?: string | null;
+  }
+
+  namespace Express {
+    interface Request {
+      user?: { role?: string } | null;
+    }
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function runWithConcurrency(
+  items: any[],
+  limit: number,
+  worker: (item: any, index: number) => Promise<any> | any,
+): Promise<any[]> {
   const results = new Array(items.length);
   let nextIndex = 0;
   const runners = Array.from(
@@ -43,7 +74,11 @@ async function runWithConcurrency(items, limit, worker) {
   return results;
 }
 
-export async function copyChunkBackup(sourcePath, destinationPath, exclusive = false) {
+export async function copyChunkBackup(
+  sourcePath: string,
+  destinationPath: string,
+  exclusive = false,
+): Promise<boolean> {
   try {
     await fs.promises.copyFile(
       sourcePath,
@@ -51,20 +86,20 @@ export async function copyChunkBackup(sourcePath, destinationPath, exclusive = f
       exclusive ? fs.constants.COPYFILE_EXCL : 0,
     );
     return true;
-  } catch (error) {
+  } catch (error: any) {
     if (error.code === "ENOENT") return false;
     throw error;
   }
 }
 
-function cellDivisorFor(isB42) {
+function cellDivisorFor(isB42: boolean): number {
   return isB42 ? 32 : 30;
 }
-function tilesPerChunkFor(isB42) {
+function tilesPerChunkFor(isB42: boolean): number {
   return isB42 ? 8 : 10;
 }
 
-function detectSaveIsB42Sync(savePath) {
+function detectSaveIsB42Sync(savePath: string): boolean {
   try {
     const mapPath = path.join(savePath, "map");
     if (fs.existsSync(mapPath)) {
@@ -90,11 +125,11 @@ function detectSaveIsB42Sync(savePath) {
 }
 
 async function cleanupEmptyCellFiles(
-  savePath,
-  touchedCells,
-  isB42,
-  backupPath = null,
-) {
+  savePath: string,
+  touchedCells: Set<string>,
+  isB42: boolean,
+  backupPath: string | null = null,
+): Promise<{ removed: string[] }> {
   if (!isB42 || touchedCells.size === 0) return { removed: [] };
   const divisor = cellDivisorFor(true);
   const mapPath = path.join(savePath, "map");
@@ -115,7 +150,7 @@ async function cleanupEmptyCellFiles(
       let entries;
       try {
         entries = await fs.promises.readdir(xDir);
-      } catch (e) {
+      } catch (e: any) {
         if (e.code === "ENOENT") continue;
         hasSurvivor = true;
         break;
@@ -149,7 +184,7 @@ async function cleanupEmptyCellFiles(
         }
         await fs.promises.unlink(full);
         removed.push(`${folder}/${file}`);
-      } catch (e) {
+      } catch (e: any) {
         if (e.code !== "ENOENT") {
           log.debug(
             `Failed to delete cell file ${folder}/${file}: ${e.message}`,
@@ -173,22 +208,22 @@ router.use(async (req, res, next) => {
         });
     }
     next();
-  } catch (err) {
+  } catch (err: any) {
     next(err);
   }
 });
 
-async function getZomboidDataPath() {
+async function getZomboidDataPath(): Promise<string | null> {
   const activeServer = await getActiveServer();
   if (activeServer?.zomboidDataPath) {
     return normalizeUserPath(activeServer.zomboidDataPath);
   }
 
   const legacyPath = await getSetting("zomboidDataPath");
-  return normalizeUserPath(legacyPath) || null;
+  return normalizeUserPath(legacyPath as string | null) || null;
 }
 
-function resolveSavesPath(zomboidDataPath) {
+function resolveSavesPath(zomboidDataPath: string): string {
   let savesPath = path.join(zomboidDataPath, "Saves", "Multiplayer");
 
   if (!fs.existsSync(savesPath)) {
@@ -208,7 +243,7 @@ function resolveSavesPath(zomboidDataPath) {
   return savesPath;
 }
 
-function resolveCustomOrDefaultDataPath(customPath) {
+function resolveCustomOrDefaultDataPath(customPath: string): string | null {
   if (!customPath) return null;
   const cleaned = normalizeUserPath(customPath);
   if (!cleaned) return null;
@@ -229,7 +264,7 @@ function resolveCustomOrDefaultDataPath(customPath) {
       error.details = { reason: "not-a-directory", tried: normalized };
       throw error;
     }
-  } catch (e) {
+  } catch (e: any) {
     if (e.statusCode) throw e;
     const error = new Error(
       `Could not read custom path (${e.code || "error"}): ${normalized}`,
@@ -289,7 +324,7 @@ function resolveCustomOrDefaultDataPath(customPath) {
   throw error;
 }
 
-function assertRealSaveDataPath(zomboidDataPath) {
+function assertRealSaveDataPath(zomboidDataPath: string): void {
   const verdict = inspectZomboidPath(zomboidDataPath);
   const hasStructuralEvidence =
     verdict.checks.hasSavesDir ||
@@ -307,20 +342,23 @@ function assertRealSaveDataPath(zomboidDataPath) {
   }
 }
 
-async function assertKnownSaveRoot(zomboidDataPath) {
+async function assertKnownSaveRoot(zomboidDataPath: string): Promise<void> {
   const resolved = path.resolve(zomboidDataPath);
   const configuredServers = await getServers();
   const matchesConfiguredServer = configuredServers.some(
-    (s) => s.zomboidDataPath && path.resolve(s.zomboidDataPath) === resolved,
+    (s: any) => s.zomboidDataPath && path.resolve(s.zomboidDataPath) === resolved,
   );
   if (matchesConfiguredServer) return;
 
   const candidates = getCandidateZomboidPaths();
-  const matchesCandidate = candidates.some((c) => path.resolve(c.path) === resolved);
+  const matchesCandidate = candidates.some((c: any) => path.resolve(c.path) === resolved);
   if (matchesCandidate) return;
 
   const legacyPath = await getSetting("zomboidDataPath");
-  if (legacyPath && path.resolve(normalizeUserPath(legacyPath)) === resolved) return;
+  if (legacyPath) {
+    const normalizedLegacyPath = normalizeUserPath(legacyPath as string);
+    if (normalizedLegacyPath && path.resolve(normalizedLegacyPath) === resolved) return;
+  }
 
   const error = new Error(
     "This custom path isn't a location the panel already recognizes -- not a configured " +
@@ -441,7 +479,7 @@ router.get("/saves", requirePermission("chunks.manage"), async (req, res) => {
     let entries;
     try {
       entries = await fs.promises.readdir(savesPath, { withFileTypes: true });
-    } catch (e) {
+    } catch (e: any) {
       log.warn(
         `[ChunkCleaner] Failed to read saves dir ${savesPath}: ${e.message}`,
       );
@@ -499,7 +537,7 @@ router.get("/saves", requirePermission("chunks.manage"), async (req, res) => {
             chunkCount = rootEntries.filter((f) =>
               B41_CHUNK_REGEX.test(f),
             ).length;
-          } catch (e) {
+          } catch (e: any) {
             log.debug(
               `B41 chunk count fallback failed for ${savePath}: ${e.message}`,
             );
@@ -515,7 +553,7 @@ router.get("/saves", requirePermission("chunks.manage"), async (req, res) => {
             topEntries.map(async (entry) => {
               if (entry.name === "map" && mapScan.isB42Structure) {
                 const chunkSize = mapScan.rawChunks.reduce(
-                  (sum, c) => sum + c.size,
+                  (sum: number, c: AnyRecord) => sum + c.size,
                   0,
                 );
                 return chunkSize + mapScan.totalNonBinSize;
@@ -524,13 +562,13 @@ router.get("/saves", requirePermission("chunks.manage"), async (req, res) => {
               if (entry.isDirectory()) return getDirSize(fullPath);
               try {
                 return (await fs.promises.stat(fullPath)).size;
-              } catch (e) {
+              } catch (e: any) {
                 return 0;
               }
             }),
           );
           size = topSizes.reduce((a, b) => a + b, 0);
-        } catch (e) {
+        } catch (e: any) {
           log.debug(`Save size scan failed for ${savePath}: ${e.message}`);
         }
 
@@ -560,14 +598,14 @@ router.get("/saves", requirePermission("chunks.manage"), async (req, res) => {
           saves.length === 0 && !customPath ? getCandidateZomboidPaths() : [],
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     const isUserError = error.statusCode && error.statusCode < 500;
     if (isUserError) {
       log.warn(`Get saves rejected (${error.statusCode}): ${error.message}`);
     } else {
       log.error(`Failed to get saves: ${error.message}`);
     }
-    const payload = { error: sanitizeError(error.message) };
+    const payload: AnyRecord = { error: sanitizeError(error.message) };
     if (error.details) {
       payload.debug = {
         zomboidDataPath: null,
@@ -590,7 +628,7 @@ router.get("/suggested-paths", requirePermission("chunks.manage"), async (req, r
       candidates: getCandidateZomboidPaths(),
       platform: process.platform,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to enumerate suggested paths: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -608,8 +646,8 @@ router.post("/save-path", requirePermission("chunks.manage"), async (req, res) =
     let validated;
     try {
       validated = resolveCustomOrDefaultDataPath(rawPath);
-    } catch (e) {
-      const payload = { error: sanitizeError(e.message) };
+    } catch (e: any) {
+      const payload: AnyRecord = { error: sanitizeError(e.message) };
       if (e.details) payload.rejection = e.details;
       return res.status(e.statusCode || 400).json(payload);
     }
@@ -654,7 +692,7 @@ router.post("/save-path", requirePermission("chunks.manage"), async (req, res) =
       `[ChunkCleaner] Saved zomboidDataPath to legacy settings: ${validated}`,
     );
     res.json({ ok: true, target: "setting", path: validated });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to save zomboid data path: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -670,7 +708,12 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
     const scanId = req.query.scanId ? String(req.query.scanId) : null;
     const io = req.app.get("io");
     let lastProgressAt = 0;
-    const emitProgress = (scanned, total, found, { force = false } = {}) => {
+    const emitProgress: ProgressEmitter = (
+      scanned,
+      total,
+      found,
+      { force = false } = {},
+    ) => {
       if (!io || !scanId) return;
       const now = Date.now();
       if (!force && now - lastProgressAt < 200) return;
@@ -678,7 +721,7 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
       io.emit("chunkScan:progress", { scanId, scanned, total, chunks: found });
     };
 
-    const sanitizedSaveName = path.basename(saveName);
+    const sanitizedSaveName = path.basename(String(saveName));
     if (
       !sanitizedSaveName ||
       sanitizedSaveName !== saveName ||
@@ -693,7 +736,14 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
 
     let zomboidDataPath;
     if (customPath) {
-      zomboidDataPath = resolveCustomOrDefaultDataPath(String(customPath));
+      const resolvedPath = resolveCustomOrDefaultDataPath(String(customPath));
+      if (!resolvedPath) {
+        return res.status(400).json({
+          error: "Zomboid data path is empty after normalization",
+          code: ErrorCode.CHUNKS_DATA_PATH_NOT_SET,
+        });
+      }
+      zomboidDataPath = resolvedPath;
       assertRealSaveDataPath(zomboidDataPath);
     } else {
       zomboidDataPath = await getZomboidDataPath();
@@ -720,8 +770,8 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
       return res.json({ chunks: [], bounds: null });
     }
 
-    const chunks = [];
-    const seenChunkCoords = new Set();
+    const chunks: AnyRecord[] = [];
+    const seenChunkCoords = new Set<string>();
     let minX = Infinity,
       maxX = -Infinity;
     let minY = Infinity,
@@ -732,14 +782,14 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
     const mapExists = mapScan.mapExists;
     const mapContents = mapScan.mapContents || [];
     const flatBinFiles = mapContents.filter(
-      (f) => f.isFile() && f.name.endsWith(".bin"),
+      (f: any) => f.isFile() && f.name.endsWith(".bin"),
     );
 
     log.info(
       `[ChunkCleaner] map/ ${mapExists ? "exists" : "missing"}: ${mapContents.length} entries, ${mapScan.isB42Structure ? "B42 structure" : "no B42 dirs"}, ${flatBinFiles.length} flat .bin files (B41)`,
     );
 
-    const rememberChunkCoord = (x, y) => {
+    const rememberChunkCoord = (x: number, y: number): boolean => {
       const key = `${x},${y}`;
       if (seenChunkCoords.has(key)) return false;
       seenChunkCoords.add(key);
@@ -758,10 +808,10 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
       }
     } else {
       const files = mapContents
-        .filter((f) => f.isFile() && f.name.endsWith(".bin"))
-        .map((f) => f.name);
+        .filter((f: any) => f.isFile() && f.name.endsWith(".bin"))
+        .map((f: any) => f.name);
 
-      const chunkEntries = [];
+      const chunkEntries: AnyRecord[] = [];
       for (const file of files) {
         const match = file.match(
           /^(?:map_|chunkdata_|chunk_)?(\d+)_(\d+)(?:_\d+)?\.bin$/i,
@@ -786,7 +836,7 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
               size: stats.size,
               modified: stats.mtime,
             };
-          } catch (e) {
+          } catch (e: any) {
             log.debug(`Stat failed for legacy chunk ${file}: ${e.message}`);
             return null;
           }
@@ -859,7 +909,7 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
                 modified: stats.mtime,
                 source: "saveroot",
               };
-            } catch (e) {
+            } catch (e: any) {
               log.debug(
                 `Stat failed for B41 root chunk ${entry.name}: ${e.message}`,
               );
@@ -922,7 +972,7 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
                 cellX: rawX,
                 cellY: rawY,
               };
-            } catch (e) {
+            } catch (e: any) {
               log.debug(`Stat failed for chunkdata ${file}: ${e.message}`);
               return null;
             }
@@ -951,12 +1001,12 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
       maxChunks: null,
       isB42,
     });
-  } catch (error) {
+  } catch (error: any) {
     const isUserError = error.statusCode && error.statusCode < 500;
     if (isUserError)
       log.warn(`Get chunks rejected (${error.statusCode}): ${error.message}`);
     else log.error(`Failed to get chunks: ${error.message}`);
-    const payload = { error: sanitizeError(error.message) };
+    const payload: AnyRecord = { error: sanitizeError(error.message) };
     if (error.details) payload.rejection = error.details;
     res.status(error.statusCode || 500).json(payload);
   }
@@ -985,7 +1035,7 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
             typeof serverManager.getServerProcessDetails === "function"
               ? await serverManager.getServerProcessDetails()
               : null;
-        } catch (e) {
+        } catch (e: any) {
           log.warn(
             `Server-running check failed, refusing to proceed: ${e.message}`,
           );
@@ -1111,7 +1161,7 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
       if (chunk.cellY == null) chunk.cellY = Math.floor(chunk.y / cellDivisor);
     }
 
-    let backupPath = null;
+    let backupPath: string | null = null;
     if (createBackup) {
       backupPath = path.join(
         zomboidDataPath,
@@ -1137,10 +1187,10 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
               const backupName = `${srcTag}_${chunk.file.replace(/[/\\]/g, "_")}`;
               await copyChunkBackup(
                 mapFile,
-                path.join(backupPath, backupName),
+                path.join(backupPath!, backupName),
                 true,
               );
-            } catch (e) {
+            } catch (e: any) {
               if (e.code !== "ENOENT") throw e;
             }
             if (chunk.source === "chunkdata") {
@@ -1153,14 +1203,14 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
                 const backupName = `chunkdata_${chunk.file.replace(/[/\\]/g, "_")}`;
                 await copyChunkBackup(
                   chunkDataFile,
-                  path.join(backupPath, backupName),
+                  path.join(backupPath!, backupName),
                   true,
                 );
-              } catch (e) {
+              } catch (e: any) {
                 if (e.code !== "ENOENT") throw e;
               }
             }
-          } catch (e) {
+          } catch (e: any) {
             log.error(`Failed to backup chunk ${chunk.file}: ${e.message}`);
             throw e;
           }
@@ -1171,8 +1221,8 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
     }
 
     let deleted = 0;
-    const errors = [];
-    const touchedCells = new Set();
+    const errors: string[] = [];
+    const touchedCells = new Set<string>();
 
     const deleteResults = await Promise.all(
       chunks.map(async (chunk) => {
@@ -1184,7 +1234,7 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
             try {
               await fs.promises.unlink(chunkDataFile);
               wasDeleted = true;
-            } catch (e) {
+            } catch (e: any) {
               if (e.code !== "ENOENT")
                 return {
                   success: false,
@@ -1200,7 +1250,7 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
             try {
               await fs.promises.unlink(mapFile);
               wasDeleted = true;
-            } catch (e) {
+            } catch (e: any) {
               if (e.code !== "ENOENT")
                 return {
                   success: false,
@@ -1214,7 +1264,7 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
             touchedCells.add(`${chunk.cellX},${chunk.cellY}`);
           }
           return { success: true, wasDeleted };
-        } catch (err) {
+        } catch (err: any) {
           return {
             success: false,
             error: sanitizeError(err.message),
@@ -1237,7 +1287,7 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
       backupPath,
     );
 
-    const deletedXDirs = new Set();
+    const deletedXDirs = new Set<string>();
     for (const chunk of chunks) {
       const parts = chunk.file.split("/");
       if (parts.length === 2) deletedXDirs.add(parts[0]);
@@ -1247,12 +1297,12 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
         const xPath = path.join(savePath, "map", xDir);
         const remaining = await fs.promises.readdir(xPath);
         if (remaining.length === 0) await fs.promises.rmdir(xPath);
-      } catch (e) {
+      } catch (e: any) {
         /* ignore */
       }
     }
 
-    let vehiclesResult = { deleted: 0, skipped: true };
+    let vehiclesResult: AnyRecord = { deleted: 0, skipped: true };
     if (deleteVehicles && deleted > 0) {
       const dbBackup = backupPath
         ? path.join(backupPath, "vehicles.db.bak")
@@ -1292,10 +1342,10 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
         });
       try {
         vehiclesResult = await deleteVehiclesInBoxes(savePath, boxes, {
-          backupPath: dbBackup,
+          backupPath: dbBackup ?? undefined,
         });
         log.info(`vehicles.db: removed ${vehiclesResult.deleted} rows`);
-      } catch (e) {
+      } catch (e: any) {
         log.warn(`vehicles.db cleanup failed: ${e.message}`);
         errors.push(`vehicles.db: ${e.message}`);
       }
@@ -1315,7 +1365,7 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
       errors: errors.length > 0 ? errors : undefined,
       backupCreated: createBackup,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to delete chunks: ${error.message}`);
     res
       .status(error.statusCode || 500)
@@ -1347,7 +1397,7 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
             typeof serverManager.getServerProcessDetails === "function"
               ? await serverManager.getServerProcessDetails()
               : null;
-        } catch (e) {
+        } catch (e: any) {
           log.warn(
             `Server-running check failed, refusing to proceed: ${e.message}`,
           );
@@ -1446,9 +1496,9 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
 
     const regionIsB42 = detectSaveIsB42Sync(savePath);
 
-    const chunksToDelete = [];
-    let mapContents = [];
-    let xDirs = [];
+    const chunksToDelete: AnyRecord[] = [];
+    let mapContents: fs.Dirent[] = [];
+    let xDirs: fs.Dirent[] = [];
 
     if (mapExists) {
       mapContents = await fs.promises.readdir(mapPath, { withFileTypes: true });
@@ -1483,7 +1533,7 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
                 }
               }
             }
-          } catch (err) {
+          } catch (err: any) {
             log.warn(`Error reading chunk directory ${xPath}: ${err.message}`);
           }
         }),
@@ -1593,7 +1643,7 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
       });
     }
 
-    let backupPath = null;
+    let backupPath: string | null = null;
     if (createBackup) {
       backupPath = path.join(
         zomboidDataPath,
@@ -1620,16 +1670,16 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
             const backupName = `${srcTag}_${chunk.file.replace(/[/\\]/g, "_")}`;
             await copyChunkBackup(
               srcFile,
-              path.join(backupPath, backupName),
+              path.join(backupPath!, backupName),
             );
-          } catch (e) {
+          } catch (e: any) {
             if (e.code !== "ENOENT") throw e;
           }
         }),
       );
 
       await fs.promises.writeFile(
-        path.join(backupPath, "region_info.json"),
+        path.join(backupPath!, "region_info.json"),
         JSON.stringify(
           {
             minX,
@@ -1648,8 +1698,8 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
     }
 
     let deleted = 0;
-    const errors = [];
-    const touchedCells = new Set();
+    const errors: string[] = [];
+    const touchedCells = new Set<string>();
     const regionCellDiv = cellDivisorFor(regionIsB42);
 
     await Promise.all(
@@ -1666,7 +1716,7 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
           touchedCells.add(
             `${Math.floor(chunk.x / regionCellDiv)},${Math.floor(chunk.y / regionCellDiv)}`,
           );
-        } catch (err) {
+        } catch (err: any) {
           if (err.code !== "ENOENT") {
             log.warn(`Failed to delete chunk ${chunk.file}: ${err.message}`);
             errors.push(`${chunk.file}: ${sanitizeError(err.message)}`);
@@ -1682,7 +1732,7 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
       backupPath,
     );
 
-    const deletedXDirs = new Set();
+    const deletedXDirs = new Set<string>();
     for (const chunk of chunksToDelete) {
       const parts = chunk.file.split("/");
       if (parts.length === 2) deletedXDirs.add(parts[0]);
@@ -1692,13 +1742,13 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
         const xDirPath = path.join(mapPath, xDir);
         const remaining = await fs.promises.readdir(xDirPath);
         if (remaining.length === 0) await fs.promises.rmdir(xDirPath);
-      } catch (e) {
+      } catch (e: any) {
         if (e.code !== "ENOENT")
           log.debug(`Failed to clean up empty dir ${xDir}: ${e.message}`);
       }
     }
 
-    let vehiclesResult = { deleted: 0, skipped: true };
+    let vehiclesResult: AnyRecord = { deleted: 0, skipped: true };
     if (deleteVehicles && deleted > 0) {
       const tilesPerChunk = tilesPerChunkFor(regionIsB42);
       const dbBackup =
@@ -1738,12 +1788,12 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
       });
       try {
         vehiclesResult = await deleteVehiclesInBoxes(savePath, boxes, {
-          backupPath: dbBackup,
+          backupPath: dbBackup ?? undefined,
         });
         log.info(
           `vehicles.db: removed ${vehiclesResult.deleted} rows from region`,
         );
-      } catch (e) {
+      } catch (e: any) {
         log.warn(`vehicles.db region cleanup failed: ${e.message}`);
       }
     }
@@ -1763,7 +1813,7 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
       region: { minX, maxX, minY, maxY },
       inverted: invert,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to delete region: ${error.message}`);
     res
       .status(error.statusCode || 500)
@@ -1778,7 +1828,7 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
       ? String(req.query.customPath)
       : null;
 
-    const sanitizedSaveName = path.basename(saveName);
+    const sanitizedSaveName = path.basename(String(saveName));
     if (
       !sanitizedSaveName ||
       sanitizedSaveName !== saveName ||
@@ -1826,7 +1876,7 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
       "radio",
     ];
 
-    const folderStatsByName = {};
+    const folderStatsByName: AnyRecord = {};
     for (const folder of folders) {
       const folderPath = path.join(savePath, folder);
       try {
@@ -1834,7 +1884,7 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
           const mapScan = await getMapFolderScan(folderPath);
           if (mapScan.isB42Structure) {
             const chunkSize = mapScan.rawChunks.reduce(
-              (sum, c) => sum + c.size,
+              (sum: number, c: AnyRecord) => sum + c.size,
               0,
             );
             folderStatsByName.map = {
@@ -1851,7 +1901,7 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
           const { count, size } = await getDirStats(folderPath);
           folderStatsByName[folder] = { count, size };
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Failed to stat folder ${folder}: ${e.message}`);
       }
     }
@@ -1869,17 +1919,17 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
         try {
           const s = await fs.promises.stat(path.join(savePath, entry.name));
           return s.size;
-        } catch (e) {
+        } catch (e: any) {
           return 0;
         }
       });
       totalSize = topSizes.reduce((a, b) => a + b, 0);
-    } catch (err) {
+    } catch (err: any) {
       if (err.code !== "EACCES" && err.code !== "ENOENT")
         log.debug(`Top-level size scan failed for ${savePath}: ${err.message}`);
     }
 
-    const stats = {
+    const stats: AnyRecord = {
       saveName,
       totalSize,
       folders: {},
@@ -1911,7 +1961,7 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
             try {
               const s = await fs.promises.stat(path.join(savePath, f.name));
               rootChunkSize += s.size;
-            } catch (e) {
+            } catch (e: any) {
               log.debug(`Stat failed for root chunk ${f.name}: ${e.message}`);
             }
           }
@@ -1921,7 +1971,7 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
             sizeFormatted: formatBytes(rootChunkSize),
           };
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`B41 root chunk scan failed: ${e.message}`);
       }
     }
@@ -1931,7 +1981,7 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
       try {
         const s = await fs.promises.stat(playersDb);
         stats.playersDbSize = s.size;
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Stat failed for players.db: ${e.message}`);
       }
     }
@@ -1941,7 +1991,7 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
       try {
         const s = await fs.promises.stat(vehiclesDb);
         stats.vehiclesDbSize = s.size;
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Stat failed for vehicles.db: ${e.message}`);
       }
     }
@@ -1949,12 +1999,12 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
     stats.totalSizeFormatted = formatBytes(stats.totalSize);
 
     res.json(stats);
-  } catch (error) {
+  } catch (error: any) {
     const isUserError = error.statusCode && error.statusCode < 500;
     if (isUserError)
       log.warn(`Get stats rejected (${error.statusCode}): ${error.message}`);
     else log.error(`Failed to get save stats: ${error.message}`);
-    const payload = { error: sanitizeError(error.message) };
+    const payload: AnyRecord = { error: sanitizeError(error.message) };
     if (error.details) payload.rejection = error.details;
     res.status(error.statusCode || 500).json(payload);
   }
@@ -1962,7 +2012,7 @@ router.get("/stats/:saveName", requirePermission("chunks.manage"), async (req, r
 
 const DIR_WALK_CONCURRENCY = 8;
 
-async function getDirSize(dirPath) {
+async function getDirSize(dirPath: string): Promise<number> {
   let totalSize = 0;
   try {
     const files = await fs.promises.readdir(dirPath, { withFileTypes: true });
@@ -1974,19 +2024,19 @@ async function getDirSize(dirPath) {
       try {
         const stats = await fs.promises.stat(filePath);
         return stats.size;
-      } catch (e) {
+      } catch (e: any) {
         return 0;
       }
     });
     totalSize = sizes.reduce((a, b) => a + b, 0);
-  } catch (err) {
+  } catch (err: any) {
     if (err.code !== "EACCES" && err.code !== "ENOENT")
       log.debug(`getDirSize error for ${dirPath}: ${err.message}`);
   }
   return totalSize;
 }
 
-async function getDirStats(dirPath) {
+async function getDirStats(dirPath: string): Promise<{ count: number; size: number }> {
   let count = 0;
   let size = 0;
   try {
@@ -2003,12 +2053,12 @@ async function getDirStats(dirPath) {
       try {
         const stats = await fs.promises.stat(entryPath);
         size += stats.size;
-      } catch (e) {
+      } catch (e: any) {
         // Matches getDirSize's silent-0-on-stat-failure — the file still
         // counts, it just doesn't contribute a known size.
       }
     });
-  } catch (err) {
+  } catch (err: any) {
     if (err.code !== "EACCES" && err.code !== "ENOENT")
       log.debug(`getDirStats error for ${dirPath}: ${err.message}`);
   }
@@ -2019,7 +2069,10 @@ const MAP_SCAN_TTL_MS = 3000;
 const _mapScanCache = new Map();
 const _mapScanInflight = new Map();
 
-async function getMapFolderScan(mapPath, emitProgress) {
+async function getMapFolderScan(
+  mapPath: string,
+  emitProgress?: ProgressEmitter,
+): Promise<AnyRecord> {
   const cached = _mapScanCache.get(mapPath);
   if (cached && Date.now() - cached.at < MAP_SCAN_TTL_MS) {
     return cached.result;
@@ -2038,11 +2091,14 @@ async function getMapFolderScan(mapPath, emitProgress) {
   return promise;
 }
 
-function invalidateMapFolderScan(mapPath) {
+function invalidateMapFolderScan(mapPath: string): void {
   _mapScanCache.delete(mapPath);
 }
 
-async function scanMapFolder(mapPath, emitProgress) {
+async function scanMapFolder(
+  mapPath: string,
+  emitProgress?: ProgressEmitter,
+): Promise<AnyRecord> {
   const mapExists = fs.existsSync(mapPath);
   if (!mapExists) {
     return { mapExists: false, isB42Structure: false };
@@ -2063,10 +2119,10 @@ async function scanMapFolder(mapPath, emitProgress) {
   let totalBinFiles = 0;
   let totalNonBinFiles = 0;
   let totalNonBinSize = 0;
-  let sampleNonBinFiles = [];
+  const sampleNonBinFiles: string[] = [];
   let emptyDirs = 0;
   let scannedDirs = 0;
-  const rawChunks = [];
+  const rawChunks: AnyRecord[] = [];
   emitProgress?.(0, xDirs.length, 0, { force: true });
 
   await runWithConcurrency(xDirs, XDIR_SCAN_CONCURRENCY, async (xDir) => {
@@ -2114,7 +2170,7 @@ async function scanMapFolder(mapPath, emitProgress) {
                 size: stats.size,
                 modified: stats.mtime,
               };
-            } catch (e) {
+            } catch (e: any) {
               log.debug(`Stat failed for chunk ${x}/${yFile}: ${e.message}`);
               return null;
             }
@@ -2125,7 +2181,7 @@ async function scanMapFolder(mapPath, emitProgress) {
             try {
               const s = await fs.promises.stat(path.join(xPath, f));
               return s.size;
-            } catch (e) {
+            } catch (e: any) {
               return 0;
             }
           }),
@@ -2136,7 +2192,7 @@ async function scanMapFolder(mapPath, emitProgress) {
         if (chunk) rawChunks.push(chunk);
       }
       totalNonBinSize += nonBinSizes.reduce((a, b) => a + b, 0);
-    } catch (err) {
+    } catch (err: any) {
       log.warn(`Error reading chunk directory ${xPath}: ${err.message}`);
     }
 
@@ -2163,7 +2219,7 @@ async function scanMapFolder(mapPath, emitProgress) {
   };
 }
 
-function formatBytes(bytes) {
+function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB"];
@@ -2238,7 +2294,7 @@ router.get("/browse", requirePermission("chunks.manage"), async (req, res) => {
       try {
         const childFiles = fs.readdirSync(childPath);
         return childFiles.some((f) => B41_ROOT_REGEX.test(f));
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`B41 check failed for ${d}: ${e.message}`);
         return false;
       }
@@ -2254,7 +2310,7 @@ router.get("/browse", requirePermission("chunks.manage"), async (req, res) => {
           ? path.dirname(resolved)
           : null,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to browse path: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }

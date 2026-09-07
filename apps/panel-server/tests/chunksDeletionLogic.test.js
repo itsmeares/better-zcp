@@ -15,7 +15,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { getActiveServer, getServers, getSetting } = await import("../database/init.js");
-const { default: router } = await import("../routes/chunks.js");
+const { default: router } = await import("../routes/chunks.ts");
 
 let sqlPromise = null;
 const SQL_WASM_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../node_modules/sql.js/dist/sql-wasm.wasm");

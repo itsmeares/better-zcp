@@ -15,7 +15,7 @@ vi.mock("../database/init.js", () => ({
   getServers,
 }));
 
-const { default: router } = await import("../routes/chunks.js");
+const { default: router } = await import("../routes/chunks.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

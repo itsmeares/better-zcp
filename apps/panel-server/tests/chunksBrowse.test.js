@@ -13,7 +13,7 @@ vi.mock("../database/init.js", () => ({
   updateServer: vi.fn(),
 }));
 
-const { copyChunkBackup, default: router } = await import("../routes/chunks.js");
+const { copyChunkBackup, default: router } = await import("../routes/chunks.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

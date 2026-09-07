@@ -10,7 +10,7 @@ vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
 }));
 
-vi.mock("../routes/chunks.js", () => ({
+vi.mock("../routes/chunks.ts", () => ({
   invalidateMapFolderScan: vi.fn(),
 }));
 

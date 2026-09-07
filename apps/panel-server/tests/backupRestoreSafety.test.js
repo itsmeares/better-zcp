@@ -17,7 +17,7 @@ vi.mock("../database/init.js", () => ({
 const { invalidateMapFolderScanMock } = vi.hoisted(() => ({
   invalidateMapFolderScanMock: vi.fn(),
 }));
-vi.mock("../routes/chunks.js", () => ({
+vi.mock("../routes/chunks.ts", () => ({
   invalidateMapFolderScan: invalidateMapFolderScanMock,
 }));
 
@@ -282,7 +282,7 @@ describe("restoreBackup archive safety", () => {
     expect(fs.readFileSync(path.join(savesPath, "map_meta.bin"), "utf8")).toBe("PORTABLE");
   });
 
-  it("invalidates chunks.js's cached map/ folder scan after a successful restore", async () => {
+  it("invalidates chunks.ts's cached map/ folder scan after a successful restore", async () => {
     const good = path.join(backupsPath, "good.zip");
     await writeValidBackup(good, "RESTORED");
 

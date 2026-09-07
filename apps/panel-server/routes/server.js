@@ -35,7 +35,7 @@ import {
 } from "../services/lifecycleCoordinator.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { ProgressCode } from "../utils/progressCodes.ts";
-import { invalidateMapFolderScan } from "./chunks.js";
+import { invalidateMapFolderScan } from "./chunks.ts";
 import { emitActionResult } from "./scheduler.js";
 import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";

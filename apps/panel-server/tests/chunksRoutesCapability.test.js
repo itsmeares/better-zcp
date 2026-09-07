@@ -51,11 +51,11 @@ const CHUNKS_MANAGE_ROUTES = [
   ["/browse", "get"],
 ];
 
-describe("chunks.js: all eight routes (three mutating, five read) require chunks.manage", () => {
+describe("chunks.ts: all eight routes (three mutating, five read) require chunks.manage", () => {
   it.each(CHUNKS_MANAGE_ROUTES)(
     "refuses a moderator (does not hold chunks.manage) on %s %s",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/chunks.js");
+      const { default: router } = await import("../routes/chunks.ts");
       const { res, calledNext } = await runGate(router, routePath, method, "moderator");
       expect(res.getStatusCode()).toBe(403);
       expect(res.getBody()).toEqual({
@@ -69,7 +69,7 @@ describe("chunks.js: all eight routes (three mutating, five read) require chunks
   it.each(CHUNKS_MANAGE_ROUTES)(
     "refuses a role that no longer resolves to any row on %s %s (renamed/deleted role -- fails closed, not open)",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/chunks.js");
+      const { default: router } = await import("../routes/chunks.ts");
       const { res, calledNext } = await runGate(router, routePath, method, "not-a-real-role");
       expect(res.getStatusCode()).toBe(403);
       expect(calledNext).toBe(false);
@@ -79,7 +79,7 @@ describe("chunks.js: all eight routes (three mutating, five read) require chunks
   it.each(CHUNKS_MANAGE_ROUTES)(
     "does not refuse a technician (holds chunks.manage) on %s %s -- proves the gate isn't just permanently closed",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/chunks.js");
+      const { default: router } = await import("../routes/chunks.ts");
       const { calledNext } = await runGate(router, routePath, method, "technician");
       expect(calledNext).toBe(true);
     },
