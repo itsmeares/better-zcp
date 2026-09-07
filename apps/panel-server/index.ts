@@ -6,7 +6,17 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { permissionsPolicy } from "./middleware/permissionsPolicy.ts";
 import { logSetupTokenIfNeeded } from "./utils/setupToken.ts";
-import { computeInlineScriptCspHashes } from "./utils/cspScriptHash.ts";
+import {
+  appendCspScriptHashes,
+  computeInlineScriptCspHashes,
+  computeInlineScriptCspHashesFromHtml,
+} from "./utils/cspScriptHash.ts";
+import {
+  loadTanStackStartHandler,
+  sendTanStackStartResponse,
+  toTanStackStartRequest,
+  type TanStackStartHandler,
+} from "./utils/tanstackStartServer.ts";
 import { parseTrustProxySetting } from "./utils/trustProxy.ts";
 import { isUncompressedBinaryProxyPath } from "./utils/compressionFilter.ts";
 import { createServer } from "http";
@@ -1506,6 +1516,59 @@ app.post(
 
 const isPackaged = typeof process.pkg !== "undefined";
 const clientDistPath = cspClientDistPath;
+const tanStackStartServerPath = isPackaged
+  ? path.join(externalClientDistPath, ".start-server", "server.js")
+  : path.join(__dirname, "../panel-client/dist-start-server/server.js");
+let tanStackStartHandlerPromise:
+  | Promise<TanStackStartHandler | null>
+  | undefined;
+
+async function getTanStackStartHandler(): Promise<TanStackStartHandler | null> {
+  if (!fs.existsSync(tanStackStartServerPath)) return null;
+  tanStackStartHandlerPromise ??= loadTanStackStartHandler(
+    tanStackStartServerPath,
+  ).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    log.warn(
+      `TanStack Start server bundle could not be loaded (${message}); using the static client shell`,
+    );
+    return null;
+  });
+  return tanStackStartHandlerPromise;
+}
+
+async function trySendTanStackStartPage(
+  req: Request,
+  res: Response,
+): Promise<boolean> {
+  try {
+    const handler = await getTanStackStartHandler();
+    if (!handler) return false;
+
+    const response = await handler.fetch(toTanStackStartRequest(req));
+    if (response.headers.get("content-type")?.includes("text/html")) {
+      const hashes = computeInlineScriptCspHashesFromHtml(
+        await response.clone().text(),
+      );
+      const cspHeader = res.getHeader("Content-Security-Policy");
+      if (typeof cspHeader === "string") {
+        res.setHeader(
+          "Content-Security-Policy",
+          appendCspScriptHashes(cspHeader, hashes),
+        );
+      }
+    }
+
+    await sendTanStackStartResponse(response, res);
+    return true;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    log.warn(
+      `TanStack Start page render failed (${message}); using the static client shell`,
+    );
+    return false;
+  }
+}
 const legacyClientMetadata =
   isPackaged && !embeddedClientDistPath
     ? readClientDistMetadata(clientDistPath)
@@ -1590,15 +1653,18 @@ export function apiErrorHandler(
 app.use("/api", apiErrorHandler);
 
 app.use((req, res, next) => {
-  if (req.method !== "GET") return next();
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
   if (req.path.startsWith("/api")) {
     res.status(404).json({ error: "API endpoint not found" });
   } else {
-    sendClientIndex(res, clientDistPath, (err) => {
-      if (err) {
-        log.error(`Failed to serve index.html: ${err.message}`);
-        res.status(500).send("Page not available");
-      }
+    void trySendTanStackStartPage(req, res).then((handled) => {
+      if (handled || res.headersSent) return;
+      sendClientIndex(res, clientDistPath, (err) => {
+        if (err) {
+          log.error(`Failed to serve index.html: ${err.message}`);
+          res.status(500).send("Page not available");
+        }
+      });
     });
   }
 });

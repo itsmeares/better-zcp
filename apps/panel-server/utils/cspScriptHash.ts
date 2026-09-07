@@ -32,8 +32,8 @@ export function computeInlineScriptCspHashes(
     return [];
   }
 
-  const matches = [...html.matchAll(INLINE_SCRIPT_RE)];
-  if (matches.length === 0) {
+  const hashes = computeInlineScriptCspHashesFromHtml(html);
+  if (hashes.length === 0) {
     log?.warn(
       `CSP: no inline <script> block found in ${indexPath} to hash. ` +
         "script-src will NOT allow inline scripts until this is fixed — " +
@@ -43,7 +43,11 @@ export function computeInlineScriptCspHashes(
     return [];
   }
 
-  return matches.map((match) => {
+  return hashes;
+}
+
+export function computeInlineScriptCspHashesFromHtml(html: string): string[] {
+  return [...html.matchAll(INLINE_SCRIPT_RE)].map((match) => {
     const normalized = match[1].replace(/\r\n?/g, "\n");
     const digest = crypto
       .createHash("sha256")
@@ -51,6 +55,27 @@ export function computeInlineScriptCspHashes(
       .digest("base64");
     return `'sha256-${digest}'`;
   });
+}
+
+export function appendCspScriptHashes(
+  cspHeader: string,
+  hashes: readonly string[],
+): string {
+  if (hashes.length === 0) return cspHeader;
+
+  const directives = cspHeader.split(";");
+  const scriptSrcIndex = directives.findIndex((directive) =>
+    /^\s*script-src(?:\s|$)/i.test(directive),
+  );
+  if (scriptSrcIndex === -1) return cspHeader;
+
+  const directive = directives[scriptSrcIndex].trim();
+  const existing = new Set(directive.split(/\s+/).slice(1));
+  const additions = hashes.filter((hash) => !existing.has(hash));
+  if (additions.length === 0) return cspHeader;
+
+  directives[scriptSrcIndex] = `${directive} ${additions.join(" ")}`;
+  return directives.join("; ");
 }
 
 export function computeInlineScriptCspHash(

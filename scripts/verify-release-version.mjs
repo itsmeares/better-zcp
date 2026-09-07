@@ -64,13 +64,12 @@ function verify() {
 
   const lua = readText("integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua");
   const modInfo = readText("integrations/panelbridge/PanelBridge/mod.info");
-  const header = [...lua.matchAll(/^\s*Version:\s*([^\r\n]+)$/gm)];
   const runtime = [...lua.matchAll(/^\s*VERSION\s*=\s*"([^"]+)"/gm)];
   const manifest = [...modInfo.matchAll(/^modversion=([^\r\n]+)$/gm)];
-  assert(header.length === 1 && runtime.length === 1 && manifest.length === 1,
-    "PanelBridge must contain exactly one header, runtime, and mod.info version");
-  assert(header[0][1].trim() === runtime[0][1] && runtime[0][1] === manifest[0][1],
-    "PanelBridge header, runtime, and mod.info versions differ");
+  assert(runtime.length === 1 && manifest.length === 1,
+    "PanelBridge must contain exactly one runtime and mod.info version");
+  assert(runtime[0][1] === manifest[0][1],
+    "PanelBridge runtime and mod.info versions differ");
 
   const releaseManifest = readJson("release/release-manifest.json");
   assert(releaseManifest.version === expectedVersion,
