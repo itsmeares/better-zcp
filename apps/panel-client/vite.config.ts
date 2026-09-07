@@ -25,6 +25,7 @@ function resolveBuildSha() {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const basePath = env.VITE_BASE_PATH || '/'
+  const isStaticClientBuild = mode === 'static-client'
   const buildSha = resolveBuildSha()
   const parsedApiContractVersion = Number(process.env.PANEL_API_CONTRACT_VERSION)
   const apiContractVersion = Number.isInteger(parsedApiContractVersion) && parsedApiContractVersion > 0
@@ -39,15 +40,14 @@ export default defineConfig(({ mode }) => {
       __PANEL_API_CONTRACT_VERSION__: JSON.stringify(apiContractVersion),
     },
     plugins: [
-      tanstackStart({
-        spa: {
-          prerender: {
-            outputPath: '/index',
-            crawlLinks: false,
-            retryCount: 0,
-          },
-        },
-      }),
+      ...(!isStaticClientBuild
+        ? [
+            tanstackStart({
+              spa: { enabled: false },
+              prerender: { enabled: false },
+            }),
+          ]
+        : []),
       react(),
       {
         name: 'panel-build-info',
@@ -64,14 +64,18 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
-    environments: {
-      client: {
-        build: { outDir: 'dist' },
-      },
-      ssr: {
-        build: { outDir: 'dist-start-server' },
-      },
-    },
+    ...(isStaticClientBuild
+      ? {}
+      : {
+          environments: {
+            client: {
+              build: { outDir: 'dist' },
+            },
+            ssr: {
+              build: { outDir: 'dist-start-server' },
+            },
+          },
+        }),
     esbuild: {
       drop: ['console', 'debugger'],
     },
