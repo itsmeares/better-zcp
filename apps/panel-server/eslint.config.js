@@ -15,7 +15,7 @@ export default [
     ],
   },
   {
-    files: ["**/*.{js,ts}"],
+    files: ["**/*.{js,ts,mts}"],
     plugins: {
       local: { rules: { "require-result-handling": requireResultHandling } },
     },
@@ -82,7 +82,7 @@ export default [
     },
   },
   {
-    files: ["tests/**/*.js"],
+    files: ["tests/**/*.{ts,mts}"],
     rules: {
       // A test calls these for their effect on a stub, not for the result.
       "local/require-result-handling": "off",

@@ -15,14 +15,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": [
-    "index.ts",
-    "database/**/*.js",
-    "middleware/**/*.js",
-    "routes/**/*.js",
-    "services/**/*.js",
-    "utils/**/*.js",
-    "**/*.ts"
-  ],
+  "include": ["index.ts", "**/*.ts"],
   "exclude": ["tests", "node_modules", ".build"]
 }
