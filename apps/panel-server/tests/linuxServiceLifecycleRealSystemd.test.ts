@@ -20,7 +20,7 @@ if (!HAS_SYSTEMD) {
   console.warn(
     "\n" +
       "!".repeat(78) +
-      "\nSKIPPING linuxServiceLifecycleRealSystemd.test.js: `systemd-analyze` is " +
+      "\nSKIPPING linuxServiceLifecycleRealSystemd.test.ts: `systemd-analyze` is " +
       "not on this host.\nThe generated systemd unit was NEVER checked against a " +
       "real init system on this run.\nThis is a degraded run, not a clean pass -- " +
       "do not treat a green suite here as proof the\nunit actually loads. Run on a " +

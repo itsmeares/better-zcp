@@ -189,7 +189,7 @@ const source = extractDiagnosticsChecks(debugTsSource);
 const en = flattenLocaleChecks(loadChecksNode(EN_DEBUG_JSON_PATH));
 const fr = flattenLocaleChecks(loadChecksNode(FR_DEBUG_JSON_PATH));
 
-describe("diagnostics check locale registry (self-enforcing, mirrors errorCodeRegistry.test.js)", () => {
+describe("diagnostics check locale registry (self-enforcing, mirrors errorCodeRegistry.test.ts)", () => {
   it("found at least the checks batches 1 and 2 are known to have added (sanity check on the scan itself)", () => {
     expect(source.plain.has("server.process::ok")).toBe(true);
     expect(source.withVariant.has("server.installPath::fail::netMount")).toBe(true);

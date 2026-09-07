@@ -31,7 +31,7 @@ if (!CAN_RUN) {
   console.warn(
     "\n" +
       "!".repeat(78) +
-      "\nSKIPPING linuxServiceLifecycleRealOpenrc.test.js: " +
+      "\nSKIPPING linuxServiceLifecycleRealOpenrc.test.ts: " +
       (!HAS_OPENRC
         ? "real OpenRC tooling (rc-service/openrc-run/supervise-daemon) is not on this host."
         : "not running as root -- installing into /etc/init.d/ and driving rc-service requires it.") +

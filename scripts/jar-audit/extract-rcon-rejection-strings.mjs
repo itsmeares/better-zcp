@@ -80,7 +80,7 @@ const fixture = {
       "any per-command class), zombie/network/BanSystem.class and zombie/network/ServerWorldDatabase.class " +
       "(plus its LogonResult inner class) because banuser/unbanuser/adduser/" +
       "removeuserfromwhitelist's own command classes carry no rejection text of their own; they return " +
-      "whatever these two classes' methods hand back. apps/panel-server/tests/rconRejectionGroundTruth.test.js asserts " +
+      "whatever these two classes' methods hand back. apps/panel-server/tests/rconRejectionGroundTruth.test.ts asserts " +
       "every pattern in rcon.js's KNOWN_RCON_REJECTIONS matches at least one string somewhere in this " +
       "corpus. A pattern matching nothing here is not a fixture bug -- it means the live jar no longer " +
       "contains that text, which is exactly the drift this fixture exists to catch.",

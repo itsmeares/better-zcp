@@ -22,7 +22,7 @@ ZombRand = function(n) return 0 end
 
 -- getDir() returns the real IsoDirections Java enum, not a string --
 -- confirmed against real vanilla Lua (see
--- panelBridgeSpawnHordeBehindDirection.test.js for the full citation). A
+-- panelBridgeSpawnHordeBehindDirection.test.ts for the full citation). A
 -- bare-string stub here would silently validate spawnHordeBehindPlayer's
 -- string-keyed direction lookup bug instead of catching it.
 local function mkDir(name)

@@ -203,6 +203,6 @@ describe("Admin-initiated revocation already takes effect immediately, not at to
   });
 
   // Deletion's immediate-effect property already has its own dedicated
-  // coverage in deleteUser.test.js ("sessions stop working immediately,
+  // coverage in deleteUser.test.ts ("sessions stop working immediately,
   // not at token expiry") -- not duplicated here.
 });
