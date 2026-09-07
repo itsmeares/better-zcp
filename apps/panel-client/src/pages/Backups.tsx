@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trans, useTranslation } from 'react-i18next'
 import {
   Archive,
@@ -44,7 +45,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useToast } from '@/components/ui/use-toast'
 import { useSocket } from '@/contexts/SocketContext'
-import { backupApi, serversApi, BackupStatus, ServerBackupArchive, BackupHistoryRecord, BackupSnapshot } from '@/lib/api'
+import { backupApi, serversApi, BackupSnapshot, type ServerBackupArchive } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { PageHeader } from '@/components/PageHeader'
@@ -52,6 +53,7 @@ import { DisabledReason } from '@/components/DisabledReason'
 import { useAuth } from '@/contexts/AuthContext'
 import { EmptyState } from '@/components/EmptyState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { panelQueryKeys } from '@/lib/queryClient'
 
 interface BackupProgress {
   phase: 'preparing' | 'archiving' | 'finalizing' | 'complete' | 'error'
@@ -62,22 +64,71 @@ interface BackupProgress {
   currentFile?: string
 }
 
+const EMPTY_BACKUPS: ServerBackupArchive[] = []
+
 export default function Backups() {
   const { t, i18n } = useTranslation('backups')
   const { toast } = useToast()
   const socket = useSocket()
   const { can } = useAuth()
+  const queryClient = useQueryClient()
   const canManageBackups = can('backups.manage')
   const canRestoreBackups = can('backups.restore')
   const canDownloadBackups = can('backups.download')
 
   const progressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null)
-  const [backups, setBackups] = useState<ServerBackupArchive[]>([])
-  const [backupsLoaded, setBackupsLoaded] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const {
+    data: activeServerData,
+    refetch: refetchActiveServer,
+    isFetching: activeServerFetching,
+  } = useQuery({
+    queryKey: panelQueryKeys.activeServer,
+    queryFn: serversApi.getResolvedActive,
+    retry: false,
+    staleTime: 0,
+  })
+  const {
+    data: backupStatus,
+    error: backupStatusError,
+    refetch: refetchBackupStatus,
+    isFetching: backupStatusFetching,
+  } = useQuery({
+    queryKey: panelQueryKeys.backupStatus,
+    queryFn: backupApi.getStatus,
+    retry: false,
+    staleTime: 15_000,
+  })
+  const {
+    data: backupsData,
+    error: backupsError,
+    refetch: refetchBackups,
+    isFetching: backupsFetching,
+    isFetched: backupsLoaded,
+  } = useQuery({
+    queryKey: panelQueryKeys.backups,
+    queryFn: backupApi.listBackups,
+    retry: false,
+    staleTime: 15_000,
+  })
+  const activeServer = activeServerData?.server ?? null
+  const activeServerId = activeServer?.id ?? null
+  const activeServerRemote = Boolean(activeServer?.isRemote)
+  const backups = backupsData?.backups ?? EMPTY_BACKUPS
+  const historyQuery = useQuery({
+    queryKey: activeServerId == null ? ['backups', 'history', 'none'] : panelQueryKeys.backupHistory(activeServerId),
+    queryFn: () => backupApi.getHistory(activeServerId as string | number),
+    enabled: activeServerId != null,
+    retry: false,
+    staleTime: 15_000,
+  })
+  const history = historyQuery.data?.records ?? []
+  const loading = activeServerFetching || backupStatusFetching || backupsFetching
+  const loadError = backupStatusError
+    ? getUserErrorMessage(backupStatusError, t('toasts.loadStatusFailed'))
+    : backupsError
+      ? getUserErrorMessage(backupsError, t('toasts.loadBackupsFailed'))
+      : null
   const [creatingBackup, setCreatingBackup] = useState(false)
   const [restoringBackup, setRestoringBackup] = useState<string | null>(null)
   const [deletingBackups, setDeletingBackups] = useState(false)
@@ -86,9 +137,6 @@ export default function Backups() {
   const [uploadPercent, setUploadPercent] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [activeServerRemote, setActiveServerRemote] = useState(false)
-  const [activeServerId, setActiveServerId] = useState<string | number | null>(null)
-  const [history, setHistory] = useState<BackupHistoryRecord[]>([])
   const [serverChangedSinceLoad, setServerChangedSinceLoad] = useState(false)
   const [restoreTargetServerName, setRestoreTargetServerName] = useState<string | null>(null)
 
@@ -112,73 +160,36 @@ export default function Backups() {
   const [deletingOlder, setDeletingOlder] = useState(false)
   const [snapshotDialog, setSnapshotDialog] = useState<{ name: string; snapshot: BackupSnapshot } | null>(null)
 
-  const fetchBackupStatus = useCallback(async () => {
-    try {
-      const status = await backupApi.getStatus()
-      setBackupStatus(status)
-      setBackupSchedule(status.schedule)
-      setBackupMaxCount(status.maxBackups)
-      setLoadError(null)
-      if (status.backupInProgress) setCreatingBackup(true)
-    } catch (error) {
-      setLoadError(getUserErrorMessage(error, t('toasts.loadStatusFailed')))
-    }
-  }, [t])
-
-  const fetchBackups = useCallback(async () => {
-    try {
-      const data = await backupApi.listBackups()
-      setBackups(data.backups || [])
-      setLoadError(null)
-      setSelectedBackups(prev => {
-        const backupNames = new Set((data.backups || []).map(b => b.name))
-        const newSelection = new Set<string>()
-        prev.forEach(name => {
-          if (backupNames.has(name)) {
-            newSelection.add(name)
-          }
-        })
-        return newSelection
-      })
-    } catch (error) {
-      setLoadError(getUserErrorMessage(error, t('toasts.loadBackupsFailed')))
-    } finally {
-      setBackupsLoaded(true)
-    }
-  }, [t])
-
-  const fetchHistory = useCallback(async (serverId: string | number | null) => {
-    if (serverId == null) {
-      setHistory([])
-      return
-    }
-    try {
-      const data = await backupApi.getHistory(serverId)
-      setHistory(data.records || [])
-    } catch {
-      setHistory([])
-    }
-  }, [])
-
-  const refreshAll = useCallback(async () => {
-    setLoading(true)
-    try {
-      const active = await serversApi.getResolvedActive().catch(() => ({ server: null }))
-      setActiveServerRemote(!!active.server?.isRemote)
-      setActiveServerId(active.server?.id ?? null)
-      await Promise.all([
-        fetchBackupStatus(),
-        fetchBackups(),
-        fetchHistory(active.server?.id ?? null),
-      ])
-    } finally {
-      setLoading(false)
-    }
-  }, [fetchBackupStatus, fetchBackups, fetchHistory])
+  useEffect(() => {
+    if (!backupStatus) return
+    setBackupSchedule(backupStatus.schedule)
+    setBackupMaxCount(backupStatus.maxBackups)
+    if (backupStatus.backupInProgress) setCreatingBackup(true)
+  }, [backupStatus])
 
   useEffect(() => {
-    refreshAll()
-  }, [refreshAll])
+    setSelectedBackups((previous) => {
+      const backupNames = new Set(backups.map((backup) => backup.name))
+      return new Set([...previous].filter((name) => backupNames.has(name)))
+    })
+  }, [backups])
+
+  const fetchBackupStatus = useCallback(async () => {
+    await refetchBackupStatus()
+  }, [refetchBackupStatus])
+
+  const fetchBackups = useCallback(async () => {
+    await refetchBackups()
+  }, [refetchBackups])
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([
+      refetchActiveServer(),
+      fetchBackupStatus(),
+      fetchBackups(),
+      queryClient.invalidateQueries({ queryKey: ['backups', 'history'] }),
+    ])
+  }, [refetchActiveServer, fetchBackupStatus, fetchBackups, queryClient])
 
   useEffect(() => {
     if (!socket) return
@@ -325,10 +336,7 @@ export default function Backups() {
 
   const openRestoreDialog = (name: string) => {
     setRestoreDialog({ open: true, backupName: name })
-    setRestoreTargetServerName(null)
-    serversApi.getResolvedActive()
-      .then((d) => setRestoreTargetServerName(d.server?.name || d.server?.serverName || null))
-      .catch(() => setRestoreTargetServerName(null))
+    setRestoreTargetServerName(activeServer?.name || activeServer?.serverName || null)
   }
 
   const handleRestoreBackup = async (name: string) => {

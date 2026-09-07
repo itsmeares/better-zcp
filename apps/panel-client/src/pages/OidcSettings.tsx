@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, ShieldAlert, Loader2, Copy, Check, CheckCircle2, XCircle } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -28,6 +29,7 @@ import {
   type OidcDiscoveredMetadata,
 } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
+import { panelQueryKeys } from '@/lib/queryClient'
 
 interface ProviderPreset {
   id: string
@@ -71,10 +73,22 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
   const { t } = useTranslation('oidcSettings')
   const { toast } = useToast()
 
-  const [settings, setSettings] = useState<OidcSettingsWithEnv | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [permissionDenied, setPermissionDenied] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const {
+    data: settings,
+    error: settingsError,
+    refetch: refetchSettings,
+    isPending: settingsPending,
+  } = useQuery({
+    queryKey: panelQueryKeys.oidcSettings,
+    queryFn: oidcSettingsApi.get,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const loading = settingsPending
+  const permissionDenied = settingsError instanceof ApiError && settingsError.status === 403
+  const loadError = !permissionDenied && settingsError
+    ? getUserErrorMessage(settingsError, t('toasts.unknownError'))
+    : null
 
   const [form, setForm] = useState<Record<FieldKey, string>>({
     issuerUrl: '',
@@ -94,7 +108,6 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
   const [discoveryResult, setDiscoveryResult] = useState<OidcDiscoveredMetadata | null>(null)
 
   const applySettings = (data: OidcSettingsWithEnv) => {
-    setSettings(data)
     setForm({
       issuerUrl: data.issuerUrl,
       clientId: data.clientId,
@@ -106,27 +119,13 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
     setAllowInsecureHttp(data.allowInsecureHttp)
   }
 
-  const fetchSettings = useCallback(async () => {
-    setLoading(true)
-    setPermissionDenied(false)
-    setLoadError(null)
-    try {
-      const data = await oidcSettingsApi.get()
-      applySettings(data)
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        setPermissionDenied(true)
-      } else {
-        setLoadError(getUserErrorMessage(error, t('toasts.unknownError')))
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [t])
-
   useEffect(() => {
-    fetchSettings()
-  }, [fetchSettings])
+    if (settings) applySettings(settings)
+  }, [settings])
+
+  const fetchSettings = useCallback(async () => {
+    await refetchSettings()
+  }, [refetchSettings])
 
   function buildUpdatePayload(): OidcSettingsUpdate {
     if (!settings) return {}

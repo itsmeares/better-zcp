@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { MemoryRouter } from '@/test/router'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmProvider } from '@/contexts/ConfirmContext'
@@ -34,6 +36,11 @@ const removeUser = vi.mocked(usersApi.remove)
 const createUser = vi.mocked(usersApi.create)
 const getRoles = vi.mocked(permissionsApi.getRoles)
 
+function withQueryClient(children: ReactNode) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+}
+
 function makeUser(id: string, username: string): ManagedUserAccount {
   return { id, username, role: 'moderator', roleId: null, createdAt: '2026-01-01T00:00:00.000Z', lastLogin: null }
 }
@@ -61,11 +68,13 @@ describe('Users -- focus after a confirmed delete', () => {
     removeUser.mockResolvedValue({ success: true, user: { id: 'u1', username: 'alice' } })
 
     render(
-      <MemoryRouter>
-        <ConfirmProvider>
-          <Users />
-        </ConfirmProvider>
-      </MemoryRouter>,
+      withQueryClient(
+        <MemoryRouter>
+          <ConfirmProvider>
+            <Users />
+          </ConfirmProvider>
+        </MemoryRouter>,
+      ),
     )
 
     await confirmDelete('alice')
@@ -84,11 +93,13 @@ describe('Users -- focus after a confirmed delete', () => {
     removeUser.mockResolvedValue({ success: true, user: { id: 'u2', username: 'bob' } })
 
     render(
-      <MemoryRouter>
-        <ConfirmProvider>
-          <Users />
-        </ConfirmProvider>
-      </MemoryRouter>,
+      withQueryClient(
+        <MemoryRouter>
+          <ConfirmProvider>
+            <Users />
+          </ConfirmProvider>
+        </MemoryRouter>,
+      ),
     )
 
     await confirmDelete('bob')
@@ -106,11 +117,13 @@ describe('Users -- focus after a confirmed delete', () => {
     removeUser.mockResolvedValue({ success: true, user: { id: 'u1', username: 'alice' } })
 
     render(
-      <MemoryRouter>
-        <ConfirmProvider>
-          <Users />
-        </ConfirmProvider>
-      </MemoryRouter>,
+      withQueryClient(
+        <MemoryRouter>
+          <ConfirmProvider>
+            <Users />
+          </ConfirmProvider>
+        </MemoryRouter>,
+      ),
     )
 
     await confirmDelete('alice')
@@ -133,13 +146,15 @@ describe('Users -- focus after a confirmed delete', () => {
     listUsers.mockResolvedValueOnce({ users: [userA, userB, userC] })
 
     render(
-      <MemoryRouter>
-        <TooltipProvider>
-          <ConfirmProvider>
-            <Users />
-          </ConfirmProvider>
-        </TooltipProvider>
-      </MemoryRouter>,
+      withQueryClient(
+        <MemoryRouter>
+          <TooltipProvider>
+            <ConfirmProvider>
+              <Users />
+            </ConfirmProvider>
+          </TooltipProvider>
+        </MemoryRouter>,
+      ),
     )
 
     await confirmDelete('alice')

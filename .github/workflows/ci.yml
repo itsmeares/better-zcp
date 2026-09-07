@@ -17,15 +17,15 @@ jobs:
     name: Server (lint + tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: pnpm/action-setup@d9184bf108216479bc5a137cc391f4d7b14c870b
         with:
           version: 11.24.0
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22
           cache: pnpm
@@ -61,9 +61,9 @@ jobs:
     name: Engine signature check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22
 
@@ -74,9 +74,9 @@ jobs:
     name: Scripts checkers (bridge actions/routes, RCON commands, i18n duplicates)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22
 
@@ -96,13 +96,13 @@ jobs:
     name: Client (lint + types + tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: pnpm/action-setup@d9184bf108216479bc5a137cc391f4d7b14c870b
         with:
           version: 11.24.0
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22
           cache: pnpm
@@ -129,15 +129,15 @@ jobs:
     name: Windows packaged updater
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: pnpm/action-setup@d9184bf108216479bc5a137cc391f4d7b14c870b
         with:
           version: 11.24.0
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22
           cache: pnpm
@@ -151,7 +151,44 @@ jobs:
       - name: Exercise bundle transaction and generated supervisor
         run: pnpm --filter @better-zcp/panel-server exec vitest run tests/panelUpdateBundle.test.ts tests/supervisor-restart.test.ts tests/serverManagerSpacedPathCmdQuoting.test.ts tests/serverManagerWindowsSpawnFixes.test.ts tests/serverManagerCustomStartCommandQuoting.test.ts tests/serverManagerCommandLineRoundTrip.test.ts tests/serverManagerEmptyScanWindows.test.ts tests/serverManager-stopTimeout.test.ts tests/setDataPaths.test.ts
 
+      - name: Preload pkg Windows base binary
+        shell: pwsh
+        env:
+          PKG_CACHE_PATH: ${{ runner.temp }}\pkg-cache
+        run: |
+          $cacheDir = Join-Path $env:PKG_CACHE_PATH "v3.6"
+          $binaryPath = Join-Path $cacheDir "fetched-v22.23.2-win-x64"
+          $downloadPath = "$binaryPath.download"
+          $url = "https://github.com/yao-pkg/pkg-fetch/releases/download/v3.6/node-v22.23.2-win-x64"
+          $expectedSha256 = "555d3dceaaf1c5628ac8fa23d1ebde46a424d2ad6782cc2412be8eed4a7a6b69"
+
+          New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+              curl.exe --fail --location --retry 3 --retry-delay 2 --output $downloadPath $url
+              if ($LASTEXITCODE -ne 0) { throw "curl exited with code $LASTEXITCODE" }
+
+              $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $downloadPath).Hash.ToLowerInvariant()
+              if ($actualSha256 -ne $expectedSha256) {
+                throw "pkg binary checksum mismatch: expected $expectedSha256, got $actualSha256"
+              }
+
+              Move-Item -Force $downloadPath $binaryPath
+              break
+            } catch {
+              if (Test-Path -LiteralPath $downloadPath) { Remove-Item -Force $downloadPath }
+              if ($attempt -eq 3) { throw }
+              Start-Sleep -Seconds 3
+            }
+          }
+
+          if (-not (Test-Path -LiteralPath $binaryPath)) {
+            throw "pkg Windows base binary was not cached"
+          }
+
       - name: Build packaged Windows executable
+        env:
+          PKG_CACHE_PATH: ${{ runner.temp }}\pkg-cache
         run: node scripts/release/build.mjs --windows
 
       - name: Verify packaged updater artifacts

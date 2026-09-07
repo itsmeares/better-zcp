@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } from '@/lib/api'
@@ -62,10 +63,13 @@ const testBackup: ServerBackupArchive = {
 }
 
 function renderBackups() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   return render(
-    <TooltipProvider>
-      <Backups />
-    </TooltipProvider>,
+    <QueryClientProvider client={client}>
+      <TooltipProvider>
+        <Backups />
+      </TooltipProvider>
+    </QueryClientProvider>,
   )
 }
 
@@ -113,6 +117,6 @@ describe('Backups.tsx: reflects the server-side backupInProgress/restoreInProgre
     renderBackups()
 
     const createButton = await screen.findByRole('button', { name: /create backup/i })
-    expect(createButton).not.toBeDisabled()
+    await waitFor(() => expect(createButton).not.toBeDisabled())
   })
 })

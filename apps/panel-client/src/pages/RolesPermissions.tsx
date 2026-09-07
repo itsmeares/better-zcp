@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck, ShieldAlert, Plus, Pencil, Trash2, Loader2, Lock, ChevronDown } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -32,14 +33,15 @@ import {
   permissionsApi,
   usersApi,
   ApiError,
-  type CapabilityGroup,
   type CapabilityInfo,
   type RoleInfo,
   type ManagedUserAccount,
 } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
+import { panelQueryKeys } from '@/lib/queryClient'
 
 const RECOVERY_CAPABILITY_KEYS = new Set(['roles.manage', 'users.manage'])
+const EMPTY_ROLES: RoleInfo[] = []
 
 function recoveryActionKey(
   existingCapabilities: string[],
@@ -56,12 +58,55 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
   const { t } = useTranslation(['roles', 'errors'])
   const { toast } = useToast()
   const confirm = useConfirm()
+  const queryClient = useQueryClient()
 
-  const [groups, setGroups] = useState<CapabilityGroup[]>([])
-  const [roles, setRoles] = useState<RoleInfo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [permissionDenied, setPermissionDenied] = useState(false)
+  const {
+    data: capabilitiesData,
+    error: capabilitiesError,
+    refetch: refetchCapabilities,
+    isPending: capabilitiesPending,
+  } = useQuery({
+    queryKey: panelQueryKeys.capabilities,
+    queryFn: permissionsApi.getCapabilities,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const {
+    data: rolesData,
+    error: rolesError,
+    refetch: refetchRoles,
+    isPending: rolesPending,
+  } = useQuery({
+    queryKey: panelQueryKeys.roles,
+    queryFn: permissionsApi.getRoles,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const {
+    data: usersData,
+    error: usersError,
+    refetch: refetchUsers,
+  } = useQuery({
+    queryKey: panelQueryKeys.users,
+    queryFn: usersApi.list,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const groups = capabilitiesData?.groups ?? []
+  const roles = rolesData?.roles ?? EMPTY_ROLES
+  const users = usersData?.users ?? null
+  const matrixError = capabilitiesError ?? rolesError
+  const permissionDenied = [capabilitiesError, rolesError].some(
+    (error) => error instanceof ApiError && error.status === 403,
+  )
+  const loadError = !permissionDenied && matrixError
+    ? getUserErrorMessage(matrixError, t('toasts.unknownError'))
+    : null
+  const loading = capabilitiesPending || rolesPending
+  const usersDenied = usersError instanceof ApiError && usersError.status === 403
+  const usersLoadError = !usersDenied && usersError
+    ? getUserErrorMessage(usersError, t('toasts.unknownError'))
+    : null
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   function toggleGroup(group: string) {
@@ -72,10 +117,6 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
       return next
     })
   }
-
-  const [users, setUsers] = useState<ManagedUserAccount[] | null>(null)
-  const [usersDenied, setUsersDenied] = useState(false)
-  const [usersLoadError, setUsersLoadError] = useState<string | null>(null)
 
   const [savingCells, setSavingCells] = useState<Set<string>>(new Set())
   const [savingUserRows, setSavingUserRows] = useState<Set<string>>(new Set())
@@ -111,46 +152,16 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const fetchUsers = useCallback(async () => {
-    try {
-      const { users: list } = await usersApi.list()
-      setUsers(list)
-      setUsersDenied(false)
-      setUsersLoadError(null)
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        setUsersDenied(true)
-      } else {
-        setUsersLoadError(getUserErrorMessage(error, t('toasts.unknownError')))
-      }
-    }
-  }, [t])
+    await refetchUsers()
+  }, [refetchUsers])
 
   const fetchMatrix = useCallback(async () => {
-    setLoading(true)
-    setLoadError(null)
-    setPermissionDenied(false)
-    try {
-      const [{ groups: g }, { roles: r }] = await Promise.all([
-        permissionsApi.getCapabilities(),
-        permissionsApi.getRoles(),
-      ])
-      setGroups(g)
-      setRoles(r)
-      fetchUsers()
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        setPermissionDenied(true)
-      } else {
-        setLoadError(getUserErrorMessage(error, t('toasts.unknownError')))
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [fetchUsers, t])
-
-  useEffect(() => {
-    fetchMatrix()
-  }, [fetchMatrix])
+    await Promise.all([
+      refetchCapabilities(),
+      refetchRoles(),
+      refetchUsers(),
+    ])
+  }, [refetchCapabilities, refetchRoles, refetchUsers])
 
   function capabilityLabel(cap: CapabilityInfo): string {
     return t(`capabilities.${cap.key}.label`, { defaultValue: cap.label })
@@ -174,7 +185,11 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
         confirmSelfCapabilityLoss,
       })
       if (pendingCapabilitiesRef.current.get(role.id) === nextCapabilities) {
-        setRoles((prev) => prev.map((r) => (r.id === role.id ? { ...r, ...updated } : r)))
+        queryClient.setQueryData<{ roles: RoleInfo[] }>(panelQueryKeys.roles, (previous) =>
+          previous
+            ? { ...previous, roles: previous.roles.map((r) => (r.id === role.id ? { ...r, ...updated } : r)) }
+            : previous,
+        )
       }
       return true
     } catch (error) {
@@ -262,7 +277,9 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
         name,
         capabilities: Array.from(formCapabilities),
       })
-      setRoles((prev) => [...prev, { ...role, memberCount: 0 }])
+      queryClient.setQueryData<{ roles: RoleInfo[] }>(panelQueryKeys.roles, (previous) =>
+        previous ? { ...previous, roles: [...previous.roles, { ...role, memberCount: 0 }] } : { roles: [{ ...role, memberCount: 0 }] },
+      )
       setCreateOpen(false)
       toast({
         title: t('toasts.roleCreatedTitle'),
@@ -297,8 +314,15 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
     setFormError(null)
     try {
       const { role: updated } = await permissionsApi.updateRole(renameTarget.id, { name })
-      setRoles((prev) =>
-        prev.map((r) => (r.id === renameTarget.id ? { ...r, name: updated.name, updatedAt: updated.updatedAt } : r)),
+      queryClient.setQueryData<{ roles: RoleInfo[] }>(panelQueryKeys.roles, (previous) =>
+        previous
+          ? {
+              ...previous,
+              roles: previous.roles.map((r) =>
+                r.id === renameTarget.id ? { ...r, name: updated.name, updatedAt: updated.updatedAt } : r,
+              ),
+            }
+          : previous,
       )
       setRenameTarget(null)
       toast({
@@ -338,10 +362,17 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
     try {
       const result = await permissionsApi.deleteRole(deleteTarget.id, reassignTo || undefined)
       const targetRole = roles.find((r) => r.id === reassignTo)
-      setRoles((prev) =>
-        prev
-          .filter((r) => r.id !== deleteTarget.id)
-          .map((r) => (reassignTo && r.id === reassignTo ? { ...r, memberCount: r.memberCount + result.reassigned } : r)),
+      queryClient.setQueryData<{ roles: RoleInfo[] }>(panelQueryKeys.roles, (previous) =>
+        previous
+          ? {
+              ...previous,
+              roles: previous.roles
+                .filter((r) => r.id !== deleteTarget.id)
+                .map((r) =>
+                  reassignTo && r.id === reassignTo ? { ...r, memberCount: r.memberCount + result.reassigned } : r,
+                ),
+            }
+          : previous,
       )
       toast({
         title: t('toasts.roleDeletedTitle'),
@@ -379,8 +410,15 @@ export default function RolesPermissions({ embedded = false }: { embedded?: bool
     setSavingUserRows((prev) => new Set(prev).add(user.id))
     try {
       const { user: updated } = await usersApi.assignRole(user.id, roleId)
-      setUsers((prev) =>
-        prev ? prev.map((u) => (u.id === user.id ? { ...u, role: updated.role, roleId: updated.roleId } : u)) : prev,
+      queryClient.setQueryData<{ users: ManagedUserAccount[] }>(panelQueryKeys.users, (previous) =>
+        previous
+          ? {
+              ...previous,
+              users: previous.users.map((u) =>
+                u.id === user.id ? { ...u, role: updated.role, roleId: updated.roleId } : u,
+              ),
+            }
+          : previous,
       )
       const newRole = roles.find((r) => r.id === roleId)
       toast({

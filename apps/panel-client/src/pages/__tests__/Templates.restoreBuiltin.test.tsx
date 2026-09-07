@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from '@/test/router'
 import Templates from '../Templates'
 import { templatesApi, SimTemplate } from '@/lib/api'
@@ -61,10 +62,13 @@ afterEach(() => {
 })
 
 function renderTemplates() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   return render(
-    <MemoryRouter>
-      <Templates />
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <Templates />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 

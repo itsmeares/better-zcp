@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import RolesPermissions from '../RolesPermissions'
 import { permissionsApi, usersApi, type CapabilityGroup, type RoleInfo } from '@/lib/api'
 
 function renderRolesPermissions() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   return render(
-    <TooltipProvider>
-      <RolesPermissions />
-    </TooltipProvider>,
+    <QueryClientProvider client={client}>
+      <TooltipProvider>
+        <RolesPermissions />
+      </TooltipProvider>
+    </QueryClientProvider>,
   )
 }
 

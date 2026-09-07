@@ -21,16 +21,16 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@6f5948dfacef28e207b48d0905cf90c03365536d
+        uses: github/codeql-action/init@a35ac6e6798d72df5475948b28efb89edc2e19ca
         with:
           languages: javascript-typescript
           queries: security-extended
           packs: codeql/javascript-queries:AlertSuppression.ql
 
       - name: Analyze
-        uses: github/codeql-action/analyze@6f5948dfacef28e207b48d0905cf90c03365536d
+        uses: github/codeql-action/analyze@a35ac6e6798d72df5475948b28efb89edc2e19ca
         with:
           category: /language:javascript-typescript
