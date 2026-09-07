@@ -8,7 +8,7 @@ vi.mock("../database/init.js", () => ({
   recordPlayerSession: (...args) => recordPlayerSession(...args),
 }));
 
-const { PanelBridge } = await import("../services/panelBridge.js");
+const { PanelBridge } = await import("../services/panelBridge.ts");
 
 beforeEach(() => {
   logPlayerAction.mockClear();

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let getStatusReturn;
 let isModConnectedReturn;
-vi.mock("../services/panelBridge.js", () => ({
+vi.mock("../services/panelBridge.ts", () => ({
   default: {
     getStatus: () => getStatusReturn,
     isModConnected: () => isModConnectedReturn,

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 
-const { PanelBridge } = await import("../services/panelBridge.js");
+const { PanelBridge } = await import("../services/panelBridge.ts");
 
 function makeBridge() {
   const bridgePath = fs.mkdtempSync(

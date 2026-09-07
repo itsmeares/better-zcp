@@ -240,7 +240,7 @@ import systemRoutes from "./routes/system.ts";
 import templatesRoutes from "./routes/templates.ts";
 import dockerRoutes from "./routes/docker.ts";
 import permissionsRoutes from "./routes/permissions.ts";
-import panelBridge from "./services/panelBridge.js";
+import panelBridge from "./services/panelBridge.ts";
 
 dotenv.config();
 

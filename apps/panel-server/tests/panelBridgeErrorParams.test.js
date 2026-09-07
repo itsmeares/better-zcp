@@ -12,7 +12,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { getServer } = await import("../database/init.js");
-const { default: bridge } = await import("../services/panelBridge.js");
+const { default: bridge } = await import("../services/panelBridge.ts");
 const { default: router } = await import("../routes/panelBridge.js");
 
 function createResponse() {

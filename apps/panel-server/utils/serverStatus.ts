@@ -4,7 +4,7 @@ import {
   resolveDockerHostSignal,
   type DockerControl,
 } from "../services/managedContainer.ts";
-import panelBridge from "../services/panelBridge.js";
+import panelBridge from "../services/panelBridge.ts";
 
 interface ObservedSignals {
   processRunning?: boolean;

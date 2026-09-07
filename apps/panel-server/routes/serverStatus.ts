@@ -2,7 +2,7 @@ import express from "express";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.js";
-import panelBridge from "../services/panelBridge.js";
+import panelBridge from "../services/panelBridge.ts";
 import { composeServerStatus, resolveProvider } from "../utils/serverStatusModel.ts";
 import { resolveDockerHostSignal } from "../services/managedContainer.ts";
 

@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { fileURLToPath } from "url";
-import bridge from "../services/panelBridge.js";
+import bridge from "../services/panelBridge.ts";
 import {
   getActiveServer,
   getServer,

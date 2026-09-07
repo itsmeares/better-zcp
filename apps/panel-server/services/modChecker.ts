@@ -15,7 +15,7 @@ import fs from "fs";
 import path from "path";
 import { EventEmitter } from "events";
 import { sanitizeError } from "../utils/sanitize.ts";
-import panelBridge from "./panelBridge.js";
+import panelBridge from "./panelBridge.ts";
 
 type AnyRecord = Record<string, any>;
 

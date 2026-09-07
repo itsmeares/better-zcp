@@ -19,7 +19,7 @@ vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
 }));
 
-vi.mock("../services/panelBridge.js", () => ({
+vi.mock("../services/panelBridge.ts", () => ({
   default: { isRunning: false, sendCommand: vi.fn() },
 }));
 

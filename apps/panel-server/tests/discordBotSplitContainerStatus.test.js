@@ -5,7 +5,7 @@ const getActiveServer = vi.fn(async () => ({ id: "s1", isRemote: true }));
 vi.mock("../database/init.js", () => ({ getActiveServer: (...args) => getActiveServer(...args) }));
 
 const fakeBridge = { isModConnected: vi.fn(() => false) };
-vi.mock("../services/panelBridge.js", () => ({ default: fakeBridge }));
+vi.mock("../services/panelBridge.ts", () => ({ default: fakeBridge }));
 
 vi.mock("../services/managedContainer.ts", () => ({
   resolveDockerHostSignal: vi.fn(),

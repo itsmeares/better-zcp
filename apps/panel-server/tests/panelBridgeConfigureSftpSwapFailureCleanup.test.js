@@ -16,7 +16,7 @@ vi.mock("../services/panelBridgeSftp.ts", () => ({
   }),
 }));
 
-const { PanelBridge } = await import("../services/panelBridge.js");
+const { PanelBridge } = await import("../services/panelBridge.ts");
 
 beforeEach(() => {
   mockTransport.start.mockClear();

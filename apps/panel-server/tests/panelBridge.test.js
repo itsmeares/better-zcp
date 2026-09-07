@@ -178,7 +178,7 @@ describe('PanelBridge queue recovery', () => {
   it('resumes command numbering after a cleared SFTP cache', async () => {
     const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'pz-bridge-test-'));
     try {
-      const { PanelBridge } = await import('../services/panelBridge.js');
+      const { PanelBridge } = await import('../services/panelBridge.ts');
       fs.writeFileSync(
         path.join(temporaryDirectory, 'queue-state-lua.json.txt'),
         JSON.stringify({ lastCommandSeq: 42 }),

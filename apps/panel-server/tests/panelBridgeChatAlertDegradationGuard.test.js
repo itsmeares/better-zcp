@@ -11,7 +11,7 @@ vi.mock("../database/init.js", () => ({
   logBridgeCommand: vi.fn(async () => {}),
 }));
 
-const { default: bridge } = await import("../services/panelBridge.js");
+const { default: bridge } = await import("../services/panelBridge.ts");
 const { default: router } = await import("../routes/panelBridge.js");
 
 function createResponse() {

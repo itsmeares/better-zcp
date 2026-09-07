@@ -7,7 +7,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const fakeBridge = { bridgePath: null, isRunning: false, isModConnected: () => false };
-vi.mock("../services/panelBridge.js", () => ({ default: fakeBridge }));
+vi.mock("../services/panelBridge.ts", () => ({ default: fakeBridge }));
 
 const resolveDockerHostSignal = vi.fn(async () => ({ running: false, scanFailed: true }));
 vi.mock("../services/managedContainer.ts", () => ({ resolveDockerHostSignal }));

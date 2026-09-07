@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-const { PanelBridge } = await import("../services/panelBridge.js");
+const { PanelBridge } = await import("../services/panelBridge.ts");
 
 let tmpDir;
 

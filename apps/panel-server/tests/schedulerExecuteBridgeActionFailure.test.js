@@ -9,7 +9,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { Scheduler } = await import("../services/scheduler.ts");
-const { default: panelBridge } = await import("../services/panelBridge.js");
+const { default: panelBridge } = await import("../services/panelBridge.ts");
 
 function makeScheduler() {
   const rconService = { connected: true };

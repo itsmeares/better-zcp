@@ -3,7 +3,7 @@ import path from "path";
 import cron from "node-cron";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Scheduler");
-import panelBridge from "./panelBridge.js";
+import panelBridge from "./panelBridge.ts";
 import { RconService } from "./rcon.js";
 import { ServerManager } from "./serverManager.js";
 import { runManagedLifecycle } from "./managedContainer.ts";

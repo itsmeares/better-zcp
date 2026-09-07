@@ -19,7 +19,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 vi.mock("../utils/whitelistDb.ts", () => ({ listWhitelistAccounts: vi.fn(), listServerRoleNames }));
-vi.mock("../services/panelBridge.js", () => ({ isRunning: false }));
+vi.mock("../services/panelBridge.ts", () => ({ isRunning: false }));
 
 const { default: router } = await import("../routes/players.ts");
 

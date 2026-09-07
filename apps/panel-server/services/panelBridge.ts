@@ -6,23 +6,32 @@ import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
 import { logPlayerAction, recordPlayerSession } from '../database/init.js';
 import { createLogger } from '../utils/logger.ts';
-import { PanelBridgeSftpTransport } from './panelBridgeSftp.js';
+import { PanelBridgeSftpTransport } from './panelBridgeSftp.ts';
 const log = createLogger('Bridge');
+
+type AnyRecord = Record<string, any>;
+type PendingCommand = {
+  resolve: (value: any) => void;
+  reject: (reason?: unknown) => void;
+  timeout: ReturnType<typeof setTimeout>;
+  action: string;
+  timestamp: number;
+};
 
 const MOD_WRITE_SUFFIX = '.txt';
 const RESULT_FILE_PATTERN = /^res-(\d+)\.json(?:\.txt)?$/;
 
 const MIN_ORPHAN_TMP_AGE_MS = 60_000;
 
-function isOldEnoughToSweep(filePath, minAgeMs = MIN_ORPHAN_TMP_AGE_MS) {
+function isOldEnoughToSweep(filePath: string, minAgeMs: number = MIN_ORPHAN_TMP_AGE_MS) {
   try {
     return Date.now() - fs.statSync(filePath).mtimeMs >= minAgeMs;
-  } catch (_) {
+  } catch (_: any) {
     return false;
   }
 }
 
-function formatAge(ms) {
+function formatAge(ms: number) {
   if (!Number.isFinite(ms) || ms < 0) return 'unknown';
   const s = Math.round(ms / 1000);
   if (s < 60) return `${s}s`;
@@ -35,6 +44,33 @@ function formatAge(ms) {
 }
 
 class PanelBridge extends EventEmitter {
+  bridgePath: string | null;
+  isRunning: boolean;
+  pollInterval: ReturnType<typeof setInterval> | null;
+  statusInterval: ReturnType<typeof setInterval> | null;
+  fileWatcher: fs.FSWatcher | null;
+  sftpTransport: PanelBridgeSftpTransport | null;
+  lastSftpStatus: AnyRecord | null;
+  pendingCommands: Map<string, PendingCommand>;
+  processedResults: Map<string, number>;
+  protocolVersion: string;
+  queue: AnyRecord;
+  queueState: AnyRecord;
+  outboxStuckState: AnyRecord;
+  inboxResyncNextCheckAt: number;
+  lastQueueCleanupAt: number;
+  modStatus: AnyRecord | null;
+  previousPlayers: Set<any>;
+  lastStatusFileCheck: number;
+  consecutiveFailures: number;
+  maxConsecutiveFailures: number;
+  watcherRetries: number;
+  maxWatcherRetries: number;
+  config: AnyRecord;
+  _debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  _writeQueue: Promise<void> | null = null;
+  _emptyReadCounter: { seq: number; count: number } | null = null;
+
   constructor() {
     super();
     this.bridgePath = null;
@@ -83,7 +119,7 @@ class PanelBridge extends EventEmitter {
     };
   }
 
-  configure(bridgeFolderPath, isDirectPath = false) {
+  configure(bridgeFolderPath: string, isDirectPath: boolean = false) {
     if (!bridgeFolderPath) {
       throw new Error('bridgeFolderPath is required');
     }
@@ -101,11 +137,11 @@ class PanelBridge extends EventEmitter {
     return this.bridgePath;
   }
 
-  async configureSftp(config, cachePath) {
+  async configureSftp(config: AnyRecord, cachePath: string) {
     const transport = new PanelBridgeSftpTransport();
     try {
       await transport.start(config, cachePath);
-    } catch (error) {
+    } catch (error: any) {
       this.lastSftpStatus = transport.getStatus();
       await transport.stop();
       this.lastSftpStatus = transport.getStatus();
@@ -121,7 +157,7 @@ class PanelBridge extends EventEmitter {
       this.sftpTransport = transport;
       this.lastSftpStatus = transport.getStatus();
       this.start();
-    } catch (error) {
+    } catch (error: any) {
       this.sftpTransport = null;
       await transport.stop();
       this.lastSftpStatus = transport.getStatus();
@@ -143,7 +179,7 @@ class PanelBridge extends EventEmitter {
     return Boolean(this.sftpTransport?.running);
   }
 
-  autoDetect(serverName, zomboidUserFolder = null) {
+  autoDetect(serverName: string, zomboidUserFolder: string | null = null) {
     if (!serverName || typeof serverName !== 'string' || !/^[a-zA-Z0-9_\- ]{1,64}$/.test(serverName)) {
       throw new Error('Invalid server name — use only letters, numbers, spaces, hyphens, and underscores (max 64 chars)');
     }
@@ -170,12 +206,12 @@ class PanelBridge extends EventEmitter {
   }
 
 
-  getModWriteFile(relativeName) {
+  getModWriteFile(relativeName: string) {
     if (!this.bridgePath) return null;
     return path.join(this.bridgePath, `${relativeName}${MOD_WRITE_SUFFIX}`);
   }
 
-  resolveModFile(relativeName) {
+  resolveModFile(relativeName: string) {
     if (!this.bridgePath) return null;
     const suffixedFile = this.getModWriteFile(relativeName);
     if (suffixedFile && fs.existsSync(suffixedFile)) return suffixedFile;
@@ -210,17 +246,17 @@ class PanelBridge extends EventEmitter {
     return this.resolveModFile(this.queue.inboxCursorFile);
   }
 
-  formatSeq(seq) {
+  formatSeq(seq: number) {
     return String(seq).padStart(this.queue.sequenceWidth, '0');
   }
 
-  getCommandFileBySeq(seq) {
+  getCommandFileBySeq(seq: number) {
     const inboxDir = this.getInboxDir();
     if (!inboxDir) return null;
     return path.join(inboxDir, `cmd-${this.formatSeq(seq)}.json`);
   }
 
-  getResultFileBySeq(seq) {
+  getResultFileBySeq(seq: number) {
     if (!this.bridgePath) return null;
     return this.resolveModFile(path.join(this.queue.outboxDir, `res-${this.formatSeq(seq)}.json`));
   }
@@ -235,10 +271,13 @@ class PanelBridge extends EventEmitter {
 
     const inboxDir = this.getInboxDir();
     const outboxDir = this.getOutboxDir();
+    const stateFile = this.getQueueStateFile();
+    if (!inboxDir || !outboxDir || !stateFile) {
+      throw new Error('Bridge queue paths are not configured');
+    }
     fs.mkdirSync(inboxDir, { recursive: true });
     fs.mkdirSync(outboxDir, { recursive: true });
 
-    const stateFile = this.getQueueStateFile();
     if (fs.existsSync(stateFile)) {
       try {
         const state = JSON.parse(fs.readFileSync(stateFile, 'utf-8') || '{}');
@@ -246,7 +285,7 @@ class PanelBridge extends EventEmitter {
         const consumed = Number(state.lastConsumedResultSeq);
         this.queueState.nextCommandSeq = Number.isFinite(nextSeq) && nextSeq > 0 ? Math.floor(nextSeq) : 1;
         this.queueState.lastConsumedResultSeq = Number.isFinite(consumed) && consumed >= 0 ? Math.floor(consumed) : 0;
-      } catch (error) {
+      } catch (error: any) {
         log.warn(`Could not parse queue state file: ${error.message}`);
         this.queueState.nextCommandSeq = 1;
         this.queueState.lastConsumedResultSeq = 0;
@@ -264,7 +303,7 @@ class PanelBridge extends EventEmitter {
             Math.floor(lastCommandSeq) + 1,
           );
         }
-      } catch (error) {
+      } catch (error: any) {
         log.warn(`Could not parse Lua queue state file: ${error.message}`);
       }
     }
@@ -286,13 +325,13 @@ class PanelBridge extends EventEmitter {
     try {
       fs.writeFileSync(tempFile, JSON.stringify(payload, null, 2), { mode: 0o600 });
       fs.renameSync(tempFile, stateFile);
-    } catch (error) {
+    } catch (error: any) {
       try {
         fs.writeFileSync(stateFile, JSON.stringify(payload, null, 2), { mode: 0o600 });
-      } catch (writeError) {
+      } catch (writeError: any) {
         log.warn(`Could not persist queue state: ${writeError.message}`);
       }
-      try { fs.unlinkSync(tempFile); } catch (_) { /* ignore */ }
+      try { fs.unlinkSync(tempFile); } catch (_: any) { /* ignore */ }
     }
   }
 
@@ -303,7 +342,7 @@ class PanelBridge extends EventEmitter {
     const statusFile = this.getStatusFile();
 
     const issues = [];
-    const checks = {
+    const checks: AnyRecord = {
       bridgePathConfigured: Boolean(bridgePath),
       bridgePathExists: false,
       bridgePathReadable: false,
@@ -336,7 +375,7 @@ class PanelBridge extends EventEmitter {
       if (!checks.bridgePathExists) {
         issues.push('Bridge directory does not exist yet.');
       }
-    } catch (e) {
+    } catch (e: any) {
       issues.push(`Bridge directory check failed: ${e.message}`);
     }
 
@@ -344,19 +383,19 @@ class PanelBridge extends EventEmitter {
       try {
         fs.accessSync(bridgePath, fs.constants.R_OK);
         checks.bridgePathReadable = true;
-      } catch (e) {
+      } catch (e: any) {
         issues.push(`Bridge directory is not readable: ${e.message}`);
       }
 
       try {
         fs.accessSync(bridgePath, fs.constants.W_OK);
         checks.bridgePathWritable = true;
-      } catch (e) {
+      } catch (e: any) {
         issues.push(`Bridge directory is not writable: ${e.message}`);
       }
     }
 
-    const inspectFile = (filePath, presentKey, readableKey) => {
+    const inspectFile = (filePath: string | null, presentKey: string, readableKey: string) => {
       if (!filePath) return;
       try {
         const exists = fs.existsSync(filePath);
@@ -364,7 +403,7 @@ class PanelBridge extends EventEmitter {
         if (!exists) return;
         fs.accessSync(filePath, fs.constants.R_OK);
         checks[readableKey] = true;
-      } catch (e) {
+      } catch (e: any) {
         checks[readableKey] = false;
         issues.push(`${path.basename(filePath)} is not readable: ${e.message}`);
       }
@@ -385,6 +424,8 @@ class PanelBridge extends EventEmitter {
 
     if (!checks.statusFilePresent) {
       issues.push('Status file is missing. Start the game server with PanelBridge enabled.');
+    } else if (!statusFile) {
+      issues.push('Status file path is not configured.');
     } else {
       try {
         const stats = fs.statSync(statusFile);
@@ -397,7 +438,7 @@ class PanelBridge extends EventEmitter {
         if (!checks.statusFresh) {
           issues.push(`Status file is stale (${formatAge(ageMs)} old) — is the PZ server running?`);
         }
-      } catch (e) {
+      } catch (e: any) {
         issues.push(`Could not read status file metadata: ${e.message}`);
       }
     }
@@ -446,10 +487,13 @@ class PanelBridge extends EventEmitter {
   }
 
   setupFileWatcher() {
+    if (!this.bridgePath) return;
+    const bridgePath = this.bridgePath;
+
     if (this.fileWatcher) {
       try {
         this.fileWatcher.close();
-      } catch (e) {
+      } catch (e: any) {
         // Ignore close errors
       }
       this.fileWatcher = null;
@@ -465,31 +509,33 @@ class PanelBridge extends EventEmitter {
 
     try {
       this._debounceTimer = null;
-      this.fileWatcher = fs.watch(this.bridgePath, { persistent: false }, (eventType, filename) => {
+      const watcher = fs.watch(bridgePath, { persistent: false }, (_eventType: string, filename: string | null) => {
+        const changedFile = filename ?? '';
         if (this._debounceTimer) clearTimeout(this._debounceTimer);
         this._debounceTimer = setTimeout(() => {
           this._debounceTimer = null;
           if (!this.isRunning) return;
           try {
-            if (filename === 'status.json') {
+            if (changedFile === 'status.json') {
               this.checkModStatus();
-            } else if (filename === 'results.json') {
+            } else if (changedFile === 'results.json') {
               this.pollResults();
             }
-          } catch (e) {
+          } catch (e: any) {
             log.debug(`File change handler error: ${e.message}`);
           }
         }, this.config.fileWatchDebounceMs);
       });
+      this.fileWatcher = watcher;
 
-      this.fileWatcher.on('error', (err) => {
+      watcher.on('error', (err) => {
         const hint = process.platform === 'linux' && (err.code === 'ENOSPC' || err.message.includes('inotify'))
           ? ' Increase fs.inotify.max_user_watches: sudo sysctl -w fs.inotify.max_user_watches=524288'
           : '';
         log.warn(`File watcher error: ${err.message}${hint}`);
         try {
-          this.fileWatcher.close();
-        } catch (e) { /* ignore */ }
+          watcher.close();
+        } catch (e: any) { /* ignore */ }
         this.fileWatcher = null;
         this.watcherRetries++;
 
@@ -503,7 +549,7 @@ class PanelBridge extends EventEmitter {
 
       log.debug('File watcher active');
       this.watcherRetries = 0;
-    } catch (err) {
+    } catch (err: any) {
       this.watcherRetries++;
       log.warn(`Could not setup file watcher: ${err.message}`);
 
@@ -554,7 +600,7 @@ class PanelBridge extends EventEmitter {
     this.emit('stopped');
   }
 
-  async sendCommand(action, args = {}) {
+  async sendCommand(action: string, args: AnyRecord = {}): Promise<any> {
     log.debug(`sendCommand: action=${action} args=${JSON.stringify(args).substring(0, 200)}`);
     if (!this.bridgePath) {
       throw new Error('Bridge not configured');
@@ -573,12 +619,15 @@ class PanelBridge extends EventEmitter {
     }
 
     const commandsFile = this.getCommandsFile();
+    if (!commandsFile) {
+      throw new Error('Bridge not configured');
+    }
     const id = uuidv4();
     this.ensureQueueProtocol();
 
     if (!this._writeQueue) this._writeQueue = Promise.resolve();
 
-    let writeError = null;
+    let writeError: any = null;
     this._writeQueue = this._writeQueue
       .then(() => this._enqueueCommand(id, action, args))
       .catch(async (queueError) => {
@@ -609,8 +658,8 @@ class PanelBridge extends EventEmitter {
     });
   }
 
-  _appendCommand(commandsFile, id, action, args) {
-    let commands = { commands: [] };
+  _appendCommand(commandsFile: string, id: string, action: string, args: AnyRecord) {
+    let commands: AnyRecord = { commands: [] };
     try {
       if (fs.existsSync(commandsFile)) {
         const content = fs.readFileSync(commandsFile, 'utf-8');
@@ -619,7 +668,7 @@ class PanelBridge extends EventEmitter {
           if (!commands.commands) commands.commands = [];
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`Failed to parse commands file ${commandsFile}: ${e.message}`);
       commands = { commands: [] };
     }
@@ -635,26 +684,29 @@ class PanelBridge extends EventEmitter {
     fs.writeFileSync(tempFile, JSON.stringify(commands, null, 2), { mode: 0o600 });
     try {
       fs.renameSync(tempFile, commandsFile);
-    } catch (err) {
+    } catch (err: any) {
       log.warn(`renameSync failed, using direct write: ${err.message}`);
       try {
         fs.writeFileSync(commandsFile, JSON.stringify(commands, null, 2), { mode: 0o600 });
-      } catch (writeErr) {
+      } catch (writeErr: any) {
         log.error(`Direct write also failed: ${writeErr.message}`);
-        try { fs.unlinkSync(tempFile); } catch (_) { /* ignore */ }
+        try { fs.unlinkSync(tempFile); } catch (_: any) { /* ignore */ }
         throw writeErr;
       }
-      try { fs.unlinkSync(tempFile); } catch (_) { /* ignore */ }
+      try { fs.unlinkSync(tempFile); } catch (_: any) { /* ignore */ }
     }
   }
 
-  _enqueueCommand(id, action, args) {
+  _enqueueCommand(id: string, action: string, args: AnyRecord) {
     if (!this.queueState.initialized) {
       this.ensureQueueProtocol();
     }
 
     const seq = this.queueState.nextCommandSeq;
     const commandFile = this.getCommandFileBySeq(seq);
+    if (!commandFile) {
+      throw new Error('Bridge command path is not configured');
+    }
     const payload = {
       protocolVersion: this.protocolVersion,
       seq,
@@ -681,7 +733,7 @@ class PanelBridge extends EventEmitter {
     this.cleanupQueueFilesIfNeeded();
   }
 
-  tryResyncOutboxCursor(seq) {
+  tryResyncOutboxCursor(seq: number) {
     const now = Date.now();
     if (this.outboxStuckState.seq !== seq) {
       this.outboxStuckState = { seq, since: now, nextCheckAt: now + this.queue.resyncStuckMs };
@@ -700,7 +752,7 @@ class PanelBridge extends EventEmitter {
     let luaState;
     try {
       luaState = JSON.parse(fs.readFileSync(luaStateFile, 'utf-8') || '{}');
-    } catch (error) {
+    } catch (error: any) {
       log.debug(`Could not parse mod queue state during resync check: ${error.message}`);
       return false;
     }
@@ -727,7 +779,7 @@ class PanelBridge extends EventEmitter {
     return true;
   }
 
-  recoverSkippedResults(fromSeqExclusive, toSeqInclusive) {
+  recoverSkippedResults(fromSeqExclusive: number, toSeqInclusive: number) {
     const scanFrom = (toSeqInclusive - fromSeqExclusive) > this.queue.retainRecentFiles
       ? (toSeqInclusive - this.queue.retainRecentFiles + 1)
       : (fromSeqExclusive + 1);
@@ -740,7 +792,7 @@ class PanelBridge extends EventEmitter {
       let raw;
       try {
         raw = fs.readFileSync(resultFile, 'utf-8');
-      } catch (error) {
+      } catch (error: any) {
         log.debug(`Resync recovery: could not read result seq ${seq}: ${error.message}`);
         continue;
       }
@@ -749,7 +801,7 @@ class PanelBridge extends EventEmitter {
       let parsed;
       try {
         parsed = JSON.parse(raw);
-      } catch (error) {
+      } catch (error: any) {
         log.debug(`Resync recovery: could not parse result seq ${seq}: ${error.message}`);
         continue;
       }
@@ -762,7 +814,7 @@ class PanelBridge extends EventEmitter {
 
       try {
         fs.writeFileSync(resultFile, '', { mode: 0o600 });
-      } catch (cleanupErr) {
+      } catch (cleanupErr: any) {
         log.debug(`Resync recovery: failed to clear result file seq ${seq}: ${cleanupErr.message}`);
       }
     }
@@ -787,7 +839,7 @@ class PanelBridge extends EventEmitter {
     let luaState;
     try {
       luaState = JSON.parse(fs.readFileSync(luaStateFile, 'utf-8') || '{}');
-    } catch (error) {
+    } catch (error: any) {
       log.debug(`Could not parse mod queue state during inbox resync check: ${error.message}`);
       return false;
     }
@@ -812,7 +864,7 @@ class PanelBridge extends EventEmitter {
     if (!this.queueState.initialized) {
       try {
         this.ensureQueueProtocol();
-      } catch (error) {
+      } catch (error: any) {
         log.debug(`Queue init not ready during poll: ${error.message}`);
         return;
       }
@@ -851,7 +903,7 @@ class PanelBridge extends EventEmitter {
         }
         if (this._emptyReadCounter) this._emptyReadCounter.count = 0;
         parsed = JSON.parse(raw);
-      } catch (error) {
+      } catch (error: any) {
         log.debug(`Queue result parse error for seq ${seq}: ${error.message}`);
         break;
       }
@@ -866,7 +918,7 @@ class PanelBridge extends EventEmitter {
 
       try {
         fs.writeFileSync(resultFile, '', { mode: 0o600 });
-      } catch (cleanupErr) {
+      } catch (cleanupErr: any) {
         log.debug(`Failed to clear result file seq ${seq}: ${cleanupErr.message}`);
       }
     }
@@ -894,7 +946,7 @@ class PanelBridge extends EventEmitter {
         }
       }
 
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`pollResults read error (likely mid-write): ${e.message}`);
     }
   }
@@ -931,13 +983,13 @@ class PanelBridge extends EventEmitter {
 
     try {
       this.cleanupInboxFiles();
-    } catch (error) {
+    } catch (error: any) {
       log.debug(`Queue inbox cleanup skipped: ${error.message}`);
     }
 
     try {
       this.cleanupOutboxFiles();
-    } catch (error) {
+    } catch (error: any) {
       log.debug(`Queue outbox cleanup skipped: ${error.message}`);
     }
   }
@@ -951,10 +1003,10 @@ class PanelBridge extends EventEmitter {
         if (fileName.endsWith('.tmp')) {
           const tmpPath = path.join(inboxDir, fileName);
           if (!isOldEnoughToSweep(tmpPath)) continue;
-          try { fs.unlinkSync(tmpPath); } catch (_) { /* ignore */ }
+          try { fs.unlinkSync(tmpPath); } catch (_: any) { /* ignore */ }
         }
       }
-    } catch (_) { /* ignore */ }
+    } catch (_: any) { /* ignore */ }
 
     const cursorFile = this.getInboxCursorFile();
     let lastProcessedSeq = 0;
@@ -965,7 +1017,7 @@ class PanelBridge extends EventEmitter {
         if (Number.isFinite(parsed) && parsed > 0) {
           lastProcessedSeq = Math.floor(parsed);
         }
-      } catch (error) {
+      } catch (error: any) {
         log.debug(`Could not parse inbox cursor file: ${error.message}`);
       }
     }
@@ -981,7 +1033,7 @@ class PanelBridge extends EventEmitter {
       if (fileName.endsWith('.tmp')) {
         const tmpPath = path.join(inboxDir, fileName);
         if (isOldEnoughToSweep(tmpPath)) {
-          try { fs.unlinkSync(tmpPath); deleted++; } catch (_) { /* ignore */ }
+          try { fs.unlinkSync(tmpPath); deleted++; } catch (_: any) { /* ignore */ }
         }
         continue;
       }
@@ -990,7 +1042,7 @@ class PanelBridge extends EventEmitter {
         try {
           fs.unlinkSync(path.join(inboxDir, fileName));
           deleted++;
-        } catch (_) {
+        } catch (_: any) {
           // Ignore cleanup failures.
         }
       }
@@ -1010,10 +1062,10 @@ class PanelBridge extends EventEmitter {
         if (fileName.endsWith('.tmp')) {
           const tmpPath = path.join(outboxDir, fileName);
           if (!isOldEnoughToSweep(tmpPath)) continue;
-          try { fs.unlinkSync(tmpPath); } catch (_) { /* ignore */ }
+          try { fs.unlinkSync(tmpPath); } catch (_: any) { /* ignore */ }
         }
       }
-    } catch (_) { /* ignore */ }
+    } catch (_: any) { /* ignore */ }
 
     if (this.queueState.lastConsumedResultSeq <= this.queue.retainRecentFiles) {
       return;
@@ -1028,7 +1080,7 @@ class PanelBridge extends EventEmitter {
         try {
           fs.unlinkSync(path.join(outboxDir, fileName));
           deleted++;
-        } catch (_) {
+        } catch (_: any) {
           // Ignore cleanup failures.
         }
       }
@@ -1039,7 +1091,7 @@ class PanelBridge extends EventEmitter {
     }
   }
 
-  extractSeq(fileName, pattern) {
+  extractSeq(fileName: string, pattern: RegExp) {
     const match = fileName.match(pattern);
     if (!match) return null;
     const parsed = Number(match[1]);
@@ -1047,7 +1099,7 @@ class PanelBridge extends EventEmitter {
     return Math.floor(parsed);
   }
 
-  processResult(result) {
+  processResult(result: AnyRecord) {
     if (!result || !result.id) return;
 
     if (this.processedResults.has(result.id)) return;
@@ -1068,7 +1120,7 @@ class PanelBridge extends EventEmitter {
         log[logLevel](`PanelBridge result: action=${pending.action} failed: ${result.error || 'unknown'} (${elapsed}ms)`);
         const message = result.error || result.data?.message || 'Command failed';
         const err = new Error(message);
-        err.data = result.data;
+        (err as AnyRecord).data = result.data;
         pending.reject(err);
       }
     }
@@ -1097,14 +1149,15 @@ class PanelBridge extends EventEmitter {
         ? this.config.statusStaleIdleMs
         : this.config.statusStaleMs;
 
-      const hasValidStatus = this.modStatus && !this.modStatus.waiting && this.modStatus.version;
-      if (stats.mtimeMs === this.lastStatusFileCheck && hasValidStatus) {
-        if (this.modStatus.age !== age) {
-          this.modStatus.age = age;
-          this.modStatus.alive = age < staleThreshold;
-          if (!this.modStatus.alive && this.modStatus._wasAlive) {
-            this.modStatus._wasAlive = false;
-            this.emit('modStatus', this.modStatus);
+      const currentStatus = this.modStatus;
+      const hasValidStatus = currentStatus && !currentStatus.waiting && currentStatus.version;
+      if (stats.mtimeMs === this.lastStatusFileCheck && hasValidStatus && currentStatus) {
+        if (currentStatus.age !== age) {
+          currentStatus.age = age;
+          currentStatus.alive = age < staleThreshold;
+          if (!currentStatus.alive && currentStatus._wasAlive) {
+            currentStatus._wasAlive = false;
+            this.emit('modStatus', currentStatus);
           }
         }
         return;
@@ -1145,12 +1198,12 @@ class PanelBridge extends EventEmitter {
           log.info(`Mod connected (age: ${Math.round(age / 1000)}s, players: ${status.playerCount})`);
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       this.handleStatusFailure(`Parse error: ${e.message}`);
     }
   }
 
-  handleStatusFailure(reason) {
+  handleStatusFailure(reason: string) {
     this.consecutiveFailures++;
 
     if (this.consecutiveFailures === 1 || this.consecutiveFailures % 10 === 0) {
@@ -1175,14 +1228,14 @@ class PanelBridge extends EventEmitter {
     }
   }
 
-  trackPlayerActivity(currentPlayers) {
+  trackPlayerActivity(currentPlayers: any) {
     const playerList = Array.isArray(currentPlayers) ? currentPlayers : Object.keys(currentPlayers || {});
     const current = new Set(playerList);
     const previous = this.previousPlayers;
 
     for (const player of current) {
       if (!previous.has(player)) {
-        logPlayerAction(player, 'connect', 'Player connected to server').catch(err => log.debug(`Failed to log player connect: ${err.message}`));
+        (logPlayerAction as any)(player, 'connect', 'Player connected to server').catch((err: any) => log.debug(`Failed to log player connect: ${err.message}`));
         recordPlayerSession(player, 'connect').catch(err => log.debug(`Failed to record player connect session: ${err.message}`));
         this.emit('playerConnect', player);
       }
@@ -1190,7 +1243,7 @@ class PanelBridge extends EventEmitter {
 
     for (const player of previous) {
       if (!current.has(player)) {
-        logPlayerAction(player, 'disconnect', 'Player disconnected from server').catch(err => log.debug(`Failed to log player disconnect: ${err.message}`));
+        (logPlayerAction as any)(player, 'disconnect', 'Player disconnected from server').catch((err: any) => log.debug(`Failed to log player disconnect: ${err.message}`));
         recordPlayerSession(player, 'disconnect').catch(err => log.debug(`Failed to record player disconnect session: ${err.message}`));
         this.emit('playerDisconnect', player);
       }
@@ -1218,7 +1271,7 @@ class PanelBridge extends EventEmitter {
         } else {
           fileInfo = { exists: false, path: statusFile };
         }
-      } catch (e) {
+      } catch (e: any) {
         fileInfo = { exists: false, error: e.message };
       }
     }
@@ -1257,7 +1310,7 @@ class PanelBridge extends EventEmitter {
     try {
       const result = await this.sendCommand('ping', {});
       return { ...result, modStatus: this.modStatus };
-    } catch (error) {
+    } catch (error: any) {
       return { success: false, error: error.message };
     }
   }
@@ -1276,21 +1329,21 @@ class PanelBridge extends EventEmitter {
     return this.sendCommand('getServerInfo', {});
   }
 
-  async triggerBlizzard(duration = 1.0) {
+  async triggerBlizzard(duration: number = 1.0) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
     return this.sendCommand('triggerBlizzard', { duration });
   }
 
-  async triggerTropicalStorm(duration = 1.0) {
+  async triggerTropicalStorm(duration: number = 1.0) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
     return this.sendCommand('triggerTropicalStorm', { duration });
   }
 
-  async triggerStorm(duration = 1.0) {
+  async triggerStorm(duration: number = 1.0) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
@@ -1304,17 +1357,17 @@ class PanelBridge extends EventEmitter {
     return this.sendCommand('stopWeather', {});
   }
 
-  async setSnow(enabled = true, intensity = null) {
+  async setSnow(enabled: boolean = true, intensity: number | null = null) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
-    const args = { enabled };
+    const args: AnyRecord = { enabled };
     if (intensity !== null) args.intensity = intensity;
     return this.sendCommand('setSnow', args);
   }
 
 
-  async startRain(intensity = 0.5) {
+  async startRain(intensity: number = 0.5) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
@@ -1328,14 +1381,14 @@ class PanelBridge extends EventEmitter {
     return this.sendCommand('stopRain', {});
   }
 
-  async triggerLightning(x = null, y = null, strike = true, light = true, rumble = true) {
+  async triggerLightning(x: number | null = null, y: number | null = null, strike: boolean = true, light: boolean = true, rumble: boolean = true) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
     return this.sendCommand('triggerLightning', { x, y, strike, light, rumble });
   }
 
-  async setClimateFloat(floatId, value, enable = true) {
+  async setClimateFloat(floatId: any, value: any, enable: boolean = true) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
@@ -1377,7 +1430,7 @@ class PanelBridge extends EventEmitter {
     return this.sendCommand('getWorldStats', {});
   }
 
-  async getPlayerDetails(username) {
+  async getPlayerDetails(username: string) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
@@ -1391,7 +1444,7 @@ class PanelBridge extends EventEmitter {
     return this.sendCommand('getAllPlayerDetails', {});
   }
 
-  async teleportPlayer(username, x, y, z = 0) {
+  async teleportPlayer(username: string, x: number, y: number, z: number = 0) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
@@ -1413,14 +1466,14 @@ class PanelBridge extends EventEmitter {
   }
 
 
-  async playWorldSound(x, y, z = 0, radius = 50, volume = 100) {
+  async playWorldSound(x: number, y: number, z: number = 0, radius: number = 50, volume: number = 100) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
     return this.sendCommand('playWorldSound', { x, y, z, radius, volume });
   }
 
-  async playSoundNearPlayer(username, radius = 50, volume = 100) {
+  async playSoundNearPlayer(username: string, radius: number = 50, volume: number = 100) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
@@ -1449,35 +1502,35 @@ class PanelBridge extends EventEmitter {
   }
 
 
-  async generateWeather(strength = 0.5, frontType = 0) {
+  async generateWeather(strength: number = 0.5, frontType: number = 0) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
     return this.sendCommand('generateWeather', { strength, frontType });
   }
 
-  async setTemperature(value = 22) {
+  async setTemperature(value: number = 22) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
     return this.sendCommand('setTemperature', { value });
   }
 
-  async setWind(value = 0.5) {
+  async setWind(value: number = 0.5) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
     return this.sendCommand('setWind', { value });
   }
 
-  async setFog(value = 0) {
+  async setFog(value: number = 0) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }
     return this.sendCommand('setFog', { value });
   }
 
-  async setClouds(value = 0) {
+  async setClouds(value: number = 0) {
     if (!this.isRunning) {
       throw new Error('Bridge not running');
     }

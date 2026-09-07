@@ -22,7 +22,7 @@ const bridgeMock = {
   isRunning: false,
 };
 
-vi.mock("../services/panelBridge.js", () => ({ default: bridgeMock }));
+vi.mock("../services/panelBridge.ts", () => ({ default: bridgeMock }));
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PanelBridge } from "../services/panelBridge.js";
+import { PanelBridge } from "../services/panelBridge.ts";
 
 
 function makeTempBridgeDir() {

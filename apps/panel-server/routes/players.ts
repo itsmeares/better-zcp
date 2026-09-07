@@ -20,7 +20,7 @@ import {
 } from '../database/init.js';
 import { VEHICLES, PERKS, PERK_CATALOG, ACCESS_LEVELS } from '../utils/commands.ts';
 import { sanitizeError } from '../utils/sanitize.ts';
-import bridge from '../services/panelBridge.js';
+import bridge from '../services/panelBridge.ts';
 import { listWhitelistAccounts, listServerRoleNames } from '../utils/whitelistDb.ts';
 import { requirePermission } from '../services/permissions.ts';
 import { ErrorCode } from '../utils/errorCodes.ts';

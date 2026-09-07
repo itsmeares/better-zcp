@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PanelBridge } from '../services/panelBridge.js';
+import { PanelBridge } from '../services/panelBridge.ts';
 
 
 function makePendingBridge(action) {

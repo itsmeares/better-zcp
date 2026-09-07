@@ -27,7 +27,7 @@ describe('PanelBridge.lua json.decode -- unicode escape handling', () => {
     expect(result.msg).toBe('helloAworld');
   });
 
-  it('round-trips a real command payload written the way apps/panel-server/services/panelBridge.js writes it (Node JSON.stringify escaping a control character)', () => {
+  it('round-trips a real command payload written the way apps/panel-server/services/panelBridge.ts writes it (Node JSON.stringify escaping a control character)', () => {
     const bridge = loadPanelBridge(LUA_PATH);
     const bel = String.fromCharCode(7);
     const nodeEncoded = JSON.stringify({ reason: `x${bel}y` });
