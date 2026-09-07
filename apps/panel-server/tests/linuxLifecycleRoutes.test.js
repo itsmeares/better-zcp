@@ -23,7 +23,7 @@ vi.mock("../services/permissions.ts", () => ({
   requirePermission: () => (_req, _res, next) => next(),
 }));
 
-vi.mock("../services/serverManager.js", () => ({
+vi.mock("../services/serverManager.ts", () => ({
   resolveLaunchMode: () => ({ mode: "managed" }),
   ServerManager: class {
     async reloadConfig() {}

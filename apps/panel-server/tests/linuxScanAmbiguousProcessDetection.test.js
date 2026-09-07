@@ -25,7 +25,7 @@ vi.mock("../utils/logger.ts", () => ({
   }),
 }));
 
-const { ServerManager } = await import("../services/serverManager.js");
+const { ServerManager } = await import("../services/serverManager.ts");
 
 function makeManager(overrides) {
   const manager = new ServerManager();

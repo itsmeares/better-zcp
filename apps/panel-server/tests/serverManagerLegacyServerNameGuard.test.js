@@ -16,7 +16,7 @@ vi.mock("../database/init.js", () => ({
   getServers,
 }));
 
-const { ServerManager } = await import("../services/serverManager.js");
+const { ServerManager } = await import("../services/serverManager.ts");
 
 describe("ServerManager loadConfig -- legacy settings.serverName path-traversal guard", () => {
   beforeEach(() => {

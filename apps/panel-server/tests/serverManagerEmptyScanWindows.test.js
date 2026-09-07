@@ -6,7 +6,7 @@ vi.mock('child_process', async (importOriginal) => {
   return { ...actual, execFile: (...args) => execFileMock(...args) };
 });
 
-const { ServerManager } = await import('../services/serverManager.js');
+const { ServerManager } = await import('../services/serverManager.ts');
 
 describe('ServerManager Windows scan: empty match set vs a genuine exec failure', () => {
   beforeEach(() => {

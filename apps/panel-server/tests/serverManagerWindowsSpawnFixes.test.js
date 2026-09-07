@@ -43,7 +43,7 @@ vi.mock("../utils/logger.ts", () => ({
   }),
 }));
 
-const { ServerManager } = await import("../services/serverManager.js");
+const { ServerManager } = await import("../services/serverManager.ts");
 
 const isWindowsHost = process.platform === "win32";
 

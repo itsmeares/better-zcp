@@ -11,7 +11,7 @@ vi.mock("../services/managedContainer.ts", () => ({
 }));
 
 const { getObservedServerRunning } = await import("../index.js");
-const { ServerManager } = await import("../services/serverManager.js");
+const { ServerManager } = await import("../services/serverManager.ts");
 
 describe("status watchdog -- Docker provider awareness", () => {
   beforeEach(() => {

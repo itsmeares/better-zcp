@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { execFile } from 'child_process';
-import { ServerManager } from '../services/serverManager.js';
+import { ServerManager } from '../services/serverManager.ts';
 
 
 function makeManager(overrides = {}) {

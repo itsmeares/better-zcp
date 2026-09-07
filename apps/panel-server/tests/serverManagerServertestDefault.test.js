@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ServerManager, scoreServerProcessOwnership } from '../services/serverManager.js';
+import { ServerManager, scoreServerProcessOwnership } from '../services/serverManager.ts';
 
 describe('ServerManager serverName default identity', () => {
   it('does not default this.serverName to the literal vanilla PZ name "servertest"', () => {

@@ -24,7 +24,7 @@ vi.mock("../utils/logger.ts", () => ({
   }),
 }));
 
-const { ServerManager } = await import("../services/serverManager.js");
+const { ServerManager } = await import("../services/serverManager.ts");
 
 (isLinux ? describe : describe.skip)(
   "startServer() with a no-extension custom command on Linux",

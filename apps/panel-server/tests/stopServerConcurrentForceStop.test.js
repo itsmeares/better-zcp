@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ServerManager } from "../services/serverManager.js";
+import { ServerManager } from "../services/serverManager.ts";
 
 
 function makeManager(overrides = {}) {

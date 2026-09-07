@@ -28,7 +28,22 @@ const PUBLIC_IP_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 const KILL_EXEC_TIMEOUT_MS = 8000;
 
-export function resolveConfiguredRconPort(value, fallback = 27015) {
+type AnyRecord = Record<string, any>;
+
+type ProcessDetails = {
+  running: boolean;
+  matched: AnyRecord[];
+  owned?: AnyRecord[];
+  ambiguous?: string[];
+  scanFailed?: boolean;
+  [key: string]: any;
+};
+
+type LaunchMode =
+  | { mode: "managed"; launcherPath: null }
+  | { mode: "custom"; launcherPath: string };
+
+export function resolveConfiguredRconPort(value: unknown, fallback: number = 27015) {
   if (
     value === undefined ||
     value === null ||
@@ -39,12 +54,12 @@ export function resolveConfiguredRconPort(value, fallback = 27015) {
   return parseBoundedInteger(value, null, 1, 65535);
 }
 
-function getConfiguredIpv4Address(variableName) {
+function getConfiguredIpv4Address(variableName: string) {
   const address = process.env[variableName]?.trim();
   return address && net.isIP(address) === 4 ? address : null;
 }
 
-export function classifyProcessKillError(error) {
+export function classifyProcessKillError(error: AnyRecord | null) {
   if (!error) return "success";
   if (error?.killed) return "timedOut";
 
@@ -62,7 +77,7 @@ export function classifyProcessKillError(error) {
   return "failed";
 }
 
-function buildLdLibraryPath(serverDir) {
+function buildLdLibraryPath(serverDir: string) {
   log.debug(
     `buildLdLibraryPath: scanning candidates for serverDir=${serverDir}`,
   );
@@ -90,11 +105,11 @@ function buildLdLibraryPath(serverDir) {
   return result;
 }
 
-export function windowsQuoteArgIfNeeded(value) {
+export function windowsQuoteArgIfNeeded(value: string) {
   return /[\s"&<>()^|,;=]/.test(value) ? `"${value}"` : value;
 }
 
-export function buildWindowsCmdLine(exePath, args, launchLogPath) {
+export function buildWindowsCmdLine(exePath: string, args: string[], launchLogPath: string | null) {
   const parts = [
     windowsQuoteArgIfNeeded(exePath),
     ...args.map(windowsQuoteArgIfNeeded),
@@ -105,7 +120,7 @@ export function buildWindowsCmdLine(exePath, args, launchLogPath) {
   return `"${parts.join(" ")}"`;
 }
 
-export function parseCustomStartCommand(startCommand) {
+export function parseCustomStartCommand(startCommand: string) {
   const parts = startCommand.match(/(?:[^\s"]+|"[^"]*")+/g) || [
     startCommand,
   ];
@@ -114,7 +129,7 @@ export function parseCustomStartCommand(startCommand) {
   return { cmd, args };
 }
 
-function findJvmExecutable(serverDir) {
+function findJvmExecutable(serverDir: string) {
   const candidates = [
     path.join(serverDir, "jre64", "bin", "java"),
     path.join(serverDir, "jre", "bin", "java"),
@@ -133,7 +148,7 @@ const ALLOWED_CMD_EXTENSIONS = isWindows
   ? [".bat", ".cmd", ".exe"]
   : [".sh", ""];
 
-function validateStartCommand(cmd) {
+function validateStartCommand(cmd: string) {
   if (!cmd || typeof cmd !== "string")
     return { valid: false, reason: "Command is empty" };
   if (cmd.length > 1024)
@@ -152,7 +167,7 @@ function getDefaultStartupScript() {
   return isWindows ? "StartServer64.bat" : "start-server.sh";
 }
 
-export function isWindowsDedicatedServerCommandLine(commandLine) {
+export function isWindowsDedicatedServerCommandLine(commandLine: unknown) {
   const normalized =
     typeof commandLine === "string" ? commandLine.toLowerCase() : "";
   if (!normalized) return false;
@@ -184,7 +199,7 @@ export function isWindowsDedicatedServerCommandLine(commandLine) {
   return false;
 }
 
-function isLinuxDedicatedServerCommandLine(commandLine) {
+function isLinuxDedicatedServerCommandLine(commandLine: unknown) {
   const lower = String(commandLine || "").toLowerCase();
   if (!lower) return false;
   if (lower.includes("zombie.network.gameserver")) return true;
@@ -210,18 +225,18 @@ function isLinuxDedicatedServerCommandLine(commandLine) {
   return false;
 }
 
-function looksZomboidAdjacent(commandLine) {
+function looksZomboidAdjacent(commandLine: unknown) {
   const lower = String(commandLine || "").toLowerCase();
   return lower.includes("zomboid") || lower.includes("zombie.network");
 }
 
-function looksLikeUndeterminedJvmCandidate(commandLine) {
+function looksLikeUndeterminedJvmCandidate(commandLine: unknown) {
   const lower = String(commandLine || "").toLowerCase();
   if (!looksZomboidAdjacent(lower)) return false;
   return /\bjava\b|\bjavaw\b|\/java$/.test(lower);
 }
 
-function extractLaunchArgValue(commandLine, flag) {
+function extractLaunchArgValue(commandLine: unknown, flag: string) {
   const pattern = new RegExp(
     `(?:^|\\s)-${flag}(?:\\s*=\\s*|\\s+)("[^"]*"|'[^']*'|\\S+)`,
     "i",
@@ -232,7 +247,7 @@ function extractLaunchArgValue(commandLine, flag) {
   return value || null;
 }
 
-function normalizePathForCompare(value) {
+function normalizePathForCompare(value: unknown) {
   const normalized = String(value || "")
     .trim()
     .replace(/^["']|["']$/g, "")
@@ -241,7 +256,7 @@ function normalizePathForCompare(value) {
   return isWindows ? normalized.toLowerCase() : normalized;
 }
 
-export function resolveLaunchMode(server) {
+export function resolveLaunchMode(server: AnyRecord | null): LaunchMode {
   const raw = server?.serverPath || server?.installPath;
   if (!raw || typeof raw !== "string") {
     return { mode: "managed", launcherPath: null };
@@ -253,7 +268,7 @@ export function resolveLaunchMode(server) {
   return { mode: "managed", launcherPath: null };
 }
 
-export function scoreServerProcessOwnership(commandLine, descriptor = {}) {
+export function scoreServerProcessOwnership(commandLine: unknown, descriptor: AnyRecord = {}) {
   const cmd = String(commandLine || "");
   if (!cmd) return 0;
 
@@ -287,7 +302,31 @@ export function scoreServerProcessOwnership(commandLine, descriptor = {}) {
 }
 
 export class ServerManager {
-  constructor({ lifecycleFactory = createLinuxServiceLifecycle } = {}) {
+  serverProcess: any;
+  serverPath: string;
+  serverBat: string;
+  savePath: string;
+  serverName: string | null;
+  startCommand: string;
+  rconHost: any;
+  rconPort: any;
+  isRunning: boolean;
+  startTime: Date | null;
+  configLoaded: boolean;
+  launchMode: string;
+  lifecycleProvider: string;
+  _serverRecord: AnyRecord | null;
+  _lifecycleFactory: any;
+  _serverId: string | null;
+  publicIp: string | null;
+  gamePort: number | null;
+  fetchingIp: boolean;
+  _killTimeoutMs: number;
+  _starting = false;
+  _stopping = false;
+  _launchLogFd: any = null;
+
+  constructor({ lifecycleFactory = createLinuxServiceLifecycle }: { lifecycleFactory?: any } = {}) {
     this.serverProcess = null;
     this.serverPath = process.env.PZ_SERVER_PATH || "";
     this.serverBat = process.env.PZ_SERVER_BAT || getDefaultStartupScript();
@@ -310,7 +349,7 @@ export class ServerManager {
     this._killTimeoutMs = KILL_EXEC_TIMEOUT_MS;
   }
 
-  async reloadConfig(serverId = null) {
+  async reloadConfig(serverId: string | null = null) {
     this.serverPath = process.env.PZ_SERVER_PATH || "";
     this.serverBat = process.env.PZ_SERVER_BAT || getDefaultStartupScript();
     this.savePath = process.env.PZ_SAVE_PATH || "";
@@ -325,7 +364,7 @@ export class ServerManager {
     await this.loadConfig(serverId);
   }
 
-  async loadConfig(serverId = null) {
+  async loadConfig(serverId: string | null = null) {
     if (this.configLoaded) return;
     this._serverId = serverId;
     try {
@@ -424,7 +463,7 @@ export class ServerManager {
         log.warn(`No server config found for server ${serverId}`);
       }
       this.configLoaded = true;
-    } catch (error) {
+    } catch (error: any) {
       log.debug(`Could not load server config from database: ${error.message}`);
     }
   }
@@ -444,7 +483,7 @@ export class ServerManager {
       const fd = fs.openSync(javaPath, "r+");
       fs.closeSync(fd);
       return false;
-    } catch (error) {
+    } catch (error: any) {
       if (error?.code === "ETXTBSY") return true;
       log.debug(
         `isJvmExecutableBusy: could not probe ${javaPath} (${error?.code || error?.message}), not treating as busy`,
@@ -478,7 +517,7 @@ export class ServerManager {
           serviceName: lifecycle.serviceName,
           ...(status.error ? { error: status.error } : {}),
         };
-      } catch (error) {
+      } catch (error: any) {
         log.warn(
           `Managed lifecycle status failed for "${this.serverName}": ${error.message}`,
         );
@@ -514,9 +553,13 @@ export class ServerManager {
       );
     }
 
-    if (!scan.scanFailed && owned.length === 0 && scan.ambiguous?.length > 0) {
+    if (
+      !scan.scanFailed &&
+      owned.length === 0 &&
+      (scan.ambiguous?.length ?? 0) > 0
+    ) {
       log.warn(
-        `getServerProcessDetails: found ${scan.ambiguous.length} ambiguous JVM-shaped process(es) while no process could be attributed to "${this.serverName}" -- cannot confirm the server is stopped`,
+        `getServerProcessDetails: found ${scan.ambiguous?.length ?? 0} ambiguous JVM-shaped process(es) while no process could be attributed to "${this.serverName}" -- cannot confirm the server is stopped`,
       );
       return {
         running: false,
@@ -540,13 +583,13 @@ export class ServerManager {
     };
   }
 
-  async _scanDedicatedServerProcesses() {
-    return new Promise((resolve) => {
+  async _scanDedicatedServerProcesses(): Promise<ProcessDetails> {
+    return new Promise<ProcessDetails>((resolve) => {
       log.debug(
         `getServerProcessDetails: starting detection (platform=${process.platform})`,
       );
-      const matched = [];
-      const pushMatch = (cmd, pid) => {
+      const matched: AnyRecord[] = [];
+      const pushMatch = (cmd: unknown, pid: unknown) => {
         const full = String(cmd || "");
         matched.push(pid ? { pid: String(pid), cmd: full } : { cmd: full });
       };
@@ -603,8 +646,8 @@ export class ServerManager {
               return;
             }
 
-            const ambiguous = [];
-            const pushAmbiguous = (cmd) => {
+            const ambiguous: string[] = [];
+            const pushAmbiguous = (cmd: unknown) => {
               ambiguous.push(String(cmd || "").slice(0, 240));
             };
             const lines = psStdout.split(/\r?\n/);
@@ -643,8 +686,8 @@ export class ServerManager {
         );
       } else {
         log.debug("getServerProcessDetails: trying pgrep -af first...");
-        const ambiguous = [];
-        const pushAmbiguous = (cmd) => {
+        const ambiguous: string[] = [];
+        const pushAmbiguous = (cmd: unknown) => {
           ambiguous.push(String(cmd || "").slice(0, 240));
         };
         exec(
@@ -749,7 +792,7 @@ export class ServerManager {
     return path.join(getDataPaths().dataDir, `server-process-${safeName}.json`);
   }
 
-  _writePidFile(pid) {
+  _writePidFile(pid: unknown) {
     try {
       const data = {
         pid: String(pid),
@@ -757,7 +800,7 @@ export class ServerManager {
         writtenAt: Date.now(),
       };
       fs.writeFileSync(this._pidFilePath(), JSON.stringify(data), "utf-8");
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`Could not write server pidfile: ${e.message}`);
     }
   }
@@ -781,12 +824,12 @@ export class ServerManager {
     }
   }
 
-  _getLiveCommandLine(pid) {
+  _getLiveCommandLine(pid: unknown) {
     if (!/^\d+$/.test(String(pid || ""))) return Promise.resolve(null);
 
     return new Promise((resolve) => {
       let settled = false;
-      const finish = (value) => {
+      const finish = (value: string | null) => {
         if (settled) return;
         settled = true;
         resolve(value);
@@ -844,10 +887,10 @@ export class ServerManager {
     };
   }
 
-  async getProcessUptimeSeconds(pid) {
+  async getProcessUptimeSeconds(pid: unknown): Promise<number | null> {
     if (isWindows || !/^\d+$/.test(String(pid || ""))) return null;
 
-    return new Promise((resolve) => {
+    return new Promise<number | null>((resolve) => {
       execFile(
         "ps",
         ["-o", "etimes=", "-p", String(pid)],
@@ -861,7 +904,7 @@ export class ServerManager {
     });
   }
 
-  async startServer({ skipRunningCheck = false, serverId = this._serverId } = {}) {
+  async startServer({ skipRunningCheck = false, serverId = this._serverId }: { skipRunningCheck?: boolean; serverId?: string | null } = {}) {
     if (this._starting) {
       throw new Error("Server start already in progress");
     }
@@ -894,10 +937,10 @@ export class ServerManager {
         this.isRunning = true;
         this.startTime = this.startTime || new Date();
         this._deletePidFile();
-        await logServerEvent(
+        await (logServerEvent as any)(
           "server_start",
           `Server started through ${this.lifecycleProvider}`,
-        ).catch((error) => log.warn(`Failed to log event: ${error.message}`));
+        ).catch((error: any) => log.warn(`Failed to log event: ${error.message}`));
         return result;
       }
 
@@ -1006,7 +1049,7 @@ export class ServerManager {
         } else if (!isWindows && ext === ".sh") {
           try {
             fs.chmodSync(resolvedCmd, 0o750);
-          } catch (e) {
+          } catch (e: any) {
             log.debug(`chmod on custom .sh failed: ${e.message}`);
           }
           const serverAbsPath = path.resolve(cwd);
@@ -1024,7 +1067,7 @@ export class ServerManager {
           if (!isWindows) {
             try {
               fs.chmodSync(resolvedCmd, 0o750);
-            } catch (e) {
+            } catch (e: any) {
               log.debug(`chmod on custom command failed: ${e.message}`);
             }
           }
@@ -1046,7 +1089,7 @@ export class ServerManager {
         }
         this._closeLaunchLogFd();
 
-        this.serverProcess.on("error", (error) => {
+        this.serverProcess.on("error", (error: any) => {
           log.error(`Server process error: ${error.message}`);
           this.isRunning = false;
           this.serverProcess = null;
@@ -1065,7 +1108,7 @@ export class ServerManager {
           );
         }
 
-        await logServerEvent("server_start", "Server started via manager");
+        await (logServerEvent as any)("server_start", "Server started via manager");
         log.info("Server start command executed");
         this._writePidFile(this.serverProcess.pid);
 
@@ -1093,7 +1136,7 @@ export class ServerManager {
       } else {
         try {
           fs.chmodSync(batPath, 0o750);
-        } catch (e) {
+        } catch (e: any) {
           log.warn(`Could not chmod startup script: ${e.message}`);
         }
         const serverAbsPath = path.resolve(this.serverPath);
@@ -1111,7 +1154,7 @@ export class ServerManager {
       }
       this._closeLaunchLogFd();
 
-      this.serverProcess.on("error", (error) => {
+      this.serverProcess.on("error", (error: any) => {
         log.error(`Server process error: ${error.message}`);
         this.isRunning = false;
         this.serverProcess = null;
@@ -1130,7 +1173,7 @@ export class ServerManager {
         );
       }
 
-      await logServerEvent("server_start", "Server started via manager");
+      await (logServerEvent as any)("server_start", "Server started via manager");
       log.info("Server start command executed");
       this._writePidFile(this.serverProcess.pid);
 
@@ -1148,7 +1191,7 @@ export class ServerManager {
     try {
       this._launchLogFd = fs.openSync(launchLogPath, "w");
       return launchLogPath;
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`Could not open launch log file: ${e.message}`);
       this._launchLogFd = "ignore";
       return null;
@@ -1166,12 +1209,12 @@ export class ServerManager {
     this._launchLogFd = null;
   }
 
-  _waitForImmediateCrash(launchLogPath) {
+  _waitForImmediateCrash(launchLogPath: string | null): Promise<AnyRecord | null> {
     const proc = this.serverProcess;
     if (!proc) return Promise.resolve(null);
-    return new Promise((resolve) => {
+    return new Promise<AnyRecord | null>((resolve) => {
       let settled = false;
-      let graceTimer;
+      let graceTimer: ReturnType<typeof setTimeout>;
       const readTail = () => {
         try {
           if (launchLogPath && fs.existsSync(launchLogPath)) {
@@ -1182,7 +1225,7 @@ export class ServerManager {
         }
         return "";
       };
-      const finish = (result) => {
+      const finish = (result: AnyRecord | null) => {
         if (settled) return;
         settled = true;
         clearTimeout(graceTimer);
@@ -1190,10 +1233,10 @@ export class ServerManager {
         proc.removeListener("error", onError);
         resolve(result);
       };
-      const onExit = (exitCode, signal) => {
+      const onExit = (exitCode: number | null, signal: NodeJS.Signals | null) => {
         finish({ exitCode, signal, tail: readTail() });
       };
-      const onError = (error) => {
+      const onError = (error: any) => {
         finish({
           exitCode: null,
           signal: null,
@@ -1207,8 +1250,8 @@ export class ServerManager {
   }
 
   async stopServer(
-    graceful = true,
-    { serverId = this._serverId } = {},
+    graceful: boolean = true,
+    { serverId = this._serverId }: { serverId?: string | null } = {},
   ) {
     if (graceful) {
       log.info("Graceful stop requested - use RCON quit command");
@@ -1236,10 +1279,10 @@ export class ServerManager {
         const result = await this._getManagedLifecycle().run("stop");
         if (result.success && result.confirmed !== false) this._clearRunState();
         if (result.success) {
-          await logServerEvent(
+          await (logServerEvent as any)(
             "server_stop",
             `Server stopped through ${this.lifecycleProvider}`,
-          ).catch((error) => log.warn(`Failed to log event: ${error.message}`));
+          ).catch((error: any) => log.warn(`Failed to log event: ${error.message}`));
         }
         return result;
       }
@@ -1273,10 +1316,10 @@ export class ServerManager {
           log.warn(
             `stopServer: kill command for "${this.serverName}" (PIDs: ${pids.join(", ")}) did not finish within ${this._killTimeoutMs}ms — could not confirm the process actually exited`,
           );
-          await logServerEvent(
+          await (logServerEvent as any)(
             "server_stop",
             `Server stop timed out waiting for kill confirmation (PIDs: ${pids.join(", ")})`,
-          ).catch((e) => log.warn(`Failed to log event: ${e.message}`));
+          ).catch((e: any) => log.warn(`Failed to log event: ${e.message}`));
           return {
             success: true,
             confirmed: false,
@@ -1307,10 +1350,10 @@ export class ServerManager {
           };
         }
         this._clearRunState();
-        await logServerEvent(
+        await (logServerEvent as any)(
           "server_stop",
           `Server force stopped (killed PIDs: ${pids.join(", ")})`,
-        ).catch((e) => log.warn(`Failed to log event: ${e.message}`));
+        ).catch((e: any) => log.warn(`Failed to log event: ${e.message}`));
         return { success: true, message: "Server stopped" };
       }
 
@@ -1337,10 +1380,10 @@ export class ServerManager {
         log.warn(
           `stopServer: generic force stop did not finish within ${this._killTimeoutMs}ms — could not confirm the process actually exited`,
         );
-        await logServerEvent(
+        await (logServerEvent as any)(
           "server_stop",
           "Server stop timed out waiting for kill confirmation (generic fallback)",
-        ).catch((e) => log.warn(`Failed to log event: ${e.message}`));
+        ).catch((e: any) => log.warn(`Failed to log event: ${e.message}`));
         return {
           success: true,
           confirmed: false,
@@ -1369,7 +1412,7 @@ export class ServerManager {
         };
       }
       this._clearRunState();
-      await logServerEvent("server_stop", "Server force stopped").catch((e) =>
+      await (logServerEvent as any)("server_stop", "Server force stopped").catch((e: any) =>
         log.warn(`Failed to log event: ${e.message}`),
       );
       return { success: true, message: "Forced fallback kill executed" };
@@ -1392,19 +1435,19 @@ export class ServerManager {
   async _isOnlyLocalServer() {
     try {
       const servers = await getServers();
-      return (servers || []).filter((entry) => !entry.isRemote).length <= 1;
-    } catch (error) {
+      return (servers || []).filter((entry: AnyRecord) => !entry.isRemote).length <= 1;
+    } catch (error: any) {
       log.debug(`Could not count configured servers: ${error.message}`);
       return false;
     }
   }
 
-  _killPids(pids) {
-    return new Promise((resolve) => {
+  _killPids(pids: string[]) {
+    return new Promise<AnyRecord>((resolve) => {
       if (isWindows) {
         let remaining = pids.length;
         let timedOut = false;
-        const errors = [];
+        const errors: string[] = [];
         for (const pid of pids) {
           execFile(
             "taskkill",
@@ -1414,7 +1457,7 @@ export class ServerManager {
               if (killErr) {
                 const outcome = classifyProcessKillError(killErr);
                 if (outcome === "timedOut") timedOut = true;
-                if (outcome === "failed") errors.push(`PID ${pid}: ${killErr.message}`);
+                if (outcome === "failed") errors.push(`PID ${pid}: ${killErr?.message || "kill failed"}`);
                 log.debug(`taskkill ${pid}: ${killErr.message}`);
               }
                 if (--remaining === 0) {
@@ -1440,14 +1483,14 @@ export class ServerManager {
           resolve({
             timedOut: outcome === "timedOut",
             failed: outcome === "failed",
-            errors: outcome === "failed" ? [killErr.message] : [],
+            errors: outcome === "failed" ? [killErr?.message || "kill failed"] : [],
           });
         },
       );
     });
   }
 
-  _killProcessGroup(pid) {
+  _killProcessGroup(pid: unknown) {
     if (isWindows || !/^\d+$/.test(String(pid ?? "")) || Number(pid) <= 1) {
       return { failed: false, errors: [] };
     }
@@ -1455,7 +1498,7 @@ export class ServerManager {
     try {
       process.kill(-Number(pid), "SIGKILL");
       return { failed: false, errors: [] };
-    } catch (error) {
+    } catch (error: any) {
       const outcome = classifyProcessKillError(error);
       return {
         failed: outcome === "failed",
@@ -1465,11 +1508,11 @@ export class ServerManager {
   }
 
   async _confirmProcessStopped() {
-    let timeoutId;
-    const processDetails = Promise.resolve()
+    let timeoutId!: ReturnType<typeof setTimeout>;
+    const processDetails: Promise<ProcessDetails | null> = Promise.resolve()
       .then(() => this.getServerProcessDetails())
       .catch(() => null);
-    const timeout = new Promise((resolve) => {
+    const timeout = new Promise<null>((resolve) => {
       timeoutId = setTimeout(() => resolve(null), 3000);
     });
 
@@ -1481,25 +1524,25 @@ export class ServerManager {
     }
   }
 
-  _genericForceStop() {
-    return new Promise((resolve) => {
+  _genericForceStop(): Promise<AnyRecord> {
+    return new Promise<AnyRecord>((resolve) => {
       if (isWindows) {
         let timedOut = false;
-        const errors = [];
+        const errors: string[] = [];
         exec(
           "taskkill /IM ProjectZomboid64.exe /T /F",
           { timeout: this._killTimeoutMs },
-          (err1) => {
+          (err1: any) => {
             const outcome1 = classifyProcessKillError(err1);
             if (outcome1 === "timedOut") timedOut = true;
-            if (outcome1 === "failed") errors.push(`ProjectZomboid64.exe: ${err1.message}`);
+            if (outcome1 === "failed") errors.push(`ProjectZomboid64.exe: ${err1?.message || "kill failed"}`);
             exec(
               "powershell -Command \"Get-CimInstance Win32_Process -Filter \\\"Name='java.exe'\\\" | Where-Object { $_.CommandLine -like '*zombie.network.gameserver*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }\"",
               { timeout: this._killTimeoutMs },
-              (err2) => {
+              (err2: any) => {
                 const outcome2 = classifyProcessKillError(err2);
                 if (outcome2 === "timedOut") timedOut = true;
-                if (outcome2 === "failed") errors.push(`java.exe: ${err2.message}`);
+                if (outcome2 === "failed") errors.push(`java.exe: ${err2?.message || "kill failed"}`);
                 resolve({ timedOut, failed: errors.length > 0, errors });
               },
             );
@@ -1511,23 +1554,23 @@ export class ServerManager {
       exec(
         "pkill -9 -f 'zombie.network.[Gg]ame[Ss]erver|[Pp]roject[Zz]omboid64|[Pp]roject[Zz]omboid32'",
         { timeout: this._killTimeoutMs },
-        (err) => {
+        (err: any) => {
           const outcome = classifyProcessKillError(err);
           resolve({
             timedOut: outcome === "timedOut",
             failed: outcome === "failed",
-            errors: outcome === "failed" ? [err.message] : [],
+            errors: outcome === "failed" ? [err?.message || "kill failed"] : [],
           });
         },
       );
     });
   }
 
-  async restartServer(rconService, warningMinutes = 5) {
+  async restartServer(rconService: any, warningMinutes: number = 5) {
     try {
-      const sendWarning = async (msg) => {
+      const sendWarning = async (msg: string) => {
         try {
-          let timeoutId;
+          let timeoutId!: ReturnType<typeof setTimeout>;
           const timeoutPromise = new Promise((_, reject) => {
             timeoutId = setTimeout(
               () => reject(new Error("RCON timeout")),
@@ -1536,7 +1579,7 @@ export class ServerManager {
           });
           await Promise.race([rconService.serverMessage(msg), timeoutPromise]);
           clearTimeout(timeoutId);
-        } catch (e) {
+        } catch (e: any) {
           log.warn(`Failed to send restart warning: ${e.message}`);
         }
       };
@@ -1553,7 +1596,7 @@ export class ServerManager {
       await this.sleep(5000);
 
       try {
-        let saveTimeoutId;
+        let saveTimeoutId!: ReturnType<typeof setTimeout>;
         const saveTimeout = new Promise((_, reject) => {
           saveTimeoutId = setTimeout(
             () => reject(new Error("Save timeout")),
@@ -1567,7 +1610,7 @@ export class ServerManager {
             `Save before restart failed: ${saveResult?.error || "unknown error"}`,
           );
         }
-      } catch (e) {
+      } catch (e: any) {
         throw new Error(`Save before restart failed: ${e.message}`);
       }
       await this.sleep(3000);
@@ -1585,7 +1628,7 @@ export class ServerManager {
         this.isRunning = true;
         this.startTime = new Date();
         this._deletePidFile();
-        await logServerEvent(
+        await (logServerEvent as any)(
           "server_restart",
           `Server restarted through ${this.lifecycleProvider}`,
         );
@@ -1596,7 +1639,7 @@ export class ServerManager {
       }
 
       try {
-        let quitTimeoutId;
+        let quitTimeoutId!: ReturnType<typeof setTimeout>;
         const quitTimeout = new Promise((_, reject) => {
           quitTimeoutId = setTimeout(
             () => reject(new Error("Quit timeout")),
@@ -1605,7 +1648,7 @@ export class ServerManager {
         });
         await Promise.race([rconService.quit(), quitTimeout]);
         clearTimeout(quitTimeoutId);
-      } catch (e) {
+      } catch (e: any) {
         log.warn(`RCON quit failed, will force stop: ${e.message}`);
       }
       await this.sleep(10000);
@@ -1657,9 +1700,9 @@ export class ServerManager {
         };
       }
 
-      await logServerEvent("server_restart", "Server restarted");
+      await (logServerEvent as any)("server_restart", "Server restarted");
       return { success: true, message: "Server restarted successfully" };
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Restart failed: ${error.message}`);
       throw error;
     }
@@ -1691,7 +1734,7 @@ export class ServerManager {
             );
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         log.debug(`Public IP lookup setting check failed: ${err.message}`);
       }
     }
@@ -1747,7 +1790,7 @@ export class ServerManager {
     const interfaces = os.networkInterfaces();
     const result = [];
     for (const name of Object.keys(interfaces)) {
-      for (const iface of interfaces[name]) {
+      for (const iface of interfaces[name] ?? []) {
         if (iface.family === "IPv4" && !iface.internal) {
           result.push({ name, address: iface.address });
         }
@@ -1764,7 +1807,7 @@ export class ServerManager {
       if (selected && interfaces.some((iface) => iface.address === selected)) {
         return selected;
       }
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`lanIpAddress setting lookup failed: ${err.message}`);
     }
 
@@ -1780,7 +1823,7 @@ export class ServerManager {
       if (config && config.DefaultPort) {
         this.gamePort = parseInt(config.DefaultPort, 10);
       }
-    } catch (e) {
+    } catch (e: any) {
       // ignore
     }
   }
@@ -1803,11 +1846,11 @@ export class ServerManager {
         try {
           await setSetting("cachedPublicIp", data.ip);
           await setSetting("cachedPublicIpAt", String(Date.now()));
-        } catch (_) {
+        } catch (_: any) {
           /* best effort */
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       // silent fail
     } finally {
       this.fetchingIp = false;
@@ -1855,10 +1898,10 @@ export class ServerManager {
     return null;
   }
 
-  parseIniFile(filePath) {
+  parseIniFile(filePath: string): AnyRecord | null {
     try {
       const content = fs.readFileSync(filePath, "utf-8");
-      const config = {};
+      const config: AnyRecord = {};
       const lines = content.split("\n");
 
       for (const line of lines) {
@@ -1872,13 +1915,13 @@ export class ServerManager {
       }
 
       return config;
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Failed to parse config file: ${error.message}`);
       return null;
     }
   }
 
-  async saveServerConfig(config) {
+  async saveServerConfig(config: AnyRecord) {
     if (!this.savePath) {
       throw new Error("Save path not configured");
     }
@@ -1930,7 +1973,7 @@ export class ServerManager {
       });
       log.info("Server config saved");
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Failed to save config: ${error.message}`);
       throw error;
     }
@@ -1947,26 +1990,26 @@ export class ServerManager {
         return [];
       }
 
-      const mods = config.Mods.split(";").filter((m) => m.trim());
+      const mods = String(config.Mods).split(";").filter((m: string) => m.trim());
       const workshopIds = config.WorkshopItems
-        ? config.WorkshopItems.split(";").filter((m) => m.trim())
+        ? String(config.WorkshopItems).split(";").filter((m: string) => m.trim())
         : [];
 
-      return mods.map((mod, index) => ({
+      return mods.map((mod: string, index: number) => ({
         name: mod,
         workshopId: workshopIds[index] || null,
       }));
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Failed to get mod list: ${error.message}`);
       return [];
     }
   }
 
-  sleep(ms) {
+  sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  updatePaths(serverPath, savePath) {
+  updatePaths(serverPath: string, savePath: string) {
     this.serverPath = serverPath || this.serverPath;
     this.savePath = savePath || this.savePath;
   }

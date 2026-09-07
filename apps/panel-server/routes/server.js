@@ -17,7 +17,7 @@ import {
 } from "../database/init.js";
 import { sanitizeError, sanitizeIniValue } from "../utils/sanitize.ts";
 import { hasIniKeyValue, setIniKeyLine } from "../utils/iniKeyWrite.ts";
-import { resolveLaunchMode } from "../services/serverManager.js";
+import { resolveLaunchMode } from "../services/serverManager.ts";
 import {
   isSteamOperationIdle,
   getActiveSteamOperations,

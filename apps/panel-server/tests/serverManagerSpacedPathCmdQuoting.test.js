@@ -3,7 +3,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { buildWindowsCmdLine } from "../services/serverManager.js";
+import { buildWindowsCmdLine } from "../services/serverManager.ts";
 
 
 const isWindows = process.platform === "win32";

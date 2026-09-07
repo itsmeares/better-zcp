@@ -5,7 +5,7 @@ import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Scheduler");
 import panelBridge from "./panelBridge.ts";
 import { RconService } from "./rcon.ts";
-import { ServerManager } from "./serverManager.js";
+import { ServerManager } from "./serverManager.ts";
 import { runManagedLifecycle } from "./managedContainer.ts";
 import {
   acquireLifecycleLock,

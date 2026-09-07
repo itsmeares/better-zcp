@@ -45,7 +45,7 @@ import {
   getDatabaseFilePath,
 } from "./database/init.js";
 import { RconService } from "./services/rcon.ts";
-import { ServerManager } from "./services/serverManager.js";
+import { ServerManager } from "./services/serverManager.ts";
 import { DockerClient } from "./services/dockerClient.ts";
 import { setDockerClient } from "./services/managedContainer.ts";
 import { ModChecker } from "./services/modChecker.ts";

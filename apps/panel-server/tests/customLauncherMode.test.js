@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { resolveLaunchMode } from "../services/serverManager.js";
+import { resolveLaunchMode } from "../services/serverManager.ts";
 
 const getActiveServer = vi.fn();
 vi.mock("../database/init.js", () => ({

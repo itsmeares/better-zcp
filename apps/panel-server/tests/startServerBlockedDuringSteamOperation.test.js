@@ -1,6 +1,6 @@
 import { describe, expect, it, afterEach } from "vitest";
 import path from "path";
-import { ServerManager } from "../services/serverManager.js";
+import { ServerManager } from "../services/serverManager.ts";
 import {
   getActiveSteamOperations,
   clearActiveSteamOperation,

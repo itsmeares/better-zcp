@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { ServerManager } from "../services/serverManager.js";
+import { ServerManager } from "../services/serverManager.ts";
 
 
 function makeManager(savePath, serverName) {

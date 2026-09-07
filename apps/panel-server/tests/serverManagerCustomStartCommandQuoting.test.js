@@ -6,7 +6,7 @@ import path from "path";
 import {
   buildWindowsCmdLine,
   parseCustomStartCommand,
-} from "../services/serverManager.js";
+} from "../services/serverManager.ts";
 
 
 const isWindows = process.platform === "win32";

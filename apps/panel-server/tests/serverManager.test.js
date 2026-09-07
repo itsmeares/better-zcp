@@ -5,7 +5,7 @@ import {
   scoreServerProcessOwnership,
   resolveConfiguredRconPort,
   ServerManager,
-} from '../services/serverManager.js';
+} from '../services/serverManager.ts';
 
 describe('ServerManager Windows detection', () => {
   it('should recognize WinGSM-style ProjectZomboid server launches', () => {

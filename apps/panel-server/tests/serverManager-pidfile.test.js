@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
-import { ServerManager } from '../services/serverManager.js';
+import { ServerManager } from '../services/serverManager.ts';
 
 
 describe('ServerManager pidfile fast path', () => {

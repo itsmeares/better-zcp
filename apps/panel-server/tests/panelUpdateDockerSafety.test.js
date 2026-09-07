@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handlePanelUpdateDownload } from "../index.js";
-import { ServerManager } from "../services/serverManager.js";
+import { ServerManager } from "../services/serverManager.ts";
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

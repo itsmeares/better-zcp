@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import archiver from "archiver";
 import { createLogger } from "../utils/logger.ts";
 import { getDiskFree } from "../utils/diskSpace.ts";
-import { resolveLaunchMode } from "../services/serverManager.js";
+import { resolveLaunchMode } from "../services/serverManager.ts";
 const log = createLogger("API:Debug");
 import { getDataPaths, setDataPaths } from "../utils/paths.ts";
 import {

@@ -32,7 +32,7 @@ Object.defineProperty(process, "platform", {
   configurable: true,
 });
 
-const { ServerManager } = await import("../services/serverManager.js");
+const { ServerManager } = await import("../services/serverManager.ts");
 
 afterEach(() => {
   execMock.mockReset();

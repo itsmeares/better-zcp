@@ -14,7 +14,7 @@ vi.mock("../database/init.js", () => ({
   logServerEvent,
 }));
 
-const { ServerManager } = await import("../services/serverManager.js");
+const { ServerManager } = await import("../services/serverManager.ts");
 const {
   getActiveSteamOperations,
   clearActiveSteamOperation,

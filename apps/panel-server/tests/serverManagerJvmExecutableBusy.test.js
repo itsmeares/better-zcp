@@ -25,7 +25,7 @@ vi.mock("../utils/logger.ts", () => ({
   }),
 }));
 
-const { ServerManager } = await import("../services/serverManager.js");
+const { ServerManager } = await import("../services/serverManager.ts");
 
 async function waitUntil(predicate, { timeoutMs = 3000, intervalMs = 50 } = {}) {
   const deadline = Date.now() + timeoutMs;
