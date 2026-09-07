@@ -3,13 +3,18 @@ import path from "path";
 
 const root = path.resolve(process.argv[2] || ".");
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+const readFirst = (...rels) => {
+  const rel = rels.find((candidate) => fs.existsSync(path.join(root, candidate)));
+  if (!rel) throw new Error(`None of these files exist: ${rels.join(", ")}`);
+  return read(rel);
+};
 
 const lua = read("integrations/panelbridge/PanelBridge/media/lua/server/PanelBridge.lua");
 const luaHandlers = new Set(
   [...lua.matchAll(/^\s*handlers\.([a-zA-Z]+)/gm)].map((m) => m[1]),
 );
 
-const routes = read("apps/panel-server/routes/panelBridge.js");
+const routes = readFirst("apps/panel-server/routes/panelBridge.ts", "apps/panel-server/routes/panelBridge.js");
 const validBlock = routes.slice(routes.indexOf("const VALID_ACTIONS"));
 const allowList = new Set(
   [...validBlock.slice(0, validBlock.indexOf("]);")).matchAll(/"([a-zA-Z]+)"/g)].map(
