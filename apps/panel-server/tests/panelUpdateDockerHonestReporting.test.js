@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import http from "http";
 
 
-const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");
+const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
 const { DockerUpdateProxy } = await import("../services/dockerUpdateProxy.ts");
 
 describe("preflight() no longer reports a fabricated clean bill of health for docker mode", () => {

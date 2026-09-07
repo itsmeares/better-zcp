@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { createUpdateDataBackup } from "../services/panelUpdateChecker.js";
+import { createUpdateDataBackup } from "../services/panelUpdateChecker.ts";
 
 const tempDirs = [];
 

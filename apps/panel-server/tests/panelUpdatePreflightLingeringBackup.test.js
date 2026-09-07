@@ -6,7 +6,7 @@ import path from "node:path";
 
 process.pkg = {};
 
-const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");
+const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
 
 describe("preflight() detects a lingering backup from a prior apply", () => {
   let scratchDir;

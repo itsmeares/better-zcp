@@ -9,7 +9,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { PanelUpdateChecker } = await import(
-  "../services/panelUpdateChecker.js"
+  "../services/panelUpdateChecker.ts"
 );
 
 describe("PanelUpdateChecker pending-update reconciliation", () => {

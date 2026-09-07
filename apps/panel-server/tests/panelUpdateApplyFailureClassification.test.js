@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 
-const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");
+const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
 
 describe("classifyApplyFailure() recognises Supervisor v2's real, current wording", () => {
   it("the exact case: supervisor.log's actual av_quarantine line resolves correctly, not 'unknown'", () => {

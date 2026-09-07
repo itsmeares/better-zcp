@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getPanelFolderPermissionGuidance,
   getRestartAssessment,
-} from "../services/panelUpdateChecker.js";
+} from "../services/panelUpdateChecker.ts";
 
 describe("platform-specific updater guidance", () => {
   it("does not tell Linux operators to run as Administrator", () => {

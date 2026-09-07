@@ -10,7 +10,7 @@ import {
 import {
   createUpdateDataBackup,
   restorePreUpdateDataBackup,
-} from "../services/panelUpdateChecker.js";
+} from "../services/panelUpdateChecker.ts";
 
 function writeFile(filePath, contents) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });

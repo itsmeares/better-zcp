@@ -7,7 +7,7 @@ vi.mock("../utils/dockerDetect.ts", () => ({
 }));
 
 const { PanelUpdateChecker, getDevModeUpgradeInstruction } = await import(
-  "../services/panelUpdateChecker.js"
+  "../services/panelUpdateChecker.ts"
 );
 
 describe("dev-mode upgrade guidance branches on containerization", () => {

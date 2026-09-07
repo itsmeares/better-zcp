@@ -6,7 +6,7 @@ import path from "node:path";
 
 process.pkg = {};
 
-const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");
+const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
 
 describe("preflight() surfaces an unknown free-disk-space result instead of staying silent", () => {
   let scratchDir;

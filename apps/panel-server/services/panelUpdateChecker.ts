@@ -19,6 +19,28 @@ import { stageUpdateBundle } from "./updateBundle.ts";
 
 const log = createLogger("PanelUpdater");
 
+type AnyRecord = Record<string, any>;
+type ReleaseAsset = {
+  name: string;
+  size: number;
+  downloadUrl: string;
+};
+type LatestRelease = {
+  version: string;
+  tag: string;
+  name: string;
+  body: string;
+  publishedAt: string | null;
+  htmlUrl: string | null;
+  assets: ReleaseAsset[];
+};
+
+declare global {
+  interface Error {
+    rateLimited?: boolean;
+  }
+}
+
 const GITHUB_OWNER = "itsmeares";
 const GITHUB_REPO = "better-zcp";
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -27,7 +49,7 @@ const DOWNLOAD_TIMEOUT_MS = 60000;
 const MAX_GITHUB_RETRIES = 3;
 const MAX_DOWNLOAD_REDIRECTS = 5;
 
-export function getPanelFolderPermissionGuidance(platform, detail) {
+export function getPanelFolderPermissionGuidance(platform: string, detail: unknown) {
   const prefix = `Panel folder is not writable by this process: ${detail}.`;
   if (platform === "win32") {
     return `${prefix} Try running as Administrator, or move the panel out of a protected folder.`;
@@ -46,6 +68,12 @@ export function getRestartAssessment({
   launcherProtected =
     environment.PANEL_SUPERVISOR_V === "2" &&
     environment.PANEL_PRESERVE_GAME_SERVERS === "1",
+}: {
+  platform?: string;
+  packaged?: boolean;
+  environment?: NodeJS.ProcessEnv;
+  exeDir?: string;
+  launcherProtected?: boolean;
 } = {}) {
   const orchestrated = Boolean(
     environment.INVOCATION_ID || environment.NOTIFY_SOCKET || environment.RC_SVCNAME,
@@ -87,18 +115,18 @@ export function getRestartAssessment({
   };
 }
 
-export function getDevModeUpgradeInstruction(containerized = isContainerized()) {
+export function getDevModeUpgradeInstruction(containerized: boolean = isContainerized()) {
   return containerized
     ? "Pull the newer image and recreate the container: docker compose pull && docker compose up -d."
     : "In dev mode, pull the latest code with git.";
 }
 
-function addPreflightMessage(messages, details, key, params, fallback) {
+function addPreflightMessage(messages: string[], details: AnyRecord[], key: string, params: AnyRecord, fallback: string) {
   messages.push(fallback);
   details.push({ key, params });
 }
 
-export function createUpdateDataBackup(dataPaths, version, fsModule = fs) {
+export function createUpdateDataBackup(dataPaths: AnyRecord, version: unknown, fsModule: typeof fs = fs) {
   const dbPath = dataPaths?.dbPath;
   if (!dbPath || !fsModule.existsSync(dbPath)) return null;
   const safeVersion = String(version || "unknown").replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -107,14 +135,14 @@ export function createUpdateDataBackup(dataPaths, version, fsModule = fs) {
   fsModule.copyFileSync(dbPath, tempPath);
   try {
     fsModule.renameSync(tempPath, backupPath);
-  } catch (error) {
+  } catch (error: any) {
     try { fsModule.unlinkSync(tempPath); } catch { /* best effort */ }
     throw error;
   }
   return backupPath;
 }
 
-export function restorePreUpdateDataBackup(dataPaths, backupPath, fsModule = fs) {
+export function restorePreUpdateDataBackup(dataPaths: AnyRecord, backupPath: string, fsModule: typeof fs = fs) {
   const dbPath = dataPaths?.dbPath;
   if (!dbPath || !backupPath || !fsModule.existsSync(backupPath)) return false;
   fsModule.copyFileSync(backupPath, dbPath);
@@ -122,10 +150,10 @@ export function restorePreUpdateDataBackup(dataPaths, backupPath, fsModule = fs)
 }
 
 export function validateReleaseManifest(
-  manifest,
-  expectedVersion,
-  artifactName,
-  artifactHash,
+  manifest: AnyRecord | null,
+  expectedVersion: unknown,
+  artifactName: string | null,
+  artifactHash: string | null,
 ) {
   if (!manifest || typeof manifest !== "object") {
     return "Release archive does not contain a valid release manifest.";
@@ -151,7 +179,23 @@ export function validateReleaseManifest(
 }
 
 export class PanelUpdateChecker {
-  constructor(io) {
+  io: any;
+  checkInterval: ReturnType<typeof setInterval> | null;
+  initialTimeout: ReturnType<typeof setTimeout> | null;
+  latestRelease: LatestRelease | null;
+  currentVersion: string | null;
+  updateAvailable: boolean;
+  isChecking: boolean;
+  isDownloading: boolean;
+  downloadProgress: number;
+  lastCheck: string | null;
+  lastError: string | null;
+  dockerUpdateProxy: DockerUpdateProxy;
+  isApplying: boolean;
+  _stagedVersionCache: string | null = null;
+  lastApplyResult: AnyRecord | null = null;
+
+  constructor(io?: any) {
     this.io = io;
     this.checkInterval = null;
     this.initialTimeout = null;
@@ -167,7 +211,7 @@ export class PanelUpdateChecker {
     this.isApplying = false;
   }
 
-  async start(currentVersion) {
+  async start(currentVersion: string) {
     this.currentVersion = currentVersion || "0.0.0";
     log.info(`Panel update checker started (current: v${this.currentVersion})`);
 
@@ -175,19 +219,19 @@ export class PanelUpdateChecker {
 
     try {
       await this.reconcilePendingUpdate();
-    } catch (err) {
+    } catch (err: any) {
       log.warn(`Could not reconcile pending panel update: ${err.message}`);
     }
 
     try {
       this.cleanupOldHelperArtifacts();
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Helper artifact cleanup failed: ${err.message}`);
     }
 
     try {
       this.cleanupOrphanPartials();
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Orphan partial cleanup failed: ${err.message}`);
     }
 
@@ -238,7 +282,7 @@ export class PanelUpdateChecker {
         body: typeof release.body === "string" ? release.body : "",
         publishedAt: release.published_at || null,
         htmlUrl: release.html_url || null,
-        assets: (release.assets || []).map((a) => ({
+        assets: (release.assets || []).map((a: AnyRecord) => ({
           name: a.name,
           size: a.size,
           downloadUrl: a.browser_download_url,
@@ -247,7 +291,7 @@ export class PanelUpdateChecker {
 
       this.updateAvailable = this.isNewer(
         this.latestRelease.version,
-        this.currentVersion,
+        this.currentVersion ?? "0.0.0",
       );
       this.lastError = null;
 
@@ -263,7 +307,7 @@ export class PanelUpdateChecker {
       } else {
         log.debug(`Panel is up to date (v${this.currentVersion})`);
       }
-    } catch (error) {
+    } catch (error: any) {
       this.lastError = error.message;
       log.warn(`Panel update check failed: ${error.message}`);
     } finally {
@@ -273,17 +317,17 @@ export class PanelUpdateChecker {
     return this.getStatus();
   }
 
-  fetchLatestRelease() {
+  fetchLatestRelease(): Promise<AnyRecord | null> {
     return this.requestGitHubReleaseWithRetry();
   }
 
-  async requestGitHubReleaseWithRetry() {
+  async requestGitHubReleaseWithRetry(): Promise<AnyRecord | null> {
     let lastError = null;
 
     for (let attempt = 1; attempt <= MAX_GITHUB_RETRIES; attempt += 1) {
       try {
         return await this.fetchLatestReleaseOnce();
-      } catch (error) {
+      } catch (error: any) {
         lastError = error;
         if (
           !this.isRetryableGitHubError(error) ||
@@ -303,8 +347,8 @@ export class PanelUpdateChecker {
     throw lastError || new Error("Unknown GitHub update check failure");
   }
 
-  fetchLatestReleaseOnce() {
-    return new Promise((resolve, reject) => {
+  fetchLatestReleaseOnce(): Promise<AnyRecord | null> {
+    return new Promise<AnyRecord | null>((resolve, reject) => {
       const options = {
         hostname: "api.github.com",
         path: `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`,
@@ -358,7 +402,7 @@ export class PanelUpdateChecker {
               throw new Error("Invalid GitHub release payload");
             }
             resolve(parsed);
-          } catch (_) {
+          } catch (_: any) {
             reject(new Error("Failed to parse GitHub response"));
           }
         });
@@ -373,7 +417,7 @@ export class PanelUpdateChecker {
     });
   }
 
-  isRetryableGitHubError(error) {
+  isRetryableGitHubError(error: AnyRecord) {
     const statusCode = error?.statusCode;
     const code = error?.code;
     if ([408, 429, 500, 502, 503, 504].includes(statusCode)) return true;
@@ -385,7 +429,7 @@ export class PanelUpdateChecker {
     return Boolean(error?.rateLimited);
   }
 
-  extractVersion(tag) {
+  extractVersion(tag: unknown) {
     if (typeof tag !== "string") return null;
     const match = tag.match(/(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?/);
     if (!match) return null;
@@ -394,8 +438,8 @@ export class PanelUpdateChecker {
       : `${match[1]}.${match[2]}.${match[3]}`;
   }
 
-  isNewer(latest, current) {
-    const normalize = (v) => {
+  isNewer(latest: string, current: string) {
+    const normalize = (v: string) => {
       const match = v.match(/(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?/);
       if (!match) return [0, 0, 0, 0];
       return [
@@ -430,7 +474,8 @@ export class PanelUpdateChecker {
         code: "apply_in_progress",
       };
     }
-    if (!this.updateAvailable || !this.latestRelease) {
+    const latestRelease = this.latestRelease;
+    if (!this.updateAvailable || !latestRelease) {
       return {
         success: false,
         error: "No update available",
@@ -448,11 +493,11 @@ export class PanelUpdateChecker {
     }
 
     if (this.dockerUpdateProxy.enabled) {
-      const version = this.latestRelease.version;
+      const version = latestRelease.version;
       this.isDownloading = true;
       try {
         return await this.dockerUpdateProxy.apply(version);
-      } catch (error) {
+      } catch (error: any) {
         this.lastError = error.message;
         return { success: false, error: error.message };
       } finally {
@@ -473,17 +518,17 @@ export class PanelUpdateChecker {
     const assetName = isWindows
       ? "ZomboidControlPanel.exe"
       : "ZomboidControlPanel";
-    const isArchive = (name) => /\.(zip|tar\.gz|tgz|7z|rar)$/i.test(name || "");
+    const isArchive = (name: string) => /\.(zip|tar\.gz|tgz|7z|rar)$/i.test(name || "");
 
-    let asset = this.latestRelease.assets.find((a) => a.name === assetName);
+    let asset = latestRelease.assets.find((a: ReleaseAsset) => a.name === assetName);
     if (!asset) {
       if (isWindows) {
-        asset = this.latestRelease.assets.find(
-          (a) => /\.exe$/i.test(a.name) && !isArchive(a.name),
+        asset = latestRelease.assets.find(
+          (a: ReleaseAsset) => /\.exe$/i.test(a.name) && !isArchive(a.name),
         );
       } else {
-        asset = this.latestRelease.assets.find(
-          (a) =>
+        asset = latestRelease.assets.find(
+          (a: ReleaseAsset) =>
             !isArchive(a.name) &&
             !/\.exe$/i.test(a.name) &&
             a.name.toLowerCase().includes("linux"),
@@ -501,8 +546,8 @@ export class PanelUpdateChecker {
     const archiveName = isWindows
       ? "ZomboidControlPanel-windows.zip"
       : "ZomboidControlPanel-linux.tar.gz";
-    const clientArchive = this.latestRelease.assets.find(
-      (candidate) => candidate.name === archiveName,
+    const clientArchive = latestRelease.assets.find(
+      (candidate: ReleaseAsset) => candidate.name === archiveName,
     );
     if (!clientArchive) {
       return {
@@ -522,7 +567,7 @@ export class PanelUpdateChecker {
     const clientArchiveExtension = isWindows ? ".zip" : ".tar.gz";
     const tmpClientArchivePath = path.join(
       exeDir,
-      `.client-dist-${this.latestRelease.version}.partial.${process.pid}${clientArchiveExtension}`,
+      `.client-dist-${latestRelease.version}.partial.${process.pid}${clientArchiveExtension}`,
     );
     let incomingClientPath = null;
 
@@ -537,7 +582,7 @@ export class PanelUpdateChecker {
 
       try {
         if (fs.existsSync(tmpDownloadPath)) fs.unlinkSync(tmpDownloadPath);
-      } catch (cleanErr) {
+      } catch (cleanErr: any) {
         log.debug(`Failed to clean partial file: ${cleanErr.message}`);
       }
 
@@ -558,11 +603,11 @@ export class PanelUpdateChecker {
         }
         if (verified === null) {
           throw new Error(
-            `Release v${this.latestRelease.version} does not publish a checksums.txt entry for ${asset.name} — refusing to apply an unverified update`,
+            `Release v${latestRelease.version} does not publish a checksums.txt entry for ${asset.name} — refusing to apply an unverified update`,
           );
         }
         log.info(`SHA256 verified against release checksums.txt`);
-      } catch (verifyErr) {
+      } catch (verifyErr: any) {
         try {
           fs.unlinkSync(tmpDownloadPath);
         } catch {
@@ -597,7 +642,7 @@ export class PanelUpdateChecker {
 
       try {
         if (fs.existsSync(stagedPath)) fs.unlinkSync(stagedPath);
-      } catch (cleanErr) {
+      } catch (cleanErr: any) {
         log.debug(`Failed to clean stale staged file: ${cleanErr.message}`);
       }
       fs.renameSync(tmpDownloadPath, stagedPath);
@@ -605,7 +650,7 @@ export class PanelUpdateChecker {
       if (!isWindows) {
         try {
           fs.chmodSync(stagedPath, 0o755);
-        } catch (chmodErr) {
+        } catch (chmodErr: any) {
           log.warn(`Could not chmod staged binary: ${chmodErr.message}`);
         }
       }
@@ -613,7 +658,7 @@ export class PanelUpdateChecker {
       const exeBasePath = this.getExeBasePath();
       const journalPath = stageUpdateBundle({
         installDir: exeDir,
-        version: this.latestRelease.version,
+        version: latestRelease.version,
         binaryPath: exeBasePath,
         stagedBinaryPath: stagedPath,
         liveClientPath: path.join(exeDir, "client", "dist"),
@@ -623,39 +668,39 @@ export class PanelUpdateChecker {
       fs.rmSync(incomingClientPath, { recursive: true, force: true });
       incomingClientPath = null;
 
-      this._stagedVersionCache = this.latestRelease.version;
+      this._stagedVersionCache = latestRelease.version;
       try {
         await setSetting(
           "stagedPanelUpdateVersion",
-          this.latestRelease.version,
+          latestRelease.version,
         );
-      } catch (persistErr) {
+      } catch (persistErr: any) {
         log.debug(`Could not persist staged version: ${persistErr.message}`);
       }
 
       log.info(
-        `Update to v${this.latestRelease.version} staged at ${stagedPath}. Restart to apply.`,
+        `Update to v${latestRelease.version} staged at ${stagedPath}. Restart to apply.`,
       );
       this.io?.emit("panel:updateReady", {
-        version: this.latestRelease.version,
+        version: latestRelease.version,
       });
 
       return {
         success: true,
-        message: `Update to v${this.latestRelease.version} downloaded. Restart the panel to apply.`,
+        message: `Update to v${latestRelease.version} downloaded. Restart the panel to apply.`,
         journal: path.basename(journalPath),
       };
-    } catch (error) {
+    } catch (error: any) {
       this.lastError = error.message;
       log.error(`Update download failed: ${error.message}`);
       try {
         if (fs.existsSync(tmpDownloadPath)) fs.unlinkSync(tmpDownloadPath);
-      } catch (delErr) {
+      } catch (delErr: any) {
         log.debug(`Failed to clean partial after error: ${delErr.message}`);
       }
       try {
         if (fs.existsSync(tmpClientArchivePath)) fs.unlinkSync(tmpClientArchivePath);
-      } catch (delErr) {
+      } catch (delErr: any) {
         log.debug(`Failed to clean client archive after error: ${delErr.message}`);
       }
       if (incomingClientPath) {
@@ -679,7 +724,7 @@ export class PanelUpdateChecker {
     );
   }
 
-  writeSupervisorMarker(staged) {
+  writeSupervisorMarker(staged: AnyRecord) {
     const exeDir = path.dirname(this.getExeBasePath());
     const markerPath = path.join(exeDir, ".update-pending");
     const payload = {
@@ -742,7 +787,7 @@ export class PanelUpdateChecker {
     let journal;
     try {
       journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
-    } catch (error) {
+    } catch (error: any) {
       log.warn(`Ignoring invalid update bundle journal: ${error.message}`);
       return null;
     }
@@ -762,7 +807,7 @@ export class PanelUpdateChecker {
         );
         return null;
       }
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Could not stat staged update: ${err.message}`);
       return null;
     }
@@ -774,17 +819,17 @@ export class PanelUpdateChecker {
   async loadStagedVersionCache() {
     try {
       this._stagedVersionCache = await getSetting("stagedPanelUpdateVersion");
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Could not load staged version cache: ${err.message}`);
       this._stagedVersionCache = null;
     }
   }
 
 
-  async stageClientDist(archivePath, isWindows, binaryPath, artifactName) {
+  async stageClientDist(archivePath: string, isWindows: boolean, binaryPath: string, artifactName: string) {
     const exeDir = path.dirname(process.execPath);
     const extractDir = fs.mkdtempSync(path.join(os.tmpdir(), "zpanel-update-"));
-    const escapePowerShellLiteral = (value) => String(value).replace(/'/g, "''");
+    const escapePowerShellLiteral = (value: string) => String(value).replace(/'/g, "''");
     let extractArchivePath = archivePath;
     let windowsArchiveCopy = null;
 
@@ -810,7 +855,7 @@ export class PanelUpdateChecker {
         manifest = JSON.parse(
           fs.readFileSync(path.join(extractDir, "release-manifest.json"), "utf8"),
         );
-      } catch (error) {
+      } catch (error: any) {
         throw new Error(`Release archive manifest is invalid: ${error.message}`);
       }
       const manifestError = validateReleaseManifest(
@@ -873,11 +918,11 @@ export class PanelUpdateChecker {
     { name: "install-linux-service.sh", mode: 0o755 },
   ];
 
-  static getLinuxLauncherStageDir(exeDir) {
+  static getLinuxLauncherStageDir(exeDir: string) {
     return path.join(exeDir, ".update-linux-files-staged");
   }
 
-  stageLinuxLauncherFiles(extractDir, exeDir) {
+  stageLinuxLauncherFiles(extractDir: string, exeDir: string) {
     const stageDir = PanelUpdateChecker.getLinuxLauncherStageDir(exeDir);
     for (const file of PanelUpdateChecker.LINUX_LAUNCHER_FILES) {
       if (!fs.existsSync(path.join(extractDir, file.name))) {
@@ -891,7 +936,7 @@ export class PanelUpdateChecker {
     }
   }
 
-  activateStagedLinuxLauncherFiles(exeDir) {
+  activateStagedLinuxLauncherFiles(exeDir: string) {
     const stageDir = PanelUpdateChecker.getLinuxLauncherStageDir(exeDir);
     if (!fs.existsSync(stageDir)) return false;
 
@@ -909,7 +954,7 @@ export class PanelUpdateChecker {
         if (fs.existsSync(target)) fs.renameSync(target, backup);
         try {
           fs.renameSync(staged, target);
-        } catch (error) {
+        } catch (error: any) {
           if (fs.existsSync(backup) && !fs.existsSync(target)) {
             fs.renameSync(backup, target);
           }
@@ -917,12 +962,12 @@ export class PanelUpdateChecker {
         }
         swapped.push({ target, backup });
       }
-    } catch (error) {
+    } catch (error: any) {
       for (const { target, backup } of swapped.reverse()) {
         try {
           fs.rmSync(target, { force: true });
           if (fs.existsSync(backup)) fs.renameSync(backup, target);
-        } catch (rollbackError) {
+        } catch (rollbackError: any) {
           log.error(`Could not roll back ${target}: ${rollbackError.message}`);
         }
       }
@@ -934,8 +979,8 @@ export class PanelUpdateChecker {
     return true;
   }
 
-  runUpdateCommand(command, args) {
-    return new Promise((resolve, reject) => {
+  runUpdateCommand(command: string, args: string[]) {
+    return new Promise<void>((resolve, reject) => {
       const child = spawn(command, args, { windowsHide: true });
       let stderr = "";
       child.stderr?.on("data", (chunk) => {
@@ -949,12 +994,12 @@ export class PanelUpdateChecker {
     });
   }
 
-  downloadFile(url, destPath, expectedSize, expectedKind = "binary") {
-    return new Promise((resolve, reject) => {
+  downloadFile(url: string, destPath: string, expectedSize: number, expectedKind: string = "binary") {
+    return new Promise<void>((resolve, reject) => {
       let settled = false;
-      let file = null;
+      let file: ReturnType<typeof fs.createWriteStream> | null = null;
 
-      const fail = (error) => {
+      const fail = (error: any) => {
         if (settled) return;
         settled = true;
         if (file && !file.destroyed) {
@@ -972,7 +1017,7 @@ export class PanelUpdateChecker {
         resolve();
       };
 
-      const isAllowedRedirectHost = (downloadUrl) => {
+      const isAllowedRedirectHost = (downloadUrl: string) => {
         try {
           const parsed = new URL(downloadUrl);
           const host = parsed.hostname.toLowerCase();
@@ -983,13 +1028,13 @@ export class PanelUpdateChecker {
             host === "github-releases.githubusercontent.com" ||
             host.endsWith(".githubusercontent.com")
           );
-        } catch (e) {
+        } catch (e: any) {
           log.debug(`Invalid download URL: ${e.message}`);
           return false;
         }
       };
 
-      const follow = (downloadUrl, redirectCount = 0) => {
+      const follow = (downloadUrl: string, redirectCount: number = 0) => {
         if (redirectCount > MAX_DOWNLOAD_REDIRECTS) {
           return fail(
             new Error(`Too many redirects (max ${MAX_DOWNLOAD_REDIRECTS})`),
@@ -1033,12 +1078,13 @@ export class PanelUpdateChecker {
               return fail(new Error(`Download failed: HTTP ${res.statusCode}`));
             }
 
-            const totalBytes = parseInt(
-              res.headers["content-length"] || expectedSize,
-              10,
-            );
+            const contentLength = res.headers["content-length"];
+            const totalBytes = contentLength
+              ? parseInt(contentLength, 10)
+              : expectedSize;
             let receivedBytes = 0;
-            file = fs.createWriteStream(destPath);
+            const outputFile = fs.createWriteStream(destPath);
+            file = outputFile;
 
             let lastEmittedProgress = -1;
             res.on("data", (chunk) => {
@@ -1061,9 +1107,9 @@ export class PanelUpdateChecker {
             });
 
             res.on("error", fail);
-            res.pipe(file);
-            file.on("finish", () => {
-              file.close(() => {
+            res.pipe(outputFile);
+            outputFile.on("finish", () => {
+              outputFile.close(() => {
                 if (expectedSize > 0 && receivedBytes !== expectedSize) {
                   return fail(
                     new Error(
@@ -1085,7 +1131,7 @@ export class PanelUpdateChecker {
                 succeed();
               });
             });
-            file.on("error", (err) => {
+            outputFile.on("error", (err) => {
               fail(err);
             });
           },
@@ -1137,11 +1183,11 @@ export class PanelUpdateChecker {
 
 
   async preflight() {
-    const blockers = [];
-    const warnings = [];
-    const blockerDetails = [];
-    const warningDetails = [];
-    const info = {};
+    const blockers: string[] = [];
+    const warnings: string[] = [];
+    const blockerDetails: AnyRecord[] = [];
+    const warningDetails: AnyRecord[] = [];
+    const info: AnyRecord = {};
 
     const isWindows = process.platform === "win32";
     const isPackaged = typeof process.pkg !== "undefined";
@@ -1188,6 +1234,7 @@ export class PanelUpdateChecker {
       );
       return { ok: blockers.length === 0, blockers, warnings, blockerDetails, warningDetails, info };
     }
+    const latestRelease = this.latestRelease;
 
     if (!this.updateAvailable) {
       info.alreadyCurrent = true;
@@ -1208,7 +1255,7 @@ export class PanelUpdateChecker {
         info.databaseUsers = Array.isArray(parsed.users) ? parsed.users.length : 0;
         info.databaseServers = Array.isArray(parsed.servers) ? parsed.servers.length : 0;
         info.databaseReadable = true;
-      } catch (err) {
+      } catch (err: any) {
         info.databaseReadable = false;
         addPreflightMessage(
           blockers,
@@ -1249,16 +1296,16 @@ export class PanelUpdateChecker {
     const assetName = isWindows
       ? "ZomboidControlPanel.exe"
       : "ZomboidControlPanel";
-    const isArchive = (name) => /\.(zip|tar\.gz|tgz|7z|rar)$/i.test(name || "");
-    let asset = this.latestRelease.assets.find((a) => a.name === assetName);
+    const isArchive = (name: string) => /\.(zip|tar\.gz|tgz|7z|rar)$/i.test(name || "");
+    let asset = latestRelease.assets.find((a: ReleaseAsset) => a.name === assetName);
     if (!asset) {
       if (isWindows) {
-        asset = this.latestRelease.assets.find(
-          (a) => /\.exe$/i.test(a.name) && !isArchive(a.name),
+        asset = latestRelease.assets.find(
+          (a: ReleaseAsset) => /\.exe$/i.test(a.name) && !isArchive(a.name),
         );
       } else {
-        asset = this.latestRelease.assets.find(
-          (a) =>
+        asset = latestRelease.assets.find(
+          (a: ReleaseAsset) =>
             !isArchive(a.name) &&
             !/\.exe$/i.test(a.name) &&
             a.name.toLowerCase().includes("linux"),
@@ -1284,7 +1331,7 @@ export class PanelUpdateChecker {
       fs.writeFileSync(probePath, "ok");
       probeCreated = true;
       info.writable = true;
-    } catch (err) {
+    } catch (err: any) {
       info.writable = false;
       const permissionKey =
         process.platform === "win32"
@@ -1303,7 +1350,7 @@ export class PanelUpdateChecker {
       if (probeCreated) {
         try {
           fs.unlinkSync(probePath);
-        } catch (unlinkErr) {
+        } catch (unlinkErr: any) {
           log.debug(
             `Could not remove write probe ${probePath}: ${unlinkErr.message}`,
           );
@@ -1335,7 +1382,7 @@ export class PanelUpdateChecker {
             `Not enough free disk space. Need ~${(needed / 1024 / 1024).toFixed(0)} MB, have ${(free / 1024 / 1024).toFixed(0)} MB.`,
           );
         }
-      } catch (err) {
+      } catch (err: any) {
         info.freeBytes = null;
         addPreflightMessage(
           warnings,
@@ -1417,26 +1464,26 @@ export class PanelUpdateChecker {
           "A previous backup is present next to the exe. It will be cleaned up on the next successful apply.",
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Previous-backup probe failed: ${err.message}`);
     }
 
     return { ok: blockers.length === 0, blockers, warnings, blockerDetails, warningDetails, info };
   }
 
-  async getFreeDiskSpace(dirPath) {
+  async getFreeDiskSpace(dirPath: string) {
     try {
       if (typeof fs.promises.statfs === "function") {
         const stat = await fs.promises.statfs(dirPath);
         return Number(stat.bavail) * Number(stat.bsize);
       }
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`statfs failed: ${err.message}`);
     }
     return null;
   }
 
-  validateBinaryMagic(filePath) {
+  validateBinaryMagic(filePath: string) {
     try {
       const fd = fs.openSync(filePath, "r");
       const header = Buffer.alloc(4);
@@ -1446,7 +1493,7 @@ export class PanelUpdateChecker {
       } finally {
         try {
           fs.closeSync(fd);
-        } catch (_) {
+        } catch (_: any) {
           /* ignore */
         }
       }
@@ -1468,12 +1515,12 @@ export class PanelUpdateChecker {
         }
       }
       return null;
-    } catch (err) {
+    } catch (err: any) {
       return `could not read downloaded file: ${err.message}`;
     }
   }
 
-  validateArchiveMagic(filePath) {
+  validateArchiveMagic(filePath: string) {
     try {
       const header = fs.readFileSync(filePath, { encoding: null }).subarray(0, 4);
       if (header.length < 2) return "file is shorter than an archive header";
@@ -1490,13 +1537,13 @@ export class PanelUpdateChecker {
         return "not a gzip archive";
       }
       return null;
-    } catch (err) {
+    } catch (err: any) {
       return `could not read downloaded archive: ${err.message}`;
     }
   }
 
-  sha256File(filePath) {
-    return new Promise((resolve, reject) => {
+  sha256File(filePath: string) {
+    return new Promise<string>((resolve, reject) => {
       const hash = crypto.createHash("sha256");
       const stream = fs.createReadStream(filePath);
       stream.on("error", reject);
@@ -1505,9 +1552,9 @@ export class PanelUpdateChecker {
     });
   }
 
-  fetchReleaseText(url, maxBytes = 64 * 1024) {
-    return new Promise((resolve, reject) => {
-      const allowedHost = (u) => {
+  fetchReleaseText(url: string, maxBytes: number = 64 * 1024) {
+    return new Promise<string>((resolve, reject) => {
+      const allowedHost = (u: string) => {
         try {
           const host = new URL(u).hostname.toLowerCase();
           return (
@@ -1522,7 +1569,7 @@ export class PanelUpdateChecker {
         }
       };
 
-      const follow = (u, hops) => {
+      const follow = (u: string, hops: number) => {
         if (hops > MAX_DOWNLOAD_REDIRECTS)
           return reject(new Error("Too many redirects"));
         if (!u.startsWith("https://"))
@@ -1537,7 +1584,7 @@ export class PanelUpdateChecker {
             },
           },
           (res) => {
-            if ([301, 302, 307, 308].includes(res.statusCode)) {
+            if ([301, 302, 307, 308].includes(res.statusCode ?? 0)) {
               const loc = res.headers.location;
               res.resume();
               if (!loc) return reject(new Error("Redirect without location"));
@@ -1548,7 +1595,7 @@ export class PanelUpdateChecker {
               return reject(new Error(`HTTP ${res.statusCode}`));
             }
             let size = 0;
-            const chunks = [];
+            const chunks: Buffer[] = [];
             res.on("data", (chunk) => {
               size += chunk.length;
               if (size > maxBytes) {
@@ -1573,7 +1620,7 @@ export class PanelUpdateChecker {
     });
   }
 
-  async verifyChecksum(filePath, assetName) {
+  async verifyChecksum(filePath: string, assetName: string) {
     if (!this.latestRelease?.assets) return null;
     const checksumAsset = this.latestRelease.assets.find(
       (a) => a.name === "checksums.txt",
@@ -1583,7 +1630,7 @@ export class PanelUpdateChecker {
     let text;
     try {
       text = await this.fetchReleaseText(checksumAsset.downloadUrl);
-    } catch (err) {
+    } catch (err: any) {
       throw new Error(
         `Release publishes checksums.txt but it could not be fetched: ${err.message}`,
       );
@@ -1597,7 +1644,7 @@ export class PanelUpdateChecker {
         const m = line.match(/^([a-fA-F0-9]{64})\s+\*?(.+?)\s*$/);
         return m ? { hash: m[1].toLowerCase(), name: m[2] } : null;
       })
-      .filter(Boolean)
+      .filter((entry): entry is { hash: string; name: string } => Boolean(entry))
       .find((entry) => entry.name === assetName);
 
     if (!want) {
@@ -1641,7 +1688,7 @@ export class PanelUpdateChecker {
     const staged = this.getStagedUpdate();
     const stagedStillPresent = Boolean(staged);
 
-    if (!stagedStillPresent && this.isNewer(this.currentVersion, pending)) {
+    if (!stagedStillPresent && this.isNewer(this.currentVersion ?? "0.0.0", pending)) {
       await setSetting("pendingPanelUpdate", null);
       await setSetting("stagedPanelUpdateVersion", null);
       this._stagedVersionCache = null;
@@ -1681,7 +1728,7 @@ export class PanelUpdateChecker {
     // download will overwrite the pending marker at restart time.
   }
 
-  classifyApplyFailure(helperLog, stagedStillPresent) {
+  classifyApplyFailure(helperLog: string | null, stagedStillPresent: boolean) {
     if (!helperLog) return "no_helper_log";
     const l = helperLog.toLowerCase();
 
@@ -1741,7 +1788,7 @@ export class PanelUpdateChecker {
     return "unknown";
   }
 
-  isRollbackRetryLikely(helperLog) {
+  isRollbackRetryLikely(helperLog: string | null) {
     if (!helperLog) return false;
     const rollbackLines = helperLog
       .split(/\r?\n/)
@@ -1790,7 +1837,7 @@ export class PanelUpdateChecker {
           }
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`readMostRecentApplyLog (stable) failed: ${err.message}`);
     }
     try {
@@ -1807,7 +1854,7 @@ export class PanelUpdateChecker {
             return null;
           }
         })
-        .filter(Boolean)
+        .filter((entry): entry is { fp: string; mtime: number; size: number } => Boolean(entry))
         .sort((a, b) => b.mtime - a.mtime);
       if (names.length) {
         const { fp, size } = names[0];
@@ -1822,22 +1869,22 @@ export class PanelUpdateChecker {
           fs.closeSync(fd);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`readMostRecentApplyLog (logs dir) failed: ${err.message}`);
     }
     return null;
   }
 
-  cleanupOldHelperArtifacts(keep = 5) {
+  cleanupOldHelperArtifacts(keep: number = 5) {
     const tmpDir = os.tmpdir();
     const tmpPatterns = [
       /^zomboid-panel-update-\d+\.log$/,
       /^zomboid-panel-apply-\d+-\d+\.ps1$/,
     ];
-    let tmpEntries;
+    let tmpEntries: string[];
     try {
       tmpEntries = fs.readdirSync(tmpDir);
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Could not read TEMP dir: ${err.message}`);
       tmpEntries = [];
     }
@@ -1852,13 +1899,13 @@ export class PanelUpdateChecker {
             return null;
           }
         })
-        .filter(Boolean)
+        .filter((entry): entry is { fp: string; mtime: number } => Boolean(entry))
         .sort((a, b) => b.mtime - a.mtime);
       const toDelete = matching.slice(keep);
       for (const { fp } of toDelete) {
         try {
           fs.unlinkSync(fp);
-        } catch (err) {
+        } catch (err: any) {
           log.debug(
             `Could not remove old helper artifact ${fp}: ${err.message}`,
           );
@@ -1884,18 +1931,18 @@ export class PanelUpdateChecker {
               return null;
             }
           })
-          .filter(Boolean)
+          .filter((entry): entry is { fp: string; mtime: number } => Boolean(entry))
           .sort((a, b) => b.mtime - a.mtime);
         const toDelete = cmdEntries.slice(keep);
         for (const { fp } of toDelete) {
           try {
             fs.unlinkSync(fp);
-          } catch (err) {
+          } catch (err: any) {
             log.debug(`Could not remove old helper cmd ${fp}: ${err.message}`);
           }
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Could not prune helper dir: ${err.message}`);
     }
 
@@ -1913,17 +1960,17 @@ export class PanelUpdateChecker {
             return null;
           }
         })
-        .filter(Boolean)
+        .filter((entry): entry is { fp: string; mtime: number } => Boolean(entry))
         .sort((a, b) => b.mtime - a.mtime);
       const toDelete = logEntries.slice(keep);
       for (const { fp } of toDelete) {
         try {
           fs.unlinkSync(fp);
-        } catch (err) {
+        } catch (err: any) {
           log.debug(`Could not remove old log ${fp}: ${err.message}`);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Could not prune logs dir: ${err.message}`);
     }
   }
@@ -1944,13 +1991,13 @@ export class PanelUpdateChecker {
       try {
         fs.unlinkSync(fp);
         log.info(`Removed orphan download partial: ${name}`);
-      } catch (err) {
+      } catch (err: any) {
         log.debug(`Could not remove orphan partial ${fp}: ${err.message}`);
       }
     }
   }
 
-  isSameOrNewer(a, b) {
+  isSameOrNewer(a: string, b: string) {
     if (a === b) return true;
     return this.isNewer(a, b);
   }

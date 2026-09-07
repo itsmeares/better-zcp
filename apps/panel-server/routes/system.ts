@@ -7,7 +7,7 @@ import { sanitizeError } from "../utils/sanitize.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { getDiskStatusForPath } from "../services/diskMonitor.ts";
 import { getCircuitBreakerStatus } from "../database/init.js";
-import { getRestartAssessment } from "../services/panelUpdateChecker.js";
+import { getRestartAssessment } from "../services/panelUpdateChecker.ts";
 import { isContainerized } from "../utils/dockerDetect.ts";
 
 const log = createLogger("API:System");

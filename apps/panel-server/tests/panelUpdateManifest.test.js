@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateReleaseManifest } from "../services/panelUpdateChecker.js";
+import { validateReleaseManifest } from "../services/panelUpdateChecker.ts";
 
 describe("standalone release manifest validation", () => {
   const manifest = {

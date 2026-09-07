@@ -30,7 +30,7 @@ vi.mock("../services/dockerUpdateProxy.ts", () => ({
   }),
 }));
 
-const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");
+const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
 
 describe("PanelUpdateChecker.checkForUpdate settles even when the GitHub response aborts mid-body", () => {
   it("resets isChecking instead of hanging forever when res never fires 'end' and req never fires 'error'", async () => {

@@ -57,7 +57,7 @@ import {
   PanelUpdateChecker,
   createUpdateDataBackup,
   restorePreUpdateDataBackup,
-} from "./services/panelUpdateChecker.js";
+} from "./services/panelUpdateChecker.ts";
 import {
   acknowledgeUpdateBundle,
   applyUpdateBundle,

@@ -15,7 +15,7 @@ vi.mock("../utils/paths.ts", () => ({
   getDataPaths: () => ({ logsDir: mockLogsDir.dir, dataDir: mockLogsDir.dir }),
 }));
 
-const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");
+const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
 
 describe("readMostRecentApplyLog(): logsDir fallbacks still work; the os.tmpdir() fallback is gone", () => {
   let sharedTmpDir;

@@ -41,7 +41,7 @@ vi.mock("../services/dockerUpdateProxy.ts", () => ({
   }),
 }));
 
-const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.js");
+const { PanelUpdateChecker } = await import("../services/panelUpdateChecker.ts");
 
 let tempDir;
 
