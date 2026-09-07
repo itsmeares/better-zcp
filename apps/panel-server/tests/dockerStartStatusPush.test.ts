@@ -59,7 +59,7 @@ describe("POST /start -- Docker start pushes server:status immediately", () => {
     runManagedLifecycle.mockReset();
   });
 
-  it("emits server:status:{running:true} synchronously for a managed container start, without touching the local process scan", async () => {
+  it("emits a starting state synchronously for a managed container start, without touching the local process scan", async () => {
     runManagedLifecycle.mockResolvedValue({
       handled: true,
       success: true,
@@ -72,7 +72,7 @@ describe("POST /start -- Docker start pushes server:status immediately", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(app._values.io.emit).toHaveBeenCalledWith("server:status", { running: true });
+    expect(app._values.io.emit).toHaveBeenCalledWith("server:status", { state: "starting" });
     expect(app._values.serverManager.getServerProcessDetails).not.toHaveBeenCalled();
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true }),

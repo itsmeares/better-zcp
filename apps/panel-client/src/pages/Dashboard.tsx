@@ -25,6 +25,7 @@ import {
 } from '@/lib/api'
 import { formatUptime } from '@/lib/utils'
 import { resolveClientProvider, deriveDashboardStatus } from '@/lib/serverStatus'
+import type { LifecycleState } from '@/lib/serverStatus'
 import { useSocket } from '@/contexts/SocketContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -49,6 +50,7 @@ interface BridgeStatus {
 }
 interface ServerStatus {
   running: boolean
+  state?: LifecycleState
   scanFailed?: boolean
   startTime: string | null
   uptime: number

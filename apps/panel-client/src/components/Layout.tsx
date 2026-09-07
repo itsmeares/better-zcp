@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils'
 import { ConnectionStatus } from './ConnectionStatus'
 import { SystemHealthBanner } from './SystemHealthBanner'
 import { serversApi, ServerInstance, updateApi, UpdateStatus, serverApi, modsApi, panelUpdateApi } from '@/lib/api'
-import { resolveClientProvider } from '@/lib/serverStatus'
+import { resolveClientProvider, toClientRunState } from '@/lib/serverStatus'
 import { SocketContext } from '@/contexts/SocketContext'
 
 import { useAuth } from '@/contexts/AuthContext'
@@ -385,6 +385,8 @@ export default function Layout({ children }: LayoutProps) {
     if (provider === 'native') {
       try {
         const data = await serverApi.getStatus()
+        const lifecycleState = toClientRunState(data?.state)
+        if (lifecycleState) { setServerRunState(lifecycleState); return }
         if (typeof data?.running === 'boolean') setServerRunState(data.running ? 'running' : 'stopped')
       } catch { /* transient fetch failure -- keep the last known state */ }
       return
@@ -392,6 +394,8 @@ export default function Layout({ children }: LayoutProps) {
     if (provider == null) { setServerRunState('unknown'); return }
     try {
       const composed = await serversApi.getComposedStatus()
+      const lifecycleState = toClientRunState(composed.state)
+      if (lifecycleState) { setServerRunState(lifecycleState); return }
       const hostRunning = composed.host.status === 'running'
       const rconConnected = composed.server.status === 'connected'
       const bridgeActive = composed.bridge.status === 'active'
@@ -410,7 +414,9 @@ export default function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     if (!socket) return
-    const onStatus = (data?: { running?: boolean; isRunning?: boolean }) => {
+    const onStatus = (data?: { running?: boolean; isRunning?: boolean; state?: string }) => {
+      const lifecycleState = toClientRunState(data?.state)
+      if (lifecycleState) { setServerRunState(lifecycleState); return }
       if (provider === 'native') {
         const running = typeof data?.running === 'boolean' ? data.running : data?.isRunning
         if (typeof running === 'boolean') { setServerRunState(running ? 'running' : 'stopped'); return }

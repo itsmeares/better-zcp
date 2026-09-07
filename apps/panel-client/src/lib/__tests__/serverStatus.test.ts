@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { deriveDashboardStatus, resolveClientProvider, resolveServerCardRunning, resolveServerRunning, waitForServerState } from '../serverStatus'
+import { deriveDashboardStatus, resolveClientProvider, resolveServerCardRunning, resolveServerRunning, toClientRunState, waitForServerState } from '../serverStatus'
+
+describe('toClientRunState', () => {
+  it('keeps a server that is running but not ready out of the ready state', () => {
+    expect(toClientRunState('ready')).toBe('running')
+    expect(toClientRunState('running-not-ready')).toBe('transitioning')
+    expect(toClientRunState('starting')).toBe('transitioning')
+    expect(toClientRunState('stopped')).toBe('stopped')
+    expect(toClientRunState('unknown')).toBe('unknown')
+  })
+})
 
 describe('resolveClientProvider', () => {
   it('returns null for no server', () => {

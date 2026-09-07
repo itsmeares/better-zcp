@@ -5,6 +5,7 @@ import { getActiveServer } from "../database/init.ts";
 import panelBridge from "../services/panelBridge.ts";
 import { composeServerStatus, resolveProvider } from "../utils/serverStatusModel.ts";
 import { resolveDockerHostSignal } from "../services/managedContainer.ts";
+import { getActiveLifecycleOperation } from "../services/lifecycleCoordinator.ts";
 
 const log = createLogger("API:ServerStatus");
 const router = express.Router();
@@ -57,6 +58,7 @@ router.get("/active/status", async (req, res) => {
         running: !!panelBridge.isRunning,
         modConnected: panelBridge.isModConnected ? panelBridge.isModConnected() : false,
       },
+      lifecycleOperation: getActiveLifecycleOperation(),
     });
 
     res.json(status);

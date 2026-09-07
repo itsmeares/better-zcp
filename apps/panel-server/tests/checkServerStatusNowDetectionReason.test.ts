@@ -36,7 +36,10 @@ describe("checkServerStatusNow(detectionReason) -- the reason reaches both trans
       await checkServerStatusNow("integration-test-reason");
       await flush();
 
-      expect(emitSpy).toHaveBeenCalledWith("server:status", { running: false });
+      expect(emitSpy).toHaveBeenCalledWith("server:status", {
+        running: false,
+        state: "stopped",
+      });
       const stateChangedLog = logEntries.find((e) =>
         e.message.includes("Server state changed"),
       );

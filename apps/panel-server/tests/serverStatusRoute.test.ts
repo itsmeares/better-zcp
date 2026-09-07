@@ -84,6 +84,7 @@ describe("GET /api/servers/active/status", () => {
         host: expect.objectContaining({ status: "running" }),
         server: expect.objectContaining({ status: "disconnected" }),
         bridge: expect.objectContaining({ status: "offline" }),
+        state: "running-not-ready",
       }),
     );
   });
@@ -146,6 +147,7 @@ describe("GET /api/servers/active/status", () => {
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({
         host: expect.objectContaining({ status: "unknown" }),
+        state: "unknown",
       }),
     );
   });

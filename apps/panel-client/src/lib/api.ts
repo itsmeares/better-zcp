@@ -2,6 +2,7 @@ import { reportClientWarning } from "./client-errors";
 import { clearAccessToken, getAccessToken, setAccessToken } from "./authToken";
 import { toast } from "@/components/ui/use-toast";
 import i18n from "@/i18n";
+import type { LifecycleState } from "./serverStatus";
 
 const API_BASE = "/api";
 
@@ -1504,6 +1505,7 @@ export interface ServerStatusSignal {
 export interface ComposedServerStatus {
   provider: string;
   selected: boolean;
+  state?: LifecycleState;
   host: ServerStatusSignal;
   server: ServerStatusSignal;
   bridge: ServerStatusSignal;

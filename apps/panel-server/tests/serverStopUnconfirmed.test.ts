@@ -42,8 +42,8 @@ function makeApp(overrides = {}) {
   return { get: (key) => values[key] };
 }
 
-describe("POST /stop -- graceful RCON path no longer claims a confirmed stop", () => {
-  it("reports confirmed:false and does not emit server:status when quit() only confirms acceptance", async () => {
+describe("POST /stop -- graceful RCON path reports a transition until confirmed", () => {
+  it("reports confirmed:false and emits stopping when quit() only confirms acceptance", async () => {
     const rconService = {
       connected: true,
       save: vi.fn().mockResolvedValue({ success: true }),
@@ -66,7 +66,7 @@ describe("POST /stop -- graceful RCON path no longer claims a confirmed stop", (
         message: "Server shutting down",
       }),
     );
-    expect(io.emit).not.toHaveBeenCalledWith("server:status", expect.anything());
+    expect(io.emit).toHaveBeenCalledWith("server:status", { state: "stopping" });
   });
 
   it("asks the status watchdog for a prompt re-check instead of emitting its own claim", async () => {
@@ -183,7 +183,7 @@ describe("POST /stop -- managed Linux service", () => {
     expect(serverManager.stopServer).toHaveBeenCalledWith(false, {
       serverId: null,
     });
-    expect(io.emit).not.toHaveBeenCalled();
+    expect(io.emit).toHaveBeenCalledWith("server:status", { state: "stopping" });
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true, confirmed: true }),
     );

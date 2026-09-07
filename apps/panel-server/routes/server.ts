@@ -31,6 +31,7 @@ import { requirePermission } from "../services/permissions.ts";
 import { runManagedLifecycle } from "../services/managedContainer.ts";
 import {
   acquireLifecycleLock,
+  getActiveLifecycleOperation,
   lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
@@ -41,6 +42,10 @@ import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
 import { isContainerized } from "../utils/dockerDetect.ts";
+import {
+  buildServerSignal,
+  resolveLifecycleState,
+} from "../utils/serverStatusModel.ts";
 
 const router = express.Router();
 
@@ -848,10 +853,24 @@ router.get("/status", async (req, res) => {
 
     const status = await serverManager.getServerStatus();
     const rconStatus = rconService.getConfig();
+    const serverSignal = buildServerSignal({
+      connected: rconStatus.connected,
+      connecting: Boolean(rconService.connecting || rconService.reconnecting),
+    });
+    const hostStatus = status.scanFailed
+      ? "unknown"
+      : status.running
+        ? "running"
+        : "stopped";
 
     res.json({
       ...status,
       rcon: rconStatus,
+      state: resolveLifecycleState({
+        hostStatus,
+        rconStatus: serverSignal.status,
+        operation: getActiveLifecycleOperation(),
+      }),
     });
   } catch (error: any) {
     log.error(`Failed to get server status: ${error.message}`);
@@ -947,9 +966,11 @@ export async function refreshLaunchTargetBeforeStart(
 async function waitForRconAfterStart({
   rconService,
   discordBot,
+  io,
 }: {
   rconService: any;
   discordBot: any;
+  io?: { emit?: (event: string, payload: unknown) => void };
 }) {
   log.info("Waiting for RCON to be ready - starting port polling...");
 
@@ -1022,6 +1043,7 @@ async function waitForRconAfterStart({
 
   if (rconConnected) {
     log.info("RCON startup sequence completed - connected");
+    io?.emit?.("server:status", { running: true, state: "ready" });
     discordBot
       ?.sendEventNotification("serverStart", {})
       .catch((err: any) =>
@@ -1031,6 +1053,10 @@ async function waitForRconAfterStart({
     log.warn(
       "RCON startup sequence completed - NOT connected (auto-reconnect will keep trying every 30s)",
     );
+    io?.emit?.("server:status", {
+      running: true,
+      state: "running-not-ready",
+    });
   }
 
   if (rconService.setServerStarting) {
@@ -1119,13 +1145,15 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
       rconService.serverStarting = true;
     }
 
+    io?.emit?.("server:status", { state: "starting" });
+
     if (managed.handled) {
-      if (io) io.emit("server:status", { running: true });
       log.info("Container start confirmed by Docker; skipping local process poll");
       lifecycleLockTransferred = true;
       void waitForRconAfterStart({
         rconService,
         discordBot: req.app.get("discordBot"),
+        io,
       })
         .catch((err: any) =>
           log.error(`Post-start RCON wait failed: ${err.message}`),
@@ -1158,6 +1186,7 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
             } else {
               rconService.serverStarting = false;
             }
+            io?.emit?.("server:status", { state: "unknown" });
             log.warn(
               "Server start polling timed out without confirming process state",
             );
@@ -1170,9 +1199,12 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
         if (isRunning) {
           pollCleared = true;
           clearInterval(pollInterval);
-          if (io) io.emit("server:status", { running: true });
           log.info("Server detected as running");
-          await waitForRconAfterStart({ rconService, discordBot: req.app.get("discordBot") });
+          await waitForRconAfterStart({
+            rconService,
+            discordBot: req.app.get("discordBot"),
+            io,
+          });
           releaseLifecycleLock();
         } else if (attempts >= maxAttempts) {
           pollCleared = true;
@@ -1183,6 +1215,7 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
           } else {
             rconService.serverStarting = false;
           }
+          io?.emit?.("server:status", { state: "stopped", running: false });
           log.warn("Server start polling timed out");
         }
       } catch (err: any) {
@@ -1194,6 +1227,7 @@ router.post("/start", requirePermission("server.control"), async (req, res) => {
         } else {
           rconService.serverStarting = false;
         }
+        io?.emit?.("server:status", { state: "unknown" });
         log.error(`Server status poll failed: ${err.message}`);
       }
     }, 1000);
@@ -1228,6 +1262,7 @@ router.post("/stop", requirePermission("server.control"), async (req, res) => {
     const activeServer = activeServerForLock;
     const rconService = req.app.get("rconService");
     const serverManager = req.app.get("serverManager");
+    const io = req.app.get("io");
     log.info("POST /stop — graceful shutdown requested");
 
     if (!rconService.connected) {
@@ -1246,6 +1281,8 @@ router.post("/stop", requirePermission("server.control"), async (req, res) => {
         code: ErrorCode.SERVER_STOP_SAVE_FAILED,
       });
     }
+
+    io?.emit?.("server:status", { state: "stopping" });
 
     const managed = await runManagedLifecycle("stop", {
       serverId: activeServer?.id ?? null,
@@ -1281,14 +1318,12 @@ router.post("/stop", requirePermission("server.control"), async (req, res) => {
 
     if (managed.handled || serviceManaged) {
       serverManager?.markServerStopped?.();
-      const io = req.app.get("io");
+      io?.emit?.("server:status", { running: false, state: "stopped" });
       const checkServerStatusNow = req.app.get("checkServerStatusNow");
       if (typeof checkServerStatusNow === "function") {
         Promise.resolve(checkServerStatusNow("managed-stop")).catch((err: any) =>
           log.debug(`Post-stop status re-check failed: ${err.message}`),
         );
-      } else if (io) {
-        io.emit("server:status", { running: false });
       }
       await logServerEventBestEffort(
         "server_stop",
@@ -1406,6 +1441,8 @@ router.post("/force-stop", requirePermission("server.control"), async (req, res)
     const rconService = req.app.get("rconService");
     const saveOutcome = await attemptBoundedSaveBeforeForceStop(rconService);
     log.info(`POST /force-stop — pre-stop save attempt: ${saveOutcome}`);
+    const io = req.app.get("io");
+    io?.emit?.("server:status", { state: "stopping" });
 
     const managed = await runManagedLifecycle("stop", {
       serverId: activeServer?.id ?? null,
@@ -1437,14 +1474,12 @@ router.post("/force-stop", requirePermission("server.control"), async (req, res)
 
     serverManager?.markServerStopped?.();
 
-    const io = req.app.get("io");
+    io?.emit?.("server:status", { running: false, state: "stopped" });
     const checkServerStatusNow = req.app.get("checkServerStatusNow");
     if (typeof checkServerStatusNow === "function") {
       Promise.resolve(checkServerStatusNow("force-stop")).catch((err) =>
         log.debug(`Post-stop status re-check failed: ${err.message}`),
       );
-    } else if (io) {
-      io.emit("server:status", { running: false });
     }
 
     res.json({ ...result, saveOutcome });
