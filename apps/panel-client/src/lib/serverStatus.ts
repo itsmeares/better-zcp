@@ -1,5 +1,24 @@
 export type ServerProvider = 'native' | 'docker-local' | 'remote-sftp'
 
+export type LifecycleState =
+  | 'stopped'
+  | 'starting'
+  | 'running-not-ready'
+  | 'ready'
+  | 'stopping'
+  | 'unknown'
+
+export type ClientRunState = 'unknown' | 'running' | 'stopped' | 'transitioning'
+
+export function toClientRunState(state: LifecycleState | string | null | undefined): ClientRunState | null {
+  if (state === 'ready') return 'running'
+  if (state === 'running-not-ready') return 'transitioning'
+  if (state === 'stopped') return 'stopped'
+  if (state === 'starting' || state === 'stopping') return 'transitioning'
+  if (state === 'unknown') return 'unknown'
+  return null
+}
+
 export function resolveClientProvider(
   server: { isRemote?: boolean; dockerContainerName?: string | null; dockerContainerId?: string | null } | null | undefined,
 ): ServerProvider | null {

@@ -6,6 +6,7 @@ import {
   buildBridgeSignal,
   buildSummary,
   composeServerStatus,
+  resolveLifecycleState,
 } from "../utils/serverStatusModel.ts";
 
 describe("resolveProvider", () => {
@@ -147,6 +148,37 @@ describe("buildBridgeSignal", () => {
   });
 });
 
+describe("resolveLifecycleState", () => {
+  it.each([
+    ["start", "starting"],
+    ["restart", "starting"],
+    ["discord-stop", "stopping"],
+  ])("maps an active %s operation to %s", (operation, expected) => {
+    expect(
+      resolveLifecycleState({
+        hostStatus: "running",
+        rconStatus: "connected",
+        operation,
+      }),
+    ).toBe(expected);
+  });
+
+  it("requires RCON before calling a running process ready", () => {
+    expect(
+      resolveLifecycleState({ hostStatus: "running", rconStatus: "disconnected" }),
+    ).toBe("running-not-ready");
+    expect(
+      resolveLifecycleState({ hostStatus: "running", rconStatus: "connected" }),
+    ).toBe("ready");
+  });
+
+  it("does not turn an unknown host into a stopped server", () => {
+    expect(
+      resolveLifecycleState({ hostStatus: "unknown", rconStatus: "disconnected" }),
+    ).toBe("unknown");
+  });
+});
+
 describe("buildSummary", () => {
   it("reads as a plain-English one-liner", () => {
     const host = { status: "running", label: "Process" };
@@ -174,6 +206,7 @@ describe("composeServerStatus", () => {
         detail: "host.docker.internal:27015",
       },
       bridge: { status: "offline", label: "PanelBridge", detail: null },
+      state: "running-not-ready",
       summary: "Process running, RCON disconnected",
     });
   });

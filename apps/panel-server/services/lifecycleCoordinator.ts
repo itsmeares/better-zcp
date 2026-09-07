@@ -58,3 +58,7 @@ export function lifecycleInProgressResponse(): {
 export function isLifecycleLocked(): boolean {
   return activeLock !== null;
 }
+
+export function getActiveLifecycleOperation(): string | null {
+  return activeLock?.operation ?? null;
+}

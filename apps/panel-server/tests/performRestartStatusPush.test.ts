@@ -64,12 +64,13 @@ describe("performRestart() pushes server:status at its own verified transitions"
     expect(result.success).toBe(true);
     const calls = emit.mock.calls.filter(([event]) => event === "server:status");
     expect(calls).toEqual([
-      ["server:status", { running: false }],
-      ["server:status", { running: true }],
+      ["server:status", { state: "stopping" }],
+      ["server:status", { state: "starting" }],
+      ["server:status", { running: true, state: "ready" }],
     ]);
   });
 
-  it("Docker-managed restart: emits only {running:true} -- there is no separately-observable stopped moment (docker restart is atomic)", async () => {
+  it("Docker-managed restart reports startup and readiness without a fake stopped moment", async () => {
     getServer.mockResolvedValue(null);
     getActiveServer.mockResolvedValue(null);
     runManagedLifecycle.mockResolvedValue({ handled: true, success: true });
@@ -89,7 +90,10 @@ describe("performRestart() pushes server:status at its own verified transitions"
 
     expect(result.success).toBe(true);
     const calls = emit.mock.calls.filter(([event]) => event === "server:status");
-    expect(calls).toEqual([["server:status", { running: true }]]);
+    expect(calls).toEqual([
+      ["server:status", { state: "starting" }],
+      ["server:status", { running: true, state: "ready" }],
+    ]);
   });
 
   it("does not throw when no io has been wired (setIo never called)", async () => {

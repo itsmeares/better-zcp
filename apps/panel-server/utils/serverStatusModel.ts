@@ -1,5 +1,13 @@
 type ServerProvider = string;
 
+export type LifecycleState =
+  | "stopped"
+  | "starting"
+  | "running-not-ready"
+  | "ready"
+  | "stopping"
+  | "unknown";
+
 interface ServerLike {
   provider?: string | null;
   dockerContainerId?: unknown;
@@ -24,6 +32,12 @@ interface BridgeSignalInput {
   configured?: boolean;
   running?: boolean;
   modConnected?: boolean;
+}
+
+interface LifecycleStateInput {
+  hostStatus: string;
+  rconStatus: string;
+  operation?: string | null;
 }
 
 interface Signal {
@@ -109,6 +123,20 @@ export function buildBridgeSignal({
   return { status, label: "PanelBridge", detail: null };
 }
 
+export function resolveLifecycleState({
+  hostStatus,
+  rconStatus,
+  operation = null,
+}: LifecycleStateInput): LifecycleState {
+  if (operation && /(?:^|-)stop$/.test(operation)) return "stopping";
+  if (operation && /(?:^|-)start$|restart$/.test(operation)) return "starting";
+  if (hostStatus === "unknown" || hostStatus === "not-applicable") {
+    return rconStatus === "connected" ? "ready" : "unknown";
+  }
+  if (hostStatus === "stopped") return "stopped";
+  return rconStatus === "connected" ? "ready" : "running-not-ready";
+}
+
 const HOST_WORDS: Record<string, string> = {
   running: "running",
   stopped: "stopped",
@@ -134,6 +162,7 @@ export function composeServerStatus({
   rcon,
   bridge,
   dockerContainer,
+  lifecycleOperation,
 }: {
   server?: ServerLike | null;
   isRunning?: boolean;
@@ -141,17 +170,24 @@ export function composeServerStatus({
   rcon?: ServerSignalInput;
   bridge?: BridgeSignalInput;
   dockerContainer?: DockerContainer | null;
+  lifecycleOperation?: string | null;
 } = {}) {
   const provider = resolveProvider(server);
   const host = buildHostSignal(provider, Boolean(isRunning), scanFailed, dockerContainer);
   const serverSignal = buildServerSignal(rcon);
   const bridgeSignal = buildBridgeSignal(bridge);
+  const state = resolveLifecycleState({
+    hostStatus: host.status,
+    rconStatus: serverSignal.status,
+    operation: lifecycleOperation,
+  });
   return {
     provider,
     selected: true,
     host,
     server: serverSignal,
     bridge: bridgeSignal,
+    state,
     summary: buildSummary(host, serverSignal),
   };
 }

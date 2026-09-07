@@ -187,7 +187,9 @@ export class Scheduler {
 
   _emitVerifiedTransition(running: boolean): void {
     if (typeof this.io?.emit === "function") {
-      this.io.emit("server:status", { running });
+      this.io.emit("server:status", {
+        state: running ? "starting" : "stopping",
+      });
     }
   }
 
@@ -1360,6 +1362,10 @@ export class Scheduler {
       } else {
         rconService.serverStarting = false;
       }
+      this.io?.emit?.("server:status", {
+        running: true,
+        state: rconConnected ? "ready" : "running-not-ready",
+      });
 
       const restartDuration = Date.now() - restartStartTime;
 

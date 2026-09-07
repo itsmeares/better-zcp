@@ -2104,7 +2104,14 @@ export async function checkServerStatusNow(
       log.info(
         `Server state changed → ${running ? "running" : "stopped"} (detected by ${detectionReason})`,
       );
-      io.emit("server:status", { running });
+      io.emit("server:status", {
+        ...(running ? { running: true } : { running: false }),
+        state: running
+          ? rconService.connected
+            ? "ready"
+            : "running-not-ready"
+          : "stopped",
+      });
       if (!running) {
         logServerEvent(
           "server_stop",
