@@ -25,23 +25,89 @@ import {
   isSupportedFiveFieldCron,
 } from "../utils/cronValidation.ts";
 
-let unzipper;
-async function getUnzipper() {
+type ArchiveResult = { skipped: boolean };
+type WalkItem = {
+  entry: any;
+  fullPath: string;
+  archivePath: string;
+  isSymlink?: boolean;
+};
+type BackupSummary = {
+  name: string;
+  path: string;
+  size: number;
+  created: string;
+};
+type BackupFile = BackupSummary & {
+  sortKey: { key: string; suffix: number };
+};
+type BackupSettings = {
+  enabled: boolean;
+  schedule: string;
+  maxBackups: number;
+  includeDb: boolean;
+};
+type BackupOptions = {
+  io?: { emit: (event: string, payload: unknown) => void } | null;
+  isPreRestore?: boolean;
+  isPreWipe?: boolean;
+  includeDb?: boolean;
+  force?: boolean;
+  createPreRestoreBackup?: boolean;
+};
+type ProgressEmitter = (
+  phase: string,
+  percent: number,
+  message: string,
+  extra?: Record<string, unknown>,
+) => void;
+type BackupResult = {
+  success: boolean;
+  message?: string;
+  backup?: BackupSummary | null;
+  duration?: number;
+  skippedFiles?: string[];
+  deleted?: number;
+  failed?: number;
+  deletedNames?: string[];
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function recordServerEvent(
+  eventType: string,
+  message?: unknown | null,
+): Promise<unknown> {
+  return (logServerEvent as unknown as (
+    eventType: string,
+    message?: unknown | null,
+  ) => Promise<unknown>)(eventType, message);
+}
+
+let unzipper: any;
+async function getUnzipper(): Promise<any> {
   if (!unzipper) {
     unzipper = await import("unzipper");
   }
   return unzipper;
 }
 
-async function* walkDirectory(rootDir) {
-  const pending = [{ dirPath: rootDir, archivePath: "", isRoot: true }];
+async function* walkDirectory(rootDir: string): AsyncGenerator<WalkItem> {
+  const pending: Array<{
+    dirPath: string;
+    archivePath: string;
+    isRoot: boolean;
+  }> = [{ dirPath: rootDir, archivePath: "", isRoot: true }];
 
   while (pending.length > 0) {
     const current = pending.pop();
+    if (!current) continue;
     let directory;
     try {
       directory = await fs.promises.opendir(current.dirPath);
-    } catch (error) {
+    } catch (error: unknown) {
       if (current.isRoot) throw error;
       continue;
     }
@@ -75,7 +141,7 @@ async function* walkDirectory(rootDir) {
   }
 }
 
-async function countFiles(rootDir) {
+async function countFiles(rootDir: string): Promise<number> {
   let count = 0;
   for await (const { entry } of walkDirectory(rootDir)) {
     if (!entry.isDirectory()) count++;
@@ -87,7 +153,7 @@ const CENTRAL_TEMP_PATTERN = /^\.central-(\d+)-\d+-[0-9a-z]+\.tmp$/;
 
 export const isBackupTempOwnerAlive = isPidAlive;
 
-export function cleanupOrphanBackupTemps(backupsPath) {
+export function cleanupOrphanBackupTemps(backupsPath: string): void {
   let entries;
   try {
     entries = fs.readdirSync(backupsPath);
@@ -104,14 +170,17 @@ export function cleanupOrphanBackupTemps(backupsPath) {
     try {
       fs.unlinkSync(path.join(backupsPath, name));
       log.info(`Removed orphan backup temporary file: ${name}`);
-    } catch (error) {
-      log.debug(`Could not remove orphan backup temporary file ${name}: ${error.message}`);
+    } catch (error: unknown) {
+      log.debug(`Could not remove orphan backup temporary file ${name}: ${errorMessage(error)}`);
     }
   }
 }
 
-export function waitForArchiveEntry(archive, append) {
-  return new Promise((resolve, reject) => {
+export function waitForArchiveEntry(
+  archive: any,
+  append: () => unknown,
+): Promise<ArchiveResult> {
+  return new Promise<ArchiveResult>((resolve, reject) => {
     let settled = false;
 
     const cleanup = () => {
@@ -120,20 +189,21 @@ export function waitForArchiveEntry(archive, append) {
       archive.off("warning", onWarning);
     };
 
-    const settle = (handler, value) => {
+    const settle = (value?: ArchiveResult, error?: unknown): void => {
       if (settled) return;
       settled = true;
       cleanup();
-      handler(value);
+      if (error !== undefined) reject(error);
+      else resolve(value!);
     };
 
-    const onEntry = () => settle(resolve, { skipped: false });
-    const onError = (error) => settle(reject, error);
-    const onWarning = (error) => {
+    const onEntry = () => settle({ skipped: false });
+    const onError = (error: unknown) => settle(undefined, error);
+    const onWarning = (error: { code?: string }) => {
       if (error.code === "ENOENT") {
-        settle(resolve, { skipped: true });
+        settle({ skipped: true });
       } else {
-        settle(reject, error);
+        settle(undefined, error);
       }
     };
 
@@ -143,14 +213,18 @@ export function waitForArchiveEntry(archive, append) {
 
     try {
       append();
-    } catch (error) {
-      settle(reject, error);
+    } catch (error: unknown) {
+      settle(undefined, error);
     }
   });
 }
 
-export async function appendDirectoryToArchive(archive, sourceRoot, destinationRoot) {
-  const skipped = [];
+export async function appendDirectoryToArchive(
+  archive: any,
+  sourceRoot: string,
+  destinationRoot: string,
+): Promise<string[]> {
+  const skipped: string[] = [];
   for await (const { entry, fullPath, archivePath, isSymlink } of walkDirectory(
     sourceRoot,
   )) {
@@ -170,7 +244,10 @@ export async function appendDirectoryToArchive(archive, sourceRoot, destinationR
 
 const BACKUP_TIMESTAMP_RE =
   /(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3})(?:-(\d+))?\.zip$/;
-function backupSortKey(fileName, stats) {
+function backupSortKey(
+  fileName: string,
+  stats: fs.Stats,
+): { key: string; suffix: number } {
   const match = fileName.match(BACKUP_TIMESTAMP_RE);
   if (match) {
     return { key: match[1], suffix: match[2] ? parseInt(match[2], 10) : 1 };
@@ -182,6 +259,13 @@ function backupSortKey(fileName, stats) {
 }
 
 export class BackupService {
+  backupInProgress: boolean;
+  restoreInProgress: boolean;
+  lastBackup: BackupSummary | null;
+  backupHistory: unknown[];
+  discordBot: any;
+  serverManager: any;
+
   constructor() {
     this.backupInProgress = false;
     this.restoreInProgress = false;
@@ -192,15 +276,15 @@ export class BackupService {
   }
 
 
-  setDiscordBot(discordBot) {
+  setDiscordBot(discordBot: any): void {
     this.discordBot = discordBot;
   }
 
-  setServerManager(serverManager) {
+  setServerManager(serverManager: any): void {
     this.serverManager = serverManager;
   }
 
-  async getSavesPath() {
+  async getSavesPath(): Promise<string | null> {
     try {
       const activeServer = await getActiveServer();
 
@@ -251,13 +335,13 @@ export class BackupService {
       }
 
       return null;
-    } catch (error) {
-      log.error(`Failed to get saves path: ${error.message}`);
+    } catch (error: unknown) {
+      log.error(`Failed to get saves path: ${errorMessage(error)}`);
       return null;
     }
   }
 
-  async getBackupsPath() {
+  async getBackupsPath(): Promise<string | null> {
     try {
       const activeServer = await getActiveServer();
       let basePath;
@@ -280,13 +364,13 @@ export class BackupService {
       }
 
       return backupsPath;
-    } catch (error) {
-      log.error(`Failed to get backups path: ${error.message}`);
+    } catch (error: unknown) {
+      log.error(`Failed to get backups path: ${errorMessage(error)}`);
       return null;
     }
   }
 
-  async getSettings() {
+  async getSettings(): Promise<BackupSettings> {
     const enabled = (await getSetting("backupEnabled")) ?? false;
     const schedule = (await getSetting("backupSchedule")) ?? "0 */6 * * *";
     const maxBackups = (await getSetting("backupMaxCount")) ?? 10;
@@ -295,7 +379,7 @@ export class BackupService {
     return { enabled, schedule, maxBackups, includeDb };
   }
 
-  async updateSettings(settings) {
+  async updateSettings(settings: Partial<BackupSettings>): Promise<BackupSettings> {
     if (
       settings.enabled !== undefined &&
       typeof settings.enabled !== "boolean"
@@ -341,7 +425,7 @@ export class BackupService {
     return this.getSettings();
   }
 
-  async createBackup(options = {}) {
+  async createBackup(options: BackupOptions = {}): Promise<BackupResult> {
     if (this.backupInProgress) {
       return { success: false, message: "Backup already in progress" };
     }
@@ -353,7 +437,12 @@ export class BackupService {
     const startTime = Date.now();
     const io = options.io;
 
-    const emitProgress = (phase, percent, message, extra = {}) => {
+    const emitProgress: ProgressEmitter = (
+      phase,
+      percent,
+      message,
+      extra = {},
+    ) => {
       if (io) {
         io.emit("backup:progress", { phase, percent, message, ...extra });
       }
@@ -361,20 +450,24 @@ export class BackupService {
 
     try {
       return await this._doCreateBackup(options, startTime, emitProgress);
-    } catch (error) {
-      log.error(`Backup failed: ${error.message}`);
+    } catch (error: unknown) {
+      log.error(`Backup failed: ${errorMessage(error)}`);
       emitProgress(
         "error",
         0,
-        `Backup failed: ${sanitizeError(error.message)}`,
+        `Backup failed: ${sanitizeError(errorMessage(error))}`,
       );
-      return { success: false, message: sanitizeError(error.message) };
+      return { success: false, message: sanitizeError(errorMessage(error)) };
     } finally {
       this.backupInProgress = false;
     }
   }
 
-  async _doCreateBackup(options, startTime, emitProgress) {
+  async _doCreateBackup(
+    options: BackupOptions,
+    startTime: number,
+    emitProgress: ProgressEmitter,
+  ): Promise<BackupResult> {
     emitProgress("preparing", 5, "Preparing backup...");
 
     const savesPath = await this.getSavesPath();
@@ -423,8 +516,8 @@ export class BackupService {
 
     try {
       totalFiles = await countFiles(savesPath);
-    } catch (err) {
-      log.warn(`Failed to count files: ${err.message}`);
+    } catch (err: unknown) {
+      log.warn(`Failed to count files: ${errorMessage(err)}`);
       totalFiles = 1000;
     }
 
@@ -448,10 +541,10 @@ export class BackupService {
     });
 
     let filesProcessed = 0;
-    const skippedFiles = [];
+    const skippedFiles: string[] = [];
 
-    return new Promise((resolve, reject) => {
-      archive.on("entry", (entry) => {
+    return new Promise<BackupResult>((resolve, reject) => {
+      archive.on("entry", (entry: { name: string }) => {
         filesProcessed++;
         const percent = Math.min(
           15 + Math.round((filesProcessed / totalFiles) * 75),
@@ -476,11 +569,11 @@ export class BackupService {
 
         try {
           fs.renameSync(tempBackupPath, backupPath);
-        } catch (renameError) {
+        } catch (renameError: unknown) {
           emitProgress(
             "error",
             0,
-            `Backup failed: ${renameError.message}`,
+            `Backup failed: ${errorMessage(renameError)}`,
           );
           reject(renameError);
           return;
@@ -513,23 +606,23 @@ export class BackupService {
             server: activeServer,
             snapshot: serverSnapshot,
           });
-        } catch (error) {
-          log.warn(`Backup record could not be saved for ${backupName}: ${error.message}`);
+        } catch (error: unknown) {
+          log.warn(`Backup record could not be saved for ${backupName}: ${errorMessage(error)}`);
         }
 
         try {
-          await logServerEvent("backup_created", `${backupName} (${sizeMB} MB)`);
-        } catch (error) {
+          await recordServerEvent("backup_created", `${backupName} (${sizeMB} MB)`);
+        } catch (error: unknown) {
           log.warn(
-            `Backup event could not be logged for ${backupName}: ${error.message}`,
+            `Backup event could not be logged for ${backupName}: ${errorMessage(error)}`,
           );
         }
 
         if (!options.isPreRestore && !options.isPreWipe) {
           try {
             await this.cleanupOldBackups();
-          } catch (cleanupError) {
-            log.warn(`Backup retention cleanup failed for ${backupName}: ${cleanupError.message}`);
+          } catch (cleanupError: unknown) {
+            log.warn(`Backup retention cleanup failed for ${backupName}: ${errorMessage(cleanupError)}`);
           }
         }
 
@@ -542,9 +635,9 @@ export class BackupService {
         if (this.discordBot) {
           this.discordBot
             .sendEventNotification("backupComplete", {})
-            .catch((err) =>
+            .catch((err: unknown) =>
               log.debug(
-                `Discord backupComplete notification failed: ${err.message}`,
+                `Discord backupComplete notification failed: ${errorMessage(err)}`,
               ),
             );
         }
@@ -561,27 +654,27 @@ export class BackupService {
         fs.rm(tempBackupPath, { force: true }, (cleanupErr) => {
           if (cleanupErr) {
             log.warn(
-              `Could not remove incomplete backup file ${tempBackupPath}: ${cleanupErr.message}`,
+              `Could not remove incomplete backup file ${tempBackupPath}: ${errorMessage(cleanupErr)}`,
             );
           }
         });
       };
 
-      output.on("error", (err) => {
-        emitProgress("error", 0, `Backup failed: ${err.message}`);
+      output.on("error", (err: unknown) => {
+        emitProgress("error", 0, `Backup failed: ${errorMessage(err)}`);
         cleanupTemp();
         reject(err);
       });
 
-      archive.on("error", (err) => {
-        emitProgress("error", 0, `Archive error: ${err.message}`);
+      archive.on("error", (err: unknown) => {
+        emitProgress("error", 0, `Archive error: ${errorMessage(err)}`);
         cleanupTemp();
         reject(err);
       });
 
-      archive.on("warning", (err) => {
+      archive.on("warning", (err: { code?: string }) => {
         if (err.code === "ENOENT") {
-          log.warn(`Backup warning: ${err.message}`);
+          log.warn(`Backup warning: ${errorMessage(err)}`);
         } else {
           cleanupTemp();
           reject(err);
@@ -615,7 +708,7 @@ export class BackupService {
           }
 
           await archive.finalize();
-        } catch (error) {
+        } catch (error: unknown) {
           archive.abort();
           cleanupTemp();
           reject(error);
@@ -626,7 +719,7 @@ export class BackupService {
     });
   }
 
-  async listBackups() {
+  async listBackups(): Promise<BackupSummary[]> {
     try {
       const backupsPath = await this.getBackupsPath();
       if (!backupsPath || !fs.existsSync(backupsPath)) {
@@ -649,14 +742,14 @@ export class BackupService {
                 created: stats.birthtime.toISOString(),
                 sortKey: backupSortKey(f, stats),
               };
-            } catch (e) {
+            } catch (e: unknown) {
               return null;
             }
           }),
       );
 
       return backups
-        .filter((b) => b !== null)
+        .filter((b): b is BackupFile => b !== null)
         .sort((a, b) => {
           if (a.sortKey.key !== b.sortKey.key) {
             return a.sortKey.key < b.sortKey.key ? 1 : -1;
@@ -664,13 +757,15 @@ export class BackupService {
           return b.sortKey.suffix - a.sortKey.suffix;
         })
         .map(({ sortKey: _sortKey, ...backup }) => backup);
-    } catch (error) {
-      log.error(`Failed to list backups: ${error.message}`);
+    } catch (error: unknown) {
+      log.error(`Failed to list backups: ${errorMessage(error)}`);
       return [];
     }
   }
 
-  async getBackupSnapshot(backupName) {
+  async getBackupSnapshot(
+    backupName: string,
+  ): Promise<{ success: boolean; snapshot?: unknown; message?: string }> {
     const backupsPath = await this.getBackupsPath();
     const safeName = path.basename(backupName);
     if (!backupsPath || !safeName.endsWith(".zip")) {
@@ -686,20 +781,20 @@ export class BackupService {
       const unzip = await getUnzipper();
       const archive = await unzip.Open.file(backupPath);
       const entry = archive.files.find(
-        (file) => file.path === "panel-server-snapshot.json",
+        (file: { path: string }) => file.path === "panel-server-snapshot.json",
       );
       if (!entry) {
         return { success: false, message: "This backup has no panel snapshot" };
       }
       const snapshot = JSON.parse((await entry.buffer()).toString("utf-8"));
       return { success: true, snapshot };
-    } catch (error) {
-      log.warn(`Could not read backup snapshot from ${safeName}: ${error.message}`);
+    } catch (error: unknown) {
+      log.warn(`Could not read backup snapshot from ${safeName}: ${errorMessage(error)}`);
       return { success: false, message: "Could not read backup snapshot" };
     }
   }
 
-  async deleteBackup(backupName) {
+  async deleteBackup(backupName: string): Promise<BackupResult> {
     try {
       const backupsPath = await this.getBackupsPath();
       if (!backupsPath) {
@@ -720,24 +815,24 @@ export class BackupService {
       fs.unlinkSync(backupPath);
       try {
         await removeBackupRecord(safeName);
-      } catch (error) {
-        log.warn(`Backup record could not be removed for ${safeName}: ${error.message}`);
+      } catch (error: unknown) {
+        log.warn(`Backup record could not be removed for ${safeName}: ${errorMessage(error)}`);
       }
       log.info(`Deleted backup: ${safeName}`);
       try {
-        await logServerEvent("backup_deleted", safeName);
-      } catch (error) {
-        log.warn(`Could not log backup_deleted event for ${safeName}: ${error.message}`);
+        await recordServerEvent("backup_deleted", safeName);
+      } catch (error: unknown) {
+        log.warn(`Could not log backup_deleted event for ${safeName}: ${errorMessage(error)}`);
       }
 
       return { success: true };
-    } catch (error) {
-      log.error(`Failed to delete backup: ${error.message}`);
-      return { success: false, message: error.message };
+    } catch (error: unknown) {
+      log.error(`Failed to delete backup: ${errorMessage(error)}`);
+      return { success: false, message: errorMessage(error) };
     }
   }
 
-  async cleanupOldBackups() {
+  async cleanupOldBackups(): Promise<void> {
     try {
       const settings = await this.getSettings();
       const backups = await this.listBackups();
@@ -758,12 +853,12 @@ export class BackupService {
         }
         log.info(`Cleaned up old backup: ${backup.name}`);
       }
-    } catch (error) {
-      log.error(`Failed to cleanup old backups: ${error.message}`);
+    } catch (error: unknown) {
+      log.error(`Failed to cleanup old backups: ${errorMessage(error)}`);
     }
   }
 
-  async deleteBackupsOlderThan(days) {
+  async deleteBackupsOlderThan(days: number): Promise<BackupResult> {
     if (typeof days !== "number" || !Number.isInteger(days) || days < 1) {
       return { success: false, message: "Invalid days parameter. Must be a whole number >= 1" };
     }
@@ -787,7 +882,7 @@ export class BackupService {
 
       let deletedCount = 0;
       let failedCount = 0;
-      const deletedNames = [];
+      const deletedNames: string[] = [];
 
       for (const backup of toDelete) {
         const result = await this.deleteBackup(backup.name);
@@ -808,13 +903,13 @@ export class BackupService {
         deletedNames,
         message: `Deleted ${deletedCount} backup${deletedCount !== 1 ? "s" : ""} older than ${days} days${failedCount > 0 ? ` (${failedCount} failed)` : ""}`,
       };
-    } catch (error) {
-      log.error(`Failed to delete old backups: ${error.message}`);
-      return { success: false, message: error.message };
+    } catch (error: unknown) {
+      log.error(`Failed to delete old backups: ${errorMessage(error)}`);
+      return { success: false, message: errorMessage(error) };
     }
   }
 
-  async getStatus() {
+  async getStatus(): Promise<Record<string, unknown>> {
     const settings = await this.getSettings();
     const backups = await this.listBackups();
     const savesPath = await this.getSavesPath();
@@ -843,7 +938,7 @@ export class BackupService {
     };
   }
 
-  getBackupContentsInfo() {
+  getBackupContentsInfo(): Record<string, unknown> {
     return {
       description: "Server world save data",
       includes: [
@@ -862,7 +957,10 @@ export class BackupService {
     };
   }
 
-  async restoreBackup(backupName, options = {}) {
+  async restoreBackup(
+    backupName: string,
+    options: BackupOptions = {},
+  ): Promise<BackupResult> {
     if (this.restoreInProgress) {
       return { success: false, message: "Restore already in progress" };
     }
@@ -873,10 +971,15 @@ export class BackupService {
 
     this.restoreInProgress = true;
     const startTime = Date.now();
-    let stagingPath = null;
+    let stagingPath: string | null = null;
     const io = options.io;
 
-    const emitProgress = (phase, percent, message, extra = {}) => {
+    const emitProgress: ProgressEmitter = (
+      phase,
+      percent,
+      message,
+      extra = {},
+    ) => {
       if (io) {
         io.emit("restore:progress", { phase, percent, message, ...extra });
       }
@@ -921,11 +1024,11 @@ export class BackupService {
                 "Server is still running. Stop the server before restoring a backup, otherwise the running world will overwrite the restored save.",
             };
           }
-        } catch (error) {
-          log.warn(`Could not confirm server is stopped: ${error.message}`);
+        } catch (error: unknown) {
+          log.warn(`Could not confirm server is stopped: ${errorMessage(error)}`);
           return {
             success: false,
-            message: `Could not confirm the server is stopped (${error.message}). Stop the server and try again.`,
+            message: `Could not confirm the server is stopped (${errorMessage(error)}). Stop the server and try again.`,
           };
         }
       }
@@ -963,12 +1066,13 @@ export class BackupService {
         log.info("Creating pre-restore backup...");
         emitProgress("pre-backup", 10, "Backing up current world before restoring...");
         const preBackupResult = await this.createBackup({ isPreRestore: true, io });
+        const skippedPreBackupFiles = preBackupResult.skippedFiles ?? [];
         const preBackupIncomplete =
-          preBackupResult.success && (preBackupResult.skippedFiles?.length ?? 0) > 0;
+          preBackupResult.success && skippedPreBackupFiles.length > 0;
         if (!preBackupResult.success || preBackupIncomplete) {
           const reason = preBackupIncomplete
-            ? `it could not include ${preBackupResult.skippedFiles.length} file(s) (${preBackupResult.skippedFiles.join(", ")}) -- an incomplete pre-restore backup is not a safety net`
-            : preBackupResult.message;
+            ? `it could not include ${skippedPreBackupFiles.length} file(s) (${skippedPreBackupFiles.join(", ")}) -- an incomplete pre-restore backup is not a safety net`
+            : preBackupResult.message ?? "unknown error";
           log.error(`Pre-restore backup failed: ${reason}`);
           emitProgress(
             "error",
@@ -1000,12 +1104,12 @@ export class BackupService {
       const unzip = await getUnzipper();
       const resolvedParent = path.resolve(stagingPath) + path.sep;
 
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         let settled = false;
-        const settle = (err) => {
+        const settle = (err?: unknown): void => {
           if (settled) return;
           settled = true;
-          if (err) reject(err);
+          if (err !== undefined) reject(err);
           else resolve();
         };
 
@@ -1016,13 +1120,13 @@ export class BackupService {
         };
 
         const readStream = createReadStream(backupPath);
-        readStream.on("error", settle);
+        readStream.on("error", (err: unknown) => settle(err));
 
         readStream
           .pipe(unzip.Parse())
-          .on("entry", (entry) => {
+          .on("entry", (entry: any) => {
             try {
-              const entryPath = path.join(stagingPath, entry.path);
+              const entryPath = path.join(stagingPath!, entry.path);
               const resolvedEntry = path.resolve(entryPath);
 
               if (!resolvedEntry.startsWith(resolvedParent)) {
@@ -1043,7 +1147,7 @@ export class BackupService {
                 fs.mkdirSync(path.dirname(resolvedEntry), { recursive: true });
                 const writeStream = createWriteStream(resolvedEntry);
                 pendingWrites++;
-                writeStream.on("error", (err) => {
+                writeStream.on("error", (err: unknown) => {
                   pendingWrites--;
                   try {
                     entry.unpipe(writeStream);
@@ -1061,10 +1165,10 @@ export class BackupService {
                   pendingWrites--;
                   settleIfComplete();
                 });
-                entry.on("error", settle);
+                entry.on("error", (err: unknown) => settle(err));
                 entry.pipe(writeStream);
               }
-            } catch (err) {
+            } catch (err: unknown) {
               settle(err);
             }
           })
@@ -1072,7 +1176,7 @@ export class BackupService {
             parseClosed = true;
             settleIfComplete();
           })
-          .on("error", settle);
+          .on("error", (err: unknown) => settle(err));
       });
 
       emitProgress("verifying", 80, "Verifying restored file integrity...");
@@ -1114,13 +1218,13 @@ export class BackupService {
 
       try {
         fs.renameSync(stagedWorldPath, savesPath);
-      } catch (swapError) {
+      } catch (swapError: unknown) {
         if (retired) {
           try {
             fs.renameSync(retiredPath, savesPath);
-          } catch (rollbackError) {
+          } catch (rollbackError: unknown) {
             log.error(
-              `Restore rollback failed - previous save is at ${retiredPath}: ${rollbackError.message}`,
+              `Restore rollback failed - previous save is at ${retiredPath}: ${errorMessage(rollbackError)}`,
             );
             throw new Error(
               `Restore failed and the previous save could not be put back automatically. It is preserved at ${retiredPath}.`,
@@ -1133,9 +1237,9 @@ export class BackupService {
       if (retired) {
         try {
           fs.rmSync(retiredPath, { recursive: true, force: true });
-        } catch (cleanupError) {
+        } catch (cleanupError: unknown) {
           log.warn(
-            `Restored successfully but could not remove ${retiredPath}: ${cleanupError.message}`,
+            `Restored successfully but could not remove ${retiredPath}: ${errorMessage(cleanupError)}`,
           );
         }
       }
@@ -1152,10 +1256,10 @@ export class BackupService {
       log.info(`Restore completed in ${duration}s`);
 
       try {
-        await logServerEvent("backup_restored", `Restored from ${safeName}`);
-      } catch (eventError) {
+        await recordServerEvent("backup_restored", `Restored from ${safeName}`);
+      } catch (eventError: unknown) {
         log.warn(
-          `Restore event could not be logged for ${safeName}: ${eventError.message}`,
+          `Restore event could not be logged for ${safeName}: ${errorMessage(eventError)}`,
         );
       }
       emitProgress("complete", 100, `Restored from ${safeName}`);
@@ -1165,24 +1269,24 @@ export class BackupService {
         message: `Restored from ${safeName}`,
         duration: parseFloat(duration),
       };
-    } catch (error) {
-      log.error(`Restore failed: ${error.message}`);
-      emitProgress("error", 0, `Restore failed: ${sanitizeError(error.message)}`);
+    } catch (error: unknown) {
+      log.error(`Restore failed: ${errorMessage(error)}`);
+      emitProgress("error", 0, `Restore failed: ${sanitizeError(errorMessage(error))}`);
       try {
-        await logServerEvent("restore_failed", error.message);
-      } catch (eventError) {
+        await recordServerEvent("restore_failed", errorMessage(error));
+      } catch (eventError: unknown) {
         log.warn(
-          `Restore failure event could not be logged: ${eventError.message}`,
+          `Restore failure event could not be logged: ${errorMessage(eventError)}`,
         );
       }
-      return { success: false, message: error.message };
+      return { success: false, message: errorMessage(error) };
     } finally {
       if (stagingPath) {
         try {
           fs.rmSync(stagingPath, { recursive: true, force: true });
-        } catch (cleanupError) {
+        } catch (cleanupError: unknown) {
           log.warn(
-            `Could not remove restore staging folder ${stagingPath}: ${cleanupError.message}`,
+            `Could not remove restore staging folder ${stagingPath}: ${errorMessage(cleanupError)}`,
           );
         }
       }
@@ -1190,23 +1294,26 @@ export class BackupService {
     }
   }
 
-  async _verifyExtractedIntegrity(backupPath, stagingPath) {
-    const corruptFiles = [];
+  async _verifyExtractedIntegrity(
+    backupPath: string,
+    stagingPath: string,
+  ): Promise<{ ok: boolean; corruptFiles: string[] }> {
+    const corruptFiles: string[] = [];
     let archive;
     try {
       const unzip = await getUnzipper();
       archive = await unzip.Open.file(backupPath);
-    } catch (error) {
-      return { ok: false, corruptFiles: [`(could not read archive directory: ${error.message})`] };
+    } catch (error: unknown) {
+      return { ok: false, corruptFiles: [`(could not read archive directory: ${errorMessage(error)})`] };
     }
 
-    for (const entry of archive.files) {
+    for (const entry of archive.files as any[]) {
       if (entry.type !== "File") continue;
       const entryPath = path.join(stagingPath, entry.path);
 
       let actualCrc32;
       try {
-        actualCrc32 = await new Promise((resolve, reject) => {
+        actualCrc32 = await new Promise<number>((resolve, reject) => {
           let checksum = 0;
           const stream = createReadStream(entryPath);
           stream.on("data", (chunk) => {
@@ -1215,8 +1322,8 @@ export class BackupService {
           stream.on("end", () => resolve(checksum));
           stream.on("error", reject);
         });
-      } catch (error) {
-        corruptFiles.push(`${entry.path} (missing after extraction: ${error.message})`);
+      } catch (error: unknown) {
+        corruptFiles.push(`${entry.path} (missing after extraction: ${errorMessage(error)})`);
         continue;
       }
 
@@ -1228,8 +1335,11 @@ export class BackupService {
     return { ok: corruptFiles.length === 0, corruptFiles };
   }
 
-  _findExtractedWorld(stagingPath, expectedFolderName) {
-    const looksLikeWorld = (dir) =>
+  _findExtractedWorld(
+    stagingPath: string,
+    expectedFolderName: string,
+  ): string | null {
+    const looksLikeWorld = (dir: string): boolean =>
       fs.existsSync(path.join(dir, "map_meta.bin")) ||
       fs.existsSync(path.join(dir, "map_t.bin"));
 
@@ -1242,10 +1352,11 @@ export class BackupService {
       return stagingPath;
     }
 
-    const candidates = [];
-    const pending = [stagingPath];
+    const candidates: string[] = [];
+    const pending: string[] = [stagingPath];
     while (pending.length > 0) {
       const current = pending.pop();
+      if (!current) continue;
       let entries;
       try {
         entries = fs.readdirSync(current, { withFileTypes: true });

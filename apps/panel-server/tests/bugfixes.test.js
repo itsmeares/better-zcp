@@ -25,7 +25,7 @@ import {
   parseLegacyMinutes,
 } from "../services/modChecker.js";
 import { parseAutoUpdateWarningMinutes } from "../services/updateChecker.ts";
-import { BackupService } from "../services/backupService.js";
+import { BackupService } from "../services/backupService.ts";
 import authService from "../services/auth.ts";
 import { parsePlayerExportFile } from "../routes/players.ts";
 import { requireStoppedForLocalConfigMutation } from "../services/configMutationGuard.ts";

@@ -18,7 +18,7 @@ vi.mock("../routes/chunks.js", () => ({
   invalidateMapFolderScan: vi.fn(),
 }));
 
-const { BackupService } = await import("../services/backupService.js");
+const { BackupService } = await import("../services/backupService.ts");
 
 let root;
 let savesPath;

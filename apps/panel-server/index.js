@@ -51,7 +51,7 @@ import { setDockerClient } from "./services/managedContainer.ts";
 import { ModChecker } from "./services/modChecker.js";
 import { Scheduler } from "./services/scheduler.js";
 import { DiscordBot } from "./services/discordBot.js";
-import { BackupService } from "./services/backupService.js";
+import { BackupService } from "./services/backupService.ts";
 import { UpdateChecker } from "./services/updateChecker.ts";
 import {
   PanelUpdateChecker,

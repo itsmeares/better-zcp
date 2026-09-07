@@ -46,7 +46,7 @@ vi.mock("../utils/paths.ts", () => ({
   getDataPaths: () => ({ dataDir: tmpDir, logsDir: tmpDir }),
 }));
 
-const { BackupService } = await import("../services/backupService.js");
+const { BackupService } = await import("../services/backupService.ts");
 
 function writeBackup(backupsPath, name) {
   fs.writeFileSync(path.join(backupsPath, name), "dummy");

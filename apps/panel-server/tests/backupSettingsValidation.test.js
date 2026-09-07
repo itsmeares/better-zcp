@@ -10,7 +10,7 @@ vi.mock("../database/init.js", () => ({
   logServerEvent: vi.fn(async () => {}),
 }));
 
-const { BackupService } = await import("../services/backupService.js");
+const { BackupService } = await import("../services/backupService.ts");
 
 describe("BackupService.updateSettings schedule validation", () => {
   beforeEach(() => {

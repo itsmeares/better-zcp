@@ -3,7 +3,7 @@ import { EventEmitter } from "events";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { waitForArchiveEntry, appendDirectoryToArchive } from "../services/backupService.js";
+import { waitForArchiveEntry, appendDirectoryToArchive } from "../services/backupService.ts";
 
 
 function makeFakeArchive(outcomeFor) {

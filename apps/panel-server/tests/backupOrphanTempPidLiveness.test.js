@@ -3,7 +3,7 @@ import { spawnSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { cleanupOrphanBackupTemps, isBackupTempOwnerAlive } from "../services/backupService.js";
+import { cleanupOrphanBackupTemps, isBackupTempOwnerAlive } from "../services/backupService.ts";
 
 
 function makeDeadPid() {

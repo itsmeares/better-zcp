@@ -36,7 +36,7 @@ vi.mock("../utils/logger.ts", () => ({
   }),
 }));
 
-const { BackupService } = await import("../services/backupService.js");
+const { BackupService } = await import("../services/backupService.ts");
 
 function writeBackup(backupsPath, name) {
   fs.writeFileSync(path.join(backupsPath, name), "dummy");
