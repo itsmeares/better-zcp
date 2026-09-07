@@ -50,7 +50,7 @@ describe("servers.js: POST /, PUT /:id and POST /:id/activate all require server
   it.each(SERVERS_MANAGE_ROUTES)(
     "refuses a moderator (does not hold servers.manage) on %s %s",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/servers.js");
+      const { default: router } = await import("../routes/servers.ts");
       const { res, calledNext } = await runGate(router, routePath, method, "moderator");
       expect(res.getStatusCode()).toBe(403);
       expect(res.getBody()).toEqual({
@@ -64,7 +64,7 @@ describe("servers.js: POST /, PUT /:id and POST /:id/activate all require server
   it.each(SERVERS_MANAGE_ROUTES)(
     "does not refuse a technician (holds servers.manage) on %s %s",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/servers.js");
+      const { default: router } = await import("../routes/servers.ts");
       const { calledNext } = await runGate(router, routePath, method, "technician");
       expect(calledNext).toBe(true);
     },
@@ -73,7 +73,7 @@ describe("servers.js: POST /, PUT /:id and POST /:id/activate all require server
   it.each(SERVERS_MANAGE_ROUTES)(
     "does not refuse an admin on %s %s",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/servers.js");
+      const { default: router } = await import("../routes/servers.ts");
       const { calledNext } = await runGate(router, routePath, method, "admin");
       expect(calledNext).toBe(true);
     },

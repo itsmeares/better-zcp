@@ -65,7 +65,7 @@ vi.mock("../services/rcon.js", () => ({
   testRconConnection: vi.fn(),
 }));
 
-const { default: router } = await import("../routes/servers.js");
+const { default: router } = await import("../routes/servers.ts");
 
 function handler(routePath, method) {
   const layer = router.stack.find(

@@ -219,7 +219,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 import serverRoutes from "./routes/server.js";
 import discoveryRoutes from "./routes/discovery.ts";
-import serversRoutes from "./routes/servers.js";
+import serversRoutes from "./routes/servers.ts";
 import serverStatusRoutes from "./routes/serverStatus.ts";
 import serverFilesRoutes from "./routes/serverFiles.js";
 import playerRoutes from "./routes/players.ts";

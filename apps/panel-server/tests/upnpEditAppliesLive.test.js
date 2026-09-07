@@ -74,7 +74,7 @@ describe("PUT /servers/:id -- editing useUpnp actually changes the server's own 
     createdServerId = server.id;
     await setActiveServer(server.id);
 
-    const { default: router } = await import("../routes/servers.js");
+    const { default: router } = await import("../routes/servers.ts");
     const res = createResponse();
     await getRouteHandler(router, "/:id", "put")(
       { params: { id: String(server.id) }, body: { useUpnp: false }, app: { get: () => undefined } },
@@ -108,7 +108,7 @@ describe("PUT /servers/:id -- editing useUpnp actually changes the server's own 
     createdServerId = server.id;
     await setActiveServer(server.id);
 
-    const { default: router } = await import("../routes/servers.js");
+    const { default: router } = await import("../routes/servers.ts");
     const res = createResponse();
     await getRouteHandler(router, "/:id", "put")(
       { params: { id: String(server.id) }, body: { useUpnp: false }, app: { get: () => undefined } },
@@ -137,7 +137,7 @@ describe("PUT /servers/:id -- editing useUpnp actually changes the server's own 
     createdServerId = server.id;
     await setActiveServer(server.id);
 
-    const { default: router } = await import("../routes/servers.js");
+    const { default: router } = await import("../routes/servers.ts");
     const res = createResponse();
     await getRouteHandler(router, "/:id", "put")(
       { params: { id: String(server.id) }, body: { useUpnp: false }, app: { get: () => undefined } },

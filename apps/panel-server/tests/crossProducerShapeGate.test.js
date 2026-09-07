@@ -33,7 +33,7 @@ vi.mock("../services/rcon.js", () => ({
   testRconConnection,
 }));
 
-const { default: serversRouter } = await import("../routes/servers.js");
+const { default: serversRouter } = await import("../routes/servers.ts");
 const { default: backupRouter } = await import("../routes/backup.ts");
 
 function getHandler(router, routePath, method) {
@@ -106,7 +106,7 @@ beforeEach(() => {
   setSetting.mockReset().mockResolvedValue(undefined);
 });
 
-describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.js)", () => {
+describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.ts)", () => {
   it("GET / (per-item) and GET /active return identical key sets for the same server", async () => {
     const list = await invokeJson(serversRouter, "/", "get", { app: fakeApp() });
     const active = await invokeJson(serversRouter, "/active", "get", { app: fakeApp() });

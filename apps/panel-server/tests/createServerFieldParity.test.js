@@ -60,7 +60,7 @@ describe("POST /servers -- every field forwarded to createServer() must survive 
   });
 
   it("a comprehensive create request persists every meaningfully-set field it forwards, not just the ones already known to work", async () => {
-    const { default: router } = await import("../routes/servers.js");
+    const { default: router } = await import("../routes/servers.ts");
     const res = createResponse();
     const body = {
       name: "ParityTest",
@@ -102,7 +102,7 @@ describe("POST /servers -- every field forwarded to createServer() must survive 
   });
 
   it("dockerContainerName specifically -- the live regression (a Docker-managed server registered through the Add/Register dialog)", async () => {
-    const { default: router } = await import("../routes/servers.js");
+    const { default: router } = await import("../routes/servers.ts");
     const res = createResponse();
     await getRouteHandler(router, "/", "post")(
       {
@@ -124,7 +124,7 @@ describe("POST /servers -- every field forwarded to createServer() must survive 
   });
 
   it("useUpnp specifically -- explicit false must persist as false, not be coerced to the true default", async () => {
-    const { default: router } = await import("../routes/servers.js");
+    const { default: router } = await import("../routes/servers.ts");
     const res = createResponse();
     await getRouteHandler(router, "/", "post")(
       {
@@ -146,7 +146,7 @@ describe("POST /servers -- every field forwarded to createServer() must survive 
   });
 
   it("useUpnp omitted entirely defaults to true, matching the wizard's own default checkbox state", async () => {
-    const { default: router } = await import("../routes/servers.js");
+    const { default: router } = await import("../routes/servers.ts");
     const res = createResponse();
     await getRouteHandler(router, "/", "post")(
       {

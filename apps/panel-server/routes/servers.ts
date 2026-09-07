@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";
@@ -52,20 +52,41 @@ const router = express.Router();
 const RCON_HOST_REGEX = /^[a-zA-Z0-9.-]{1,255}$/;
 const RCON_PASSWORD_MAX_LENGTH = 256;
 
+type JsonRecord = Record<string, any>;
+type ServerId = string | number;
+type ScanResults = {
+  installPaths: string[];
+  dataPaths: string[];
+  customBatFiles: Array<{
+    path: string;
+    folder: string;
+    fileName: string;
+    serverName: string;
+  }>;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 const SERVER_NAME_REGEX =
   /^[a-zA-Z0-9_-][a-zA-Z0-9_\- ]*[a-zA-Z0-9_-]$|^[a-zA-Z0-9_-]$/;
 
-function isValidServerName(value) {
+function isValidServerName(value: unknown): value is string {
   return typeof value === "string" && SERVER_NAME_REGEX.test(value);
 }
 
-function isValidDockerContainerRef(value) {
+function isValidDockerContainerRef(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(value);
 }
 
 const INSTALL_PATH_MAX_LENGTH = 1024;
 
-function validateInstallPathShape(value) {
+function validateInstallPathShape(value: unknown): {
+  valid: boolean;
+  error?: string;
+  mode?: string;
+} {
   if (typeof value !== "string" || !value.trim()) {
     return { valid: false, error: "Install path must be a non-empty string" };
   }
@@ -95,16 +116,24 @@ function validateInstallPathShape(value) {
   return { valid: true, mode };
 }
 
-async function requireCapabilityInline(capability, req, res) {
+async function requireCapabilityInline(
+  capability: string,
+  req: Request,
+  res: Response,
+): Promise<boolean> {
   let passed = false;
-  await requirePermission(capability)(req, res, () => {
+  await requirePermission(capability)(req, res, (() => {
     passed = true;
-  });
+  }) as NextFunction);
   return passed;
 }
 
-async function mapWithConcurrency(items, limit, mapper) {
-  const results = new Array(items.length);
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T) => Promise<R> | R,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
   let nextIndex = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (nextIndex < items.length) {
@@ -116,19 +145,19 @@ async function mapWithConcurrency(items, limit, mapper) {
   return results;
 }
 
-async function refreshWorkshopCheckerIfAvailable(req) {
+async function refreshWorkshopCheckerIfAvailable(req: Request): Promise<void> {
   const modChecker = req.app.get("modChecker");
   if (!modChecker) return;
 
   try {
     await refreshWorkshopChecker(modChecker);
-  } catch (error) {
-    log.warn(`Workshop checker refresh failed: ${error.message}`);
+  } catch (error: unknown) {
+    log.warn(`Workshop checker refresh failed: ${errorMessage(error)}`);
   }
 }
 
-function parseIni(content) {
-  const result = {};
+function parseIni(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
   const lines = content.split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
@@ -144,7 +173,11 @@ function parseIni(content) {
   return result;
 }
 
-export function parseDiscoveredPort(value, fallback, max = 65535) {
+export function parseDiscoveredPort(
+  value: unknown,
+  fallback: number,
+  max = 65535,
+): number | null {
   if (value === undefined || value === null) {
     return fallback;
   }
@@ -154,14 +187,14 @@ export function parseDiscoveredPort(value, fallback, max = 65535) {
   return parseBoundedInteger(value, null, 1, max);
 }
 
-function scanForPzPaths(rootPath, maxDepth = 3) {
-  const results = {
+function scanForPzPaths(rootPath: string, maxDepth = 3): ScanResults {
+  const results: ScanResults = {
     installPaths: [], // Folders containing PZ server startup scripts
     dataPaths: [], // Folders containing Server/ subfolder with .ini files
     customBatFiles: [], // Custom startup scripts found
   };
 
-  function scan(currentPath, depth) {
+  function scan(currentPath: string, depth: number): void {
     if (depth > maxDepth) return;
 
     try {
@@ -245,12 +278,12 @@ function scanForPzPaths(rootPath, maxDepth = 3) {
           if (fs.statSync(itemPath).isDirectory()) {
             scan(itemPath, depth + 1);
           }
-        } catch (e) {
-          log.debug(`Skipping inaccessible path ${itemPath}: ${e.message}`);
+        } catch (e: unknown) {
+          log.debug(`Skipping inaccessible path ${itemPath}: ${errorMessage(e)}`);
         }
       }
-    } catch (e) {
-      log.debug(`Skipping inaccessible folder ${currentPath}: ${e.message}`);
+    } catch (e: unknown) {
+      log.debug(`Skipping inaccessible folder ${currentPath}: ${errorMessage(e)}`);
     }
   }
 
@@ -341,8 +374,8 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
             matchedBatFile: matchingBat ? matchingBat.path : null,
             matchedInstallPath: matchingBat ? matchingBat.folder : null,
           });
-        } catch (err) {
-          log.warn(`Failed to parse ${iniFile}: ${err.message}`);
+        } catch (err: unknown) {
+          log.warn(`Failed to parse ${iniFile}: ${errorMessage(err)}`);
         }
       }
     }
@@ -358,9 +391,9 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
       customBatFiles: results.customBatFiles,
       detectedConfigs,
     });
-  } catch (error) {
-    log.error(`Failed to auto-scan: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to auto-scan: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -458,8 +491,8 @@ router.post("/detect", requirePermission("servers.discover"), async (req, res) =
             publicName: settings.PublicName || serverName,
             hasRcon: !!settings.RCONPassword,
           });
-        } catch (err) {
-          log.warn(`Failed to parse ${iniFile}: ${err.message}`);
+        } catch (err: unknown) {
+          log.warn(`Failed to parse ${iniFile}: ${errorMessage(err)}`);
         }
       }
     }
@@ -473,21 +506,24 @@ router.post("/detect", requirePermission("servers.discover"), async (req, res) =
       hasNoSteam,
       detectedServers,
     });
-  } catch (error) {
-    log.error(`Failed to detect server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to detect server: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
-function computeRemoteConfigConfigured(server, settings) {
+function computeRemoteConfigConfigured(
+  server: JsonRecord,
+  settings: JsonRecord,
+): boolean {
   return server.isRemote ? isRemoteConfigConfigured(settings) : false;
 }
 
 router.get("/", async (req, res) => {
   try {
-    const servers = await getServers();
-    const settings = await getAllSettings();
-    const withRemoteConfig = servers.map((server) => ({
+    const servers = (await getServers()) as JsonRecord[];
+    const settings = (await getAllSettings()) as JsonRecord;
+    const withRemoteConfig = servers.map((server: JsonRecord) => ({
       ...server,
       remoteConfigConfigured: computeRemoteConfigConfigured(server, settings),
     }));
@@ -495,16 +531,16 @@ router.get("/", async (req, res) => {
       servers: sanitizeServerResponseList(withRemoteConfig),
       lifecycleCapabilities: getLinuxLifecycleCapabilities(),
     });
-  } catch (error) {
-    log.error(`Failed to get servers: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get servers: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
 router.get("/status", async (req, res) => {
   try {
     const serverManager = req.app.get("serverManager");
-    const servers = await getServers();
+    const servers = (await getServers()) as JsonRecord[];
     const activeServer = await getActiveServer();
     const activeId = activeServer?.id || null;
 
@@ -517,23 +553,23 @@ router.get("/status", async (req, res) => {
         if (result?.scanFailed) {
           detectionError = result.error || "Process detection failed";
         }
-      } catch (err) {
-        detectionError = err.message;
-        log.debug(`Per-server status detection failed: ${err.message}`);
+      } catch (err: unknown) {
+        detectionError = errorMessage(err);
+        log.debug(`Per-server status detection failed: ${errorMessage(err)}`);
       }
     }
 
-    const norm = (p) =>
+    const norm = (p: unknown): string =>
       String(p || "")
         .toLowerCase()
         .replace(/\\/g, "/")
         .trim();
 
-    const statuses = await Promise.all(servers.map(async (server) => {
+    const statuses = await Promise.all(servers.map(async (server: JsonRecord) => {
       if (isManagedLifecycleProvider(server.lifecycleProvider)) {
         try {
           const status = await createLinuxServiceLifecycle(
-            server,
+            server as Parameters<typeof createLinuxServiceLifecycle>[0],
             server.lifecycleProvider,
           ).status();
           return {
@@ -545,7 +581,7 @@ router.get("/status", async (req, res) => {
             provider: server.lifecycleProvider,
             stateUnknown: Boolean(status.scanFailed),
           };
-        } catch (error) {
+        } catch (error: unknown) {
           return {
             id: server.id,
             name: server.name,
@@ -554,7 +590,7 @@ router.get("/status", async (req, res) => {
             isActive: server.id === activeId,
             provider: server.lifecycleProvider,
             stateUnknown: true,
-            error: sanitizeError(error.message),
+            error: sanitizeError(errorMessage(error)),
           };
         }
       }
@@ -589,16 +625,16 @@ router.get("/status", async (req, res) => {
       detectedProcesses: matched.length,
       detectionError,
     });
-  } catch (error) {
-    log.error(`Failed to get per-server status: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get per-server status: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
 router.get("/rcon-status", async (req, res) => {
   try {
-    const servers = await getServers();
-    const statuses = await mapWithConcurrency(servers, 3, async (server) => {
+    const servers = (await getServers()) as JsonRecord[];
+    const statuses = await mapWithConcurrency(servers, 3, async (server: JsonRecord) => {
       const rconHost =
         typeof server.rconHost === "string" ? server.rconHost.trim() : "";
       const rconPort = parseBoundedInteger(server.rconPort, null, 1, 65535);
@@ -623,9 +659,9 @@ router.get("/rcon-status", async (req, res) => {
       };
     });
     res.json({ servers: statuses });
-  } catch (error) {
-    log.error(`Failed to probe server RCON status: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to probe server RCON status: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -642,9 +678,9 @@ router.get("/active", async (req, res) => {
     res.json({
       server: sanitizeServerResponse({ ...server, remoteConfigConfigured }),
     });
-  } catch (error) {
-    log.error(`Failed to get active server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get active server: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -665,9 +701,9 @@ router.get("/:id", async (req, res) => {
     }
 
     res.json({ server: sanitizeServerResponse(server) });
-  } catch (error) {
-    log.error(`Failed to get server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get server: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -705,16 +741,19 @@ router.get(
         });
       }
       const template = buildLifecycleTemplate(server, provider, {
-        serviceUser: req.query?.serviceUser,
+        serviceUser:
+          typeof req.query?.serviceUser === "string"
+            ? req.query.serviceUser
+            : undefined,
       });
       res.json({
         ...template,
         warning:
           "Review and install this file for the panel service account. The panel will not modify the filesystem or run sudo.",
       });
-    } catch (error) {
-      log.error(`Failed to generate lifecycle template: ${error.message}`);
-      res.status(400).json({ error: sanitizeError(error.message) });
+    } catch (error: unknown) {
+      log.error(`Failed to generate lifecycle template: ${errorMessage(error)}`);
+      res.status(400).json({ error: sanitizeError(errorMessage(error)) });
     }
   },
 );
@@ -764,13 +803,17 @@ router.post(
         if (!preflight.ready) {
           return res.status(409).json({
             error: sanitizeError(preflight.error),
-            conflict: Boolean(preflight.conflict),
+            conflict: Boolean(
+              "conflict" in preflight ? preflight.conflict : false,
+            ),
             running: Boolean(preflight.running),
           });
         }
 
         const directManager = new ServerManager();
-        await directManager.reloadConfig(serverId);
+        await (directManager.reloadConfig as unknown as (
+          id: ServerId,
+        ) => Promise<unknown>)(serverId);
         const directStatus = await directManager.getServerProcessDetails();
         if (directStatus.scanFailed) {
           return res.status(503).json({
@@ -809,9 +852,9 @@ router.post(
         server: sanitizeServerResponse(updated),
         message: `Lifecycle provider changed to ${provider}`,
       });
-    } catch (error) {
-      log.error(`Failed to change lifecycle provider: ${error.message}`);
-      res.status(400).json({ error: sanitizeError(error.message) });
+    } catch (error: unknown) {
+      log.error(`Failed to change lifecycle provider: ${errorMessage(error)}`);
+      res.status(400).json({ error: sanitizeError(errorMessage(error)) });
     }
   },
 );
@@ -868,9 +911,9 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
           .readFileSync(importIniPath, "utf-8")
           .replace(/\r\n/g, "\n");
         importedSettings = parseIni(importedContent);
-      } catch (err) {
+      } catch (err: unknown) {
         return res.status(400).json({
-          error: `Failed to read ${importServerName}.ini: ${sanitizeError(err.message)}`,
+          error: `Failed to read ${importServerName}.ini: ${sanitizeError(errorMessage(err))}`,
         });
       }
       if (!importedSettings.RCONPassword) {
@@ -948,12 +991,18 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
       return res.status(400).json({ error: "Invalid Docker container name" });
     }
 
-    let serverPort = 16261;
+    let serverPort: number = 16261;
     if (config.serverPort !== undefined && config.serverPort !== null && config.serverPort !== "") {
-      serverPort = parseBoundedInteger(config.serverPort, null, 1, GAME_PORT_MAX);
-      if (serverPort === null) {
+      const parsedServerPort = parseBoundedInteger(
+        config.serverPort,
+        null,
+        1,
+        GAME_PORT_MAX,
+      );
+      if (parsedServerPort === null) {
         return res.status(400).json({ error: "Invalid server port" });
       }
+      serverPort = parsedServerPort;
     }
 
     for (const key of ["useNoSteam", "useDebug", "useUpnp"]) {
@@ -988,9 +1037,9 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
       server: sanitizeServerResponse(server),
       message: "Server created successfully",
     });
-  } catch (error) {
-    log.error(`Failed to create server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to create server: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -1043,7 +1092,7 @@ const ALLOWED_SERVER_UPDATE_FIELDS = [
   // behave.
 ];
 
-export function parseServerId(value) {
+export function parseServerId(value: unknown): ServerId | null {
   const id = String(value ?? "").trim();
   if (!/^[A-Za-z0-9_-]+$/.test(id)) return null;
   return /^\d+$/.test(id) ? Number(id) : id;
@@ -1067,11 +1116,11 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       return res.status(400).json({ error: "Invalid server ID" });
     }
 
-    const updates = {};
+    const updates: JsonRecord = {};
     const body =
       req.body && typeof req.body === "object" && !Array.isArray(req.body)
-        ? req.body
-        : {};
+        ? (req.body as JsonRecord)
+        : ({} as JsonRecord);
     for (const key of ALLOWED_SERVER_UPDATE_FIELDS) {
       if (body[key] !== undefined) {
         updates[key] = body[key];
@@ -1265,8 +1314,8 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
         try {
           await serverManager.reloadConfig();
           log.info(`ServerManager config refreshed after active server update`);
-        } catch (e) {
-          log.warn(`ServerManager reload failed after update: ${e.message}`);
+        } catch (e: unknown) {
+          log.warn(`ServerManager reload failed after update: ${errorMessage(e)}`);
           reloadWarnings.push(
             "Server manager failed to reload; restart the panel or server before relying on the updated settings",
           );
@@ -1288,8 +1337,8 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
           } else {
             log.info(`RCON config refreshed after active server update`);
           }
-        } catch (e) {
-          log.warn(`RCON reload failed after update: ${e.message}`);
+        } catch (e: unknown) {
+          log.warn(`RCON reload failed after update: ${errorMessage(e)}`);
           reloadWarnings.push(
             "RCON failed to reload; reconnect before relying on the updated connection settings",
           );
@@ -1329,9 +1378,9 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
       message: "Server updated successfully",
       ...(reloadWarnings.length > 0 ? { warnings: reloadWarnings } : {}),
     });
-  } catch (error) {
-    log.error(`Failed to update server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to update server: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   } finally {
     lifecycleLock.release();
   }
@@ -1370,9 +1419,9 @@ router.delete("/:id", requirePermission("servers.manage"), async (req, res) => {
       if (newActiveServer) {
         try {
           await reloadServicesForNewActiveServer(req, newActiveServer);
-        } catch (reloadErr) {
+        } catch (reloadErr: unknown) {
           log.warn(
-            `Failed to reload services after deleting the active server: ${reloadErr.message}`,
+            `Failed to reload services after deleting the active server: ${errorMessage(reloadErr)}`,
           );
         }
         if (io) {
@@ -1387,15 +1436,18 @@ router.delete("/:id", requirePermission("servers.manage"), async (req, res) => {
 
     log.info(`Deleted server ID: ${serverId}`);
     res.json({ success: true, message: "Server deleted successfully" });
-  } catch (error) {
-    log.error(`Failed to delete server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to delete server: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   } finally {
     lifecycleLock.release();
   }
 });
 
-async function reloadServicesForNewActiveServer(req, server) {
+async function reloadServicesForNewActiveServer(
+  req: Request,
+  server: JsonRecord,
+): Promise<void> {
   const rconService = req.app.get("rconService");
   const serverManager = req.app.get("serverManager");
 
@@ -1415,8 +1467,8 @@ async function reloadServicesForNewActiveServer(req, server) {
       await rconService.reloadConfig();
       await rconService.connect();
       log.info(`RCON reconnected for server: ${server.name}`);
-    } catch (rconErr) {
-      log.warn(`Failed to connect RCON for new server: ${rconErr.message}`);
+    } catch (rconErr: unknown) {
+      log.warn(`Failed to connect RCON for new server: ${errorMessage(rconErr)}`);
     }
   }
 
@@ -1450,9 +1502,9 @@ router.post("/:id/activate", requirePermission("servers.manage"), async (req, re
     const reloadWarnings = [];
     try {
       await reloadServicesForNewActiveServer(req, server);
-    } catch (reloadErr) {
+    } catch (reloadErr: unknown) {
       log.warn(
-        `Failed to reload services after activating server: ${reloadErr.message}`,
+        `Failed to reload services after activating server: ${errorMessage(reloadErr)}`,
       );
       reloadWarnings.push(
         "Server activated, but live services could not be fully reloaded; restart the panel or reconnect RCON before relying on the new settings",
@@ -1469,9 +1521,9 @@ router.post("/:id/activate", requirePermission("servers.manage"), async (req, re
       message: `Now managing: ${server.name}`,
       ...(reloadWarnings.length > 0 ? { warnings: reloadWarnings } : {}),
     });
-  } catch (error) {
-    log.error(`Failed to activate server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to activate server: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   } finally {
     lifecycleLock.release();
   }

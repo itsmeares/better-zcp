@@ -46,7 +46,7 @@ describe("PUT /servers/:id -- description is not a real per-server field", () =>
     });
     createdServerId = server.id;
 
-    const { default: router } = await import("../routes/servers.js");
+    const { default: router } = await import("../routes/servers.ts");
     const res = createResponse();
     await getRouteHandler(router, "/:id", "put")(
       {
@@ -74,7 +74,7 @@ describe("PUT /servers/:id -- description is not a real per-server field", () =>
     });
     createdServerId = server.id;
 
-    const { default: router } = await import("../routes/servers.js");
+    const { default: router } = await import("../routes/servers.ts");
     const res = createResponse();
     await getRouteHandler(router, "/:id", "put")(
       {

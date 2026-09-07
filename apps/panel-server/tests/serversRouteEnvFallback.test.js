@@ -12,7 +12,7 @@ vi.mock("../database/init.js", () => ({
   setActiveServer: vi.fn(),
 }));
 
-const { default: router } = await import("../routes/servers.js");
+const { default: router } = await import("../routes/servers.ts");
 
 const ORIGINAL_SERVER_PATH = process.env.PZ_SERVER_PATH;
 const ORIGINAL_SAVE_PATH = process.env.PZ_SAVE_PATH;

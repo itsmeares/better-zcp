@@ -38,7 +38,7 @@ async function runRoute(router, routePath, method, req) {
 
 describe("dead isAbsolute(resolve(x)) checks now reject a relative path before resolving it", () => {
   it("servers.js POST /auto-scan refuses a relative scanPath", async () => {
-    const { default: serversRouter } = await import("../routes/servers.js");
+    const { default: serversRouter } = await import("../routes/servers.ts");
     const res = await runRoute(serversRouter, "/auto-scan", "post", {
       body: { scanPath: "some/relative/dir" },
       user: { role: "admin" },
@@ -50,7 +50,7 @@ describe("dead isAbsolute(resolve(x)) checks now reject a relative path before r
   });
 
   it("servers.js POST /detect refuses a relative dataPath", async () => {
-    const { default: serversRouter } = await import("../routes/servers.js");
+    const { default: serversRouter } = await import("../routes/servers.ts");
     const res = await runRoute(serversRouter, "/detect", "post", {
       body: { dataPath: "some/relative/dir" },
       user: { role: "admin" },

@@ -29,7 +29,7 @@ vi.mock("../services/rcon.js", () => ({
   testRconConnection,
 }));
 
-const { default: router } = await import("../routes/servers.js");
+const { default: router } = await import("../routes/servers.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

@@ -34,7 +34,7 @@ const {
   default: router,
   parseDiscoveredPort,
   parseServerId,
-} = await import("../routes/servers.js");
+} = await import("../routes/servers.ts");
 const { getServer, getActiveServer, deleteServer, setActiveServer } = await import("../database/init.js");
 const {
   getSteamLoginArgs,
