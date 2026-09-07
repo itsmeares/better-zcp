@@ -286,9 +286,9 @@ describe("auth.js: recovery codes are admin-only, not delegable to users.manage 
   );
 });
 
-describe("mapProxy.js / serverStatus.js / system.js: deliberately open to every role", () => {
+describe("mapProxy.ts / serverStatus.js / system.js: deliberately open to every role", () => {
   it("mapProxy /resolve and /vehicles do not refuse a moderator", async () => {
-    const { default: router } = await import("../routes/mapProxy.js");
+    const { default: router } = await import("../routes/mapProxy.ts");
     for (const [routePath, method] of [
       ["/resolve", "get"],
       ["/vehicles", "get"],

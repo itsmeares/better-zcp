@@ -25,9 +25,9 @@ vi.mock("../utils/paths.ts", () => ({
 
 const { default: authService } = await import("../services/auth.js");
 const { default: modsRouter } = await import("../routes/mods.js");
-const { default: mapProxyRouter } = await import("../routes/mapProxy.js");
+const { default: mapProxyRouter } = await import("../routes/mapProxy.ts");
 
-describe("real authService.middleware() + real mods.js/mapProxy.js routers, no Authorization header", () => {
+describe("real authService.middleware() + real mods.js/mapProxy.ts routers, no Authorization header", () => {
   let server;
   let baseUrl;
 

@@ -10,8 +10,8 @@ vi.mock("../database/init.js", async () => {
 const getB42ResolutionStatus = vi.fn();
 const getB42Dir = vi.fn();
 const getB42TopFormat = vi.fn();
-vi.mock("../routes/mapProxy.js", async () => {
-  const actual = await vi.importActual("../routes/mapProxy.js");
+vi.mock("../routes/mapProxy.ts", async () => {
+  const actual = await vi.importActual("../routes/mapProxy.ts");
   return { ...actual, getB42ResolutionStatus, getB42Dir, getB42TopFormat };
 });
 

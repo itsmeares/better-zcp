@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import type { Request, Response as ExpressResponse } from "express";
 import { createLogger } from "../utils/logger.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { getActiveServer } from "../database/init.js";
@@ -13,11 +14,41 @@ const execFileAsync = promisify(execFile);
 
 const router = express.Router();
 
+type TileCacheEntry = { buffer: Buffer; contentType: string };
+type MapProjection = { x0: number; y0: number; sqr: number; scale: number };
+type MapGeometry = {
+  tileSize: number;
+  width: number;
+  height: number;
+  maxLevel: number;
+  x0?: number;
+  y0?: number;
+  sqr?: number;
+  scale?: number;
+  renderedMaxLevel?: number;
+};
+type B42Map = MapGeometry & {
+  directory: string;
+  renderedMaxLevel?: number;
+};
+type CurlResponse = { ok: boolean; status: number; text: string };
+type TopFormat = "webp" | "jpg" | "jpeg" | "png";
+type VehicleRecord = { id: number; x: number; y: number };
+type PersistedVehicleCache = {
+  key: string | null;
+  expiresAt: number;
+  vehicles: VehicleRecord[];
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 const TILE_CACHE_DIR = path.join(getDataPaths().dataDir, "map-tiles-cache");
 const MEM_CACHE_MAX = 500;
-const memCache = new Map();
+const memCache = new Map<string, TileCacheEntry>();
 
-function memCacheGet(relPath) {
+function memCacheGet(relPath: string): TileCacheEntry | null {
   const entry = memCache.get(relPath);
   if (!entry) return null;
   memCache.delete(relPath);
@@ -25,7 +56,7 @@ function memCacheGet(relPath) {
   return entry;
 }
 
-function memCachePut(relPath, buffer, contentType) {
+function memCachePut(relPath: string, buffer: Buffer, contentType: string): void {
   if (memCache.size >= MEM_CACHE_MAX) {
     const oldestKey = memCache.keys().next().value;
     if (oldestKey !== undefined) memCache.delete(oldestKey);
@@ -33,11 +64,11 @@ function memCachePut(relPath, buffer, contentType) {
   memCache.set(relPath, { buffer, contentType });
 }
 
-function diskPathFor(relPath) {
+function diskPathFor(relPath: string): string {
   return path.join(TILE_CACHE_DIR, relPath);
 }
 
-async function readDiskCache(relPath) {
+async function readDiskCache(relPath: string): Promise<Buffer | null> {
   try {
     return await fs.promises.readFile(diskPathFor(relPath));
   } catch {
@@ -45,15 +76,15 @@ async function readDiskCache(relPath) {
   }
 }
 
-function writeDiskCacheAsync(relPath, buffer) {
+function writeDiskCacheAsync(relPath: string, buffer: Buffer): void {
   const dest = diskPathFor(relPath);
   const tmp = `${dest}.${process.pid}.${Date.now()}.tmp`;
   fs.promises
     .mkdir(path.dirname(dest), { recursive: true })
     .then(() => fs.promises.writeFile(tmp, buffer))
     .then(() => fs.promises.rename(tmp, dest))
-    .catch((err) => {
-      log.debug(`Disk tile cache write failed for ${relPath}: ${err.message}`);
+    .catch((err: unknown) => {
+      log.debug(`Disk tile cache write failed for ${relPath}: ${errorMessage(err)}`);
       fs.promises.unlink(tmp).catch(() => {});
     });
 }
@@ -66,7 +97,7 @@ const CURL_DISCOVERY_UA =
 const CURL_TIMEOUT_S = 8;
 const CURL_STATUS_MARKER = "\n__CURL_HTTP_STATUS__:";
 
-async function fetchViaCurl(url) {
+async function fetchViaCurl(url: string): Promise<CurlResponse> {
   let stdout;
   try {
     ({ stdout } = await execFileAsync(
@@ -84,11 +115,11 @@ async function fetchViaCurl(url) {
       ],
       { timeout: (CURL_TIMEOUT_S + 2) * 1000, maxBuffer: 20 * 1024 * 1024 },
     ));
-  } catch (err) {
+  } catch (err: unknown) {
     throw new Error(
-      err.code === "ENOENT"
+      err && typeof err === "object" && "code" in err && err.code === "ENOENT"
         ? "curl is not available on this host"
-        : `curl request failed: ${err.message}`,
+        : `curl request failed: ${errorMessage(err)}`,
     );
   }
   const idx = stdout.lastIndexOf(CURL_STATUS_MARKER);
@@ -106,7 +137,7 @@ const B42_DIR_TTL_MS = 24 * 60 * 60 * 1000;
 const B42_DIR_RETRY_MS = 5 * 60 * 1000;
 const B42_GEOMETRY_FALLBACK_VERIFIED_RENDERED_MAX_LEVEL = 22;
 
-const B42_GEOMETRY_FALLBACK = {
+const B42_GEOMETRY_FALLBACK: MapGeometry = {
   tileSize: 2048,
   width: 2318656,
   height: 1019040,
@@ -118,7 +149,7 @@ const B42_GEOMETRY_FALLBACK = {
   scale: 1,
 };
 
-async function fetchMapProjection(directory) {
+async function fetchMapProjection(directory: string): Promise<MapProjection | null> {
   try {
     const resp = await fetchViaCurl(
       `${PZ_TILES_ROOT}/${directory}/base/map_info.json`,
@@ -135,7 +166,7 @@ async function fetchMapProjection(directory) {
     return null;
   }
 }
-async function fetchMapGeometry(directory) {
+async function fetchMapGeometry(directory: string): Promise<MapGeometry | null> {
   try {
     const [resp, projection] = await Promise.all([
       fetchViaCurl(`${PZ_TILES_ROOT}/${directory}/base/layer0.dzi`),
@@ -164,18 +195,22 @@ const COVERAGE_PROBE_FRACTIONS = [
   [0.56, 0.45],
   [0.61, 0.5],
 ];
-let _b42Map = null;
+let _b42Map: B42Map | null = null;
 let _b42DirFetchedAt = 0;
-let _b42ResolvePromise = null;
-let _b42Source = null;
-let _b42FallbackReason = null;
+let _b42ResolvePromise: Promise<B42Map> | null = null;
+let _b42Source: "dynamic" | "fallback" | null = null;
+let _b42FallbackReason: string | null = null;
 
 const RENDERED_MAX_LEVEL_CONSERVATIVE_OFFSET = 6;
-function conservativeRenderedMaxLevel(maxLevel) {
+function conservativeRenderedMaxLevel(maxLevel: number): number {
   return Math.max(0, maxLevel - RENDERED_MAX_LEVEL_CONSERVATIVE_OFFSET);
 }
 
-async function probeLevelHasCoverage(directory, geometry, level) {
+async function probeLevelHasCoverage(
+  directory: string,
+  geometry: MapGeometry,
+  level: number,
+): Promise<boolean> {
   const levelScale = 2 ** (geometry.maxLevel - level);
   const levelW = Math.ceil(geometry.width / levelScale);
   const levelH = Math.ceil(geometry.height / levelScale);
@@ -202,7 +237,7 @@ async function probeLevelHasCoverage(directory, geometry, level) {
   return false;
 }
 
-async function hasTileCoverage(directory, geometry) {
+async function hasTileCoverage(directory: string, geometry: MapGeometry): Promise<boolean> {
   return probeLevelHasCoverage(
     directory,
     geometry,
@@ -210,7 +245,7 @@ async function hasTileCoverage(directory, geometry) {
   );
 }
 
-async function discoverRenderedMaxLevel(directory, geometry) {
+async function discoverRenderedMaxLevel(directory: string, geometry: MapGeometry): Promise<number> {
   const floor = conservativeRenderedMaxLevel(geometry.maxLevel);
   let lo = floor;
   let hi = geometry.maxLevel;
@@ -226,16 +261,20 @@ async function discoverRenderedMaxLevel(directory, geometry) {
 }
 
 const TOP_FORMAT_FALLBACK = "jpg";
-const TOP_CONTENT_TYPES = {
+const TOP_CONTENT_TYPES: Record<TopFormat, string> = {
   webp: "image/webp",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   png: "image/png",
 };
-const _topFormatCache = new Map();
-const _topFormatInflight = new Map();
 
-async function getB42TopFormat(directory) {
+function isTopFormat(value: string): value is TopFormat {
+  return value in TOP_CONTENT_TYPES;
+}
+const _topFormatCache = new Map<string, TopFormat>();
+const _topFormatInflight = new Map<string, Promise<TopFormat>>();
+
+async function getB42TopFormat(directory: string): Promise<TopFormat> {
   const cached = _topFormatCache.get(directory);
   if (cached) return cached;
   const pending = _topFormatInflight.get(directory);
@@ -247,7 +286,7 @@ async function getB42TopFormat(directory) {
   return resolvePromise;
 }
 
-async function resolveB42TopFormat(directory) {
+async function resolveB42TopFormat(directory: string): Promise<TopFormat> {
   try {
     const resp = await fetchViaCurl(
       `${PZ_TILES_ROOT}/${directory}/base_top/layer0.dzi`,
@@ -255,7 +294,7 @@ async function resolveB42TopFormat(directory) {
     if (resp.ok) {
       const xml = resp.text;
       const format = xml.match(/Format="(\w+)"/)?.[1]?.toLowerCase();
-      if (format && TOP_CONTENT_TYPES[format]) {
+      if (format && isTopFormat(format)) {
         _topFormatCache.set(directory, format);
         return format;
       }
@@ -266,19 +305,19 @@ async function resolveB42TopFormat(directory) {
   return TOP_FORMAT_FALLBACK;
 }
 
-async function fetchBuildDefault() {
+async function fetchBuildDefault(): Promise<{ directory: string }> {
   const resp = await fetchViaCurl(`${PZ_MAP_ROOT}/api/builds/default`);
   if (!resp.ok) {
     throw new Error(`HTTP ${resp.status} for /api/builds/default`);
   }
-  const entry = JSON.parse(resp.text);
-  if (!entry?.directory) {
+  const entry = JSON.parse(resp.text) as { directory?: unknown };
+  if (typeof entry.directory !== "string" || !entry.directory) {
     throw new Error("/api/builds/default response had no directory");
   }
-  return entry;
+  return { directory: entry.directory };
 }
 
-async function fetchBuildList() {
+async function fetchBuildList(): Promise<Array<{ directory: string }>> {
   const resp = await fetchViaCurl(`${PZ_MAP_ROOT}/api/builds`);
   if (!resp.ok) {
     throw new Error(`HTTP ${resp.status} for /api/builds`);
@@ -287,14 +326,14 @@ async function fetchBuildList() {
   if (!Array.isArray(list)) {
     throw new Error("/api/builds response was not an array");
   }
-  return list;
+  return list as Array<{ directory: string }>;
 }
 
-function isB42PlusCandidate(directory) {
-  return /^4[2-9][\w.\-]*$/.test(directory || "");
+function isB42PlusCandidate(directory: unknown): directory is string {
+  return typeof directory === "string" && /^4[2-9][\w.\-]*$/.test(directory);
 }
 
-async function getB42Map() {
+async function getB42Map(): Promise<B42Map> {
   const now = Date.now();
   if (_b42Map && now - _b42DirFetchedAt < B42_DIR_TTL_MS) {
     return _b42Map;
@@ -306,10 +345,10 @@ async function getB42Map() {
   return _b42ResolvePromise;
 }
 
-async function resolveB42Map(now) {
+async function resolveB42Map(now: number): Promise<B42Map> {
   let failureReason = null;
 
-  async function tryResolve(directory) {
+  async function tryResolve(directory: string): Promise<boolean> {
     const geometry = await fetchMapGeometry(directory);
     if (!geometry) {
       failureReason = `could not read ${directory}/base/layer0.dzi (discovery request to tiles.pzmap.org was refused)`;
@@ -338,17 +377,17 @@ async function resolveB42Map(now) {
     return true;
   }
 
-  let alreadyTried = null;
+  let alreadyTried: string | null = null;
   try {
     const def = await fetchBuildDefault();
     if (isB42PlusCandidate(def.directory)) {
       alreadyTried = def.directory;
-      if (await tryResolve(def.directory)) return _b42Map;
+      if (await tryResolve(def.directory)) return _b42Map!;
     } else {
       failureReason = `/api/builds/default returned a non-B42+ directory (${def.directory})`;
     }
-  } catch (err) {
-    failureReason = err.message;
+  } catch (err: unknown) {
+    failureReason = errorMessage(err);
   }
 
   try {
@@ -362,10 +401,10 @@ async function resolveB42Map(now) {
       failureReason = failureReason || "/api/builds listed no B42+ candidates";
     }
     for (const entry of candidates) {
-      if (await tryResolve(entry.directory)) return _b42Map;
+      if (await tryResolve(entry.directory)) return _b42Map!;
     }
-  } catch (err) {
-    failureReason = failureReason || err.message;
+  } catch (err: unknown) {
+    failureReason = failureReason || errorMessage(err);
   }
 
   if (_b42Source !== "fallback" || _b42FallbackReason !== failureReason) {
@@ -380,11 +419,15 @@ async function resolveB42Map(now) {
   return _b42Map;
 }
 
-async function getB42Dir() {
+async function getB42Dir(): Promise<string> {
   return (await getB42Map()).directory;
 }
 
-function getB42ResolutionStatus() {
+function getB42ResolutionStatus(): {
+  source: "dynamic" | "fallback" | null;
+  directory: string;
+  reason: string | null;
+} {
   return {
     source: _b42Source,
     directory: _b42Map?.directory ?? B42_DIR_FALLBACK,
@@ -399,15 +442,15 @@ const CIRCUIT_COOLDOWN_MS = 30_000;
 let circuitConsecutiveFailures = 0;
 let circuitOpenUntil = 0;
 
-function isCircuitOpen() {
+function isCircuitOpen(): boolean {
   return Date.now() < circuitOpenUntil;
 }
 
-function recordTileSuccess() {
+function recordTileSuccess(): void {
   circuitConsecutiveFailures = 0;
 }
 
-function recordTileFailure() {
+function recordTileFailure(): void {
   circuitConsecutiveFailures++;
   if (
     circuitConsecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD &&
@@ -420,7 +463,7 @@ function recordTileFailure() {
   }
 }
 
-async function fetchTileWithTimeout(url) {
+async function fetchTileWithTimeout(url: string): Promise<globalThis.Response> {
   return fetch(url, {
     signal: AbortSignal.timeout(TILE_FETCH_TIMEOUT_MS),
     headers: {
@@ -433,7 +476,7 @@ async function fetchTileWithTimeout(url) {
   });
 }
 
-async function fetchTileWithRetry(url) {
+async function fetchTileWithRetry(url: string): Promise<globalThis.Response> {
   if (isCircuitOpen()) {
     throw new Error(
       "Tile proxy circuit breaker is open (upstream has been failing repeatedly)",
@@ -471,12 +514,19 @@ const TILE_BROWSER_CACHE_CONTROL = "public, max-age=3600";
 const TILE_BROWSER_CACHE_CONTROL_VERSIONED =
   "public, max-age=604800, immutable";
 
-function requestIsVersioned(req) {
+function requestIsVersioned(req: Request): boolean {
   const v = Array.isArray(req.query.v) ? req.query.v[0] : req.query.v;
   return typeof v === "string" && v.length > 0;
 }
 
-async function serveTile(req, res, url, contentType, relPath, cacheControl) {
+async function serveTile(
+  req: Request,
+  res: ExpressResponse,
+  url: string,
+  contentType: string,
+  relPath: string,
+  cacheControl: string,
+): Promise<void> {
   const hot = memCacheGet(relPath);
   if (hot) {
     res.set("Content-Type", hot.contentType);
@@ -506,7 +556,8 @@ async function serveTile(req, res, url, contentType, relPath, cacheControl) {
             ? 502
             : response.status;
       res.set("X-Tile-Cache", "miss");
-      return res.status(status).end();
+      res.status(status).end();
+      return;
     }
     const buffer = Buffer.from(await response.arrayBuffer());
     memCachePut(relPath, buffer, contentType);
@@ -515,8 +566,8 @@ async function serveTile(req, res, url, contentType, relPath, cacheControl) {
     res.set("Cache-Control", cacheControl);
     res.set("X-Tile-Cache", "miss");
     res.send(buffer);
-  } catch (err) {
-    log.debug(`Tile proxy failed for ${url}: ${err.message}`);
+  } catch (err: unknown) {
+    log.debug(`Tile proxy failed for ${url}: ${errorMessage(err)}`);
     if (!res.headersSent) res.status(502).end();
   }
 }
@@ -540,7 +591,7 @@ router.get("/resolve", async (req, res) => {
   });
 });
 
-let persistedVehicleCache = { key: null, expiresAt: 0, vehicles: [] };
+let persistedVehicleCache: PersistedVehicleCache = { key: null, expiresAt: 0, vehicles: [] };
 
 router.get("/vehicles", async (req, res) => {
   try {
@@ -560,8 +611,8 @@ router.get("/vehicles", async (req, res) => {
       };
     }
     res.json({ vehicles: persistedVehicleCache.vehicles });
-  } catch (err) {
-    log.warn(`Persisted vehicle lookup failed: ${err.message}`);
+  } catch (err: unknown) {
+    log.warn(`Persisted vehicle lookup failed: ${errorMessage(err)}`);
     res.json({ vehicles: [] });
   }
 });

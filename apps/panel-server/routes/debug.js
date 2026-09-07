@@ -48,7 +48,7 @@ import {
   getB42Dir,
   getB42TopFormat,
   getB42ResolutionStatus,
-} from "./mapProxy.js";
+} from "./mapProxy.ts";
 import { getThumbnailResolutionStatus } from "./mods.js";
 import {
   getCandidateZomboidPaths,

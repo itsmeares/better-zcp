@@ -39,7 +39,7 @@ function mapInfoJson() {
 
 async function freshModule() {
   vi.resetModules();
-  return await import("../routes/mapProxy.js");
+  return await import("../routes/mapProxy.ts");
 }
 
 beforeEach(() => {
