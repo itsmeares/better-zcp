@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MemoryRouter } from '@/lib/routerCompat'
+import { MemoryRouter } from '@/test/router'
 import { FeatureErrorBoundary } from '../FeatureErrorBoundary'
 import en from '@/locales/en/featureErrorBoundary.json'
 

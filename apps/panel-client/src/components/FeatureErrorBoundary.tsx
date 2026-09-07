@@ -3,7 +3,7 @@ import { withTranslation, type WithTranslation } from 'react-i18next'
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card'
-import { Link } from '@/lib/routerCompat'
+import { Link } from '@tanstack/react-router'
 import { reportClientError } from '@/lib/client-errors'
 import { getRecoveryUrl, rawErrorMessageIntentional } from '@/lib/errorMessage'
 
@@ -100,7 +100,7 @@ class FeatureErrorBoundaryBase extends React.Component<FeatureErrorBoundaryProps
               </Button>
               {recoveryUrl && (
                 <Button variant="ghost" asChild>
-                  <Link to={recoveryUrl}>{t('openRecoveryPage')}</Link>
+                  <a href={recoveryUrl}>{t('openRecoveryPage')}</a>
                 </Button>
               )}
             </div>

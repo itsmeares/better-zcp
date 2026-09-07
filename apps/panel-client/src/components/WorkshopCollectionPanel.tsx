@@ -1,6 +1,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from '@/lib/routerCompat'
+import { Link } from '@tanstack/react-router'
 import { Trans, useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
@@ -418,7 +418,7 @@ export function WorkshopCollectionPanel() {
               </p>
             </div>
             <Button asChild size="sm" variant="outline">
-              <Link to="/settings?tab=mods">
+              <Link to="/settings" search={{ tab: 'mods' }}>
                 <SettingsIcon className="w-3.5 h-3.5 me-2" />
                 {t('openSettings')}
               </Link>
@@ -510,7 +510,7 @@ export function WorkshopCollectionPanel() {
               {t('refresh')}
             </Button>
             <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground">
-              <Link to="/settings?tab=mods">
+              <Link to="/settings" search={{ tab: 'mods' }}>
                 <SettingsIcon className="w-3.5 h-3.5 me-1.5" />
                 {t('configure')}
               </Link>

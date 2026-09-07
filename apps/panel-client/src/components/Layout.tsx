@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { NavLink, useNavigate, useLocation } from '@/lib/routerCompat'
+import { Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, useContext } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import {
@@ -669,13 +669,13 @@ export default function Layout({ children }: LayoutProps) {
                 <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
                   {t('nav.noServerBanner.description')}
                 </p>
-                <NavLink
+                <Link
                   to="/server-setup"
                   onClick={() => setMobileMenuOpen(false)}
                   className="mt-1.5 inline-flex items-center text-[11px] font-medium text-primary hover:underline"
                 >
                   {t('nav.noServerBanner.cta')}
-                </NavLink>
+                </Link>
               </div>
             </div>
           </div>
@@ -761,7 +761,7 @@ export default function Layout({ children }: LayoutProps) {
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/servers')} className="py-2.5 px-3">
+              <DropdownMenuItem onClick={() => void navigate({ to: '/servers' })} className="py-2.5 px-3">
                 <Layers className="w-4 h-4 me-2" />
                 {t('activeServer.manageServers')}
               </DropdownMenuItem>
@@ -772,9 +772,8 @@ export default function Layout({ children }: LayoutProps) {
         <nav aria-label={t('nav.ariaLabel')} className="flex-1 overflow-y-auto nav-scroll px-2 py-2">
           <Tooltip>
             <TooltipTrigger asChild>
-              <NavLink
+              <Link
                 to={dashboardItem.to}
-                end
                 onPointerEnter={() => preloadRouteModule(dashboardItem.to)}
                 onFocus={() => preloadRouteModule(dashboardItem.to)}
                 onClick={() => setMobileMenuOpen(false)}
@@ -791,7 +790,7 @@ export default function Layout({ children }: LayoutProps) {
                 )}
                 <dashboardItem.icon className={cn('h-[15px] w-[15px] shrink-0', location.pathname === dashboardItem.to ? 'text-primary' : 'text-muted-foreground/80 group-hover:text-foreground')} />
                 {!sidebarCollapsed && <span className="truncate">{t(dashboardItem.labelKey)}</span>}
-              </NavLink>
+              </Link>
             </TooltipTrigger>
             {sidebarCollapsed && <TooltipContent side="right">{t(dashboardItem.labelKey)}</TooltipContent>}
           </Tooltip>
@@ -833,7 +832,7 @@ export default function Layout({ children }: LayoutProps) {
                     return (
                       <Tooltip key={item.to}>
                         <TooltipTrigger asChild>
-                          <NavLink
+                          <Link
                             to={item.to}
                             onPointerEnter={() => preloadRouteModule(item.to)}
                             onFocus={() => preloadRouteModule(item.to)}
@@ -849,7 +848,7 @@ export default function Layout({ children }: LayoutProps) {
                               <span className={cn('absolute start-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full', tone.childDot)} aria-hidden />
                             )}
                             <item.icon className={cn('h-[15px] w-[15px] shrink-0', isActive ? tone.labelActive : 'text-muted-foreground/80 group-hover:text-foreground')} />
-                          </NavLink>
+                          </Link>
                         </TooltipTrigger>
                         <TooltipContent side="right">{t(item.labelKey)}</TooltipContent>
                       </Tooltip>
@@ -931,24 +930,22 @@ export default function Layout({ children }: LayoutProps) {
                       )
                     }
 
+                    const isActive = location.pathname === item.to
                     return (
-                      <NavLink
+                      <Link
                         key={item.to}
                         to={item.to}
                         onPointerEnter={() => preloadRouteModule(item.to)}
                         onFocus={() => preloadRouteModule(item.to)}
                         onClick={() => setMobileMenuOpen(false)}
-                        className={({ isActive }) =>
-                          cn(
-                            'group relative flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
-                            isActive
-                              ? cn('font-medium text-foreground', tone.childActive)
-                              : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground'
-                          )
-                        }
+                        className={cn(
+                          'group relative flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
+                          isActive
+                            ? cn('font-medium text-foreground', tone.childActive)
+                            : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground'
+                        )}
                       >
-                        {({ isActive }) => (
-                          <>
+                        <>
                             {isActive && (
                               <span className={cn('absolute start-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full', tone.childDot)} aria-hidden />
                             )}
@@ -988,9 +985,8 @@ export default function Layout({ children }: LayoutProps) {
                                 aria-hidden
                               />
                             )}
-                          </>
-                        )}
-                      </NavLink>
+                        </>
+                      </Link>
                     )
                   })}
                 </div>
@@ -1010,8 +1006,9 @@ export default function Layout({ children }: LayoutProps) {
               <div className="flex items-center gap-2 text-[11px]">
                 <span className="flex items-center gap-2">
                   {panelUpdateAvailable && (
-                    <NavLink
-                      to="/settings?tab=updates"
+                    <Link
+                      to="/settings"
+                      search={{ tab: 'updates' }}
                       onClick={() => setMobileMenuOpen(false)}
                       className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-1.5 py-0 text-[10px] font-medium uppercase tracking-wider text-warning hover:bg-warning/20 transition-colors"
                       title={panelUpdateAvailable.version
@@ -1020,7 +1017,7 @@ export default function Layout({ children }: LayoutProps) {
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-warning motion-safe:animate-pulse" />
                       {t('panelUpdateBadge.update')}
-                    </NavLink>
+                    </Link>
                   )}
                   <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/55">
                     v{panelVersion || '—'}
@@ -1120,7 +1117,7 @@ export default function Layout({ children }: LayoutProps) {
                   size="sm"
                   variant="warning"
                   className="h-7 gap-1.5 px-2.5 text-xs font-semibold"
-                  onClick={() => navigate('/servers')}
+                  onClick={() => void navigate({ to: '/servers' })}
                 >
                   <RefreshCw className="h-3 w-3" />
                   {t('updateBanner.updateServer')}

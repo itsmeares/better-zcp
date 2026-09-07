@@ -34,7 +34,7 @@ import { NumberInput } from "@/components/NumberInput";
 import { DisabledReason } from "@/components/DisabledReason";
 import { getInstallProgressMessage } from "@/lib/installProgressMessage";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "@/lib/routerCompat";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Card,
   CardContent,
@@ -950,7 +950,7 @@ export default function ServerSetup() {
         title: t("toasts.serverStartingTitle"),
         description: t("toasts.serverStartingDesc"),
       });
-      navigateTimerRef.current = setTimeout(() => navigate("/"), 2000);
+      navigateTimerRef.current = setTimeout(() => void navigate({ to: "/" }), 2000);
     } catch (error) {
       toast({
         title: t("toasts.startFailedTitle"),
@@ -2111,7 +2111,7 @@ export default function ServerSetup() {
                   )}
                 </Button>
               </DisabledReason>
-              <Button variant="outline" onClick={() => navigate("/")}>
+              <Button variant="outline" onClick={() => void navigate({ to: "/" })}>
                 {t("common.openDashboardButton")}
               </Button>
             </div>
@@ -2692,7 +2692,7 @@ export default function ServerSetup() {
                   )}
                 </Button>
               </DisabledReason>
-              <Button variant="outline" onClick={() => navigate("/")}>
+              <Button variant="outline" onClick={() => void navigate({ to: "/" })}>
                 {t("common.openDashboardButton")}
               </Button>
             </div>

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
-import { Link } from '@/lib/routerCompat'
 import { Button } from '@/components/ui/button'
 import { rconApi, type RconTestResult } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -67,9 +66,9 @@ export function RconTestConnection({ host, port, password, className }: RconTest
             {result.detail}
           </p>
           {!result.success && recoveryUrl && (
-            <Link to={recoveryUrl} className="text-xs text-primary hover:underline">
+            <a href={recoveryUrl} className="text-xs text-primary hover:underline">
               Open connection settings
-            </Link>
+            </a>
           )}
         </div>
       )}

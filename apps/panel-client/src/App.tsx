@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation } from '@/lib/routerCompat'
+import { Link, Outlet, useLocation } from '@tanstack/react-router'
 import { useEffect, useState, useCallback, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DirectionProvider } from '@radix-ui/react-direction'

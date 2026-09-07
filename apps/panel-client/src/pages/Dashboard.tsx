@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import type { ReactElement } from 'react'
-import { Link, useNavigate } from '@/lib/routerCompat'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { Trans, useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { usePageShortcut } from '../hooks/useKeyboardShortcuts'
@@ -647,7 +647,7 @@ export default function Dashboard() {
         const url = getRecoveryUrl(error)
         if (url !== '/servers') return undefined
         return (
-          <ToastAction altText={t('toasts.rconAuthFailed.openServersAlt')} onClick={() => navigate(url)}>
+          <ToastAction altText={t('toasts.rconAuthFailed.openServersAlt')} onClick={() => void navigate({ to: '/servers' })}>
             {t('toasts.rconAuthFailed.openServers')}
           </ToastAction>
         )
@@ -1205,7 +1205,7 @@ export default function Dashboard() {
               >
                 <X className="h-3.5 w-3.5" />
               </Button>
-              <Link to="/settings?tab=updates">
+              <Link to="/settings" search={{ tab: 'updates' }}>
                 <Button
                   size="sm"
                   variant={lastFailed ? 'destructive' : 'default'}
@@ -1232,7 +1232,7 @@ export default function Dashboard() {
         return (
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs text-muted-foreground">
             <CloudOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-            <Link to="/settings?tab=updates" className="min-w-0 truncate underline-offset-2 hover:text-foreground hover:underline" title={panelUpdate.lastError}>
+            <Link to="/settings" search={{ tab: 'updates' }} className="min-w-0 truncate underline-offset-2 hover:text-foreground hover:underline" title={panelUpdate.lastError}>
               {t('updateCheckError.label')}
             </Link>
             <button

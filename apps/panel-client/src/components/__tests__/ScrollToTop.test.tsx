@@ -1,11 +1,12 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, fireEvent, screen } from '@testing-library/react'
-import { MemoryRouter, useLocation, useNavigate } from '@/lib/routerCompat'
+import { useLocation, useNavigate } from '@tanstack/react-router'
+import { MemoryRouter } from '@/test/router'
 import { ScrollToTop } from '../ScrollToTop'
 
 function PageA() {
   const navigate = useNavigate()
-  return <button onClick={() => navigate('/b')}>go to b</button>
+  return <button onClick={() => void navigate({ to: '/b' as never })}>go to b</button>
 }
 
 function RoutedContent() {

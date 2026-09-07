@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from 'react'
-import { useNavigate } from '@/lib/routerCompat'
+import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 export interface ShortcutDef {
@@ -80,7 +80,7 @@ export function useKeyboardShortcuts() {
     const shortcut = navShortcuts.find(s => s.key === key)
     if (shortcut?.path) {
       e.preventDefault()
-      navigate(shortcut.path)
+      void navigate({ to: shortcut.path as never })
     }
   }, [navigate, navShortcuts])
 

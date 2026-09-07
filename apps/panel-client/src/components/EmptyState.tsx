@@ -1,6 +1,6 @@
 import { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from '@/lib/routerCompat'
+import { Link } from '@tanstack/react-router'
 import {
   InboxIcon,
   SearchX,

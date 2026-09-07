@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Link } from '@/lib/routerCompat'
+import { Link } from '@tanstack/react-router'
 import { Trans, useTranslation } from 'react-i18next'
 import { getCurrentLanguage, isRTL } from '@/i18n'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -2745,7 +2745,8 @@ export default function WorldMap() {
                 </div>
                 </div>
                 <Link
-                  to={`/players?player=${encodeURIComponent(selectedPlayer.username)}`}
+                  to="/players"
+                  search={{ player: selectedPlayer.username }}
                   onClick={() => setSelectedPlayer(null)}
                   className="flex min-h-7 items-center justify-center gap-1.5 rounded-sm border border-border/50 px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
                 >

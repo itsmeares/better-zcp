@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
-import { useSearchParams } from '@/lib/routerCompat'
+import { useLocation } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
@@ -215,7 +215,8 @@ const STEAM_API_ISSUE_DISMISSED_KEY = 'pz-mods-steam-api-issue-dismissed'
 export default function Mods() {
   const { t, i18n } = useTranslation('mods')
   const MODS_NAV = useMemo(() => getModsNav(t), [t])
-  const [searchParams] = useSearchParams()
+  const { searchStr } = useLocation()
+  const searchParams = new URLSearchParams(searchStr)
   const reviewUnresolved = searchParams.get('review') === 'unresolved'
   const reviewDeepLinkStarted = useRef(false)
   const demoMode = isDemoMode()

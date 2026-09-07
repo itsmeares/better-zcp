@@ -88,7 +88,7 @@ import { ServerStatusBadge } from '@/components/ServerStatusBadge'
 import { SocketContext } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { useNavigate } from '@/lib/routerCompat'
+import { useNavigate } from '@tanstack/react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { PasswordInput } from '@/components/PasswordInput'
 import { NumberInput } from '@/components/NumberInput'
@@ -438,7 +438,7 @@ export default function Servers() {
         await serversApi.activate(server.id)
         await fetchServers()
       }
-      navigate('/settings?tab=bridge')
+      void navigate({ to: '/settings', search: { tab: 'bridge' } })
     } catch (error) {
       toast({
         title: t('toasts.couldNotSelectRemoteTitle'),
@@ -1406,7 +1406,7 @@ export default function Servers() {
             <Button variant="outline" onClick={() => { setAddMode('local'); setShowAddDialog(true) }}>
               <FolderOpen className="w-4 h-4 me-2" /> {t('pageHeader.addExisting')}
             </Button>
-            <Button variant="command" onClick={() => navigate('/server-setup')}>
+            <Button variant="command" onClick={() => void navigate({ to: '/server-setup' })}>
               <Download className="w-4 h-4 me-2" /> {t('pageHeader.installNew')}
             </Button>
           </div>
@@ -1475,7 +1475,7 @@ export default function Servers() {
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     {t('emptyState.installDesc')}
                   </p>
-                  <Button className="onboarding-cta mt-4 w-full" onClick={() => navigate('/server-setup')}>
+                  <Button className="onboarding-cta mt-4 w-full" onClick={() => void navigate({ to: '/server-setup' })}>
                     <Download className="me-2 h-4 w-4" />
                     {t('pageHeader.installNew')}
                   </Button>

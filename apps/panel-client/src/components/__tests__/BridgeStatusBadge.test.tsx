@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from '@/lib/routerCompat'
+import { MemoryRouter } from '@/test/router'
 import { BridgeStatusBadge } from '../BridgeStatusBadge'
 import en from '@/locales/en/bridgeStatusBadge.json'
 

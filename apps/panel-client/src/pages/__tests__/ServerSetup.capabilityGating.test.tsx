@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "@/lib/routerCompat";
+import { MemoryRouter } from "@/test/router";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SocketContext } from "@/contexts/SocketContext";
 import type { Socket } from "socket.io-client";
