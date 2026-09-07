@@ -5,7 +5,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 
-const { computeInlineScriptCspHash } = await import(
+const { computeInlineScriptCspHash, computeInlineScriptCspHashes } = await import(
   "../utils/cspScriptHash.ts"
 );
 
@@ -74,6 +74,17 @@ describe("computeInlineScriptCspHash — present and matching", () => {
     );
     const result = computeInlineScriptCspHash(tmpDir);
     expect(result).toBe(`'sha256-${sha256Base64("const x = 1;")}'`);
+  });
+
+  it("returns a hash for every inline script while ignoring external scripts", () => {
+    writeIndexHtml(
+      `<script>const first = 1;</script><script id="stream">const second = 2;</script><script type="module" src="/app.js"></script>`,
+    );
+
+    expect(computeInlineScriptCspHashes(tmpDir)).toEqual([
+      `'sha256-${sha256Base64("const first = 1;")}'`,
+      `'sha256-${sha256Base64("const second = 2;")}'`,
+    ]);
   });
 });
 
