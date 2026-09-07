@@ -6,7 +6,12 @@ import {
   Outlet,
   RouterContextProvider,
 } from '@tanstack/react-router'
-import { useMemo, type ReactNode } from 'react'
+import {
+  QueryClient,
+  QueryClientContext,
+  QueryClientProvider,
+} from '@tanstack/react-query'
+import { useContext, useMemo, type ReactNode } from 'react'
 
 const memoryRootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -17,6 +22,17 @@ const memoryCatchAllRoute = createRoute({
   component: () => null,
 })
 const memoryRouteTree = memoryRootRoute.addChildren([memoryCatchAllRoute])
+
+function QueryProviderIfNeeded({ children }: { children: ReactNode }) {
+  const parentClient = useContext(QueryClientContext)
+  const testClient = useMemo(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }),
+    [],
+  )
+
+  if (parentClient) return <>{children}</>
+  return <QueryClientProvider client={testClient}>{children}</QueryClientProvider>
+}
 
 export function MemoryRouter({
   children,
@@ -35,6 +51,8 @@ export function MemoryRouter({
   )
 
   return (
-    <RouterContextProvider router={router}>{children}</RouterContextProvider>
+    <QueryProviderIfNeeded>
+      <RouterContextProvider router={router}>{children}</RouterContextProvider>
+    </QueryProviderIfNeeded>
   )
 }
