@@ -64,10 +64,12 @@ export function detectInitialLanguage(): SupportedLanguage {
   } catch {
     // localStorage unavailable (privacy mode, disabled storage) — fall through
   }
-  const candidates = [
-    navigator.language,
-    ...(Array.isArray(navigator.languages) ? navigator.languages : []),
-  ]
+  const candidates = typeof navigator === 'undefined'
+    ? []
+    : [
+      navigator.language,
+      ...(Array.isArray(navigator.languages) ? navigator.languages : []),
+    ]
   for (const raw of candidates) {
     const mapped = mapBrowserLanguage(raw)
     if (mapped) return mapped
@@ -80,6 +82,7 @@ export function detectInitialLanguage(): SupportedLanguage {
 }
 
 function applyDocumentDirection(lang: string): void {
+  if (typeof document === 'undefined') return
   document.documentElement.dir = isRTL(lang) ? 'rtl' : 'ltr'
   document.documentElement.lang = lang
 }
