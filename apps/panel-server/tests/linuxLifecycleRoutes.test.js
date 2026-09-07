@@ -60,7 +60,7 @@ vi.mock("../services/linuxServiceLifecycle.ts", () => ({
   }),
 }));
 
-vi.mock("../services/rcon.js", () => ({
+vi.mock("../services/rcon.ts", () => ({
   normalizeRconHost: (host) => host,
   testRconConnection: vi.fn(),
 }));

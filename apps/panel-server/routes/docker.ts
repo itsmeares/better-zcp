@@ -2,7 +2,7 @@ import express from "express";
 import { requirePermission } from "../services/permissions.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getServer } from "../database/init.js";
-import { RconService } from "../services/rcon.js";
+import { RconService } from "../services/rcon.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import {
   acquireLifecycleLock,

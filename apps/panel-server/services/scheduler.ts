@@ -4,7 +4,7 @@ import cron from "node-cron";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Scheduler");
 import panelBridge from "./panelBridge.ts";
-import { RconService } from "./rcon.js";
+import { RconService } from "./rcon.ts";
 import { ServerManager } from "./serverManager.js";
 import { runManagedLifecycle } from "./managedContainer.ts";
 import {

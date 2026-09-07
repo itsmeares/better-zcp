@@ -9,7 +9,7 @@ import {
   sanitizeServerResponseList,
   isMaskedSecret,
 } from "../utils/sanitize.ts";
-import { testRconConnection } from "../services/rcon.js";
+import { testRconConnection } from "../services/rcon.ts";
 import {
   getServers,
   getServer,

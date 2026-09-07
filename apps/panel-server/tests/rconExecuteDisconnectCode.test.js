@@ -8,7 +8,7 @@ vi.mock("../database/init.js", () => ({
   logCommand: () => {},
 }));
 
-const { RconService } = await import("../services/rcon.js");
+const { RconService } = await import("../services/rcon.ts");
 
 describe("RconService: getUserFriendlyError() / getRconDisconnectCode() classify from the same table", () => {
   const service = new RconService();

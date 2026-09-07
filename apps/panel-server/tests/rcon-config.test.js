@@ -13,7 +13,7 @@ vi.mock("../database/init.js", () => ({
   logCommand,
 }));
 
-const { RconService } = await import("../services/rcon.js");
+const { RconService } = await import("../services/rcon.ts");
 
 function freshService() {
   const service = new RconService();

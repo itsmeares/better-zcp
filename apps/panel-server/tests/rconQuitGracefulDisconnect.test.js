@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { RconService } from "../services/rcon.js";
+import { RconService } from "../services/rcon.ts";
 
 describe("RconService.quit(): connection reset during shutdown reports success", () => {
   function makeService(executeResult) {

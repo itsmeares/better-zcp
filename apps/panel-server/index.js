@@ -44,7 +44,7 @@ import {
   logServerEvent,
   getDatabaseFilePath,
 } from "./database/init.js";
-import { RconService } from "./services/rcon.js";
+import { RconService } from "./services/rcon.ts";
 import { ServerManager } from "./services/serverManager.js";
 import { DockerClient } from "./services/dockerClient.ts";
 import { setDockerClient } from "./services/managedContainer.ts";

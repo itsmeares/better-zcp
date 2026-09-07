@@ -22,7 +22,7 @@ import {
   RCON_UNREACHABLE_DETAIL,
   RCON_AUTH_FAILED_DETAIL,
   RCON_USER_ACTION_TIMEOUT_MS,
-} from "../services/rcon.js";
+} from "../services/rcon.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import {
   requireIntInRange,

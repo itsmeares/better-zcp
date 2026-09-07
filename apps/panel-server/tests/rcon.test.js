@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { RconService } from '../services/rcon.js';
+import { RconService } from '../services/rcon.ts';
 import { PacketReader } from '../utils/sourceRcon.ts';
 
 describe('RCON packet framing', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeRconHost } from "../services/rcon.js";
+import { normalizeRconHost } from "../services/rcon.ts";
 
 describe("normalizeRconHost", () => {
   it("strips whitespace pasted around a host", () => {

@@ -28,7 +28,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: vi.fn(async () => null),
 }));
 
-vi.mock("../services/rcon.js", () => ({
+vi.mock("../services/rcon.ts", () => ({
   normalizeRconHost: (host) => host.trim(),
   testRconConnection,
 }));

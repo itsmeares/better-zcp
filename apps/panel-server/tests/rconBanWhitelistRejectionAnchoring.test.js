@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RconService } from "../services/rcon.js";
+import { RconService } from "../services/rcon.ts";
 
 
 describe("classifyRconResponse: the new ban/whitelist rejections fire", () => {

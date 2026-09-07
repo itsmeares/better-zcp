@@ -10,7 +10,7 @@ const { getServer, connect, save, disconnect } = vi.hoisted(() => ({
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 vi.mock("../database/init.js", () => ({ getServer, getRoleByName: mockGetRoleByName }));
-vi.mock("../services/rcon.js", () => ({
+vi.mock("../services/rcon.ts", () => ({
   RconService: class {
     connected = false;
     async loadConfig() {}
