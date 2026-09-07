@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trans, useTranslation } from 'react-i18next'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import {
@@ -73,6 +74,58 @@ interface GameServer {
 type SortField = 'name' | 'players' | 'maxPlayers' | 'ping'
 type SortDirection = 'asc' | 'desc'
 
+type ServerFinderResponse = {
+  servers: GameServer[]
+  source: string
+  cached: boolean
+  count: number
+  totalPlayers: number
+  activeServers: number
+  totalCapacity: number
+  apiKeyConfigured: boolean
+  emptyReason?: string
+}
+
+const SERVER_FINDER_QUERY_KEY = ['server-finder'] as const
+const EMPTY_SERVERS: GameServer[] = []
+
+function responseNumber(value: unknown): number {
+  return typeof value === 'number' ? value : 0
+}
+
+async function fetchServerFinder(
+  signal: AbortSignal,
+  forceRefresh = false,
+): Promise<ServerFinderResponse> {
+  const endpoint = forceRefresh ? '/server-finder?refresh=true' : '/server-finder'
+  const response = await apiFetch(endpoint, { signal })
+  const data = await response.json().catch(() => null) as Record<string, unknown> | null
+
+  if (!response.ok || !data || data.success === false) {
+    throw new ApiError(
+      typeof data?.error === 'string' ? data.error : `HTTP ${response.status}`,
+      {
+        status: response.status,
+        code: typeof data?.code === 'string' ? data.code : undefined,
+      },
+    )
+  }
+
+  const servers = Array.isArray(data.servers) ? data.servers as GameServer[] : []
+
+  return {
+    servers,
+    source: typeof data.source === 'string' ? data.source : 'unknown',
+    cached: data.cached === true,
+    count: responseNumber(data.count) || servers.length,
+    totalPlayers: responseNumber(data.totalPlayers),
+    activeServers: responseNumber(data.activeServers),
+    totalCapacity: responseNumber(data.totalCapacity),
+    apiKeyConfigured: data.apiKeyConfigured !== false,
+    emptyReason: typeof data.emptyReason === 'string' ? data.emptyReason : undefined,
+  }
+}
+
 export function pingKey(server: Pick<GameServer, 'ip' | 'port'>): string | null {
   return server.port === null || server.port === undefined ? null : `${server.ip}:${server.port}`
 }
@@ -100,15 +153,39 @@ export function pingFailDescKey(reason?: string): string {
 
 export default function ServerFinder() {
   const { t, i18n } = useTranslation('serverFinder')
-  const [servers, setServers] = useState<GameServer[]>([])
+  const queryClient = useQueryClient()
+  const {
+    data,
+    error: queryError,
+    isPending,
+    isFetching,
+    isFetchedAfterMount,
+    dataUpdatedAt,
+    refetch,
+  } = useQuery({
+    queryKey: SERVER_FINDER_QUERY_KEY,
+    queryFn: ({ signal }) => fetchServerFinder(signal),
+    retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  })
+  const servers = data?.servers ?? EMPTY_SERVERS
   const [filteredServers, setFilteredServers] = useState<GameServer[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [source, setSource] = useState<string>('')
-  const [cached, setCached] = useState(false)
-  const [apiKeyConfigured, setApiKeyConfigured] = useState<boolean>(true)
-  const [emptyReason, setEmptyReason] = useState<string | undefined>(undefined)
-  const [stats, setStats] = useState({ totalPlayers: 0, activeServers: 0, totalCapacity: 0 })
+  const loading = isPending || isFetching
+  const error = queryError
+    ? getUserErrorMessage(queryError, t('toasts.fetchFailedFallback'))
+    : data?.apiKeyConfigured === false
+      ? t('toasts.apiKeyMissing')
+      : null
+  const source = data?.source ?? ''
+  const cached = data?.cached ?? false
+  const apiKeyConfigured = data?.apiKeyConfigured ?? true
+  const emptyReason = data?.emptyReason
+  const stats = {
+    totalPlayers: data?.totalPlayers ?? 0,
+    activeServers: data?.activeServers ?? 0,
+    totalCapacity: data?.totalCapacity ?? 0,
+  }
   const [currentPage, setCurrentPage] = useState(1)
   const { toast } = useToast()
 
@@ -130,54 +207,27 @@ export default function ServerFinder() {
 
   const ITEMS_PER_PAGE = 50
 
-  const fetchServers = useCallback(async (forceRefresh = false) => {
-    setLoading(true)
-    setError(null)
-    setCurrentPage(1)
-
-    try {
-      const url = forceRefresh ? '/api/server-finder?refresh=true' : '/api/server-finder'
-      const response = await apiFetch(url.replace('/api', ''))
-      const data = await response.json().catch(() => null)
-
-      if (!response.ok || !data || data.success === false) {
-        throw new ApiError(data?.error || `HTTP ${response.status}`, {
-          status: response.status,
-          code: data?.code,
-        })
-      }
-
-      setServers(data.servers || [])
-      setSource(data.source || 'unknown')
-      setCached(data.cached || false)
-      setApiKeyConfigured(data.apiKeyConfigured !== false)
-      setEmptyReason(data.emptyReason)
-      setStats({
-        totalPlayers: data.totalPlayers || 0,
-        activeServers: data.activeServers || 0,
-        totalCapacity: data.totalCapacity || 0,
-      })
-
-      if (data.apiKeyConfigured === false) {
-        setError(t('toasts.apiKeyMissing'))
-      }
-
-      if (data.servers?.length > 0) {
-        toast({
-          title: data.cached ? t('toasts.loadedCachedTitle') : t('toasts.loadedTitle'),
-          description: t('toasts.loadedDesc', { count: data.count, players: data.totalPlayers || 0 }),
-        })
-      }
-    } catch (err) {
-      setError(getUserErrorMessage(err, t('toasts.fetchFailedFallback')))
-    } finally {
-      setLoading(false)
-    }
-  }, [toast, t])
-
   useEffect(() => {
-    fetchServers()
-  }, [fetchServers])
+    if (!data || !isFetchedAfterMount) return
+
+    setCurrentPage(1)
+    if (data.servers.length > 0) {
+      toast({
+        title: data.cached ? t('toasts.loadedCachedTitle') : t('toasts.loadedTitle'),
+        description: t('toasts.loadedDesc', { count: data.count, players: data.totalPlayers }),
+      })
+    }
+  }, [data, dataUpdatedAt, isFetchedAfterMount, t, toast])
+
+  const reloadFromSteam = () => {
+    setCurrentPage(1)
+    void queryClient.fetchQuery({
+      queryKey: SERVER_FINDER_QUERY_KEY,
+      queryFn: ({ signal }) => fetchServerFinder(signal, true),
+      retry: false,
+      staleTime: 0,
+    }).catch(() => undefined)
+  }
 
   useEffect(() => {
     let result = [...servers]
@@ -392,7 +442,14 @@ export default function ServerFinder() {
         icon={<Globe className="w-5 h-5" />}
         actions={
           <>
-            <Button variant="outline" onClick={() => fetchServers(false)} disabled={loading}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCurrentPage(1)
+                void refetch()
+              }}
+              disabled={loading}
+            >
               {loading ? (
                 <Loader2 className="h-4 w-4 me-2 animate-spin" />
               ) : (
@@ -400,7 +457,7 @@ export default function ServerFinder() {
               )}
               {t('pageHeader.refreshList')}
             </Button>
-            <Button onClick={() => fetchServers(true)} disabled={loading}>
+            <Button onClick={reloadFromSteam} disabled={loading}>
               <RefreshCw className="h-4 w-4 me-2" />
               {t('pageHeader.reloadFromSteam')}
             </Button>
@@ -626,7 +683,7 @@ export default function ServerFinder() {
               <p className="font-medium text-destructive">{t('error.title')}</p>
               <p className="text-sm text-muted-foreground">{error}</p>
             </div>
-            <Button variant="outline" onClick={() => fetchServers()} className="ms-auto">
+            <Button variant="outline" onClick={() => void refetch()} className="ms-auto">
               {t('error.retry')}
             </Button>
           </CardContent>
