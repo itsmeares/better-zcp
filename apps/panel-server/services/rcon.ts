@@ -546,9 +546,7 @@ export class RconService extends EventEmitter {
 
   async reloadConfig(serverId: string | null = null) {
     this.configLoaded = false;
-    if (this.connected) {
-      await this.disconnect();
-    }
+    await this.disconnect();
     await this.loadConfig(serverId);
   }
 
@@ -835,6 +833,15 @@ export class RconService extends EventEmitter {
 
   async disconnect() {
     const wasConnected = this.connected;
+    const hasPendingConnection =
+      this.connecting || this.pendingClients.size > 0;
+
+    if (hasPendingConnection) {
+      this.connectionVersion++;
+      this.connecting = false;
+      this.connectPromise = null;
+      this._cleanupAllPendingClients();
+    }
 
     if (this.client) {
       this._cleanupClient();
@@ -1697,8 +1704,6 @@ export class RconService extends EventEmitter {
     this.config.password =
       password !== undefined ? password : this.config.password;
 
-    if (this.connected) {
-      await this.disconnect();
-    }
+    await this.disconnect();
   }
 }
