@@ -15,7 +15,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const { scanSaveStats } = await import("../routes/debug.js");
+const { scanSaveStats } = await import("../routes/debug.ts");
 
 describe("scanSaveStats: self-bounded by a wall-clock deadline, not just MAX_FILES", () => {
   it("stops early and reports truncated: true once the budget runs out, well short of visiting every file", async () => {

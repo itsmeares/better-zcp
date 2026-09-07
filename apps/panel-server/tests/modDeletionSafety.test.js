@@ -49,7 +49,7 @@ vi.mock("../utils/browserCookies.ts", () => ({
   extractSteamCookies: vi.fn(),
 }));
 
-const { default: router, getIniLockCount, withIniLock } = await import("../routes/mods.js");
+const { default: router, getIniLockCount, withIniLock } = await import("../routes/mods.ts");
 
 function getDeleteHandler() {
   const layer = router.stack.find(

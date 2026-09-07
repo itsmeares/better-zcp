@@ -16,7 +16,7 @@ vi.mock("../database/init.ts", () => ({
   getRoleByName: vi.fn(),
 }));
 
-const { default: router } = await import("../routes/panelBridge.js");
+const { default: router } = await import("../routes/panelBridge.ts");
 const { getBundledBridgeVersion } = await import(
   "../services/panelBridgeInstaller.ts"
 );

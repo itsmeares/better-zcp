@@ -20,7 +20,7 @@ const SCANNED_FILES = [
   ...listServerFiles(path.join(SERVER_DIR, "routes")),
   ...listServerFiles(path.join(SERVER_DIR, "services")),
   ...listServerFiles(path.join(SERVER_DIR, "middleware")),
-  path.join(SERVER_DIR, "index.js"),
+  path.join(SERVER_DIR, "index.ts"),
 ];
 
 function findCodeLiterals() {
@@ -71,7 +71,7 @@ const KNOWN_CLIENT_ONLY_LOCALE_KEYS = new Set([
 ]);
 
 describe("server error codes: registry membership (structure, not meaning)", () => {
-  it("every `code:` literal used in apps/panel-server/routes, apps/panel-server/services, apps/panel-server/middleware and apps/panel-server/index.js is a registered ErrorCode value", () => {
+  it("every `code:` literal used in apps/panel-server/routes, apps/panel-server/services, apps/panel-server/middleware and apps/panel-server/index.ts is a registered ErrorCode value", () => {
     const registryValues = new Set(Object.values(ErrorCode));
     const literals = findCodeLiterals();
     const unregistered = literals.filter((l) => !registryValues.has(l.value));
@@ -96,7 +96,7 @@ describe("server error codes: registry membership (structure, not meaning)", () 
     expect(literals.map((l) => l.value)).toContain("server_running");
   });
 
-  it("every registered ErrorCode value is referenced at least once (as a `code:` literal or an `ErrorCode.NAME` member access) in apps/panel-server/routes, apps/panel-server/services, apps/panel-server/middleware or apps/panel-server/index.js", () => {
+  it("every registered ErrorCode value is referenced at least once (as a `code:` literal or an `ErrorCode.NAME` member access) in apps/panel-server/routes, apps/panel-server/services, apps/panel-server/middleware or apps/panel-server/index.ts", () => {
     const literalValues = new Set(findCodeLiterals().map((l) => l.value));
     const memberNames = findMemberReferences();
 

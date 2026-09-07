@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { getServerProcessState } from "../routes/debug.js";
+import { getServerProcessState } from "../routes/debug.ts";
 
 describe("debug server process state", () => {
   it("preserves an unknown state when process detection reports scanFailed", async () => {

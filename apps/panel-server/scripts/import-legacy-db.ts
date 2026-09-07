@@ -1,6 +1,6 @@
 import { importLegacyDatabase } from "../database/sqlite/legacyImport.ts";
 
-function readOption(args, name) {
+function readOption(args: string[], name: string): string | null {
   const index = args.indexOf(name);
   return index === -1 ? null : args[index + 1] || null;
 }
@@ -20,7 +20,7 @@ if (!sourcePath || !targetPath) {
     if (!apply) {
       console.log("Dry run only. Add --apply after reviewing this summary.");
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Import failed: ${error.message}`);
     process.exitCode = 1;
   }

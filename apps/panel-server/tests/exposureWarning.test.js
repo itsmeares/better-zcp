@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { logExposureWarningIfNeeded } from "../index.js";
+import { logExposureWarningIfNeeded } from "../index.ts";
 
 
 function fakeLogger() {

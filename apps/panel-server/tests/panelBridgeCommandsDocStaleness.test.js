@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { VALID_ACTIONS } from "../routes/panelBridge.js";
-import { default as router } from "../routes/panelBridge.js";
+import { VALID_ACTIONS } from "../routes/panelBridge.ts";
+import { default as router } from "../routes/panelBridge.ts";
 
 function getCommandsHandler() {
   const layer = router.stack.find(

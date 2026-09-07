@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.join(__dirname, "..");
 const REPO_ROOT = path.join(SERVER_DIR, "..", "..");
-const DEBUG_JS_PATH = path.join(SERVER_DIR, "routes", "debug.js");
+const DEBUG_TS_PATH = path.join(SERVER_DIR, "routes", "debug.ts");
 const DEBUG_TSX_PATH = path.join(
   REPO_ROOT,
   "apps/panel-client/src/pages/Debug.tsx",
@@ -58,9 +58,9 @@ function extractSwitchCaseIds(source, functionStartMarker, functionEndMarker) {
   return ids;
 }
 
-const debugJsSource = fs.readFileSync(DEBUG_JS_PATH, "utf8");
+const debugTsSource = fs.readFileSync(DEBUG_TS_PATH, "utf8");
 const debugTsxSource = fs.readFileSync(DEBUG_TSX_PATH, "utf8");
-const diagnosticsCheckIds = extractDiagnosticsCheckIds(debugJsSource);
+const diagnosticsCheckIds = extractDiagnosticsCheckIds(debugTsSource);
 
 describe("Debug.tsx fix-action switches only reference real check ids (self-enforcing)", () => {
   it("sanity check on the scan itself -- found known real ids", () => {

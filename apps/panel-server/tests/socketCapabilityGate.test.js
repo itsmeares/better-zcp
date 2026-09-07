@@ -10,7 +10,7 @@ vi.mock("../database/init.ts", () => ({
   getDb: vi.fn(async () => ({ data: {} })),
 }));
 
-const { socketHasCapability } = await import("../index.js");
+const { socketHasCapability } = await import("../index.ts");
 
 describe("socketHasCapability() -- Socket.IO's capability gate for subscribe:* rooms", () => {
   it("returns false with no socket.user at all (unauthenticated / pre-setup connection)", async () => {

@@ -6,7 +6,7 @@ vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async () => null),
 }));
 
-const { default: router } = await import("../routes/mods.js");
+const { default: router } = await import("../routes/mods.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

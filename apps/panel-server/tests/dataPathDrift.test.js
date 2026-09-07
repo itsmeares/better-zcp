@@ -10,7 +10,7 @@ vi.mock("../database/init.ts", async () => {
 });
 
 const { getDataPaths } = await import("../utils/paths.ts");
-const { default: debugRouter, formatDbAccessibleMessage } = await import("../routes/debug.js");
+const { default: debugRouter, formatDbAccessibleMessage } = await import("../routes/debug.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

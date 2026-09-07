@@ -62,7 +62,7 @@ describe("dead isAbsolute(resolve(x)) checks now reject a relative path before r
   });
 
   it("panelBridge.js POST /install-mod refuses a relative serverLuaPath", async () => {
-    const { default: panelBridgeRouter } = await import("../routes/panelBridge.js");
+    const { default: panelBridgeRouter } = await import("../routes/panelBridge.ts");
     const res = await runRoute(panelBridgeRouter, "/install-mod", "post", {
       body: { serverLuaPath: "some/relative/media/lua/server" },
       user: { role: "admin" },
@@ -74,7 +74,7 @@ describe("dead isAbsolute(resolve(x)) checks now reject a relative path before r
   });
 
   it("panelBridge.js POST /install-mod refuses an absolute path outside configured local servers", async () => {
-    const { default: panelBridgeRouter } = await import("../routes/panelBridge.js");
+    const { default: panelBridgeRouter } = await import("../routes/panelBridge.ts");
     getServers.mockResolvedValue([]);
     const res = await runRoute(panelBridgeRouter, "/install-mod", "post", {
       body: { serverLuaPath: path.join(os.tmpdir(), "media", "lua", "server") },
@@ -89,7 +89,7 @@ describe("dead isAbsolute(resolve(x)) checks now reject a relative path before r
   });
 
   it("panelBridge.js POST /install-mod writes only to a configured local server target", async () => {
-    const { default: panelBridgeRouter } = await import("../routes/panelBridge.js");
+    const { default: panelBridgeRouter } = await import("../routes/panelBridge.ts");
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "panelbridge-allowlist-"));
     try {
       getServers.mockResolvedValue([{ installPath: root, isRemote: false }]);

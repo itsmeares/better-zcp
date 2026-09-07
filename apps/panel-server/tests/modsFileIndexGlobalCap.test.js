@@ -5,7 +5,7 @@ import path from "path";
 
 
 const { buildFileIndex, FILE_INDEX_MAX_ENTRIES } = await import(
-  "../routes/mods.js"
+  "../routes/mods.ts"
 );
 
 function buildModFixture(serverPath, wsId, modDirName, fileCount) {

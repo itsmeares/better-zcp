@@ -78,7 +78,7 @@ async function freshModule(tempRoot) {
   vi.resetModules();
   const { getDataPaths } = await import("../utils/paths.ts");
   getDataPaths.mockReturnValue({ dataDir: tempRoot, logsDir: tempRoot });
-  return await import("../routes/mods.js");
+  return await import("../routes/mods.ts");
 }
 
 describe("GET /thumbnail/:workshopId — negative caching", () => {

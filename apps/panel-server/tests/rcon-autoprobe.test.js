@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { probeRconFallbackIfConfigured } from "../index.js";
+import { probeRconFallbackIfConfigured } from "../index.ts";
 
 
 function makeFakeRconService({ portOpen = true, connectSucceeds = true } = {}) {

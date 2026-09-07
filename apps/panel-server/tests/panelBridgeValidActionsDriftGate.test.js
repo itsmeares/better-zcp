@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VALID_ACTIONS, BRIDGE_ACTION_CAPABILITY } from "../routes/panelBridge.js";
+import { VALID_ACTIONS, BRIDGE_ACTION_CAPABILITY } from "../routes/panelBridge.ts";
 
 const PINNED_VALID_ACTIONS = [
   "ping",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyStartupProcessState } from "../index.js";
+import { classifyStartupProcessState } from "../index.ts";
 
 describe("startup process-state classification", () => {
   it("does not treat a failed local scan as a confirmed stop", () => {

@@ -13,13 +13,13 @@ import {
   regenerateJwtSecretFile,
 } from "../utils/jwtSecret.ts";
 import { readSecret } from "../utils/secrets.ts";
-import { getCapabilitiesForRole } from "./permissions.js";
+import { getCapabilitiesForRole } from "./permissions.ts";
 import {
   getRoleById,
   getRoleByName,
   getRoles,
   RECOVERY_CAPABILITIES,
-} from "./permissions.js";
+} from "./permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 const log = createLogger("Auth");

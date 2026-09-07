@@ -12,7 +12,7 @@ vi.mock("../database/init.ts", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 
-const { default: router } = await import("../routes/panelBridge.js");
+const { default: router } = await import("../routes/panelBridge.ts");
 const { getServer } = await import("../database/init.ts");
 
 function createResponse() {

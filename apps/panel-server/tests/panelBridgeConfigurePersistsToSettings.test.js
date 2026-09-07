@@ -63,7 +63,7 @@ describe("panelBridge.js /configure and /configure-direct persist bridgePath to 
   it("POST /configure writes settings.panelBridge.bridgePath after a successful configure", async () => {
     setSettingMock.mockClear();
     bridgeMock.configure.mockReturnValueOnce(configuredBridgePath);
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const res = createResponse();
     await getRouteHandler(router, "/configure", "post")(
       { body: { zomboidSavePath } },
@@ -78,7 +78,7 @@ describe("panelBridge.js /configure and /configure-direct persist bridgePath to 
   it("POST /configure-direct writes settings.panelBridge.bridgePath after a successful configure -- the manual escape hatch that can't self-heal via auto-detect", async () => {
     setSettingMock.mockClear();
     bridgeMock.configure.mockReturnValueOnce(directBridgePath);
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const res = createResponse();
     await getRouteHandler(router, "/configure-direct", "post")(
       { body: { bridgePath: directBridgePath } },

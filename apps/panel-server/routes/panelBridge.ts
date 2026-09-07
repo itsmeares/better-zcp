@@ -57,6 +57,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+type AnyRecord = Record<string, any>;
+type BridgePath = {
+  path: string;
+  source: string;
+  hasStatus: boolean;
+  hasInit: boolean;
+  exists: boolean;
+  priority: number;
+};
 
 const ITEM_TYPE_REGEX = /^[A-Za-z0-9_]+\.[A-Za-z0-9_&#+.\-]+$/;
 const VEHICLE_SCRIPT_REGEX = /^[A-Za-z0-9_]+\.[A-Za-z0-9_&#+.\-]+$/;
@@ -73,8 +82,8 @@ const SFTP_SETTING_KEYS = {
 
 const SFTP_LOG_PATH_KEY = "panelBridgeSftpLogPath";
 
-async function resolveSftpConfig(input = {}) {
-  const settings = await getAllSettings();
+async function resolveSftpConfig(input: AnyRecord = {}) {
+  const settings = (await getAllSettings()) as AnyRecord;
   const password = input.password && !isMaskedSecret(input.password)
     ? input.password
     : settings[SFTP_SETTING_KEYS.password] || "";
@@ -88,8 +97,8 @@ async function resolveSftpConfig(input = {}) {
   });
 }
 
-async function resolveSftpLogConfig(input = {}) {
-  const settings = await getAllSettings();
+async function resolveSftpLogConfig(input: AnyRecord = {}) {
+  const settings = (await getAllSettings()) as AnyRecord;
   const password = input.password && !isMaskedSecret(input.password)
     ? input.password
     : settings[SFTP_SETTING_KEYS.password] || "";
@@ -208,7 +217,7 @@ export const VALID_ACTIONS = new Set([
   "debugItemScript",
 ]);
 
-export const BRIDGE_ACTION_CAPABILITY = {
+export const BRIDGE_ACTION_CAPABILITY: Record<string, string> = {
   moderationKickUser: "players.moderate",
   moderationBanUser: "players.moderate",
   moderationBanIP: "players.moderate",
@@ -247,7 +256,7 @@ export const ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS = new Set([
 ]);
 
 const requireBridgeCommand = requirePermission("bridge.command");
-function requireBridgeCommandUnlessGmToolsOnly(req, res, next) {
+function requireBridgeCommandUnlessGmToolsOnly(req: any, res: any, next: any) {
   const { action } = req.body || {};
   if (
     typeof action === "string" &&
@@ -265,7 +274,7 @@ const BLOCKED_BRIDGE_PATH_PREFIXES =
     ? ["c:\\windows", "c:\\program files"]
     : ["/etc", "/usr", "/bin", "/sbin", "/proc", "/sys", "/dev"];
 
-function isValidBridgePath(inputPath) {
+function isValidBridgePath(inputPath: any) {
   if (!inputPath || typeof inputPath !== "string") return false;
   if (!path.isAbsolute(inputPath)) return false;
   const resolved = path.resolve(inputPath);
@@ -275,11 +284,11 @@ function isValidBridgePath(inputPath) {
 
 
 router.get("/status", async (req, res) => {
-  const status = bridge.getStatus();
+  const status = bridge.getStatus() as AnyRecord;
 
-  let detectedPaths = null;
-  let localInstall = null;
-  let remoteBridgeVersionCheck = null;
+  let detectedPaths: AnyRecord | null = null;
+  let localInstall: AnyRecord | null = null;
+  let remoteBridgeVersionCheck: AnyRecord | null = null;
   try {
     const activeServer = await getActiveServer();
     if (activeServer) {
@@ -305,7 +314,7 @@ router.get("/status", async (req, res) => {
         };
       }
     }
-  } catch (e) {
+  } catch (e: any) {
     // Ignore
   }
 
@@ -352,18 +361,18 @@ router.post("/auto-configure", requirePermission("bridge.setup"), async (req, re
       });
     }
 
-    const possiblePaths = [];
-    const searchedLocations = [];
+    const possiblePaths: BridgePath[] = [];
+    const searchedLocations: AnyRecord[] = [];
 
-    const safeReadDir = (dirPath) => {
+    const safeReadDir = (dirPath: string): string[] => {
       try {
         return fs.existsSync(dirPath) ? fs.readdirSync(dirPath) : [];
-      } catch (e) {
+      } catch (e: any) {
         return [];
       }
     };
 
-    const addPath = (p, source, priority = 10) => {
+    const addPath = (p: string, source: string, priority = 10) => {
       if (possiblePaths.some((pp) => pp.path === p)) return;
 
       const statusFile = path.join(p, "status.json");
@@ -538,7 +547,7 @@ router.post("/auto-configure", requirePermission("bridge.setup"), async (req, re
                   `PanelBridge mod update: ${destVersion} → ${srcVersion}`,
                 );
               }
-            } catch (_) {
+            } catch (_: any) {
               /* ignore read errors — keep existing */
             }
           }
@@ -554,7 +563,7 @@ router.post("/auto-configure", requirePermission("bridge.setup"), async (req, re
           }
         }
       }
-    } catch (modError) {
+    } catch (modError: any) {
       log.warn(`Auto-install mod failed: ${modError.message}`);
     }
 
@@ -572,7 +581,7 @@ router.post("/auto-configure", requirePermission("bridge.setup"), async (req, re
     log.info(
       `Bridge auto-configured: path=${foundPath.path} source=${foundPath.source} hasStatus=${foundPath.hasStatus} modInstalled=${modInstalled}`,
     );
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -602,17 +611,17 @@ router.get("/scan-server/:serverId", requirePermission("bridge.setup"), async (r
         });
     }
 
-    const possiblePaths = [];
+    const possiblePaths: BridgePath[] = [];
 
-    const safeReadDir = (dirPath) => {
+    const safeReadDir = (dirPath: string): string[] => {
       try {
         return fs.existsSync(dirPath) ? fs.readdirSync(dirPath) : [];
-      } catch (e) {
+      } catch (e: any) {
         return [];
       }
     };
 
-    const addPath = (p, source, priority = 10) => {
+    const addPath = (p: string, source: string, priority = 10) => {
       if (possiblePaths.some((pp) => pp.path === p)) return;
 
       const statusFile = path.join(p, "status.json");
@@ -720,7 +729,7 @@ router.get("/scan-server/:serverId", requirePermission("bridge.setup"), async (r
       recommendedPath: recommendedPath?.path || null,
       recommendedSource: recommendedPath?.source || null,
     });
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ success: false, error: sanitizeError(error.message) });
@@ -756,7 +765,7 @@ router.post("/auto-detect", requirePermission("bridge.setup"), async (req, res) 
       message: "Bridge auto-configured and started",
       bridgePath,
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(400).json({ error: sanitizeError(error.message) });
   }
 });
@@ -791,7 +800,7 @@ router.post("/configure", requirePermission("bridge.setup"), async (req, res) =>
       message: "Bridge configured and started",
       bridgePath,
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -838,7 +847,7 @@ router.post("/configure-direct", requirePermission("bridge.setup"), async (req, 
       message: "Bridge configured with manual path and started",
       bridgePath: configuredPath,
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -848,7 +857,7 @@ router.post("/sftp/test", requirePermission("bridge.setup"), async (req, res) =>
     const config = await resolveSftpConfig(req.body);
     const result = await testSftpBridge(config);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(400).json({
       error: sanitizeError(formatSftpError(error)),
       code: classifySftpErrorCode(error),
@@ -863,11 +872,11 @@ router.post("/sftp/configure", requirePermission("bridge.setup"), async (req, re
     const cachePath = getSftpCachePath(config);
     await bridge.configureSftp(config, cachePath);
     for (const [field, key] of Object.entries(SFTP_SETTING_KEYS)) {
-      const value = field === "enabled" ? true : config[field];
+      const value = field === "enabled" ? true : (config as AnyRecord)[field];
       if (value !== undefined) await setSetting(key, value);
     }
     res.json({ success: true, bridgePath: cachePath, transport: bridge.getStatus().transport });
-  } catch (error) {
+  } catch (error: any) {
     res.status(400).json({
       error: sanitizeError(formatSftpError(error)),
       code: classifySftpErrorCode(error),
@@ -882,7 +891,7 @@ router.post("/sftp/logs/list", requirePermission("bridge.setup"), async (req, re
     const result = await listSftpLogs(config);
     if (req.body?.logPath) await setSetting(SFTP_LOG_PATH_KEY, config.logPath);
     res.json({ success: true, ...result });
-  } catch (error) {
+  } catch (error: any) {
     res.status(400).json({ error: sanitizeError(error.message) });
   }
 });
@@ -892,7 +901,7 @@ router.post("/sftp/logs/tail", requirePermission("bridge.setup"), async (req, re
     const config = await resolveSftpLogConfig(req.body);
     const result = await readSftpLogTail(config, req.body?.name, req.body?.maxBytes);
     res.json({ success: true, ...result });
-  } catch (error) {
+  } catch (error: any) {
     res.status(400).json({ error: sanitizeError(error.message) });
   }
 });
@@ -917,7 +926,7 @@ router.post("/sftp/config/list", requirePermission("bridge.setup"), async (req, 
       resetRemoteConfigSession();
     }
     res.json({ success: true, ...result });
-  } catch (error) {
+  } catch (error: any) {
     res.status(400).json({ error: sanitizeError(error.message) });
   }
 });
@@ -926,7 +935,7 @@ router.post("/start", requirePermission("bridge.setup"), (req, res) => {
   try {
     bridge.start();
     res.json({ success: true, message: "Bridge started" });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -936,7 +945,7 @@ router.post("/stop", requirePermission("bridge.setup"), async (req, res) => {
     await bridge.stopSftp();
     bridge.stop();
     res.json({ success: true, message: "Bridge stopped" });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -944,10 +953,10 @@ router.post("/stop", requirePermission("bridge.setup"), async (req, res) => {
 router.get("/scan-paths", requirePermission("bridge.setup"), async (req, res) => {
   try {
     const activeServer = await getActiveServer();
-    const foundBridges = [];
-    const scannedDirs = [];
+    const foundBridges: AnyRecord[] = [];
+    const scannedDirs: string[] = [];
 
-    const searchForBridge = (baseDir, depth = 0, maxDepth = 3) => {
+    const searchForBridge = (baseDir: string, depth = 0, maxDepth = 3) => {
       if (depth > maxDepth || !baseDir || !fs.existsSync(baseDir)) return;
 
       try {
@@ -982,7 +991,7 @@ router.get("/scan-paths", requirePermission("bridge.setup"), async (req, res) =>
                       fs.readFileSync(statusFile, "utf-8"),
                     );
                     modVersion = content.version;
-                  } catch (e) {
+                  } catch (e: any) {
                     log.debug(
                       `Failed to parse status for ${sf.name}: ${e.message}`,
                     );
@@ -1000,7 +1009,7 @@ router.get("/scan-paths", requirePermission("bridge.setup"), async (req, res) =>
                   isActive: statusAge !== null && statusAge < 60000, // Active if updated in last minute
                 });
               }
-            } catch (e) {
+            } catch (e: any) {
               log.debug(
                 `Failed to scan panelbridge folder in ${itemPath}: ${e.message}`,
               );
@@ -1025,12 +1034,12 @@ router.get("/scan-paths", requirePermission("bridge.setup"), async (req, res) =>
             searchForBridge(itemPath, depth + 1, maxDepth);
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         // Ignore errors reading directories
       }
     };
 
-    const searchDirs = new Set();
+    const searchDirs = new Set<string>();
 
     if (activeServer?.installPath) {
       searchDirs.add(activeServer.installPath);
@@ -1064,7 +1073,7 @@ router.get("/scan-paths", requirePermission("bridge.setup"), async (req, res) =>
       isRunning: bridge.isRunning,
       modConnected: bridge.isModConnected(),
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1088,7 +1097,7 @@ router.post("/refresh", requirePermission("bridge.setup"), (req, res) => {
         message: "Bridge not configured - use auto-configure first",
       });
     }
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1104,7 +1113,7 @@ router.get("/ping", async (req, res) => {
   try {
     const result = await bridge.ping();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1196,7 +1205,7 @@ router.post("/command", requireBridgeCommandUnlessGmToolsOnly, async (req, res) 
           z: Math.floor(z),
         } : undefined,
       });
-    } catch (error) {
+    } catch (error: any) {
       const message = sanitizeError(error?.message || "Vehicle spawn failed");
       logBridgeCommand(action, args, { error: message }, false, 0).catch(() => {});
       return res.status(500).json({ success: false, error: message });
@@ -1311,7 +1320,7 @@ router.post("/command", requireBridgeCommandUnlessGmToolsOnly, async (req, res) 
     log.debug(`POST /command: action=${action} completed in ${durationMs}ms`);
     logBridgeCommand(action, args, result, true, durationMs).catch(() => {});
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     const durationMs = Date.now() - startTime;
     const message = sanitizeError(error?.message || "Bridge command failed");
     logBridgeCommand(action, args, { error: message }, false, durationMs).catch(
@@ -1366,7 +1375,7 @@ router.get("/weather", requirePermission("server.world_events"), async (req, res
   try {
     const result = await bridge.getWeather();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1393,7 +1402,7 @@ router.get("/server-info", requirePermission("players.view"), async (req, res) =
       result.data.players = Object.values(result.data.players);
     }
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1411,7 +1420,7 @@ router.post("/weather/blizzard", requirePermission("server.world_events"), async
   try {
     const result = await bridge.triggerBlizzard(duration);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1429,7 +1438,7 @@ router.post("/weather/tropical-storm", requirePermission("server.world_events"),
   try {
     const result = await bridge.triggerTropicalStorm(duration);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1461,7 +1470,7 @@ router.post("/weather/storm", requirePermission("server.world_events"), async (r
   try {
     const result = await bridge.triggerStorm(duration);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1478,7 +1487,7 @@ router.post("/weather/stop", requirePermission("server.world_events"), async (re
   try {
     const result = await bridge.stopWeather();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1523,7 +1532,7 @@ router.post("/weather/generate", requirePermission("server.world_events"), async
       frontType ?? 0,
     );
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1557,7 +1566,7 @@ router.post("/weather/snow", requirePermission("server.world_events"), async (re
   try {
     const result = await bridge.setSnow(enabled !== false, intensity ?? null);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1588,7 +1597,7 @@ router.post("/weather/rain/start", requirePermission("server.world_events"), asy
   try {
     const result = await bridge.startRain(intensity ?? 0.5);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1605,7 +1614,7 @@ router.post("/weather/rain/stop", requirePermission("server.world_events"), asyn
   try {
     const result = await bridge.stopRain();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1635,7 +1644,7 @@ router.post("/weather/lightning", requirePermission("server.world_events"), asyn
   try {
     const result = await bridge.triggerLightning(x, y, strike, light, rumble);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1652,7 +1661,7 @@ router.get("/climate/floats", requirePermission("server.world_events"), async (r
   try {
     const result = await bridge.getClimateFloats();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1697,7 +1706,7 @@ router.post("/climate/float", requirePermission("server.world_events"), async (r
       enable !== false,
     );
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1714,7 +1723,7 @@ router.post("/climate/reset", requirePermission("server.world_events"), async (r
   try {
     const result = await bridge.resetClimateOverrides();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1744,7 +1753,7 @@ router.post("/climate/temperature", requirePermission("server.world_events"), as
   try {
     const result = await bridge.setTemperature(value ?? 22);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1774,7 +1783,7 @@ router.post("/climate/wind", requirePermission("server.world_events"), async (re
   try {
     const result = await bridge.setWind(value ?? 0.5);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1804,7 +1813,7 @@ router.post("/climate/fog", requirePermission("server.world_events"), async (req
   try {
     const result = await bridge.setFog(value ?? 0);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1834,7 +1843,7 @@ router.post("/climate/clouds", requirePermission("server.world_events"), async (
   try {
     const result = await bridge.setClouds(value ?? 0);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1851,7 +1860,7 @@ router.get("/time", requirePermission("server.world_events"), async (req, res) =
   try {
     const result = await bridge.getGameTime();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1914,7 +1923,7 @@ router.post("/time", requirePermission("server.world_events"), async (req, res) 
   try {
     const result = await bridge.setGameTime({ hour, day, month, year });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1931,7 +1940,7 @@ router.get("/world/stats", requirePermission("server.world_events"), async (req,
   try {
     const result = await bridge.getWorldStats();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1948,7 +1957,7 @@ router.post("/world/save", requirePermission("server.control"), async (req, res)
   try {
     const result = await bridge.saveWorld();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1965,7 +1974,7 @@ router.get("/players", requirePermission("players.gm_tools"), async (req, res) =
   try {
     const result = await bridge.getAllPlayerDetails();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1979,16 +1988,17 @@ router.get("/players/:username", requirePermission("players.gm_tools"), async (r
         code: ErrorCode.BRIDGE_NOT_RUNNING,
       });
   }
-  if (!BRIDGE_USERNAME_REGEX.test(req.params.username)) {
+  const username = String(req.params.username);
+  if (!BRIDGE_USERNAME_REGEX.test(username)) {
     return res.status(400).json({
       error: "Invalid username format",
       code: ErrorCode.BRIDGE_INVALID_USERNAME_FORMAT,
     });
   }
   try {
-    const result = await bridge.getPlayerDetails(req.params.username);
+    const result = await bridge.getPlayerDetails(username);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       error: "Failed to get player details",
       code: ErrorCode.PANELBRIDGE_GET_PLAYER_DETAILS_FAILED,
@@ -2005,7 +2015,8 @@ router.post("/players/:username/teleport", requirePermission("players.gm_tools")
         code: ErrorCode.BRIDGE_NOT_RUNNING,
       });
   }
-  if (!BRIDGE_USERNAME_REGEX.test(req.params.username)) {
+  const username = String(req.params.username);
+  if (!BRIDGE_USERNAME_REGEX.test(username)) {
     return res.status(400).json({
       error: "Invalid username format",
       code: ErrorCode.BRIDGE_INVALID_USERNAME_FORMAT,
@@ -2043,9 +2054,9 @@ router.post("/players/:username/teleport", requirePermission("players.gm_tools")
     });
   }
   try {
-    const result = await bridge.teleportPlayer(req.params.username, x, y, z);
+    const result = await bridge.teleportPlayer(username, x, y, z);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     const diagnosticFields =
       error?.data && typeof error.data === "object" ? error.data : {};
     res.status(500).json({
@@ -2080,7 +2091,7 @@ router.post("/message", requirePermission("server.world_events"), async (req, re
       isAlert: true,
     });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -2097,7 +2108,7 @@ router.get("/sandbox", requirePermission("players.gm_tools"), async (req, res) =
   try {
     const result = await bridge.getSandboxOptions();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -2719,7 +2730,7 @@ router.get("/mod-path", requirePermission("bridge.setup"), async (req, res) => {
         "server",
       );
     }
-  } catch (e) {
+  } catch (e: any) {
     // Ignore
   }
 
@@ -2763,7 +2774,7 @@ router.post("/install-local", requirePermission("bridge.setup"), async (req, res
       message: `PanelBridge installed to ${result.targetPath}`,
       serverName: server.serverName || server.name,
     });
-  } catch (error) {
+  } catch (error: any) {
     res
       .status(500)
       .json({ success: false, error: sanitizeError(error.message) });
@@ -2819,7 +2830,7 @@ router.post("/install-mod-auto", requirePermission("bridge.setup"), async (req, 
       serverName: targetServer.serverName || targetServer.name,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -2867,10 +2878,10 @@ router.post("/install-mod", requirePermission("bridge.setup"), async (req, res) 
       });
   }
 
-  let allowedTarget = null;
+  let allowedTarget: string | null = null;
   try {
     const servers = await getServers();
-    const normalizePath = (value) => {
+    const normalizePath = (value: string) => {
       const resolved = path.resolve(value);
       return process.platform === "win32" ? resolved.toLowerCase() : resolved;
     };
@@ -2905,7 +2916,7 @@ router.post("/install-mod", requirePermission("bridge.setup"), async (req, res) 
         break;
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     log.debug(`Configured PanelBridge target validation failed: ${error.message}`);
   }
 
@@ -2960,7 +2971,7 @@ router.post("/install-mod", requirePermission("bridge.setup"), async (req, res) 
       message: "PanelBridge.lua installed successfully",
       path: destPath,
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3000,7 +3011,7 @@ router.post("/sound/world", requirePermission("server.world_events"), async (req
   try {
     const result = await bridge.playWorldSound(x, y, z, radius, volume);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3024,7 +3035,7 @@ router.post("/sound/near-player", requirePermission("players.endanger_or_imperso
   try {
     const result = await bridge.playSoundNearPlayer(username, radius, volume);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       error: "Failed to play sound",
       code: ErrorCode.PANELBRIDGE_PLAY_SOUND_FAILED,
@@ -3051,7 +3062,7 @@ router.post("/sound/gunshot", requirePermission("players.endanger_or_impersonate
   try {
     const result = await bridge.triggerGunshot({ x, y, z, username });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       error: "Failed to trigger gunshot",
       code: ErrorCode.PANELBRIDGE_TRIGGER_GUNSHOT_FAILED,
@@ -3078,7 +3089,7 @@ router.post("/sound/alarm", requirePermission("players.endanger_or_impersonate")
   try {
     const result = await bridge.triggerAlarmSound({ x, y, z, username });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3109,14 +3120,14 @@ router.post("/sound/noise", requirePermission("players.endanger_or_impersonate")
       username,
     });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
 
-async function persistUtilities(power, water, on) {
-  const values = {};
+async function persistUtilities(power: any, water: any, on: any) {
+  const values: AnyRecord = {};
   if (power) {
     values.ElecShut = on ? 9 : 1;
     values.ElecShutModifier = on ? 2147483647 : 0;
@@ -3131,7 +3142,7 @@ async function persistUtilities(power, water, on) {
       log.warn(`Utilities not persisted to SandboxVars.lua: ${reason}`);
     }
     return { persisted, persistReason: reason };
-  } catch (error) {
+  } catch (error: any) {
     log.error(
       `Failed to persist utilities to SandboxVars.lua: ${error.message}`,
     );
@@ -3151,7 +3162,7 @@ router.get("/utilities/status", requirePermission("server.world_events"), async 
   try {
     const result = await bridge.sendCommand("getUtilitiesStatus", {});
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3182,7 +3193,7 @@ router.post("/utilities/restore", requirePermission("server.world_events"), asyn
       ...result,
       ...(await persistUtilities(power !== false, water !== false, true)),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to restore utilities: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3214,7 +3225,7 @@ router.post("/utilities/shutoff", requirePermission("server.world_events"), asyn
       ...result,
       ...(await persistUtilities(power !== false, water !== false, false)),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to shut off utilities: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3240,7 +3251,7 @@ router.post("/character/export", requirePermission("players.gm_tools"), async (r
   try {
     const result = await bridge.sendCommand("exportPlayerData", { username });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3311,7 +3322,7 @@ router.post("/character/import", requirePermission("players.gm_tools"), async (r
       snapshotPath,
       JSON.stringify(snapshot.data ?? snapshot, null, 2),
     );
-  } catch (error) {
+  } catch (error: any) {
     return res.status(502).json({
       error: `Could not snapshot ${username}'s current data before import — refusing to overwrite without a recovery copy: ${sanitizeError(error.message)}`,
     });
@@ -3324,7 +3335,7 @@ router.post("/character/import", requirePermission("players.gm_tools"), async (r
       options,
     });
     res.json({ ...result, snapshotFile: path.basename(snapshotPath) });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3337,7 +3348,7 @@ router.post("/players/:username/give-item", requirePermission("players.gm_tools"
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
     });
   }
-  const { username } = req.params;
+  const username = String(req.params.username);
   if (!BRIDGE_USERNAME_REGEX.test(username)) {
     return res.status(400).json({
       error: "Invalid username format",
@@ -3367,7 +3378,7 @@ router.post("/players/:username/give-item", requirePermission("players.gm_tools"
       count,
     });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3379,7 +3390,7 @@ router.post("/players/:username/heal", requirePermission("players.gm_tools"), as
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
     });
   }
-  const { username } = req.params;
+  const username = String(req.params.username);
   if (!BRIDGE_USERNAME_REGEX.test(username)) {
     return res.status(400).json({
       error: "Invalid username format",
@@ -3389,7 +3400,7 @@ router.post("/players/:username/heal", requirePermission("players.gm_tools"), as
   try {
     const result = await bridge.sendCommand("healPlayer", { username });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3401,7 +3412,7 @@ router.post("/players/:username/kill", requirePermission("players.gm_tools"), as
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
     });
   }
-  const { username } = req.params;
+  const username = String(req.params.username);
   if (!BRIDGE_USERNAME_REGEX.test(username)) {
     return res.status(400).json({
       error: "Invalid username format",
@@ -3411,7 +3422,7 @@ router.post("/players/:username/kill", requirePermission("players.gm_tools"), as
   try {
     const result = await bridge.sendCommand("killPlayer", { username });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     const diagnosticFields =
       error?.data && typeof error.data === "object" ? error.data : {};
     res
@@ -3427,7 +3438,7 @@ router.post("/players/:username/godmode", requirePermission("players.gm_tools"),
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
     });
   }
-  const { username } = req.params;
+  const username = String(req.params.username);
   if (!BRIDGE_USERNAME_REGEX.test(username)) {
     return res.status(400).json({
       error: "Invalid username format",
@@ -3444,7 +3455,7 @@ router.post("/players/:username/godmode", requirePermission("players.gm_tools"),
       enabled: enabled === true,
     });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3456,7 +3467,7 @@ router.post("/players/:username/invisible", requirePermission("players.gm_tools"
       code: ErrorCode.BRIDGE_NOT_RUNNING_BARE,
     });
   }
-  const { username } = req.params;
+  const username = String(req.params.username);
   if (!BRIDGE_USERNAME_REGEX.test(username)) {
     return res.status(400).json({
       error: "Invalid username format",
@@ -3473,7 +3484,7 @@ router.post("/players/:username/invisible", requirePermission("players.gm_tools"
       enabled: enabled === true,
     });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3489,7 +3500,7 @@ router.get("/zombies/count", requirePermission("server.world_events"), async (re
   try {
     const result = await bridge.sendCommand("getZombieCount", {});
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3520,7 +3531,7 @@ router.post("/zombies/clear-near-player", requirePermission("server.world_events
       radius,
     });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3537,7 +3548,7 @@ router.post("/zombies/clear-all", requirePermission("server.world_events"), asyn
     const result = await bridge.sendCommand("clearAllZombies", {});
     log.info(`Clear all zombies result: ${JSON.stringify(result)}`);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.warn(`Clear all zombies failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3566,7 +3577,7 @@ router.post("/zombies/spawn-near", requirePermission("players.endanger_or_impers
     });
     log.info(`Spawn horde near result: ${JSON.stringify(result)}`);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.warn(`Spawn horde near failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3595,7 +3606,7 @@ router.post("/zombies/spawn-behind", requirePermission("players.endanger_or_impe
     });
     log.info(`Spawn horde behind result: ${JSON.stringify(result)}`);
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.warn(`Spawn horde behind failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3621,7 +3632,7 @@ router.post("/visual/view-distance", requirePermission("server.world_events"), a
   try {
     const result = await bridge.sendCommand("setViewDistance", { value });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3643,7 +3654,7 @@ router.post("/visual/daylight", requirePermission("server.world_events"), async 
   try {
     const result = await bridge.sendCommand("setDayLight", { value });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3665,7 +3676,7 @@ router.post("/visual/night-strength", requirePermission("server.world_events"), 
   try {
     const result = await bridge.sendCommand("setNightStrength", { value });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3687,7 +3698,7 @@ router.post("/visual/desaturation", requirePermission("server.world_events"), as
   try {
     const result = await bridge.sendCommand("setDesaturation", { value });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3709,7 +3720,7 @@ router.post("/visual/ambient", requirePermission("server.world_events"), async (
   try {
     const result = await bridge.sendCommand("setAmbient", { value });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3725,12 +3736,12 @@ router.get("/chat/info", requirePermission("server.world_events"), async (req, r
   try {
     const result = await bridge.sendCommand("getChatInfo", {});
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
-async function trySendViaRcon(req, text) {
+async function trySendViaRcon(req: any, text: any) {
   const rconService = req.app.get("rconService");
   if (!rconService || !rconService.connected) return null;
   const result = await rconService.serverMessage(text, { skipLog: true });
@@ -3770,7 +3781,7 @@ router.post("/chat/admin", requirePermission("players.endanger_or_impersonate"),
         error: "Neither PanelBridge nor RCON available for admin chat",
         code: ErrorCode.PANELBRIDGE_ADMIN_CHAT_UNAVAILABLE,
       });
-  } catch (error) {
+  } catch (error: any) {
     try {
       const rconResult = await trySendViaRcon(req, `[ADMIN] ${message}`);
       if (rconResult) {
@@ -3782,7 +3793,7 @@ router.post("/chat/admin", requirePermission("players.endanger_or_impersonate"),
           },
         });
       }
-    } catch (_) {
+    } catch (_: any) {
       /* ignore */
     }
     res.status(500).json({
@@ -3829,7 +3840,7 @@ router.post("/chat/general", requirePermission("players.endanger_or_impersonate"
         error: "Neither PanelBridge nor RCON available for chat",
         code: ErrorCode.PANELBRIDGE_CHAT_UNAVAILABLE,
       });
-  } catch (error) {
+  } catch (error: any) {
     try {
       const rconResult = await trySendViaRcon(req, `[${author}] ${message}`);
       if (rconResult) {
@@ -3838,7 +3849,7 @@ router.post("/chat/general", requirePermission("players.endanger_or_impersonate"
           data: { message: "Message sent via RCON", author, method: "RCON" },
         });
       }
-    } catch (_) {
+    } catch (_: any) {
       /* ignore */
     }
     res.status(500).json({ error: sanitizeError(error.message) });
@@ -3890,7 +3901,7 @@ router.post("/chat/alert", requirePermission("server.world_events"), async (req,
         error: "Neither RCON nor PanelBridge available",
         code: ErrorCode.PANELBRIDGE_RCON_AND_BRIDGE_UNAVAILABLE,
       });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3905,13 +3916,15 @@ router.get("/debug/log", requirePermission("bridge.diagnostics"), async (req, re
   }
   const limit = parseClampedInteger(req.query.limit, 50, 1, 500);
   const VALID_LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR"];
-  const minLevel = VALID_LOG_LEVELS.includes(req.query.level)
-    ? req.query.level
+  const requestedLevel =
+    typeof req.query.level === "string" ? req.query.level : "";
+  const minLevel = VALID_LOG_LEVELS.includes(requestedLevel)
+    ? requestedLevel
     : "DEBUG";
   try {
     const result = await bridge.sendCommand("getDebugLog", { limit, minLevel });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3926,7 +3939,7 @@ router.get("/debug/stats", requirePermission("bridge.diagnostics"), async (req, 
   try {
     const result = await bridge.sendCommand("getStats", {});
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3947,7 +3960,7 @@ router.post("/debug/mode", requirePermission("bridge.diagnostics"), async (req, 
       enabled: enabled === true,
     });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3981,7 +3994,7 @@ router.get("/debug/api", requirePermission("bridge.diagnostics"), async (req, re
   try {
     const result = await bridge.sendCommand("checkAPI", { object, method });
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3996,7 +4009,7 @@ router.get("/debug/handlers", requirePermission("bridge.diagnostics"), async (re
   try {
     const result = await bridge.sendCommand("getAvailableHandlers", {});
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -4011,7 +4024,7 @@ router.post("/debug/clear-errors", requirePermission("bridge.diagnostics"), asyn
   try {
     const result = await bridge.clearErrors();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -4025,7 +4038,7 @@ router.get("/catalog/items", requirePermission("players.gm_tools"), async (req, 
       return res.json({ items: [], count: 0, scannedAt: null });
     }
     res.json(catalog);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -4038,7 +4051,7 @@ router.get("/catalog/vehicles", requirePermission("players.gm_tools"), async (re
       return res.json({ vehicles: [], count: 0, scannedAt: null });
     }
     res.json(catalog);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -4068,7 +4081,7 @@ router.post("/catalog/scan-items", requirePermission("bridge.diagnostics"), asyn
     await commitNow();
     log.info(`Item catalog cached: ${catalog.count} items`);
     res.json(catalog);
-  } catch (error) {
+  } catch (error: any) {
     log.error("Item catalog scan failed:", error.message);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4099,7 +4112,7 @@ router.post("/catalog/scan-vehicles", requirePermission("bridge.diagnostics"), a
     await commitNow();
     log.info(`Vehicle catalog cached: ${catalog.count} vehicles`);
     res.json(catalog);
-  } catch (error) {
+  } catch (error: any) {
     log.error("Vehicle catalog scan failed:", error.message);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4115,7 +4128,7 @@ router.post("/catalog/debug-item-script", requirePermission("bridge.diagnostics"
   try {
     const result = await bridge.sendCommand("debugItemScript", {});
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });

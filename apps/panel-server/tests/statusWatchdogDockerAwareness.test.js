@@ -10,7 +10,7 @@ vi.mock("../services/managedContainer.ts", () => ({
   resolveDockerHostSignal,
 }));
 
-const { getObservedServerRunning } = await import("../index.js");
+const { getObservedServerRunning } = await import("../index.ts");
 const { ServerManager } = await import("../services/serverManager.ts");
 
 describe("status watchdog -- Docker provider awareness", () => {

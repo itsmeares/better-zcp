@@ -15,7 +15,7 @@ vi.mock("../routes/mapProxy.ts", async () => {
   return { ...actual, getB42ResolutionStatus, getB42Dir, getB42TopFormat };
 });
 
-const { default: debugRouter } = await import("../routes/debug.js");
+const { default: debugRouter } = await import("../routes/debug.ts");
 
 let originalFetch;
 beforeEach(() => {

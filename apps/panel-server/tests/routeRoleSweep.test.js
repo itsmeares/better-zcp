@@ -58,18 +58,18 @@ async function runRoute(router, routePath, method, req) {
 
 describe("mods.js: admin+technician (mods/config is technician's job, not moderator's)", () => {
   it("refuses a moderator", async () => {
-    const { default: router } = await import("../routes/mods.js");
+    const { default: router } = await import("../routes/mods.ts");
     const { res } = await runFirstUseLayer(router, { user: { role: "moderator" } });
     expect(res.getStatusCode()).toBe(403);
   });
   it("does not refuse a technician", async () => {
-    const { default: router } = await import("../routes/mods.js");
+    const { default: router } = await import("../routes/mods.ts");
     const { calledNext } = await runFirstUseLayer(router, { user: { role: "technician" } });
     expect(calledNext).toBe(true);
   });
 
   it("does NOT refuse a moderator on /thumbnail/:id -- the deliberate path-based carve-out overrides the role gate entirely for this one route", async () => {
-    const { default: router } = await import("../routes/mods.js");
+    const { default: router } = await import("../routes/mods.ts");
     const { calledNext } = await runFirstUseLayer(router, {
       user: { role: "moderator" },
       path: "/thumbnail/123",
@@ -77,7 +77,7 @@ describe("mods.js: admin+technician (mods/config is technician's job, not modera
     expect(calledNext).toBe(true);
   });
   it("still refuses that same moderator on every other path -- the carve-out is one route, not the whole router", async () => {
-    const { default: router } = await import("../routes/mods.js");
+    const { default: router } = await import("../routes/mods.ts");
     const { res } = await runFirstUseLayer(router, {
       user: { role: "moderator" },
       path: "/status",

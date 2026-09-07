@@ -17,7 +17,7 @@ vi.mock("../utils/paths.ts", () => ({
   })),
 }));
 
-const { buildFileIndex } = await import("../routes/mods.js");
+const { buildFileIndex } = await import("../routes/mods.ts");
 
 const WORKSHOP_ID = "123456789";
 

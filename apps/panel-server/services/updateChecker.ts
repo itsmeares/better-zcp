@@ -36,9 +36,12 @@ type ServerProcessDetails = {
 };
 
 type ServerManager = {
-  serverName?: string;
+  serverName?: string | null;
   getServerProcessDetails: () => Promise<ServerProcessDetails>;
-  startServer: (options: { serverId: string | number | null }) => Promise<CommandResult>;
+  startServer: (options?: {
+    skipRunningCheck?: boolean;
+    serverId?: string | null;
+  }) => Promise<CommandResult>;
 };
 
 type UpdateCheckerOptions = {
@@ -577,7 +580,7 @@ export class UpdateChecker {
 
     let shouldRestart = false;
     let normalizedInstallPath = null;
-    let targetServerId: string | number | null = null;
+  let targetServerId: string | null = null;
     let phase: "not-started" | "before-stop" | "updating" = "not-started";
     const fail = (reason: string, message: string, params?: unknown): never => {
       const err = new AutoUpdateError(message);
@@ -602,7 +605,7 @@ export class UpdateChecker {
         fail("NOT_CONFIGURED", "No active server is configured");
       }
       const configuredActiveServer = activeServer as NonNullable<typeof activeServer>;
-      targetServerId = activeServer?.id ?? null;
+      targetServerId = (activeServer?.id as string | null | undefined) ?? null;
       const steamcmdPath = await getSetting("steamcmdPath");
       const managed = await resolveManagedContainer({ serverId: activeServer?.id });
       if (managed.handled) {

@@ -12,6 +12,9 @@ import { isUncompressedBinaryProxyPath } from "./utils/compressionFilter.ts";
 import { createServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import { Server } from "socket.io";
+import type { Socket } from "socket.io";
+import type { Request, Response, NextFunction } from "express";
+import type { Server as HttpsServer } from "https";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
@@ -30,6 +33,39 @@ import {
   logReady,
 } from "./utils/logger.ts";
 const log = createLogger("Panel");
+
+type AnyRecord = Record<string, any>;
+type PlayerRecord = AnyRecord & { name: string };
+type SwapSnapshot = { total: number; used: number };
+type AuthenticatedSocket = Socket & { user?: AnyRecord };
+type HttpsServerOptions = {
+  httpsEnabled: unknown;
+  httpsPort: string | number;
+  customKeyPath?: string;
+  customCertPath?: string;
+};
+type CorsBlockedOrigin = {
+  id: string;
+  origin: string;
+  source: string;
+  blockedAt: string;
+};
+type CorsState = {
+  allowAll: boolean;
+  allowPrivateNetworks: boolean;
+  debug: boolean;
+  customOrigins: Set<string>;
+  blocked: CorsBlockedOrigin[];
+  lastLoadedAt: string | null;
+};
+type PendingUpdateInspection = {
+  pending: boolean;
+  awaitingStartupAck: boolean;
+  phase?: string;
+  transactionId?: string;
+  metadata?: AnyRecord;
+  applyingMarkerPath?: string | null;
+};
 import {
   initDatabase,
   getActiveServer,
@@ -115,7 +151,7 @@ import { acquireLifecycleLock } from "./services/lifecycleCoordinator.ts";
     );
     child.unref();
     process.exit(0);
-  } catch (err) {
+  } catch (err: any) {
     console.error(
       "Supervisor bootstrap failed, continuing without it:",
       err.message,
@@ -131,7 +167,7 @@ process.stderr?.on?.("error", (err) => {
 });
 
 // Global error handlers.
-function fatalExit(label, err) {
+function fatalExit(label: string, err: unknown) {
   log.error(`${label}:`, err);
   Promise.race([
     flushWrites().catch(() => {}),
@@ -150,7 +186,7 @@ process.on("unhandledRejection", (reason) => {
 
 let isShuttingDown = false;
 
-async function gracefulShutdown(signal) {
+async function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
@@ -208,7 +244,7 @@ async function gracefulShutdown(signal) {
       log.warn("Graceful shutdown timed out, forcing exit");
       process.exit(1);
     }, 10000);
-  } catch (error) {
+  } catch (error: any) {
     log.error("Error during shutdown:", error);
     process.exit(1);
   }
@@ -226,14 +262,14 @@ import playerRoutes from "./routes/players.ts";
 import rconRoutes from "./routes/rcon.ts";
 import configRoutes from "./routes/config.ts";
 import schedulerRoutes from "./routes/scheduler.ts";
-import modsRoutes from "./routes/mods.js";
+import modsRoutes from "./routes/mods.ts";
 import chunksRoutes from "./routes/chunks.ts";
 import discordRoutes from "./routes/discord.ts";
-import debugRoutes, { addLogToBuffer } from "./routes/debug.js";
+import debugRoutes, { addLogToBuffer } from "./routes/debug.ts";
 import { getDiskFree } from "./utils/diskSpace.ts";
 import { getSwapInfo } from "./utils/swapInfo.ts";
 import serverFinderRoutes from "./routes/serverFinder.ts";
-import panelBridgeRoutes from "./routes/panelBridge.js";
+import panelBridgeRoutes from "./routes/panelBridge.ts";
 import backupRoutes from "./routes/backup.ts";
 import mapProxyRoutes from "./routes/mapProxy.ts";
 import systemRoutes from "./routes/system.ts";
@@ -252,7 +288,7 @@ const trustProxyEnv = process.env.TRUST_PROXY || "";
 let trustProxySetting = parseTrustProxySetting(trustProxyEnv);
 try {
   app.set("trust proxy", trustProxySetting);
-} catch (error) {
+} catch (error: any) {
   log.warn(
     `Invalid TRUST_PROXY value (${trustProxyEnv}), proxy trust disabled: ${error.message}`,
   );
@@ -268,9 +304,9 @@ if (trustProxySetting) {
   );
 }
 const httpServer = createServer(app);
-let activePanelPort = null;
+let activePanelPort: number | null = null;
 
-let httpsServer = null;
+let httpsServer: HttpsServer | null = null;
 
 export function isHttpsServerActive() {
   return httpsServer !== null;
@@ -286,7 +322,7 @@ const MAX_CORS_CUSTOM_ORIGINS = 100;
 const MAX_CORS_ORIGIN_LENGTH = 256;
 const CORS_DENY_MESSAGE =
   "Origin blocked by panel CORS policy. Open the panel from a local/LAN host, or for first-time reverse-proxy setup set CORS_ORIGINS=https://your-panel-host in the panel environment and restart it. After setup, this origin can be managed in Settings > Remote Access.";
-const corsState = {
+const corsState: CorsState = {
   allowAll: false,
   allowPrivateNetworks: true,
   debug: false,
@@ -295,29 +331,29 @@ const corsState = {
   lastLoadedAt: null,
 };
 
-function normalizeOrigin(origin) {
+function normalizeOrigin(origin: unknown): string | null {
   if (typeof origin !== "string") return null;
   const trimmed = origin.trim();
   if (trimmed.length > MAX_CORS_ORIGIN_LENGTH) return null;
   if (!trimmed) return null;
   try {
     return new URL(trimmed).origin;
-  } catch (_) {
+  } catch (_: any) {
     return null;
   }
 }
 
-function parseOriginList(rawOrigins) {
+function parseOriginList(rawOrigins: unknown): string[] {
   if (typeof rawOrigins !== "string") return [];
   const parsed = rawOrigins
     .split(/[\n,;]+/)
     .map((origin) => normalizeOrigin(origin))
-    .filter(Boolean);
+    .filter((origin): origin is string => Boolean(origin));
   return [...new Set(parsed)].slice(0, MAX_CORS_CUSTOM_ORIGINS);
 }
 
-function isPrivateNetworkHost(host) {
-  if (!host) return false;
+function isPrivateNetworkHost(host: unknown): boolean {
+  if (typeof host !== "string" || !host) return false;
   return (
     host === "localhost" ||
     host === "127.0.0.1" ||
@@ -332,8 +368,8 @@ function isPrivateNetworkHost(host) {
   );
 }
 
-function isLikelyLanHostname(host) {
-  if (!host) return false;
+function isLikelyLanHostname(host: unknown): boolean {
+  if (typeof host !== "string" || !host) return false;
   const normalized = String(host).trim().toLowerCase();
   if (!normalized) return false;
 
@@ -353,7 +389,7 @@ function isLikelyLanHostname(host) {
   return false;
 }
 
-function recordCorsBlock(origin, source) {
+function recordCorsBlock(origin: unknown, source: string): void {
   if (!corsState.debug) return;
   const normalizedOrigin = typeof origin === "string" ? origin.trim() : "";
   const safeOrigin = normalizedOrigin
@@ -372,7 +408,7 @@ function recordCorsBlock(origin, source) {
 }
 
 const MAX_ALLOWED_ORIGINS = 200;
-function addAllowedOrigin(origin) {
+function addAllowedOrigin(origin: unknown): void {
   const normalized = normalizeOrigin(origin);
   if (!normalized) return;
   if (
@@ -384,7 +420,7 @@ function addAllowedOrigin(origin) {
   allowedOrigins.add(normalized);
 }
 
-function rebuildAllowedOriginsFromSettings(settings = {}) {
+function rebuildAllowedOriginsFromSettings(settings: AnyRecord = {}): void {
   allowedOrigins.clear();
   for (const origin of defaultAllowedOrigins) {
     addAllowedOrigin(origin);
@@ -445,7 +481,7 @@ async function refreshCorsConfig() {
   return getCorsDebugSnapshot();
 }
 
-function isAllowedOrigin(origin) {
+function isAllowedOrigin(origin: unknown): boolean {
   if (!origin) return true;
   if (corsState.allowAll) return true;
 
@@ -462,7 +498,7 @@ function isAllowedOrigin(origin) {
       addAllowedOrigin(normalized);
       return true;
     }
-  } catch (_) {
+  } catch (_: any) {
     // Unparseable origin: fall through and deny.
   }
 
@@ -489,13 +525,13 @@ export function setupHttpsServer({
   httpsPort,
   customKeyPath,
   customCertPath,
-}) {
+}: HttpsServerOptions): HttpsServer | null {
   if (!httpsEnabled) return null;
 
   let certs = null;
   try {
     certs = loadOrCreateCerts(customKeyPath, customCertPath);
-  } catch (error) {
+  } catch (error: any) {
     log.error(
       `HTTPS certificate setup failed unexpectedly: ${error.message} — running HTTP only`,
     );
@@ -510,7 +546,7 @@ export function setupHttpsServer({
 
   try {
     httpsServer = createHttpsServer(certs, app);
-  } catch (error) {
+  } catch (error: any) {
     log.error(
       `HTTPS certificate/key content is invalid: ${error.message} — running HTTP only`,
     );
@@ -548,7 +584,7 @@ export function setupHttpsServer({
     httpsServer.listen(httpsPort, () => {
       log.info(`HTTPS server listening on port ${httpsPort}`);
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(
       `Invalid HTTPS port ${JSON.stringify(httpsPort)}: ${error.message} — HTTPS disabled, HTTP is unaffected`,
     );
@@ -768,12 +804,12 @@ async function findPanelBridgePath() {
     }
   }
 
-  const possiblePaths = [];
+  const possiblePaths: Array<{ p: string; source: string; priority: number }> = [];
 
-  const safeReadDir = (dirPath) => {
+  const safeReadDir = (dirPath: string): string[] => {
     try {
       return fs.existsSync(dirPath) ? fs.readdirSync(dirPath) : [];
-    } catch (e) {
+    } catch (e: any) {
       return [];
     }
   };
@@ -851,7 +887,7 @@ async function findPanelBridgePath() {
   };
 }
 
-async function tryStartPanelBridge(trigger = "unknown") {
+async function tryStartPanelBridge(trigger: string = "unknown"): Promise<boolean> {
   if (panelBridge.isRunning) {
     log.debug(`Already running (trigger: ${trigger})`);
     return true;
@@ -871,7 +907,7 @@ async function tryStartPanelBridge(trigger = "unknown") {
       await panelBridge.configureSftp(sftpConfig, getSftpCachePath(sftpConfig));
       log.info(`Started SFTP transport (trigger: ${trigger})`);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       log.warn(`Could not start configured SFTP transport: ${error.message}`);
     }
   }
@@ -945,7 +981,7 @@ async function tryStartPanelBridge(trigger = "unknown") {
           log.info("PanelBridge mod auto-installed to server");
         }
       }
-    } catch (modError) {
+    } catch (modError: any) {
       log.warn(`Auto-update mod check failed: ${modError.message}`);
     }
 
@@ -954,7 +990,7 @@ async function tryStartPanelBridge(trigger = "unknown") {
     panelBridge.start();
     log.info(`Started from ${result.source} (trigger: ${trigger})`);
     return true;
-  } catch (error) {
+  } catch (error: any) {
     log.warn(`Failed to start - ${error.message}`);
     return false;
   }
@@ -967,7 +1003,7 @@ rconService.on("connected", async () => {
     lastPlayerList = [];
     playerBaselineReady = false;
     await tryStartPanelBridge("rcon-connected");
-  } catch (err) {
+  } catch (err: any) {
     log.debug(`RCON-connected PanelBridge check failed: ${err.message}`);
   }
 });
@@ -1071,8 +1107,8 @@ app.use("/api/templates", templatesRoutes);
 app.use("/api/docker", dockerRoutes);
 app.use("/api/permissions", permissionsRoutes);
 
-let _pkgVersion;
-let _buildSha;
+let _pkgVersion: string;
+let _buildSha: string;
 try {
   _pkgVersion =
     typeof PANEL_VERSION !== "undefined"
@@ -1106,7 +1142,10 @@ function updateBundleJournalPath() {
   return path.join(path.dirname(panelUpdateChecker.getExeBasePath()), "update-bundle.json");
 }
 
-let _pendingUpdateInspection = { pending: false, awaitingStartupAck: false };
+let _pendingUpdateInspection: PendingUpdateInspection = {
+  pending: false,
+  awaitingStartupAck: false,
+};
 
 function inspectPendingPanelUpdate() {
   const journalPath = updateBundleJournalPath();
@@ -1158,7 +1197,7 @@ app.post("/api/panel/restart", requireRole("admin"), async (req, res) => {
         await setSetting("preUpdateDataBackupPath", dataBackupPath);
         await flushWrites();
       }
-    } catch (backupErr) {
+    } catch (backupErr: any) {
       log.warn(`Could not back up panel database before update: ${backupErr.message}`);
     }
   }
@@ -1195,7 +1234,7 @@ app.post("/api/panel/restart", requireRole("admin"), async (req, res) => {
         });
         setTimeout(() => process.exit(75), 500);
         return;
-      } catch (err) {
+      } catch (err: any) {
         log.error(`Could not write supervisor marker: ${err.message}`);
         return res.status(500).json({ error: sanitizeError(err.message) });
       }
@@ -1230,12 +1269,12 @@ app.post("/api/panel/restart", requireRole("admin"), async (req, res) => {
       const targetPath = appliedBundle.paths.binary;
       try {
         await fs.promises.chmod(targetPath, 0o755);
-      } catch (chmodErr) {
+      } catch (chmodErr: any) {
         log.warn(`Could not chmod new binary: ${chmodErr.message}`);
       }
       try {
         await fs.promises.access(targetPath, fs.constants.X_OK);
-      } catch (accessErr) {
+      } catch (accessErr: any) {
         recoverInterruptedUpdateBundle(
           staged.journalPath,
           "binary_not_executable",
@@ -1255,7 +1294,7 @@ app.post("/api/panel/restart", requireRole("admin"), async (req, res) => {
       log.info(
         `Linux update bundle applied to ${targetPath}; awaiting startup acknowledgement after restart`,
       );
-    } catch (err) {
+    } catch (err: any) {
       refreshInlineScriptCspHash();
       checker.isApplying = false;
       log.error(`Failed to apply Linux staged update: ${err.message}`);
@@ -1313,7 +1352,7 @@ app.get("/api/panel/update-check", async (req, res) => {
         .json({ error: "Panel update checker not available" });
     const status = await checker.checkForUpdate();
     res.json(status);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Panel update check failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1337,7 +1376,7 @@ app.get("/api/panel/update-preflight", async (req, res) => {
         .json({ error: "Panel update checker not available" });
     const result = await checker.preflight();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Panel update preflight failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1355,12 +1394,15 @@ app.get("/api/panel/update-apply-log", (req, res) => {
       log,
       logPath: path.join(getDataPaths().logsDir, "panel-update-last.log"),
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
-export async function handlePanelUpdateDownload(req, res) {
+export async function handlePanelUpdateDownload(
+  req: Request,
+  res: Response,
+): Promise<Response | void> {
     try {
       const checker = req.app.get("panelUpdateChecker");
       if (!checker)
@@ -1433,13 +1475,16 @@ export async function handlePanelUpdateDownload(req, res) {
         return res.status(400).json(result);
       }
       res.json(result);
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Panel update download failed: ${error.message}`);
       res.status(500).json({ error: sanitizeError(error.message) });
     }
 }
 
-export function classifyStartupProcessState(processState, isRemote = false) {
+export function classifyStartupProcessState(
+  processState: AnyRecord | null | undefined,
+  isRemote: boolean = false,
+) {
   if (isRemote) {
     return { running: Boolean(processState?.running), unknown: false };
   }
@@ -1471,7 +1516,7 @@ const legacyClientMismatch =
   !clientDistMatchesMetadata(clientDistPath, _buildMetadata);
 
 function buildLegacyClientRecoveryPage() {
-  const escapeHtml = (value) =>
+  const escapeHtml = (value: unknown): string =>
     String(value)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -1518,16 +1563,25 @@ if (!legacyClientMismatch) {
   );
 }
 
-export function sendClientIndex(res, clientDistPath, callback) {
+export function sendClientIndex(
+  res: Response,
+  clientDistPath: string,
+  callback?: (error?: Error) => void,
+) {
   return res.sendFile("index.html", { root: clientDistPath }, callback);
 }
 
 // Global API error handler — sanitize internal details from error responses
-const REGISTERED_ERROR_CODES = new Set(Object.values(ErrorCode));
-export function apiErrorHandler(err, req, res, next) {
+const REGISTERED_ERROR_CODES: Set<string> = new Set(Object.values(ErrorCode));
+export function apiErrorHandler(
+  err: AnyRecord,
+  req: Request,
+  res: Response,
+  _next: NextFunction,
+): void {
   log.error(`Unhandled API error on ${req.method} ${req.path}: ${err.message}`);
   const status = err.status || 500;
-  const body = { error: sanitizeError(err.message) };
+  const body: AnyRecord = { error: sanitizeError(err.message) };
   if (typeof err.code === "string" && REGISTERED_ERROR_CODES.has(err.code)) {
     body.code = err.code;
   }
@@ -1549,7 +1603,7 @@ app.use((req, res, next) => {
   }
 });
 
-io.use(async (socket, next) => {
+io.use(async (socket: AuthenticatedSocket, next) => {
   try {
     const needsSetup = await authService.needsSetup();
     if (needsSetup) return next();
@@ -1578,23 +1632,26 @@ io.use(async (socket, next) => {
 
     socket.user = payload;
     next();
-  } catch (error) {
+  } catch (error: any) {
     next(new Error("Authentication error"));
   }
 });
 
-export async function socketHasCapability(socket, capability) {
+export async function socketHasCapability(
+  socket: AuthenticatedSocket,
+  capability: string,
+): Promise<boolean> {
   if (!socket.user) return false;
   try {
     const role = await getRoleByName(socket.user.role);
     return Array.isArray(role?.capabilities) && role.capabilities.includes(capability);
-  } catch (error) {
+  } catch (error: any) {
     log.warn(`Could not resolve socket capability "${capability}": ${error.message}`);
     return false;
   }
 }
 
-io.on("connection", (socket) => {
+io.on("connection", (socket: AuthenticatedSocket) => {
   log.debug(
     `Client connected: ${socket.id}${socket.user ? ` (${socket.user.username})` : ""}`,
   );
@@ -1638,7 +1695,7 @@ onLog((logEntry) => {
 
 import { getDataPaths } from "./utils/paths.ts";
 
-async function autoExportPlayer(username) {
+async function autoExportPlayer(username: string): Promise<void> {
   try {
     if (!panelBridge.isRunning || !panelBridge.isModConnected()) {
       log.debug(
@@ -1687,14 +1744,14 @@ async function autoExportPlayer(username) {
     log.info(
       `Auto-exported character data for ${username} (${files.length > maxExports ? maxExports : files.length} kept)`,
     );
-  } catch (err) {
+  } catch (err: any) {
     log.warn(`Auto-export error for ${username}: ${err.message}`);
   }
 }
 
-let lastPlayerList = [];
+let lastPlayerList: PlayerRecord[] = [];
 let playerBaselineReady = false;
-let playerPollingInterval = null;
+let playerPollingInterval: ReturnType<typeof setInterval> | null = null;
 let rconConnectedAt = 0;
 
 function startPlayerPolling() {
@@ -1714,7 +1771,10 @@ function startPlayerPolling() {
         return;
       }
 
-      const result = await rconService.getPlayers();
+      const result = (await rconService.getPlayers()) as {
+        success?: boolean;
+        players?: PlayerRecord[];
+      };
       if (result.success && result.players) {
         const baselineWasReady = playerBaselineReady;
         playerBaselineReady = true;
@@ -1769,7 +1829,7 @@ function startPlayerPolling() {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       log.debug(`Player polling error: ${error.message}`);
     }
   }, 5000);
@@ -1786,8 +1846,8 @@ function stopPlayerPolling() {
   }
 }
 
-let perfPollingInterval = null;
-let lastCpuInfo = null;
+let perfPollingInterval: ReturnType<typeof setInterval> | null = null;
+let lastCpuInfo: { total: number; idle: number } | null = null;
 
 function getCpuUsage() {
   const cpus = os.cpus();
@@ -1811,7 +1871,10 @@ function getCpuUsage() {
   return totalDiff > 0 ? Math.round((1 - idleDiff / totalDiff) * 100) : 0;
 }
 
-let lastDiskSample = { at: 0, value: null };
+let lastDiskSample: { at: number; value: SwapSnapshot | null } = {
+  at: 0,
+  value: null,
+};
 const DISK_SAMPLE_INTERVAL_MS = 60000;
 
 async function getDiskSnapshot() {
@@ -1837,7 +1900,10 @@ async function getDiskSnapshot() {
   return lastDiskSample.value;
 }
 
-let lastSwapSample = { at: 0, value: null };
+let lastSwapSample: { at: number; value: SwapSnapshot | null } = {
+  at: 0,
+  value: null,
+};
 const SWAP_SAMPLE_INTERVAL_MS = 60000;
 
 async function getSwapSnapshot() {
@@ -1854,8 +1920,8 @@ async function getSwapSnapshot() {
   return lastSwapSample.value;
 }
 
-async function getPzProcessMemory() {
-  return new Promise((resolve) => {
+async function getPzProcessMemory(): Promise<number | null> {
+  return new Promise<number | null>((resolve) => {
     const timeout = setTimeout(() => resolve(null), 5000);
 
     if (process.platform === "win32") {
@@ -1936,7 +2002,7 @@ async function startPerfPolling() {
       await recordPerformanceSnapshot(snapshot);
 
       io.to("perf").emit("perf:snapshot", snapshot);
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Perf snapshot failed: ${err.message}`);
     }
   }, 60000);
@@ -1952,14 +2018,16 @@ function stopPerfPolling() {
   }
 }
 
-let statusWatchdogInterval = null;
-let lastKnownRunning = null;
+let statusWatchdogInterval: ReturnType<typeof setInterval> | null = null;
+let lastKnownRunning: boolean | null = null;
 
 export async function getObservedServerRunning() {
   return resolveObservedServerRunning(serverManager, rconService, dockerClient);
 }
 
-export async function checkServerStatusNow(detectionReason = "watchdog") {
+export async function checkServerStatusNow(
+  detectionReason: string = "watchdog",
+): Promise<void> {
   try {
     const running = await getObservedServerRunning();
     if (running === null) {
@@ -1994,7 +2062,7 @@ export async function checkServerStatusNow(detectionReason = "watchdog") {
       }
     }
     lastKnownRunning = running;
-  } catch (err) {
+  } catch (err: any) {
     log.debug(`Status watchdog error: ${err.message}`);
   }
 }
@@ -2007,10 +2075,10 @@ function startStatusWatchdog() {
 }
 
 export async function probeRconFallbackIfConfigured(
-  activeServer,
-  rconServiceInstance,
-  timeoutMs,
-) {
+  activeServer: AnyRecord | null | undefined,
+  rconServiceInstance: AnyRecord,
+  timeoutMs: number,
+): Promise<boolean> {
   if (!activeServer) {
     log.debug(
       "No server configured yet — skipping RCON port fallback probe",
@@ -2045,11 +2113,11 @@ export async function probeRconFallbackIfConfigured(
         if (rconServiceInstance.connected) {
           log.info("RCON connected via port fallback probe");
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Fallback RCON connect failed: ${e.message}`);
       }
     }
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Fallback RCON probe error: ${e.message}`);
   }
   return rconPortOccupied;
@@ -2061,7 +2129,13 @@ export async function logExposureWarningIfNeeded({
   localIp,
   authServiceInstance = authService,
   loggerInstance = log,
-}) {
+}: {
+  needsSetup: boolean;
+  boundPort: number;
+  localIp: string | null;
+  authServiceInstance?: { isAuthEnabled: () => Promise<boolean> };
+  loggerInstance?: { warn: (...args: any[]) => void };
+}): Promise<void> {
   const reachableUrl =
     localIp && localIp !== "127.0.0.1"
       ? `http://${localIp}:${boundPort}`
@@ -2087,7 +2161,7 @@ export async function logExposureWarningIfNeeded({
   }
 }
 
-async function start() {
+async function start(): Promise<void> {
   try {
     let panelVersion;
     try {
@@ -2104,8 +2178,8 @@ async function start() {
 
     if (typeof process.pkg !== "undefined") {
       try {
-        _pendingUpdateInspection = inspectPendingPanelUpdate();
-      } catch (error) {
+  _pendingUpdateInspection = inspectPendingPanelUpdate();
+      } catch (error: any) {
         log.error(
           `Update startup validation failed [${error.code || "invalid_bundle"}]: ${error.message}`,
         );
@@ -2126,7 +2200,7 @@ async function start() {
         );
         process.exit(78);
       }
-    } catch (err) {
+    } catch (err: any) {
       log.warn(`Lock check skipped: ${err.message}`);
     }
 
@@ -2142,12 +2216,13 @@ async function start() {
         input: process.stdin,
         output: process.stdout,
       });
-      const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+      const ask = (q: string): Promise<string> =>
+        new Promise((resolve) => rl.question(q, resolve));
 
-      let users;
+      let users: Awaited<ReturnType<typeof authService.getUsers>>;
       try {
         users = await authService.getUsers();
-      } catch (err) {
+      } catch (err: any) {
         console.log(`\n  ERROR: Could not read users: ${err.message}\n`);
         rl.close();
         process.exit(1);
@@ -2190,7 +2265,7 @@ async function start() {
         const result = await authService.resetPassword(newPassword);
         console.log(`\n  Password reset successful for: ${result.username}`);
         console.log("  All existing sessions have been invalidated.\n");
-      } catch (err) {
+      } catch (err: any) {
         console.log(`  ERROR: ${err.message}\n`);
         rl.close();
         process.exit(1);
@@ -2233,7 +2308,7 @@ async function start() {
         ).catch((err) =>
           log.debug(`Failed to log player death: ${err.message}`),
         );
-      } catch (err) {
+      } catch (err: any) {
         log.debug(`playerDeath DB log failed: ${err.message}`);
       }
       discordBot
@@ -2290,7 +2365,7 @@ async function start() {
 
         const timeoutMs = 15000;
         const activeServer = await getActiveServer();
-        const processState = await Promise.race([
+        const processState = (await Promise.race([
           activeServer?.isRemote
             ? Promise.resolve({
                 running: rconService.connected || panelBridge.isModConnected(),
@@ -2303,7 +2378,7 @@ async function start() {
               timeoutMs,
             ),
           ),
-        ]);
+        ])) as AnyRecord | null;
         const startupState = classifyStartupProcessState(
           processState,
           Boolean(activeServer?.isRemote),
@@ -2336,7 +2411,7 @@ async function start() {
                 log.info(`RCON connected on attempt ${attempt}`);
                 break;
               }
-            } catch (e) {
+            } catch (e: any) {
               log.debug(
                 `RCON connection attempt ${attempt} failed: ${e.message}`,
               );
@@ -2384,7 +2459,7 @@ async function start() {
 
                 try {
                   const startResult = await serverManager.startServer({
-                    serverId: activeServer?.id ?? null,
+                    serverId: (activeServer?.id as string | null | undefined) ?? null,
                   });
                   if (startResult.success) {
                     log.info("PZ server auto-started successfully");
@@ -2437,7 +2512,7 @@ async function start() {
                           );
                           await new Promise((r) => setTimeout(r, 5000));
                         }
-                      } catch (e) {
+                      } catch (e: any) {
                         log.debug(
                           `Auto-start RCON connection failed: ${e.message}`,
                         );
@@ -2450,7 +2525,7 @@ async function start() {
                       startResult.error,
                     );
                   }
-                } catch (e) {
+                } catch (e: any) {
                   log.error("Error during auto-start:", e.message);
                 } finally {
                   rconService.setServerStarting(false);
@@ -2463,7 +2538,7 @@ async function start() {
           // Even if server isn't running, Panel Bridge might have stale files
           // The bridge will detect the mod isn't responding via status timestamp
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Startup initialization: ${e.message}`);
       }
     })();
@@ -2547,7 +2622,7 @@ async function start() {
                     "Linux launcher and service templates updated; re-run install-linux-service.sh --enable to load the new unit.",
                   );
                 }
-              } catch (activateErr) {
+              } catch (activateErr: any) {
                 log.error(
                   `Could not update Linux launcher/service templates: ${activateErr.message}. ` +
                     `Run: sudo ${path.join(linuxExeDir, "install-linux-service.sh")} --enable`,
@@ -2555,7 +2630,7 @@ async function start() {
               }
             }
           }
-        } catch (error) {
+        } catch (error: any) {
           log.error(
             `Update startup handshake failed [${error.code || "startup_handshake_failed"}]: ${error.message}`,
           );
@@ -2578,7 +2653,7 @@ async function start() {
                   "Version-mismatch rollback occurred but no pre-update database snapshot was recorded to restore.",
                 );
               }
-            } catch (restoreErr) {
+            } catch (restoreErr: any) {
               log.error(
                 `Could not restore the pre-update database snapshot: ${restoreErr.message}`,
               );
@@ -2601,7 +2676,7 @@ async function start() {
               );
             }
           }
-        } catch (err) {
+        } catch (err: any) {
           log.debug(`Mount auto-discovery check failed: ${err.message}`);
         }
 
@@ -2620,7 +2695,7 @@ async function start() {
                 `Low inotify limit (${maxWatches}). File watching may fail. Fix: sudo sysctl -w fs.inotify.max_user_watches=524288`,
               );
             }
-          } catch (e) {
+          } catch (e: any) {
             log.debug(`inotify check skipped: ${e.message}`);
           }
           try {
@@ -2640,7 +2715,7 @@ async function start() {
                 log.info(`glibc ${major}.${minor} detected`);
               }
             }
-          } catch (e) {
+          } catch (e: any) {
             log.debug(`glibc version check skipped: ${e.message}`);
           }
           if (!fs.existsSync("/proc/self/status")) {
@@ -2657,7 +2732,7 @@ async function start() {
                 "32-bit glibc not found (ld-linux.so.2). SteamCMD requires: sudo yum install glibc.i686 libstdc++.i686 (CentOS) or sudo dpkg --add-architecture i386 && sudo apt install lib32gcc-s1 (Ubuntu)",
               );
             }
-          } catch (e) {
+          } catch (e: any) {
             log.debug(`32-bit libs check skipped: ${e.message}`);
           }
         }
@@ -2718,7 +2793,7 @@ async function start() {
     });
 
     listenWithRetry();
-  } catch (error) {
+  } catch (error: any) {
     log.error("Failed to start server:", error);
     process.exit(1);
   }

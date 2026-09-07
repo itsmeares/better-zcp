@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.join(__dirname, "..");
 const REPO_ROOT = path.join(SERVER_DIR, "..", "..");
-const DEBUG_JS_PATH = path.join(SERVER_DIR, "routes", "debug.js");
+const DEBUG_TS_PATH = path.join(SERVER_DIR, "routes", "debug.ts");
 const EN_DEBUG_JSON_PATH = path.join(REPO_ROOT, "apps/panel-client/src/locales/en/debug.json");
 const FR_DEBUG_JSON_PATH = path.join(REPO_ROOT, "apps/panel-client/src/locales/fr/debug.json");
 
@@ -134,8 +134,8 @@ function loadWorldMapChecksNode(localePath) {
   return raw?.diagnostics?.checks?.worldmap ?? {};
 }
 
-const debugJsSource = fs.readFileSync(DEBUG_JS_PATH, "utf8");
-const source = extractWorldMapChecks(debugJsSource);
+const debugTsSource = fs.readFileSync(DEBUG_TS_PATH, "utf8");
+const source = extractWorldMapChecks(debugTsSource);
 const en = flattenWorldMapLocaleChecks(loadWorldMapChecksNode(EN_DEBUG_JSON_PATH));
 const fr = flattenWorldMapLocaleChecks(loadWorldMapChecksNode(FR_DEBUG_JSON_PATH));
 

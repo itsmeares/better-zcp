@@ -1,39 +1,8 @@
 import { describe, it, expect } from "vitest";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const source = fs.readFileSync(
-  path.join(__dirname, "../routes/serverFiles.ts"),
-  "utf8",
-);
-
-function extractFn(name) {
-  const start = source.indexOf(`function ${name}(`);
-  if (start === -1) throw new Error(`${name} not found in serverFiles.ts`);
-  let depth = 0;
-  let i = source.indexOf("{", start);
-  const open = i;
-  for (; i < source.length; i++) {
-    if (source[i] === "{") depth++;
-    else if (source[i] === "}" && --depth === 0) break;
-  }
-  return { header: source.slice(start, open), body: source.slice(open, i + 1) };
-}
-
-const unescapeSrc = extractFn("unescapeLuaString");
-const escapeSrc = extractFn("escapeLuaString");
-const tableStart = source.indexOf("const LUA_UNESCAPES = {");
-const tableEnd = source.indexOf("};", tableStart) + 2;
-const luaTable = source.slice(tableStart, tableEnd);
-
-const { escapeLuaString, unescapeLuaString } = new Function(
-  `${luaTable}
-   ${escapeSrc.header}${escapeSrc.body}
-   ${unescapeSrc.header}${unescapeSrc.body}
-   return { escapeLuaString, unescapeLuaString };`,
-)();
+import {
+  escapeLuaString,
+  unescapeLuaString,
+} from "../routes/serverFiles.ts";
 
 const quote = (v) => `"${escapeLuaString(v)}"`;
 

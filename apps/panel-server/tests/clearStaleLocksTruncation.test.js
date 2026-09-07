@@ -10,7 +10,7 @@ vi.mock("../database/init.ts", async () => {
   return { ...actual, getRoleByName: mockGetRoleByName, getActiveServer };
 });
 
-const { default: router } = await import("../routes/debug.js");
+const { default: router } = await import("../routes/debug.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

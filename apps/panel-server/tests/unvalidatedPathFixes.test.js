@@ -123,7 +123,7 @@ describe("server path validation rejects raw traversal segments", () => {
 
 describe("panelBridge.js /configure and /auto-detect reject an unvalidated path", () => {
   it("POST /configure refuses a relative zomboidSavePath", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const res = createResponse();
     await getRouteHandler(router, "/configure", "post")(
       { body: { zomboidSavePath: "relative/save/path" } },
@@ -137,7 +137,7 @@ describe("panelBridge.js /configure and /auto-detect reject an unvalidated path"
   });
 
   it("POST /configure refuses a protected system directory", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const res = createResponse();
     const systemPath = process.platform === "win32" ? "C:\\Windows\\evil" : "/etc/evil";
     await getRouteHandler(router, "/configure", "post")(
@@ -148,7 +148,7 @@ describe("panelBridge.js /configure and /auto-detect reject an unvalidated path"
   });
 
   it("POST /auto-detect refuses a relative zomboidUserFolder when provided", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const res = createResponse();
     await getRouteHandler(router, "/auto-detect", "post")(
       { body: { serverName: "servertest", zomboidUserFolder: "relative/folder" } },
@@ -162,7 +162,7 @@ describe("panelBridge.js /configure and /auto-detect reject an unvalidated path"
   });
 
   it("POST /configure-direct refuses a relative bridgePath (the isAbsolute check was checking path.resolve()'s result, which is always absolute -- a no-op that never rejected anything)", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const res = createResponse();
     await getRouteHandler(router, "/configure-direct", "post")(
       { body: { bridgePath: "relative/bridge/path" } },
@@ -176,7 +176,7 @@ describe("panelBridge.js /configure and /auto-detect reject an unvalidated path"
   });
 
   it("POST /configure-direct still refuses a protected system directory (pre-existing check, now sharing the same blocklist)", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const res = createResponse();
     const systemPath = process.platform === "win32" ? "C:\\Windows\\evil" : "/etc/evil";
     await getRouteHandler(router, "/configure-direct", "post")(

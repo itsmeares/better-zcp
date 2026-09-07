@@ -6,7 +6,7 @@ import {
   redactRawLogText,
   collectBundleKnownSecrets,
   createRedactingLogStream,
-} from "../routes/debug.js";
+} from "../routes/debug.ts";
 
 
 const ETXTBSY_STACK_TRACE_LINE =

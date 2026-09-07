@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 
-const { buildZomboidPaths } = await import("../routes/debug.js");
+const { buildZomboidPaths } = await import("../routes/debug.ts");
 
 describe("zomboid-paths.json: listings.install / listings.installLogs resolve the actual install DIRECTORY", () => {
   let tempDir;

@@ -21,7 +21,7 @@ const {
   buildDiscordBotStatus,
   buildDockerContainerLogsText,
   buildManagedServiceLogsText,
-} = await import("../routes/debug.js");
+} = await import("../routes/debug.ts");
 const { setDockerClient } = await import("../services/managedContainer.ts");
 
 function fakeReq(services = {}, headers = {}) {

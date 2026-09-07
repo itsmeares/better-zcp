@@ -135,7 +135,7 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
       isRemote: false,
     });
 
-    const { default: router } = await import("../routes/mods.js");
+    const { default: router } = await import("../routes/mods.ts");
     const res = await invokeLastHandler(router, "/validate-config", "get", {});
 
     expect(res.getStatusCode()).toBe(200);
@@ -166,7 +166,7 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
       isRemote: false,
     });
 
-    const { default: router } = await import("../routes/mods.js");
+    const { default: router } = await import("../routes/mods.ts");
     const res = await invokeLastHandler(router, "/current-config", "get", {});
 
     expect(res.getStatusCode()).toBe(200);

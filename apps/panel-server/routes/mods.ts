@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request, type Response } from "express";
 import path from "path";
 import fs from "fs";
 import { promises as fsp } from "fs";
@@ -58,6 +58,7 @@ import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 
 const router = express.Router();
+type AnyRecord = Record<string, any>;
 
 const requireModsManage = requirePermission("mods.manage");
 router.use((req, res, next) => {
@@ -65,8 +66,11 @@ router.use((req, res, next) => {
   return requireModsManage(req, res, next);
 });
 
-const activeIniLocks = new Map();
-export function withIniLock(iniPath, fn) {
+const activeIniLocks = new Map<string, number>();
+export function withIniLock<T>(
+  iniPath: string,
+  fn: () => T | PromiseLike<T>,
+): Promise<T> {
   activeIniLocks.set(iniPath, (activeIniLocks.get(iniPath) || 0) + 1);
   const cleanup = () => {
     const remaining = (activeIniLocks.get(iniPath) || 1) - 1;
@@ -82,12 +86,15 @@ export function getIniLockCount() {
   return activeIniLocks.size;
 }
 
-export function filterOwnedClientModIds(clientModIds, ownedModIds) {
+export function filterOwnedClientModIds(
+  clientModIds: any,
+  ownedModIds: any,
+): string[] {
   const ownedSet = new Set((ownedModIds || []).map(String));
   if (!ownedSet.size || !Array.isArray(clientModIds)) return [];
 
-  const filtered = [];
-  const seen = new Set();
+  const filtered: string[] = [];
+  const seen = new Set<string>();
   for (const rawId of clientModIds) {
     if (typeof rawId !== "string") continue;
     const modId = sanitizeIniValue(rawId).trim();
@@ -100,16 +107,19 @@ export function filterOwnedClientModIds(clientModIds, ownedModIds) {
   return filtered;
 }
 
-function stripBom(str) {
+function stripBom(str: string): string {
   return str.charCodeAt(0) === 0xfeff ? str.slice(1) : str;
 }
 
-function readTextFile(filePath) {
+function readTextFile(filePath: string): string {
   return stripBom(fs.readFileSync(filePath, "utf-8")).replace(/\r\n/g, "\n");
 }
 
 
-function getSanitizedIniPath(serverConfigPath, serverName) {
+function getSanitizedIniPath(
+  serverConfigPath: string | null | undefined,
+  serverName: string | null | undefined,
+): string | null {
   if (!serverConfigPath || typeof serverName !== "string") {
     return null;
   }
@@ -166,7 +176,7 @@ async function getServerPath() {
   return legacyPath || null;
 }
 
-function getModChecker(req, res) {
+function getModChecker(req: Request, res: Response): any {
   const modChecker = req.app.get("modChecker");
   if (!modChecker) {
     res.status(500).json({
@@ -178,7 +188,7 @@ function getModChecker(req, res) {
   return modChecker;
 }
 
-function shouldRefreshTrackedModName(name) {
+function shouldRefreshTrackedModName(name: any): boolean {
   return (
     !name || /^Workshop Mod /i.test(name) || /\[\s*Legacy\s*\]/i.test(name)
   );
@@ -191,7 +201,7 @@ router.get("/status", async (req, res) => {
 
     const status = await modChecker.getStatus();
     res.json(status);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get mod checker status: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -215,7 +225,7 @@ router.get("/tracked", async (req, res) => {
             const workshopIds =
               workshopMatch?.[1]?.split(";").filter(Boolean) || [];
             const configuredIds = new Set(
-              workshopIds.filter((id) => /^\d{1,15}$/.test(id)),
+              workshopIds.filter((id: string) => /^\d{1,15}$/.test(id)),
             );
             const trackedNow = await getTrackedMods();
 
@@ -240,7 +250,7 @@ router.get("/tracked", async (req, res) => {
           }
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`Auto-track from INI skipped: ${e.message}`);
     }
 
@@ -282,7 +292,7 @@ router.get("/tracked", async (req, res) => {
     }
 
     res.json({ mods });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get tracked mods: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -353,7 +363,7 @@ router.post("/refresh-names", async (req, res) => {
               steamResolved++;
             }
           }
-        } catch (e) {
+        } catch (e: any) {
           log.debug(`Steam name refresh batch failed: ${e.message}`);
         }
       }
@@ -367,7 +377,7 @@ router.post("/refresh-names", async (req, res) => {
       totalResolved: diskResolved + steamResolved,
       unresolved: candidates.length - diskResolved - steamResolved,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to refresh mod names: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -401,7 +411,7 @@ router.post("/track", async (req, res) => {
     const result = await modChecker.addModToTrack(workshopIdStr);
     autoSyncCollection("add", workshopIdStr).catch(() => {});
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to add mod to track: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -428,7 +438,7 @@ router.delete("/track/:workshopId", async (req, res) => {
       success: true,
       message: "Mod removed from tracking and added to ignore list",
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to remove tracked mod: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -439,7 +449,7 @@ router.get("/ignored", async (req, res) => {
   try {
     const ignored = await getIgnoredMods();
     res.json(ignored);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get ignored mods: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -462,7 +472,7 @@ router.delete("/ignored/:workshopId", async (req, res) => {
       });
     }
     res.json({ success: true, message: "Mod removed from ignore list" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to un-ignore mod: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -476,7 +486,7 @@ router.delete("/ignored", async (req, res) => {
       message: `Cleared ${removed} ignored mod${removed !== 1 ? "s" : ""}`,
       removed,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to clear ignored mods: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -489,7 +499,7 @@ router.get("/ignored-pairs", async (req, res) => {
   try {
     const pairs = await getIgnoredModPairs();
     res.json(pairs);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get ignored mod pairs: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -523,7 +533,7 @@ router.post("/ignored-pairs", async (req, res) => {
         code: ErrorCode.MODS_IGNORED_PAIR_INVALID,
       });
     res.json({ success: true, pair: entry });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to add ignored mod pair: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -550,7 +560,7 @@ router.delete("/ignored-pairs", async (req, res) => {
         code: ErrorCode.MODS_IGNORED_PAIR_NOT_FOUND,
       });
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to remove ignored mod pair: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -563,7 +573,7 @@ router.post("/check-updates", async (req, res) => {
 
     const result = await modChecker.checkForUpdates();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to check for updates: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -574,7 +584,7 @@ router.get("/server-mods", async (req, res) => {
     const serverManager = req.app.get("serverManager");
     const mods = await serverManager.getModList();
     res.json({ mods });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get server mods: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -585,7 +595,7 @@ router.get("/check-rcon", async (req, res) => {
     const rconService = req.app.get("rconService");
     const result = await rconService.checkModsNeedUpdate();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to check mods via RCON: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -606,7 +616,7 @@ router.post("/start", async (req, res) => {
       });
     }
     res.json({ success: true, message: "Mod checker started" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to start mod checker: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -619,7 +629,7 @@ router.post("/stop", async (req, res) => {
 
     modChecker.stop();
     res.json({ success: true, message: "Mod checker stopped" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to stop mod checker: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -650,7 +660,7 @@ router.put("/interval", async (req, res) => {
       success: true,
       message: `Check interval set to ${intervalMs}ms`,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to set check interval: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -670,7 +680,7 @@ router.post("/auto-restart", async (req, res) => {
     }
 
     if (enabled) {
-      await modChecker.setUpdateCallback(async (updatedMods) => {
+      await modChecker.setUpdateCallback(async (updatedMods: any) => {
         const handled = await modChecker.handleModUpdate(updatedMods);
         if (!handled?.success) {
           log.warn(
@@ -684,7 +694,7 @@ router.post("/auto-restart", async (req, res) => {
     }
 
     res.json({ success: true, autoRestart: enabled });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to configure auto-restart: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -702,7 +712,7 @@ router.put("/restart-options", async (req, res) => {
       checkInterval,
     } = req.body || {};
 
-    const inRange = (v, min, max) =>
+    const inRange = (v: any, min: number, max: number) =>
       parseBoundedInteger(v, null, min, max) !== null;
     if (warningMinutes !== undefined && !inRange(warningMinutes, 0, 30)) {
       return res.status(400).json({
@@ -716,12 +726,13 @@ router.put("/restart-options", async (req, res) => {
         code: ErrorCode.MODS_RESTART_MAX_DELAY_MINUTES_INVALID,
       });
     }
+    const parsedCheckInterval =
+      checkInterval === undefined
+        ? null
+        : parseBoundedInteger(checkInterval, null, 60_000, 120 * 60 * 1000);
     if (
       checkInterval !== undefined &&
-      (!inRange(checkInterval, 60_000, 120 * 60 * 1000) ||
-        parseBoundedInteger(checkInterval, null, 60_000, 120 * 60 * 1000) %
-          60_000 !==
-          0)
+      (parsedCheckInterval === null || parsedCheckInterval % 60_000 !== 0)
     ) {
       return res.status(400).json({
         error:
@@ -758,7 +769,7 @@ router.put("/restart-options", async (req, res) => {
         checkInterval: status.checkInterval,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to set restart options: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -779,7 +790,7 @@ router.get("/workshop-status", async (req, res) => {
         ? "Workshop ACF file found - mod updates can be detected automatically"
         : "Workshop ACF file not found - ensure server install path is correct",
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get workshop status: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -799,7 +810,7 @@ router.post("/cancel-pending-restart", async (req, res) => {
 
     modChecker.cancelPendingRestart();
     res.json({ success: true, message: "Pending restart cancelled" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to cancel pending restart: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -879,7 +890,7 @@ router.post("/sync-from-server", async (req, res) => {
             );
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         log.warn(
           `sync-from-server: Steam API lookup failed, proceeding without type filter: ${e.message}`,
         );
@@ -906,7 +917,7 @@ router.post("/sync-from-server", async (req, res) => {
           steamTitle || nameFromDisk || `Workshop Mod ${workshopId}`;
         await addTrackedMod(workshopId, modName);
         synced++;
-      } catch (e) {
+      } catch (e: any) {
         log.warn(`Failed to sync mod ${workshopIds[i]}: ${e.message}`);
       }
     }
@@ -927,7 +938,7 @@ router.post("/sync-from-server", async (req, res) => {
       skippedNonMod,
       iniPath,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to sync mods from server: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -937,7 +948,7 @@ router.post("/clear-updates", async (req, res) => {
   try {
     await clearModUpdates();
     res.json({ success: true, message: "Update flags cleared" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to clear mod updates: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -949,7 +960,7 @@ router.get("/collection/diff", async (req, res) => {
     const tracked = await getTrackedMods();
     const ids = tracked.map((m) => String(m.workshop_id));
     const diff = await computeCollectionDiff(ids);
-    const configuredWorkshopIds = new Set();
+    const configuredWorkshopIds = new Set<string>();
     let serverConfigRead = false;
     try {
       const serverConfigPath = await getServerConfigPath();
@@ -971,14 +982,14 @@ router.get("/collection/diff", async (req, res) => {
           serverConfigRead = true;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       serverConfigRead = false;
       log.debug(`Collection server membership check skipped: ${error.message}`);
     }
 
-    let items = [];
+    let items: AnyRecord[] = [];
     if (diff.ok) {
-      const trackedNames = new Map(
+      const trackedNames = new Map<string, string | null>(
         tracked.map((m) => {
           const workshopId = String(m.workshop_id);
           const name = typeof m.name === "string" ? m.name.trim() : "";
@@ -986,23 +997,25 @@ router.get("/collection/diff", async (req, res) => {
           return [workshopId, isPlaceholder ? null : name || null];
         }),
       );
-      const inCollection = new Set(diff.inCollection.map(String));
-      const allIds = new Set([
+      const inCollection = new Set<string>(diff.inCollection.map(String));
+      const allIds = new Set<string>([
         ...trackedNames.keys(),
         ...inCollection,
         ...configuredWorkshopIds,
       ]);
-      const needTitles = [...allIds].filter((id) => !trackedNames.get(id));
+      const needTitles = [...allIds].filter(
+        (id: string) => !trackedNames.get(id),
+      );
       const titleMap =
         needTitles.length > 0
           ? await fetchPublishedFileTitles(needTitles)
-          : new Map();
-      items = [...allIds].map((id) => {
+          : new Map<string, string>();
+      items = [...allIds].map((id: string) => {
         const inTracked = trackedNames.has(id);
         const inColl = inCollection.has(id);
         const inServer = configuredWorkshopIds.has(id);
         const present = serverConfigRead ? inServer : inTracked;
-        let status;
+        let status: "synced" | "to-add" | "collection-only" | "tracked-only";
         if (present && inColl) status = "synced";
         else if (present && !inColl) status = "to-add";
         else if (!present && inColl) status = "collection-only";
@@ -1016,13 +1029,13 @@ router.get("/collection/diff", async (req, res) => {
           inServer,
         };
       });
-      const order = {
+      const order: Record<string, number> = {
         "to-add": 0,
         "collection-only": 1,
         "tracked-only": 2,
         synced: 3,
       };
-      items.sort((a, b) => {
+      items.sort((a: AnyRecord, b: AnyRecord) => {
         if (order[a.status] !== order[b.status])
           return order[a.status] - order[b.status];
         const an = (a.name || a.workshopId).toLowerCase();
@@ -1033,7 +1046,7 @@ router.get("/collection/diff", async (req, res) => {
 
     const { sessionId: sidVal, loginSecure: lsVal } =
       await getSteamSessionCredentials();
-    const looksMasked = (v) =>
+    const looksMasked = (v: any) =>
       typeof v === "string" && (v.startsWith("••••••••") || /^[•*]+$/.test(v));
     const hasCredentials =
       typeof sidVal === "string" &&
@@ -1074,7 +1087,7 @@ router.get("/collection/diff", async (req, res) => {
       trackedCount: ids.length,
       serverConfigRead,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Collection diff failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1103,7 +1116,7 @@ router.post("/collection/items", async (req, res) => {
         .status(502)
         .json({ error: r.error || "Steam rejected the change" });
     res.json({ ok: true, workshopId, action: "add" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Collection add failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1131,7 +1144,7 @@ router.delete("/collection/items/:workshopId", async (req, res) => {
         .status(502)
         .json({ error: r.error || "Steam rejected the change" });
     res.json({ ok: true, workshopId, action: "remove" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Collection remove failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1155,7 +1168,7 @@ router.delete("/collection/tracking/:workshopId", async (req, res) => {
         ? "Mod is no longer tracked; Steam collection and server configuration were unchanged"
         : "Mod was not tracked",
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Collection tracking removal failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1179,11 +1192,11 @@ router.post("/collection/sync", async (req, res) => {
         .json({ error: diff.error || "Could not read collection" });
     }
 
-    const added = [];
-    const errors = [];
+    const added: string[] = [];
+    const errors: AnyRecord[] = [];
     let staleSession = false;
 
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
     const STALE_RE = /session expired|HTTP 302|HTTP 401|HTTP 403/i;
 
     for (const id of diff.toAdd) {
@@ -1217,7 +1230,7 @@ router.post("/collection/sync", async (req, res) => {
             ? "Steam session expired \u2014 paste fresh cookies and try again"
             : `Steam rejected ${detailedErrors.length} item${detailedErrors.length !== 1 ? "s" : ""}`,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Collection sync failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1256,7 +1269,7 @@ router.post("/collection/test", async (req, res) => {
         ? `Collection "${contents.title}" found (${contents.items.length} items). Write access is verified on first sync.`
         : `Collection found (${contents.items.length} items). Write access is verified on first sync.`,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Collection test failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1267,7 +1280,7 @@ router.get("/collection/browsers", async (req, res) => {
   try {
     const info = listAvailableBrowsers();
     res.json(info);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`List browsers failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1297,7 +1310,7 @@ router.post("/collection/extract-cookies", async (req, res) => {
       saved: true,
       notes: result.notes,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Extract cookies failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1341,10 +1354,10 @@ router.post("/collection/save-cookies", async (req, res) => {
     await setSteamSessionCredentials(sessionid, loginSecure);
 
     log.info(
-      `Steam cookies updated via manual entry (user: ${req.user?.username || "unknown"})`,
+      `Steam cookies updated via manual entry (user: ${(req.user as AnyRecord)?.username || "unknown"})`,
     );
     res.json({ ok: true, message: "Cookies saved" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Saving Steam cookies failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1395,7 +1408,7 @@ router.post("/import-collection", async (req, res) => {
           signal: controller.signal,
         },
       );
-    } catch (error) {
+    } catch (error: any) {
       if (error.name === "AbortError") {
         return res.status(504).json({
           error: "Steam collection lookup timed out. Please try again.",
@@ -1432,13 +1445,15 @@ router.post("/import-collection", async (req, res) => {
     }
 
     const WORKSHOP_FILE_TYPE_COLLECTION = 2;
-    const children = collection.children || [];
+    const children: AnyRecord[] = Array.isArray(collection.children)
+      ? collection.children
+      : [];
     const subCollectionIds = children
-      .filter((c) => Number(c.filetype) === WORKSHOP_FILE_TYPE_COLLECTION)
-      .map((c) => c.publishedfileid);
+      .filter((c: AnyRecord) => Number(c.filetype) === WORKSHOP_FILE_TYPE_COLLECTION)
+      .map((c: AnyRecord) => String(c.publishedfileid));
     const modIds = children
-      .filter((c) => Number(c.filetype) !== WORKSHOP_FILE_TYPE_COLLECTION)
-      .map((c) => c.publishedfileid);
+      .filter((c: AnyRecord) => Number(c.filetype) !== WORKSHOP_FILE_TYPE_COLLECTION)
+      .map((c: AnyRecord) => String(c.publishedfileid));
 
     if (modIds.length === 0) {
       return res.json({
@@ -1451,7 +1466,7 @@ router.post("/import-collection", async (req, res) => {
 
     const modFormData = new URLSearchParams();
     modFormData.append("itemcount", modIds.length.toString());
-    modIds.forEach((id, index) => {
+    modIds.forEach((id: string, index: number) => {
       modFormData.append(`publishedfileids[${index}]`, id);
     });
 
@@ -1480,21 +1495,25 @@ router.post("/import-collection", async (req, res) => {
     const allDetails = modsData.response?.publishedfiledetails || [];
 
     const mods = allDetails
-      .filter((m) => m.result === 1)
-      .map((m) => ({
-        workshopId: m.publishedfileid,
+      .filter((m: AnyRecord) => m.result === 1)
+      .map((m: AnyRecord) => ({
+        workshopId: String(m.publishedfileid),
         name: m.title,
         description: m.description?.substring(0, 200),
-        tags: m.tags?.map((t) => t.tag) || [],
+        tags: m.tags?.map((t: AnyRecord) => t.tag) || [],
         isMap:
           m.tags?.some(
-            (t) =>
+            (t: AnyRecord) =>
               t.tag?.toLowerCase() === "map" || t.tag?.toLowerCase() === "maps",
           ) || false,
       }));
 
-    const resolvedIds = new Set(mods.map((m) => m.workshopId));
-    const skippedModIds = modIds.filter((id) => !resolvedIds.has(id));
+    const resolvedIds = new Set<string>(
+      mods.map((m: AnyRecord) => m.workshopId),
+    );
+    const skippedModIds = modIds.filter(
+      (id: string) => !resolvedIds.has(id),
+    );
 
     log.info(
       `Found ${mods.length} mods in collection ${collectionId}` +
@@ -1514,7 +1533,7 @@ router.post("/import-collection", async (req, res) => {
       subCollectionIds,
       skippedModIds,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to import collection: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1577,16 +1596,16 @@ router.post("/get-mod-info", async (req, res) => {
       workshopId: modInfo.publishedfileid,
       name: modInfo.title,
       description: modInfo.description?.substring(0, 500),
-      tags: modInfo.tags?.map((t) => t.tag) || [],
+      tags: modInfo.tags?.map((t: AnyRecord) => t.tag) || [],
       isMap:
         modInfo.tags?.some(
-          (t) =>
+          (t: AnyRecord) =>
             t.tag?.toLowerCase() === "map" || t.tag?.toLowerCase() === "maps",
         ) || false,
       timeUpdated: modInfo.time_updated,
       timeCreated: modInfo.time_created,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get mod info: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1799,7 +1818,7 @@ router.post("/write-to-ini", async (req, res) => {
       mapFolders: detectedMapFolders,
       ...(backupWarning ? { backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to write mods to ini: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1860,7 +1879,7 @@ router.get("/current-config", async (req, res) => {
 
     const serverPath = await getServerPath();
     const modIdSet = new Set(modIds);
-    const workshopModMap = {};
+    const workshopModMap: Record<string, AnyRecord[]> = {};
     if (serverPath) {
       for (const wsId of workshopIds) {
         const details = getModDetailsFromWorkshop(wsId, serverPath);
@@ -1883,7 +1902,7 @@ router.get("/current-config", async (req, res) => {
       workshopModMap,
       duplicateKeys,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get current mod config: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2005,7 +2024,7 @@ router.post("/toggle-mod-id", async (req, res) => {
       totalMods: result.totalMods,
       ...(result.backupWarning ? { backupWarning: result.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to toggle mod ID: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2145,7 +2164,7 @@ router.post("/batch-toggle-mod-ids", async (req, res) => {
       totalMods: result.totalMods,
       ...(result.backupWarning ? { backupWarning: result.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to batch toggle mod IDs: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2228,8 +2247,8 @@ router.post("/add-to-ini", async (req, res) => {
       }
     }
 
-    let addedMapFolders = [];
-    let modMapFolders = [];
+    let addedMapFolders: string[] = [];
+    let modMapFolders: string[] = [];
     if (serverPath) {
       modMapFolders = findMapFoldersFromWorkshop(
         String(workshopId),
@@ -2335,13 +2354,13 @@ router.post("/add-to-ini", async (req, res) => {
         : 'Mod ID could not be auto-detected. You may need to add it manually or use "Sync Mod IDs" after the mod is downloaded.',
       ...(result.backupWarning ? { backupWarning: result.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to add mod to ini: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
-async function fetchModIdFromWorkshop(workshopId) {
+async function fetchModIdFromWorkshop(workshopId: string): Promise<string | null> {
   try {
     const fetchAbort = new AbortController();
     const fetchTimer = setTimeout(() => fetchAbort.abort(), 15000);
@@ -2428,7 +2447,7 @@ async function fetchModIdFromWorkshop(workshopId) {
       `Could not extract Mod ID from workshop ${workshopId} description. Title: "${title}"`,
     );
     return null;
-  } catch (error) {
+  } catch (error: any) {
     log.error(
       `Error fetching mod ID from workshop ${workshopId}: ${error.message}`,
     );
@@ -2436,7 +2455,7 @@ async function fetchModIdFromWorkshop(workshopId) {
   }
 }
 
-function getWorkshopPaths(workshopId, serverPath) {
+function getWorkshopPaths(workshopId: string, serverPath: string): string[] {
   const home = os.homedir();
   const paths = [
     path.join(
@@ -2508,7 +2527,7 @@ function getWorkshopPaths(workshopId, serverPath) {
   return paths;
 }
 
-function isValidMapFolder(mapFolderPath) {
+function isValidMapFolder(mapFolderPath: string): boolean {
   try {
     const files = fs.readdirSync(mapFolderPath);
     for (const file of files) {
@@ -2525,17 +2544,20 @@ function isValidMapFolder(mapFolderPath) {
       }
     }
     return false;
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Error validating map folder ${mapFolderPath}: ${e.message}`);
     return false;
   }
 }
 
-function findMapFoldersFromWorkshop(workshopId, serverPath) {
-  const mapFolders = [];
+function findMapFoldersFromWorkshop(
+  workshopId: string,
+  serverPath: string,
+): string[] {
+  const mapFolders: string[] = [];
   const possiblePaths = getWorkshopPaths(workshopId, serverPath);
 
-  function scanMapsDir(mapsPath) {
+  function scanMapsDir(mapsPath: string): void {
     if (!fs.existsSync(mapsPath)) return;
     const mapEntries = fs.readdirSync(mapsPath, { withFileTypes: true });
     for (const mapEntry of mapEntries) {
@@ -2585,7 +2607,7 @@ function findMapFoldersFromWorkshop(workshopId, serverPath) {
       scanMapsDir(path.join(workshopPath, "media", "maps"));
 
       if (mapFolders.length > 0) return mapFolders;
-    } catch (e) {
+    } catch (e: any) {
       // Continue to next path
     }
   }
@@ -2593,17 +2615,27 @@ function findMapFoldersFromWorkshop(workshopId, serverPath) {
   return mapFolders;
 }
 
-function findAllModIdsFromWorkshop(workshopId, serverPath) {
+function findAllModIdsFromWorkshop(
+  workshopId: string,
+  serverPath: string,
+): string[] {
   const mods = getModDetailsFromWorkshop(workshopId, serverPath);
   return mods.map((m) => m.id);
 }
 
-function findModIdFromWorkshop(workshopId, serverPath) {
+function findModIdFromWorkshop(
+  workshopId: string,
+  serverPath: string,
+): string | null {
   const mods = getModDetailsFromWorkshop(workshopId, serverPath);
   return mods.length > 0 ? mods[0].id : null;
 }
 
-function isModIdVerifiedOnDisk(modId, currentWorkshopIds, serverPath) {
+function isModIdVerifiedOnDisk(
+  modId: string,
+  currentWorkshopIds: string[],
+  serverPath: string | null,
+): boolean {
   if (!serverPath || !currentWorkshopIds?.length) return false;
   for (const wsId of currentWorkshopIds) {
     try {
@@ -2618,8 +2650,12 @@ function isModIdVerifiedOnDisk(modId, currentWorkshopIds, serverPath) {
   return false;
 }
 
-function sanitizeModIdListWithDiskBypass(ids, currentWorkshopIds, serverPath) {
-  const out = [];
+function sanitizeModIdListWithDiskBypass(
+  ids: any,
+  currentWorkshopIds: string[],
+  serverPath: string | null,
+): string {
+  const out: string[] = [];
   for (const raw of ids || []) {
     const v = sanitizeIniValue(raw);
     if (!v) continue;
@@ -2635,12 +2671,15 @@ function sanitizeModIdListWithDiskBypass(ids, currentWorkshopIds, serverPath) {
 }
 
 
-function parseModInfoVersionFolder(folderName) {
+function parseModInfoVersionFolder(folderName: string): number[] | null {
   if (!/^\d+(?:\.\d+)*$/.test(folderName)) return null;
   return folderName.split(".").map((part) => Number.parseInt(part, 10));
 }
 
-function compareModInfoCandidatePaths(leftCandidate, rightCandidate) {
+function compareModInfoCandidatePaths(
+  leftCandidate: AnyRecord,
+  rightCandidate: AnyRecord,
+): number {
   const leftVersion = leftCandidate.version;
   const rightVersion = rightCandidate.version;
 
@@ -2659,14 +2698,20 @@ function compareModInfoCandidatePaths(leftCandidate, rightCandidate) {
   return leftCandidate.order - rightCandidate.order;
 }
 
-export function getModDetailsFromWorkshop(workshopId, serverPath) {
-  const mods = [];
-  const seenIds = new Set();
+export function getModDetailsFromWorkshop(
+  workshopId: string,
+  serverPath: string,
+): AnyRecord[] {
+  const mods: AnyRecord[] = [];
+  const seenIds = new Set<string>();
   const possiblePaths = getWorkshopPaths(workshopId, serverPath);
 
-  function parseModInfoFile(modInfoPath) {
-    const ids = [];
-    const meta = {};
+  function parseModInfoFile(modInfoPath: string): {
+    ids: string[];
+    meta: AnyRecord;
+  } {
+    const ids: string[] = [];
+    const meta: AnyRecord = {};
     let content;
     try {
       content = readTextFile(modInfoPath);
@@ -2704,7 +2749,7 @@ export function getModDetailsFromWorkshop(workshopId, serverPath) {
         if (!entry.isDirectory()) continue;
 
         const modDir = path.join(searchPath, entry.name);
-        const candidatePaths = [
+        const candidatePaths: AnyRecord[] = [
           {
             path: path.join(modDir, "mod.info"),
             version: null,
@@ -2715,9 +2760,9 @@ export function getModDetailsFromWorkshop(workshopId, serverPath) {
           const subfolders = fs
             // codeql[js/path-injection] workshopId is validated as /^\d{1,15}$/ at this file's POST /inspect-workshop-item handler before reaching getWorkshopPaths/getModDetailsFromWorkshop/findMapFoldersFromWorkshop -- CodeQL's only tracked source for this sink is that numeric-validated field.
             .readdirSync(modDir, { withFileTypes: true })
-            .filter((sub) => sub.isDirectory())
-            .map((sub) => sub.name)
-            .sort((leftName, rightName) =>
+            .filter((sub: fs.Dirent) => sub.isDirectory())
+            .map((sub: fs.Dirent) => sub.name)
+            .sort((leftName: string, rightName: string) =>
               leftName.localeCompare(rightName, undefined, {
                 numeric: true,
                 sensitivity: "base",
@@ -2730,13 +2775,13 @@ export function getModDetailsFromWorkshop(workshopId, serverPath) {
               order: subIndex + 1,
             });
           }
-        } catch (e) {
+        } catch (e: any) {
           log.debug(`Failed to scan subdirs for ${modDir}: ${e.message}`);
         }
 
         for (const candidate of candidatePaths
           // codeql[js/path-injection] workshopId is validated as /^\d{1,15}$/ at this file's POST /inspect-workshop-item handler before reaching getWorkshopPaths/getModDetailsFromWorkshop/findMapFoldersFromWorkshop -- CodeQL's only tracked source for this sink is that numeric-validated field.
-          .filter((item) => fs.existsSync(item.path))
+          .filter((item: AnyRecord) => fs.existsSync(item.path))
           .sort(compareModInfoCandidatePaths)) {
           const { ids, meta } = parseModInfoFile(candidate.path);
           for (const id of ids) {
@@ -2752,7 +2797,7 @@ export function getModDetailsFromWorkshop(workshopId, serverPath) {
               require: meta.require
                 ? meta.require
                     .split(/[,;]/)
-                    .map((s) => s.trim().replace(/^\\+/, ""))
+                    .map((s: string) => s.trim().replace(/^\\+/, ""))
                     .filter(Boolean)
                 : [],
             });
@@ -2761,7 +2806,7 @@ export function getModDetailsFromWorkshop(workshopId, serverPath) {
       }
 
       if (mods.length > 0) return mods;
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`Error scanning path ${searchPath}: ${e.message}`);
     }
   }
@@ -2769,8 +2814,12 @@ export function getModDetailsFromWorkshop(workshopId, serverPath) {
   return mods;
 }
 
-export function scoreWorkshopDependencyMatch(query, modId, modName) {
-  const normalize = (value) =>
+export function scoreWorkshopDependencyMatch(
+  query: any,
+  modId: any,
+  modName: any,
+): AnyRecord {
+  const normalize = (value: any) =>
     String(value || "")
       .toLowerCase()
       .replace(/[\s_.\-+\[\]()]/g, "");
@@ -2845,7 +2894,7 @@ router.post("/inspect-workshop-item", async (req, res) => {
       mapFolders,
       count: mods.length,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to inspect workshop item: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -2916,8 +2965,8 @@ router.post("/remove-from-ini", async (req, res) => {
 
       workshopIds = workshopIds.filter((id) => id !== String(workshopId));
 
-      let removedModIds = [];
-      let ownedModIds = [];
+      let removedModIds: string[] = [];
+      let ownedModIds: string[] = [];
 
       if (serverPath) {
         const allModIds = findAllModIdsFromWorkshop(
@@ -3053,7 +3102,7 @@ router.post("/remove-from-ini", async (req, res) => {
       remainingMods: lockResult.remainingMods,
       ...(lockResult.backupWarning ? { backupWarning: lockResult.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to remove mod from ini: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3077,7 +3126,7 @@ router.post("/batch-remove", async (req, res) => {
       });
     }
 
-    const validIds = [];
+    const validIds: string[] = [];
     for (const id of workshopIds) {
       const str = String(id);
       if (/^\d{1,15}$/.test(str)) validIds.push(str);
@@ -3102,7 +3151,7 @@ router.post("/batch-remove", async (req, res) => {
     const serverPath = await getServerPath();
     const serverName = await getServerName();
 
-    let iniResult = { removed: 0, skipped: 0 };
+    let iniResult: AnyRecord = { removed: 0, skipped: 0 };
     let iniEditApplied = false;
 
     if (serverConfigPath && serverName) {
@@ -3135,8 +3184,8 @@ router.post("/batch-remove", async (req, res) => {
             const mapMatch = content.match(/^[ \t]*Map[ \t]*=[ \t]*(.*)$/m);
             let iniMaps = mapMatch?.[1]?.split(";").filter(Boolean) || [];
 
-            const modIdsToRemove = new Set();
-            const mapFoldersToRemove = new Set();
+            const modIdsToRemove = new Set<string>();
+            const mapFoldersToRemove = new Set<string>();
 
             for (const wsId of validIds) {
               if (serverPath) {
@@ -3201,7 +3250,7 @@ router.post("/batch-remove", async (req, res) => {
           await removeTrackedMod(wsId);
           await addIgnoredMod(wsId, modNameMap.get(wsId) || null);
           dbResults.removed++;
-        } catch (e) {
+        } catch (e: any) {
           dbResults.failed++;
           log.debug(`DB removal failed for ${wsId}: ${e.message}`);
         }
@@ -3241,7 +3290,7 @@ router.post("/batch-remove", async (req, res) => {
             code: ErrorCode.MODS_BATCH_REMOVE_INI_NOT_ACCESSIBLE,
           }),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Batch removal failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3288,7 +3337,7 @@ router.post("/repair-map-entries", async (req, res) => {
       const workshopMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
       const workshopIds = workshopMatch?.[1]?.split(";").filter(Boolean) || [];
 
-      const validMapFolders = new Set();
+      const validMapFolders = new Set<string>();
       for (const wsId of workshopIds) {
         const folders = findMapFoldersFromWorkshop(wsId, serverPath);
         for (const f of folders) validMapFolders.add(f);
@@ -3296,7 +3345,7 @@ router.post("/repair-map-entries", async (req, res) => {
       validMapFolders.add("Muldraugh, KY");
 
       const validEntries = [];
-      const removedEntries = [];
+      const removedEntries: string[] = [];
       for (const entry of currentMaps) {
         if (
           validMapFolders.has(entry) ||
@@ -3313,11 +3362,11 @@ router.post("/repair-map-entries", async (req, res) => {
         }
       }
 
-      const addedEntries = [];
+      const addedEntries: string[] = [];
       for (const folder of validMapFolders) {
         if (folder === "Muldraugh, KY") continue;
         if (!validEntries.includes(folder)) {
-          const mulIdx = validEntries.findIndex((e) => e.includes("Muldraugh"));
+          const mulIdx = validEntries.findIndex((e: string) => e.includes("Muldraugh"));
           if (mulIdx >= 0) {
             validEntries.splice(mulIdx, 0, folder);
           } else {
@@ -3327,11 +3376,11 @@ router.post("/repair-map-entries", async (req, res) => {
         }
       }
 
-      if (!validEntries.some((e) => e.includes("Muldraugh"))) {
+      if (!validEntries.some((e: string) => e.includes("Muldraugh"))) {
         validEntries.push("Muldraugh, KY");
       }
 
-      let backupWarning = null;
+      let backupWarning: string | null = null;
       if (removedEntries.length > 0 || addedEntries.length > 0) {
         const newMapLine = validEntries.join(";");
         if (mapMatch) {
@@ -3352,7 +3401,7 @@ router.post("/repair-map-entries", async (req, res) => {
       return { removedEntries, addedEntries, validEntries, backupWarning };
     });
 
-    const parts = [];
+    const parts: string[] = [];
     if (lockResult.removedEntries.length > 0)
       parts.push(
         `Removed ${lockResult.removedEntries.length} invalid: ${lockResult.removedEntries.join(", ")}`,
@@ -3373,7 +3422,7 @@ router.post("/repair-map-entries", async (req, res) => {
           : "All map entries are valid. No changes needed.",
       ...(lockResult.backupWarning ? { backupWarning: lockResult.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to repair map entries: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3411,14 +3460,23 @@ router.post("/deduplicate-mod-ids", async (req, res) => {
       });
     }
 
-    const lockResult = await withIniLock(iniPath, async () => {
+    type DedupResult =
+      | { noChanges: true; deduped: string[] }
+      | {
+          noChanges: false;
+          removed: string[];
+          deduped: string[];
+          backupWarning: string | null;
+        };
+    const lockResult = await withIniLock<DedupResult>(iniPath, async () => {
       let content = readTextFile(iniPath);
       const modsMatch = content.match(/^[ \t]*Mods[ \t]*=[ \t]*(.*)$/m);
-      const currentMods = modsMatch?.[1]?.split(";").filter(Boolean) || [];
+      const currentMods: string[] =
+        modsMatch?.[1]?.split(";").filter(Boolean) || [];
 
-      const seen = new Map();
-      const deduped = [];
-      const removed = [];
+      const seen = new Map<string, number>();
+      const deduped: string[] = [];
+      const removed: string[] = [];
       for (const modId of currentMods) {
         const count = (seen.get(modId) || 0) + 1;
         seen.set(modId, count);
@@ -3466,7 +3524,7 @@ router.post("/deduplicate-mod-ids", async (req, res) => {
       message: `Removed ${lockResult.removed.length} duplicate mod ID${lockResult.removed.length !== 1 ? "s" : ""}: ${uniqueDupes.join(", ")}`,
       ...(lockResult.backupWarning ? { backupWarning: lockResult.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to deduplicate mod IDs: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3605,7 +3663,7 @@ router.post("/add-missing-dep", async (req, res) => {
       message: `Added ${resolvedModId || wsIdStr} to server config.${mapFolders.length > 0 ? ` Map folders: ${mapFolders.join(", ")}` : ""}`,
       ...(lockResult.backupWarning ? { backupWarning: lockResult.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to add missing dep: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3666,7 +3724,7 @@ router.post("/add-all-resolved-deps", async (req, res) => {
       });
     }
 
-    const resolvedDeps = [];
+    const resolvedDeps: AnyRecord[] = [];
     for (const dep of deps) {
       const wsId = String(dep.workshopId);
       let modId = dep.modId || null;
@@ -3674,7 +3732,7 @@ router.post("/add-all-resolved-deps", async (req, res) => {
       if (!modId) {
         try {
           modId = await fetchModIdFromWorkshop(wsId);
-        } catch (e) {
+        } catch (e: any) {
           log.debug(`fetchModIdFromWorkshop failed for ${wsId}: ${e.message}`);
         }
       }
@@ -3768,7 +3826,7 @@ router.post("/add-all-resolved-deps", async (req, res) => {
       message: `Added ${deps.length} dependencies to server config.`,
       ...(lockResult.backupWarning ? { backupWarning: lockResult.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to batch add deps: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -3804,24 +3862,24 @@ router.post("/search-workshop-mods", async (req, res) => {
         : "";
     const serverPath = await getServerPath();
 
-    const buildSearchVariants = (raw, parent) => {
-      const variants = [];
-      const seen = new Set();
-      const push = (v) => {
+    const buildSearchVariants = (raw: string, parent: string): string[] => {
+      const variants: string[] = [];
+      const seen = new Set<string>();
+      const push = (v: string) => {
         if (!v) return;
         const s = v.trim().toLowerCase();
         if (s.length < 3 || seen.has(s)) return;
         seen.add(s);
         variants.push(v.trim());
       };
-      const stripSuffixes = (s) =>
+      const stripSuffixes = (s: string) =>
         s
           .replace(
             /[_-]?(b4[12]fix|b4[12]_fix|b4[12]|fix(es)?|patch|patches|update|updates|v\d+(\.\d+)*|rev\d+|reupload|continued|continuation|port|ported|edition)$/gi,
             "",
           )
           .trim();
-      const humanize = (s) =>
+      const humanize = (s: string) =>
         s
           .replace(/([a-z])([A-Z])/g, "$1 $2")
           .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
@@ -3898,11 +3956,11 @@ router.post("/search-workshop-mods", async (req, res) => {
                   }
                 }
               }
-            } catch (e) {
+            } catch (e: any) {
               log.debug(`Error scanning mod entry during search: ${e.message}`);
             }
           }
-        } catch (e) {
+        } catch (e: any) {
           log.debug(`Error reading workshop dir during search: ${e.message}`);
         }
         if (localResults.length >= 20) break;
@@ -3954,7 +4012,7 @@ router.post("/search-workshop-mods", async (req, res) => {
               });
             }
           }
-        } catch (e) {
+        } catch (e: any) {
           log.debug(`Steam collection lookup failed (non-fatal): ${e.message}`);
         }
       }
@@ -3972,7 +4030,7 @@ router.post("/search-workshop-mods", async (req, res) => {
         ) {
           steamSearchEnabled = true;
           const lowerOriginal = searchTerm.toLowerCase();
-          const scoreCandidate = (title) => {
+    const scoreCandidate = (title: any) => {
             const t = (title || "").toLowerCase();
             if (!t) return 0;
             if (t === lowerOriginal) return 1000;
@@ -4041,7 +4099,7 @@ router.post("/search-workshop-mods", async (req, res) => {
                   matchedVariant: variant,
                 });
               }
-            } catch (e) {
+            } catch (e: any) {
               log.debug?.(
                 `Steam text search variant "${variant}" failed (non-fatal): ${e.message}`,
               );
@@ -4062,7 +4120,7 @@ router.post("/search-workshop-mods", async (req, res) => {
             });
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug?.(`Steam text search failed (non-fatal): ${e.message}`);
       }
     }
@@ -4076,7 +4134,7 @@ router.post("/search-workshop-mods", async (req, res) => {
       results: [...localResults, ...steamResults],
       searchUrl: `https://steamcommunity.com/workshop/browse/?appid=108600&searchtext=${encodeURIComponent(searchTerm)}`,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Workshop search failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4139,13 +4197,13 @@ router.post("/resolve-missing-deps", async (req, res) => {
                     break;
                   }
                 }
-              } catch (e) {
+              } catch (e: any) {
                 log.debug(
                   `Error reading mod details during dep resolution: ${e.message}`,
                 );
               }
             }
-          } catch (e) {
+          } catch (e: any) {
             log.debug(
               `Error reading workshop path during dep scan: ${e.message}`,
             );
@@ -4160,7 +4218,7 @@ router.post("/resolve-missing-deps", async (req, res) => {
       deps: resolved,
       resolvedCount: resolved.filter((d) => d.resolvedWorkshopId).length,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to resolve missing deps: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4215,7 +4273,7 @@ router.post("/sync-mod-ids", async (req, res) => {
           const fallbackId = await fetchModIdFromWorkshop(workshopId);
           resolvedMap.set(workshopId, { availableModIds: [], fallbackId });
         }
-      } catch (err) {
+      } catch (err: any) {
         log.error(`Error processing workshop ID ${workshopId}: ${err.message}`);
         resolvedMap.set(workshopId, {
           availableModIds: [],
@@ -4232,8 +4290,8 @@ router.post("/sync-mod-ids", async (req, res) => {
       const currentModIds = modsMatch?.[1]?.split(";").filter(Boolean) || [];
       const finalModIds = [...currentModIds];
 
-      const syncedMods = [];
-      const missingMods = [];
+    const syncedMods: AnyRecord[] = [];
+    const missingMods: string[] = [];
 
       for (const workshopId of workshopIds) {
         const resolved = resolvedMap.get(workshopId);
@@ -4245,7 +4303,7 @@ router.post("/sync-mod-ids", async (req, res) => {
         const { availableModIds, fallbackId } = resolved;
 
         if (availableModIds.length > 0) {
-          const present = availableModIds.filter((id) =>
+          const present = availableModIds.filter((id: string) =>
             currentModIds.includes(id),
           );
           if (present.length > 0) {
@@ -4330,7 +4388,7 @@ router.post("/sync-mod-ids", async (req, res) => {
           : undefined,
       ...(lockResult.backupWarning ? { backupWarning: lockResult.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to sync mod IDs: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4377,7 +4435,6 @@ router.get("/validate-config", async (req, res) => {
       ? workshopMatch[1].split(";").filter(Boolean)
       : [];
     const modIds = modsMatch ? modsMatch[1].split(";").filter(Boolean) : [];
-
     const warnings = [];
     const errors = [];
 
@@ -4450,7 +4507,7 @@ router.get("/validate-config", async (req, res) => {
         availableMods: availableModIds.size,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to validate config: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4461,7 +4518,7 @@ router.get("/presets", async (req, res) => {
   try {
     const presets = await getModPresets();
     res.json({ presets });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get mod presets: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4510,24 +4567,27 @@ router.post("/presets", async (req, res) => {
     const content = readTextFile(iniPath);
     const workshopMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
     const modsMatch = content.match(/^[ \t]*Mods[ \t]*=[ \t]*(.*)$/m);
+    const mapsMatch = content.match(/^[ \t]*Map[ \t]*=[ \t]*(.*)$/m);
 
     const workshopIds = workshopMatch
       ? workshopMatch[1].split(";").filter(Boolean)
       : [];
     const modIds = modsMatch ? modsMatch[1].split(";").filter(Boolean) : [];
+    const maps = mapsMatch ? mapsMatch[1].split(";").filter(Boolean) : [];
 
     const preset = await createModPreset(
       name,
       description,
       modIds,
       workshopIds,
+      maps,
     );
 
     log.info(
       `Created mod preset "${name}" with ${workshopIds.length} workshop items and ${modIds.length} mod IDs`,
     );
     res.json({ preset, message: `Preset "${name}" created successfully` });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to create mod preset: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4543,7 +4603,7 @@ router.put("/presets/:id", async (req, res) => {
       });
     }
 
-    const updates = {};
+    const updates: AnyRecord = {};
     if (req.body.name !== undefined) {
       if (typeof req.body.name !== "string")
         return res.status(400).json({
@@ -4591,7 +4651,7 @@ router.put("/presets/:id", async (req, res) => {
 
     log.info(`Updated mod preset: ${updates.name || id}`);
     res.json({ preset, message: "Preset updated successfully" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to update mod preset: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4618,7 +4678,7 @@ router.delete("/presets/:id", async (req, res) => {
 
     log.info(`Deleted mod preset: ${id}`);
     res.json({ message: "Preset deleted successfully" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to delete mod preset: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4687,7 +4747,7 @@ router.post("/presets/:id/apply", async (req, res) => {
       modCount: (preset.mods || []).length,
       ...(backupWarning ? { backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to apply mod preset: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4758,7 +4818,7 @@ router.post("/save-order", async (req, res) => {
       modCount: modIds.length,
       ...(backupWarning ? { backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to save mod order: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4791,7 +4851,7 @@ router.post("/discover-mod-ids", async (req, res) => {
     }
 
     const serverPath = await getServerPath();
-    const discoveredModIds = [];
+    const discoveredModIds: string[] = [];
     const sources = [];
 
     if (serverPath) {
@@ -4835,7 +4895,7 @@ router.post("/discover-mod-ids", async (req, res) => {
           modInfo = null;
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       if (e.name === "AbortError") {
         log.warn(`Steam API request timed out for workshop ${wsId}`);
       } else {
@@ -4869,14 +4929,14 @@ router.post("/discover-mod-ids", async (req, res) => {
 
     const uniqueModIds = [...new Set(discoveredModIds)];
 
-    let mapFolders = [];
+    let mapFolders: string[] = [];
     if (serverPath) {
       mapFolders = findMapFoldersFromWorkshop(String(wsId), serverPath);
     }
 
     const isMap =
       modInfo?.tags?.some(
-        (t) =>
+        (t: AnyRecord) =>
           t.tag?.toLowerCase() === "map" || t.tag?.toLowerCase() === "maps",
       ) || mapFolders.length > 0;
 
@@ -4893,9 +4953,9 @@ router.post("/discover-mod-ids", async (req, res) => {
       isDownloaded: serverPath
         ? findAllModIdsFromWorkshop(String(wsId), serverPath).length > 0
         : false,
-      tags: modInfo?.tags?.map((t) => t.tag) || [],
+      tags: modInfo?.tags?.map((t: AnyRecord) => t.tag) || [],
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to discover mod IDs: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4982,7 +5042,7 @@ router.post("/add-mod-advanced", async (req, res) => {
       modIdsToAdd = [...new Set([...modIdsToAdd, ...allModIds])];
     }
 
-    let modMapFolders = [];
+    let modMapFolders: string[] = [];
     if (serverPath) {
       modMapFolders = findMapFoldersFromWorkshop(
         String(workshopId),
@@ -4990,7 +5050,7 @@ router.post("/add-mod-advanced", async (req, res) => {
       );
     }
 
-    let addedMapFolders = [];
+    let addedMapFolders: string[] = [];
     const lockResult = await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
 
@@ -5007,7 +5067,7 @@ router.post("/add-mod-advanced", async (req, res) => {
         currentWorkshopIds.push(String(workshopId));
       }
 
-      const addedModIds = [];
+      const addedModIds: string[] = [];
       for (const modId of modIdsToAdd) {
         if (!currentModIds.includes(modId)) {
           currentModIds.push(modId);
@@ -5068,7 +5128,7 @@ router.post("/add-mod-advanced", async (req, res) => {
     try {
       await removeIgnoredMod(String(workshopId));
       await addTrackedMod(String(workshopId), `Workshop Mod ${workshopId}`);
-    } catch (e) {
+    } catch (e: any) {
       // Ignore if already tracked
     }
 
@@ -5091,7 +5151,7 @@ router.post("/add-mod-advanced", async (req, res) => {
           : "Workshop ID added (mod IDs were already configured)",
       ...(lockResult.backupWarning ? { backupWarning: lockResult.backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to add mod advanced: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -5102,12 +5162,15 @@ let conflictScanInFlight = false;
 let conflictScanStartedAt = 0;
 const SCAN_MUTEX_TIMEOUT_MS = 5 * 60 * 1000;
 
-let lastScanResult = null;
-let lastScanWorkshopSnapshot = null;
-let lastScanModSnapshot = null;
-let lastScanServerPath = null;
+let lastScanResult: AnyRecord | null = null;
+let lastScanWorkshopSnapshot: string | null = null;
+let lastScanModSnapshot: string | null = null;
+let lastScanServerPath: string | null = null;
 
-export function createConflictScanSnapshots(workshopIds, modIds) {
+export function createConflictScanSnapshots(
+  workshopIds: string[],
+  modIds: string[],
+): { workshop: string; mods: string } {
   return {
     workshop: workshopIds.slice().sort().join(","),
     mods: modIds.join(","),
@@ -5131,7 +5194,7 @@ function acquireScanLock() {
   return ++scanLockToken;
 }
 
-function releaseScanLock(token) {
+function releaseScanLock(token: number): void {
   if (token !== scanLockToken) return;
   conflictScanInFlight = false;
   conflictScanStartedAt = 0;
@@ -5154,34 +5217,39 @@ const WALK_SKIP_DIRS = new Set([
   ".vscode",
 ]);
 
-function safeRealpath(p) {
+function safeRealpath(p: string): string | null {
   try {
     return fs.realpathSync(p);
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Could not resolve ${p}: ${e.message}`);
     return null;
   }
 }
 
-function isInsideRoot(target, root) {
+function isInsideRoot(target: string, root: string): boolean {
   return target === root || target.startsWith(root + path.sep);
 }
 
 const WALK_YIELD_EVERY = 1000;
 
-async function walkDir(dir, prefix = "", _depth = 0, _ctx = null) {
-  const ctx = _ctx || {
+async function walkDir(
+  dir: string,
+  prefix = "",
+  _depth = 0,
+  _ctx: AnyRecord | null = null,
+): Promise<{ files: string[]; truncated: boolean }> {
+  const ctx: AnyRecord = _ctx || {
     left: WALK_MAX_FILES,
     root: safeRealpath(dir) || dir,
     sinceYield: 0,
   };
-  const results = [];
+  const results: string[] = [];
   let truncated = false;
   if (_depth > WALK_MAX_DEPTH) return { files: results, truncated };
   let entries;
   try {
     entries = await fs.promises.readdir(dir, { withFileTypes: true });
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`walkDir: could not read ${dir}: ${e.message}`);
     return { files: results, truncated };
   }
@@ -5202,7 +5270,7 @@ async function walkDir(dir, prefix = "", _depth = 0, _ctx = null) {
       if (!real || !isInsideRoot(real, ctx.root)) continue;
       try {
         isDirectory = (await fs.promises.stat(real)).isDirectory();
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`walkDir: could not stat link ${fullPath}: ${e.message}`);
         continue;
       }
@@ -5220,7 +5288,7 @@ async function walkDir(dir, prefix = "", _depth = 0, _ctx = null) {
   return { files: results, truncated };
 }
 
-function classifyFile(relPath) {
+function classifyFile(relPath: string): string {
   const lower = relPath.toLowerCase();
   const basename = lower.split("/").pop();
 
@@ -5260,7 +5328,7 @@ function classifyFile(relPath) {
   return "other";
 }
 
-const SEVERITY_MAP = {
+const SEVERITY_MAP: Record<string, string> = {
   "lua-server": "high",
   "lua-shared": "high",
   "lua-client": "high",
@@ -5280,7 +5348,7 @@ const SEVERITY_MAP = {
   other: "low",
 };
 
-const CATEGORY_LABELS = {
+const CATEGORY_LABELS: Record<string, string> = {
   "lua-server": "Server Lua Scripts",
   "lua-shared": "Shared Lua Scripts",
   "lua-client": "Client Lua Scripts",
@@ -5300,22 +5368,25 @@ const CATEGORY_LABELS = {
   other: "Other Files",
 };
 
-function extractTranslationKeys(filePath) {
+function extractTranslationKeys(filePath: string): Set<string> | null {
   try {
     const content = stripBom(fs.readFileSync(filePath, "utf-8"));
-    const keys = new Set();
+    const keys = new Set<string>();
     const re = /^\s*([A-Za-z_]\w*)\s*=\s*(?:"|'|\[\[)/gm;
     let m;
     while ((m = re.exec(content)) !== null) keys.add(m[1]);
     return keys;
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Error parsing translation file ${filePath}: ${e.message}`);
     return null;
   }
 }
 
-export function compareDefinitionSets(modEntries, extract) {
-  const parsed = [];
+export function compareDefinitionSets(
+  modEntries: AnyRecord[],
+  extract: (_filePath: string) => Set<string> | null,
+): AnyRecord {
+  const parsed: Array<{ mod: AnyRecord; defs: Set<string> }> = [];
   let unparsable = 0;
   for (const entry of modEntries) {
     const defs = extract(entry.absPath);
@@ -5325,7 +5396,7 @@ export function compareDefinitionSets(modEntries, extract) {
     }
     parsed.push({ mod: entry, defs });
   }
-  const overlapping = new Set();
+  const overlapping = new Set<string>();
   for (let i = 0; i < parsed.length; i++) {
     for (let j = i + 1; j < parsed.length; j++) {
       if (parsed[i].mod.modId === parsed[j].mod.modId) continue;
@@ -5348,15 +5419,15 @@ export function compareDefinitionSets(modEntries, extract) {
   return { disjoint: !inconclusive, overlapping: [], inconclusive };
 }
 
-function compareTranslationKeys(modEntries) {
+function compareTranslationKeys(modEntries: AnyRecord[]): AnyRecord {
   return compareDefinitionSets(modEntries, extractTranslationKeys);
 }
 
-function extractScriptDefinitions(filePath) {
+function extractScriptDefinitions(filePath: string): Set<string> | null {
   try {
     const content = stripBom(fs.readFileSync(filePath, "utf-8"));
     if (content.length > 2 * 1024 * 1024) return null;
-    const defs = new Set();
+    const defs = new Set<string>();
     const moduleRe = /module\s+(\w+)\s*\{/g;
     let moduleMatch;
     while ((moduleMatch = moduleRe.exec(content)) !== null) {
@@ -5378,21 +5449,21 @@ function extractScriptDefinitions(filePath) {
       }
     }
     return defs;
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Error parsing script file ${filePath}: ${e.message}`);
     return null;
   }
 }
 
-function compareScriptDefinitions(modEntries) {
+function compareScriptDefinitions(modEntries: AnyRecord[]): AnyRecord {
   return compareDefinitionSets(modEntries, extractScriptDefinitions);
 }
 
-function extractClothingDefinitions(filePath) {
+function extractClothingDefinitions(filePath: string): Set<string> | null {
   try {
     const content = stripBom(fs.readFileSync(filePath, "utf-8"));
     if (content.length > 2 * 1024 * 1024) return null;
-    const defs = new Set();
+    const defs = new Set<string>();
     const modelRe =
       /<m_(?:Male|Female)Model>\s*([^<]+)\s*<\/m_(?:Male|Female)Model>/gi;
     let m;
@@ -5404,24 +5475,24 @@ function extractClothingDefinitions(filePath) {
       defs.add(m[1].trim().toLowerCase());
     }
     return defs;
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Error parsing clothing file ${filePath}: ${e.message}`);
     return null;
   }
 }
 
-function compareClothingDefinitions(modEntries) {
+function compareClothingDefinitions(modEntries: AnyRecord[]): AnyRecord {
   return compareDefinitionSets(modEntries, extractClothingDefinitions);
 }
 
-function extractLuaSymbols(filePath) {
+function extractLuaSymbols(filePath: string): Set<string> | null {
   try {
     const content = stripBom(fs.readFileSync(filePath, "utf-8"));
     if (content.length > 2 * 1024 * 1024) return null;
     const stripped = content
       .replace(/--\[\[[\s\S]*?\]\]/g, "")
       .replace(/--[^\n]*/g, "");
-    const symbols = new Set();
+    const symbols = new Set<string>();
     let m;
     const fnRe = /(?:^|\n)\s*(?:local\s+)?function\s+([A-Za-z_][\w.:]*)\s*\(/g;
     while ((m = fnRe.exec(stripped)) !== null) symbols.add(`fn:${m[1]}`);
@@ -5433,16 +5504,16 @@ function extractLuaSymbols(filePath) {
       /(?:^|\n)\s*([A-Z][\w]*)\s*=\s*[A-Z][\w]*\s*:\s*derive\s*\(/g;
     while ((m = classRe.exec(stripped)) !== null) symbols.add(`class:${m[1]}`);
     return symbols;
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Error parsing Lua file ${filePath}: ${e.message}`);
     return null;
   }
 }
 
 const LUA_SYMBOL_CACHE_MAX = 20_000;
-const luaSymbolCache = new Map();
+const luaSymbolCache = new Map<string, Set<string> | null>();
 
-function getLuaSymbols(filePath) {
+function getLuaSymbols(filePath: string): Set<string> | null {
   const cached = luaSymbolCache.get(filePath);
   if (cached !== undefined) return cached;
   const symbols = extractLuaSymbols(filePath);
@@ -5455,15 +5526,15 @@ function resetScanCaches() {
   luaSymbolCache.clear();
 }
 
-function compareLuaSymbols(modEntries) {
-  const symsByMod = [];
+function compareLuaSymbols(modEntries: AnyRecord[]): AnyRecord | null {
+  const symsByMod: Array<{ mod: AnyRecord; symbols: Set<string> }> = [];
   for (const entry of modEntries) {
     const s = getLuaSymbols(entry.absPath);
     if (!s || s.size === 0) continue;
     symsByMod.push({ mod: entry, symbols: s });
   }
   if (symsByMod.length < 2) return null;
-  const overlapping = new Set();
+  const overlapping = new Set<string>();
   for (let i = 0; i < symsByMod.length; i++) {
     for (let j = i + 1; j < symsByMod.length; j++) {
       if (symsByMod[i].mod.modId === symsByMod[j].mod.modId) continue;
@@ -5483,37 +5554,40 @@ const LUA_CATEGORIES = new Set([
   "lua-other",
 ]);
 
-function dedupeByModId(entries) {
-  const byId = new Map();
+function dedupeByModId(entries: AnyRecord[]): AnyRecord[] {
+  const byId = new Map<string, AnyRecord>();
   for (const entry of entries) if (!byId.has(entry.modId)) byId.set(entry.modId, entry);
   return [...byId.values()];
 }
 
-function hashFileStreaming(filePath) {
+function hashFileStreaming(filePath: string): Promise<string | null> {
   return new Promise((resolve) => {
     const hash = crypto.createHash("md5");
     const stream = fs.createReadStream(filePath);
     stream.on("data", (chunk) => hash.update(chunk));
     stream.on("end", () => resolve(hash.digest("hex")));
-    stream.on("error", (e) => {
+    stream.on("error", (e: Error) => {
       log.debug(`Error hashing file ${filePath}: ${e.message}`);
       resolve(null);
     });
   });
 }
 
-async function compareFileContents(entries) {
+async function compareFileContents(entries: AnyRecord[]): Promise<string> {
   const sized = await Promise.all(
     entries.map(async (entry) => {
       try {
         return { entry, size: (await fsp.stat(entry.absPath)).size };
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Error reading file size ${entry.absPath}: ${e.message}`);
         return null;
       }
     }),
   );
-  const readable = sized.filter(Boolean);
+  const readable = sized.filter(Boolean) as Array<{
+    entry: AnyRecord;
+    size: number;
+  }>;
   const unreadable = sized.length - readable.length;
   if (readable.length < 2) return "unknown";
   if (new Set(readable.map((r) => r.size)).size > 1) return "differs";
@@ -5526,24 +5600,27 @@ async function compareFileContents(entries) {
   return unreadable === 0 ? "identical" : "differs";
 }
 
-function hashFileSync(filePath) {
+function hashFileSync(filePath: string): string | null {
   try {
     const stat = fs.statSync(filePath);
     if (stat.size > HASH_MAX_BYTES) return "too-large";
     const buf = fs.readFileSync(filePath);
     return crypto.createHash("md5").update(buf).digest("hex");
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Error hashing file sync ${filePath}: ${e.message}`);
     return null;
   }
 }
 
-async function readIniModLists() {
+async function readIniModLists(): Promise<{
+  workshopIds: string[];
+  modIdsFromIni: string[];
+}> {
   const serverConfigPath = await getServerConfigPath();
   const serverName = await getServerName();
   const iniPath = getSanitizedIniPath(serverConfigPath, serverName);
-  let workshopIds = [];
-  let modIdsFromIni = [];
+  let workshopIds: string[] = [];
+  let modIdsFromIni: string[] = [];
   if (iniPath && fs.existsSync(iniPath)) {
     const iniContent = readTextFile(iniPath);
     const wsMatch = iniContent.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
@@ -5567,20 +5644,20 @@ async function readIniModLists() {
 }
 
 export async function buildFileIndex(
-  workshopIds,
-  serverPath,
-  onModScanned,
-  activeModIds,
+  workshopIds: string[],
+  serverPath: string,
+  onModScanned: ((_info: AnyRecord) => void) | null | undefined,
+  activeModIds: string[] | null | undefined,
   maxEntries = FILE_INDEX_MAX_ENTRIES,
-) {
-  const fileIndex = {};
-  const modInfoMap = {};
+): Promise<AnyRecord> {
+  const fileIndex: Record<string, AnyRecord[]> = {};
+  const modInfoMap: Record<string, AnyRecord[]> = {};
   let modsScanned = 0;
   let modsNotFound = 0;
   let modsSkippedInactive = 0;
   let indexedEntries = 0;
   let indexTruncated = false;
-  const warnings = [];
+  const warnings: string[] = [];
   const totalWorkshopIds = workshopIds.length;
   const activeSet = activeModIds ? new Set(activeModIds) : null;
 
@@ -5610,7 +5687,7 @@ export async function buildFileIndex(
     let modEntries;
     try {
       modEntries = fs.readdirSync(searchBase, { withFileTypes: true });
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`Could not read mod directory ${searchBase}: ${e.message}`);
       continue;
     }
@@ -5619,7 +5696,7 @@ export async function buildFileIndex(
       if (indexTruncated) break;
       if (!modDir.isDirectory()) continue;
       const modDirPath = path.join(searchBase, modDir.name);
-      const mediaPaths = [];
+      const mediaPaths: string[] = [];
       const directMedia = path.join(modDirPath, "media");
       if (fs.existsSync(directMedia)) {
         mediaPaths.push(directMedia);
@@ -5633,7 +5710,7 @@ export async function buildFileIndex(
               if (fs.existsSync(subMedia)) mediaPaths.push(subMedia);
             }
           }
-        } catch (e) {
+        } catch (e: any) {
           log.debug(
             `Could not scan B42 subfolders for ${modDirPath}: ${e.message}`,
           );
@@ -5641,7 +5718,7 @@ export async function buildFileIndex(
       }
       if (mediaPaths.length === 0) continue;
       const matchingMod = modDetails.find(
-        (m) => m.id === modDir.name || m.name === modDir.name,
+        (m: AnyRecord) => m.id === modDir.name || m.name === modDir.name,
       );
       const modId = matchingMod?.id || modDir.name;
       const modName = matchingMod?.name || modDir.name;
@@ -5719,13 +5796,17 @@ export async function buildFileIndex(
   };
 }
 
-async function detectConflicts(fileIndex, onConflictFound, options = {}) {
+async function detectConflicts(
+  fileIndex: Record<string, AnyRecord[]>,
+  onConflictFound: ((_conflict: AnyRecord) => void) | null | undefined = undefined,
+  options: AnyRecord = {},
+): Promise<AnyRecord> {
   const { shouldAbort, onProgress } = options;
-  const conflicts = [];
+  const conflicts: AnyRecord[] = [];
   let identicalSkipped = 0;
   let additiveSkipped = 0;
   let pzAdditiveSkipped = 0;
-  const pzAdditiveBreakdown = {
+  const pzAdditiveBreakdown: Record<string, number> = {
     sandbox: 0,
     scripts: 0,
     clothing: 0,
@@ -5760,7 +5841,7 @@ async function detectConflicts(fileIndex, onConflictFound, options = {}) {
       continue;
     }
 
-    const conflictMods = distinctMods.map((m) => ({
+    const conflictMods: AnyRecord[] = distinctMods.map((m: AnyRecord) => ({
       workshopId: m.workshopId,
       modId: m.modId,
       modName: m.modName,
@@ -5774,7 +5855,7 @@ async function detectConflicts(fileIndex, onConflictFound, options = {}) {
         pzAdditiveBreakdown.translate++;
         continue;
       }
-      const conflict = {
+      const conflict: AnyRecord = {
         file: filePath,
         category,
         categoryLabel: CATEGORY_LABELS[category] || category,
@@ -5823,7 +5904,7 @@ async function detectConflicts(fileIndex, onConflictFound, options = {}) {
       luaOverlap = compareLuaSymbols(mods);
     }
 
-    const conflict = {
+    const conflict: AnyRecord = {
       file: filePath,
       category,
       categoryLabel: CATEGORY_LABELS[category] || category,
@@ -5868,15 +5949,15 @@ async function detectConflicts(fileIndex, onConflictFound, options = {}) {
 }
 
 async function detectSameWorkshopLuaSymbolConflicts(
-  fileIndex,
-  existingConflicts,
-  onConflictFound,
-  options = {},
-) {
+  fileIndex: Record<string, AnyRecord[]>,
+  existingConflicts: AnyRecord[],
+  onConflictFound: ((_conflict: AnyRecord) => void) | null | undefined = undefined,
+  options: AnyRecord = {},
+): Promise<AnyRecord[]> {
   const { shouldAbort } = options;
-  const coveredPairs = new Set();
+  const coveredPairs = new Set<string>();
   for (const c of existingConflicts) {
-    const ids = [...new Set(c.mods.map((m) => m.modId))].sort();
+    const ids = [...new Set(c.mods.map((m: AnyRecord) => m.modId))].sort();
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
         coveredPairs.add(`${ids[i]}|${ids[j]}`);
@@ -5884,7 +5965,7 @@ async function detectSameWorkshopLuaSymbolConflicts(
     }
   }
 
-  const wsModFiles = {};
+  const wsModFiles: Record<string, Record<string, AnyRecord[]>> = {};
   for (const [relPath, mods] of Object.entries(fileIndex)) {
     if (!LUA_CATEGORIES.has(classifyFile(relPath))) continue;
     for (const m of mods) {
@@ -5899,7 +5980,7 @@ async function detectSameWorkshopLuaSymbolConflicts(
     }
   }
 
-  const conflicts = [];
+  const conflicts: AnyRecord[] = [];
   let scanned = 0;
   let parsed = 0;
   for (const [wsId, modFilesMap] of Object.entries(wsModFiles)) {
@@ -5907,9 +5988,9 @@ async function detectSameWorkshopLuaSymbolConflicts(
     const modIds = Object.keys(modFilesMap);
     if (modIds.length < 2) continue;
 
-    const symsByMod = {};
+    const symsByMod: Record<string, Map<string, AnyRecord>> = {};
     for (const modId of modIds) {
-      const symMap = new Map();
+      const symMap = new Map<string, AnyRecord>();
       for (const f of modFilesMap[modId]) {
         if (++parsed % 50 === 0) await yieldTick();
         const syms = getLuaSymbols(f.absPath);
@@ -5932,7 +6013,7 @@ async function detectSameWorkshopLuaSymbolConflicts(
         const symsB = symsByMod[idB];
         if (!symsA || !symsB || symsA.size === 0 || symsB.size === 0) continue;
 
-        const overlap = [];
+        const overlap: string[] = [];
         for (const s of symsA.keys()) {
           if (symsB.has(s)) overlap.push(s);
         }
@@ -5941,7 +6022,8 @@ async function detectSameWorkshopLuaSymbolConflicts(
         const firstSym = overlap[0];
         const fileA = symsA.get(firstSym);
         const fileB = symsB.get(firstSym);
-        const conflict = {
+        if (!fileA || !fileB) continue;
+        const conflict: AnyRecord = {
           file:
             fileA.relPath === fileB.relPath
               ? fileA.relPath
@@ -5971,14 +6053,14 @@ async function detectSameWorkshopLuaSymbolConflicts(
 }
 
 export function groupIntoPairs(
-  conflicts,
+  conflicts: AnyRecord[],
   maxFileEntries = CONFLICT_PAIR_FILE_MAX_ENTRIES,
-) {
-  const pairConflicts = {};
+): AnyRecord {
+  const pairConflicts: Record<string, AnyRecord> = {};
   let groupedFileEntries = 0;
   let truncated = false;
   outer: for (const conflict of conflicts) {
-    const modIds = [...new Set(conflict.mods.map((m) => m.modId))].sort();
+    const modIds = [...new Set(conflict.mods.map((m: AnyRecord) => m.modId))].sort();
     for (let i = 0; i < modIds.length; i++) {
       for (let j = i + 1; j < modIds.length; j++) {
         if (groupedFileEntries >= maxFileEntries) {
@@ -5988,8 +6070,8 @@ export function groupIntoPairs(
         const pairKey = `${modIds[i]}|${modIds[j]}`;
         if (!pairConflicts[pairKey]) {
           pairConflicts[pairKey] = {
-            modA: conflict.mods.find((m) => m.modId === modIds[i]),
-            modB: conflict.mods.find((m) => m.modId === modIds[j]),
+            modA: conflict.mods.find((m: AnyRecord) => m.modId === modIds[i]),
+            modB: conflict.mods.find((m: AnyRecord) => m.modId === modIds[j]),
             files: [],
             highCount: 0,
             mediumCount: 0,
@@ -6023,7 +6105,7 @@ export function groupIntoPairs(
   }
   return {
     pairs: Object.values(pairConflicts).sort(
-      (a, b) =>
+      (a: AnyRecord, b: AnyRecord) =>
         b.highCount - a.highCount ||
         b.mediumCount - a.mediumCount ||
         b.files.length - a.files.length,
@@ -6033,8 +6115,10 @@ export function groupIntoPairs(
   };
 }
 
-function annotateWinners(conflicts, modLoadOrder) {
-  const order = new Map(modLoadOrder.map((id, i) => [id, i]));
+function annotateWinners(conflicts: AnyRecord[], modLoadOrder: string[]): void {
+  const order = new Map<string, number>(
+    modLoadOrder.map((id: string, i: number) => [id, i]),
+  );
   for (const c of conflicts) {
     let bestIdx = -1;
     let winner = null;
@@ -6056,28 +6140,33 @@ function annotateWinners(conflicts, modLoadOrder) {
   }
 }
 
-function findIdCollisions(modInfoMap, modIdsFromIni) {
-  const activeSet = new Set(modIdsFromIni);
-  const byModId = new Map();
+function findIdCollisions(
+  modInfoMap: Record<string, AnyRecord[]>,
+  modIdsFromIni: string[],
+): AnyRecord[] {
+  const activeSet = new Set<string>(modIdsFromIni);
+  const byModId = new Map<string, AnyRecord[]>();
   for (const [wsId, details] of Object.entries(modInfoMap)) {
     for (const mod of details) {
       if (!byModId.has(mod.id)) byModId.set(mod.id, []);
-      byModId.get(mod.id).push({
+      byModId.get(mod.id)!.push({
         workshopId: wsId,
         modName: mod.name,
         active: activeSet.has(mod.id),
       });
     }
   }
-  const collisions = [];
+  const collisions: AnyRecord[] = [];
   for (const [modId, sources] of byModId.entries()) {
     const distinctWs = [
-      ...new Map(sources.map((s) => [s.workshopId, s])).values(),
+      ...new Map(
+        sources.map((s: AnyRecord) => [s.workshopId, s] as [string, AnyRecord]),
+      ).values(),
     ];
     if (distinctWs.length > 1) {
       collisions.push({
         modId,
-        active: distinctWs.some((s) => s.active),
+        active: distinctWs.some((s: AnyRecord) => s.active),
         sources: distinctWs,
       });
     }
@@ -6085,9 +6174,13 @@ function findIdCollisions(modInfoMap, modIdsFromIni) {
   return collisions;
 }
 
-function findMissingDeps(modInfoMap, modIdsFromIni, serverPath) {
-  const activeModSet = new Set(modIdsFromIni);
-  const dependencies = {};
+function findMissingDeps(
+  modInfoMap: Record<string, AnyRecord[]>,
+  modIdsFromIni: string[],
+  serverPath: string | null,
+): AnyRecord[] {
+  const activeModSet = new Set<string>(modIdsFromIni);
+  const dependencies: Record<string, AnyRecord> = {};
   for (const [wsId, details] of Object.entries(modInfoMap)) {
     for (const mod of details) {
       if (mod.require?.length > 0 && activeModSet.has(mod.id)) {
@@ -6124,9 +6217,9 @@ function findMissingDeps(modInfoMap, modIdsFromIni, serverPath) {
     "Professions",
     "Climate",
   ]);
-  const allModIds = new Set(builtInMods);
+  const allModIds = new Set<string>(builtInMods);
   for (const id of modIdsFromIni) allModIds.add(id);
-  const missingDeps = [];
+  const missingDeps: AnyRecord[] = [];
   for (const [modId, depInfo] of Object.entries(dependencies)) {
     for (const req of depInfo.requires) {
       if (allModIds.has(req)) continue;
@@ -6148,8 +6241,10 @@ function findMissingDeps(modInfoMap, modIdsFromIni, serverPath) {
   }
 
   if (serverPath && missingDeps.length > 0) {
-    const missingIds = new Set(missingDeps.map((d) => d.missingDep));
-    const resolved = new Map();
+    const missingIds = new Set<string>(
+      missingDeps.map((d: AnyRecord) => d.missingDep),
+    );
+    const resolved = new Map<string, AnyRecord>();
     const workshopPaths = [
       path.join(serverPath, "steamapps", "workshop", "content", "108600"),
       path.join(serverPath, "..", "steamapps", "workshop", "content", "108600"),
@@ -6172,11 +6267,11 @@ function findMissingDeps(modInfoMap, modIdsFromIni, serverPath) {
                 });
               }
             }
-          } catch (e) {
+          } catch (e: any) {
             log.debug(`Workshop folder unreadable ${entry.name}: ${e.message}`);
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Workshop path inaccessible: ${e.message}`);
       }
       if (resolved.size === missingIds.size) break;
@@ -6193,7 +6288,7 @@ function findMissingDeps(modInfoMap, modIdsFromIni, serverPath) {
   return missingDeps;
 }
 
-async function findSteamDeps(workshopIds) {
+async function findSteamDeps(workshopIds: string[]): Promise<AnyRecord> {
   const steamApiKey = await getSteamApiKey();
   if (
     !steamApiKey ||
@@ -6207,9 +6302,9 @@ async function findSteamDeps(workshopIds) {
       ],
     };
 
-  const configuredWsIds = new Set(workshopIds.map(String));
-  const allDeps = [];
-  const steamWarnings = [];
+  const configuredWsIds = new Set<string>(workshopIds.map(String));
+  const allDeps: AnyRecord[] = [];
+  const steamWarnings: string[] = [];
   let steamApiFailed = false;
 
   for (let i = 0; i < workshopIds.length; i += 50) {
@@ -6218,7 +6313,7 @@ async function findSteamDeps(workshopIds) {
       key: steamApiKey,
       includechildren: "true",
     });
-    batch.forEach((id, idx) =>
+    batch.forEach((id: string, idx: number) =>
       params.append(`publishedfileids[${idx}]`, String(id)),
     );
     try {
@@ -6255,7 +6350,7 @@ async function findSteamDeps(workshopIds) {
           }
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       steamApiFailed = true;
       log.debug?.(`Steam deps batch failed (non-fatal): ${e.message}`);
     }
@@ -6272,7 +6367,9 @@ async function findSteamDeps(workshopIds) {
     for (let i = 0; i < childIds.length; i += 50) {
       const batch = childIds.slice(i, i + 50);
       const params = new URLSearchParams({ key: steamApiKey });
-      batch.forEach((id, idx) => params.append(`publishedfileids[${idx}]`, id));
+      batch.forEach((id: string, idx: number) =>
+        params.append(`publishedfileids[${idx}]`, id),
+      );
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
@@ -6286,7 +6383,7 @@ async function findSteamDeps(workshopIds) {
         if (!response.ok) continue;
         const data = await response.json();
         const details = data.response?.publishedfiledetails || [];
-        const nameMap = new Map();
+        const nameMap = new Map<string, string>();
         for (const item of details) {
           if (item.publishedfileid && item.title) {
             nameMap.set(String(item.publishedfileid), item.title);
@@ -6297,7 +6394,7 @@ async function findSteamDeps(workshopIds) {
             dep.childName = nameMap.get(dep.childWorkshopId);
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         log.debug(
           `Steam deps batch name lookup failed (non-fatal): ${e.message}`,
         );
@@ -6309,8 +6406,8 @@ async function findSteamDeps(workshopIds) {
     if (!dep.childName) dep.childName = `Workshop Item #${dep.childWorkshopId}`;
   }
 
-  const seen = new Set();
-  const deps = allDeps.filter((d) => {
+  const seen = new Set<string>();
+  const deps = allDeps.filter((d: AnyRecord) => {
     const key = `${d.parentWorkshopId}-${d.childWorkshopId}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -6344,7 +6441,7 @@ router.get("/conflicts/cached", async (req, res) => {
         ? lastScanModSnapshot.split(",")
         : [],
     });
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Error checking scan staleness (marking stale): ${e.message}`);
     res.json({ ...lastScanResult, stale: true });
   }
@@ -6415,9 +6512,9 @@ router.get("/conflicts", async (req, res) => {
     if (crossFileConflicts.length > 0) conflicts.push(...crossFileConflicts);
     annotateWinners(conflicts, modIdsFromIni);
     const idCollisions = findIdCollisions(modInfoMap, modIdsFromIni);
-    const severityOrder = { high: 0, medium: 1, low: 2 };
+    const severityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
     conflicts.sort(
-      (a, b) =>
+      (a: AnyRecord, b: AnyRecord) =>
         (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3) ||
         a.file.localeCompare(b.file),
     );
@@ -6429,12 +6526,12 @@ router.get("/conflicts", async (req, res) => {
       );
     }
     const missingDeps = findMissingDeps(modInfoMap, modIdsFromIni, serverPath);
-    let steamDeps = [];
+    let steamDeps: AnyRecord[] = [];
     try {
       const steamResult = await findSteamDeps(workshopIds);
       steamDeps = steamResult.deps;
       warnings.push(...steamResult.warnings);
-    } catch (e) {
+    } catch (e: any) {
       log.debug(
         `Steam deps lookup failed during batch scan (non-fatal): ${e.message}`,
       );
@@ -6466,7 +6563,7 @@ router.get("/conflicts", async (req, res) => {
     lastScanResult = result;
     lastScanTimestamp = Date.now();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to scan mod conflicts: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   } finally {
@@ -6500,11 +6597,11 @@ router.get("/conflicts/stream", async (req, res) => {
     aborted = true;
   });
 
-  const send = (event, data) => {
+  const send = (event: string, data: unknown) => {
     if (!res.writable || aborted) return;
     try {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`SSE write failed (stream closed): ${e.message}`);
     }
   };
@@ -6513,7 +6610,7 @@ router.get("/conflicts/stream", async (req, res) => {
     if (!res.writable || aborted) return;
     try {
       res.write(": ping\n\n");
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`SSE heartbeat failed (stream closed): ${e.message}`);
     }
   }, 20_000);
@@ -6616,14 +6713,14 @@ router.get("/conflicts/stream", async (req, res) => {
             file: conflict.file,
             severity: conflict.severity,
             categoryLabel: conflict.categoryLabel,
-            mods: conflict.mods.map((m) => m.modName),
+            mods: conflict.mods.map((m: AnyRecord) => m.modName),
             conflictsSoFar: conflictCount,
           });
         }
       },
       {
         shouldAbort: () => aborted,
-        onProgress: ({ processed, total }) => {
+        onProgress: ({ processed, total }: { processed: number; total: number }) => {
           if (aborted || total === 0) return;
           send("phase", {
             phase: "hashing",
@@ -6649,7 +6746,7 @@ router.get("/conflicts/stream", async (req, res) => {
           file: conflict.file,
           severity: conflict.severity,
           categoryLabel: conflict.categoryLabel,
-          mods: conflict.mods.map((m) => m.modName),
+          mods: conflict.mods.map((m: AnyRecord) => m.modName),
           conflictsSoFar: conflictCount,
         });
       },
@@ -6659,9 +6756,9 @@ router.get("/conflicts/stream", async (req, res) => {
 
     annotateWinners(conflicts, modIdsFromIni);
     const idCollisions = findIdCollisions(modInfoMap, modIdsFromIni);
-    const severityOrder = { high: 0, medium: 1, low: 2 };
+    const severityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
     conflicts.sort(
-      (a, b) =>
+      (a: AnyRecord, b: AnyRecord) =>
         (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3) ||
         a.file.localeCompare(b.file),
     );
@@ -6674,7 +6771,7 @@ router.get("/conflicts/stream", async (req, res) => {
     }
     const missingDeps = findMissingDeps(modInfoMap, modIdsFromIni, serverPath);
 
-    let steamDeps = [];
+    let steamDeps: AnyRecord[] = [];
     try {
       if (!aborted) {
         send("phase", { phase: "dependencies", progress: 90 });
@@ -6682,7 +6779,7 @@ router.get("/conflicts/stream", async (req, res) => {
         steamDeps = steamResult.deps;
         warnings.push(...steamResult.warnings);
       }
-    } catch (e) {
+    } catch (e: any) {
       log.debug(
         `Steam deps lookup failed during SSE scan (non-fatal): ${e.message}`,
       );
@@ -6716,7 +6813,7 @@ router.get("/conflicts/stream", async (req, res) => {
     lastScanServerPath = serverPath;
     send("complete", result);
     res.end();
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Streaming conflict scan failed: ${error.message}`);
     if (!aborted) {
       send("error", { error: sanitizeError(error.message) });
@@ -6796,7 +6893,7 @@ router.get("/conflicts/diff", async (req, res) => {
       let modEntries;
       try {
         modEntries = fs.readdirSync(searchBase, { withFileTypes: true });
-      } catch (e) {
+      } catch (e: any) {
         log.debug(`Could not read mod directory ${searchBase}: ${e.message}`);
         continue;
       }
@@ -6822,7 +6919,7 @@ router.get("/conflicts/diff", async (req, res) => {
                 mediaCandidates.push(path.join(modDirPath, sub.name, "media"));
               }
             }
-          } catch (e) {
+          } catch (e: any) {
             /* skip unreadable */
           }
         }
@@ -6937,21 +7034,27 @@ router.get("/conflicts/diff", async (req, res) => {
       modB: { size: statB.size, lineCount: linesB.length },
       hunks,
       totalAdded: hunks.reduce(
-        (s, h) => s + h.lines.filter((l) => l.type === "add").length,
+        (s: number, h: AnyRecord) =>
+          s + h.lines.filter((l: AnyRecord) => l.type === "add").length,
         0,
       ),
       totalRemoved: hunks.reduce(
-        (s, h) => s + h.lines.filter((l) => l.type === "remove").length,
+        (s: number, h: AnyRecord) =>
+          s + h.lines.filter((l: AnyRecord) => l.type === "remove").length,
         0,
       ),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to diff files: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
-function computeUnifiedDiff(linesA, linesB, contextLines = 3) {
+function computeUnifiedDiff(
+  linesA: string[],
+  linesB: string[],
+  contextLines = 3,
+): AnyRecord[] {
   const n = linesA.length,
     m = linesB.length;
 
@@ -6965,14 +7068,22 @@ function computeUnifiedDiff(linesA, linesB, contextLines = 3) {
         lines: [
           ...linesA
             .slice(0, 50)
-            .map((l, i) => ({ type: "remove", lineA: i + 1, text: l })),
+            .map((l: string, i: number) => ({
+              type: "remove",
+              lineA: i + 1,
+              text: l,
+            })),
           {
             type: "context",
             text: `... (${n} lines in Mod A, ${m} lines in Mod B — file too large for inline diff)`,
           },
           ...linesB
             .slice(0, 50)
-            .map((l, i) => ({ type: "add", lineB: i + 1, text: l })),
+            .map((l: string, i: number) => ({
+              type: "add",
+              lineB: i + 1,
+              text: l,
+            })),
         ],
       },
     ];
@@ -6988,7 +7099,7 @@ function computeUnifiedDiff(linesA, linesB, contextLines = 3) {
     }
   }
 
-  const ops = [];
+  const ops: AnyRecord[] = [];
   let i = n,
     j = m;
   while (i > 0 || j > 0) {
@@ -7006,8 +7117,8 @@ function computeUnifiedDiff(linesA, linesB, contextLines = 3) {
   }
   ops.reverse();
 
-  const hunks = [];
-  let currentHunk = null;
+  const hunks: AnyRecord[] = [];
+  let currentHunk: AnyRecord | null = null;
   let sinceLastChange = Infinity;
 
   for (let k = 0; k < ops.length; k++) {
@@ -7051,8 +7162,8 @@ function computeUnifiedDiff(linesA, linesB, contextLines = 3) {
   if (currentHunk) hunks.push(currentHunk);
 
   for (const hunk of hunks) {
-    hunk.countA = hunk.lines.filter((l) => l.type !== "add").length;
-    hunk.countB = hunk.lines.filter((l) => l.type !== "remove").length;
+    hunk.countA = hunk.lines.filter((l: AnyRecord) => l.type !== "add").length;
+    hunk.countB = hunk.lines.filter((l: AnyRecord) => l.type !== "remove").length;
   }
 
   return hunks;
@@ -7099,7 +7210,7 @@ router.get("/disk-only", async (req, res) => {
     let entries = [];
     try {
       entries = fs.readdirSync(contentDir, { withFileTypes: true });
-    } catch (e) {
+    } catch (e: any) {
       log.warn(`disk-only: failed to read ${contentDir}: ${e.message}`);
       return res.json({ mods: [], reason: "cannot read workshop folder" });
     }
@@ -7117,7 +7228,7 @@ router.get("/disk-only", async (req, res) => {
     }
 
     res.json({ mods });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to list disk-only mods: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -7208,13 +7319,13 @@ router.post("/enable-disk-mod", async (req, res) => {
       modIdsAdded: modIdsToAdd.length,
       ...(backupWarning ? { backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to enable disk-only mod: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
-async function deleteModFromDiskAndIni(wsId) {
+async function deleteModFromDiskAndIni(wsId: string): Promise<AnyRecord> {
   const serverConfigPath = await getServerConfigPath();
   const serverName = await getServerName();
   const serverPath = await getServerPath();
@@ -7241,7 +7352,7 @@ async function deleteModFromDiskAndIni(wsId) {
     ? findMapFoldersFromWorkshop(wsId, serverPath)
     : [];
 
-  let backupWarning = null;
+  let backupWarning: string | null = null;
   await withIniLock(iniPath, async () => {
     let content = readTextFile(iniPath);
     const wsMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
@@ -7291,7 +7402,7 @@ async function deleteModFromDiskAndIni(wsId) {
         fs.rmSync(p, { recursive: true, force: true });
         removedPath = p;
         break;
-      } catch (e) {
+      } catch (e: any) {
         log.warn(`Failed to delete workshop folder ${p}: ${e.message}`);
       }
     }
@@ -7366,7 +7477,7 @@ router.post("/delete-disk-mod", async (req, res) => {
       modIdsStripped: modIdsToStrip.length,
       ...(backupWarning ? { backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to delete disk mod: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -7382,7 +7493,7 @@ router.post("/purge", async (req, res) => {
       });
     }
 
-    let name = null;
+    let name: string | null = null;
     try {
       const tracked = await getTrackedMods();
       name = tracked?.find((m) => String(m.workshop_id) === wsId)?.name || null;
@@ -7391,7 +7502,11 @@ router.post("/purge", async (req, res) => {
     }
     if (!name && req.body?.name) name = String(req.body.name).slice(0, 200);
 
-    const collection = { attempted: false, ok: false, error: null };
+    const collection: {
+      attempted: boolean;
+      ok: boolean;
+      error: string | null;
+    } = { attempted: false, ok: false, error: null };
     const collectionId = await getSetting("workshopCollectionId");
     if (collectionId) {
       collection.attempted = true;
@@ -7399,7 +7514,7 @@ router.post("/purge", async (req, res) => {
         const r = await removeItemFromCollection(collectionId, wsId);
         collection.ok = !!r.ok;
         if (!r.ok) collection.error = r.error || "Steam rejected the change";
-      } catch (e) {
+      } catch (e: any) {
         collection.error = e.message;
       }
     }
@@ -7454,7 +7569,7 @@ router.post("/purge", async (req, res) => {
       mapFoldersStripped: mapFoldersToStrip.length,
       ...(backupWarning ? { backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Purge failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -7497,7 +7612,7 @@ router.post("/batch-delete-disk-mods", async (req, res) => {
       });
     }
 
-    const allModIdsToStrip = new Set();
+    const allModIdsToStrip = new Set<string>();
     for (const wsId of cleaned) {
       if (serverPath) {
         for (const m of findAllModIdsFromWorkshop(wsId, serverPath))
@@ -7505,7 +7620,7 @@ router.post("/batch-delete-disk-mods", async (req, res) => {
       }
     }
 
-    let backupWarning = null;
+    let backupWarning: string | null = null;
     await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
       const wsMatch = content.match(/^[ \t]*WorkshopItems[ \t]*=[ \t]*(.*)$/m);
@@ -7535,7 +7650,7 @@ router.post("/batch-delete-disk-mods", async (req, res) => {
       );
     });
 
-    const results = [];
+    const results: AnyRecord[] = [];
     for (const wsId of cleaned) {
       const possiblePaths = getWorkshopPaths(wsId, serverPath || "");
       let removed = false;
@@ -7545,7 +7660,7 @@ router.post("/batch-delete-disk-mods", async (req, res) => {
             fs.rmSync(p, { recursive: true, force: true });
             removed = true;
             break;
-          } catch (e) {
+          } catch (e: any) {
             log.warn(`Failed to delete ${p}: ${e.message}`);
           }
         }
@@ -7553,7 +7668,7 @@ router.post("/batch-delete-disk-mods", async (req, res) => {
       results.push({ workshopId: wsId, deletedFromDisk: removed });
     }
 
-    let trackedById = new Map();
+    let trackedById = new Map<string, string | null>();
     try {
       for (const m of (await getTrackedMods()) || []) {
         if (m?.workshop_id)
@@ -7587,7 +7702,7 @@ router.post("/batch-delete-disk-mods", async (req, res) => {
       results,
       ...(backupWarning ? { backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to batch delete disk mods: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -7638,7 +7753,7 @@ router.post("/resolve-orphan-workshop", async (req, res) => {
       });
     }
 
-    const ignoredSet = new Set();
+    const ignoredSet = new Set<string>();
     try {
       for (const m of (await getIgnoredMods()) || []) {
         if (m?.workshop_id) ignoredSet.add(String(m.workshop_id));
@@ -7647,9 +7762,9 @@ router.post("/resolve-orphan-workshop", async (req, res) => {
       /* best-effort */
     }
 
-    const wsToDrop = new Set();
-    const modIdsToAdd = new Set();
-    const breakdown = [];
+    const wsToDrop = new Set<string>();
+    const modIdsToAdd = new Set<string>();
+    const breakdown: AnyRecord[] = [];
     for (const wsId of cleaned) {
       const ignored = ignoredSet.has(wsId);
       const folderExists = serverPath
@@ -7677,7 +7792,7 @@ router.post("/resolve-orphan-workshop", async (req, res) => {
       breakdown.push({ workshopId: wsId, action, modIds: ids });
     }
 
-    let backupWarning = null;
+    let backupWarning: string | null = null;
     await withIniLock(iniPath, async () => {
       let content = readTextFile(iniPath);
 
@@ -7738,7 +7853,7 @@ router.post("/resolve-orphan-workshop", async (req, res) => {
       breakdown,
       ...(backupWarning ? { backupWarning } : {}),
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to resolve orphan workshop items: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -7746,26 +7861,26 @@ router.post("/resolve-orphan-workshop", async (req, res) => {
 
 const THUMB_FETCH_TIMEOUT_MS = 12_000;
 const THUMB_MAX_BYTES = 5 * 1024 * 1024;
-const THUMB_INFLIGHT = new Map();
+const THUMB_INFLIGHT = new Map<string, Promise<Buffer | null>>();
 const THUMB_EMPTY_GIF = Buffer.from(
   "R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==",
   "base64",
 );
 const THUMB_FAIL_TTL_MS = 5 * 60 * 1000;
-const THUMB_FAIL_CACHE = new Map();
-let _thumbLastFailure = null;
+const THUMB_FAIL_CACHE = new Map<string, AnyRecord>();
+let _thumbLastFailure: AnyRecord | null = null;
 
-function recordThumbFailure(wsId, reason) {
+function recordThumbFailure(wsId: string, reason: string): void {
   const failedAt = Date.now();
   THUMB_FAIL_CACHE.set(wsId, { failedAt, reason });
   _thumbLastFailure = { workshopId: wsId, reason, at: failedAt };
 }
 
-function clearThumbFailure(wsId) {
+function clearThumbFailure(wsId: string): void {
   THUMB_FAIL_CACHE.delete(wsId);
 }
 
-function liveThumbFailure(wsId) {
+function liveThumbFailure(wsId: string): AnyRecord | null {
   const entry = THUMB_FAIL_CACHE.get(wsId);
   if (!entry) return null;
   if (Date.now() - entry.failedAt >= THUMB_FAIL_TTL_MS) {
@@ -7789,13 +7904,13 @@ export async function getThumbnailResolutionStatus() {
   return { failing, total: tracked.length, lastError: _thumbLastFailure };
 }
 
-function sendEmptyThumbnail(res) {
+function sendEmptyThumbnail(res: Response): unknown {
   res.setHeader("Content-Type", "image/gif");
   res.setHeader("Cache-Control", "public, max-age=3600");
   return res.end(THUMB_EMPTY_GIF);
 }
 
-async function fetchSteamPreviewUrl(workshopId) {
+async function fetchSteamPreviewUrl(workshopId: string): Promise<string | null> {
   const params = new URLSearchParams();
   params.append("itemcount", "1");
   params.append("publishedfileids[0]", workshopId);
@@ -7820,7 +7935,7 @@ async function fetchSteamPreviewUrl(workshopId) {
   }
 }
 
-async function downloadThumbnail(previewUrl) {
+async function downloadThumbnail(previewUrl: string): Promise<Buffer | null> {
   let parsed;
   try {
     parsed = new URL(previewUrl);
@@ -7928,7 +8043,7 @@ router.get("/thumbnail/:workshopId", async (req, res) => {
     res.setHeader("Content-Type", "image/jpeg");
     res.setHeader("Cache-Control", "public, max-age=86400, immutable");
     return res.end(buf);
-  } catch (err) {
+  } catch (err: any) {
     log.debug(`Thumbnail fetch failed for ${wsId}: ${err.message}`);
     recordThumbFailure(wsId, err.message);
     return sendEmptyThumbnail(res);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VALID_ACTIONS } from "../routes/panelBridge.js";
+import { VALID_ACTIONS } from "../routes/panelBridge.ts";
 
 const PINNED_CLIENT_TEMPLATE_ACTIONS = [
   "getSafehouses",

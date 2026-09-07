@@ -55,7 +55,7 @@ describe("LEGACY_USER_ROLES (client) vs USER_ROLES (server): parity", () => {
 
 describe("AIRDROP_PRESETS (client) vs airdrop's VALID_PRESETS (server): parity", () => {
   const CLIENT_PATH = "apps/panel-client/src/pages/WorldMap.tsx";
-  const SERVER_PATH = "apps/panel-server/routes/panelBridge.js";
+  const SERVER_PATH = "apps/panel-server/routes/panelBridge.ts";
 
   function extractAirdropPresetIds() {
     const content = fs.readFileSync(path.join(ROOT, CLIENT_PATH), "utf-8");

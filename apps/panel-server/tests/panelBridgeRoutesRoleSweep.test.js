@@ -54,13 +54,13 @@ describe("panelBridge.js: bridge setup/integration control -- admin+technician",
   ];
 
   it.each(ROUTES)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ROUTES)("does not refuse a technician at the gate on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
@@ -80,13 +80,13 @@ describe("panelBridge.js: bridge/catalog diagnostics -- admin+technician", () =>
   ];
 
   it.each(ROUTES)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ROUTES)("does not refuse a technician at the gate on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
@@ -105,13 +105,13 @@ describe("panelBridge.js: existing SFTP + mod-install gates are unchanged (admin
   ];
 
   it.each(ROUTES)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ROUTES)("does not refuse a technician at the gate on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
@@ -119,13 +119,13 @@ describe("panelBridge.js: existing SFTP + mod-install gates are unchanged (admin
 
 describe("panelBridge.js: POST /command stays admin-only (unchanged, whitelist-free passthrough)", () => {
   it("refuses a technician", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { res } = await runGate(router, "/command", "post", "technician");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it("does not refuse an admin", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, "/command", "post", "admin");
     expect(calledNext).toBe(true);
   });
@@ -139,7 +139,7 @@ describe("panelBridge.js: /status, /ping, /commands stay outside the matrix enti
   ];
 
   it.each(TRULY_UNGATED)("%s %s has no requirePermission gate ahead of its handler", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const layer = router.stack.find(
       (entry) => entry.route?.path === routePath && entry.route.methods[method],
     );
@@ -149,7 +149,7 @@ describe("panelBridge.js: /status, /ping, /commands stay outside the matrix enti
 
 describe("panelBridge.js: GET /server-info -- players.view (previously wide open)", () => {
   it("has a requirePermission gate ahead of its handler", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const layer = router.stack.find(
       (entry) => entry.route?.path === "/server-info" && entry.route.methods.get,
     );
@@ -158,7 +158,7 @@ describe("panelBridge.js: GET /server-info -- players.view (previously wide open
 
   for (const role of ["admin", "technician", "moderator"]) {
     it(`does not refuse a ${role}`, async () => {
-      const { default: router } = await import("../routes/panelBridge.js");
+      const { default: router } = await import("../routes/panelBridge.ts");
       const { calledNext } = await runGate(router, "/server-info", "get", role);
       expect(calledNext).toBe(true);
     });
@@ -205,13 +205,13 @@ describe("panelBridge.js: server.world_events (world-wide GM effects, folded in 
   ];
 
   it.each(WORLD_EVENTS_ROUTES)("does not refuse a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, routePath, method, "moderator");
     expect(calledNext).toBe(true);
   });
 
   it.each(WORLD_EVENTS_ROUTES)("does not refuse a technician on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
@@ -230,19 +230,19 @@ describe("panelBridge.js: players.endanger_or_impersonate (targeted zombie/sound
   ];
 
   it.each(ENDANGER_ROUTES)("refuses a moderator on %s %s (lost with the split -- intended)", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ENDANGER_ROUTES)("refuses a technician on %s %s (lost with the split -- intended)", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { res } = await runGate(router, routePath, method, "technician");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ENDANGER_ROUTES)("does not refuse an admin on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, routePath, method, "admin");
     expect(calledNext).toBe(true);
   });
@@ -266,13 +266,13 @@ describe("panelBridge.js: players.gm_tools (player-targeted actions + supporting
   ];
 
   it.each(GM_TOOLS_ROUTES)("does not refuse a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, routePath, method, "moderator");
     expect(calledNext).toBe(true);
   });
 
   it.each(GM_TOOLS_ROUTES)("does not refuse a technician on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });

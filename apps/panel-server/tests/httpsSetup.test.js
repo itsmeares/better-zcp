@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import net from "net";
-import { setupHttpsServer, isHttpsServerActive } from "../index.js";
+import { setupHttpsServer, isHttpsServerActive } from "../index.ts";
 
 
 const serversToClose = [];

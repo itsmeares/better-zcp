@@ -256,7 +256,7 @@ router.use((req: ServerFilesRequest, res: Response, next: NextFunction) => {
   return next();
 });
 
-function escapeLuaString(str: unknown): string {
+export function escapeLuaString(str: unknown): string {
   return String(str).replace(/[\\"'\n\r\t\0\[\]]/g, (c) => {
     const escapes: Record<string, string> = {
       "\\": "\\\\",
@@ -285,7 +285,7 @@ const LUA_UNESCAPES: Record<string, string> = {
   "]": "]",
 };
 
-function unescapeLuaString(value: unknown): string {
+export function unescapeLuaString(value: unknown): string {
   const str = String(value);
   if (!/^"[\s\S]*"$|^'[\s\S]*'$/.test(str)) {
     return str.replace(/^["']|["']$/g, "");

@@ -11,6 +11,7 @@ const DEFAULT_LOG_TAIL_LINES = 500;
 const MAX_LOG_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 interface DockerContainer {
+  State?: { Running?: boolean };
   Labels?: Record<string, string>;
   Config?: {
     Labels?: Record<string, string>;
@@ -62,6 +63,7 @@ interface DockerActionResult {
   success: boolean;
   error?: string;
   message?: string;
+  [key: string]: unknown;
 }
 
 function errorMessage(error: unknown): string {

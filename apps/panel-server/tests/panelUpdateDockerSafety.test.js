@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { handlePanelUpdateDownload } from "../index.js";
+import { handlePanelUpdateDownload } from "../index.ts";
 import { ServerManager } from "../services/serverManager.ts";
 
 function createResponse() {

@@ -16,7 +16,7 @@
     "types": ["node"]
   },
   "include": [
-    "index.js",
+    "index.ts",
     "database/**/*.js",
     "middleware/**/*.js",
     "routes/**/*.js",

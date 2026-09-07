@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import globals from "globals";
+import tseslint from "typescript-eslint";
 import requireResultHandling from "../../scripts/eslint-rules/require-result-handling.js";
 
 export default [
@@ -14,11 +15,12 @@ export default [
     ],
   },
   {
-    files: ["**/*.js"],
+    files: ["**/*.{js,ts}"],
     plugins: {
       local: { rules: { "require-result-handling": requireResultHandling } },
     },
     languageOptions: {
+      parser: tseslint.parser,
       ecmaVersion: 2023,
       sourceType: "module",
       globals: {
@@ -68,6 +70,15 @@ export default [
       // Express handlers and service interfaces intentionally remain async,
       // including paths that do not await on every code path.
       "require-await": "off",
+    },
+  },
+  {
+    files: ["**/*.ts"],
+    rules: {
+      // TypeScript's compiler owns type names and declaration merging.
+      "no-undef": "off",
+      "no-redeclare": "off",
+      "no-unused-vars": "off",
     },
   },
   {

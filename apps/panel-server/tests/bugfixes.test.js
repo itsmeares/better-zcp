@@ -14,7 +14,7 @@ import {
   getModDetailsFromWorkshop,
   groupIntoPairs,
   scoreWorkshopDependencyMatch,
-} from "../routes/mods.js";
+} from "../routes/mods.ts";
 import {
   ModChecker,
   getWorkshopAcfCandidates,

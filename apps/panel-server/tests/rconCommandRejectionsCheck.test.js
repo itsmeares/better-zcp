@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 
 const { summarizeRconRejections, buildRconCommandRejectionsCheck } = await import(
-  "../routes/debug.js"
+  "../routes/debug.ts"
 );
 
 function classify(response) {

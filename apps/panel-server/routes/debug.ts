@@ -49,7 +49,7 @@ import {
   getB42TopFormat,
   getB42ResolutionStatus,
 } from "./mapProxy.ts";
-import { getThumbnailResolutionStatus } from "./mods.js";
+import { getThumbnailResolutionStatus } from "./mods.ts";
 import {
   getCandidateZomboidPaths,
   inspectZomboidPath,
@@ -75,11 +75,12 @@ const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
+type AnyRecord = Record<string, any>;
 
-const logBuffer = [];
+const logBuffer: AnyRecord[] = [];
 const MAX_BUFFER_SIZE = 500;
 
-export function addLogToBuffer(level, message, source = "server") {
+export function addLogToBuffer(level: any, message: any, source: any = "server") {
   const entry = {
     level,
     message,
@@ -112,7 +113,7 @@ router.get("/ram", requirePermission("diagnostics.manage"), async (req, res) => 
       recommendedMin,
       recommendedMax,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get RAM info: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -123,7 +124,7 @@ router.get("/system", requirePermission("diagnostics.manage"), async (req, res) 
     const paths = getDataPaths();
     const databasePath = getDatabaseFilePath();
 
-    const redactPath = (p) => {
+    const redactPath = (p: string) => {
       if (!p) return "Not configured";
       const segments = p.replace(/\\/g, "/").split("/").filter(Boolean);
       return segments.length > 2
@@ -150,7 +151,7 @@ router.get("/system", requirePermission("diagnostics.manage"), async (req, res) 
         LOG_LEVEL: process.env.LOG_LEVEL || "info",
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get system info: ${error.message}`);
     res.status(500).json({ error: "Failed to get system info" });
   }
@@ -163,13 +164,13 @@ router.get("/logs", requirePermission("diagnostics.manage"), async (req, res) =>
       logs: logBuffer.slice(-limit),
       total: logBuffer.length,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get logs: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
 
-async function getAvailableLogFiles(logsDir) {
+async function getAvailableLogFiles(logsDir: string) {
   const entries = await fs.promises.readdir(logsDir, { withFileTypes: true });
 
   const files = (
@@ -185,7 +186,7 @@ async function getAvailableLogFiles(logsDir) {
               size: stats.size,
               modified: stats.mtime.toISOString(),
             };
-          } catch (error) {
+          } catch (error: any) {
             log.debug(
               `Stat failed for log file ${entry.name}: ${error.message}`,
             );
@@ -206,7 +207,7 @@ const SUPPORT_LOG_FILE_RE = /\.(log|txt)$/i;
 const CRASH_FILE_RE =
   /^(hs_err_pid.*|.*(?:crash|error|exception).*)\.(log|txt)$/i;
 
-async function resolveSearchRoot(candidate) {
+async function resolveSearchRoot(candidate: string | null) {
   if (!candidate) return null;
 
   const resolved = path.resolve(candidate);
@@ -220,11 +221,11 @@ async function resolveSearchRoot(candidate) {
 }
 
 async function collectBundleFilesFromDir(
-  dir,
-  matcher,
-  archivePrefix,
-  entries,
-  seenFiles,
+  dir: string | null,
+  matcher: (_name: string) => boolean,
+  archivePrefix: string,
+  entries: any[],
+  seenFiles: Set<string>,
 ) {
   if (!dir) return;
 
@@ -286,17 +287,17 @@ const ENV_PRESENCE_ONLY = [
   "ADMIN_PASSWORD",
 ];
 
-function maskValue(v) {
+function maskValue(v: any) {
   return v == null ? v : "••••";
 }
 
-function sanitizeForBundle(value, depth = 0) {
+function sanitizeForBundle(value: any, depth = 0): any {
   if (value == null || depth > 8) return value;
   if (Array.isArray(value))
     return value.map((v) => sanitizeForBundle(v, depth + 1));
   if (typeof value !== "object") return value;
 
-  const out = {};
+  const out: AnyRecord = {};
   for (const [k, v] of Object.entries(value)) {
     if (SECRET_FIELD_RE.test(k) && typeof v === "string" && v.length > 0) {
       out[k] = maskValue(v);
@@ -331,16 +332,16 @@ async function collectBundleKnownSecrets() {
   return [...values];
 }
 
-function redactRawLogText(text, knownSecrets) {
+function redactRawLogText(text: any, knownSecrets: any[]): string {
   if (typeof text !== "string" || !text) return text;
-  let out = redactKnownSecrets(text, knownSecrets);
-  out = redactRconCommandSecrets(out);
+  let out = String(redactKnownSecrets(text, knownSecrets));
+  out = String(redactRconCommandSecrets(out));
   out = out.replace(RAW_LOG_DISCORD_TOKEN_RE, "[REDACTED-DISCORD-TOKEN]");
   out = out.replace(RAW_LOG_STEAM_KEY_QUERY_RE, "$1[REDACTED]");
   return out;
 }
 
-function createRedactingLogStream(knownSecrets) {
+function createRedactingLogStream(knownSecrets: any[]) {
   let carry = "";
   return new Transform({
     transform(chunk, _enc, callback) {
@@ -363,13 +364,13 @@ async function readPanelVersion() {
   if (typeof PANEL_VERSION !== "undefined" && PANEL_VERSION) {
     return String(PANEL_VERSION);
   }
-  const candidates = [
+  const candidates: string[] = [
     path.join(__dirname, "..", "..", "..", "package.json"),
     path.join(process.cwd(), "package.json"),
     process.execPath
       ? path.join(path.dirname(process.execPath), "package.json")
       : null,
-  ].filter(Boolean);
+  ].filter((candidate): candidate is string => Boolean(candidate));
   for (const p of candidates) {
     try {
       const txt = await fs.promises.readFile(p, "utf8");
@@ -382,7 +383,7 @@ async function readPanelVersion() {
   return "unknown";
 }
 
-async function safeStatfs(target) {
+async function safeStatfs(target: string | null) {
   if (!target || typeof fs.promises.statfs !== "function") return null;
   try {
     const s = await fs.promises.statfs(target);
@@ -396,7 +397,7 @@ async function safeStatfs(target) {
       percentFree:
         totalBytes > 0 ? +((freeBytes / totalBytes) * 100).toFixed(1) : null,
     };
-  } catch (e) {
+  } catch (e: any) {
     return { error: e.message };
   }
 }
@@ -405,7 +406,7 @@ const UI_LANGUAGE_HEADER = "x-ui-language";
 const UI_LANGUAGE_MAX_LENGTH = 35;
 const UI_LANGUAGE_RE = /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{1,8}){0,4}$/;
 
-function resolveReportedUiLanguage(req) {
+function resolveReportedUiLanguage(req: any) {
   const raw = req?.headers?.[UI_LANGUAGE_HEADER];
   if (typeof raw !== "string") return "not reported";
   const value = raw.trim();
@@ -414,13 +415,13 @@ function resolveReportedUiLanguage(req) {
   return value;
 }
 
-async function buildSystemInfo(activeServer, serverManager, uiLanguage = "not reported") {
+async function buildSystemInfo(activeServer: any, serverManager: any, uiLanguage = "not reported") {
   const version = await readPanelVersion();
   const isPkg = typeof process.pkg !== "undefined";
   const paths = getDataPaths();
   const cpus = os.cpus();
 
-  let serverProcess = { checked: false };
+  let serverProcess: AnyRecord = { checked: false };
   if (typeof serverManager?.getServerProcessDetails === "function") {
     try {
       const details = await serverManager.getServerProcessDetails();
@@ -429,7 +430,7 @@ async function buildSystemInfo(activeServer, serverManager, uiLanguage = "not re
         running: Boolean(details.running),
         scanFailed: Boolean(details.scanFailed),
       };
-    } catch (e) {
+    } catch (e: any) {
       serverProcess = { checked: true, error: e.message };
     }
   }
@@ -510,30 +511,30 @@ async function buildEnvironmentReport() {
   return lines.join("\n") + "\n";
 }
 
-async function buildPanelConfig(activeServer) {
-  let settings = {};
-  let servers = [];
-  let scheduledTasks = [];
-  let trackedMods = [];
+async function buildPanelConfig(activeServer: any) {
+  let settings: AnyRecord = {};
+  let servers: any[] = [];
+  let scheduledTasks: any[] = [];
+  let trackedMods: any[] = [];
   try {
-    settings = await getAllSettings();
-  } catch (e) {
+    settings = (await getAllSettings()) as AnyRecord;
+  } catch (e: any) {
     settings = { _error: e.message };
   }
   try {
     const db = await getDb();
     servers = db?.data?.servers || [];
-  } catch (e) {
+  } catch (e: any) {
     servers = [{ _error: e.message }];
   }
   try {
     scheduledTasks = await getScheduledTasks();
-  } catch (e) {
+  } catch (e: any) {
     scheduledTasks = [{ _error: e.message }];
   }
   try {
     trackedMods = await getTrackedMods();
-  } catch (e) {
+  } catch (e: any) {
     trackedMods = [{ _error: e.message }];
   }
 
@@ -562,7 +563,7 @@ const SUPPORT_INI_KEYS = [
   "AntiCheatProtectionType",
 ];
 
-async function buildServerConfigSummary(activeServer) {
+async function buildServerConfigSummary(activeServer: any) {
   const configDir = activeServer?.serverConfigPath;
   const serverName = activeServer?.serverName || activeServer?.name;
   if (!configDir || !serverName) {
@@ -571,7 +572,7 @@ async function buildServerConfigSummary(activeServer) {
 
   const iniPath = path.join(configDir, `${serverName}.ini`);
   const sandboxPath = path.join(configDir, `${serverName}_SandboxVars.lua`);
-  const result = {
+  const result: AnyRecord = {
     available: false,
     serverName,
     ini: { path: iniPath, exists: false },
@@ -580,7 +581,7 @@ async function buildServerConfigSummary(activeServer) {
 
   try {
     const iniContent = await fs.promises.readFile(iniPath, "utf8");
-    const values = {};
+    const values: AnyRecord = {};
     for (const raw of iniContent.split(/\r?\n/)) {
       const line = raw.trim();
       if (!line || line.startsWith("#") || line.startsWith(";")) continue;
@@ -588,10 +589,10 @@ async function buildServerConfigSummary(activeServer) {
       if (separator <= 0) continue;
       values[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
     }
-    const splitList = (value) =>
+    const splitList = (value: any) =>
       (value || "")
         .split(";")
-        .map((entry) => entry.trim())
+        .map((entry: string) => entry.trim())
         .filter(Boolean);
     const safeSettings = Object.fromEntries(
       SUPPORT_INI_KEYS.filter((key) => values[key] !== undefined).map((key) => [
@@ -612,7 +613,7 @@ async function buildServerConfigSummary(activeServer) {
       map: splitList(values.Map),
       modsWorkshopCountMismatch: mods.length !== workshopItems.length,
     };
-  } catch (error) {
+  } catch (error: any) {
     result.ini.error = error.message;
   }
 
@@ -626,14 +627,14 @@ async function buildServerConfigSummary(activeServer) {
       sha256: crypto.createHash("sha256").update(sandboxContent).digest("hex"),
       braceBalance: braces,
     };
-  } catch (error) {
+  } catch (error: any) {
     result.sandbox.error = error.message;
   }
 
   return result;
 }
 
-async function buildPzBuildInfo(activeServer) {
+async function buildPzBuildInfo(activeServer: any) {
   const installPath = activeServer?.installPath;
   if (!installPath) return { available: false, reason: "Install path is not set" };
 
@@ -644,7 +645,7 @@ async function buildPzBuildInfo(activeServer) {
   );
   try {
     const manifest = await fs.promises.readFile(manifestPath, "utf8");
-    const valueFor = (key) =>
+    const valueFor = (key: string) =>
       manifest.match(new RegExp(`"${key}"\\s+"([^"]+)"`))?.[1] || null;
     const lastUpdated = valueFor("LastUpdated");
     return {
@@ -656,27 +657,30 @@ async function buildPzBuildInfo(activeServer) {
         ? new Date(Number(lastUpdated) * 1000).toISOString()
         : null,
     };
-  } catch (error) {
+  } catch (error: any) {
     return { available: false, manifestPath, error: error.message };
   }
 }
 
-async function listDir(target, { recurseInto = [], maxEntries = 200 } = {}) {
+async function listDir(
+  target: string | null,
+  { recurseInto = [], maxEntries = 200 }: { recurseInto?: string[]; maxEntries?: number } = {},
+) {
   if (!target) return null;
   try {
     const stat = await fs.promises.stat(target);
     if (!stat.isDirectory()) return { path: target, error: "not a directory" };
-  } catch (e) {
+  } catch (e: any) {
     return { path: target, error: e.message };
   }
   try {
     const items = await fs.promises.readdir(target, { withFileTypes: true });
-    const out = [];
+    const out: AnyRecord[] = [];
     for (const it of items.slice(0, maxEntries)) {
       try {
         const full = path.join(target, it.name);
         const s = await fs.promises.stat(full);
-        const entry = {
+        const entry: AnyRecord = {
           name: it.name,
           type: it.isDirectory() ? "dir" : it.isFile() ? "file" : "other",
           size: s.size,
@@ -696,18 +700,18 @@ async function listDir(target, { recurseInto = [], maxEntries = 200 } = {}) {
       totalEntries: items.length,
       entries: out,
     };
-  } catch (e) {
+  } catch (e: any) {
     return { path: target, error: e.message };
   }
 }
 
-async function buildZomboidPaths(activeServer) {
+async function buildZomboidPaths(activeServer: any) {
   const configured = activeServer?.zomboidDataPath || null;
   const inspection = configured ? inspectZomboidPath(configured) : null;
-  let candidates = [];
+  let candidates: any[] = [];
   try {
     candidates = getCandidateZomboidPaths();
-  } catch (e) {
+  } catch (e: any) {
     candidates = [{ _error: e.message }];
   }
 
@@ -750,7 +754,7 @@ async function buildZomboidPaths(activeServer) {
   };
 }
 
-function sanitizeCommandHistoryEntry(entry) {
+function sanitizeCommandHistoryEntry(entry: any) {
   if (!entry) return entry;
   const cloned = { ...entry };
   if (typeof cloned.command === "string") {
@@ -763,34 +767,34 @@ function sanitizeCommandHistoryEntry(entry) {
 }
 
 async function buildRecentEvents() {
-  let serverEvents = [];
-  let commandHistory = [];
-  let playerLogs = [];
-  let scheduleHistory = [];
-  let bridgeLogs = [];
+  let serverEvents: any[] = [];
+  let commandHistory: any[] = [];
+  let playerLogs: any[] = [];
+  let scheduleHistory: any[] = [];
+  let bridgeLogs: any[] = [];
 
   try {
     const db = await getDb();
     serverEvents = (db?.data?.server_events || []).slice(0, 50);
     scheduleHistory = (db?.data?.schedule_history || []).slice(0, 50);
-  } catch (e) {
+  } catch (e: any) {
     serverEvents = [{ _error: e.message }];
   }
   try {
     commandHistory = (await getCommandHistory(100)).map(
       sanitizeCommandHistoryEntry,
     );
-  } catch (e) {
+  } catch (e: any) {
     commandHistory = [{ _error: e.message }];
   }
   try {
     playerLogs = await getPlayerLogs(null, 100);
-  } catch (e) {
+  } catch (e: any) {
     playerLogs = [{ _error: e.message }];
   }
   try {
     bridgeLogs = await getBridgeLogs(100);
-  } catch (e) {
+  } catch (e: any) {
     bridgeLogs = [{ _error: e.message }];
   }
 
@@ -806,7 +810,7 @@ async function buildRecentEvents() {
 async function buildPerformanceHistory() {
   try {
     return await getPerformanceHistory(180);
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
@@ -815,14 +819,14 @@ async function buildDbStats() {
   try {
     const stats = await getDatabaseStats();
     return sanitizeForBundle(stats);
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
 
 function buildBridgeStatus() {
   try {
-    const status = panelBridgeService?.getStatus?.() || null;
+    const status: AnyRecord = panelBridgeService?.getStatus?.() || {};
     if (!status) return { available: false };
 
     const enriched = { ...status };
@@ -843,21 +847,21 @@ function buildBridgeStatus() {
           } else {
             enriched.ipcFiles[name] = { exists: false };
           }
-        } catch (e) {
+        } catch (e: any) {
           enriched.ipcFiles[name] = { error: e.message };
         }
       }
     }
     return sanitizeForBundle(enriched);
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
 
 async function buildSftpDiagnostics() {
   try {
-    const settings = await getAllSettings();
-    const status = panelBridgeService?.getStatus?.() || {};
+    const settings = (await getAllSettings()) as AnyRecord;
+    const status: AnyRecord = panelBridgeService?.getStatus?.() || {};
     return sanitizeForBundle({
       configured: Boolean(settings?.panelBridgeSftpEnabled),
       host: settings?.panelBridgeSftpHost || null,
@@ -868,7 +872,7 @@ async function buildSftpDiagnostics() {
       lastSftpTransport: status.lastSftpTransport || null,
       fellBackToLocal: status.transport?.type !== "sftp" && Boolean(status.lastSftpTransport),
     });
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
@@ -883,12 +887,12 @@ async function buildProcessSnapshot() {
         ? process.resourceUsage()
         : null,
     activeRequests:
-      typeof process._getActiveRequests === "function"
-        ? process._getActiveRequests().length
+      typeof (process as any)._getActiveRequests === "function"
+        ? (process as any)._getActiveRequests().length
         : null,
     activeHandles:
-      typeof process._getActiveHandles === "function"
-        ? process._getActiveHandles().length
+      typeof (process as any)._getActiveHandles === "function"
+        ? (process as any)._getActiveHandles().length
         : null,
   };
 }
@@ -896,9 +900,9 @@ async function buildProcessSnapshot() {
 async function buildNetworkInterfaces() {
   try {
     const ifaces = os.networkInterfaces();
-    const sanitized = {};
+    const sanitized: AnyRecord = {};
     for (const [name, addrs] of Object.entries(ifaces || {})) {
-      sanitized[name] = (addrs || []).map((a) => ({
+      sanitized[name] = (addrs || []).map((a: any) => ({
         address: a.address,
         family: a.family,
         internal: a.internal,
@@ -906,7 +910,7 @@ async function buildNetworkInterfaces() {
       }));
     }
     return sanitized;
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
@@ -925,7 +929,7 @@ async function buildOidcStatus() {
       allowInsecureHttp: settings.allowInsecureHttp,
       envOverrides: getOidcEnvOverrides(),
     };
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
@@ -946,7 +950,7 @@ async function buildRolesAndPermissions() {
       })),
       users: users.map((u) => ({ username: u.username, role: u.role, roleId: u.roleId })),
     });
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
@@ -973,7 +977,7 @@ async function buildWorldMapDiagnostics() {
       Promise.resolve(getB42ResolutionStatus()),
     ]);
     return { curl, b42Resolution: resolution };
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
@@ -981,12 +985,12 @@ async function buildWorldMapDiagnostics() {
 function buildDbWriteHealth() {
   try {
     return getCircuitBreakerStatus();
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
 
-async function buildBackupsSummary(req) {
+async function buildBackupsSummary(req: any) {
   try {
     const backupService = req?.app?.get?.("backupService");
     const [settings, recent] = await Promise.all([
@@ -994,19 +998,19 @@ async function buildBackupsSummary(req) {
       listBackupRecords({ limit: 20 }),
     ]);
     return sanitizeForBundle({ settings, recentRuns: recent });
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
 
 const SUPPORT_BUNDLE_LOG_TAIL_LINES = 500;
 
-async function buildDockerContainerLogsText(activeServer) {
+async function buildDockerContainerLogsText(activeServer: any) {
   const ref = activeServer?.dockerContainerName || activeServer?.dockerContainerId || null;
   if (!ref) {
     return "Docker container logs\n=====================\n\nNo Docker container is mapped to the active server -- skipped.\n";
   }
-  const dockerClient = getDockerClient();
+  const dockerClient = getDockerClient() as any;
   if (!dockerClient?.enabled || !dockerClient.available) {
     return `Docker container logs\n=====================\n\nContainer "${ref}" is mapped to the active server, but Docker control is disabled or the Docker socket is unavailable on this panel host -- skipped.\n`;
   }
@@ -1022,8 +1026,12 @@ async function buildDockerContainerLogsText(activeServer) {
   return `Docker container logs\n=====================\nContainer: ${ref}\nLast ${SUPPORT_BUNDLE_LOG_TAIL_LINES} lines, stdout+stderr, timestamps included.\n\n${logs}`;
 }
 
-function execLinuxUserCommand(command, args, { timeoutMs = 8000 } = {}) {
-  return new Promise((resolve) => {
+function execLinuxUserCommand(
+  command: string,
+  args: string[],
+  { timeoutMs = 8000 }: { timeoutMs?: number } = {},
+): Promise<AnyRecord> {
+  return new Promise<AnyRecord>((resolve) => {
     const uid = typeof process.getuid === "function" ? process.getuid() : null;
     const env = { ...process.env };
     if (!env.XDG_RUNTIME_DIR && Number.isInteger(uid)) {
@@ -1034,8 +1042,9 @@ function execLinuxUserCommand(command, args, { timeoutMs = 8000 } = {}) {
       args,
       { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env },
       (error, stdout, stderr) => {
+        const errorCode = error?.code;
         resolve({
-          code: Number.isInteger(error?.code) ? error.code : error ? 1 : 0,
+          code: Number.isInteger(errorCode) ? errorCode : error ? 1 : 0,
           stdout: String(stdout || ""),
           stderr: String(stderr || error?.message || ""),
         });
@@ -1044,7 +1053,7 @@ function execLinuxUserCommand(command, args, { timeoutMs = 8000 } = {}) {
   });
 }
 
-async function buildManagedServiceLogsText(activeServer) {
+async function buildManagedServiceLogsText(activeServer: any) {
   const provider = activeServer?.lifecycleProvider;
   if (!isManagedLifecycleProvider(provider)) {
     return "Managed service logs\n=====================\n\nThe active server is not running under a systemd/OpenRC managed lifecycle -- skipped.\n";
@@ -1059,7 +1068,7 @@ async function buildManagedServiceLogsText(activeServer) {
   let serviceName;
   try {
     serviceName = getLifecycleServiceName(activeServer);
-  } catch (e) {
+  } catch (e: any) {
     return `Managed service logs\n=====================\n\nCould not determine the systemd unit name: ${e.message}\n`;
   }
   const unit = `${serviceName}.service`;
@@ -1082,12 +1091,12 @@ async function buildManagedServiceLogsText(activeServer) {
   return `Managed service logs\n=====================\nUnit: ${unit} (systemd --user)\nLast ${SUPPORT_BUNDLE_LOG_TAIL_LINES} lines.\n\n${result.stdout}`;
 }
 
-async function buildDiscordBotStatus(req) {
+async function buildDiscordBotStatus(req: any) {
   try {
     const discordBot = req?.app?.get?.("discordBot");
     if (!discordBot?.getStatus) return { available: false };
     return sanitizeForBundle(discordBot.getStatus());
-  } catch (e) {
+  } catch (e: any) {
     return { _error: e.message };
   }
 }
@@ -1152,11 +1161,15 @@ function buildBundleReadme() {
   ].join("\n");
 }
 
-async function buildBundleDiagnostics(activeServer, req, knownSecrets) {
-  const wrap = async (name, fn) => {
+async function buildBundleDiagnostics(
+  activeServer: any,
+  req: any,
+  knownSecrets: any[],
+) {
+  const wrap = async (name: string, fn: () => any): Promise<[string, any]> => {
     try {
       return [name, await fn()];
-    } catch (e) {
+    } catch (e: any) {
       return [name, { _error: e?.message || String(e) }];
     }
   };
@@ -1189,7 +1202,7 @@ async function buildBundleDiagnostics(activeServer, req, knownSecrets) {
     })),
   ]);
 
-  const files = [
+  const files: Array<{ name: string; content: string }> = [
     { name: "README.md", content: buildBundleReadme() },
     {
       name: "environment.txt",
@@ -1231,8 +1244,8 @@ async function getSupportBundleEntries() {
     activeServer?.zomboidDataPath || "",
   );
 
-  const entries = [];
-  const seenFiles = new Set();
+  const entries: any[] = [];
+  const seenFiles = new Set<string>();
 
   await collectBundleFilesFromDir(
     paths.logsDir,
@@ -1316,7 +1329,7 @@ router.get("/logs/files", requirePermission("diagnostics.manage"), async (req, r
 
     try {
       await fs.promises.access(logsDir);
-    } catch (e) {
+    } catch (e: any) {
       log.debug(`Logs directory not accessible (${logsDir}): ${e.message}`);
       return res.json({ files: [] });
     }
@@ -1324,7 +1337,7 @@ router.get("/logs/files", requirePermission("diagnostics.manage"), async (req, r
     const files = await getAvailableLogFiles(logsDir);
 
     res.json({ files });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to list log files: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1350,7 +1363,7 @@ router.get("/logs/download", requirePermission("diagnostics.manage"), async (req
       else res.destroy();
     });
     readStream.pipe(res);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to download logs: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1380,11 +1393,11 @@ router.get("/logs/download-zip", requirePermission("diagnostics.manage"), async 
       zlib: { level: 6 },
     });
 
-    archive.on("warning", (error) => {
+    archive.on("warning", (error: any) => {
       log.warn(`Log zip warning: ${error.message}`);
     });
 
-    archive.on("error", (error) => {
+    archive.on("error", (error: any) => {
       log.error(`Failed to create log archive: ${error.message}`);
       if (!res.headersSent) {
         res.status(500).json({ error: "Failed to create log archive" });
@@ -1435,7 +1448,7 @@ router.get("/logs/download-zip", requirePermission("diagnostics.manage"), async 
       log.info(
         `Support bundle: appended ${diagnostics.length} diagnostic files + ${entries.length} log files`,
       );
-    } catch (diagErr) {
+    } catch (diagErr: any) {
       log.warn(`Support bundle diagnostics failed: ${diagErr.message}`);
       archive.append(
         `Diagnostic collection failed: ${diagErr.message}\nStack:\n${diagErr.stack || "(no stack)"}\n`,
@@ -1444,7 +1457,7 @@ router.get("/logs/download-zip", requirePermission("diagnostics.manage"), async 
     }
 
     archive.finalize();
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to download log archive: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1453,7 +1466,7 @@ router.get("/logs/download-zip", requirePermission("diagnostics.manage"), async 
 router.get("/logs/download/:filename", requirePermission("diagnostics.manage"), async (req, res) => {
   try {
     const paths = getDataPaths();
-    const filename = req.params.filename;
+    const filename = String(req.params.filename);
     log.info(`GET /logs/download/${filename}`);
 
     if (
@@ -1485,7 +1498,7 @@ router.get("/logs/download/:filename", requirePermission("diagnostics.manage"), 
       else res.destroy();
     });
     readStream.pipe(res);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to download log file: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1496,7 +1509,7 @@ router.post("/logs/clear", requirePermission("diagnostics.manage"), async (req, 
     log.info("POST /logs/clear");
     logBuffer.length = 0;
     res.json({ success: true, message: "Log buffer cleared" });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -1544,7 +1557,7 @@ router.post("/paths", requirePermission("diagnostics.manage"), async (req, res) 
     } else {
       res.status(400).json({ error: result.error });
     }
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to update paths: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -1580,7 +1593,7 @@ router.get("/health", requirePermission("diagnostics.manage"), async (req, res) 
       },
       uptime: process.uptime(),
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       status: "error",
       error: sanitizeError(error.message),
@@ -1599,10 +1612,10 @@ const DIAG_CATEGORIES = {
   updates: { label: "Updates", order: 6 },
 };
 
-function diagOk(id, label, message, extras = {}) {
+function diagOk(id: any, label: any, message: any, extras: AnyRecord = {}) {
   return { id, label, status: "ok", message, severity: "info", ...extras };
 }
-function diagFail(id, label, message, extras = {}) {
+function diagFail(id: any, label: any, message: any, extras: AnyRecord = {}) {
   return {
     id,
     label,
@@ -1612,13 +1625,13 @@ function diagFail(id, label, message, extras = {}) {
     ...extras,
   };
 }
-function diagWarn(id, label, message, extras = {}) {
+function diagWarn(id: any, label: any, message: any, extras: AnyRecord = {}) {
   return { id, label, status: "warn", message, severity: "warning", ...extras };
 }
-function diagInfo(id, label, message, extras = {}) {
+function diagInfo(id: any, label: any, message: any, extras: AnyRecord = {}) {
   return { id, label, status: "info", message, severity: "info", ...extras };
 }
-function diagSkip(id, label, message, extras = {}) {
+function diagSkip(id: any, label: any, message: any, extras: AnyRecord = {}) {
   return { id, label, status: "skip", message, severity: "info", ...extras };
 }
 
@@ -1626,14 +1639,14 @@ export function resolveServerProcessCheckMode({
   remoteRconOnly,
   dockerManagedProvider,
   serverRunning,
-}) {
+}: AnyRecord) {
   if (remoteRconOnly) return "remote";
   if (dockerManagedProvider) return "docker";
   if (serverRunning === null) return "unknown";
   return serverRunning ? "running" : "stopped";
 }
 
-export function levenshteinDistance(a, b) {
+export function levenshteinDistance(a: string, b: string) {
   if (a === b) return 0;
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
@@ -1650,7 +1663,7 @@ export function levenshteinDistance(a, b) {
   return prev[b.length];
 }
 
-export function findNearMissTypo(modId, candidateNames) {
+export function findNearMissTypo(modId: string, candidateNames: string[]) {
   let best = null;
   let bestDistance = Infinity;
   const threshold = Math.max(2, Math.floor(modId.length * 0.1));
@@ -1669,9 +1682,9 @@ export function findNearMissTypo(modId, candidateNames) {
 }
 
 export function triageUnresolvedMods(
-  unresolvedMods,
-  installedModNames,
-  { steamOperationActive, anyWorkshopMissingFromDisk },
+  unresolvedMods: string[],
+  installedModNames: string[],
+  { steamOperationActive, anyWorkshopMissingFromDisk }: AnyRecord,
 ) {
   return unresolvedMods.map((modId) => {
     const suggestion = findNearMissTypo(modId, installedModNames);
@@ -1683,7 +1696,7 @@ export function triageUnresolvedMods(
   });
 }
 
-async function pathExistsAsync(p) {
+async function pathExistsAsync(p: string | null) {
   if (!p) return false;
   try {
     await fs.promises.access(p);
@@ -1693,7 +1706,7 @@ async function pathExistsAsync(p) {
   }
 }
 
-async function pathWritableAsync(p) {
+async function pathWritableAsync(p: string | null) {
   if (!p) return false;
   try {
     await fs.promises.access(p, fs.constants.W_OK);
@@ -1703,7 +1716,7 @@ async function pathWritableAsync(p) {
   }
 }
 
-async function scanWorkshopFailures(zPath) {
+async function scanWorkshopFailures(zPath: string | null) {
   if (!zPath) return null;
   const logPath = path.join(zPath, "server-console.txt");
   let stat;
@@ -1736,8 +1749,8 @@ async function scanWorkshopFailures(zPath) {
     }
   }
 
-  const failedIds = [];
-  const resultByFailedId = {};
+  const failedIds: any[] = [];
+  const resultByFailedId: AnyRecord = {};
   const re = /Workshop:\s+onItemNotDownloaded\s+itemID=(\d+)\s+result=(\d+)/g;
   let m;
   while ((m = re.exec(text)) !== null) {
@@ -1760,7 +1773,7 @@ async function scanWorkshopFailures(zPath) {
   };
 }
 
-async function scanRecentCrash(zPath) {
+async function scanRecentCrash(zPath: string | null) {
   if (!zPath) return null;
   const logPath = path.join(zPath, "server-console.txt");
   let stat;
@@ -1828,14 +1841,14 @@ async function scanRecentCrash(zPath) {
   return null;
 }
 
-async function parseServerIni(iniPath) {
+async function parseServerIni(iniPath: string) {
   let text;
   try {
     text = await fs.promises.readFile(iniPath, "utf-8");
   } catch {
     return null;
   }
-  const out = {};
+  const out: AnyRecord = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line || line.startsWith("#") || line.startsWith(";")) continue;
@@ -1843,10 +1856,10 @@ async function parseServerIni(iniPath) {
     if (eq <= 0) continue;
     out[line.slice(0, eq).trim()] = line.slice(eq + 1);
   }
-  const splitSemi = (v) =>
+  const splitSemi = (v: any): string[] =>
     (v || "")
       .split(";")
-      .map((s) => s.trim())
+      .map((s: string) => s.trim())
       .filter(Boolean);
   return {
     raw: out,
@@ -1860,10 +1873,10 @@ async function parseServerIni(iniPath) {
   };
 }
 
-async function readModIds(modInfoPath, fallbackName) {
+async function readModIds(modInfoPath: string, fallbackName: string) {
   try {
     const text = await fs.promises.readFile(modInfoPath, "utf-8");
-    const ids = [];
+    const ids: any[] = [];
     for (const raw of text.split(/\r?\n/)) {
       const line = raw.trim();
       if (!line || line.startsWith("#") || line.startsWith(";")) continue;
@@ -1879,9 +1892,9 @@ async function readModIds(modInfoPath, fallbackName) {
   }
 }
 
-async function collectModContent(modDir, fallbackName) {
-  const ids = new Set();
-  const maps = new Set();
+async function collectModContent(modDir: string, fallbackName: string) {
+  const ids = new Set<string>();
+  const maps = new Set<string>();
 
   const candidateRoots = [modDir];
   const children = await safeReaddir(modDir);
@@ -1912,8 +1925,8 @@ async function collectModContent(modDir, fallbackName) {
   return { ids: [...ids], maps: [...maps] };
 }
 
-async function scanWorkshopMods(installPath) {
-  const out = new Map();
+async function scanWorkshopMods(installPath: string | null) {
+  const out = new Map<string, { mods: string[]; maps: string[] }>();
   if (!installPath) return out;
   const root = path.join(
     installPath,
@@ -1930,7 +1943,7 @@ async function scanWorkshopMods(installPath) {
       const modsRoot = path.join(root, id, "mods");
       const modNames = await safeReaddir(modsRoot);
       if (!modNames) return;
-      const entry = { mods: [], maps: [] };
+      const entry: { mods: string[]; maps: string[] } = { mods: [], maps: [] };
       await Promise.all(
         modNames.map(async (name) => {
           const collected = await collectModContent(
@@ -1947,9 +1960,9 @@ async function scanWorkshopMods(installPath) {
   return out;
 }
 
-async function scanLocalMods(zPath) {
-  const mods = new Set();
-  const maps = new Set();
+async function scanLocalMods(zPath: string | null) {
+  const mods = new Set<string>();
+  const maps = new Set<string>();
   if (!zPath) return { mods, maps };
   for (const dir of ["mods", "Mods"]) {
     const root = path.join(zPath, dir);
@@ -1966,7 +1979,7 @@ async function scanLocalMods(zPath) {
   return { mods, maps };
 }
 
-async function scanSaveStats(saveDir, budgetMs) {
+async function scanSaveStats(saveDir: string, budgetMs: number) {
   if (!saveDir) return null;
   const exists = await safePathExists(saveDir);
   if (!exists) return null;
@@ -1976,11 +1989,11 @@ async function scanSaveStats(saveDir, budgetMs) {
   const deadline = now + budgetMs;
   let totalBytes = 0;
   let chunks = 0;
-  let staleLocks = [];
+  let staleLocks: any[] = [];
   let visited = 0;
   let truncated = false;
 
-  const walk = async (dir) => {
+  const walk = async (dir: string) => {
     if (visited >= MAX_FILES || Date.now() >= deadline) {
       truncated = true;
       return;
@@ -2013,12 +2026,12 @@ async function scanSaveStats(saveDir, budgetMs) {
   return { totalBytes, chunks, staleLocks, truncated };
 }
 
-function probeJre(javaPath) {
-  return new Promise((resolve) => {
+function probeJre(javaPath: string | null): Promise<any> {
+  return new Promise<any>((resolve) => {
     if (!javaPath) return resolve({ ok: false, error: "no path" });
     let done = false;
-    let child;
-    const finish = (result) => {
+    let child: any;
+    const finish = (result: any) => {
       if (done) return;
       done = true;
       try {
@@ -2054,7 +2067,7 @@ function probeJre(javaPath) {
           finish({ ok: true, version: first });
         },
       );
-    } catch (e) {
+    } catch (e: any) {
       clearTimeout(timer);
       finish({ ok: false, error: e?.message || "exec failed" });
     }
@@ -2080,7 +2093,7 @@ async function probeSteamWorkshopApi() {
       },
     );
     const dateHeader = resp.headers.get("date");
-    let serverTime = null;
+    let serverTime: number | null = null;
     if (dateHeader) {
       const parsed = Date.parse(dateHeader);
       if (Number.isFinite(parsed)) serverTime = parsed;
@@ -2092,7 +2105,7 @@ async function probeSteamWorkshopApi() {
       serverTime,
       localTime: Date.now(),
     };
-  } catch (e) {
+  } catch (e: any) {
     return {
       reachable: false,
       statusCode: null,
@@ -2102,9 +2115,9 @@ async function probeSteamWorkshopApi() {
   }
 }
 
-function withTimeout(promise, ms, fallback) {
-  let timer;
-  const timeoutPromise = new Promise((resolve) => {
+function withTimeout(promise: any, ms: number, fallback: any) {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<any>((resolve) => {
     timer = setTimeout(() => resolve(fallback), ms);
   });
   return Promise.race([
@@ -2123,7 +2136,7 @@ function withTimeout(promise, ms, fallback) {
 }
 
 export async function getServerProcessState(
-  serverManager,
+  serverManager: any,
   timeoutMs = FS_TIMEOUT_MS,
 ) {
   if (!serverManager) return { running: false, scanFailed: false };
@@ -2155,20 +2168,24 @@ export async function getServerProcessState(
 }
 
 const FS_TIMEOUT_MS = 2000;
-const safePathExists = (p) =>
+const safePathExists = (p: string | null) =>
   withTimeout(pathExistsAsync(p), FS_TIMEOUT_MS, false);
-const safePathWritable = (p) =>
+const safePathWritable = (p: string | null) =>
   withTimeout(pathWritableAsync(p), FS_TIMEOUT_MS, false);
 
-async function safeReaddir(p) {
+async function safeReaddir(p: string): Promise<string[] | null> {
   try {
-    return await withTimeout(fs.promises.readdir(p), FS_TIMEOUT_MS, null);
+    return (await withTimeout(
+      fs.promises.readdir(p),
+      FS_TIMEOUT_MS,
+      null,
+    )) as string[] | null;
   } catch {
     return null;
   }
 }
 
-async function safeStat(p) {
+async function safeStat(p: string) {
   try {
     return await withTimeout(fs.promises.stat(p), FS_TIMEOUT_MS, null);
   } catch {
@@ -2176,12 +2193,11 @@ async function safeStat(p) {
   }
 }
 
-// eslint-disable-next-line no-unused-vars
-async function runCheck(label, fn, ctx = {}) {
+async function runCheck(label: string, fn: () => any, ctx: AnyRecord = {}) {
   try {
     const result = await fn();
     return result;
-  } catch (e) {
+  } catch (e: any) {
     return diagFail(
       `error.${label}`,
       label,
@@ -2191,21 +2207,21 @@ async function runCheck(label, fn, ctx = {}) {
   }
 }
 
-function fmtMB(bytes) {
+function fmtMB(bytes: any) {
   if (!Number.isFinite(bytes)) return "?";
   return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
 }
 
-export function formatDbAccessibleMessage(dbStats) {
+export function formatDbAccessibleMessage(dbStats: any) {
   const collectionCount = dbStats ? Object.keys(dbStats.collections).length : "?";
   return `${collectionCount} collections, ${fmtMB(dbStats?.fileSizeBytes)}.`;
 }
 
-function fmtGB(bytes) {
+function fmtGB(bytes: any) {
   if (!Number.isFinite(bytes)) return "?";
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
-function fmtAge(ms) {
+function fmtAge(ms: any) {
   if (!Number.isFinite(ms) || ms < 0) return "unknown";
   const s = Math.round(ms / 1000);
   if (s < 60) return `${s}s ago`;
@@ -2216,7 +2232,7 @@ function fmtAge(ms) {
   return `${Math.round(h / 24)}d ago`;
 }
 
-function buildThumbnailResolutionCheck(thumbStatus) {
+function buildThumbnailResolutionCheck(thumbStatus: any) {
   const failing = thumbStatus?.failing;
   const total = thumbStatus?.total;
   const lastError = thumbStatus?.lastError ?? null;
@@ -2295,7 +2311,11 @@ const RCON_REJECTION_REASON_HINTS = [
 const RCON_REJECTIONS_CLOSING_LINE =
   "Everything the panel can positively identify as a rejection is listed above. For anything that looks wrong but is not, the Console page's command history shows the exact raw response every RCON command received, so a person can spot something no automated check catches.";
 
-function summarizeRconRejections(history, classify, { windowMs = RCON_REJECTION_WINDOW_MS, now = Date.now() } = {}) {
+function summarizeRconRejections(
+  history: any[],
+  classify: (_response: any) => any,
+  { windowMs = RCON_REJECTION_WINDOW_MS, now = Date.now() }: AnyRecord = {},
+) {
   if (typeof classify !== "function") return null;
   const cutoff = now - windowMs;
   const byCommand = new Map();
@@ -2322,7 +2342,7 @@ function summarizeRconRejections(history, classify, { windowMs = RCON_REJECTION_
   };
 }
 
-function buildRconCommandRejectionsCheck(summary) {
+function buildRconCommandRejectionsCheck(summary: any) {
   if (!summary || typeof summary.total !== "number" || !Array.isArray(summary.breakdown)) {
     return diagWarn(
       "rcon.commandRejections",
@@ -2341,7 +2361,9 @@ function buildRconCommandRejectionsCheck(summary) {
     );
   }
 
-  const list = summary.breakdown.map((b) => `${b.command} (x${b.count})`).join(", ");
+  const list = summary.breakdown
+    .map((b: AnyRecord) => `${b.command} (x${b.count})`)
+    .join(", ");
   const hint = [...summary.reasonHints, RCON_REJECTIONS_CLOSING_LINE].join(" ");
   return diagWarn(
     "rcon.commandRejections",
@@ -2365,7 +2387,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
     const discordBot = req.app.get("discordBot");
     const panelUpdateChecker = req.app.get("panelUpdateChecker");
 
-    const checks = [];
+    const checks: AnyRecord[] = [];
     const paths = getDataPaths();
     const databasePath = getDatabaseFilePath();
     const databaseName = path.basename(databasePath);
@@ -2528,7 +2550,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
             : null,
         );
         checks.push(buildRconCommandRejectionsCheck(summary));
-      } catch (e) {
+      } catch (e: any) {
         checks.push(
           diagWarn(
             "rcon.commandRejections",
@@ -2571,7 +2593,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
 
       {
         const enabledTasks = (scheduledTasks || []).filter(
-          (t) => t.enabled,
+          (t: AnyRecord) => t.enabled,
         ).length;
         if (scheduler) {
           checks.push(
@@ -2625,7 +2647,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
 
       try {
         checks.push(buildThumbnailResolutionCheck(await getThumbnailResolutionStatus()));
-      } catch (e) {
+      } catch (e: any) {
         checks.push(
           diagWarn(
             "mods.thumbnailResolution",
@@ -2635,7 +2657,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           ),
         );
       }
-    } catch (e) {
+    } catch (e: any) {
       const reason = e?.message || "unknown";
       checks.push(
         diagWarn(
@@ -2940,7 +2962,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
         }
 
         if (zPath || installPath) {
-          const bridgeCandidates = [];
+          const bridgeCandidates: any[] = [];
           if (zPath) {
             for (const root of ["mods", "Mods"]) {
               bridgeCandidates.push(
@@ -3166,19 +3188,19 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
               maps: new Set(),
             }),
           ]);
-          const wsModNames = new Set();
-          const wsMapNames = new Set();
+          const wsModNames = new Set<string>();
+          const wsMapNames = new Set<string>();
           for (const v of wsScan.values()) {
             for (const m of v.mods) wsModNames.add(m);
             for (const m of v.maps) wsMapNames.add(m);
           }
 
           const allUnresolved = ini.Mods.filter(
-            (m) => !wsModNames.has(m) && !localScan.mods.has(m),
+            (m: string) => !wsModNames.has(m) && !localScan.mods.has(m),
           );
-          const numericInMods = allUnresolved.filter((m) => /^\d{5,}$/.test(m));
+          const numericInMods = allUnresolved.filter((m: string) => /^\d{5,}$/.test(m));
           const unresolvedMods = allUnresolved.filter(
-            (m) => !/^\d{5,}$/.test(m),
+            (m: string) => !/^\d{5,}$/.test(m),
           );
 
           if (numericInMods.length > 0) {
@@ -3225,7 +3247,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
               normalizedInstallPathForOp,
             );
             const anyWorkshopMissingFromDisk = ini.WorkshopItems.some(
-              (id) => /^\d{1,15}$/.test(id) && !wsScan.has(id),
+              (id: string) => /^\d{1,15}$/.test(id) && !wsScan.has(id),
             );
             const installedModNames = [...wsModNames, ...localScan.mods];
             const unresolvedTriage = triageUnresolvedMods(
@@ -3249,8 +3271,8 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           }
 
           const modSet = new Set(ini.Mods);
-          const orphanWorkshop = [];
-          const deadWorkshop = [];
+          const orphanWorkshop: any[] = [];
+          const deadWorkshop: any[] = [];
           for (const id of ini.WorkshopItems) {
             if (!/^\d{1,15}$/.test(id)) continue;
             const v = wsScan.get(id);
@@ -3268,7 +3290,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
             const shown = all.slice(0, 5).join(", ");
             const list =
               all.length > 5 ? `${shown}, +${all.length - 5} more` : shown;
-            const parts = [];
+            const parts: any[] = [];
             if (orphanWorkshop.length)
               parts.push(
                 `${orphanWorkshop.length} downloaded but not in Mods=`,
@@ -3318,12 +3340,12 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
             }
           }
 
-          const dupMods = ini.Mods.filter((m, i, a) => a.indexOf(m) !== i);
+          const dupMods = ini.Mods.filter((m: string, i: number, a: string[]) => a.indexOf(m) !== i);
           const dupWs = ini.WorkshopItems.filter(
-            (m, i, a) => a.indexOf(m) !== i,
+            (m: string, i: number, a: string[]) => a.indexOf(m) !== i,
           );
           if (dupMods.length || dupWs.length) {
-            const parts = [];
+            const parts: any[] = [];
             if (dupMods.length)
               parts.push(
                 `${dupMods.length} duplicate Mods= entr${dupMods.length === 1 ? "y" : "ies"}`,
@@ -3372,18 +3394,18 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           }
 
           const BUILTIN_MAPS = new Set(["Muldraugh, KY"]);
-          const mapNamesKnownLower = new Set();
+          const mapNamesKnownLower = new Set<string>();
           for (const m of BUILTIN_MAPS) mapNamesKnownLower.add(m.toLowerCase());
           for (const m of wsMapNames) mapNamesKnownLower.add(m.toLowerCase());
           for (const m of localScan.maps)
             mapNamesKnownLower.add(m.toLowerCase());
-          const modNamesKnownLower = new Set();
+          const modNamesKnownLower = new Set<string>();
           for (const m of wsModNames) modNamesKnownLower.add(m.toLowerCase());
           for (const m of localScan.mods)
             modNamesKnownLower.add(m.toLowerCase());
 
           const missingMaps = ini.Map.filter(
-            (m) => !mapNamesKnownLower.has(m.toLowerCase()),
+            (m: string) => !mapNamesKnownLower.has(m.toLowerCase()),
           );
           if (ini.Map.length > 0 && missingMaps.length === 0) {
             checks.push(
@@ -3395,13 +3417,13 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
               ),
             );
           } else if (missingMaps.length > 0) {
-            const modsInMap = missingMaps.filter((m) =>
+            const modsInMap = missingMaps.filter((m: string) =>
               modNamesKnownLower.has(m.toLowerCase()),
             );
             const trulyMissing = missingMaps.filter(
-              (m) => !modNamesKnownLower.has(m.toLowerCase()),
+              (m: string) => !modNamesKnownLower.has(m.toLowerCase()),
             );
-            const parts = [];
+            const parts: any[] = [];
             if (modsInMap.length > 0) {
               parts.push(
                 `${modsInMap.length} entr${modsInMap.length === 1 ? "y is a mod" : "ies are mods"}, not a map (belong only in Mods=): ${modsInMap.join(", ")}`,
@@ -3457,7 +3479,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
         }
 
         if (ini) {
-          const drift = [];
+          const drift: any[] = [];
           const panelRconPort = parseInt(activeServer.rconPort, 10);
           if (
             Number.isFinite(panelRconPort) &&
@@ -3596,7 +3618,9 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           }
           const staleLocksCheck = buildStaleLocksCheck(saveStats, saveDirUsed);
           if (staleLocksCheck) checks.push(staleLocksCheck);
-          req._diagSaveStats = saveStats ? { ...saveStats, saveDirUsed } : null;
+          (req as AnyRecord)._diagSaveStats = saveStats
+            ? { ...saveStats, saveDirUsed }
+            : null;
         }
 
         if (installPath) {
@@ -3664,7 +3688,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           }
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       const reason = e?.message || "unknown";
       checks.push(
         diagWarn(
@@ -3746,7 +3770,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           }
 
           const status = bridgeStatus.modStatus;
-          const conn = bridgeStatus.connection;
+          const conn = bridgeStatus.connection as AnyRecord;
           if (status?.alive) {
             const ageText = fmtAge(status.age || 0);
             checks.push(
@@ -3806,7 +3830,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           }
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       const reason = e?.message || "unknown";
       checks.push(
         diagWarn(
@@ -3873,7 +3897,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           ),
         );
       }
-    } catch (e) {
+    } catch (e: any) {
       const reason = e?.message || "unknown error";
       checks.push(
         diagWarn(
@@ -3959,7 +3983,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           ),
         );
       }
-    } catch (e) {
+    } catch (e: any) {
       const reason = e?.message || "unknown error";
       checks.push(
         diagWarn(
@@ -4044,7 +4068,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
       }
 
       {
-        const ss = req._diagSaveStats;
+        const ss = (req as AnyRecord)._diagSaveStats;
         if (ss) {
           const sizeGb = ss.totalBytes / 1024 / 1024 / 1024;
           const summary =
@@ -4094,7 +4118,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           }
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       const reason = e?.message || "unknown";
       checks.push(
         diagWarn(
@@ -4196,7 +4220,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           ),
         );
       }
-    } catch (e) {
+    } catch (e: any) {
       const reason = e?.message || "unknown";
       checks.push(
         diagWarn(
@@ -4358,7 +4382,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
 
       {
         const outdated = (trackedMods || []).filter(
-          (m) => m.updateAvailable,
+          (m: AnyRecord) => m.updateAvailable,
         ).length;
         if (outdated > 0) {
           checks.push(
@@ -4380,7 +4404,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
           );
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       const reason = e?.message || "unknown";
       checks.push(
         diagWarn(
@@ -4392,7 +4416,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
       );
     }
 
-    const summary = { ok: 0, warn: 0, fail: 0, info: 0, skip: 0 };
+    const summary: AnyRecord = { ok: 0, warn: 0, fail: 0, info: 0, skip: 0 };
     for (const c of checks) summary[c.status] = (summary[c.status] || 0) + 1;
     const overall =
       summary.fail > 0 ? "fail" : summary.warn > 0 ? "warn" : "ok";
@@ -4409,7 +4433,7 @@ router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, 
       checks: sanitizedChecks,
       durationMs: Date.now() - t0,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Diagnostics failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4423,7 +4447,7 @@ const WORLDMAP_HANDLERS = [
   "triggerAirdrop",
 ];
 
-async function probeTile(url) {
+async function probeTile(url: string) {
   const t0 = Date.now();
   try {
     const ctrl = AbortSignal.timeout(TILE_PROBE_TIMEOUT_MS);
@@ -4444,7 +4468,7 @@ async function probeTile(url) {
       latencyMs: Date.now() - t0,
       error: null,
     };
-  } catch (e) {
+  } catch (e: any) {
     return {
       url,
       reachable: false,
@@ -4455,7 +4479,7 @@ async function probeTile(url) {
   }
 }
 
-async function detectSaveBuild(savePath) {
+async function detectSaveBuild(savePath: string) {
   if (!(await safePathExists(savePath))) return "unknown";
   const mapDir = path.join(savePath, "map");
   if (await safePathExists(mapDir)) {
@@ -4468,7 +4492,7 @@ async function detectSaveBuild(savePath) {
   return "unknown";
 }
 
-function buildStaleLocksCheck(saveStats, saveDirUsed) {
+function buildStaleLocksCheck(saveStats: any, saveDirUsed: string | null) {
   if (saveStats && saveStats.staleLocks.length > 0) {
     return diagFail(
       "server.staleLocks",
@@ -4499,7 +4523,7 @@ function buildStaleLocksCheck(saveStats, saveDirUsed) {
 
 router.get("/worldmap", requirePermission("diagnostics.manage"), async (req, res) => {
   const t0 = Date.now();
-  const checks = [];
+  const checks: AnyRecord[] = [];
 
   try {
     const [activeServer] = await Promise.all([
@@ -4698,7 +4722,7 @@ router.get("/worldmap", requirePermission("diagnostics.manage"), async (req, res
           ),
         );
       }
-    } catch (e) {
+    } catch (e: any) {
       const reason = e?.message || "unknown";
       checks.push(
         diagWarn(
@@ -4880,7 +4904,7 @@ router.get("/worldmap", requirePermission("diagnostics.manage"), async (req, res
     }
 
 
-    const summary = { ok: 0, warn: 0, fail: 0, info: 0, skip: 0 };
+    const summary: AnyRecord = { ok: 0, warn: 0, fail: 0, info: 0, skip: 0 };
     for (const c of checks) summary[c.status] = (summary[c.status] || 0) + 1;
     const overall =
       summary.fail > 0 ? "fail" : summary.warn > 0 ? "warn" : "ok";
@@ -4930,7 +4954,7 @@ router.get("/worldmap", requirePermission("diagnostics.manage"), async (req, res
         b41: "/api/map/b41tiles/:level/:tile",
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`World map diagnostics failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4940,7 +4964,7 @@ router.get("/performance-history", requirePermission("diagnostics.manage"), asyn
     const limit = parseClampedInteger(req.query.limit, 60, 1, 1440);
     const history = await getPerformanceHistory(limit);
     res.json({ history });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get performance history: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4950,11 +4974,12 @@ router.post("/performance-snapshot", requirePermission("diagnostics.manage"), as
   try {
     const { memoryUsed, memoryTotal, cpuUsage, playerCount, serverRunning } =
       req.body || {};
-    const toNum = (v, fallback) => {
+    const toNum = (v: any, fallback: number) => {
       const n = Number(v);
       return Number.isFinite(n) ? n : fallback;
     };
-    const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
+    const clamp = (n: number, lo: number, hi: number) =>
+      Math.min(Math.max(n, lo), hi);
     await recordPerformanceSnapshot({
       memoryUsed: clamp(
         toNum(memoryUsed, process.memoryUsage().heapUsed),
@@ -4971,7 +4996,7 @@ router.post("/performance-snapshot", requirePermission("diagnostics.manage"), as
       serverRunning: typeof serverRunning === "boolean" ? serverRunning : false,
     });
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to record performance snapshot: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4981,7 +5006,7 @@ router.get("/database", requirePermission("diagnostics.manage"), async (req, res
   try {
     const stats = await getDatabaseStats();
     res.json(stats);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get database stats: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -4992,7 +5017,7 @@ router.post("/database/backup", requirePermission("diagnostics.manage"), async (
     log.info("POST /database/backup");
     const result = await createDatabaseBackup();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to create database backup: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -5003,7 +5028,7 @@ router.post("/database/compact", requirePermission("diagnostics.manage"), async 
     log.info("POST /database/compact");
     const result = await compactDatabase();
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to compact database: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -5092,12 +5117,12 @@ router.post("/clear-stale-locks", requirePermission("diagnostics.manage"), async
     const staleAfterMs = 60 * 60 * 1000;
     const now = Date.now();
     const deadline = now + 30000;
-    const deleted = [];
-    const failed = [];
+  const deleted: any[] = [];
+  const failed: any[] = [];
     let visited = 0;
     let truncated = false;
 
-    const walk = async (dir) => {
+    const walk = async (dir: string) => {
       if (visited >= MAX_FILES || Date.now() >= deadline) {
         truncated = true;
         return;
@@ -5122,7 +5147,7 @@ router.post("/clear-stale-locks", requirePermission("diagnostics.manage"), async
             try {
               await fs.promises.unlink(full);
               deleted.push(full);
-            } catch (err) {
+            } catch (err: any) {
               failed.push({ path: full, error: err.message });
             }
           }
@@ -5148,7 +5173,7 @@ router.post("/clear-stale-locks", requirePermission("diagnostics.manage"), async
           ? ". Stopped early -- this save is too large to fully check in one pass, so some stale lock files may remain undetected."
           : ".") ,
     });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to clear stale locks: ${error.message}`);
     res
       .status(500)
@@ -5167,14 +5192,14 @@ router.get("/crash-logs", requirePermission("diagnostics.manage"), async (req, r
       getDataPaths().logsDir,
     ].filter(Boolean);
 
-    const crashLogs = [];
+  const crashLogs: any[] = [];
     const seenFiles = new Set();
 
     for (const dir of crashDirs) {
       try {
         try {
           await fs.promises.access(dir);
-        } catch (e) {
+        } catch (e: any) {
           log.debug(`Crash log dir not accessible (${dir}): ${e.message}`);
           continue;
         }
@@ -5202,23 +5227,26 @@ router.get("/crash-logs", requirePermission("diagnostics.manage"), async (req, r
                     modified: stats.mtime.toISOString(),
                   });
                 }
-              } catch (e) {
+              } catch (e: any) {
                 log.debug(`Stat failed for crash log ${file}: ${e.message}`);
               }
             }
           }),
         );
-      } catch (e) {
+      } catch (e: any) {
         log.debug(
           `Directory not accessible for crash logs: ${dir} — ${e.message}`,
         );
       }
     }
 
-    crashLogs.sort((a, b) => new Date(b.modified) - new Date(a.modified));
+    crashLogs.sort(
+      (a: AnyRecord, b: AnyRecord) =>
+        new Date(b.modified).getTime() - new Date(a.modified).getTime(),
+    );
 
     res.json({ crashLogs: crashLogs.slice(0, 20), totalCount: crashLogs.length });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to get crash logs: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -5226,7 +5254,7 @@ router.get("/crash-logs", requirePermission("diagnostics.manage"), async (req, r
 
 router.get("/crash-logs/:filename", requirePermission("diagnostics.manage"), async (req, res) => {
   try {
-    const { filename } = req.params;
+    const filename = String(req.params.filename);
     const serverManager = req.app.get("serverManager");
     const serverPath = serverManager?.serverPath || "";
 
@@ -5238,7 +5266,7 @@ router.get("/crash-logs/:filename", requirePermission("diagnostics.manage"), asy
       return res.status(400).json({ error: "Invalid filename" });
     }
 
-    const searchDirs = [
+    const searchDirs: string[] = [
       serverPath,
       path.join(serverPath, "logs"),
       getDataPaths().logsDir,
@@ -5266,13 +5294,13 @@ router.get("/crash-logs/:filename", requirePermission("diagnostics.manage"), asy
         } finally {
           await handle.close();
         }
-      } catch (e) {
+      } catch (e: any) {
         // File not found in this dir, try next
       }
     }
 
     res.status(404).json({ error: "Crash log not found" });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Failed to read crash log: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -5319,7 +5347,7 @@ router.post("/client-errors", (req, res) => {
     });
 
     res.json({ ok: true });
-  } catch (err) {
+  } catch (err: any) {
     res.status(500).json({ error: "Failed to process error report" });
   }
 });
@@ -5328,7 +5356,8 @@ router.post("/client-errors", (req, res) => {
 router.get("/activity", requirePermission("diagnostics.manage"), async (req, res) => {
   try {
     const limit = parseClampedInteger(req.query.limit, 200, 1, 500);
-    const source = req.query.source || "all";
+    const source =
+      typeof req.query.source === "string" ? req.query.source : "all";
 
     let canViewPlayers = true;
     if (source === "all" || source === "player") {
@@ -5342,7 +5371,7 @@ router.get("/activity", requirePermission("diagnostics.manage"), async (req, res
       });
     }
 
-    const entries = [];
+  const entries: any[] = [];
 
     if (source === "all" || source === "rcon") {
       const rconHistory = await getCommandHistory(limit);
@@ -5409,11 +5438,14 @@ router.get("/activity", requirePermission("diagnostics.manage"), async (req, res
       }
     }
 
-    entries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    entries.sort(
+      (a: AnyRecord, b: AnyRecord) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
     const trimmed = entries.slice(0, limit);
 
     res.json({ entries: trimmed, total: trimmed.length });
-  } catch (error) {
+  } catch (error: any) {
     log.error(`Activity log failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -5442,7 +5474,7 @@ router.post(
 
       try {
         await fs.promises.chmod(targetPath, 0o600);
-      } catch (chmodError) {
+      } catch (chmodError: any) {
         return res.status(400).json({
           success: false,
           error: `Could not change file permissions: ${chmodError.message}`,
@@ -5465,7 +5497,7 @@ router.post(
         message: "Database file is writable again.",
         path: targetPath,
       });
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Failed to fix writability: ${error.message}`);
       res.status(500).json({ error: sanitizeError(error.message) });
     }

@@ -916,7 +916,7 @@ async function main() {
   }
 
   await esbuild.build({
-    entryPoints: ["./apps/panel-server/index.js"],
+    entryPoints: ["./apps/panel-server/index.ts"],
     bundle: true,
     platform: "node",
     target: "node22",

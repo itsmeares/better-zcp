@@ -51,7 +51,7 @@ describe("getModDetailsFromWorkshop: Flatpak Steam workshop content root", () =>
         "name=Flatpak Test Mod\nid=FlatpakTestMod\n",
       );
 
-      const { getModDetailsFromWorkshop } = await import("../routes/mods.js");
+      const { getModDetailsFromWorkshop } = await import("../routes/mods.ts");
       const details = getModDetailsFromWorkshop(
         workshopId,
         "/nonexistent-server-install-path",

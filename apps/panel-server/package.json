@@ -7,11 +7,11 @@
     "node": ">=22"
   },
   "type": "module",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
-    "dev": "nodemon --exec \"node --experimental-strip-types\" index.js",
-    "start": "node --experimental-strip-types index.js",
-    "db:import": "node scripts/import-legacy-db.mjs",
+    "dev": "nodemon --ext ts,js,json --exec \"node --experimental-strip-types\" index.ts",
+    "start": "node --experimental-strip-types index.ts",
+    "db:import": "node --experimental-strip-types scripts/import-legacy-db.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings=0",
@@ -45,6 +45,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.20.1",
@@ -54,6 +57,7 @@
     "jose": "^6.2.10",
     "nodemon": "^3.1.14",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.11",
     "ws": "^8.21.0"
   }

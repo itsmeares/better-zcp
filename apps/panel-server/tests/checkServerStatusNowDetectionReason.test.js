@@ -6,7 +6,7 @@ vi.mock("../database/init.ts", async (importOriginal) => {
   return { ...actual, logServerEvent: logServerEventMock };
 });
 
-const { checkServerStatusNow, io } = await import("../index.js");
+const { checkServerStatusNow, io } = await import("../index.ts");
 const { ServerManager } = await import("../services/serverManager.ts");
 const { onLog } = await import("../utils/logger.ts");
 

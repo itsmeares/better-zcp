@@ -6,7 +6,7 @@ vi.mock("../database/init.ts", async () => {
   return { ...actual, getRoleByName: mockGetRoleByName };
 });
 
-const { default: debugRouter } = await import("../routes/debug.js");
+const { default: debugRouter } = await import("../routes/debug.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 
-const { buildThumbnailResolutionCheck } = await import("../routes/debug.js");
+const { buildThumbnailResolutionCheck } = await import("../routes/debug.ts");
 
 describe("GET /diagnostics: mods.thumbnailResolution", () => {
   it("ok, with mods tracked: reports the total and that all are resolving", () => {

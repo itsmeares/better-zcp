@@ -84,7 +84,7 @@ describe("panelBridge.js: sound/zombie-targeting and chat-impersonation routes m
   it.each(PANEL_BRIDGE_TARGETED_ROUTES)(
     "refuses a world_events-only caller on %s %s",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/panelBridge.js");
+      const { default: router } = await import("../routes/panelBridge.ts");
       const { res } = await runGate(router, routePath, method, "world_events_only");
       expect(res.getStatusCode()).toBe(403);
     },
@@ -93,7 +93,7 @@ describe("panelBridge.js: sound/zombie-targeting and chat-impersonation routes m
   it.each(PANEL_BRIDGE_TARGETED_ROUTES)(
     "does not refuse a players.endanger_or_impersonate-only caller on %s %s",
     async (routePath, method) => {
-      const { default: router } = await import("../routes/panelBridge.js");
+      const { default: router } = await import("../routes/panelBridge.ts");
       const { calledNext } = await runGate(router, routePath, method, "endanger_only");
       expect(calledNext).toBe(true);
     },
@@ -114,19 +114,19 @@ describe("narrowness check: the split did not over-reach into untouched cosmetic
   });
 
   it("world_events_only is still allowed on panelBridge.js GET /weather (untouched, world-wide)", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, "/weather", "get", "world_events_only");
     expect(calledNext).toBe(true);
   });
 
   it("endanger_only is refused on panelBridge.js GET /weather (new capability must not also grant cosmetic routes)", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { res } = await runGate(router, "/weather", "get", "endanger_only");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it("world_events_only is still allowed on panelBridge.js POST /zombies/clear-near-player (takes a username but is benign, stayed under world_events)", async () => {
-    const { default: router } = await import("../routes/panelBridge.js");
+    const { default: router } = await import("../routes/panelBridge.ts");
     const { calledNext } = await runGate(router, "/zombies/clear-near-player", "post", "world_events_only");
     expect(calledNext).toBe(true);
   });

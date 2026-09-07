@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 
-const { resolveServerProcessCheckMode } = await import("../routes/debug.js");
+const { resolveServerProcessCheckMode } = await import("../routes/debug.ts");
 
 describe("resolveServerProcessCheckMode", () => {
   it("is 'docker' (skip) for docker-local/docker-managed, same treatment as remoteRconOnly", () => {

@@ -26,7 +26,7 @@ vi.mock("../database/init.ts", async () => {
   };
 });
 
-const { default: router } = await import("../routes/debug.js");
+const { default: router } = await import("../routes/debug.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

@@ -81,7 +81,7 @@ describe("computeInlineScriptCspHash() re-read after a real applyUpdateBundle() 
 });
 
 describe("helmet's scriptSrc directive: function element vs. frozen array element", () => {
-  it("a function element picks up a reassigned outer variable on the very next request -- the shape apps/panel-server/index.js now uses", () => {
+  it("a function element picks up a reassigned outer variable on the very next request -- the shape apps/panel-server/index.ts now uses", () => {
     let currentHash = "'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='";
     const middleware = contentSecurityPolicy({
       useDefaults: false,

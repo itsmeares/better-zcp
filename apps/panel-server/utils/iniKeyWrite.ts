@@ -1,4 +1,4 @@
-import { escapeRegExp } from "./regex.js";
+import { escapeRegExp } from "./regex.ts";
 
 export function hasIniKeyLine(content: string, key: string): boolean {
   return new RegExp(`^[ \\t]*${escapeRegExp(key)}[ \\t]*=`, "m").test(content);
