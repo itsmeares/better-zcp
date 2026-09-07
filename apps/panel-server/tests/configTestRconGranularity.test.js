@@ -7,7 +7,7 @@ vi.mock("../database/init.js", () => ({
   setSetting: vi.fn(async () => {}),
 }));
 
-const router = (await import("../routes/config.js")).default;
+const router = (await import("../routes/config.ts")).default;
 const { RCON_UNREACHABLE_DETAIL, RCON_AUTH_FAILED_DETAIL } = await import(
   "../services/rcon.js"
 );

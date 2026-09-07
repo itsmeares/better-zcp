@@ -53,7 +53,7 @@ function getRouteHandler(router, routePath, method) {
 }
 
 async function putAppSettings(settings) {
-  const { default: router } = await import("../routes/config.js");
+  const { default: router } = await import("../routes/config.ts");
   const res = createResponse();
   await getRouteHandler(router, "/app-settings", "put")(
     {

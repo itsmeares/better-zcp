@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request } from "express";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Config");
@@ -49,6 +49,16 @@ const SERVER_AUTO_UPDATE_WARNING_MINUTES_MIN = 0;
 const SERVER_AUTO_UPDATE_WARNING_MINUTES_MAX = 60;
 
 const router = express.Router();
+
+type ConfigRequest = Request & {
+  user?: { role?: string } | null;
+};
+
+type SettingEntry = [string, unknown];
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 const VALID_SETTINGS_KEYS = [
   "rconHost",
@@ -116,7 +126,7 @@ const VALID_SETTINGS_KEYS = [
   "panelBridgeSftpConfigPath",
 ];
 
-const SETTINGS_KEY_CAPABILITY = {
+const SETTINGS_KEY_CAPABILITY: Record<string, string> = {
   rconHost: "server.configure",
   rconPort: "server.configure",
   rconPassword: "server.configure",
@@ -147,7 +157,7 @@ const MAX_CORS_ALLOWED_ORIGINS_LENGTH = 5000;
 const MAX_CORS_ALLOWED_ORIGINS = 100;
 const MAX_CORS_ORIGIN_LENGTH = 256;
 
-function validateCorsAllowedOrigins(value) {
+function validateCorsAllowedOrigins(value: unknown): string | null {
   if (typeof value !== "string") {
     return "CORS allowed origins must be a string list";
   }
@@ -184,17 +194,20 @@ function validateCorsAllowedOrigins(value) {
 
 const maskSensitiveSettings = maskSensitiveObject;
 
-router.get("/app-settings", async (req, res) => {
+router.get("/app-settings", async (_req, res) => {
   try {
     const settings = await getAllSettings();
     res.json({ settings: maskSensitiveSettings(settings) });
-  } catch (error) {
-    log.error(`Failed to get app settings: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get app settings: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
-router.put("/app-settings", requirePermission("panel.settings"), async (req, res) => {
+router.put(
+  "/app-settings",
+  requirePermission("panel.settings"),
+  async (req: ConfigRequest, res) => {
   try {
     const { settings } = req.body || {};
     log.info(
@@ -205,7 +218,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       return res.status(400).json({ error: "Settings are required", code: ErrorCode.CONFIG_APP_SETTINGS_REQUIRED });
     }
 
-    const FEATURE_GATED_FIELDS = {
+    const FEATURE_GATED_FIELDS: Record<string, string> = {
       panelBridgeSftpPort: "panelBridgeSftpEnabled",
       panelBridgeSftpPollIntervalSeconds: "panelBridgeSftpEnabled",
       httpsCertPath: "httpsEnabled",
@@ -217,8 +230,8 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       reconnectInterval: "autoReconnect",
     };
 
-    const effectiveFlagCache = new Map();
-    function getEffectiveFlag(flagKey) {
+    const effectiveFlagCache = new Map<string, Promise<boolean>>();
+    function getEffectiveFlag(flagKey: string): Promise<boolean> {
       if (!effectiveFlagCache.has(flagKey)) {
         effectiveFlagCache.set(
           flagKey,
@@ -227,10 +240,10 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
             : getSetting(flagKey).then(Boolean),
         );
       }
-      return effectiveFlagCache.get(flagKey);
+      return effectiveFlagCache.get(flagKey)!;
     }
 
-    const validEntries = [];
+    const validEntries: SettingEntry[] = [];
     for (const [key, value] of Object.entries(settings)) {
       if (!VALID_SETTINGS_KEYS.includes(key)) {
         log.warn(`Invalid setting key rejected: ${key}`);
@@ -301,7 +314,10 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
         }
       }
 
-      if (key === "lanIpAddress" && value !== "" && net.isIP(value) !== 4) {
+      if (
+        key === "lanIpAddress" &&
+        (typeof value !== "string" || (value !== "" && net.isIP(value) !== 4))
+      ) {
         return res
           .status(400)
           .json({ error: "lanIpAddress must be an IPv4 address or empty", code: ErrorCode.CONFIG_INVALID_LAN_IP });
@@ -499,7 +515,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       validEntries.push([key, value]);
     }
 
-    const filtered = validEntries.filter(([key, value]) => {
+    const filtered: SettingEntry[] = validEntries.filter(([key, value]) => {
       if (SENSITIVE_FIELD_RE.test(key) && isMaskedSecret(value)) {
         log.info(
           `Preserving stored value for sensitive key "${key}" (masked input ignored)`,
@@ -513,8 +529,11 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       ([key]) => key in SETTINGS_KEY_CAPABILITY,
     );
     const currentSettings = touchesGovernedKey ? await getAllSettings() : null;
-    const missingCapabilities = [];
-    let callerCapabilities = null;
+    const missingCapabilities: Array<{
+      key: string;
+      requiredCapability: string;
+    }> = [];
+    let callerCapabilities: string[] | null = null;
     for (const [key, value] of filtered) {
       const requiredCapability = SETTINGS_KEY_CAPABILITY[key];
       if (!requiredCapability) continue;
@@ -527,7 +546,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
           ? role.capabilities
           : [];
       }
-      if (!callerCapabilities.includes(requiredCapability)) {
+      if (!callerCapabilities!.includes(requiredCapability)) {
         missingCapabilities.push({ key, requiredCapability });
       }
     }
@@ -551,8 +570,8 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
     );
     if (steamSessionIdEntry || steamLoginSecureEntry) {
       await setSteamSessionCredentials(
-        steamSessionIdEntry?.[1],
-        steamLoginSecureEntry?.[1],
+        steamSessionIdEntry?.[1] as string | null | undefined,
+        steamLoginSecureEntry?.[1] as string | null | undefined,
       );
     }
 
@@ -586,7 +605,7 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       const [, enabled] = autoRestartEntry;
       await modChecker.setUpdateCallback(
         enabled
-          ? async (updatedMods) => modChecker.handleModUpdate(updatedMods)
+          ? async (updatedMods: unknown[]) => modChecker.handleModUpdate(updatedMods)
           : null,
       );
     }
@@ -601,13 +620,13 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
 
     const serverManager = req.app.get("serverManager");
     const rconService = req.app.get("rconService");
-    const reloadWarnings = [];
+    const reloadWarnings: string[] = [];
     if (serverManager?.reloadConfig) {
       try {
         await serverManager.reloadConfig();
-      } catch (reloadErr) {
+      } catch (reloadErr: unknown) {
         log.warn(
-          `serverManager reload failed after settings save: ${reloadErr.message}`,
+          `serverManager reload failed after settings save: ${errorMessage(reloadErr)}`,
         );
         reloadWarnings.push(
           "Server manager failed to reload — restart may be required",
@@ -618,9 +637,9 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       try {
         rconService.configLoaded = false;
         await rconService.loadConfig();
-      } catch (reloadErr) {
+      } catch (reloadErr: unknown) {
         log.warn(
-          `rconService reload failed after settings save: ${reloadErr.message}`,
+          `rconService reload failed after settings save: ${errorMessage(reloadErr)}`,
         );
         reloadWarnings.push(
           "RCON service failed to reload — reconnect may be required",
@@ -631,9 +650,9 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
     if (typeof refreshCorsConfig === "function") {
       try {
         await refreshCorsConfig();
-      } catch (reloadErr) {
+      } catch (reloadErr: unknown) {
         log.warn(
-          `CORS config reload failed after settings save: ${reloadErr.message}`,
+          `CORS config reload failed after settings save: ${errorMessage(reloadErr)}`,
         );
         reloadWarnings.push(
           "CORS settings could not be reloaded — panel restart may be required",
@@ -641,12 +660,16 @@ router.put("/app-settings", requirePermission("panel.settings"), async (req, res
       }
     }
 
-    const response = { success: true, message: "Settings saved" };
+    const response: {
+      success: boolean;
+      message: string;
+      warnings?: string[];
+    } = { success: true, message: "Settings saved" };
     if (reloadWarnings.length) response.warnings = reloadWarnings;
     res.json(response);
-  } catch (error) {
-    log.error(`Failed to save app settings: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to save app settings: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -659,9 +682,9 @@ router.get("/cors-debug", requirePermission("diagnostics.manage"), async (req, r
         .json({ error: "CORS diagnostics are not available", code: ErrorCode.CONFIG_CORS_DIAGNOSTICS_UNAVAILABLE });
     }
     res.json({ diagnostics: getCorsDebugSnapshot() });
-  } catch (error) {
-    log.error(`Failed to get CORS diagnostics: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get CORS diagnostics: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -675,9 +698,9 @@ router.post("/cors-debug/reload", requirePermission("diagnostics.manage"), async
     }
     const diagnostics = await refreshCorsConfig();
     res.json({ success: true, diagnostics });
-  } catch (error) {
-    log.error(`Failed to reload CORS config: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to reload CORS config: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -696,9 +719,9 @@ router.delete("/cors-debug/blocked", requirePermission("diagnostics.manage"), as
 
     clearCorsBlockedOrigins();
     res.json({ success: true, diagnostics: getCorsDebugSnapshot() });
-  } catch (error) {
-    log.error(`Failed to clear blocked CORS origins: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to clear blocked CORS origins: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -726,11 +749,11 @@ router.post("/test-rcon", requirePermission("server.configure"), async (req, res
           message: "RCON connection successful",
           connected: true,
         });
-      } catch (cmdError) {
+      } catch (cmdError: unknown) {
         res.json({
           success: true,
           message:
-            "Connected but command failed: " + sanitizeError(cmdError.message),
+            "Connected but command failed: " + sanitizeError(errorMessage(cmdError)),
           connected: true,
           warning: true,
         });
@@ -762,11 +785,11 @@ router.post("/test-rcon", requirePermission("server.configure"), async (req, res
         code: ErrorCode.RCON_CONNECT_AUTH_FAILED,
       });
     }
-  } catch (error) {
-    log.error(`RCON test failed: ${error.message}`);
+  } catch (error: unknown) {
+    log.error(`RCON test failed: ${errorMessage(error)}`);
     res.status(500).json({
       success: false,
-      error: sanitizeError(error.message),
+      error: sanitizeError(errorMessage(error)),
       connected: false,
     });
   }

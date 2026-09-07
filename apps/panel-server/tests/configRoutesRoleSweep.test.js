@@ -42,13 +42,13 @@ describe("config.js: server.configure (test-rcon) -- admin+technician", () => {
   const ROUTES = [["/test-rcon", "post"]];
 
   it.each(ROUTES)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/config.js");
+    const { default: router } = await import("../routes/config.ts");
     const { res } = await runGate(router, routePath, method, "moderator");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ROUTES)("does not refuse a technician at the gate on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/config.js");
+    const { default: router } = await import("../routes/config.ts");
     const { calledNext } = await runGate(router, routePath, method, "technician");
     expect(calledNext).toBe(true);
   });
@@ -62,13 +62,13 @@ describe("config.js: config.diagnostics (CORS debug snapshot + mutation) -- admi
   ];
 
   it.each(ROUTES)("refuses a technician on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/config.js");
+    const { default: router } = await import("../routes/config.ts");
     const { res } = await runGate(router, routePath, method, "technician");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it.each(ROUTES)("does not refuse an admin on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/config.js");
+    const { default: router } = await import("../routes/config.ts");
     const { calledNext } = await runGate(router, routePath, method, "admin");
     expect(calledNext).toBe(true);
   });
@@ -76,13 +76,13 @@ describe("config.js: config.diagnostics (CORS debug snapshot + mutation) -- admi
 
 describe("config.js: PUT /app-settings stays admin-only (unchanged, corsAllowAll lives here)", () => {
   it("refuses a technician", async () => {
-    const { default: router } = await import("../routes/config.js");
+    const { default: router } = await import("../routes/config.ts");
     const { res } = await runGate(router, "/app-settings", "put", "technician");
     expect(res.getStatusCode()).toBe(403);
   });
 
   it("does not refuse an admin", async () => {
-    const { default: router } = await import("../routes/config.js");
+    const { default: router } = await import("../routes/config.ts");
     const { calledNext } = await runGate(router, "/app-settings", "put", "admin");
     expect(calledNext).toBe(true);
   });
@@ -92,7 +92,7 @@ describe("config.js: read-only routes stay open to every role", () => {
   const OPEN = [["/app-settings", "get"]];
 
   it.each(OPEN)("%s %s has no requireRole gate ahead of its handler", async (routePath, method) => {
-    const { default: router } = await import("../routes/config.js");
+    const { default: router } = await import("../routes/config.ts");
     const layer = router.stack.find(
       (entry) => entry.route?.path === routePath && entry.route.methods[method],
     );

@@ -15,7 +15,7 @@ vi.mock("../services/steamSessionCredentials.ts", () => ({
   setSteamSessionCredentials,
 }));
 
-const { default: router } = await import("../routes/config.js");
+const { default: router } = await import("../routes/config.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };
