@@ -85,11 +85,16 @@ export default defineConfig(({ mode }) => {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined
 
-            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-')) return 'charts'
-            if (id.includes('socket.io-client') || id.includes('engine.io')) return 'socket'
-            if (id.includes('@radix-ui')) return 'radix-vendor'
-            if (id.includes('lucide-react')) return 'icons'
-            if (id.includes('react-router')) return 'router'
+            const packagePath = id.replaceAll('\\', '/').split('/node_modules/').pop() || ''
+            const packageName = packagePath.startsWith('@')
+              ? packagePath.split('/').slice(0, 2).join('/')
+              : packagePath.split('/')[0]
+
+            if (packageName === 'recharts' || packageName.startsWith('d3-') || packageName.startsWith('victory-')) return 'charts'
+            if (packageName === 'socket.io-client' || packageName === 'engine.io') return 'socket'
+            if (packageName.startsWith('@radix-ui/')) return 'radix-vendor'
+            if (packageName === 'lucide-react') return 'icons'
+            if (packageName === 'react-router' || packageName.startsWith('react-router/')) return 'router'
 
             return 'vendor'
           },

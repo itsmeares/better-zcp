@@ -136,14 +136,33 @@ interface IniConfig {
   duplicateKeys?: Array<{ key: string; count: number }>
 }
 
+function parseSteamCommunityUrl(input: string): URL | null {
+  const trimmed = input.trim()
+  if (!trimmed) return null
+  try {
+    const url = new URL(
+      /^[a-z][a-z\d+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`,
+    )
+    if (
+      url.protocol !== 'https:' ||
+      !['steamcommunity.com', 'www.steamcommunity.com'].includes(url.hostname.toLowerCase())
+    ) {
+      return null
+    }
+    return url
+  } catch {
+    return null
+  }
+}
+
 function parseWorkshopId(input: string): string | null {
   const trimmed = input.trim()
   if (!trimmed) return null
-  const urlMatch = trimmed.match(/[?&]id=(\d+)/)
-  if (urlMatch) return urlMatch[1]
   const numericMatch = trimmed.match(/^(\d{6,15})$/)
   if (numericMatch) return numericMatch[1]
-  return null
+  const url = parseSteamCommunityUrl(trimmed)
+  const id = url?.searchParams.get('id')
+  return id && /^\d{1,15}$/.test(id) ? id : null
 }
 
 type ModsView =
@@ -1099,15 +1118,12 @@ export default function Mods() {
       autoDiscoverTimeoutRef.current = null
     }
 
-    if (value.includes('steamcommunity.com') && value.includes('id=')) {
-      const workshopId = parseWorkshopId(value)
-
-      if (workshopId && workshopId !== lastAutoDiscoverIdRef.current) {
-        lastAutoDiscoverIdRef.current = workshopId
-        autoDiscoverTimeoutRef.current = setTimeout(() => {
-          void discoverWorkshopMod(workshopId)
-        }, 200)
-      }
+    const workshopId = parseWorkshopId(value)
+    if (workshopId && workshopId !== lastAutoDiscoverIdRef.current) {
+      lastAutoDiscoverIdRef.current = workshopId
+      autoDiscoverTimeoutRef.current = setTimeout(() => {
+        void discoverWorkshopMod(workshopId)
+      }, 200)
     }
   }, [discoverWorkshopMod])
 
@@ -1445,7 +1461,7 @@ export default function Mods() {
       return
     }
     const trimmed = collectionUrl.trim()
-    if (!/^\d{1,15}$/.test(trimmed) && !trimmed.includes('steamcommunity.com')) {
+    if (!/^\d{1,15}$/.test(trimmed) && !parseSteamCommunityUrl(trimmed)) {
       toast({
         title: t('toasts.invalidFormatTitle'),
         description: t('toasts.invalidFormatDesc'),

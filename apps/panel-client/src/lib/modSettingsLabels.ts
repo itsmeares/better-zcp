@@ -11,7 +11,7 @@ export function formatModSettingLabel(value: string | undefined, groupName?: str
     const normalizedGroup = groupName.replace(/^Sandbox_/i, '').replace(/[^a-z0-9]/gi, '')
     const normalizedLabel = label.replace(/[^a-z0-9]/gi, '')
     if (normalizedGroup && normalizedLabel.toLowerCase().startsWith(normalizedGroup.toLowerCase())) {
-      const groupPrefix = label.match(new RegExp(`^${escapeRegExp(groupName.replace(/^Sandbox_/i, ''))}[_\.]?`, 'i'))
+      const groupPrefix = label.match(new RegExp(`^${escapeRegExp(groupName.replace(/^Sandbox_/i, ''))}_[.]?`, 'i'))
       if (groupPrefix) label = label.slice(groupPrefix[0].length)
     }
   }

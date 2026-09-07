@@ -603,7 +603,12 @@ export default function Console() {
 
     setSendingAnnouncement(true)
     try {
-      const cleaned = announcement.replace(/"/g, '\\"')
+      const cleaned = Array.from(announcement.replace(/["\\]/g, ''))
+        .filter((character) => {
+          const code = character.charCodeAt(0)
+          return code >= 0x20 && code !== 0x7f
+        })
+        .join('')
       const cmd = selectedChannel === 'all'
         ? `servermsg "${cleaned}"`
         : `servermsg "[${selectedChannel.toUpperCase()}] ${cleaned}"`
