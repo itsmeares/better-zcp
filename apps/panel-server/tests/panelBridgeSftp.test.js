@@ -11,7 +11,7 @@ const mockDataPaths = vi.hoisted(() => {
 vi.mock('../utils/paths.ts', () => ({ getDataPaths: (...args) => mockDataPaths.current(...args) }));
 
 const { getSftpErrorGuidance, classifySftpErrorCode, PanelBridgeSftpTransport, validateSftpBridgeConfig, getSftpCachePath } =
-  await import('../services/panelBridgeSftp.js');
+  await import('../services/panelBridgeSftp.ts');
 const { ErrorCode } = await import('../utils/errorCodes.ts');
 
 const valid = {

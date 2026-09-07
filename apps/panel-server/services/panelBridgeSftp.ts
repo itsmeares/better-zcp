@@ -10,7 +10,44 @@ const log = createLogger('Bridge:SFTP');
 
 const MAX_REMOTE_PATH_LENGTH = 500;
 
-function safeRemotePath(value) {
+type SftpConfigInput = Record<string, unknown> | null | undefined;
+
+export type SftpBridgeConfig = {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  bridgePath: string;
+  pollIntervalSeconds: number;
+};
+
+type SftpLogConfig = {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  logPath: string;
+};
+
+type SftpErrorClassifier = {
+  code: string;
+  guidance: string;
+  test: (message: string, error: unknown) => boolean;
+};
+
+type SftpClientInstance = InstanceType<typeof SftpClient>;
+
+type RecentSftpError = {
+  stage: string;
+  message: string;
+  timestamp: string;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function safeRemotePath(value: unknown): string {
   if (typeof value !== 'string' || value.length > MAX_REMOTE_PATH_LENGTH || !value.startsWith('/') || value.includes('..') || value.includes('\\') || /[\0\r\n]/.test(value)) {
     throw new Error('Remote bridge path must be an absolute POSIX path without traversal');
   }
@@ -19,16 +56,16 @@ function safeRemotePath(value) {
   return normalized;
 }
 
-function isMissingRemotePath(error) {
-  const message = error?.message || String(error);
+function isMissingRemotePath(error: unknown): boolean {
+  const message = errorMessage(error);
   return /no such file|not found|enoent/i.test(message);
 }
 
-function isRemoteFile(entryType) {
+function isRemoteFile(entryType: boolean | string): boolean {
   return entryType === true || entryType === '-';
 }
 
-const SFTP_ERROR_CLASSIFIERS = [
+const SFTP_ERROR_CLASSIFIERS: SftpErrorClassifier[] = [
   {
     code: ErrorCode.SFTP_CHROOTED_ACCOUNT,
     guidance:
@@ -71,25 +108,25 @@ const SFTP_ERROR_CLASSIFIERS = [
   },
 ];
 
-function classifySftpError(error) {
-  const message = error?.message || String(error);
-  return SFTP_ERROR_CLASSIFIERS.find((entry) => entry.test(message, error));
+function classifySftpError(error: unknown): SftpErrorClassifier {
+  const message = errorMessage(error);
+  return SFTP_ERROR_CLASSIFIERS.find((entry) => entry.test(message, error))!;
 }
 
-export function classifySftpErrorCode(error) {
+export function classifySftpErrorCode(error: unknown): string {
   return classifySftpError(error).code;
 }
 
-export function getSftpErrorGuidance(error) {
+export function getSftpErrorGuidance(error: unknown): string {
   return classifySftpError(error).guidance;
 }
 
-export function formatSftpError(error) {
-  const message = error?.message || String(error);
+export function formatSftpError(error: unknown): string {
+  const message = errorMessage(error);
   return `${message} Fix: ${getSftpErrorGuidance(error)}`;
 }
 
-export function validateSftpBridgeConfig(config) {
+export function validateSftpBridgeConfig(config: SftpConfigInput): SftpBridgeConfig {
   const host = typeof config?.host === 'string' ? config.host.trim() : '';
   const username = typeof config?.username === 'string' ? config.username.trim() : '';
   const port =
@@ -118,7 +155,7 @@ export function validateSftpBridgeConfig(config) {
   };
 }
 
-export function getSftpCachePath(config) {
+export function getSftpCachePath(config: SftpBridgeConfig): string {
   const key = crypto.createHash('sha256').update(`${config.host}:${config.port}:${config.username}:${config.bridgePath}`).digest('hex').slice(0, 24);
   return path.join(getDataPaths().dataDir, 'panelbridge-sftp-cache', key);
 }
@@ -131,7 +168,7 @@ const LOG_EXTENSIONS = ['.txt', '.log'];
 const REMOTE_DIRECTORY_CHECK_MS = 60000;
 const MAX_BRIDGE_FILE_BYTES = 16 * 1024 * 1024;
 
-export function validateSftpLogConfig(config) {
+export function validateSftpLogConfig(config: SftpConfigInput): SftpLogConfig {
   const host = typeof config?.host === 'string' ? config.host.trim() : '';
   const username = typeof config?.username === 'string' ? config.username.trim() : '';
   const port = Number(config?.port || 22);
@@ -148,7 +185,10 @@ export function validateSftpLogConfig(config) {
   };
 }
 
-async function withLogClient(config, handler) {
+async function withLogClient<T>(
+  config: SftpLogConfig,
+  handler: (client: SftpClientInstance) => Promise<T>,
+): Promise<T> {
   const client = new SftpClient('PanelBridgeSftpLogs');
   try {
     await client.connect({
@@ -164,7 +204,10 @@ async function withLogClient(config, handler) {
   }
 }
 
-export async function listSftpLogs(rawConfig) {
+export async function listSftpLogs(rawConfig: SftpConfigInput): Promise<{
+  logPath: string;
+  files: Array<{ name: string; size?: number; modifiedAt: string | null }>;
+}> {
   const config = validateSftpLogConfig(rawConfig);
   return withLogClient(config, async (client) => {
     const entries = await client.list(config.logPath);
@@ -182,7 +225,17 @@ export async function listSftpLogs(rawConfig) {
   });
 }
 
-export async function readSftpLogTail(rawConfig, fileName, requestedBytes) {
+export async function readSftpLogTail(
+  rawConfig: SftpConfigInput,
+  fileName: unknown,
+  requestedBytes: unknown,
+): Promise<{
+  name: string;
+  size: number;
+  truncated: boolean;
+  bytesReturned: number;
+  content: string;
+}> {
   const config = validateSftpLogConfig(rawConfig);
   if (typeof fileName !== 'string' || !LOG_NAME_PATTERN.test(fileName)) {
     throw new Error('Invalid log file name');
@@ -216,6 +269,28 @@ export async function readSftpLogTail(rawConfig, fileName, requestedBytes) {
 }
 
 export class PanelBridgeSftpTransport {
+  config: SftpBridgeConfig | null;
+  cachePath: string | null;
+  client: SftpClientInstance | null;
+  timer: ReturnType<typeof setInterval> | null;
+  running: boolean;
+  syncing: boolean;
+  lastSyncAt: number | null;
+  lastError: string | null;
+  lastLatencyMs: number | null;
+  connectionAttempts: number;
+  lastConnectedAt: string | null;
+  lastDisconnectedAt: string | null;
+  lastErrorAt: string | null;
+  lastErrorStage: string | null;
+  syncAttempts: number;
+  failureCount: number;
+  recentErrors: RecentSftpError[];
+  lastLoggedError: string | null;
+  lastLoggedErrorAt: number;
+  nextRemoteDirectoryCheckAt: number;
+  transferId: string;
+
   constructor() {
     this.config = null;
     this.cachePath = null;
@@ -240,7 +315,7 @@ export class PanelBridgeSftpTransport {
     this.transferId = crypto.randomBytes(6).toString('hex');
   }
 
-  async start(config, cachePath) {
+  async start(config: SftpConfigInput, cachePath: string): Promise<void> {
     this.config = validateSftpBridgeConfig(config);
     this.cachePath = cachePath;
     fs.mkdirSync(path.join(cachePath, 'inbox'), { recursive: true, mode: 0o700 });
@@ -250,14 +325,14 @@ export class PanelBridgeSftpTransport {
       await this.ensureRemoteDirectories();
       await this.syncNow(true);
     } catch (error) {
-      if (this.lastError !== error.message) this.recordError('startup', error);
+      if (this.lastError !== errorMessage(error)) this.recordError('startup', error);
       throw error;
     }
     this.timer = setInterval(() => this.syncNow().catch(() => {}), this.config.pollIntervalSeconds * 1000);
     this.timer.unref?.();
   }
 
-  async stop() {
+  async stop(): Promise<void> {
     this.running = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
@@ -268,15 +343,17 @@ export class PanelBridgeSftpTransport {
     }
   }
 
-  async connect() {
+  async connect(): Promise<SftpClientInstance> {
     if (this.client) return this.client;
+    const config = this.config;
+    if (!config) throw new Error('SFTP transport is not configured');
     this.connectionAttempts += 1;
     const client = new SftpClient('PanelBridgeSftp');
     await client.connect({
-      host: this.config.host,
-      port: this.config.port,
-      username: this.config.username,
-      password: this.config.password,
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
       readyTimeout: 10000,
     });
     this.client = client;
@@ -284,33 +361,37 @@ export class PanelBridgeSftpTransport {
     return client;
   }
 
-  async ensureRemoteDirectories() {
+  async ensureRemoteDirectories(): Promise<void> {
+    const config = this.config;
+    if (!config) throw new Error('SFTP transport is not configured');
     const client = await this.connect();
     try {
-      await client.mkdir(this.config.bridgePath, true);
+      await client.mkdir(config.bridgePath, true);
       await client.mkdir(this.remote('inbox'), true);
       await client.mkdir(this.remote('outbox'), true);
     } catch (error) {
-      if (/permission denied|eacces/i.test(error?.message || '')
-        && /^\/home(?:\/|$)/i.test(this.config.bridgePath)) {
-        throw new Error(`SFTP account rejected remote bridge path ${this.config.bridgePath}; likely chrooted account path. Remove the /home prefix and use the path visible in the SFTP client.`);
+      if (/permission denied|eacces/i.test(errorMessage(error))
+        && /^\/home(?:\/|$)/i.test(config.bridgePath)) {
+        throw new Error(`SFTP account rejected remote bridge path ${config.bridgePath}; likely chrooted account path. Remove the /home prefix and use the path visible in the SFTP client.`);
       }
       throw error;
     }
     this.nextRemoteDirectoryCheckAt = Date.now() + REMOTE_DIRECTORY_CHECK_MS;
   }
 
-  remote(relativeName) {
+  remote(relativeName: string): string {
     if (!relativeName || relativeName.includes('..') || relativeName.includes('\\')) throw new Error('Invalid remote bridge file path');
+    if (!this.config) throw new Error('SFTP transport is not configured');
     return `${this.config.bridgePath}/${relativeName}`;
   }
 
-  local(relativeName) {
+  local(relativeName: string): string {
     if (!relativeName || relativeName.includes('..') || relativeName.includes('\\')) throw new Error('Invalid remote bridge file path');
+    if (!this.cachePath) throw new Error('SFTP transport is not configured');
     return path.join(this.cachePath, relativeName);
   }
 
-  async copyRemote(relativeName) {
+  async copyRemote(relativeName: string): Promise<boolean> {
     const client = await this.connect();
     const remotePath = this.remote(relativeName);
     const entryType = await client.exists(remotePath);
@@ -334,14 +415,15 @@ export class PanelBridgeSftpTransport {
     return true;
   }
 
-  async syncModFile(baseName) {
+  async syncModFile(baseName: string): Promise<string> {
     const suffixed = `${baseName}.txt`;
     if (await this.copyRemote(suffixed)) return suffixed;
     await this.copyRemote(baseName);
     return baseName;
   }
 
-  async syncOutbox() {
+  async syncOutbox(): Promise<void> {
+    if (!this.cachePath) throw new Error('SFTP transport is not configured');
     const statePath = path.join(this.cachePath, '.queue-state-node.json');
     let nextSequence = 1;
     try {
@@ -356,7 +438,8 @@ export class PanelBridgeSftpTransport {
     }
   }
 
-  async uploadInbox() {
+  async uploadInbox(): Promise<void> {
+    if (!this.cachePath) throw new Error('SFTP transport is not configured');
     const inbox = path.join(this.cachePath, 'inbox');
     const names = fs.readdirSync(inbox).filter((name) => /^cmd-\d+\.json$/.test(name)).sort();
     for (const name of names) {
@@ -387,7 +470,7 @@ export class PanelBridgeSftpTransport {
     }
   }
 
-  readLocalQueueStateNodeSnapshot() {
+  readLocalQueueStateNodeSnapshot(): unknown | null {
     if (!this.cachePath) return null;
     const statePath = path.join(this.cachePath, '.queue-state-node.json');
     try {
@@ -397,7 +480,7 @@ export class PanelBridgeSftpTransport {
     }
   }
 
-  async uploadQueueStateNode(stateSnapshot) {
+  async uploadQueueStateNode(stateSnapshot: unknown): Promise<void> {
     const remotePath = this.remote('.queue-state-node.json');
     const client = await this.connect();
     const entryType = await client.exists(remotePath);
@@ -424,7 +507,7 @@ export class PanelBridgeSftpTransport {
     }
   }
 
-  async syncNow(throwOnError = false) {
+  async syncNow(throwOnError = false): Promise<void> {
     if (!this.running || this.syncing) return;
     this.syncing = true;
     this.syncAttempts += 1;
@@ -455,8 +538,8 @@ export class PanelBridgeSftpTransport {
     }
   }
 
-  recordError(stage, error) {
-    const message = error?.message || String(error);
+  recordError(stage: string, error: unknown): void {
+    const message = errorMessage(error);
     const timestamp = new Date().toISOString();
     this.failureCount += 1;
     this.lastError = message;
@@ -473,7 +556,30 @@ export class PanelBridgeSftpTransport {
     }
   }
 
-  getStatus() {
+  getStatus(): {
+    type: string;
+    running: boolean;
+    cachePath: string | null;
+    lastSyncAt: number | null;
+    lastLatencyMs: number | null;
+    lastError: string | null;
+    lastErrorGuidance: string | null;
+    lastErrorCode: string | null;
+    pollIntervalSeconds: number | null;
+    remotePath: string | null;
+    remoteDirectories: { bridge: string; inbox: string; outbox: string } | null;
+    diagnostics: {
+      connected: boolean;
+      connectionAttempts: number;
+      lastConnectedAt: string | null;
+      lastDisconnectedAt: string | null;
+      syncAttempts: number;
+      failureCount: number;
+      lastErrorAt: string | null;
+      lastErrorStage: string | null;
+      recentErrors: RecentSftpError[];
+    };
+  } {
     return {
       type: 'sftp',
       running: this.running,
@@ -505,7 +611,13 @@ export class PanelBridgeSftpTransport {
   }
 }
 
-export async function testSftpBridge(config) {
+export async function testSftpBridge(config: SftpConfigInput): Promise<{
+  success: true;
+  statusExists: boolean;
+  foldersReady: true;
+  latencyMs: number;
+  nextStep: string;
+}> {
   const validated = validateSftpBridgeConfig(config);
   const client = new SftpClient('PanelBridgeSftpTest');
   const startedAt = Date.now();

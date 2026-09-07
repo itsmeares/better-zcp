@@ -25,8 +25,16 @@ declare module "ssh2-sftp-client" {
     end(): Promise<void>;
     list(remotePath: string): Promise<FileEntry[]>;
     stat(remotePath: string): Promise<FileStats>;
-    get(remotePath: string): Promise<Buffer | string>;
-    put(input: Buffer, remotePath: string): Promise<void>;
+    get(
+      remotePath: string,
+      destination?: undefined,
+      options?: { readStreamOptions?: { start?: number; end?: number } },
+    ): Promise<Buffer | string>;
+    put(input: Buffer, remotePath: string, options?: unknown): Promise<void>;
+    mkdir(remotePath: string, recursive?: boolean): Promise<void>;
+    exists(remotePath: string): Promise<boolean | string>;
+    fastGet(remotePath: string, localPath: string): Promise<void>;
+    fastPut(localPath: string, remotePath: string): Promise<void>;
     posixRename(oldPath: string, newPath: string): Promise<void>;
     delete(remotePath: string): Promise<void>;
     rename(oldPath: string, newPath: string): Promise<void>;

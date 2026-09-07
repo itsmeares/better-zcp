@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { validateRemoteConfigTransport } from '../services/remoteConfigFiles.ts';
-import { validateSftpBridgeConfig } from '../services/panelBridgeSftp.js';
+import { validateSftpBridgeConfig } from '../services/panelBridgeSftp.ts';
 
 describe('remote/bridge path length cap (CodeQL js/polynomial-redos #3, #1)', () => {
   it('validateRemoteConfigTransport rejects an oversized configPath', () => {

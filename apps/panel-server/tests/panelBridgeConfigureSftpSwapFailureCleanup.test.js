@@ -10,7 +10,7 @@ const mockTransport = {
   getStatus: vi.fn(() => ({ type: "sftp", running: true })),
 };
 
-vi.mock("../services/panelBridgeSftp.js", () => ({
+vi.mock("../services/panelBridgeSftp.ts", () => ({
   PanelBridgeSftpTransport: vi.fn(function PanelBridgeSftpTransport() {
     return mockTransport;
   }),

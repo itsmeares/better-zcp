@@ -75,7 +75,7 @@ import oidcRoutes from "./routes/oidc.ts";
 import { loadOrCreateCerts } from "./utils/certs.ts";
 import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";
 import { ErrorCode } from "./utils/errorCodes.ts";
-import { getSftpCachePath } from "./services/panelBridgeSftp.js";
+import { getSftpCachePath } from "./services/panelBridgeSftp.ts";
 import { resolveInstallDir } from "./services/panelBridgeInstaller.ts";
 import {
   getEmbeddedPanelBridgeLua,

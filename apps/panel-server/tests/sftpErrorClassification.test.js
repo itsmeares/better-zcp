@@ -11,8 +11,8 @@ vi.mock("../database/init.js", () => ({
   setSetting: vi.fn(async () => {}),
 }));
 
-vi.mock("../services/panelBridgeSftp.js", async () => {
-  const actual = await vi.importActual("../services/panelBridgeSftp.js");
+vi.mock("../services/panelBridgeSftp.ts", async () => {
+  const actual = await vi.importActual("../services/panelBridgeSftp.ts");
   return {
     ...actual,
     testSftpBridge: vi.fn(async () => {

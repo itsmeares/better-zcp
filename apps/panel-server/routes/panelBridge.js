@@ -43,7 +43,7 @@ import {
   validateSftpBridgeConfig,
   listSftpLogs,
   readSftpLogTail,
-} from "../services/panelBridgeSftp.js";
+} from "../services/panelBridgeSftp.ts";
 import {
   SFTP_CONFIG_PATH_KEY,
   listRemoteConfigFiles,

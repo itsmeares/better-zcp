@@ -9,7 +9,7 @@ const mockDataPaths = vi.hoisted(() => {
 });
 vi.mock('../utils/paths.ts', () => ({ getDataPaths: (...args) => mockDataPaths.current(...args) }));
 
-const { PanelBridgeSftpTransport, validateSftpBridgeConfig } = await import('../services/panelBridgeSftp.js');
+const { PanelBridgeSftpTransport, validateSftpBridgeConfig } = await import('../services/panelBridgeSftp.ts');
 
 const valid = {
   host: 'pz.example.net',
