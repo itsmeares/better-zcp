@@ -3,7 +3,7 @@ import {
   normalizeChromiumCookieRow,
   normalizeFirefoxCookieRow,
   pickSteamCookies,
-} from "../utils/browserCookies.js";
+} from "../utils/browserCookies.ts";
 
 const CHROMIUM_EPOCH_OFFSET_US = 11644473600000000n;
 

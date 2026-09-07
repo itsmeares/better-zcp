@@ -14,7 +14,7 @@ vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn(),
   getSetting: vi.fn(async () => null),
 }));
-vi.mock("../utils/browserCookies.js", () => ({
+vi.mock("../utils/browserCookies.ts", () => ({
   listAvailableBrowsers,
   extractSteamCookies,
 }));

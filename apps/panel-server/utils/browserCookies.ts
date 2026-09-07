@@ -5,12 +5,12 @@ import os from 'os';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import initSqlJs from 'sql.js';
+import initSqlJs, { type SqlJsStatic } from 'sql.js';
 import { createLogger } from './logger.ts';
 
 const log = createLogger('BrowserCookies');
 const STEAM_HOSTS = ['steamcommunity.com', '.steamcommunity.com', 'store.steampowered.com', '.steampowered.com'];
-const STEAM_HOST_PRIORITY = (host) => {
+const STEAM_HOST_PRIORITY = (host: unknown): number => {
   if (!host) return 99;
   if (host === 'steamcommunity.com' || host === '.steamcommunity.com') return 0;
   if (host === 'store.steampowered.com' || host === '.steampowered.com') return 1;
@@ -18,7 +18,72 @@ const STEAM_HOST_PRIORITY = (host) => {
 };
 const CHROMIUM_EPOCH_OFFSET_US = 11644473600000000n;
 
-function integerTimestamp(value) {
+type CookieRow = Record<string, unknown>;
+
+type NormalizedCookie = CookieRow & {
+  name: string;
+  host: string;
+  value: string;
+  profileId: string;
+  expiresAt: number | null;
+  createdAt: number | null;
+  lastAccessedAt: number | null;
+  isSession: boolean;
+};
+
+type CookieReadResult =
+  | { ok: true; rows: CookieRow[] }
+  | { ok: false; error: string };
+
+type BrowserProfile = {
+  profileDir: string;
+  cookiesPath: string;
+};
+
+type BrowserDefinition = {
+  id: string;
+  label: string;
+  family: 'firefox' | 'chromium';
+  find: () => BrowserProfile | null;
+  findAll: () => BrowserProfile[];
+  localStatePath?: () => string;
+};
+
+type BrowserListResult = {
+  supported: boolean;
+  platform: NodeJS.Platform;
+  browsers: Array<{
+    id: string;
+    label: string;
+    family: BrowserDefinition['family'];
+    detected: boolean;
+  }>;
+};
+
+type CookieExtractionResult = {
+  ok: boolean;
+  browser: string;
+  sessionid?: string | null;
+  steamLoginSecure?: string | null;
+  missing?: string[];
+  notes?: string[];
+  error?: string | null;
+};
+
+type DecryptionResult =
+  | { ok: true; value: string }
+  | { ok: false; reason: string };
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function errorCode(error: unknown): string {
+  if (error && typeof error === 'object' && 'code' in error) return String(error.code);
+  return 'locked';
+}
+
+function integerTimestamp(value: unknown): bigint | null {
   if (typeof value === 'bigint') return value;
   if (typeof value === 'number' && Number.isFinite(value)) {
     return BigInt(Math.trunc(value));
@@ -29,7 +94,7 @@ function integerTimestamp(value) {
   return null;
 }
 
-function microsecondsToUnixMs(value, epochOffsetUs = 0n) {
+function microsecondsToUnixMs(value: unknown, epochOffsetUs = 0n): number | null {
   const timestamp = integerTimestamp(value);
   if (timestamp === null || timestamp <= epochOffsetUs) return null;
   const milliseconds = Number((timestamp - epochOffsetUs) / 1000n);
@@ -38,18 +103,19 @@ function microsecondsToUnixMs(value, epochOffsetUs = 0n) {
     : null;
 }
 
-function secondsToUnixMs(value) {
+function secondsToUnixMs(value: unknown): number | null {
   const seconds = Number(value);
   if (!Number.isFinite(seconds) || seconds <= 0) return null;
   const milliseconds = Math.trunc(seconds * 1000);
   return Number.isSafeInteger(milliseconds) ? milliseconds : null;
 }
 
-export function normalizeChromiumCookieRow(row, profileId) {
+export function normalizeChromiumCookieRow(row: CookieRow, profileId: string): NormalizedCookie {
   const persistent = Number(row.is_persistent) === 1;
   return {
     ...row,
-    host: row.host_key,
+    name: typeof row.name === 'string' ? row.name : String(row.name ?? ''),
+    host: typeof row.host_key === 'string' ? row.host_key : String(row.host_key ?? ''),
     value: row.value ? String(row.value) : '',
     profileId,
     expiresAt: persistent
@@ -61,11 +127,12 @@ export function normalizeChromiumCookieRow(row, profileId) {
   };
 }
 
-export function normalizeFirefoxCookieRow(row, profileId) {
+export function normalizeFirefoxCookieRow(row: CookieRow, profileId: string): NormalizedCookie {
   const expiresAt = secondsToUnixMs(row.expiry);
   return {
     ...row,
-    host: row.host,
+    name: typeof row.name === 'string' ? row.name : String(row.name ?? ''),
+    host: typeof row.host === 'string' ? row.host : String(row.host ?? ''),
     value: row.value ? String(row.value) : '',
     profileId,
     expiresAt,
@@ -75,22 +142,22 @@ export function normalizeFirefoxCookieRow(row, profileId) {
   };
 }
 
-function steamDomainFamily(host) {
+function steamDomainFamily(host: unknown): string {
   const normalized = String(host || '').replace(/^\./, '').toLowerCase();
   if (normalized === 'steamcommunity.com') return 'community';
   if (normalized === 'steampowered.com' || normalized === 'store.steampowered.com') return 'store';
   return normalized || 'unknown';
 }
 
-function cookieFreshness(cookie) {
+function cookieFreshness(cookie: NormalizedCookie): number {
   return Number(cookie.lastAccessedAt || cookie.createdAt || 0);
 }
 
-let sqlPromise = null;
-const masterKeyCache = new Map();
+let sqlPromise: Promise<SqlJsStatic> | null = null;
+const masterKeyCache = new Map<string, Buffer>();
 
-function locateWasm() {
-  const candidates = [];
+function locateWasm(): string | null {
+  const candidates: string[] = [];
   if (process.pkg) {
     const execDir = path.dirname(process.execPath);
     candidates.push(path.join(execDir, 'sql-wasm.wasm'));
@@ -108,7 +175,7 @@ function locateWasm() {
   return null;
 }
 
-async function getSQL() {
+async function getSQL(): Promise<SqlJsStatic> {
   if (!sqlPromise) {
     sqlPromise = initSqlJs({
       locateFile: () => locateWasm() || 'sql-wasm.wasm',
@@ -117,21 +184,21 @@ async function getSQL() {
   return sqlPromise;
 }
 
-function defaultProfileRoots() {
+function defaultProfileRoots(): { home: string; localAppData: string; roamingAppData: string } {
   const home = os.homedir();
   const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
   const roamingAppData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
   return { home, localAppData, roamingAppData };
 }
 
-function chromiumProfileDirs(userDataDir) {
+function chromiumProfileDirs(userDataDir: string): BrowserProfile[] {
   if (!fs.existsSync(userDataDir)) return [];
   const candidates = ['Default'];
   try {
     const entries = fs.readdirSync(userDataDir);
     const numbered = entries
       .filter((n) => /^Profile \d+$/.test(n))
-      .sort((a, b) => parseInt(b.match(/\d+/)[0], 10) - parseInt(a.match(/\d+/)[0], 10));
+      .sort((a, b) => parseInt(b.match(/\d+/)![0], 10) - parseInt(a.match(/\d+/)![0], 10));
     candidates.push(...numbered);
   } catch { /* ignore */ }
   const profiles = [];
@@ -145,11 +212,11 @@ function chromiumProfileDirs(userDataDir) {
   return profiles;
 }
 
-function chromiumProfileDir(userDataDir) {
+function chromiumProfileDir(userDataDir: string): BrowserProfile | null {
   return chromiumProfileDirs(userDataDir)[0] || null;
 }
 
-function firefoxProfilePaths() {
+function firefoxProfilePaths(): BrowserProfile[] {
   const { roamingAppData } = defaultProfileRoots();
   const profilesIni = path.join(roamingAppData, 'Mozilla', 'Firefox', 'profiles.ini');
   if (!fs.existsSync(profilesIni)) return [];
@@ -179,11 +246,11 @@ function firefoxProfilePaths() {
     .map(({ profileDir, cookiesPath }) => ({ profileDir, cookiesPath }));
 }
 
-function firefoxProfilePath() {
+function firefoxProfilePath(): BrowserProfile | null {
   return firefoxProfilePaths()[0] || null;
 }
 
-const BROWSER_DEFS = [
+const BROWSER_DEFS: BrowserDefinition[] = [
   {
     id: 'firefox',
     label: 'Firefox',
@@ -244,7 +311,7 @@ const BROWSER_DEFS = [
   },
 ];
 
-export function listAvailableBrowsers() {
+export function listAvailableBrowsers(): BrowserListResult {
   if (process.platform !== 'win32') {
     return { supported: false, platform: process.platform, browsers: [] };
   }
@@ -261,15 +328,15 @@ export function listAvailableBrowsers() {
   return { supported: true, platform: 'win32', browsers };
 }
 
-function copyToTemp(srcPath) {
+function copyToTemp(srcPath: string): string {
   const tmp = path.join(os.tmpdir(), `zcp-cookies-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.sqlite`);
   fs.copyFileSync(srcPath, tmp);
   return tmp;
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function copyToTempViaPowerShell(srcPath) {
+async function copyToTempViaPowerShell(srcPath: string): Promise<string> {
   const tmp = path.join(os.tmpdir(), `zcp-cookies-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.sqlite`);
   const script = `
     $ErrorActionPreference = 'Stop'
@@ -282,7 +349,7 @@ async function copyToTempViaPowerShell(srcPath) {
       try { $in.CopyTo($out) } finally { $out.Close() }
     } finally { $in.Close() }
   `;
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const proc = spawn('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script,
     ], {
@@ -307,28 +374,30 @@ async function copyToTempViaPowerShell(srcPath) {
   return tmp;
 }
 
-async function snapshotCookiesFile(srcPath) {
+async function snapshotCookiesFile(srcPath: string): Promise<string> {
   try { return copyToTemp(srcPath); } catch (err) {
-    if (err.code !== 'EBUSY' && err.code !== 'EPERM' && err.code !== 'UNKNOWN') {
+    const code = errorCode(err);
+    if (code !== 'EBUSY' && code !== 'EPERM' && code !== 'UNKNOWN') {
       throw err;
     }
   }
   await sleep(250);
   try { return copyToTemp(srcPath); } catch (err) {
-    if (err.code !== 'EBUSY' && err.code !== 'EPERM' && err.code !== 'UNKNOWN') {
+    const code = errorCode(err);
+    if (code !== 'EBUSY' && code !== 'EPERM' && code !== 'UNKNOWN') {
       throw err;
     }
   }
   return copyToTempViaPowerShell(srcPath);
 }
 
-function safeUnlink(p) { try { fs.unlinkSync(p); } catch { /* ignore */ } }
+function safeUnlink(p: string): void { try { fs.unlinkSync(p); } catch { /* ignore */ } }
 
-async function readChromiumCookies(cookiesPath) {
+async function readChromiumCookies(cookiesPath: string): Promise<CookieReadResult> {
   let tmpPath;
   try { tmpPath = await snapshotCookiesFile(cookiesPath); }
   catch (err) {
-    return { ok: false, error: `Could not read cookies file (${err.code || 'locked'}). Try closing the browser and retry, or paste Steam cookies manually.` };
+    return { ok: false, error: `Could not read cookies file (${errorCode(err)}). Try closing the browser and retry, or paste Steam cookies manually.` };
   }
   try {
     const SQL = await getSQL();
@@ -340,23 +409,23 @@ async function readChromiumCookies(cookiesPath) {
     if (!res || !res[0]) return { ok: true, rows: [] };
     const cols = res[0].columns;
     const rows = res[0].values.map((row) => {
-      const obj = {};
+      const obj: CookieRow = {};
       cols.forEach((c, i) => { obj[c] = row[i]; });
       return obj;
     });
     return { ok: true, rows };
   } catch (err) {
-    return { ok: false, error: `SQLite read failed: ${err.message}` };
+    return { ok: false, error: `SQLite read failed: ${errorMessage(err)}` };
   } finally {
     safeUnlink(tmpPath);
   }
 }
 
-async function readFirefoxCookies(cookiesPath) {
+async function readFirefoxCookies(cookiesPath: string): Promise<CookieReadResult> {
   let tmpPath;
   try { tmpPath = await snapshotCookiesFile(cookiesPath); }
   catch (err) {
-    return { ok: false, error: `Could not read cookies file (${err.code || 'locked'}). Try closing Firefox and retry, or paste Steam cookies manually.` };
+    return { ok: false, error: `Could not read cookies file (${errorCode(err)}). Try closing Firefox and retry, or paste Steam cookies manually.` };
   }
   try {
     const SQL = await getSQL();
@@ -368,28 +437,28 @@ async function readFirefoxCookies(cookiesPath) {
     if (!res || !res[0]) return { ok: true, rows: [] };
     const cols = res[0].columns;
     const rows = res[0].values.map((row) => {
-      const obj = {};
+      const obj: CookieRow = {};
       cols.forEach((c, i) => { obj[c] = row[i]; });
       return obj;
     });
     return { ok: true, rows };
   } catch (err) {
-    return { ok: false, error: `SQLite read failed: ${err.message}` };
+    return { ok: false, error: `SQLite read failed: ${errorMessage(err)}` };
   } finally {
     safeUnlink(tmpPath);
   }
 }
 
-async function getChromiumMasterKey(localStatePath) {
+async function getChromiumMasterKey(localStatePath: string): Promise<Buffer> {
   if (!fs.existsSync(localStatePath)) {
     throw new Error('Local State file not found');
   }
   let raw;
   try { raw = fs.readFileSync(localStatePath, 'utf-8'); }
-  catch (err) { throw new Error(`Could not read Local State: ${err.code || err.message}`); }
+  catch (err) { throw new Error(`Could not read Local State: ${errorCode(err) || errorMessage(err)}`); }
   let parsed;
   try { parsed = JSON.parse(raw); }
-  catch (err) { throw new Error(`Local State is not valid JSON: ${err.message}`); }
+  catch (err) { throw new Error(`Local State is not valid JSON: ${errorMessage(err)}`); }
   const encB64 = parsed?.os_crypt?.encrypted_key;
   if (!encB64) throw new Error('os_crypt.encrypted_key missing from Local State');
 
@@ -407,7 +476,7 @@ async function getChromiumMasterKey(localStatePath) {
     $plain = [System.Security.Cryptography.ProtectedData]::Unprotect($bytes, $null, 'CurrentUser')
     [Console]::Out.Write([System.Convert]::ToBase64String($plain))
   `;
-  const stdout = await new Promise((resolve, reject) => {
+  const stdout = await new Promise<string>((resolve, reject) => {
     const proc = spawn('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
       '-Command', script,
@@ -433,7 +502,7 @@ async function getChromiumMasterKey(localStatePath) {
   return key;
 }
 
-function decryptChromiumValue(encrypted, key) {
+function decryptChromiumValue(encrypted: Buffer, key: Buffer): DecryptionResult {
   if (!encrypted || encrypted.length === 0) return { ok: false, reason: 'empty' };
   const prefix = encrypted.slice(0, 3).toString('ascii');
   if (prefix === 'v20') {
@@ -452,22 +521,23 @@ function decryptChromiumValue(encrypted, key) {
     const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     return { ok: true, value: plain.toString('utf-8') };
   } catch (err) {
-    return { ok: false, reason: err.message };
+    return { ok: false, reason: errorMessage(err) };
   }
 }
 
-export async function extractSteamCookies(browserId) {
+export async function extractSteamCookies(browserId: string): Promise<CookieExtractionResult> {
   if (process.platform !== 'win32') {
     return { ok: false, browser: browserId, error: 'Only supported on Windows for now — paste Steam cookies manually on Linux/macOS' };
   }
   const def = BROWSER_DEFS.find((b) => b.id === browserId);
   if (!def) return { ok: false, browser: browserId, error: 'Unknown browser id' };
-  const profiles = def.findAll ? def.findAll() : [def.find()].filter(Boolean);
+  const foundProfile = def.find();
+  const profiles = def.findAll ? def.findAll() : foundProfile ? [foundProfile] : [];
   if (profiles.length === 0) return { ok: false, browser: browserId, error: `${def.label} profile not found on this machine` };
 
   if (def.family === 'firefox') {
-    const cookies = [];
-    const readErrors = [];
+    const cookies: NormalizedCookie[] = [];
+    const readErrors: string[] = [];
     for (const profile of profiles) {
       const result = await readFirefoxCookies(profile.cookiesPath);
       if (!result.ok) {
@@ -485,8 +555,8 @@ export async function extractSteamCookies(browserId) {
     return pickSteamCookies(browserId, cookies, notes);
   }
 
-  const rowsByProfile = [];
-  const readErrors = [];
+  const rowsByProfile: Array<{ row: CookieRow; profileId: string }> = [];
+  const readErrors: string[] = [];
   for (const profile of profiles) {
     const result = await readChromiumCookies(profile.cookiesPath);
     if (!result.ok) {
@@ -502,28 +572,32 @@ export async function extractSteamCookies(browserId) {
   let key = masterKeyCache.get(browserId);
   if (!key) {
     try {
-      key = await getChromiumMasterKey(def.localStatePath());
+      key = await getChromiumMasterKey(def.localStatePath!());
       masterKeyCache.set(browserId, key);
     } catch (err) {
-      log.warn(`${def.label} master key extraction failed: ${err.message}`);
-      return { ok: false, browser: browserId, error: `Could not unwrap ${def.label}'s cookie key: ${err.message}` };
+      log.warn(`${def.label} master key extraction failed: ${errorMessage(err)}`);
+      return { ok: false, browser: browserId, error: `Could not unwrap ${def.label}'s cookie key: ${errorMessage(err)}` };
     }
   }
 
-  const decoded = [];
+  const decoded: NormalizedCookie[] = [];
   const notes = readErrors.length > 0
     ? [`Could not inspect ${readErrors.length} ${def.label} profile(s); selection used the readable profiles only.`]
     : [];
   let appBoundCount = 0;
   for (const { row, profileId } of rowsByProfile) {
     const normalized = normalizeChromiumCookieRow(row, profileId);
-    if (row.value && row.value.length > 0) {
+    if (row.value && String(row.value).length > 0) {
       decoded.push(normalized);
       continue;
     }
     const enc = row.encrypted_value;
-    if (!enc || enc.length === 0) continue;
-    const buf = Buffer.isBuffer(enc) ? enc : Buffer.from(enc);
+    if (!enc || (typeof enc === 'string' || enc instanceof Uint8Array) && enc.length === 0) continue;
+    const buf = Buffer.isBuffer(enc)
+      ? enc
+      : enc instanceof Uint8Array
+        ? Buffer.from(enc)
+        : Buffer.from(String(enc));
     const dec = decryptChromiumValue(buf, key);
     if (dec.ok) {
       decoded.push({ ...normalized, value: dec.value });
@@ -538,7 +612,12 @@ export async function extractSteamCookies(browserId) {
   return pickSteamCookies(browserId, decoded, notes);
 }
 
-export function pickSteamCookies(browserId, cookies, notes = [], now = Date.now()) {
+export function pickSteamCookies(
+  browserId: string,
+  cookies: NormalizedCookie[],
+  notes: string[] = [],
+  now = Date.now(),
+): CookieExtractionResult {
   const outputNotes = [...notes];
   const valid = cookies.filter((cookie) => {
     if (!cookie.value || !['sessionid', 'steamLoginSecure'].includes(cookie.name)) {
@@ -551,7 +630,11 @@ export function pickSteamCookies(browserId, cookies, notes = [], now = Date.now(
   const sessions = valid.filter((cookie) => cookie.name === 'sessionid');
   const logins = valid.filter((cookie) => cookie.name === 'steamLoginSecure');
 
-  for (const [name, matches] of [['sessionid', sessions], ['steamLoginSecure', logins]]) {
+  const cookieSets: Array<[string, NormalizedCookie[]]> = [
+    ['sessionid', sessions],
+    ['steamLoginSecure', logins],
+  ];
+  for (const [name, matches] of cookieSets) {
     if (new Set(matches.map((cookie) => cookie.value)).size > 1) {
       outputNotes.push(`Conflicting valid ${name} cookies were found; selected the newest compatible pair without exposing cookie values.`);
     }
@@ -586,7 +669,7 @@ export function pickSteamCookies(browserId, cookies, notes = [], now = Date.now(
   });
 
   const selected = pairs[0] || null;
-  const newest = (matches) => [...matches].sort((a, b) => {
+  const newest = (matches: NormalizedCookie[]): NormalizedCookie | null => [...matches].sort((a, b) => {
     const priority = STEAM_HOST_PRIORITY(a.host) - STEAM_HOST_PRIORITY(b.host);
     return priority || cookieFreshness(b) - cookieFreshness(a);
   })[0] || null;

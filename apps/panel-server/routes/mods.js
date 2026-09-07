@@ -49,7 +49,7 @@ import {
 import {
   listAvailableBrowsers,
   extractSteamCookies,
-} from "../utils/browserCookies.js";
+} from "../utils/browserCookies.ts";
 import { requirePermission } from "../services/permissions.js";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { withFileLock } from "../utils/fileWriteQueue.ts";

@@ -44,7 +44,7 @@ vi.mock("../services/workshopCollectionSync.ts", () => ({
   syncSingleChange: vi.fn(),
   fetchPublishedFileTitles: vi.fn(),
 }));
-vi.mock("../utils/browserCookies.js", () => ({
+vi.mock("../utils/browserCookies.ts", () => ({
   listAvailableBrowsers: vi.fn(),
   extractSteamCookies: vi.fn(),
 }));
