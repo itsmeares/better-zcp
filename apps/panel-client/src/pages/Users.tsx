@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from '@tanstack/react-router'
 import { Users as UsersIcon, UserPlus, ShieldAlert, Loader2, ArrowRight, Trash2 } from 'lucide-react'
@@ -37,9 +38,11 @@ import {
   type RoleInfo,
 } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
+import { panelQueryKeys } from '@/lib/queryClient'
 
 const LEGACY_USER_ROLES = ['admin', 'technician', 'moderator'] as const
 type LegacyUserRole = (typeof LEGACY_USER_ROLES)[number]
+const EMPTY_ROLES: RoleInfo[] = []
 function isLegacyUserRole(name: string): name is LegacyUserRole {
   return (LEGACY_USER_ROLES as readonly string[]).includes(name)
 }
@@ -56,12 +59,40 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
   const { toast } = useToast()
   const { user: currentUser } = useAuth()
   const confirm = useConfirm()
+  const queryClient = useQueryClient()
 
-  const [users, setUsers] = useState<ManagedUserAccount[] | null>(null)
-  const [roles, setRoles] = useState<RoleInfo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [permissionDenied, setPermissionDenied] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const {
+    data: usersData,
+    error: usersErrorValue,
+    refetch: refetchUsers,
+    isPending: usersPending,
+  } = useQuery({
+    queryKey: panelQueryKeys.users,
+    queryFn: usersApi.list,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const {
+    data: rolesData,
+    error: rolesError,
+    refetch: refetchRoles,
+    isPending: rolesPending,
+  } = useQuery({
+    queryKey: panelQueryKeys.roles,
+    queryFn: permissionsApi.getRoles,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const users = usersData?.users ?? null
+  const roles = rolesData?.roles ?? EMPTY_ROLES
+  const usersError = usersErrorValue ?? rolesError
+  const permissionDenied = [usersErrorValue, rolesError].some(
+    (error) => error instanceof ApiError && error.status === 403,
+  )
+  const loadError = !permissionDenied && usersError
+    ? getUserErrorMessage(usersError, t('toasts.unknownError'))
+    : null
+  const loading = usersPending || rolesPending
 
   const [createOpen, setCreateOpen] = useState(false)
   const [username, setUsername] = useState('')
@@ -95,31 +126,9 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
     setFailedDeleteFocusId(null)
   }, [failedDeleteFocusId])
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true)
-    setPermissionDenied(false)
-    setLoadError(null)
-    try {
-      const [{ users: list }, { roles: roleList }] = await Promise.all([
-        usersApi.list(),
-        permissionsApi.getRoles(),
-      ])
-      setUsers(list)
-      setRoles(roleList)
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        setPermissionDenied(true)
-      } else {
-        setLoadError(getUserErrorMessage(error, t('toasts.unknownError')))
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [t])
-
-  useEffect(() => {
-    fetchAll()
-  }, [fetchAll])
+  const fetchAll = useCallback(() => {
+    void Promise.all([refetchUsers(), refetchRoles()])
+  }, [refetchRoles, refetchUsers])
 
   function openCreateDialog() {
     setUsername('')
@@ -152,7 +161,9 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
     setDeletingIds((prev) => new Set(prev).add(user.id))
     try {
       await usersApi.remove(user.id)
-      setUsers((prev) => (prev ? prev.filter((u) => u.id !== user.id) : prev))
+      queryClient.setQueryData<{ users: ManagedUserAccount[] }>(panelQueryKeys.users, (previous) =>
+        previous ? { ...previous, users: previous.users.filter((u) => u.id !== user.id) } : previous,
+      )
       toast({
         title: t('toasts.userDeletedTitle'),
         description: t('toasts.userDeletedDescription', { username: user.username }),
@@ -227,7 +238,9 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
           await usersApi.assignRole(user.id, targetRole.id)
         } catch (error) {
           setCreateOpen(false)
-          setUsers((prev) => (prev ? [...prev, user] : prev))
+          queryClient.setQueryData<{ users: ManagedUserAccount[] }>(panelQueryKeys.users, (previous) =>
+            previous ? { ...previous, users: [...previous.users, user] } : { users: [user] },
+          )
           toast({
             title: t('toasts.userCreatedTitle'),
             description: t('toasts.userCreatedRoleAssignFailedDescription', {
@@ -242,7 +255,7 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
       }
 
       setCreateOpen(false)
-      fetchAll()
+      await refetchUsers()
       toast({
         title: t('toasts.userCreatedTitle'),
         description: t('toasts.userCreatedDescription', {

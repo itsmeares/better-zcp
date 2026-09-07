@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { LayoutTemplate, Plus, Upload, Loader2, RotateCcw } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -13,6 +14,7 @@ import { TemplatePreviewDialog } from '@/components/templates/TemplatePreviewDia
 import { CreateTemplateDialog } from '@/components/templates/CreateTemplateDialog'
 import { ImportTemplateDialog } from '@/components/templates/ImportTemplateDialog'
 import { useAuth } from '@/contexts/AuthContext'
+import { panelQueryKeys } from '@/lib/queryClient'
 
 export default function Templates() {
   const { t } = useTranslation('templates')
@@ -21,11 +23,35 @@ export default function Templates() {
   const { can, authEnabled } = useAuth()
   const canManage = !authEnabled || can('templates.manage')
 
-  const [templates, setTemplates] = useState<SimTemplate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-
-  const [hiddenTemplates, setHiddenTemplates] = useState<SimTemplate[]>([])
+  const {
+    data: templatesData,
+    error: templatesError,
+    refetch: refetchTemplates,
+    isPending: templatesPending,
+  } = useQuery({
+    queryKey: panelQueryKeys.templates,
+    queryFn: templatesApi.list,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const {
+    data: hiddenTemplatesData,
+    refetch: refetchHiddenTemplates,
+  } = useQuery({
+    queryKey: panelQueryKeys.hiddenTemplates,
+    queryFn: templatesApi.listHidden,
+    enabled: canManage,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const templates = Array.isArray(templatesData?.templates) ? templatesData.templates : []
+  const hiddenTemplates = Array.isArray(hiddenTemplatesData?.templates)
+    ? hiddenTemplatesData.templates
+    : []
+  const loading = templatesPending
+  const loadError = templatesError
+    ? getUserErrorMessage(templatesError, t('toasts.loadFailedFallback'))
+    : null
   const [restoringId, setRestoringId] = useState<string | null>(null)
 
   const [previewTemplate, setPreviewTemplate] = useState<SimTemplate | null>(null)
@@ -33,34 +59,12 @@ export default function Templates() {
   const [importOpen, setImportOpen] = useState(false)
 
   const fetchTemplates = useCallback(async () => {
-    try {
-      const { templates: list } = await templatesApi.list()
-      setTemplates(Array.isArray(list) ? list : [])
-      setLoadError(null)
-    } catch (error) {
-      setLoadError(getUserErrorMessage(error, t('toasts.loadFailedFallback')))
-    } finally {
-      setLoading(false)
-    }
-  }, [t])
+    await refetchTemplates()
+  }, [refetchTemplates])
 
   const fetchHiddenTemplates = useCallback(async () => {
-    if (!canManage) {
-      setHiddenTemplates([])
-      return
-    }
-    try {
-      const { templates: list } = await templatesApi.listHidden()
-      setHiddenTemplates(Array.isArray(list) ? list : [])
-    } catch {
-      setHiddenTemplates([])
-    }
-  }, [canManage])
-
-  useEffect(() => {
-    fetchTemplates()
-    fetchHiddenTemplates()
-  }, [fetchTemplates, fetchHiddenTemplates])
+    if (canManage) await refetchHiddenTemplates()
+  }, [canManage, refetchHiddenTemplates])
 
   const handleRestore = async (template: SimTemplate) => {
     setRestoringId(template.meta.id)
@@ -68,8 +72,7 @@ export default function Templates() {
       const result = await templatesApi.unhide(template.meta.id)
       if (!result.success) throw new Error(result.error || t('toasts.restoreFailedFallback'))
       toast({ title: t('toasts.templateRestoredTitle'), variant: 'success' as const })
-      fetchTemplates()
-      fetchHiddenTemplates()
+      await Promise.all([fetchTemplates(), fetchHiddenTemplates()])
     } catch (error) {
       toast({
         title: t('toasts.restoreFailedTitle'),
@@ -114,7 +117,7 @@ export default function Templates() {
       const result = await templatesApi.delete(template.meta.id)
       if (!result.success) throw new Error(result.error || t('toasts.deleteFailedFallback'))
       toast({ title: template.isBuiltin ? t('toasts.templateHiddenTitle') : t('toasts.templateDeletedTitle'), variant: 'success' as const })
-      fetchTemplates()
+      await fetchTemplates()
     } catch (error) {
       toast({
         title: t('toasts.deleteFailedTitle'),

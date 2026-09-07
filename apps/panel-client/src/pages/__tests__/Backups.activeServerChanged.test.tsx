@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } from '@/lib/api'
@@ -79,10 +80,13 @@ afterEach(() => {
 })
 
 function renderBackups() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   return render(
-    <TooltipProvider>
-      <Backups />
-    </TooltipProvider>,
+    <QueryClientProvider client={client}>
+      <TooltipProvider>
+        <Backups />
+      </TooltipProvider>
+    </QueryClientProvider>,
   )
 }
 

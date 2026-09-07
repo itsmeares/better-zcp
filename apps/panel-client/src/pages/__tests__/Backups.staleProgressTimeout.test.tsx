@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { SocketContext } from '@/contexts/SocketContext'
 import type { Socket } from 'socket.io-client'
@@ -80,12 +81,15 @@ afterEach(() => {
 })
 
 function renderBackups(socket: Pick<Socket, 'on' | 'off'>) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   return render(
-    <SocketContext.Provider value={socket as Socket}>
-      <TooltipProvider>
-        <Backups />
-      </TooltipProvider>
-    </SocketContext.Provider>,
+    <QueryClientProvider client={client}>
+      <SocketContext.Provider value={socket as Socket}>
+        <TooltipProvider>
+          <Backups />
+        </TooltipProvider>
+      </SocketContext.Provider>
+    </QueryClientProvider>,
   )
 }
 
@@ -101,6 +105,7 @@ describe('Backups.tsx: stale progress-clear timeout across back-to-back backups'
 
     renderBackups(socket)
     const createButton = await screen.findByRole('button', { name: /create backup/i })
+    await waitFor(() => expect(createButton).not.toBeDisabled())
     await act(async () => { fireEvent.click(createButton) })
     await waitFor(() => expect(createBackup).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(createButton).not.toBeDisabled())

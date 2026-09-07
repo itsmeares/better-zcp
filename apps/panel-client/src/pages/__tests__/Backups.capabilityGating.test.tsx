@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Backups from '../Backups'
 import { backupApi, serversApi, type BackupStatus, type ServerBackupArchive } from '@/lib/api'
@@ -72,10 +73,13 @@ afterEach(() => {
 })
 
 function renderBackups() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   return render(
-    <TooltipProvider>
-      <Backups />
-    </TooltipProvider>,
+    <QueryClientProvider client={client}>
+      <TooltipProvider>
+        <Backups />
+      </TooltipProvider>
+    </QueryClientProvider>,
   )
 }
 
@@ -108,7 +112,7 @@ describe('Backups.tsx: backups.manage gates Create Backup', () => {
     renderBackups()
 
     const createButton = await screen.findByRole('button', { name: /create backup/i })
-    expect(createButton).not.toBeDisabled()
+    await waitFor(() => expect(createButton).not.toBeDisabled())
 
     fireEvent.click(createButton)
     await waitFor(() => expect(createBackup).toHaveBeenCalledTimes(1))

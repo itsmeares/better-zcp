@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from '@/test/router'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Settings from '../Settings'
@@ -36,11 +37,17 @@ vi.mock('@/contexts/AuthContext', () => ({
 }))
 
 function renderSettings(initialPath: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  })
+
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <TooltipProvider>
-        <Settings />
-      </TooltipProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Settings />
+        </TooltipProvider>
+      </QueryClientProvider>
     </MemoryRouter>,
   )
 }
