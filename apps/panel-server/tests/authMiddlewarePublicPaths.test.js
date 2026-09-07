@@ -12,7 +12,7 @@ vi.mock("../database/init.js", () => ({
   commitNow: async () => {},
 }));
 
-const { default: authService, requireRole } = await import("../services/auth.js");
+const { default: authService, requireRole } = await import("../services/auth.ts");
 const { default: authRouter } = await import("../routes/auth.js");
 
 describe("authService.middleware() — /api/auth/* is no longer a blanket exemption", () => {

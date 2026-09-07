@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_INI_EXCLUSIONS } from "../utils/templateSchema.ts";
-import { USER_ROLES } from "../services/auth.js";
+import { USER_ROLES } from "../services/auth.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..", "..");

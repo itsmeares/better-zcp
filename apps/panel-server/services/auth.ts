@@ -1,7 +1,9 @@
 
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import type { JwtPayload } from "jsonwebtoken";
 import crypto from "crypto";
+import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { createLogger } from "../utils/logger.ts";
 import { getSetting, setSetting, getDb, commitNow } from "../database/init.js";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
@@ -21,6 +23,102 @@ import {
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 const log = createLogger("Auth");
+
+type RefreshSession = {
+  id: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+};
+
+type ExternalIdentity = {
+  issuer: string;
+  subject: string;
+  email: string | null;
+  linkedAt: string;
+};
+
+type AuthUser = {
+  id: string;
+  username: string;
+  password?: string | null;
+  role: string;
+  roleId?: string | number | null;
+  tokenGen?: number;
+  refreshSessions?: RefreshSession[];
+  externalIdentities?: ExternalIdentity[];
+  lockedUntil?: string | null;
+  failedLoginCount?: number;
+  lastLogin?: string | null;
+  createdAt?: string;
+  [key: string]: any;
+};
+
+type AuthRole = {
+  id: string | number;
+  name: string;
+  capabilities: string[];
+  isSeeded?: boolean;
+};
+
+type AuthenticatedUser = {
+  userId: string | null;
+  username: string | null;
+  role: string;
+  tokenGen: number | null;
+  authDisabled?: boolean;
+};
+
+type AuthenticatedRequest = Request & {
+  user?: AuthenticatedUser;
+};
+
+type PanelJwtPayload = JwtPayload & {
+  userId?: string;
+  username?: string;
+  role?: string;
+  tokenGen?: number;
+  type?: string;
+  sessionId?: string;
+};
+
+type RoleServiceError = Error & {
+  code: string;
+  status: number;
+  params?: unknown;
+};
+
+type PublicUser = {
+  id: string;
+  username: string;
+  role: string;
+  roleId?: string | number | null;
+};
+
+type AuthSessionResult = {
+  user: PublicUser & { capabilities?: string[] | null };
+  accessToken: string;
+  refreshToken: string | null;
+};
+
+type ExternalLoginResult =
+  | { linked: false; canBootstrapAdmin: boolean }
+  | {
+      linked: true;
+      user: PublicUser;
+      accessToken: string;
+      refreshToken: string | null;
+    };
+
+type ExternalIdentityInput = {
+  issuer?: string;
+  subject?: string;
+  email?: string;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 const PUBLIC_AUTH_PATHS = new Set([
   "/api/auth/status",
@@ -51,18 +149,26 @@ const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 const DUMMY_BCRYPT_HASH =
   "$2a$12$CwTycUXWue0Thq9StjUM0uJ8u2H8ekjqOGWjF/9JMlSlL5C.tZgqe";
 
-function makeRoleError(code, message, status = 400, params) {
-  const err = new Error(message);
+function makeRoleError(
+  code: string,
+  message: string,
+  status = 400,
+  params?: unknown,
+): RoleServiceError {
+  const err = new Error(message) as RoleServiceError;
   err.code = code;
   err.status = status;
   if (params) err.params = params;
   return err;
 }
 
-async function countOtherUsersWithCapability(capability, excludingUserId) {
+async function countOtherUsersWithCapability(
+  capability: string,
+  excludingUserId: string,
+): Promise<number> {
   const db = await getDb();
-  const users = db.data.users || [];
-  const roles = await getRoles();
+  const users = (db.data.users || []) as AuthUser[];
+  const roles = await getRoles() as AuthRole[];
   const roleById = new Map(roles.map((r) => [String(r.id), r]));
   const roleByName = new Map(roles.map((r) => [r.name, r]));
 
@@ -75,7 +181,11 @@ async function countOtherUsersWithCapability(capability, excludingUserId) {
   return count;
 }
 
-async function assertNoRecoveryLockout(userId, currentCapabilities, nextCapabilities) {
+async function assertNoRecoveryLockout(
+  userId: string,
+  currentCapabilities: string[],
+  nextCapabilities: string[],
+): Promise<void> {
   for (const capability of RECOVERY_CAPABILITIES) {
     const currentlyGrants = currentCapabilities.includes(capability);
     const willStillGrant = nextCapabilities.includes(capability);
@@ -96,13 +206,17 @@ async function assertNoRecoveryLockout(userId, currentCapabilities, nextCapabili
 }
 
 class AuthService {
+  jwtSecret: string | null;
+  initialized: boolean;
+  _writeMutex: Promise<unknown>;
+
   constructor() {
     this.jwtSecret = null;
     this.initialized = false;
     this._writeMutex = Promise.resolve();
   }
 
-  _withMutex(fn) {
+  _withMutex<T>(fn: () => Promise<T>): Promise<T> {
     const run = this._writeMutex.then(fn, fn);
     this._writeMutex = run.then(
       () => {},
@@ -111,7 +225,7 @@ class AuthService {
     return run;
   }
 
-  ensureUserAuthState(user) {
+  ensureUserAuthState(user: AuthUser): void {
     if (!Number.isInteger(user.tokenGen)) {
       user.tokenGen = 0;
     }
@@ -122,7 +236,7 @@ class AuthService {
 
     const now = Date.now();
     user.refreshSessions = user.refreshSessions
-      .filter((session) => session && typeof session.id === "string")
+      .filter((session): session is RefreshSession => session && typeof session.id === "string")
       .filter((session) => {
         const expiresAt = Date.parse(session.expiresAt || "");
         return Number.isNaN(expiresAt) || expiresAt > now;
@@ -130,7 +244,7 @@ class AuthService {
       .slice(-MAX_REFRESH_SESSIONS);
   }
 
-  createRefreshSession(user) {
+  createRefreshSession(user: AuthUser): RefreshSession {
     this.ensureUserAuthState(user);
 
     const timestamp = new Date().toISOString();
@@ -141,41 +255,41 @@ class AuthService {
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_LIFETIME_MS).toISOString(),
     };
 
-    user.refreshSessions.push(session);
-    if (user.refreshSessions.length > MAX_REFRESH_SESSIONS) {
-      user.refreshSessions = user.refreshSessions.slice(-MAX_REFRESH_SESSIONS);
+    user.refreshSessions!.push(session);
+    if (user.refreshSessions!.length > MAX_REFRESH_SESSIONS) {
+      user.refreshSessions = user.refreshSessions!.slice(-MAX_REFRESH_SESSIONS);
     }
 
     return session;
   }
 
-  findRefreshSession(user, sessionId) {
+  findRefreshSession(user: AuthUser, sessionId: string): RefreshSession | null {
     this.ensureUserAuthState(user);
     return (
-      user.refreshSessions.find((session) => session.id === sessionId) || null
+      user.refreshSessions!.find((session) => session.id === sessionId) || null
     );
   }
 
-  revokeRefreshSession(user, sessionId) {
+  revokeRefreshSession(user: AuthUser, sessionId: string): boolean {
     this.ensureUserAuthState(user);
-    const initialLength = user.refreshSessions.length;
-    user.refreshSessions = user.refreshSessions.filter(
+    const initialLength = user.refreshSessions!.length;
+    user.refreshSessions = user.refreshSessions!.filter(
       (session) => session.id !== sessionId,
     );
     return user.refreshSessions.length !== initialLength;
   }
 
-  async authenticateAccessToken(token) {
+  async authenticateAccessToken(token: string): Promise<AuthenticatedUser | null> {
     try {
-      const payload = jwt.verify(token, this.jwtSecret, {
+      const payload = jwt.verify(token, this.jwtSecret as string, {
         algorithms: [JWT_ALGORITHM],
-      });
+      }) as PanelJwtPayload;
       if (payload.type === "refresh") {
         return null;
       }
 
       const db = await getDb();
-      const users = db.data.users || [];
+      const users = (db.data.users || []) as AuthUser[];
       const user = users.find((entry) => entry.id === payload.userId);
       if (!user) {
         return null;
@@ -199,7 +313,7 @@ class AuthService {
     }
   }
 
-  async init() {
+  async init(): Promise<void> {
     try {
       const legacySecret = await getSetting("jwtSecret");
       const { secret, source } = await loadOrCreateJwtSecret({
@@ -230,13 +344,13 @@ class AuthService {
       }
 
       log.info("Auth service initialized");
-    } catch (error) {
-      log.error(`Failed to initialize auth service: ${error.message}`);
+    } catch (error: unknown) {
+      log.error(`Failed to initialize auth service: ${errorMessage(error)}`);
       throw error;
     }
   }
 
-  async regenerateJwtSecret() {
+  async regenerateJwtSecret(): Promise<{ path: string }> {
     if (readSecret("JWT_SECRET")) {
       throw new Error(
         "JWT secret is set via the JWT_SECRET environment variable — rotate " +
@@ -254,13 +368,13 @@ class AuthService {
     return { path: secretPath };
   }
 
-  async needsSetup() {
+  async needsSetup(): Promise<boolean> {
     const db = await getDb();
-    const users = db.data.users || [];
+    const users = (db.data.users || []) as AuthUser[];
     return users.length === 0;
   }
 
-  async isAuthEnabled() {
+  async isAuthEnabled(): Promise<boolean> {
     const authEnabled = await getSetting("authEnabled");
     if (authEnabled === undefined || authEnabled === null) {
       const needsSetup = await this.needsSetup();
@@ -269,7 +383,7 @@ class AuthService {
     return authEnabled !== false;
   }
 
-  async createUser(username, password, role) {
+  async createUser(username: string, password: string, role?: string): Promise<PublicUser> {
     return this._withMutex(async () => {
       if (!username || !password) {
         throw new Error("Username and password are required");
@@ -298,18 +412,19 @@ class AuthService {
         db.data.users = [];
       }
 
-      const isFirstUser = db.data.users.length === 0;
-      let resolvedRole;
+      const users = db.data.users as AuthUser[];
+      const isFirstUser = users.length === 0;
+      let resolvedRole: string;
       if (isFirstUser) {
         resolvedRole = "admin";
       } else {
-        if (!USER_ROLES.includes(role)) {
+        if (!role || !USER_ROLES.includes(role)) {
           throw new Error(`role must be one of: ${USER_ROLES.join(", ")}`);
         }
         resolvedRole = role;
       }
 
-      const existing = db.data.users.find(
+      const existing = users.find(
         (u) => u.username.toLowerCase() === username.toLowerCase(),
       );
       if (existing) {
@@ -326,7 +441,7 @@ class AuthService {
         lastLogin: null,
       };
 
-      db.data.users.push(user);
+      users.push(user);
       await commitNow();
 
       log.info(`User created: ${username} (role: ${resolvedRole})`);
@@ -334,7 +449,7 @@ class AuthService {
     });
   }
 
-  async changeUserRole(userId, newRole) {
+  async changeUserRole(userId: string, newRole: string): Promise<PublicUser> {
     if (!USER_ROLES.includes(newRole)) {
       throw new Error(`role must be one of: ${USER_ROLES.join(", ")}`);
     }
@@ -349,7 +464,7 @@ class AuthService {
     return this.changeUserRoleById(userId, targetRole.id);
   }
 
-  async changeUserRoleById(userId, roleId) {
+  async changeUserRoleById(userId: string, roleId: string | number): Promise<PublicUser> {
     return this._withMutex(async () => {
       const targetRole = await getRoleById(roleId);
       if (!targetRole) {
@@ -361,7 +476,7 @@ class AuthService {
       }
 
       const db = await getDb();
-      const users = db.data.users || [];
+      const users = (db.data.users || []) as AuthUser[];
       const user = users.find((u) => u.id === userId);
       if (!user) {
         throw new Error("User not found");
@@ -391,7 +506,10 @@ class AuthService {
     });
   }
 
-  async deleteUser(userId, { actingUserId } = {}) {
+  async deleteUser(
+    userId: string,
+    { actingUserId }: { actingUserId?: string | number | null } = {},
+  ): Promise<{ id: string; username: string }> {
     return this._withMutex(async () => {
       if (actingUserId && String(actingUserId) === String(userId)) {
         throw makeRoleError(
@@ -402,7 +520,7 @@ class AuthService {
       }
 
       const db = await getDb();
-      const users = db.data.users || [];
+      const users = (db.data.users || []) as AuthUser[];
       const user = users.find((u) => u.id === userId);
       if (!user) {
         throw new Error("User not found");
@@ -423,13 +541,13 @@ class AuthService {
     });
   }
 
-  async login(username, password, rememberMe = true) {
+  async login(username: string, password: string, rememberMe = true): Promise<AuthSessionResult> {
     if (!username || !password) {
       throw new Error("Username and password are required");
     }
 
     const db = await getDb();
-    const users = db.data.users || [];
+    const users = (db.data.users || []) as AuthUser[];
     const user = users.find(
       (u) => u.username.toLowerCase() === username.toLowerCase(),
     );
@@ -465,9 +583,9 @@ class AuthService {
       }
       try {
         await commitNow();
-      } catch (error) {
+      } catch (error: unknown) {
         log.error(
-          `Failed to persist failed-login state for ${user.username}: ${error.message}`,
+          `Failed to persist failed-login state for ${user.username}: ${errorMessage(error)}`,
         );
       }
       throw new Error("Invalid username or password");
@@ -496,7 +614,7 @@ class AuthService {
     };
   }
 
-  generateAccessToken(user) {
+  generateAccessToken(user: AuthUser): string {
     return jwt.sign(
       {
         userId: user.id,
@@ -504,12 +622,12 @@ class AuthService {
         role: user.role,
         tokenGen: user.tokenGen || 0,
       },
-      this.jwtSecret,
+      this.jwtSecret as string,
       { algorithm: JWT_ALGORITHM, expiresIn: ACCESS_TOKEN_EXPIRY },
     );
   }
 
-  generateRefreshToken(user, sessionId) {
+  generateRefreshToken(user: AuthUser, sessionId: string): string {
     return jwt.sign(
       {
         userId: user.id,
@@ -517,16 +635,16 @@ class AuthService {
         tokenGen: user.tokenGen || 0,
         sessionId,
       },
-      this.jwtSecret,
+      this.jwtSecret as string,
       { algorithm: JWT_ALGORITHM, expiresIn: REFRESH_TOKEN_EXPIRY },
     );
   }
 
-  verifyAccessToken(token) {
+  verifyAccessToken(token: string): PanelJwtPayload | null {
     try {
-      const payload = jwt.verify(token, this.jwtSecret, {
+      const payload = jwt.verify(token, this.jwtSecret as string, {
         algorithms: [JWT_ALGORITHM],
-      });
+      }) as PanelJwtPayload;
       if (payload.type === "refresh") return null;
       return payload;
     } catch (error) {
@@ -534,17 +652,17 @@ class AuthService {
     }
   }
 
-  async refreshAccessToken(refreshToken) {
+  async refreshAccessToken(refreshToken: string): Promise<AuthSessionResult | null> {
     try {
-      const payload = jwt.verify(refreshToken, this.jwtSecret, {
+      const payload = jwt.verify(refreshToken, this.jwtSecret as string, {
         algorithms: [JWT_ALGORITHM],
-      });
+      }) as PanelJwtPayload;
       if (payload.type !== "refresh") {
         throw new Error("Invalid token type");
       }
 
       const db = await getDb();
-      const users = db.data.users || [];
+      const users = (db.data.users || []) as AuthUser[];
       const user = users.find((u) => u.id === payload.userId);
 
       if (!user) {
@@ -584,13 +702,13 @@ class AuthService {
     }
   }
 
-  async changePassword(userId, currentPassword, newPassword) {
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
     if (!newPassword || newPassword.length < 6) {
       throw new Error("New password must be at least 6 characters");
     }
 
     const db = await getDb();
-    const users = db.data.users || [];
+    const users = (db.data.users || []) as AuthUser[];
     const user = users.find((u) => u.id === userId);
 
     if (!user) {
@@ -617,9 +735,9 @@ class AuthService {
     return true;
   }
 
-  async getUsers() {
+  async getUsers(): Promise<PublicUser[]> {
     const db = await getDb();
-    const users = db.data.users || [];
+    const users = (db.data.users || []) as AuthUser[];
     return users.map((u) => ({
       id: u.id,
       username: u.username,
@@ -631,13 +749,16 @@ class AuthService {
   }
 
 
-  async loginWithExternalIdentity({ issuer, subject } = {}, rememberMe = true) {
+  async loginWithExternalIdentity(
+    { issuer, subject }: ExternalIdentityInput = {},
+    rememberMe = true,
+  ): Promise<ExternalLoginResult> {
     if (!issuer || !subject) {
       throw new Error("issuer and subject are required");
     }
 
     const db = await getDb();
-    const users = db.data.users || [];
+    const users = (db.data.users || []) as AuthUser[];
     const existing = users.find(
       (u) =>
         Array.isArray(u.externalIdentities) &&
@@ -677,7 +798,7 @@ class AuthService {
     email,
     username,
     setupToken,
-  } = {}) {
+  }: ExternalIdentityInput & { username?: string; setupToken?: unknown } = {}): Promise<PublicUser> {
     return this._withMutex(async () => {
       const db = await getDb();
       if (!db.data.users) {
@@ -707,7 +828,7 @@ class AuthService {
         );
       }
 
-      const user = {
+      const user: AuthUser = {
         id: crypto.randomUUID(),
         username,
         password: null, // OIDC-only account — no local password set
@@ -733,13 +854,16 @@ class AuthService {
     });
   }
 
-  async linkExternalIdentity(userId, { issuer, subject, email } = {}) {
+  async linkExternalIdentity(
+    userId: string,
+    { issuer, subject, email }: ExternalIdentityInput = {},
+  ): Promise<PublicUser> {
     if (!issuer || !subject) {
       throw new Error("issuer and subject are required");
     }
 
     const db = await getDb();
-    const users = db.data.users || [];
+    const users = (db.data.users || []) as AuthUser[];
     const user = users.find((u) => u.id === userId);
     if (!user) {
       throw new Error("User not found");
@@ -779,15 +903,15 @@ class AuthService {
     return { id: user.id, username: user.username, role: user.role };
   }
 
-  async logout(refreshToken) {
+  async logout(refreshToken: string | null | undefined): Promise<boolean> {
     if (!refreshToken) {
       return false;
     }
 
     try {
-      const payload = jwt.verify(refreshToken, this.jwtSecret, {
+      const payload = jwt.verify(refreshToken, this.jwtSecret as string, {
         algorithms: [JWT_ALGORITHM],
-      });
+      }) as PanelJwtPayload;
       if (
         !payload ||
         typeof payload !== "object" ||
@@ -799,7 +923,7 @@ class AuthService {
       }
 
       const db = await getDb();
-      const users = db.data.users || [];
+      const users = (db.data.users || []) as AuthUser[];
       const user = users.find((entry) => entry.id === payload.userId);
       if (!user) {
         return false;
@@ -826,7 +950,7 @@ class AuthService {
     }
   }
 
-  async resetPassword(newPassword) {
+  async resetPassword(newPassword: string): Promise<{ username: string }> {
     if (
       !newPassword ||
       typeof newPassword !== "string" ||
@@ -839,7 +963,7 @@ class AuthService {
     }
 
     const db = await getDb();
-    const users = db.data.users || [];
+    const users = (db.data.users || []) as AuthUser[];
     if (users.length === 0) {
       throw new Error("No user accounts exist. Use setup instead.");
     }
@@ -854,14 +978,14 @@ class AuthService {
     return { username: user.username };
   }
 
-  async generateRecoveryCodes(count = 10) {
+  async generateRecoveryCodes(count = 10): Promise<{ codes: string[]; createdAt: string }> {
     const db = await getDb();
-    const users = db.data.users || [];
+    const users = (db.data.users || []) as AuthUser[];
     const user = users.find((u) => u.role === "admin") || users[0];
     if (!user) throw new Error("No user accounts exist. Use setup instead.");
 
-    const codes = [];
-    const hashes = [];
+    const codes: string[] = [];
+    const hashes: Array<{ hash: string; usedAt: string | null }> = [];
     for (let i = 0; i < count; i++) {
       const raw = crypto.randomBytes(15).toString("base64url").slice(0, 20).toUpperCase();
       const code = `${raw.slice(0, 5)}-${raw.slice(5, 10)}-${raw.slice(10, 15)}`;
@@ -878,12 +1002,17 @@ class AuthService {
     return { codes, createdAt: new Date().toISOString() };
   }
 
-  async getRecoveryCodeStatus() {
+  async getRecoveryCodeStatus(): Promise<{
+    configured: boolean;
+    remaining: number;
+    total: number;
+    createdAt: string | null;
+  }> {
     const stored = await getSetting("authRecoveryCodes");
     const createdAt = await getSetting("authRecoveryCodesCreatedAt");
-    let entries = [];
+    let entries: Array<{ hash: string; usedAt: string | null }> = [];
     try {
-      entries = stored ? JSON.parse(stored) : [];
+      entries = (stored ? JSON.parse(stored) : []) as Array<{ hash: string; usedAt: string | null }>;
     } catch {
       entries = [];
     }
@@ -891,15 +1020,15 @@ class AuthService {
     return { configured: entries.length > 0, remaining, total: entries.length, createdAt: createdAt || null };
   }
 
-  async redeemRecoveryCode(code, newPassword) {
+  async redeemRecoveryCode(code: string, newPassword: string): Promise<{ username: string; remaining: number }> {
     return this._withMutex(async () => {
       if (typeof code !== "string" || !code.trim()) {
         throw new Error("A recovery code is required");
       }
       const stored = await getSetting("authRecoveryCodes");
-      let entries = [];
+      let entries: Array<{ hash: string; usedAt: string | null }> = [];
       try {
-        entries = stored ? JSON.parse(stored) : [];
+        entries = (stored ? JSON.parse(stored) : []) as Array<{ hash: string; usedAt: string | null }>;
       } catch {
         entries = [];
       }
@@ -930,8 +1059,9 @@ class AuthService {
     });
   }
 
-  middleware() {
-    return async (req, res, next) => {
+  middleware(): RequestHandler {
+    return async (req: Request, res: Response, next: NextFunction) => {
+      const authenticatedRequest = req as AuthenticatedRequest;
       try {
         if (!req.path.startsWith("/api")) {
           return next();
@@ -970,7 +1100,7 @@ class AuthService {
 
         const authEnabled = await this.isAuthEnabled();
         if (!authEnabled) {
-          req.user = {
+          authenticatedRequest.user = {
             userId: null,
             username: null,
             role: "admin",
@@ -996,10 +1126,10 @@ class AuthService {
             .json({ error: "Invalid or expired token", code: "TOKEN_EXPIRED" });
         }
 
-        req.user = payload;
+        authenticatedRequest.user = payload;
         next();
-      } catch (error) {
-        log.error(`Auth middleware error: ${error.message}`);
+      } catch (error: unknown) {
+        log.error(`Auth middleware error: ${errorMessage(error)}`);
         return res.status(500).json({ error: "Authentication error" });
       }
     };
@@ -1009,14 +1139,15 @@ class AuthService {
 const authService = new AuthService();
 export default authService;
 
-export function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.user) {
+export function requireRole(...roles: string[]): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as AuthenticatedRequest).user;
+    if (!user) {
       return res
         .status(401)
         .json({ error: "Authentication required", code: ErrorCode.AUTH_REQUIRED });
     }
-    if (roles.includes(req.user.role)) return next();
+    if (roles.includes(user.role)) return next();
     return res.status(403).json({ error: "Insufficient permissions" });
   };
 }

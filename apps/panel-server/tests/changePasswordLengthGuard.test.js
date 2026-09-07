@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const authenticateAccessToken = vi.fn();
 const changePassword = vi.fn();
 
-vi.mock("../services/auth.js", () => ({
+vi.mock("../services/auth.ts", () => ({
   default: {
     authenticateAccessToken,
     changePassword,

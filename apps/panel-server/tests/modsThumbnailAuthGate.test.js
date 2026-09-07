@@ -23,7 +23,7 @@ vi.mock("../utils/paths.ts", () => ({
   })),
 }));
 
-const { default: authService } = await import("../services/auth.js");
+const { default: authService } = await import("../services/auth.ts");
 const { default: modsRouter } = await import("../routes/mods.js");
 const { default: mapProxyRouter } = await import("../routes/mapProxy.ts");
 

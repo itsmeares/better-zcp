@@ -36,7 +36,7 @@ import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { checkSandboxBraceBalance } from "./serverFiles.js";
 import panelBridgeService from "../services/panelBridge.js";
-import authService from "../services/auth.js";
+import authService from "../services/auth.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
 import {
   getOidcSettings,

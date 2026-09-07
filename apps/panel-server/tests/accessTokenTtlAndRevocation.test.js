@@ -23,7 +23,7 @@ vi.mock("../database/init.js", () => ({
     ),
 }));
 
-const { default: authService, ACCESS_TOKEN_EXPIRY } = await import("../services/auth.js");
+const { default: authService, ACCESS_TOKEN_EXPIRY } = await import("../services/auth.ts");
 
 const ADMIN_ROLE = {
   id: "role-admin",

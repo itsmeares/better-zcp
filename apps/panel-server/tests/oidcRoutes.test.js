@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
-import authService from '../services/auth.js';
+import authService from '../services/auth.ts';
 import * as dbModule from '../database/init.js';
 import { _resetOidcConfigCacheForTests } from '../services/oidc.ts';
 import oidcRoutes from '../routes/oidc.ts';

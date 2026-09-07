@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 const listBackupRecords = vi.fn();
 
 vi.mock("../database/init.js", () => ({ getActiveServer: vi.fn() }));
-vi.mock("../services/auth.js", () => ({ requireRole: () => (_req, _res, next) => next() }));
+vi.mock("../services/auth.ts", () => ({ requireRole: () => (_req, _res, next) => next() }));
 vi.mock("../services/backupRecords.ts", () => ({ listBackupRecords }));
 
 const { default: router } = await import("../routes/backup.ts");

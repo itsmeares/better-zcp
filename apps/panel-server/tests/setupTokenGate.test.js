@@ -16,7 +16,7 @@ vi.mock("express-rate-limit", () => ({
   default: () => (_req, _res, next) => next(),
 }));
 
-const { default: authService } = await import("../services/auth.js");
+const { default: authService } = await import("../services/auth.ts");
 const { getOrCreateSetupToken } = await import("../utils/setupToken.ts");
 const { default: authRouter } = await import("../routes/auth.js");
 

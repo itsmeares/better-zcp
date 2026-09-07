@@ -17,7 +17,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { default: authService, USER_ROLES } = await import(
-  "../services/auth.js"
+  "../services/auth.ts"
 );
 const { getOrCreateSetupToken } = await import("../utils/setupToken.ts");
 

@@ -1,6 +1,6 @@
 import { Router, type Request } from "express";
 import rateLimit from "express-rate-limit";
-import authService from "../services/auth.js";
+import authService from "../services/auth.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, isMaskedSecret } from "../utils/sanitize.ts";
 import {
@@ -124,7 +124,11 @@ router.get("/callback", callbackRateLimiter, async (req, res) => {
   let result;
   try {
     result = await authService.loginWithExternalIdentity(
-      { issuer: claims.iss, subject: claims.sub, email: claims.email },
+      {
+        issuer: claims.iss,
+        subject: claims.sub,
+        email: typeof claims.email === "string" ? claims.email : undefined,
+      },
       true,
     );
   } catch (error: unknown) {

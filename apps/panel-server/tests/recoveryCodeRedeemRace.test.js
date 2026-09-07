@@ -12,7 +12,7 @@ vi.mock("../database/init.js", () => ({
   commitNow: async () => {},
 }));
 
-const { default: authService } = await import("../services/auth.js");
+const { default: authService } = await import("../services/auth.ts");
 
 describe("redeemRecoveryCode: concurrent redemption of the same code", () => {
   beforeEach(() => {
