@@ -49,7 +49,7 @@ import { ServerManager } from "./services/serverManager.js";
 import { DockerClient } from "./services/dockerClient.ts";
 import { setDockerClient } from "./services/managedContainer.ts";
 import { ModChecker } from "./services/modChecker.js";
-import { Scheduler } from "./services/scheduler.js";
+import { Scheduler } from "./services/scheduler.ts";
 import { DiscordBot } from "./services/discordBot.js";
 import { BackupService } from "./services/backupService.ts";
 import { UpdateChecker } from "./services/updateChecker.ts";

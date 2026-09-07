@@ -44,6 +44,42 @@ import {
 } from "../utils/restartWarning.ts";
 
 const SCHEDULER_TIMEZONE_SETTING_KEY = "schedulerTimezone";
+type ScheduledTask = Record<string, any>;
+type LifecycleLock = {
+  release: () => void;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function recordServerEvent(
+  eventType: string,
+  message?: unknown | null,
+): Promise<unknown> {
+  return (logServerEvent as unknown as (
+    eventType: string,
+    message?: unknown | null,
+  ) => Promise<unknown>)(eventType, message);
+}
+
+function recordScheduleExecution(
+  taskId: string | number | null,
+  taskName: string,
+  command: string,
+  success: boolean,
+  message: string,
+  duration: number,
+): Promise<unknown> {
+  return (logScheduleExecution as unknown as (
+    taskId: string | number | null,
+    taskName: string,
+    command: string,
+    success: boolean,
+    message: string,
+    duration: number,
+  ) => Promise<unknown>)(taskId, taskName, command, success, message, duration);
+}
 const SCHEDULABLE_BRIDGE_ACTIONS = new Set([
   "triggerBlizzard",
   "triggerTropicalStorm",
@@ -62,7 +98,7 @@ const SCHEDULABLE_BRIDGE_ACTIONS = new Set([
   "sendToAdminChat",
 ]);
 
-export function classifyScheduledCommand(command) {
+export function classifyScheduledCommand(command: unknown): string {
   const commandLower = String(command ?? "").toLowerCase();
   if (commandLower === "restart") return "restart";
   if (commandLower === "save") return "save";
@@ -71,7 +107,7 @@ export function classifyScheduledCommand(command) {
   return "raw";
 }
 
-function parseBridgeActionName(rawCommand) {
+function parseBridgeActionName(rawCommand: string): string {
   const body = rawCommand.slice("bridge:".length).trim();
   const firstSpace = body.indexOf(" ");
   return (firstSpace === -1 ? body : body.slice(0, firstSpace)).trim();
@@ -83,7 +119,7 @@ const ENDANGER_OR_IMPERSONATE_BRIDGE_ACTIONS = new Set([
   "sendToAdminChat",
 ]);
 
-export function requiredCapabilityForScheduledCommand(command) {
+export function requiredCapabilityForScheduledCommand(command: unknown): string {
   const kind = classifyScheduledCommand(command);
   if (kind === "restart" || kind === "save") return "server.control";
   if (kind === "servermsg") return "server.world_events";
@@ -99,7 +135,25 @@ export function requiredCapabilityForScheduledCommand(command) {
 }
 
 export class Scheduler {
-  constructor(rconService, serverManager) {
+  rconService: any;
+  serverManager: any;
+  backupService: any;
+  discordBot: any;
+  io: any;
+  jobs: Map<any, any>;
+  jobLabels: Map<any, string>;
+  autoRestartJob: any;
+  backupJob: any;
+  modUpdateRestartPending: boolean;
+  restartInProgress: boolean;
+  restartCancelled: boolean;
+  runningTasks: Set<any>;
+  effectiveTimezone: string;
+  configuredTimezone: string | null;
+  timezoneFallback: Record<string, string> | null;
+  restartWarning: any;
+
+  constructor(rconService: any, serverManager: any) {
     this.rconService = rconService;
     this.serverManager = serverManager;
     this.backupService = null;
@@ -111,6 +165,7 @@ export class Scheduler {
     this.backupJob = null;
     this.modUpdateRestartPending = false;
     this.restartInProgress = false;
+    this.restartCancelled = false;
     this.runningTasks = new Set();
     this.effectiveTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     this.configuredTimezone = null;
@@ -118,25 +173,25 @@ export class Scheduler {
     this.restartWarning = defaultRestartWarningSettings();
   }
 
-  setBackupService(backupService) {
+  setBackupService(backupService: any): void {
     this.backupService = backupService;
   }
 
-  setDiscordBot(discordBot) {
+  setDiscordBot(discordBot: any): void {
     this.discordBot = discordBot;
   }
 
-  setIo(io) {
+  setIo(io: any): void {
     this.io = io;
   }
 
-  _emitVerifiedTransition(running) {
+  _emitVerifiedTransition(running: boolean): void {
     if (typeof this.io?.emit === "function") {
       this.io.emit("server:status", { running });
     }
   }
 
-  async resolveTimezone() {
+  async resolveTimezone(): Promise<string> {
     const processDefault = Intl.DateTimeFormat().resolvedOptions().timeZone;
     let stored = await getSetting(SCHEDULER_TIMEZONE_SETTING_KEY);
 
@@ -147,8 +202,8 @@ export class Scheduler {
         log.info(
           `Scheduler timezone was not previously configured -- initialized to the currently-effective zone (${stored}) so upgrading does not move any existing schedule's real fire time`,
         );
-      } catch (error) {
-        log.warn(`Could not persist the migrated scheduler timezone: ${error.message}`);
+      } catch (error: unknown) {
+        log.warn(`Could not persist the migrated scheduler timezone: ${errorMessage(error)}`);
       }
     }
 
@@ -170,9 +225,11 @@ export class Scheduler {
     return this.effectiveTimezone;
   }
 
-  async setTimezone(newZone) {
+  async setTimezone(newZone: string): Promise<any> {
     if (!isValidIanaTimezone(newZone)) {
-      const error = new Error(`"${newZone}" is not a valid IANA timezone`);
+      const error = new Error(`"${newZone}" is not a valid IANA timezone`) as Error & {
+        code?: string;
+      };
       error.code = "SCHEDULER_INVALID_TIMEZONE";
       throw error;
     }
@@ -181,36 +238,36 @@ export class Scheduler {
     await this.resolveTimezone();
 
     const tasks = await getScheduledTasks();
-    for (const task of tasks) {
+    for (const task of tasks as ScheduledTask[]) {
       if (task.enabled) this.scheduleTask(task);
     }
     this.setupAutoRestart();
     await this.setupBackupSchedule();
 
-    log.info(`Scheduler timezone changed to ${this.effectiveTimezone} -- rescheduled ${tasks.filter((t) => t.enabled).length} task(s), auto-restart, and the backup job`);
+    log.info(`Scheduler timezone changed to ${this.effectiveTimezone} -- rescheduled ${(tasks as ScheduledTask[]).filter((t) => t.enabled).length} task(s), auto-restart, and the backup job`);
     return this.getStatus();
   }
 
-  async loadRestartWarningSettings() {
+  async loadRestartWarningSettings(): Promise<any> {
     try {
       this.restartWarning = normalizeRestartWarningSettings(
         await getSetting(RESTART_WARNING_SETTING_KEY),
       );
-    } catch (error) {
+    } catch (error: unknown) {
       this.restartWarning = defaultRestartWarningSettings();
-      log.warn(`Could not load restart warning settings: ${error.message}`);
+      log.warn(`Could not load restart warning settings: ${errorMessage(error)}`);
     }
     return this.restartWarning;
   }
 
-  async setRestartWarning(settings) {
+  async setRestartWarning(settings: any): Promise<any> {
     const normalized = validateRestartWarningSettings(settings);
     await setSetting(RESTART_WARNING_SETTING_KEY, normalized);
     this.restartWarning = normalized;
     return this.restartWarning;
   }
 
-  async init() {
+  async init(): Promise<void> {
     await this.resolveTimezone();
     await this.loadRestartWarningSettings();
 
@@ -223,7 +280,7 @@ export class Scheduler {
     log.info(`Scheduler initialized (timezone: ${this.effectiveTimezone})`);
   }
 
-  async loadScheduledTasks() {
+  async loadScheduledTasks(): Promise<void> {
     try {
       const tasks = await getScheduledTasks();
 
@@ -244,12 +301,12 @@ export class Scheduler {
       }
 
       log.info(`Loaded ${tasks.length} scheduled tasks`);
-    } catch (error) {
-      log.error(`Failed to load scheduled tasks: ${error.message}`);
+    } catch (error: unknown) {
+      log.error(`Failed to load scheduled tasks: ${errorMessage(error)}`);
     }
   }
 
-  scheduleTask(task) {
+  scheduleTask(task: ScheduledTask): false | { scheduled: true; dstWarning?: string | null } {
     if (
       !isSupportedFiveFieldCron(task.cron_expression) ||
       isCronTooFrequent(task.cron_expression)
@@ -281,7 +338,7 @@ export class Scheduler {
     return { scheduled: true, dstWarning };
   }
 
-  async runTaskNow(task) {
+  async runTaskNow(task: ScheduledTask): Promise<{ success: boolean; message: string }> {
     if (this.runningTasks.has(task.id)) {
       log.debug(
         `Skipping duplicate execution of task ${task.name} (already running)`,
@@ -297,7 +354,7 @@ export class Scheduler {
       const duration = Date.now() - startTime;
       await updateTaskLastRun(task.id);
       const message = "Completed successfully";
-      await logScheduleExecution(
+      await recordScheduleExecution(
         task.id,
         task.name,
         task.command,
@@ -305,32 +362,32 @@ export class Scheduler {
         message,
         duration,
       );
-      await logServerEvent("scheduled_task", `Executed: ${task.name}`);
+      await recordServerEvent("scheduled_task", `Executed: ${task.name}`);
       return { success: true, message };
-    } catch (error) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      log.error(`Scheduled task failed ${task.name}: ${error.message}`);
-      await logScheduleExecution(
+      log.error(`Scheduled task failed ${task.name}: ${errorMessage(error)}`);
+      await recordScheduleExecution(
         task.id,
         task.name,
         task.command,
         false,
-        error.message,
+        errorMessage(error),
         duration,
       );
-      await logServerEvent(
+      await recordServerEvent(
         "scheduled_task_error",
-        `${task.name}: ${error.message}`,
+        `${task.name}: ${errorMessage(error)}`,
       );
-      return { success: false, message: error.message };
+      return { success: false, message: errorMessage(error) };
     } finally {
       this.runningTasks.delete(task.id);
     }
   }
 
-  getNextRun() {
-    const candidates = [];
-    const push = (job, label) => {
+  getNextRun(): { label: string; at: string } | null {
+    const candidates: Array<{ label: string; at: Date }> = [];
+    const push = (job: any, label: string): void => {
       if (!job || typeof job.getNextRun !== "function") return;
       try {
         const at = job.getNextRun();
@@ -349,14 +406,14 @@ export class Scheduler {
     push(this.backupJob, "backup");
 
     if (candidates.length === 0) return null;
-    candidates.sort((a, b) => a.at - b.at);
+    candidates.sort((a, b) => a.at.getTime() - b.at.getTime());
     return {
       label: candidates[0].label,
       at: candidates[0].at.toISOString(),
     };
   }
 
-  async executeTask(task) {
+  async executeTask(task: ScheduledTask): Promise<void> {
     const commandKind = classifyScheduledCommand(task.command);
 
     const { rconService, serverManager, cleanup } =
@@ -411,15 +468,18 @@ export class Scheduler {
     }
   }
 
-  async _ensureRestartTarget(serverManager, pinnedServerId) {
+  async _ensureRestartTarget(
+    serverManager: any,
+    pinnedServerId: string | number | null,
+  ): Promise<void> {
     if (pinnedServerId == null) return;
 
     let current = serverManager._serverId ?? null;
     if (current == null) {
       try {
         current = (await getActiveServer())?.id ?? null;
-      } catch (error) {
-        log.debug(`Could not verify restart target: ${error.message}`);
+      } catch (error: unknown) {
+        log.debug(`Could not verify restart target: ${errorMessage(error)}`);
         return;
       }
     }
@@ -431,8 +491,10 @@ export class Scheduler {
     await serverManager.reloadConfig(pinnedServerId);
   }
 
-  async _backupConfigBeforeRestart(pinnedServerId) {
-    let server = null;
+  async _backupConfigBeforeRestart(
+    pinnedServerId: string | number | null,
+  ): Promise<any> {
+    let server: any = null;
     try {
       server =
         pinnedServerId != null
@@ -469,13 +531,17 @@ export class Scheduler {
           );
         }
       }
-    } catch (error) {
-      log.warn(`Pre-restart config backup failed: ${error.message}`);
+    } catch (error: unknown) {
+      log.warn(`Pre-restart config backup failed: ${errorMessage(error)}`);
     }
     return server;
   }
 
-  async _resolveServicesForTask(task) {
+  async _resolveServicesForTask(task: ScheduledTask): Promise<{
+    rconService: any;
+    serverManager: any;
+    cleanup: (() => Promise<void>) | null;
+  }> {
     const shared = {
       rconService: this.rconService,
       serverManager: this.serverManager,
@@ -487,9 +553,9 @@ export class Scheduler {
     let active;
     try {
       active = await getActiveServer();
-    } catch (error) {
+    } catch (error: unknown) {
       log.warn(
-        `Could not resolve active server for task ${task.name}, using shared connection: ${error.message}`,
+        `Could not resolve active server for task ${task.name}, using shared connection: ${errorMessage(error)}`,
       );
       return shared;
     }
@@ -512,14 +578,14 @@ export class Scheduler {
       cleanup: async () => {
         try {
           if (tempRcon.connected) await tempRcon.disconnect();
-        } catch (error) {
-          log.debug(`Cleanup: failed to disconnect temp RCON: ${error.message}`);
+        } catch (error: unknown) {
+          log.debug(`Cleanup: failed to disconnect temp RCON: ${errorMessage(error)}`);
         }
       },
     };
   }
 
-  async executeBridgeAction(rawCommand) {
+  async executeBridgeAction(rawCommand: string): Promise<any> {
     const body = rawCommand.slice("bridge:".length).trim();
     if (!body) throw new Error("bridge: action missing");
 
@@ -533,22 +599,22 @@ export class Scheduler {
       );
     }
 
-    let args = {};
+    let args: Record<string, any> = {};
     if (argsRaw) {
       try {
         args = JSON.parse(argsRaw);
         if (typeof args !== "object" || args === null || Array.isArray(args)) {
           throw new Error("args must be a JSON object");
         }
-      } catch (err) {
-        throw new Error(`invalid bridge args JSON: ${err.message}`);
+      } catch (err: unknown) {
+        throw new Error(`invalid bridge args JSON: ${errorMessage(err)}`);
       }
     }
 
     return panelBridge.sendCommand(action, args);
   }
 
-  cancelTask(taskId) {
+  cancelTask(taskId: string | number): boolean {
     if (this.jobs.has(taskId)) {
       this.jobs.get(taskId).stop();
       this.jobs.delete(taskId);
@@ -559,7 +625,7 @@ export class Scheduler {
     return false;
   }
 
-  cancelRestart() {
+  cancelRestart(): { success: boolean; message: string } {
     if (this.restartInProgress) {
       this.restartCancelled = true;
       log.info("Restart cancellation requested");
@@ -568,7 +634,7 @@ export class Scheduler {
     return { success: false, message: "No restart in progress" };
   }
 
-  stopAllJobs() {
+  stopAllJobs(): void {
     for (const [taskId, job] of this.jobs) {
       job.stop();
       log.debug(`Stopped scheduled task: ${taskId}`);
@@ -589,7 +655,7 @@ export class Scheduler {
     log.info("All scheduled jobs stopped");
   }
 
-  async setupBackupSchedule() {
+  async setupBackupSchedule(): Promise<void> {
     if (this.backupJob) {
       this.backupJob.stop();
       this.backupJob = null;
@@ -623,7 +689,7 @@ export class Scheduler {
           log.warn(
             "Scheduled backup skipped: a restart is currently in progress (would risk archiving a save mid-write)",
           );
-          await logScheduleExecution(
+          await recordScheduleExecution(
             null,
             "Scheduled Backup",
             "backup",
@@ -644,7 +710,7 @@ export class Scheduler {
             const skipNote = result.skippedFiles?.length
               ? ` (${result.skippedFiles.length} file(s) not included -- a temp/log/lock file rewritten mid-backup, or a symbolic link deliberately not followed: ${result.skippedFiles.join(", ")})`
               : "";
-            await logScheduleExecution(
+            await recordScheduleExecution(
               null,
               "Scheduled Backup",
               "backup",
@@ -654,7 +720,7 @@ export class Scheduler {
             );
             log.info(`Scheduled backup completed: ${result.backup.name}${skipNote}`);
           } else {
-            await logScheduleExecution(
+            await recordScheduleExecution(
               null,
               "Scheduled Backup",
               "backup",
@@ -664,17 +730,17 @@ export class Scheduler {
             );
             log.error(`Scheduled backup failed: ${result.message}`);
           }
-        } catch (error) {
+        } catch (error: unknown) {
           const duration = Date.now() - startTime;
-          await logScheduleExecution(
+          await recordScheduleExecution(
             null,
             "Scheduled Backup",
             "backup",
             false,
-            error.message,
+            errorMessage(error),
             duration,
           );
-          log.error(`Scheduled backup error: ${error.message}`);
+          log.error(`Scheduled backup error: ${errorMessage(error)}`);
         }
       }, { timezone: this.effectiveTimezone });
 
@@ -686,12 +752,12 @@ export class Scheduler {
         "backup",
       );
       if (dstWarning) log.warn(dstWarning);
-    } catch (error) {
-      log.error(`Failed to setup backup schedule: ${error.message}`);
+    } catch (error: unknown) {
+      log.error(`Failed to setup backup schedule: ${errorMessage(error)}`);
     }
   }
 
-  setupAutoRestart() {
+  setupAutoRestart(): void {
     const enabled = process.env.AUTO_RESTART_ENABLED === "true";
     const cronExpression = process.env.AUTO_RESTART_CRON || "0 */6 * * *";
     if (!enabled) {
@@ -721,8 +787,8 @@ export class Scheduler {
             `Scheduled auto-restart did not complete: ${result?.message || "unknown error"}`,
           );
         }
-      } catch (err) {
-        log.error(`Auto-restart cron tick failed: ${err.message}`);
+      } catch (err: unknown) {
+        log.error(`Auto-restart cron tick failed: ${errorMessage(err)}`);
       }
     }, { timezone: this.effectiveTimezone });
 
@@ -736,7 +802,10 @@ export class Scheduler {
     if (dstWarning) log.warn(dstWarning);
   }
 
-  async _broadcastRestartMessage(text, rconService = this.rconService) {
+  async _broadcastRestartMessage(
+    text: string,
+    rconService: any = this.rconService,
+  ): Promise<void> {
     try {
       const r = await rconService.serverMessage(text, { skipLog: true });
       if (!r?.success) {
@@ -744,8 +813,8 @@ export class Scheduler {
           `Restart broadcast (RCON) failed: ${r?.error || r?.response || "unknown"}`,
         );
       }
-    } catch (err) {
-      log.warn(`Restart broadcast (RCON) threw: ${err.message}`);
+    } catch (err: unknown) {
+      log.warn(`Restart broadcast (RCON) threw: ${errorMessage(err)}`);
     }
 
     if (rconService !== this.rconService) return;
@@ -757,35 +826,40 @@ export class Scheduler {
       ) {
         panelBridge
           .sendCommand("sendToServerChat", { message: text, isAlert: true })
-          .catch((err) => {
-            log.debug(`Restart broadcast (bridge) failed: ${err.message}`);
+          .catch((err: unknown) => {
+            log.debug(`Restart broadcast (bridge) failed: ${errorMessage(err)}`);
           });
       }
-    } catch (err) {
-      log.debug(`Restart broadcast (bridge) threw: ${err.message}`);
+    } catch (err: unknown) {
+      log.debug(`Restart broadcast (bridge) threw: ${errorMessage(err)}`);
     }
   }
 
-  async _notifyRestartCancelled() {
+  async _notifyRestartCancelled(): Promise<void> {
     if (!this.discordBot) return;
     try {
       await this.discordBot.sendNotification(
         "✅ **Scheduled restart cancelled** — the server is staying up.",
       );
-    } catch (err) {
-      log.debug(`Discord restart-cancelled notification failed: ${err.message}`);
+    } catch (err: unknown) {
+      log.debug(`Discord restart-cancelled notification failed: ${errorMessage(err)}`);
     }
   }
 
   async performRestart(
-    warningMinutesParam = null,
+    warningMinutesParam: number | null = null,
     {
       rconService = this.rconService,
       serverManager = this.serverManager,
       label = "Auto Restart",
       lifecycleLock: providedLifecycleLock = null,
+    }: {
+      rconService?: any;
+      serverManager?: any;
+      label?: string;
+      lifecycleLock?: LifecycleLock | null;
     } = {},
-  ) {
+  ): Promise<any> {
     if (this.restartInProgress) {
       log.info("Restart already in progress, ignoring duplicate request");
       return { success: false, message: "Restart already in progress" };
@@ -802,7 +876,7 @@ export class Scheduler {
     this.restartCancelled = false;
     const warningMinutes =
       warningMinutesParam ??
-      (parseInt(process.env.RESTART_WARNING_MINUTES, 10) || 5);
+      (parseInt(process.env.RESTART_WARNING_MINUTES ?? "", 10) || 5);
     const restartWarning = normalizeRestartWarningSettings(this.restartWarning);
     const restartStartTime = Date.now();
 
@@ -810,8 +884,8 @@ export class Scheduler {
     if (pinnedServerId == null) {
       try {
         pinnedServerId = (await getActiveServer())?.id ?? null;
-      } catch (error) {
-        log.debug(`Could not pin restart target: ${error.message}`);
+      } catch (error: unknown) {
+        log.debug(`Could not pin restart target: ${errorMessage(error)}`);
       }
     }
 
@@ -846,8 +920,8 @@ export class Scheduler {
             );
             wasRunning = true;
           }
-        } catch (e) {
-          log.debug(`Auto-restart: RCON test failed: ${e.message}`);
+        } catch (e: unknown) {
+          log.debug(`Auto-restart: RCON test failed: ${errorMessage(e)}`);
         }
       }
 
@@ -856,7 +930,7 @@ export class Scheduler {
           const restartDuration = Date.now() - restartStartTime;
           const errorMsg =
             "Could not confirm whether the server is stopped because process detection failed";
-          await logScheduleExecution(
+          await recordScheduleExecution(
             null,
             label,
             "restart",
@@ -864,7 +938,7 @@ export class Scheduler {
             errorMsg,
             restartDuration,
           );
-          logServerEvent("auto_restart_error", errorMsg);
+          recordServerEvent("auto_restart_error", errorMsg);
           return { success: false, wasRunning: false, message: errorMsg };
         }
 
@@ -892,7 +966,7 @@ export class Scheduler {
 
         const restartDuration = Date.now() - restartStartTime;
         if (isNowRunning) {
-          await logScheduleExecution(
+          await recordScheduleExecution(
             null,
             label,
             "restart",
@@ -900,13 +974,13 @@ export class Scheduler {
             "Server was offline - started successfully",
             restartDuration,
           );
-          logServerEvent(
+          recordServerEvent(
             "auto_restart",
             "Server was offline - started successfully",
           );
           log.info("Server started successfully (was not running)");
         } else {
-          await logScheduleExecution(
+          await recordScheduleExecution(
             null,
             label,
             "restart",
@@ -914,7 +988,7 @@ export class Scheduler {
             "Server was offline - failed to start",
             restartDuration,
           );
-          logServerEvent(
+          recordServerEvent(
             "auto_restart_error",
             "Server was offline - failed to start",
           );
@@ -927,8 +1001,8 @@ export class Scheduler {
         log.info("Auto-restart: RCON not connected, attempting to connect...");
         try {
           await rconService.connect();
-        } catch (e) {
-          log.error(`Auto-restart: Failed to connect RCON: ${e.message}`);
+        } catch (e: unknown) {
+          log.error(`Auto-restart: Failed to connect RCON: ${errorMessage(e)}`);
         }
       }
 
@@ -939,7 +1013,7 @@ export class Scheduler {
         const restartDuration = Date.now() - restartStartTime;
         const errorMsg = `RCON not available: ${testResult.error || "connection failed"}`;
         log.error(`Auto-restart failed: ${errorMsg}`);
-        await logScheduleExecution(
+        await recordScheduleExecution(
           null,
           label,
           "restart",
@@ -947,7 +1021,7 @@ export class Scheduler {
           errorMsg,
           restartDuration,
         );
-        logServerEvent("auto_restart_error", errorMsg);
+        recordServerEvent("auto_restart_error", errorMsg);
         return { success: false, message: errorMsg };
       }
 
@@ -958,9 +1032,9 @@ export class Scheduler {
           .sendEventNotification("scheduledRestart", {
             minutes: warningMinutes,
           })
-          .catch((err) =>
+          .catch((err: unknown) =>
             log.debug(
-              `Discord scheduledRestart notification failed: ${err.message}`,
+              `Discord scheduledRestart notification failed: ${errorMessage(err)}`,
             ),
           );
       }
@@ -1032,7 +1106,7 @@ export class Scheduler {
         const restartDuration = Date.now() - restartStartTime;
         const errorMsg = `Save failed; restart cancelled: ${saveResult?.error || "unknown error"}`;
         log.error(`Auto-restart: ${errorMsg}`);
-        await logScheduleExecution(
+        await recordScheduleExecution(
           null,
           label,
           "restart",
@@ -1040,7 +1114,7 @@ export class Scheduler {
           errorMsg,
           restartDuration,
         );
-        await logServerEvent("auto_restart_error", errorMsg);
+        await recordServerEvent("auto_restart_error", errorMsg);
         return { success: false, wasRunning: true, message: errorMsg };
       }
       await this.sleep(3000);
@@ -1052,7 +1126,7 @@ export class Scheduler {
         const restartDuration = Date.now() - restartStartTime;
         const errorMsg = `Container restart failed: ${managed.error || "unknown error"}`;
         log.error(`Auto-restart failed: ${errorMsg}`);
-        await logScheduleExecution(
+        await recordScheduleExecution(
           null,
           label,
           "restart",
@@ -1060,7 +1134,7 @@ export class Scheduler {
           errorMsg,
           restartDuration,
         );
-        logServerEvent("auto_restart_error", errorMsg);
+        recordServerEvent("auto_restart_error", errorMsg);
         return { success: false, wasRunning: true, message: errorMsg };
       }
 
@@ -1080,7 +1154,7 @@ export class Scheduler {
           const restartDuration = Date.now() - restartStartTime;
           const errorMsg =
             "Could not confirm the old server stopped because process detection failed";
-          await logScheduleExecution(
+          await recordScheduleExecution(
             null,
             label,
             "restart",
@@ -1088,7 +1162,7 @@ export class Scheduler {
             errorMsg,
             restartDuration,
           );
-          logServerEvent("auto_restart_error", errorMsg);
+          recordServerEvent("auto_restart_error", errorMsg);
           return { success: false, wasRunning: true, message: errorMsg };
         }
         while (processDetails.running && attempts < 60) {
@@ -1099,7 +1173,7 @@ export class Scheduler {
             const restartDuration = Date.now() - restartStartTime;
             const errorMsg =
               "Could not confirm the old server stopped because process detection failed";
-            await logScheduleExecution(
+            await recordScheduleExecution(
               null,
               label,
               "restart",
@@ -1107,7 +1181,7 @@ export class Scheduler {
               errorMsg,
               restartDuration,
             );
-            logServerEvent("auto_restart_error", errorMsg);
+            recordServerEvent("auto_restart_error", errorMsg);
             return { success: false, wasRunning: true, message: errorMsg };
           }
         }
@@ -1121,7 +1195,7 @@ export class Scheduler {
               forced?.error || forced?.message || "unknown error";
             const restartDuration = Date.now() - restartStartTime;
             log.warn(`Auto-restart: forced stop failed: ${stopError}`);
-            await logScheduleExecution(
+            await recordScheduleExecution(
               null,
               label,
               "restart",
@@ -1129,7 +1203,7 @@ export class Scheduler {
               `Could not confirm the old server stopped: ${stopError}`,
               restartDuration,
             );
-            logServerEvent(
+            recordServerEvent(
               "auto_restart_error",
               `Could not confirm the old server stopped: ${stopError}`,
             );
@@ -1150,7 +1224,7 @@ export class Scheduler {
       const restartTarget = await this._backupConfigBeforeRestart(pinnedServerId);
 
       await refreshLaunchTargetBeforeStart(restartTarget, {
-        managedHandled: managed.handled,
+        managedHandled: managed.handled as boolean,
       });
 
       if (rconService.setServerStarting) {
@@ -1199,7 +1273,7 @@ export class Scheduler {
           rconService.serverStarting = false;
         }
         const restartDuration = Date.now() - restartStartTime;
-        await logScheduleExecution(
+        await recordScheduleExecution(
           null,
           label,
           "restart",
@@ -1207,7 +1281,7 @@ export class Scheduler {
           "Server stopped but failed to start",
           restartDuration,
         );
-        logServerEvent(
+        recordServerEvent(
           "auto_restart_error",
           "Server stopped but failed to start",
         );
@@ -1264,8 +1338,8 @@ export class Scheduler {
               `Auto-restart: RCON attempt ${i + 1} - not connected (result: ${connectResult})`,
             );
           }
-        } catch (e) {
-          log.info(`Auto-restart: RCON attempt ${i + 1} failed: ${e.message}`);
+        } catch (e: unknown) {
+          log.info(`Auto-restart: RCON attempt ${i + 1} failed: ${errorMessage(e)}`);
           if (rconService.forceResetConnectionState) {
             rconService.forceResetConnectionState();
           }
@@ -1293,7 +1367,7 @@ export class Scheduler {
         const rconStatus = rconConnected
           ? " (RCON connected)"
           : " (RCON not yet connected)";
-        await logScheduleExecution(
+        await recordScheduleExecution(
           null,
           label,
           "restart",
@@ -1301,7 +1375,7 @@ export class Scheduler {
           "Server restarted successfully" + rconStatus,
           restartDuration,
         );
-        logServerEvent(
+        recordServerEvent(
           "auto_restart",
           "Server restarted successfully" + rconStatus,
         );
@@ -1309,7 +1383,7 @@ export class Scheduler {
           `Auto-restart completed successfully (took ${Math.round(restartDuration / 1000)}s)${rconStatus}`,
         );
       } else {
-        await logScheduleExecution(
+        await recordScheduleExecution(
           null,
           label,
           "restart",
@@ -1317,7 +1391,7 @@ export class Scheduler {
           "Server stopped but failed to start",
           restartDuration,
         );
-        logServerEvent(
+        recordServerEvent(
           "auto_restart_error",
           "Server stopped but failed to start",
         );
@@ -1325,18 +1399,18 @@ export class Scheduler {
       }
 
       return { success: serverStarted, wasRunning: true };
-    } catch (error) {
+    } catch (error: unknown) {
       const restartDuration = Date.now() - restartStartTime;
-      log.error(`Auto-restart failed: ${error.message}`);
-      await logScheduleExecution(
+      log.error(`Auto-restart failed: ${errorMessage(error)}`);
+      await recordScheduleExecution(
         null,
         label,
         "restart",
         false,
-        error.message,
+        errorMessage(error),
         restartDuration,
       );
-      logServerEvent("auto_restart_error", error.message);
+      recordServerEvent("auto_restart_error", errorMessage(error));
       if (rconService.setServerStarting) {
         rconService.setServerStarting(false);
       } else {
@@ -1349,7 +1423,7 @@ export class Scheduler {
     }
   }
 
-  async triggerModUpdateRestart() {
+  async triggerModUpdateRestart(): Promise<void> {
     if (this.modUpdateRestartPending) {
       log.info("Mod update restart already pending");
       return;
@@ -1374,14 +1448,14 @@ export class Scheduler {
         );
       }
       this.modUpdateRestartPending = false;
-    } catch (error) {
+    } catch (error: unknown) {
       this.modUpdateRestartPending = false;
       throw error;
     }
   }
 
-  getStatus() {
-    const tasks = [];
+  getStatus(): Record<string, any> {
+    const tasks: Array<{ id: any; running: true }> = [];
     for (const [id] of this.jobs) {
       tasks.push({ id, running: true });
     }
@@ -1400,11 +1474,11 @@ export class Scheduler {
     };
   }
 
-  sleep(ms) {
+  sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  shutdown() {
+  shutdown(): void {
     this.stopAllJobs();
 
     if (this.backupJob) {

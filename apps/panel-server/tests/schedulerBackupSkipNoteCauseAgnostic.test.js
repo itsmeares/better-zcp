@@ -27,7 +27,7 @@ vi.mock("node-cron", () => ({
   },
 }));
 
-const { Scheduler } = await import("../services/scheduler.js");
+const { Scheduler } = await import("../services/scheduler.ts");
 
 describe("Scheduler: scheduled-backup skip note is cause-agnostic, not hardcoded to 'vanished during archiving'", () => {
   it("does not claim a deliberately-skipped symlink 'vanished during archiving'", async () => {

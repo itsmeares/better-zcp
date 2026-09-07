@@ -31,7 +31,7 @@ vi.mock("../database/init.js", () => ({
   setSetting: (...args) => setSetting(...args),
 }));
 
-const { Scheduler } = await import("../services/scheduler.js");
+const { Scheduler } = await import("../services/scheduler.ts");
 const { getScheduledTasks } = await import("../database/init.js");
 
 function makeScheduler() {

@@ -4,7 +4,7 @@ import {
   timezoneObservesDst,
   dstFallBackWarning,
 } from "../utils/cronValidation.ts";
-import { Scheduler } from "../services/scheduler.js";
+import { Scheduler } from "../services/scheduler.ts";
 
 
 describe("subHourlyIntervalMinutes() -- the 'more than one fire per hour' shape node-cron's DST note is about", () => {

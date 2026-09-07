@@ -30,7 +30,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: vi.fn((name) => Promise.resolve(ROLES[name] || null)),
 }));
 
-const { Scheduler } = await import("../services/scheduler.js");
+const { Scheduler } = await import("../services/scheduler.ts");
 const { getScheduledTasks, createScheduledTask, logScheduleExecution } =
   await import("../database/init.js");
 const { default: router, parseTaskId } = await import("../routes/scheduler.ts");

@@ -132,7 +132,7 @@ describe("narrowness check: the split did not over-reach into untouched cosmetic
   });
 });
 
-describe("services/scheduler.js: requiredCapabilityForScheduledCommand tracks the same split for schedulable bridge: actions", () => {
+describe("services/scheduler.ts: requiredCapabilityForScheduledCommand tracks the same split for schedulable bridge: actions", () => {
   const MOVED_BRIDGE_ACTIONS = ["triggerGunshot", "triggerAlarmSound", "sendToAdminChat"];
   const UNMOVED_BRIDGE_ACTIONS = [
     "triggerBlizzard",
@@ -144,7 +144,7 @@ describe("services/scheduler.js: requiredCapabilityForScheduledCommand tracks th
   it.each(MOVED_BRIDGE_ACTIONS)(
     "bridge:%s requires players.endanger_or_impersonate, not server.world_events",
     async (action) => {
-      const { requiredCapabilityForScheduledCommand } = await import("../services/scheduler.js");
+      const { requiredCapabilityForScheduledCommand } = await import("../services/scheduler.ts");
       expect(requiredCapabilityForScheduledCommand(`bridge:${action}`)).toBe(
         "players.endanger_or_impersonate",
       );
@@ -154,18 +154,18 @@ describe("services/scheduler.js: requiredCapabilityForScheduledCommand tracks th
   it.each(UNMOVED_BRIDGE_ACTIONS)(
     "bridge:%s still requires server.world_events (unaffected, genuinely world-wide)",
     async (action) => {
-      const { requiredCapabilityForScheduledCommand } = await import("../services/scheduler.js");
+      const { requiredCapabilityForScheduledCommand } = await import("../services/scheduler.ts");
       expect(requiredCapabilityForScheduledCommand(`bridge:${action}`)).toBe("server.world_events");
     },
   );
 
   it("bridge:saveWorld still requires server.control (unaffected by this split)", async () => {
-    const { requiredCapabilityForScheduledCommand } = await import("../services/scheduler.js");
+    const { requiredCapabilityForScheduledCommand } = await import("../services/scheduler.ts");
     expect(requiredCapabilityForScheduledCommand("bridge:saveWorld")).toBe("server.control");
   });
 
   it("createNoise (sound/noise's equivalent) is not schedulable at all -- confirms there's no third path around the gate", async () => {
-    const { requiredCapabilityForScheduledCommand } = await import("../services/scheduler.js");
+    const { requiredCapabilityForScheduledCommand } = await import("../services/scheduler.ts");
     expect(requiredCapabilityForScheduledCommand("bridge:createNoise")).toBe("server.world_events");
   });
 });

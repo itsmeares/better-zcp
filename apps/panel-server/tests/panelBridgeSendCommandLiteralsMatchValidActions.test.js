@@ -10,7 +10,7 @@ const ROOT = path.resolve(__dirname, "..", "..", "..");
 const SCAN_FILES = [
   "apps/panel-server/routes/panelBridge.js",
   "apps/panel-server/services/panelBridge.js",
-  "apps/panel-server/services/scheduler.js",
+  "apps/panel-server/services/scheduler.ts",
   "apps/panel-server/services/modChecker.js",
 ];
 

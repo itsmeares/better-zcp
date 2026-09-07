@@ -8,7 +8,7 @@ vi.mock("../database/init.js", () => ({
   getActiveServer: vi.fn().mockResolvedValue(null),
 }));
 
-const { Scheduler } = await import("../services/scheduler.js");
+const { Scheduler } = await import("../services/scheduler.ts");
 const { default: panelBridge } = await import("../services/panelBridge.js");
 
 function makeScheduler() {

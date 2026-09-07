@@ -17,7 +17,7 @@ vi.mock("../services/managedContainer.ts", () => ({
   runManagedLifecycle: (...args) => runManagedLifecycle(...args),
 }));
 
-const { Scheduler } = await import("../services/scheduler.js");
+const { Scheduler } = await import("../services/scheduler.ts");
 
 function makeRconService(overrides = {}) {
   return {

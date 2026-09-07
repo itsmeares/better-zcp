@@ -19,7 +19,7 @@ vi.mock("../database/init.js", () => ({
 
 const { getScheduledTasks, getActiveServer } = await import("../database/init.js");
 const { default: router } = await import("../routes/scheduler.ts");
-const { Scheduler } = await import("../services/scheduler.js");
+const { Scheduler } = await import("../services/scheduler.ts");
 
 describe("Scheduler.runTaskNow return value", () => {
   it("returns {success:true, message} on success -- previously undefined on every path", async () => {

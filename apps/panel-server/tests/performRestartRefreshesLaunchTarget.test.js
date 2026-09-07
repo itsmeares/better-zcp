@@ -14,7 +14,7 @@ vi.mock("../database/init.js", () => ({
   getServer: (...args) => getServer(...args),
 }));
 
-const { Scheduler } = await import("../services/scheduler.js");
+const { Scheduler } = await import("../services/scheduler.ts");
 
 describe("performRestart() refreshes the launch target before starting", () => {
   let root;
@@ -67,7 +67,7 @@ describe("performRestart() refreshes the launch target before starting", () => {
   it("the main was-running branch calls the same refresh, by source inspection", async () => {
     const { readFileSync } = await import("fs");
     const source = readFileSync(
-      new URL("../services/scheduler.js", import.meta.url),
+      new URL("../services/scheduler.ts", import.meta.url),
       "utf8",
     );
     const mainBranch = source.slice(

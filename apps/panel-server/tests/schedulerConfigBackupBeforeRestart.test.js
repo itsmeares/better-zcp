@@ -19,7 +19,7 @@ vi.mock("../utils/configBackup.ts", async (importOriginal) => {
   return { ...actual, createBackupIfChanged: vi.fn(actual.createBackupIfChanged) };
 });
 
-const { Scheduler } = await import("../services/scheduler.js");
+const { Scheduler } = await import("../services/scheduler.ts");
 const { createBackupIfChanged } = await import("../utils/configBackup.ts");
 
 describe("Scheduler._backupConfigBeforeRestart()", () => {

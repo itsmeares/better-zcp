@@ -27,7 +27,7 @@ vi.mock("node-cron", () => ({
   },
 }));
 
-const { Scheduler } = await import("../services/scheduler.js");
+const { Scheduler } = await import("../services/scheduler.ts");
 
 describe("Scheduler: scheduled backup defers to an in-progress restart", () => {
   let scheduler;
