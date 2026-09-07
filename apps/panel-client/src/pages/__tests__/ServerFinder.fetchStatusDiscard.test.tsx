@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from '@/test/router'
 import i18n from '@/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -15,12 +16,18 @@ afterEach(() => {
 })
 
 function renderServerFinder() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
   return render(
-    <TooltipProvider>
-      <MemoryRouter>
-        <ServerFinder />
-      </MemoryRouter>
-    </TooltipProvider>,
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <MemoryRouter>
+          <ServerFinder />
+        </MemoryRouter>
+      </TooltipProvider>
+    </QueryClientProvider>,
   )
 }
 
