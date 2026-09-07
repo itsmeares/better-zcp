@@ -128,8 +128,6 @@ jobs:
   windows-packaged-updater:
     name: Windows packaged updater
     runs-on: windows-2022
-    env:
-      PKG_CACHE_PATH: ${{ runner.temp }}\pkg-cache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -155,6 +153,8 @@ jobs:
 
       - name: Preload pkg Windows base binary
         shell: pwsh
+        env:
+          PKG_CACHE_PATH: ${{ runner.temp }}\pkg-cache
         run: |
           $cacheDir = Join-Path $env:PKG_CACHE_PATH "v3.6"
           $binaryPath = Join-Path $cacheDir "fetched-v22.23.2-win-x64"
@@ -187,6 +187,8 @@ jobs:
           }
 
       - name: Build packaged Windows executable
+        env:
+          PKG_CACHE_PATH: ${{ runner.temp }}\pkg-cache
         run: node scripts/release/build.mjs --windows
 
       - name: Verify packaged updater artifacts
