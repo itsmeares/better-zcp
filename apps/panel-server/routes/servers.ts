@@ -29,7 +29,7 @@ import {
   lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
 import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.ts";
-import { refreshWorkshopChecker } from "../services/modChecker.js";
+import { refreshWorkshopChecker } from "../services/modChecker.ts";
 import {
   parseBoundedInteger,
   parseClampedInteger,

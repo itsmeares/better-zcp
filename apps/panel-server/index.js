@@ -48,7 +48,7 @@ import { RconService } from "./services/rcon.js";
 import { ServerManager } from "./services/serverManager.js";
 import { DockerClient } from "./services/dockerClient.ts";
 import { setDockerClient } from "./services/managedContainer.ts";
-import { ModChecker } from "./services/modChecker.js";
+import { ModChecker } from "./services/modChecker.ts";
 import { Scheduler } from "./services/scheduler.ts";
 import { DiscordBot } from "./services/discordBot.ts";
 import { BackupService } from "./services/backupService.ts";

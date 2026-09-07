@@ -24,7 +24,7 @@ vi.mock("../database/init.js", () => ({
   markModsChecked,
 }));
 
-const { ModChecker } = await import("../services/modChecker.js");
+const { ModChecker } = await import("../services/modChecker.ts");
 
 describe("ModChecker.init(): restored auto-restart callback propagates handleModUpdate's result", () => {
   beforeEach(() => {

@@ -11,7 +11,7 @@ const SCAN_FILES = [
   "apps/panel-server/routes/panelBridge.js",
   "apps/panel-server/services/panelBridge.js",
   "apps/panel-server/services/scheduler.ts",
-  "apps/panel-server/services/modChecker.js",
+  "apps/panel-server/services/modChecker.ts",
 ];
 
 const CALL_PATTERN = /(?:bridge|panelBridge|this)\s*\.\s*sendCommand\(\s*["']([A-Za-z0-9_]+)["']/g;

@@ -16,7 +16,7 @@ import {
   MOD_CHECK_INTERVAL_MINUTES_MAX,
   MOD_CHECK_INTERVAL_MINUTES_MIN,
   minutesToCheckIntervalMs,
-} from "../services/modChecker.js";
+} from "../services/modChecker.ts";
 import {
   checkTcpReachable,
   RCON_UNREACHABLE_DETAIL,

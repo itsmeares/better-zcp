@@ -23,7 +23,7 @@ import {
   normalizeStoredCheckInterval,
   parseLegacyBoolean,
   parseLegacyMinutes,
-} from "../services/modChecker.js";
+} from "../services/modChecker.ts";
 import { parseAutoUpdateWarningMinutes } from "../services/updateChecker.ts";
 import { BackupService } from "../services/backupService.ts";
 import authService from "../services/auth.ts";

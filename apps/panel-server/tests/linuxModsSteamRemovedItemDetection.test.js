@@ -16,7 +16,7 @@ vi.mock("../database/init.js", () => ({
   markModsChecked: vi.fn(),
 }));
 
-const { ModChecker } = await import("../services/modChecker.js");
+const { ModChecker } = await import("../services/modChecker.ts");
 const { getTrackedMods } = await import("../database/init.js");
 
 function steamResponse(details) {

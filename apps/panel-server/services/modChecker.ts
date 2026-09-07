@@ -17,11 +17,17 @@ import { EventEmitter } from "events";
 import { sanitizeError } from "../utils/sanitize.ts";
 import panelBridge from "./panelBridge.js";
 
+type AnyRecord = Record<string, any>;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export const MOD_CHECK_INTERVAL_MINUTES_MIN = 1;
 export const MOD_CHECK_INTERVAL_MINUTES_MAX = 120;
 const MOD_CHECK_INTERVAL_DEFAULT_MS = 5 * 60 * 1000;
 
-export function minutesToCheckIntervalMs(minutes) {
+export function minutesToCheckIntervalMs(minutes: unknown): number | null {
   const value = Number(minutes);
   if (
     !Number.isInteger(value) ||
@@ -33,12 +39,12 @@ export function minutesToCheckIntervalMs(minutes) {
   return value * 60 * 1000;
 }
 
-export function getWorkshopAcfCandidates(installPath) {
+export function getWorkshopAcfCandidates(installPath: unknown): string[] {
   if (typeof installPath !== "string" || !installPath.trim()) return [];
 
   const rawPath = installPath.trim();
   const baseRoot = path.normalize(rawPath);
-  const roots = [];
+  const roots: string[] = [];
   const extension = path.extname(rawPath).toLowerCase();
   let currentRoot = [".bat", ".cmd", ".exe", ".sh"].includes(extension)
     ? path.dirname(baseRoot)
@@ -50,9 +56,9 @@ export function getWorkshopAcfCandidates(installPath) {
     currentRoot = parentRoot;
   }
 
-  const candidates = [];
-  const seen = new Set();
-  const addCandidate = (candidate) => {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+  const addCandidate = (candidate: string): void => {
     const normalized = path.normalize(candidate);
     if (!seen.has(normalized)) {
       seen.add(normalized);
@@ -74,7 +80,7 @@ export function getWorkshopAcfCandidates(installPath) {
   return candidates;
 }
 
-export async function refreshWorkshopChecker(modChecker) {
+export async function refreshWorkshopChecker(modChecker: any): Promise<string | null> {
   if (!modChecker?.findWorkshopAcfPath) return null;
 
   const workshopAcfPath = await modChecker.findWorkshopAcfPath();
@@ -86,7 +92,7 @@ export async function refreshWorkshopChecker(modChecker) {
   return workshopAcfPath;
 }
 
-export function normalizeStoredCheckInterval(value) {
+export function normalizeStoredCheckInterval(value: unknown): AnyRecord | null {
   const minutesInterval = minutesToCheckIntervalMs(value);
   if (minutesInterval !== null)
     return {
@@ -107,7 +113,7 @@ export function normalizeStoredCheckInterval(value) {
   return null;
 }
 
-export function parseLegacyBoolean(value) {
+export function parseLegacyBoolean(value: unknown): boolean | null {
   if (typeof value === "boolean") return value;
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
@@ -116,7 +122,7 @@ export function parseLegacyBoolean(value) {
   return null;
 }
 
-export function parseLegacyMinutes(value) {
+export function parseLegacyMinutes(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   if (typeof value === "string" && value.trim() === "") return null;
   const minutes = Number(value);
@@ -124,12 +130,12 @@ export function parseLegacyMinutes(value) {
   return minutes;
 }
 
-function parseModInfoVersionFolder(folderName) {
+function parseModInfoVersionFolder(folderName: string): number[] | null {
   if (!/^\d+(?:\.\d+)*$/.test(folderName)) return null;
   return folderName.split(".").map((part) => Number.parseInt(part, 10));
 }
 
-function compareModInfoCandidates(leftCandidate, rightCandidate) {
+function compareModInfoCandidates(leftCandidate: AnyRecord, rightCandidate: AnyRecord): number {
   const leftVersion = leftCandidate.version;
   const rightVersion = rightCandidate.version;
 
@@ -149,6 +155,34 @@ function compareModInfoCandidates(leftCandidate, rightCandidate) {
 }
 
 export class ModChecker extends EventEmitter {
+  checkInterval: number;
+  intervalId: NodeJS.Timeout | null;
+  initialCheckTimeout: NodeJS.Timeout | null;
+  lastCheck: Date | null;
+  steamApiHealthy: boolean;
+  lastSteamApiFailureAt: Date | null;
+  modsNeedingUpdate: AnyRecord[];
+  onUpdateCallback: ((updatedMods: AnyRecord[]) => Promise<any> | any) | null;
+  autoRestartEnabled: boolean;
+  scheduler: any;
+  serverManager: any;
+  io: any;
+  workshopAcfPath: string | null;
+  _lastReportedUpdateKey: string;
+  restartWarningMinutes: number;
+  delayIfPlayersOnline: boolean;
+  maxDelayMinutes: number;
+  lastUpdateDetected: Date | null;
+  pendingRestart: boolean;
+  playerCheckInterval: NodeJS.Timeout | null;
+  modNameCache: Map<string, AnyRecord>;
+  checkInProgress: boolean;
+  lastSteamTimestamps: Map<string, AnyRecord>;
+  lastUnavailableWorkshopIds: Map<string, AnyRecord>;
+  startupGraceMs: number;
+  startedAt: number | null;
+  processedUpdates: Map<string, number>;
+
   constructor() {
     super();
     this.checkInterval =
@@ -187,7 +221,7 @@ export class ModChecker extends EventEmitter {
     this.processedUpdates = new Map();
   }
 
-  async init(scheduler, serverManager = null, io = null) {
+  async init(scheduler: any, serverManager: any = null, io: any = null): Promise<void> {
     this.scheduler = scheduler;
     this.serverManager = serverManager;
     this.io = io;
@@ -249,7 +283,7 @@ export class ModChecker extends EventEmitter {
       if (savedAutoRestart === true) {
         this.autoRestartEnabled = true;
         if (this.scheduler) {
-          this.onUpdateCallback = async (updatedMods) => {
+          this.onUpdateCallback = async (updatedMods: AnyRecord[]) => {
             const handled = await this.handleModUpdate(updatedMods);
             if (!handled?.success) {
               log.warn(
@@ -261,14 +295,14 @@ export class ModChecker extends EventEmitter {
           log.info("Auto-restart on mod update restored from settings");
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       log.warn(`Failed to restore mod checker settings: ${error.message}`);
     }
 
     await this.autoSyncModsOnStartup();
   }
 
-  async findWorkshopAcfPath() {
+  async findWorkshopAcfPath(): Promise<string | null> {
     try {
       this.workshopAcfPath = null;
 
@@ -305,14 +339,14 @@ export class ModChecker extends EventEmitter {
 
       log.debug(`Workshop ACF not found for install path ${installPath}`);
       return null;
-    } catch (error) {
+    } catch (error: any) {
       log.warn(`Failed to find workshop ACF: ${error.message}`);
       return null;
     }
   }
 
-  parseAcfFile(content) {
-    const result = {
+  parseAcfFile(content: string): AnyRecord {
+    const result: AnyRecord = {
       installedMods: {},
       modDetails: {},
     };
@@ -321,10 +355,10 @@ export class ModChecker extends EventEmitter {
 
     try {
       const lines = content.split(/\r?\n/);
-      const stack = [];
-      let current = {};
-      const root = current;
-      let pendingKey = null;
+      const stack: AnyRecord[] = [];
+      let current: AnyRecord = {};
+      const root: AnyRecord = current;
+      let pendingKey: string | null = null;
 
       for (let line of lines) {
         line = line.trim();
@@ -333,7 +367,7 @@ export class ModChecker extends EventEmitter {
         if (line === "{") {
           const key = pendingKey || "unknown";
           pendingKey = null;
-          const newObj = {};
+          const newObj: AnyRecord = {};
           current[key] = newObj;
           stack.push(current);
           current = newObj;
@@ -344,7 +378,7 @@ export class ModChecker extends EventEmitter {
           pendingKey = null;
           const keyMatch = line.match(/"([^"]+)"/);
           const key = keyMatch ? keyMatch[1] : "unknown";
-          const newObj = {};
+          const newObj: AnyRecord = {};
           current[key] = newObj;
           stack.push(current);
           current = newObj;
@@ -354,7 +388,7 @@ export class ModChecker extends EventEmitter {
         if (line === "}") {
           pendingKey = null;
           if (stack.length > 0) {
-            current = stack.pop();
+            current = stack.pop()!;
           }
           continue;
         }
@@ -379,10 +413,11 @@ export class ModChecker extends EventEmitter {
           for (const [id, data] of Object.entries(
             appState.WorkshopItemsInstalled,
           )) {
-            if (typeof data === "object") {
+            if (data && typeof data === "object") {
+              const modData = data as AnyRecord;
               result.installedMods[id] = {
-                size: parseInt(data.size || 0, 10),
-                timeupdated: parseInt(data.timeupdated || 0, 10),
+                size: parseInt(modData.size || 0, 10),
+                timeupdated: parseInt(modData.timeupdated || 0, 10),
               };
             }
           }
@@ -392,30 +427,31 @@ export class ModChecker extends EventEmitter {
           for (const [id, data] of Object.entries(
             appState.WorkshopItemDetails,
           )) {
-            if (typeof data === "object") {
+            if (data && typeof data === "object") {
+              const modData = data as AnyRecord;
               result.modDetails[id] = {
-                timeupdated: parseInt(data.timeupdated || 0, 10),
-                latest_timeupdated: parseInt(data.latest_timeupdated || 0, 10),
+                timeupdated: parseInt(modData.timeupdated || 0, 10),
+                latest_timeupdated: parseInt(modData.latest_timeupdated || 0, 10),
               };
             }
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Failed to parse ACF file: ${error.message}`);
     }
 
     return result;
   }
 
-  resolveModNameFromDisk(workshopId, skipCache = false) {
+  resolveModNameFromDisk(workshopId: string, skipCache = false): string | null {
     if (!skipCache && this.modNameCache.has(workshopId)) {
-      return this.modNameCache.get(workshopId).name;
+      return this.modNameCache.get(workshopId)?.name ?? null;
     }
 
     if (this.modNameCache.size > 500) {
       const firstKey = this.modNameCache.keys().next().value;
-      this.modNameCache.delete(firstKey);
+      if (firstKey) this.modNameCache.delete(firstKey);
     }
 
     try {
@@ -445,7 +481,7 @@ export class ModChecker extends EventEmitter {
           );
         for (const folder of modFolders) {
           const modFolderPath = path.join(modsDir, folder);
-          const candidatePaths = [
+          const candidatePaths: AnyRecord[] = [
             {
               path: path.join(modFolderPath, "mod.info"),
               version: null,
@@ -498,7 +534,7 @@ export class ModChecker extends EventEmitter {
       }
 
       return null;
-    } catch (e) {
+    } catch (e: any) {
       if (e.code === "EACCES" || e.code === "EPERM") {
         log.warn(
           `Permission denied resolving mod name for ${workshopId}: ${e.message}`,
@@ -548,14 +584,14 @@ export class ModChecker extends EventEmitter {
         const nameFromDisk = this.resolveModNameFromDisk(id);
         const name = nameFromDisk || `Workshop Mod ${id}`;
 
-        await addTrackedMod(id, name);
+        await (addTrackedMod as any)(id, name);
         synced++;
       }
 
       if (synced > 0) {
         log.info(`Auto-synced ${synced} mods from workshop ACF`);
       }
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Failed to auto-sync mods: ${error.message}`);
     }
   }
@@ -564,7 +600,7 @@ export class ModChecker extends EventEmitter {
     return !!this.intervalId;
   }
 
-  start({ resetGracePeriod = true } = {}) {
+  start({ resetGracePeriod = true }: { resetGracePeriod?: boolean } = {}): boolean {
     if (!this.workshopAcfPath) {
       log.warn(
         "Workshop ACF file not configured - mod update checking disabled. Configure server install path first.",
@@ -600,7 +636,7 @@ export class ModChecker extends EventEmitter {
     return true;
   }
 
-  runScheduledCheck() {
+  runScheduledCheck(): void {
     this.checkForUpdates().catch((error) => {
       log.error(`Scheduled mod update check failed: ${error.message}`);
     });
@@ -622,7 +658,7 @@ export class ModChecker extends EventEmitter {
     }
   }
 
-  async setUpdateCallback(callback) {
+  async setUpdateCallback(callback: any): Promise<void> {
     this.onUpdateCallback = callback;
     this.autoRestartEnabled = !!callback;
     log.info(
@@ -631,7 +667,7 @@ export class ModChecker extends EventEmitter {
     await setSetting("modAutoRestartEnabled", this.autoRestartEnabled);
   }
 
-  async setRestartOptions(options) {
+  async setRestartOptions(options: AnyRecord): Promise<void> {
     if (options.warningMinutes !== undefined) {
       const val = Number(options.warningMinutes);
       if (!isNaN(val)) {
@@ -661,14 +697,14 @@ export class ModChecker extends EventEmitter {
     );
   }
 
-  async handleModUpdate(updatedMods) {
+  async handleModUpdate(updatedMods: AnyRecord[]): Promise<AnyRecord | undefined> {
     if (this.pendingRestart) {
       log.info("Restart already pending, ignoring handleModUpdate");
       return;
     }
 
     log.info(
-      `handleModUpdate called with ${updatedMods.length} mod(s): ${updatedMods.map((m) => m.name).join(", ")}`,
+      `handleModUpdate called with ${updatedMods.length} mod(s): ${updatedMods.map((m: AnyRecord) => m.name).join(", ")}`,
     );
 
     this.pendingRestart = true;
@@ -695,7 +731,7 @@ export class ModChecker extends EventEmitter {
       try {
         const playerCount = await this.getOnlinePlayerCount();
 
-        if (playerCount > 0) {
+        if (playerCount !== null && playerCount > 0) {
           log.info(
             `${playerCount} players online, delaying restart (max ${this.maxDelayMinutes} min)`,
           );
@@ -719,21 +755,21 @@ export class ModChecker extends EventEmitter {
             reason: "waiting_for_players",
           };
         }
-      } catch (error) {
+      } catch (error: any) {
         log.warn(`Failed to check player count: ${error.message}`);
       }
     }
 
     try {
       return await this.triggerModRestart(updatedMods);
-    } catch (e) {
+    } catch (e: any) {
       log.error(`handleModUpdate: triggerModRestart threw: ${e.message}`);
       this.pendingRestart = false;
       return { success: false, retry: true, reason: "restart_error" };
     }
   }
 
-  async getOnlinePlayerCount() {
+  async getOnlinePlayerCount(): Promise<number | null> {
     if (!this.scheduler?.rconService) return null;
 
     try {
@@ -741,13 +777,13 @@ export class ModChecker extends EventEmitter {
       if (result.success && result.players) {
         return result.players.length;
       }
-    } catch (error) {
+    } catch (error: any) {
       log.debug(`Failed to get player count: ${error.message}`);
     }
     return null;
   }
 
-  startPlayerMonitoring(updatedMods) {
+  startPlayerMonitoring(updatedMods: AnyRecord[]): void {
     if (this.playerCheckInterval) {
       clearInterval(this.playerCheckInterval);
     }
@@ -762,17 +798,17 @@ export class ModChecker extends EventEmitter {
 
         if (elapsed >= maxWaitMs) {
           log.info("Max delay exceeded, forcing restart");
-          clearInterval(this.playerCheckInterval);
+          clearInterval(this.playerCheckInterval!);
           this.playerCheckInterval = null;
           try {
-            const result = await this.triggerModRestart(updatedMods);
+            const result: AnyRecord = await this.triggerModRestart(updatedMods);
             if (!result?.success) {
               log.error(
                 `Player monitor: mod restart did not run: ${result?.error || result?.message || "unknown error"}`,
               );
               this.pendingRestart = false;
             }
-          } catch (e) {
+          } catch (e: any) {
             log.error(`Player monitor: triggerModRestart threw: ${e.message}`);
             this.pendingRestart = false;
           }
@@ -788,17 +824,17 @@ export class ModChecker extends EventEmitter {
           );
         } else if (playerCount === 0) {
           log.info("No players online, triggering restart");
-          clearInterval(this.playerCheckInterval);
+          clearInterval(this.playerCheckInterval!);
           this.playerCheckInterval = null;
           try {
-            const result = await this.triggerModRestart(updatedMods);
+            const result: AnyRecord = await this.triggerModRestart(updatedMods);
             if (!result?.success) {
               log.error(
                 `Player monitor: mod restart did not run: ${result?.error || result?.message || "unknown error"}`,
               );
               this.pendingRestart = false;
             }
-          } catch (e) {
+          } catch (e: any) {
             log.error(`Player monitor: triggerModRestart threw: ${e.message}`);
             this.pendingRestart = false;
           }
@@ -808,16 +844,16 @@ export class ModChecker extends EventEmitter {
             `${playerCount} players still online, ${remainingMin} min remaining`,
           );
         }
-      } catch (error) {
+      } catch (error: any) {
         log.error(`Player monitoring error: ${error.message}`);
-        clearInterval(this.playerCheckInterval);
+        clearInterval(this.playerCheckInterval!);
         this.playerCheckInterval = null;
         this.pendingRestart = false;
       }
     }, 120000);
   }
 
-  async triggerModRestart(updatedMods) {
+  async triggerModRestart(updatedMods: AnyRecord[]): Promise<AnyRecord> {
     log.info(`Triggering restart for ${updatedMods.length} updated mod(s)`);
 
     const rconService = this.scheduler?.rconService;
@@ -830,7 +866,7 @@ export class ModChecker extends EventEmitter {
         try {
           const details = await this.serverManager.getServerProcessDetails();
           confirmedOffline = !details.running && !details.scanFailed;
-        } catch (error) {
+        } catch (error: any) {
           log.debug(
             `Could not verify server process before mod restart retry decision: ${error.message}`,
           );
@@ -890,7 +926,7 @@ export class ModChecker extends EventEmitter {
             "RCON servermsg was rejected by PZ — will rely on PanelBridge fallback",
           );
         }
-      } catch (rconErr) {
+      } catch (rconErr: any) {
         log.warn(`RCON serverMessage failed: ${rconErr?.message || rconErr}`);
       }
 
@@ -905,7 +941,7 @@ export class ModChecker extends EventEmitter {
             "Mod restart warning: neither RCON broadcast nor PanelBridge succeeded — players may not see the warning",
           );
         }
-      } catch (bridgeErr) {
+      } catch (bridgeErr: any) {
         log.warn(
           `PanelBridge sendToServerChat failed: ${bridgeErr?.message || bridgeErr}`,
         );
@@ -936,7 +972,7 @@ export class ModChecker extends EventEmitter {
       log.info(
         `Mod restart completed successfully for: ${modNames.substring(0, 200)}`,
       );
-      await logServerEvent(
+        await (logServerEvent as any)(
         "mod_update_restart",
         `Restarted for mod updates: ${modNames}`,
       );
@@ -945,7 +981,7 @@ export class ModChecker extends EventEmitter {
         this.io.emit("mods:restart_complete", { mods: updatedMods });
       }
       return { success: true, markProcessed: true, reason: "restart_complete" };
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Restart failed: ${error.message}`);
       if (this.io) {
         this.io.emit("mods:restart_failed", {
@@ -961,7 +997,7 @@ export class ModChecker extends EventEmitter {
     }
   }
 
-  async getConfiguredWorkshopIds() {
+  async getConfiguredWorkshopIds(): Promise<Set<string> | null> {
     if (
       !this.serverManager ||
       typeof this.serverManager.getServerConfig !== "function"
@@ -973,18 +1009,18 @@ export class ModChecker extends EventEmitter {
       if (!config || !config.WorkshopItems) return null;
       const ids = String(config.WorkshopItems)
         .split(";")
-        .map((s) => s.trim())
+        .map((s: string) => s.trim())
         .filter(Boolean);
       return new Set(ids);
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`getConfiguredWorkshopIds failed: ${err.message}`);
       return null;
     }
   }
 
-  async fetchSteamTimestamps(workshopIds) {
-    const result = new Map();
-    const unavailable = new Map();
+  async fetchSteamTimestamps(workshopIds: string[]): Promise<Map<string, AnyRecord>> {
+    const result = new Map<string, AnyRecord>();
+    const unavailable = new Map<string, AnyRecord>();
     if (!workshopIds.length) {
       this.lastUnavailableWorkshopIds = unavailable;
       return result;
@@ -995,17 +1031,17 @@ export class ModChecker extends EventEmitter {
     const MAX_BACKOFF_MS = 60_000;
     for (let i = 0; i < workshopIds.length; i += BATCH) {
       const batch = workshopIds.slice(i, i + BATCH);
-      let timeout;
+    let timeout: NodeJS.Timeout | null = null;
       if (backoffMs > 0) {
         log.warn(
           `Steam API backoff: sleeping ${backoffMs}ms before next batch`,
         );
-        await new Promise((r) => setTimeout(r, backoffMs));
+        await new Promise<void>((r) => setTimeout(r, backoffMs));
       }
       try {
         const params = new URLSearchParams();
         params.set("itemcount", String(batch.length));
-        batch.forEach((id, idx) => params.set(`publishedfileids[${idx}]`, id));
+        batch.forEach((id: string, idx: number) => params.set(`publishedfileids[${idx}]`, id));
 
         const controller = new AbortController();
         timeout = setTimeout(() => controller.abort(), 15000);
@@ -1014,7 +1050,7 @@ export class ModChecker extends EventEmitter {
           "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/",
           { method: "POST", body: params, signal: controller.signal },
         );
-        clearTimeout(timeout);
+        clearTimeout(timeout!);
         timeout = null;
 
         if (!res.ok) {
@@ -1060,7 +1096,7 @@ export class ModChecker extends EventEmitter {
             });
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         if (timeout) clearTimeout(timeout);
         if (err.name === "AbortError") {
           log.warn(`Steam API timeout for batch ${i / BATCH + 1}`);
@@ -1091,7 +1127,7 @@ export class ModChecker extends EventEmitter {
     return result;
   }
 
-  async checkForUpdates() {
+  async checkForUpdates(): Promise<AnyRecord> {
     if (this.checkInProgress) {
       log.debug("Update check already in progress, skipping");
       return { updated: false, mods: [], skipped: true };
@@ -1116,13 +1152,13 @@ export class ModChecker extends EventEmitter {
       if (content.charCodeAt(0) === 0xfeff) content = content.slice(1);
       const parsed = this.parseAcfFile(content);
 
-      const localTimestamps = new Map();
-      for (const [id, data] of Object.entries(parsed.installedMods)) {
-        localTimestamps.set(id, data.timeupdated);
+      const localTimestamps = new Map<string, number>();
+      for (const [id, data] of Object.entries(parsed.installedMods as AnyRecord)) {
+        localTimestamps.set(id, Number((data as AnyRecord).timeupdated) || 0);
       }
-      for (const [id, data] of Object.entries(parsed.modDetails)) {
+      for (const [id, data] of Object.entries(parsed.modDetails as AnyRecord)) {
         if (!localTimestamps.has(id)) {
-          localTimestamps.set(id, data.timeupdated);
+          localTimestamps.set(id, Number((data as AnyRecord).timeupdated) || 0);
         }
       }
 
@@ -1136,9 +1172,9 @@ export class ModChecker extends EventEmitter {
         `Checking ${modCount} workshop mods for updates via Steam API...`,
       );
 
-      const updatedMods = [];
+      const updatedMods: AnyRecord[] = [];
       const trackedMods = (await getTrackedMods()) || [];
-      const trackedMap = new Map();
+      const trackedMap = new Map<string, AnyRecord>();
       for (const mod of trackedMods) {
         trackedMap.set(mod.workshop_id, mod);
       }
@@ -1167,7 +1203,7 @@ export class ModChecker extends EventEmitter {
               await setModPreviewUrl(mod.workshop_id, steam.preview_url);
             }
           }
-        } catch (err) {
+        } catch (err: any) {
           log.debug(`Failed to persist mod preview URLs: ${err.message}`);
         }
       }
@@ -1182,8 +1218,8 @@ export class ModChecker extends EventEmitter {
 
       if (steamData.size === 0) {
         log.warn("Steam API returned no data, falling back to ACF-only check");
-        for (const [workshopId, details] of Object.entries(parsed.modDetails)) {
-          const { timeupdated, latest_timeupdated } = details;
+        for (const [workshopId, details] of Object.entries(parsed.modDetails as AnyRecord)) {
+          const { timeupdated, latest_timeupdated } = details as AnyRecord;
           if (latest_timeupdated > timeupdated) {
             if (
               !trackedMap.has(workshopId) &&
@@ -1235,7 +1271,7 @@ export class ModChecker extends EventEmitter {
               trackedMod.name !== nameFromDisk
             ) {
               trackedMod.name = nameFromDisk;
-              await addTrackedMod(workshopId, nameFromDisk);
+              await (addTrackedMod as any)(workshopId, nameFromDisk);
             }
 
             log.info(
@@ -1290,7 +1326,7 @@ export class ModChecker extends EventEmitter {
             "Could not read server INI workshop IDs — not filtering phantom updates",
           );
         }
-      } catch (filterErr) {
+      } catch (filterErr: any) {
         log.warn(
           `Failed to filter updates against INI config: ${filterErr.message}`,
         );
@@ -1310,7 +1346,7 @@ export class ModChecker extends EventEmitter {
           ]);
         }
         await markModsChecked(checkedIds, updatesById);
-      } catch (markErr) {
+      } catch (markErr: any) {
         log.warn(`Failed to mark mods as checked: ${markErr.message}`);
       }
 
@@ -1324,7 +1360,7 @@ export class ModChecker extends EventEmitter {
 
         if (isNewReport) {
           log.info(`${updatedMods.length} mod(s) have updates available`);
-          await logServerEvent(
+          await (logServerEvent as any)(
             "mod_update_detected",
             JSON.stringify(updatedMods.map((m) => m.name)),
           );
@@ -1359,11 +1395,12 @@ export class ModChecker extends EventEmitter {
           );
         }
 
+        const startedAt = this.startedAt;
         const inGracePeriod =
-          this.startedAt && Date.now() - this.startedAt < this.startupGraceMs;
+          startedAt !== null && Date.now() - startedAt < this.startupGraceMs;
         if (inGracePeriod && newUpdates.length > 0) {
           const remaining = Math.round(
-            (this.startupGraceMs - (Date.now() - this.startedAt)) / 1000,
+            (this.startupGraceMs - (Date.now() - startedAt!)) / 1000,
           );
           log.info(
             `Startup grace period active (${remaining}s remaining) — skipping auto-restart for ${newUpdates.length} update(s)`,
@@ -1398,7 +1435,7 @@ export class ModChecker extends EventEmitter {
                 "Restart did not proceed (likely aborted) — keeping updates eligible for retry on next cycle",
               );
             }
-          } catch (callbackError) {
+          } catch (callbackError: any) {
             log.error(`Mod update callback failed: ${callbackError.message}`);
           }
         } else if (this.pendingRestart) {
@@ -1419,7 +1456,7 @@ export class ModChecker extends EventEmitter {
         mods: updatedMods,
         source: this.steamApiHealthy ? "steam" : "acf-only",
       };
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Mod update check failed: ${error.message}`);
       return { updated: false, mods: [], error: error.message, source: "error" };
     } finally {
@@ -1427,7 +1464,7 @@ export class ModChecker extends EventEmitter {
     }
   }
 
-  async getWorkshopInfo() {
+  async getWorkshopInfo(): Promise<AnyRecord> {
     if (!this.workshopAcfPath || !fs.existsSync(this.workshopAcfPath)) {
       return {};
     }
@@ -1437,32 +1474,33 @@ export class ModChecker extends EventEmitter {
       if (content.charCodeAt(0) === 0xfeff) content = content.slice(1);
       const parsed = this.parseAcfFile(content);
 
-      const result = {};
+      const result: AnyRecord = {};
       for (const [workshopId, installed] of Object.entries(
-        parsed.installedMods,
+        parsed.installedMods as AnyRecord,
       )) {
-        const details = parsed.modDetails[workshopId] || {};
+        const installedData = installed as AnyRecord;
+        const details = (parsed.modDetails as AnyRecord)[workshopId] || {};
         const steamInfo = this.lastSteamTimestamps.get(workshopId);
         const latestTime =
           steamInfo?.time_updated ||
           details.latest_timeupdated ||
-          installed.timeupdated;
+          installedData.timeupdated;
         result[workshopId] = {
-          size: installed.size,
-          timeupdated: installed.timeupdated,
+          size: installedData.size,
+          timeupdated: installedData.timeupdated,
           latest_timeupdated: latestTime,
-          needsUpdate: latestTime > installed.timeupdated,
+          needsUpdate: latestTime > installedData.timeupdated,
         };
       }
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       log.error(`Failed to read workshop ACF: ${error.message}`);
       return {};
     }
   }
 
-  async addModToTrack(workshopId) {
+  async addModToTrack(workshopId: string): Promise<AnyRecord> {
     try {
       const { addTrackedMod } = await import("../database/init.js");
 
@@ -1470,12 +1508,12 @@ export class ModChecker extends EventEmitter {
       const modName = nameFromDisk || `Workshop Mod ${workshopId}`;
 
       const allInfo = await this.getWorkshopInfo();
-      const modInfo = allInfo[workshopId];
+      const modInfo = allInfo[workshopId] as AnyRecord | undefined;
 
       if (modInfo) {
-        await addTrackedMod(workshopId, modName);
+        await (addTrackedMod as any)(workshopId, modName);
         if (modInfo.timeupdated) {
-          await updateModTimestamp(
+          await (updateModTimestamp as any)(
             workshopId,
             new Date(modInfo.timeupdated * 1000).toISOString(),
           );
@@ -1486,23 +1524,23 @@ export class ModChecker extends EventEmitter {
           needsUpdate: modInfo.needsUpdate,
         };
       } else {
-        await addTrackedMod(workshopId, modName);
+        await (addTrackedMod as any)(workshopId, modName);
         return {
           success: true,
           name: modName,
           note: "Mod not found in Steam Workshop cache - may not be subscribed",
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       return { success: false, error: error.message };
     }
   }
 
-  async getStatus() {
+  async getStatus(): Promise<AnyRecord> {
     const trackedMods = (await getTrackedMods()) || [];
     const trackedWorkshopIds = new Set(
       trackedMods
-        .map((mod) => String(mod?.workshop_id ?? "").trim())
+        .map((mod: AnyRecord) => String(mod?.workshop_id ?? "").trim())
         .filter(Boolean),
     );
     const workshopInfo = await this.getWorkshopInfo();
@@ -1514,7 +1552,8 @@ export class ModChecker extends EventEmitter {
     }
     const modsWithUpdates = Object.entries(workshopInfo).filter(
       ([id, info]) => {
-        if (!info.needsUpdate) return false;
+        const workshopInfoEntry = info as AnyRecord;
+        if (!workshopInfoEntry.needsUpdate) return false;
         if (
           iniWorkshopIds &&
           iniWorkshopIds.size > 0 &&
@@ -1567,7 +1606,7 @@ export class ModChecker extends EventEmitter {
     };
   }
 
-  async setCheckInterval(intervalMs) {
+  async setCheckInterval(intervalMs: unknown): Promise<number> {
     const normalizedInterval = normalizeStoredCheckInterval(intervalMs);
     if (!normalizedInterval || normalizedInterval.legacy === false) {
       throw new RangeError(
@@ -1583,7 +1622,7 @@ export class ModChecker extends EventEmitter {
     return this.checkInterval;
   }
 
-  async setCheckIntervalMinutes(minutes) {
+  async setCheckIntervalMinutes(minutes: unknown): Promise<number> {
     const intervalMs = minutesToCheckIntervalMs(minutes);
     if (intervalMs === null) {
       throw new RangeError(

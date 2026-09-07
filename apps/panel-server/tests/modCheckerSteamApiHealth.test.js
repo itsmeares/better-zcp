@@ -16,7 +16,7 @@ vi.mock("../database/init.js", () => ({
   markModsChecked: vi.fn(),
 }));
 
-const { ModChecker } = await import("../services/modChecker.js");
+const { ModChecker } = await import("../services/modChecker.ts");
 
 function writeAcfFixture(acfPath, { workshopId, timeupdated, latestTimeupdated }) {
   fs.mkdirSync(path.dirname(acfPath), { recursive: true });
