@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: async () => null,
   getSetting: async () => null,
   setSetting: async () => {},

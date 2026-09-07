@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async (key) => {
     if (key === "serverAutoUpdate") return true;
     return null;
@@ -22,7 +22,7 @@ const {
   getActiveSteamOperations,
   clearActiveSteamOperation,
 } = await import("../services/activeSteamOperations.ts");
-const dbModule = await import("../database/init.js");
+const dbModule = await import("../database/init.ts");
 
 const tempDirs = [];
 

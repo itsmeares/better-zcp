@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const logPlayerAction = vi.fn();
 const deletePlayerNote = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   logPlayerAction,
   getPlayerLogs: vi.fn(),
   getPlayerNotes: vi.fn(),

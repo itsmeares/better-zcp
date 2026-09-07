@@ -12,7 +12,7 @@ import {
   getActiveServer,
   getServer,
   getServers,
-} from "../database/init.js";
+} from "../database/init.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
 import { escapeRegExp } from "../utils/regex.ts";
 import { getDataPaths } from "../utils/paths.ts";

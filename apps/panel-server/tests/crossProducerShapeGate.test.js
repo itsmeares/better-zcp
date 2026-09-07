@@ -15,7 +15,7 @@ const getAllSettings = vi.fn();
 const setSetting = vi.fn();
 const testRconConnection = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getServers,
   getActiveServer,
   getServer,

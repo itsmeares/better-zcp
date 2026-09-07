@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
   setSetting: vi.fn(async () => {}),
   getSetting: vi.fn(async () => null),
@@ -16,7 +16,7 @@ vi.mock("../routes/chunks.ts", () => ({
 }));
 
 const { default: router, applyUpnpToIni } = await import("../routes/server.js");
-const { getActiveServer } = await import("../database/init.js");
+const { getActiveServer } = await import("../database/init.ts");
 
 function getHandler(routePath) {
   const layer = router.stack.find(

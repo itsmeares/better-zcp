@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 
 const { getCircuitBreakerStatus, commitNow, getDb } = await import(
-  "../database/init.js"
+  "../database/init.ts"
 );
 
 const MAX_WRITE_RETRIES = 5;

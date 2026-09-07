@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSetting = vi.fn();
 const setSetting = vi.fn();
-vi.mock("../database/init.js", () => ({ getSetting, setSetting }));
+vi.mock("../database/init.ts", () => ({ getSetting, setSetting }));
 
 const mockLogsDir = {
   dir: fs.mkdtempSync(path.join(os.tmpdir(), "panel-update-logsdir-")),

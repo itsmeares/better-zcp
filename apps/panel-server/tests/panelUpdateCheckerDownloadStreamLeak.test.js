@@ -30,7 +30,7 @@ vi.mock("https", () => ({
   },
 }));
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
 }));

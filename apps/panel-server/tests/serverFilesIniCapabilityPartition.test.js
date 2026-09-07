@@ -11,7 +11,7 @@ const ROLES = {
 const getRoleByName = vi.fn(async (name) => ROLES[name] || null);
 const getActiveServer = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   getAllSettings: vi.fn(async () => ({})),
   getRoleByName,

@@ -9,7 +9,7 @@ const ROLES = {
   },
 };
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn(),
   createScheduledTask: vi.fn(),
   updateScheduledTask: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: vi.fn((name) => Promise.resolve(ROLES[name] || null)),
 }));
 
-const { createScheduledTask, updateScheduledTask } = await import("../database/init.js");
+const { createScheduledTask, updateScheduledTask } = await import("../database/init.ts");
 const { default: router, hasUnsupportedCronFieldCount } = await import("../routes/scheduler.ts");
 
 function getHandler(routePath, method) {

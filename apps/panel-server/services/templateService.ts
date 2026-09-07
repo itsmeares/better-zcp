@@ -5,13 +5,13 @@ import { fileURLToPath } from "url";
 import { createLogger } from "../utils/logger.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { sanitizeErrorParams } from "../utils/sanitize.ts";
-import { getServer, getSetting, setSetting } from "../database/init.js";
+import { getServer, getSetting, setSetting } from "../database/init.ts";
 import {
   getUserTemplates,
   getUserTemplate,
   saveUserTemplate,
   deleteUserTemplate,
-} from "../database/init.js";
+} from "../database/init.ts";
 import {
   createTemplate,
   validateTemplate,

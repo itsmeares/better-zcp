@@ -8,7 +8,7 @@ import path from "path";
 import os from "os";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Files");
-import { getActiveServer, getAllSettings, getRoleByName } from "../database/init.js";
+import { getActiveServer, getAllSettings, getRoleByName } from "../database/init.ts";
 import {
   sanitizeError,
   sanitizeErrorParams,

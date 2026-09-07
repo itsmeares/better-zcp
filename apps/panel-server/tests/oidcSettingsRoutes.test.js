@@ -8,7 +8,7 @@ import { startMockOidcProvider } from "./helpers/mockOidcProvider.js";
 
 const settingsStore = new Map();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getRoleByName: mockGetRoleByName,
   getSetting: async (key) => settingsStore.get(key) ?? null,
   setSetting: async (key, value) => {

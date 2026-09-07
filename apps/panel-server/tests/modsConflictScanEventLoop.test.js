@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getTrackedMods: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),
   getActiveServer: vi.fn(async () => null),

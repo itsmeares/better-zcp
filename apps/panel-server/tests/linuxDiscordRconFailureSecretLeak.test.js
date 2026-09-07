@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const FAKE_PASSWORD = "fake-rcon-secret-hunter2-for-test-only";
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: async () => null,
   getSetting: async () => null,
   setSetting: async () => {},

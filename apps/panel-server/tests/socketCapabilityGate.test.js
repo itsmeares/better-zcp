@@ -5,7 +5,7 @@ const { getRoleByNameMock } = vi.hoisted(() => ({
   getRoleByNameMock: vi.fn(),
 }));
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getRoleByName: getRoleByNameMock,
   getDb: vi.fn(async () => ({ data: {} })),
 }));

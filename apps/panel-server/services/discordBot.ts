@@ -17,7 +17,7 @@ import { STATUS_CODES } from "http";
 import { types } from "util";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Discord");
-import { getActiveServer, getSetting, setSetting } from "../database/init.js";
+import { getActiveServer, getSetting, setSetting } from "../database/init.ts";
 import { loadUiSecret, writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { describeStartFailure } from "./discordStartFailure.ts";

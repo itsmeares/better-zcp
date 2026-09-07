@@ -43,7 +43,7 @@ import {
   recordPerformanceSnapshot,
   logServerEvent,
   getDatabaseFilePath,
-} from "./database/init.js";
+} from "./database/init.ts";
 import { RconService } from "./services/rcon.ts";
 import { ServerManager } from "./services/serverManager.ts";
 import { DockerClient } from "./services/dockerClient.ts";
@@ -2225,7 +2225,7 @@ async function start() {
 
     logTailer.on("playerDeath", async (data) => {
       try {
-        const { logPlayerAction } = await import("./database/init.js");
+        const { logPlayerAction } = await import("./database/init.ts");
         logPlayerAction(
           data.player,
           "death",

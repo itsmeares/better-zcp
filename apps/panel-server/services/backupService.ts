@@ -15,7 +15,7 @@ import {
   getLatestScheduleExecutionByCommand,
   flushWrites,
   getDatabaseFilePath,
-} from "../database/init.js";
+} from "../database/init.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { captureBackupSnapshot } from "../utils/backupSnapshot.ts";
 import { addBackupRecord, removeBackupRecord } from "./backupRecords.ts";
@@ -288,18 +288,20 @@ export class BackupService {
     try {
       const activeServer = await getActiveServer();
 
-      if (activeServer?.zomboidDataPath && activeServer?.serverName) {
+      const serverDataPath = activeServer?.zomboidDataPath;
+      const serverName = activeServer?.serverName;
+      if (serverDataPath && serverName) {
         const savesPath = path.join(
-          activeServer.zomboidDataPath,
+          serverDataPath,
           "Saves",
           "Multiplayer",
-          activeServer.serverName,
+          serverName,
         );
         if (fs.existsSync(savesPath)) {
           return savesPath;
         }
         const baseSavesPath = path.join(
-          activeServer.zomboidDataPath,
+          serverDataPath,
           "Saves",
           "Multiplayer",
         );
@@ -308,19 +310,19 @@ export class BackupService {
             .readdirSync(baseSavesPath, { withFileTypes: true })
             .filter((d) => d.isDirectory())
             .map((d) => d.name);
-          const exactMatch = folders.find((f) => f === activeServer.serverName);
+          const exactMatch = folders.find((f) => f === serverName);
           if (exactMatch) {
             return path.join(baseSavesPath, exactMatch);
           }
           const caseInsensitiveMatch = folders.find(
-            (f) => f.toLowerCase() === activeServer.serverName.toLowerCase(),
+            (f) => f.toLowerCase() === serverName.toLowerCase(),
           );
           if (caseInsensitiveMatch) {
             return path.join(baseSavesPath, caseInsensitiveMatch);
           }
           if (folders.length > 0) {
             log.warn(
-              `Could not find save folder matching "${activeServer.serverName}", using first available: ${folders[0]}`,
+              `Could not find save folder matching "${serverName}", using first available: ${folders[0]}`,
             );
             return path.join(baseSavesPath, folders[0]);
           }
@@ -328,10 +330,15 @@ export class BackupService {
       }
 
       const zomboidDataPath = await getSetting("zomboidDataPath");
-      const serverName = await getSetting("serverName");
+      const fallbackServerName = await getSetting("serverName");
 
-      if (zomboidDataPath && serverName) {
-        return path.join(zomboidDataPath, "Saves", "Multiplayer", serverName);
+      if (zomboidDataPath && fallbackServerName) {
+        return path.join(
+          zomboidDataPath,
+          "Saves",
+          "Multiplayer",
+          fallbackServerName,
+        );
       }
 
       return null;

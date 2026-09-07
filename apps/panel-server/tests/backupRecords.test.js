@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getSetting = vi.fn();
 const setSetting = vi.fn();
 
-vi.mock("../database/init.js", () => ({ getSetting, setSetting }));
+vi.mock("../database/init.ts", () => ({ getSetting, setSetting }));
 
 const { addBackupRecord, listBackupRecords, removeBackupRecord } =
   await import("../services/backupRecords.ts");

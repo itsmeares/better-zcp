@@ -4,13 +4,13 @@ import os from "os";
 import path from "path";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(),
   getSetting: vi.fn(async () => null),
   getModPresets: vi.fn(),
 }));
 
-const { getActiveServer, getModPresets } = await import("../database/init.js");
+const { getActiveServer, getModPresets } = await import("../database/init.ts");
 const { default: router } = await import("../routes/mods.js");
 
 function createResponse() {

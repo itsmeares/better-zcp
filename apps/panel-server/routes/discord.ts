@@ -68,7 +68,7 @@ router.get("/config", async (req, res) => {
 
     await discordBot.loadConfig();
 
-    const { getSetting } = await import("../database/init.js");
+    const { getSetting } = await import("../database/init.ts");
     const autoStart = await getSetting("discordAutoStart");
 
     res.json({
@@ -181,7 +181,7 @@ router.put("/config", async (req, res) => {
     );
 
     if (typeof autoStart === "boolean") {
-      const { setSetting } = await import("../database/init.js");
+      const { setSetting } = await import("../database/init.ts");
       await setSetting("discordAutoStart", autoStart);
     }
 

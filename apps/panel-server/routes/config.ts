@@ -2,7 +2,7 @@ import express, { type Request } from "express";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Config");
-import { getAllSettings, getSetting, setSetting } from "../database/init.js";
+import { getAllSettings, getSetting, setSetting } from "../database/init.ts";
 import {
   sanitizeError,
   sanitizeErrorParams,
@@ -537,7 +537,7 @@ router.put(
     for (const [key, value] of filtered) {
       const requiredCapability = SETTINGS_KEY_CAPABILITY[key];
       if (!requiredCapability) continue;
-      if (JSON.stringify(currentSettings[key]) === JSON.stringify(value)) {
+      if (JSON.stringify(currentSettings?.[key]) === JSON.stringify(value)) {
         continue;
       }
       if (callerCapabilities === null) {

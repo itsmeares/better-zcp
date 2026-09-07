@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 
 const { getCircuitBreakerStatus, commitNow, getDb } = await import(
-  "../database/init.js"
+  "../database/init.ts"
 );
 const { getDataPaths } = await import("../utils/paths.ts");
 

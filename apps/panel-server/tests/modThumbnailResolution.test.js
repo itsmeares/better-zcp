@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getTrackedMods: vi.fn(async () => []),
   setModPreviewUrl: vi.fn(),
 }));
@@ -97,7 +97,7 @@ describe("GET /thumbnail/:workshopId — negative caching", () => {
   });
 
   it("records a failure and short-circuits a repeat request with zero network calls", async () => {
-    const { getTrackedMods } = await import("../database/init.js");
+    const { getTrackedMods } = await import("../database/init.ts");
     getTrackedMods.mockResolvedValue([{ workshop_id: "111", preview_url: null }]);
 
     const fetchMock = vi.fn(async () => ({ ok: false }));
@@ -122,7 +122,7 @@ describe("GET /thumbnail/:workshopId — negative caching", () => {
   });
 
   it("retries after the failure TTL expires", async () => {
-    const { getTrackedMods } = await import("../database/init.js");
+    const { getTrackedMods } = await import("../database/init.ts");
     getTrackedMods.mockResolvedValue([{ workshop_id: "222", preview_url: null }]);
 
     const fetchMock = vi.fn(async () => ({ ok: false }));
@@ -148,7 +148,7 @@ describe("GET /thumbnail/:workshopId — negative caching", () => {
   });
 
   it("clears the failure on a later successful resolution", async () => {
-    const { getTrackedMods } = await import("../database/init.js");
+    const { getTrackedMods } = await import("../database/init.ts");
     getTrackedMods.mockResolvedValue([{ workshop_id: "333", preview_url: null }]);
 
     let steamShouldSucceed = false;
@@ -188,7 +188,7 @@ describe("GET /thumbnail/:workshopId — negative caching", () => {
   });
 
   it("getThumbnailResolutionStatus() reports {failing, total, lastError} with no unresolved failures on a clean start", async () => {
-    const { getTrackedMods } = await import("../database/init.js");
+    const { getTrackedMods } = await import("../database/init.ts");
     getTrackedMods.mockResolvedValue([
       { workshop_id: "1", preview_url: "https://images.steamusercontent.com/x" },
       { workshop_id: "2", preview_url: "https://images.steamusercontent.com/y" },

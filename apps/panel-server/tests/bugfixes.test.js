@@ -204,7 +204,7 @@ describe("local password reset hardening", () => {
 
 describe("logout and export trust boundaries", () => {
   it("rejects forged refresh tokens even when the payload matches a real session", async () => {
-    const dbModule = await import("../database/init.js");
+    const dbModule = await import("../database/init.ts");
     const getDbSpy = vi.spyOn(dbModule, "getDb").mockResolvedValue({
       data: {
         users: [
@@ -250,7 +250,7 @@ describe("logout and export trust boundaries", () => {
 
 describe("config mutation guard", () => {
   it("fails closed when server state cannot be verified", async () => {
-    const dbModule = await import("../database/init.js");
+    const dbModule = await import("../database/init.ts");
     const getActiveServerSpy = vi
       .spyOn(dbModule, "getActiveServer")
       .mockResolvedValue(null);
@@ -273,7 +273,7 @@ describe("config mutation guard", () => {
   });
 
   it("lets a remote server's config mutation through without probing local process state", async () => {
-    const dbModule = await import("../database/init.js");
+    const dbModule = await import("../database/init.ts");
     const getActiveServerSpy = vi
       .spyOn(dbModule, "getActiveServer")
       .mockResolvedValue({ isRemote: true });
@@ -298,7 +298,7 @@ describe("config mutation guard", () => {
     const missingPath = path.join(os.tmpdir(), "zcp-guard-test-missing-path-does-not-exist");
     expect(fs.existsSync(missingPath)).toBe(false);
 
-    const dbModule = await import("../database/init.js");
+    const dbModule = await import("../database/init.ts");
     const getActiveServerSpy = vi.spyOn(dbModule, "getActiveServer").mockResolvedValue({
       installPath: missingPath,
       isRemote: true, // what normalizeServerMemory would actually compute here

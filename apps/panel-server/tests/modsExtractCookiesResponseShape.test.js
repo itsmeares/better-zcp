@@ -10,7 +10,7 @@ const { setSteamSessionCredentials, getSteamSessionCredentials } = vi.hoisted(()
   getSteamSessionCredentials: vi.fn(),
 }));
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(),
   getSetting: vi.fn(async () => null),
 }));

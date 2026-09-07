@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const getActiveServer = vi.fn();
 const getAllSettings = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   getAllSettings,
 }));

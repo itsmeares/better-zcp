@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import net from "net";
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getAllSettings: vi.fn(async () => ({})),
   getSetting: vi.fn(async () => undefined),
   setSetting: vi.fn(async () => {}),

@@ -11,7 +11,7 @@ import {
 
 let userTemplates;
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getServer: vi.fn(),
   getSetting: vi.fn(async () => []),
   setSetting: vi.fn(async () => {}),
@@ -30,7 +30,7 @@ vi.mock("../database/init.js", () => ({
   }),
 }));
 
-const { getServer, getSetting, setSetting } = await import("../database/init.js");
+const { getServer, getSetting, setSetting } = await import("../database/init.ts");
 const templateService = await import("../services/templateService.ts");
 
 const BUILTIN_IDS = [

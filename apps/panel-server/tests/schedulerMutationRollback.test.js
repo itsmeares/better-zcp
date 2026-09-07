@@ -5,7 +5,7 @@ const getScheduledTasks = vi.fn();
 const updateScheduledTask = vi.fn();
 const deleteScheduledTask = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getScheduledTasks,
   updateScheduledTask,
   deleteScheduledTask,

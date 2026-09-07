@@ -8,7 +8,7 @@ const ROLES = {
   },
 };
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn(),
   createScheduledTask: vi.fn(),
   updateScheduledTask: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { createScheduledTask, updateScheduledTask, getScheduledTasks } =
-  await import("../database/init.js");
+  await import("../database/init.ts");
 const { default: router } = await import("../routes/scheduler.ts");
 
 function getHandler(routePath, method) {

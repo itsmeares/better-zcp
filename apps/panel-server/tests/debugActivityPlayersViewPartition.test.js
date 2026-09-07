@@ -14,8 +14,8 @@ const ROLES = {
 };
 const getRoleByName = vi.fn(async (name) => ROLES[name] || null);
 
-vi.mock("../database/init.js", async () => {
-  const actual = await vi.importActual("../database/init.js");
+vi.mock("../database/init.ts", async () => {
+  const actual = await vi.importActual("../database/init.ts");
   return {
     ...actual,
     getCommandHistory,

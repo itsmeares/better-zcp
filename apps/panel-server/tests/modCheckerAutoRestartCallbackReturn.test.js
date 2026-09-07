@@ -12,7 +12,7 @@ const getActiveServer = vi.fn(async () => null);
 const isModIgnored = vi.fn(async () => false);
 const markModsChecked = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getTrackedMods,
   updateModTimestamp,
   logServerEvent,

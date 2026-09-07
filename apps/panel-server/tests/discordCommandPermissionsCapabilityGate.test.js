@@ -20,7 +20,7 @@ const ROLES = {
 
 const getRoleByName = vi.fn(async (name) => ROLES[name] || null);
 
-vi.mock("../database/init.js", () => ({ getRoleByName }));
+vi.mock("../database/init.ts", () => ({ getRoleByName }));
 vi.mock("../services/discordBot.ts", () => ({
   normalizeChatRelayScope: vi.fn((value) => value),
 }));

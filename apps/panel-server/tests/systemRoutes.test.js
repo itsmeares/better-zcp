@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 
 const getCircuitBreakerStatus = vi.fn();
-vi.mock("../database/init.js", () => ({ getCircuitBreakerStatus }));
+vi.mock("../database/init.ts", () => ({ getCircuitBreakerStatus }));
 
 const getDiskStatusForPath = vi.fn();
 vi.mock("../services/diskMonitor.ts", () => ({ getDiskStatusForPath }));

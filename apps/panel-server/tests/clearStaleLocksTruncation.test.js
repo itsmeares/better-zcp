@@ -5,8 +5,8 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 
 const getActiveServer = vi.fn();
-vi.mock("../database/init.js", async () => {
-  const actual = await vi.importActual("../database/init.js");
+vi.mock("../database/init.ts", async () => {
+  const actual = await vi.importActual("../database/init.ts");
   return { ...actual, getRoleByName: mockGetRoleByName, getActiveServer };
 });
 

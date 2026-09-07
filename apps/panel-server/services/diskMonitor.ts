@@ -1,5 +1,5 @@
 import { createLogger } from "../utils/logger.ts";
-import { getActiveServer, getSetting } from "../database/init.js";
+import { getActiveServer, getSetting } from "../database/init.ts";
 import { getDiskFree } from "../utils/diskSpace.ts";
 
 type DiskReading = { total: number; free: number };

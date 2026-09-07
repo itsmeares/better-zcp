@@ -7,7 +7,7 @@ const getActiveServer = vi.fn();
 const getSetting = vi.fn();
 const getServers = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting,
   setSetting: vi.fn(),
   getActiveServer,

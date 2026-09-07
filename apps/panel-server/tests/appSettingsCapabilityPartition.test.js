@@ -30,7 +30,7 @@ const getAllSettings = vi.fn();
 const setSetting = vi.fn();
 const setSteamSessionCredentials = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getAllSettings,
   setSetting,
   getRoleByName,

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 describe("permissions.js DEFAULT_ROLE_CAPABILITIES matches the migration's seed exactly", () => {
   it("admin/technician/moderator capability sets are identical between the two copies", async () => {
     const { DEFAULT_ROLE_CAPABILITIES } = await import("../services/permissions.ts");
-    const { runMigrations } = await import("../database/init.js");
+    const { runMigrations } = await import("../database/init.ts");
 
     const migrated = runMigrations({
       users: [],
@@ -24,7 +24,7 @@ describe("permissions.js DEFAULT_ROLE_CAPABILITIES matches the migration's seed 
 
   it("every capability granted by the migration seed is a real, catalogued capability key", async () => {
     const { CAPABILITIES, isKnownCapability } = await import("../services/permissions.ts");
-    const { runMigrations } = await import("../database/init.js");
+    const { runMigrations } = await import("../database/init.ts");
 
     const migrated = runMigrations({ users: [], settings: {}, _schemaVersion: 1 });
     for (const role of migrated.roles) {

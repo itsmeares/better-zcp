@@ -11,7 +11,7 @@ const getRoleByName = vi.fn(async (name) =>
     : mockGetRoleByName(name),
 );
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(),
   updateServer: vi.fn(),
   setSetting: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName,
 }));
 
-const { getActiveServer, updateServer, setSetting, getSetting } = await import("../database/init.js");
+const { getActiveServer, updateServer, setSetting, getSetting } = await import("../database/init.ts");
 const { default: router } = await import("../routes/chunks.ts");
 
 function createResponse() {

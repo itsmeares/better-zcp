@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 
-const { runMigrations } = await import("../database/init.js");
+const { runMigrations } = await import("../database/init.ts");
 
 function makeV1Data(overrides = {}) {
   return {
@@ -16,7 +16,7 @@ function makeV1Data(overrides = {}) {
   };
 }
 
-describe("database/init.js schema v2 migration: roles collection + user.roleId", () => {
+describe("database/init.ts schema v2 migration: roles collection + user.roleId", () => {
   it("seeds admin/technician/moderator roles and assigns roleId to every existing user, without touching user.role", () => {
     const data = runMigrations(makeV1Data());
 
@@ -127,7 +127,7 @@ describe("database/init.js schema v2 migration: roles collection + user.roleId",
   });
 });
 
-describe("database/init.js schema v3 migration: backups.download backfill", () => {
+describe("database/init.ts schema v3 migration: backups.download backfill", () => {
 
   it("grants backups.download to an existing role that already holds backups.manage", () => {
     const data = runMigrations({

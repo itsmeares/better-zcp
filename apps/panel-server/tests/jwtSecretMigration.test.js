@@ -9,7 +9,7 @@ const db = { data: { users: [] } };
 const initDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-jwtmigration-init-"));
 let tmpDir = initDir;
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: async (key) => settings.get(key) ?? null,
   setSetting: async (key, value) => {
     settings.set(key, value);

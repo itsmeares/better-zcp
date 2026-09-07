@@ -3,7 +3,7 @@ import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { requirePermission } from "../services/permissions.ts";
-import { getActiveServer } from "../database/init.js";
+import { getActiveServer } from "../database/init.ts";
 import {
   listTemplates,
   listHiddenBuiltinTemplates,

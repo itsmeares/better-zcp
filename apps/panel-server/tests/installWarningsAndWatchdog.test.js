@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { EventEmitter } from "events";
-import { setSetting } from "../database/init.js";
+import { setSetting } from "../database/init.ts";
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
 vi.mock("child_process", async (importOriginal) => {
@@ -11,7 +11,7 @@ vi.mock("child_process", async (importOriginal) => {
   return { ...actual, spawn: (...args) => spawnMock(...args) };
 });
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),
   logServerEvent: vi.fn(async () => {}),

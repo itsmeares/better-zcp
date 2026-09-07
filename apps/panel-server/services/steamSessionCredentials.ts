@@ -1,4 +1,4 @@
-import { getSetting, setSetting } from "../database/init.js";
+import { getSetting, setSetting } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
 import {
   loadUiSecret,

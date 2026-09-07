@@ -5,7 +5,7 @@ import path from "path";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(),
   getAllSettings: vi.fn(async () => ({})),
   getSetting: vi.fn(async () => null),
@@ -89,7 +89,7 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
 
   it("serverFiles.ts's GET /ini reports duplicateKeys for a real duplicated file", async () => {
     vi.resetModules();
-    const { getActiveServer } = await import("../database/init.js");
+    const { getActiveServer } = await import("../database/init.ts");
     dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ini-dup-serverfiles-"));
     const configPath = path.join(dataRoot, "Server");
     fs.mkdirSync(configPath, { recursive: true });
@@ -120,7 +120,7 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
 
   it("mods.js's GET /validate-config reports a duplicate_key error for a real duplicated file, without blocking the request", async () => {
     vi.resetModules();
-    const { getActiveServer } = await import("../database/init.js");
+    const { getActiveServer } = await import("../database/init.ts");
     dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ini-dup-mods-"));
     const configPath = path.join(dataRoot, "Server");
     fs.mkdirSync(configPath, { recursive: true });
@@ -151,7 +151,7 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
 
   it("mods.js's GET /current-config -- what the Mods page actually loads on open -- reports duplicateKeys too", async () => {
     vi.resetModules();
-    const { getActiveServer } = await import("../database/init.js");
+    const { getActiveServer } = await import("../database/init.ts");
     dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ini-dup-current-config-"));
     const configPath = path.join(dataRoot, "Server");
     fs.mkdirSync(configPath, { recursive: true });

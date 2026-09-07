@@ -5,7 +5,7 @@ const getActiveServer = vi.fn(async () => null);
 const logBridgeCommand = vi.fn(async () => {});
 const getRoleByName = vi.fn(async () => ({ capabilities: ["bridge.command", "players.gm_tools"] }));
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   getServer: vi.fn(),
   getAllSettings: vi.fn(async () => ({})),

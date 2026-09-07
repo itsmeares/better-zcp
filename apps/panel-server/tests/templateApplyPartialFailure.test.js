@@ -16,7 +16,7 @@ const writeFileAtomic = vi.fn();
 vi.mock("../utils/fileWriteQueue.ts", () => ({ withFileLock, writeFileAtomic }));
 
 const getActiveServer = vi.fn();
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   getAllSettings: vi.fn(async () => ({})),
   getRoleByName: mockGetRoleByName,

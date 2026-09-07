@@ -8,7 +8,7 @@ const removeFromWhitelist = vi.fn();
 const addAllowedSteamId = vi.fn();
 const removeAllowedSteamId = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   logPlayerAction,
   getPlayerLogs: vi.fn(),

@@ -9,7 +9,7 @@ const backupDir = path.join(dataDir, "backups");
 describe("db.json backup -> restore round trip: real code paths, not hand-crafted files", () => {
   it("FINDING (fixed 2026-09-05): createDatabaseBackup() used to snapshot a STALE on-disk db.json, silently missing a change made moments earlier", async () => {
     const { getDb, setSetting, createDatabaseBackup } = await import(
-      "../database/init.js"
+      "../database/init.ts"
     );
     await getDb();
 
@@ -34,7 +34,7 @@ describe("db.json backup -> restore round trip: real code paths, not hand-crafte
       insertRole,
       setSetting,
       addTrackedMod,
-    } = await import("../database/init.js");
+    } = await import("../database/init.ts");
     await getDb();
 
     await createServer({
@@ -61,7 +61,7 @@ describe("db.json backup -> restore round trip: real code paths, not hand-crafte
     fs.writeFileSync(dbPath, "{ not valid json, simulating corruption");
 
     vi.resetModules();
-    const freshMod = await import("../database/init.js");
+    const freshMod = await import("../database/init.ts");
     const recoveredDb = await freshMod.getDb();
 
     expect(recoveredDb.data.servers).toEqual(originalData.servers);
@@ -105,7 +105,7 @@ describe("db.json backup -> restore round trip: real code paths, not hand-crafte
     fs.writeFileSync(dbPath, "{ corrupt, forcing recovery from the v1 backup");
 
     vi.resetModules();
-    const freshMod = await import("../database/init.js");
+    const freshMod = await import("../database/init.ts");
     const db = await freshMod.getDb();
 
     expect(db.data._schemaVersion).toBe(3);
@@ -133,7 +133,7 @@ describe("db.json backup -> restore round trip: real code paths, not hand-crafte
 
   it("rotation boundary: pruning after MAX_BACKUPS+3 real backups keeps exactly the newest 5, by content -- not just by count", async () => {
     const { getDb, createDatabaseBackup, setSetting } = await import(
-      "../database/init.js"
+      "../database/init.ts"
     );
     await getDb();
 
@@ -167,7 +167,7 @@ describe("db.json backup -> restore round trip: real code paths, not hand-crafte
 
   it("partial/interrupted write: a backup truncated mid-write is detected as unreadable, never restored as valid", async () => {
     const { getDb, createDatabaseBackup, setSetting } = await import(
-      "../database/init.js"
+      "../database/init.ts"
     );
     await getDb();
 
@@ -205,7 +205,7 @@ describe("db.json backup -> restore round trip: real code paths, not hand-crafte
     fs.writeFileSync(dbPath, "{ also corrupt, forcing ring recovery");
 
     vi.resetModules();
-    const freshMod = await import("../database/init.js");
+    const freshMod = await import("../database/init.ts");
     const recovered = await freshMod.getDb();
     expect(recovered.data.settings.truncationMarker).toBe(
       "good-backup-before-truncation",

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const initUrl = new URL("../database/init.js", import.meta.url).href;
+const initUrl = new URL("../database/init.ts", import.meta.url).href;
 const tempRoots = [];
 
 function createSandbox() {

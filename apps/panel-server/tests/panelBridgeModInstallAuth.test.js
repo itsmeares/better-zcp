@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(),
   getServer: vi.fn(),
   getAllSettings: vi.fn(),
@@ -13,7 +13,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { default: router } = await import("../routes/panelBridge.js");
-const { getServer } = await import("../database/init.js");
+const { getServer } = await import("../database/init.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

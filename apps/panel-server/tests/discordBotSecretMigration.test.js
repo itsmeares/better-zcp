@@ -7,7 +7,7 @@ const settings = new Map();
 const initDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-discordmigrate-init-"));
 let tmpDir = initDir;
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: async () => null,
   getSetting: async (key) => settings.get(key) ?? null,
   setSetting: async (key, value) => {

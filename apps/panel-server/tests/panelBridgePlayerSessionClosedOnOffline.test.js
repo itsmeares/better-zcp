@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const logPlayerAction = vi.fn(async () => {});
 const recordPlayerSession = vi.fn(async () => {});
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   logPlayerAction: (...args) => logPlayerAction(...args),
   recordPlayerSession: (...args) => recordPlayerSession(...args),
 }));

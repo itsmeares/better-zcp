@@ -7,7 +7,7 @@ import {
   getSetting,
   getActiveServer,
   getServer,
-} from "../database/init.js";
+} from "../database/init.ts";
 import { SourceRconClient } from "../utils/sourceRcon.ts";
 import { readSecret } from "../utils/secrets.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";

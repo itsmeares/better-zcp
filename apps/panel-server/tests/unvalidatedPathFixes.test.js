@@ -9,7 +9,7 @@ vi.mock("child_process", async (importOriginal) => {
 });
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async (key) => (key === "steamcmdPath" ? null : null)),
   setSetting: vi.fn(async () => {}),
   logServerEvent: vi.fn(async () => {}),

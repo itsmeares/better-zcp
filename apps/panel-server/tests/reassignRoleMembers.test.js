@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 
-const { getDb, reassignRoleMembers } = await import("../database/init.js");
+const { getDb, reassignRoleMembers } = await import("../database/init.ts");
 
 let db;
 

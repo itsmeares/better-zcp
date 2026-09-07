@@ -9,7 +9,7 @@ const {
   createDatabaseBackup,
   compactDatabase,
   logCommand,
-} = await import("../database/init.js");
+} = await import("../database/init.ts");
 const { getDataPaths } = await import("../utils/paths.ts");
 
 const { dataDir } = getDataPaths();

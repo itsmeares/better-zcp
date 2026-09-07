@@ -25,7 +25,7 @@ import {
   getIgnoredModPairs,
   addIgnoredModPair,
   removeIgnoredModPair,
-} from "../database/init.js";
+} from "../database/init.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { getSteamApiKey } from "../services/steamApiKey.ts";
 import {
@@ -7894,7 +7894,7 @@ router.get("/thumbnail/:workshopId", async (req, res) => {
         previewUrl = await fetchSteamPreviewUrl(wsId);
         if (previewUrl) {
           try {
-            const { setModPreviewUrl } = await import("../database/init.js");
+            const { setModPreviewUrl } = await import("../database/init.ts");
             await setModPreviewUrl(wsId, previewUrl);
           } catch {
             /* best-effort */

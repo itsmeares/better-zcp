@@ -5,7 +5,7 @@ import path from "path";
 
 const getServer = vi.fn();
 const getActiveServer = vi.fn();
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn().mockResolvedValue([]),
   updateTaskLastRun: vi.fn().mockResolvedValue(),
   logServerEvent: vi.fn().mockResolvedValue(),

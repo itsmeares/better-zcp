@@ -1,5 +1,5 @@
 import fs from "fs";
-import { getActiveServer } from "../database/init.js";
+import { getActiveServer } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("ConfigMutationGuard");

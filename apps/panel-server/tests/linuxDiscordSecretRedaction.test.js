@@ -74,12 +74,12 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
 
   afterEach(() => {
     vi.doUnmock("../utils/paths.ts");
-    vi.doUnmock("../database/init.js");
+    vi.doUnmock("../database/init.ts");
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it("collects a per-server rconPassword for EVERY server, not just the active one", async () => {
-    vi.doMock("../database/init.js", () => ({
+    vi.doMock("../database/init.ts", () => ({
       getServers: async () => [
         { id: "s1", rconPassword: "rcon-secret-one" },
         { id: "s2", rconPassword: "rcon-secret-two" },
@@ -95,7 +95,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
   });
 
   it("collects the legacy settings.rconPassword mirror", async () => {
-    vi.doMock("../database/init.js", () => ({
+    vi.doMock("../database/init.ts", () => ({
       getServers: async () => [],
       getSetting: async (key) => (key === "rconPassword" ? "legacy-mirror-secret" : null),
     }));
@@ -107,7 +107,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
   });
 
   it("collects discordBotToken, panelBridgeSftpPassword, steamSessionId, steamLoginSecure from their real secret files", async () => {
-    vi.doMock("../database/init.js", () => ({
+    vi.doMock("../database/init.ts", () => ({
       getServers: async () => [],
       getSetting: async () => null,
     }));
@@ -132,7 +132,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
       path.join(serverDir, "servertest.ini"),
       "PVP=false\nPassword=live-ini-join-password\nMaxPlayers=16\n",
     );
-    vi.doMock("../database/init.js", () => ({
+    vi.doMock("../database/init.ts", () => ({
       getServers: async () => [
         { id: "s1", serverName: "servertest", serverConfigPath: serverDir },
       ],
@@ -147,7 +147,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
   });
 
   it("a missing/unreadable source is skipped, not fatal -- the function still returns everything else it could gather", async () => {
-    vi.doMock("../database/init.js", () => ({
+    vi.doMock("../database/init.ts", () => ({
       getServers: async () => {
         throw new Error("db unavailable");
       },
@@ -163,7 +163,7 @@ describe("collectKnownSecretValues() -- gathers every secret the panel currently
   });
 
   it("no duplicates when the same value appears from two sources", async () => {
-    vi.doMock("../database/init.js", () => ({
+    vi.doMock("../database/init.ts", () => ({
       getServers: async () => [{ id: "s1", rconPassword: "shared-value" }],
       getSetting: async (key) => (key === "rconPassword" ? "shared-value" : null),
     }));

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const rolesById = new Map();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getRoles: async () => Array.from(rolesById.values()),
   getRoleById: async (id) => rolesById.get(String(id)) || null,
   getRoleByName: async (name) => Array.from(rolesById.values()).find((r) => r.name === name) || null,

@@ -11,7 +11,7 @@ import {
   setSetting,
   getDb,
   getDatabaseFilePath,
-} from "../database/init.js";
+} from "../database/init.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { DockerUpdateProxy } from "./dockerUpdateProxy.ts";
 import { isContainerized } from "../utils/dockerDetect.ts";

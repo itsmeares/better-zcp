@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getSetting = vi.fn(async () => null);
 const setSetting = vi.fn(async () => {});
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(async () => null),
   getSetting,
   setSetting,

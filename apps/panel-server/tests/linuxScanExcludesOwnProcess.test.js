@@ -8,7 +8,7 @@ vi.mock("child_process", () => ({
   spawn: vi.fn(),
 }));
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(async () => null),
   getServer: vi.fn(async () => null),
   getServers: vi.fn(async () => []),

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import os from "os";
 
-const { normalizeServerMemory } = await import("../database/init.js");
+const { normalizeServerMemory } = await import("../database/init.ts");
 
 const ORIGINAL_SERVER_PATH = process.env.PZ_SERVER_PATH;
 const ORIGINAL_SAVE_PATH = process.env.PZ_SAVE_PATH;

@@ -7,7 +7,7 @@ import { spawnSync } from "child_process";
 
 const logServerEvent = vi.fn(async () => {});
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(async () => null),
   getSetting: vi.fn(async () => null),
   setSetting: vi.fn(async () => {}),

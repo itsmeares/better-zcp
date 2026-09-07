@@ -7,7 +7,7 @@ const ROLES = {
 };
 const getRoleByName = vi.fn(async (name) => ROLES[name] || null);
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getRoleByName,
 }));
 

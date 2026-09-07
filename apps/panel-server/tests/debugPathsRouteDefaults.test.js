@@ -10,8 +10,8 @@ vi.mock("../utils/paths.ts", async () => {
   return { ...actual, setDataPaths };
 });
 
-vi.mock("../database/init.js", async () => {
-  const actual = await vi.importActual("../database/init.js");
+vi.mock("../database/init.ts", async () => {
+  const actual = await vi.importActual("../database/init.ts");
   return { ...actual, getRoleByName: mockGetRoleByName, getServers };
 });
 

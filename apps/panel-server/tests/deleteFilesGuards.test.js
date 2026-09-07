@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
   setSetting: vi.fn(),
   getSetting: vi.fn(),
@@ -12,7 +12,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { default: router } = await import("../routes/server.js");
-const { getServers } = await import("../database/init.js");
+const { getServers } = await import("../database/init.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

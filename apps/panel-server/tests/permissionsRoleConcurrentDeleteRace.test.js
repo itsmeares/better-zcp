@@ -12,7 +12,7 @@ const { replaceRoleById, removeRoleById } = vi.hoisted(() => ({
   removeRoleById: vi.fn(),
 }));
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getDb: async () => ({ data: { users: [] } }),
   commitNow: async () => {},
   getRoles: async () => Array.from(rolesById.values()),

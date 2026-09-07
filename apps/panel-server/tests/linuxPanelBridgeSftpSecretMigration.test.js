@@ -9,7 +9,7 @@ const {
   createDatabaseBackup,
   rehydratePanelBridgeSftpPassword,
   redactPanelBridgeSftpPasswordForWrite,
-} = await import("../database/init.js");
+} = await import("../database/init.ts");
 const { getDataPaths } = await import("../utils/paths.ts");
 const { readUiSecretFile, writeUiSecretFile } = await import(
   "../utils/uiSecretFile.ts"

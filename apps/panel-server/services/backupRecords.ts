@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getSetting, setSetting } from "../database/init.js";
+import { getSetting, setSetting } from "../database/init.ts";
 
 const SETTINGS_KEY = "backupRecords";
 const MAX_RECORDS = 500;

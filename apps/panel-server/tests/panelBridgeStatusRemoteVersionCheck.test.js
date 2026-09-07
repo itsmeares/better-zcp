@@ -11,7 +11,7 @@ vi.mock("../services/panelBridge.ts", () => ({
 }));
 
 let activeServer;
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(async () => activeServer),
   getRoleByName: vi.fn(),
 }));

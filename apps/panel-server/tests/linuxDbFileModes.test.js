@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 
 const { getDb, commitNow, createDatabaseBackup, setSetting } = await import(
-  "../database/init.js"
+  "../database/init.ts"
 );
 const { getDataPaths } = await import("../utils/paths.ts");
 

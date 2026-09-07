@@ -15,7 +15,7 @@ import {
   commitNow,
   logBridgeCommand,
   getRoleByName,
-} from "../database/init.js";
+} from "../database/init.ts";
 import { sanitizeError, sanitizeErrorParams, isMaskedSecret } from "../utils/sanitize.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { persistSandboxValues } from "./serverFiles.ts";

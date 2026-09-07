@@ -1,6 +1,6 @@
 import * as client from "openid-client";
 import { createLogger } from "../utils/logger.ts";
-import { getSetting, setSetting } from "../database/init.js";
+import { getSetting, setSetting } from "../database/init.ts";
 import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";

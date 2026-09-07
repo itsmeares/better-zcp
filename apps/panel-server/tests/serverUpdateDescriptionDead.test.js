@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { createServer, deleteServer, getServer } from "../database/init.js";
+import { createServer, deleteServer, getServer } from "../database/init.ts";
 
 function createResponse() {
   const response = { status: () => response, json: () => response };

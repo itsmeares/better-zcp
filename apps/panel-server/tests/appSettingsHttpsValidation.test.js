@@ -6,7 +6,7 @@ import path from "path";
 
 const settingsStore = { panelPort: 3001 };
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getAllSettings: vi.fn(async () => ({ ...settingsStore })),
   getSetting: vi.fn(async (key) => settingsStore[key]),
   setSetting: vi.fn(async (key, value) => {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const db = { data: { roles: [] } };
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getRoleByName: async (name) =>
     db.data.roles.find((r) => r.name === name) || null,
 }));

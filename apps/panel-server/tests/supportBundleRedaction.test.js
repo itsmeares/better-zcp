@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Readable } from "stream";
-import { createServer, setSetting } from "../database/init.js";
+import { createServer, setSetting } from "../database/init.ts";
 import { writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import {
   redactRawLogText,

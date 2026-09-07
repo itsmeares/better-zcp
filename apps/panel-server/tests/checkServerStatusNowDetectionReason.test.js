@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const logServerEventMock = vi.fn(async () => ({}));
-vi.mock("../database/init.js", async (importOriginal) => {
+vi.mock("../database/init.ts", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, logServerEvent: logServerEventMock };
 });

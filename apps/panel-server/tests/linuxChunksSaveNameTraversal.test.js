@@ -4,14 +4,14 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(),
   getRoleByName: mockGetRoleByName,
   getServers: vi.fn(),
   getSetting: vi.fn(),
 }));
 
-const { getActiveServer, getServers, getSetting } = await import("../database/init.js");
+const { getActiveServer, getServers, getSetting } = await import("../database/init.ts");
 const { default: router } = await import("../routes/chunks.ts");
 
 function createResponse() {

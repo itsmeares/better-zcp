@@ -15,7 +15,7 @@ vi.mock("../services/managedContainer.ts", () => ({
 
 let steamcmdDir;
 let installDir;
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async (key) => {
     if (key === "serverAutoUpdate") return true;
     if (key === "steamcmdPath") return steamcmdDir;

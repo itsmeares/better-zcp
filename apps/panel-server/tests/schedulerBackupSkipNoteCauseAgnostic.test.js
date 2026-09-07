@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const logScheduleExecution = vi.fn().mockResolvedValue();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn().mockResolvedValue([]),
   updateTaskLastRun: vi.fn().mockResolvedValue(),
   logServerEvent: vi.fn().mockResolvedValue(),

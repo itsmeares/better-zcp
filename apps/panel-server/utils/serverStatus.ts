@@ -1,4 +1,4 @@
-import { getActiveServer } from "../database/init.js";
+import { getActiveServer } from "../database/init.ts";
 import { resolveProvider } from "./serverStatusModel.ts";
 import {
   resolveDockerHostSignal,

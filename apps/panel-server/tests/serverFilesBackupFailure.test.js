@@ -7,7 +7,7 @@ import path from "path";
 const getActiveServer = vi.fn();
 const getAllSettings = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   getAllSettings,
 }));

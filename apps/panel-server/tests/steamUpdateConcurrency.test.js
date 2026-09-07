@@ -7,7 +7,7 @@ import path from "path";
 const getSettingMock = vi.fn(async () => null);
 const setSettingMock = vi.fn(async () => {});
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(async () => {}),
   setSetting: (...args) => setSettingMock(...args),
   getSetting: (...args) => getSettingMock(...args),

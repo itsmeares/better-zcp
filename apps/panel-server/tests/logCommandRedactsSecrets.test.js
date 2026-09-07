@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "fs";
 
 
-const { logCommand, getCommandHistory, flushWrites } = await import("../database/init.js");
+const { logCommand, getCommandHistory, flushWrites } = await import("../database/init.ts");
 const { getDataPaths } = await import("../utils/paths.ts");
 
 describe("logCommand redacts RCON secrets before persisting", () => {

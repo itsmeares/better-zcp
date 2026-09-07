@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
 
-const { sweepOrphanedTmpFiles } = await import("../database/init.js");
+const { sweepOrphanedTmpFiles } = await import("../database/init.ts");
 const { getDataPaths } = await import("../utils/paths.ts");
 
 const { dataDir } = getDataPaths();

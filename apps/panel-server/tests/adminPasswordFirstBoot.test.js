@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { createServer } from "../database/init.js";
+import { createServer } from "../database/init.ts";
 import { generateStartupScripts, isFirstBootMissingAdminPassword } from "../routes/server.js";
 
-describe("createServer() persists adminPassword (database/init.js)", () => {
+describe("createServer() persists adminPassword (database/init.ts)", () => {
   it("a server created with an admin password has it on the returned record, not silently dropped", async () => {
     const server = await createServer({
       name: "AdminPwTest",

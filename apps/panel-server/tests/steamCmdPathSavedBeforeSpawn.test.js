@@ -12,7 +12,7 @@ const { getSettingMock, setSettingMock } = vi.hoisted(() => ({
   getSettingMock: vi.fn(),
   setSettingMock: vi.fn(),
 }));
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: getSettingMock,
   setSetting: setSettingMock,
   logServerEvent: vi.fn(async () => {}),

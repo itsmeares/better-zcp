@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { createServer, deleteServer, getServer, updateServer } from "../database/init.js";
+import { createServer, deleteServer, getServer, updateServer } from "../database/init.ts";
 
 describe("updateServer(): two concurrent updates to the same db.json record", () => {
   let createdServerId;

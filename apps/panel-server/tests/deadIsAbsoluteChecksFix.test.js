@@ -5,7 +5,7 @@ import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
 const getServers = vi.fn(async () => []);
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getRoleByName: mockGetRoleByName,
   getServers,
 }));

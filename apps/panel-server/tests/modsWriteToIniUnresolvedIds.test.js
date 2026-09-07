@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(),
   getSetting: vi.fn(async () => null),
   getTrackedMods: vi.fn(async () => []),
@@ -25,7 +25,7 @@ vi.mock("../database/init.js", () => ({
   removeIgnoredModPair: vi.fn(),
 }));
 
-const { getActiveServer } = await import("../database/init.js");
+const { getActiveServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/mods.js");
 
 function createResponse() {

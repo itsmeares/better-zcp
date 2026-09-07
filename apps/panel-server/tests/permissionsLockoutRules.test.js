@@ -12,7 +12,7 @@ function seedBuiltinRole(id, name, capabilities) {
   rolesById.set(id, { id, name, capabilities, isSeeded: true });
 }
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getDb: async () => ({ data: { users } }),
   commitNow: async () => {},
   getRoles: async () => Array.from(rolesById.values()),

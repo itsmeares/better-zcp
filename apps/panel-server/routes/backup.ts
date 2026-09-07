@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
-import { getActiveServer } from "../database/init.js";
+import { getActiveServer } from "../database/init.ts";
 import { requirePermission } from "../services/permissions.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
 import {

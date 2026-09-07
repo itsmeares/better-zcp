@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(async () => null),
   getServer: vi.fn(),
   getAllSettings: vi.fn(async () => ({})),
@@ -11,7 +11,7 @@ vi.mock("../database/init.js", () => ({
   logBridgeCommand: vi.fn(async () => {}),
 }));
 
-const { getServer } = await import("../database/init.js");
+const { getServer } = await import("../database/init.ts");
 const { default: bridge } = await import("../services/panelBridge.ts");
 const { default: router } = await import("../routes/panelBridge.js");
 

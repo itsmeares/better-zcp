@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 
 const { flushForShutdown, commitNow, getDb, getCircuitBreakerStatus } =
-  await import("../database/init.js");
+  await import("../database/init.ts");
 
 describe("flushForShutdown()", () => {
   beforeEach(async () => {
@@ -45,7 +45,7 @@ describe("flushForShutdown()", () => {
       return realRename(...args);
     });
 
-    const { setSetting } = await import("../database/init.js");
+    const { setSetting } = await import("../database/init.ts");
     await setSetting("shutdownFlushProbe", "1");
 
     const settled = await flushForShutdown();
@@ -63,7 +63,7 @@ describe("flushForShutdown()", () => {
       throw err;
     });
 
-    const { setSetting } = await import("../database/init.js");
+    const { setSetting } = await import("../database/init.ts");
     await setSetting("shutdownFlushProbe", "2");
 
     const start = Date.now();
@@ -82,7 +82,7 @@ describe("flushForShutdown()", () => {
       throw err;
     });
 
-    const { setSetting } = await import("../database/init.js");
+    const { setSetting } = await import("../database/init.ts");
     await setSetting("shutdownFlushProbe", "3");
 
     await flushForShutdown();

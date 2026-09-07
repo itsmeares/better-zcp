@@ -6,7 +6,7 @@ vi.mock("../services/discordBot.ts", () => ({
   normalizeChatRelayScope: vi.fn((value) => value),
 }));
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getRoleByName: mockGetRoleByName,
   setSetting: vi.fn(async () => {}),
 }));

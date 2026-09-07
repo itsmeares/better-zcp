@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getTrackedMods: vi.fn(async () => []),
   updateModTimestamp: vi.fn(),
   logServerEvent: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { ModChecker } = await import("../services/modChecker.ts");
-const { getTrackedMods } = await import("../database/init.js");
+const { getTrackedMods } = await import("../database/init.ts");
 
 function steamResponse(details) {
   return {

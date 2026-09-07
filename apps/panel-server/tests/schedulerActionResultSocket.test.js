@@ -8,7 +8,7 @@ const ROLES = {
   },
 };
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn(),
   getActiveServer: vi.fn().mockResolvedValue(null),
   logScheduleExecution: vi.fn().mockResolvedValue(),
@@ -17,7 +17,7 @@ vi.mock("../database/init.js", () => ({
   getRoleByName: vi.fn((name) => Promise.resolve(ROLES[name] || null)),
 }));
 
-const { getScheduledTasks, getActiveServer } = await import("../database/init.js");
+const { getScheduledTasks, getActiveServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/scheduler.ts");
 const { Scheduler } = await import("../services/scheduler.ts");
 

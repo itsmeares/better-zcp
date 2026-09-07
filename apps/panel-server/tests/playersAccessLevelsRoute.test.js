@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getActiveServer = vi.fn();
 const listServerRoleNames = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   logPlayerAction: vi.fn(),
   getPlayerLogs: vi.fn(),

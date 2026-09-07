@@ -25,7 +25,7 @@ import {
   getServer,
   getSetting,
   setSetting,
-} from "../database/init.js";
+} from "../database/init.ts";
 import {
   isCronTooFrequent,
   isSupportedFiveFieldCron,

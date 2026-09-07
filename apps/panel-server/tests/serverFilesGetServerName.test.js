@@ -6,7 +6,7 @@ const getAllSettings = vi.fn();
 const isRemoteConfigConfigured = vi.fn();
 const validateRemoteConfigTransport = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   getAllSettings,
 }));

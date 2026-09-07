@@ -4,7 +4,7 @@ import os from 'os';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('LogTailer');
-import { getActiveServer, getSetting } from '../database/init.js';
+import { getActiveServer, getSetting } from '../database/init.ts';
 
 const SHOUT_CHAT_ROOM_ID = 2;
 

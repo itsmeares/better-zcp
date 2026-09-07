@@ -7,7 +7,7 @@ vi.mock("child_process", () => ({
 }));
 
 const mockGetActiveServer = vi.fn();
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: (...args) => mockGetActiveServer(...args),
 }));
 

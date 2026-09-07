@@ -8,7 +8,7 @@ import { ErrorCode } from "../utils/errorCodes.ts";
 
 
 const getActiveServer = vi.fn();
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   getAllSettings: vi.fn(async () => ({})),
   getRoleByName: mockGetRoleByName,

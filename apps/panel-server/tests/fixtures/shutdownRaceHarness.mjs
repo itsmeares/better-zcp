@@ -1,5 +1,5 @@
 import http from "node:http";
-import { initDatabase, setSetting, flushForShutdown } from "../../database/init.js";
+import { initDatabase, setSetting, flushForShutdown } from "../../database/init.ts";
 
 let isShuttingDown = false;
 const httpServer = http.createServer((req, res) => res.end("ok"));

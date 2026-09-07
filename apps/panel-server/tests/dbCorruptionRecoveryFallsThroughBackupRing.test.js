@@ -32,7 +32,7 @@ async function freshDbModule() {
   );
   process.env.PANEL_PATHS_CONFIG_PATH = configPath;
   vi.resetModules();
-  const mod = await import("../database/init.js");
+  const mod = await import("../database/init.ts");
   return { ...mod, dataDir };
 }
 

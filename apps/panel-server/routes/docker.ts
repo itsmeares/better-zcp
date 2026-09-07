@@ -1,7 +1,7 @@
 import express from "express";
 import { requirePermission } from "../services/permissions.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
-import { getServer } from "../database/init.js";
+import { getServer } from "../database/init.ts";
 import { RconService } from "../services/rcon.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import {
@@ -130,7 +130,7 @@ router.post("/containers/:id/:action", requirePermission("docker.manage"), async
     }
     if (["stop", "restart"].includes(req.params.action as string) && container.State?.Running) {
       rconService = new RconService();
-      await rconService.loadConfig(server.id);
+      await rconService.loadConfig(String(server.id));
       if (!(await rconService.connect())) {
         return res.status(409).json({
           error: "RCON connection failed; container was not changed",

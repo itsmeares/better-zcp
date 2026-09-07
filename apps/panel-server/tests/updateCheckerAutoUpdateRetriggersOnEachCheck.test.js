@@ -6,7 +6,7 @@ vi.mock("../services/managedContainer.ts", () => ({
 }));
 
 let autoUpdateEnabled;
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async (key) => {
     if (key === "serverAutoUpdate") return autoUpdateEnabled;
     if (key === "steamcmdPath") return "/opt/steamcmd";

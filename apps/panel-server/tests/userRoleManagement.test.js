@@ -4,7 +4,7 @@ import { TEST_ROLES } from "./helpers/mockPermissionsDb.js";
 const settings = new Map();
 const db = { data: { users: [], roles: Object.values(TEST_ROLES).map((r) => ({ ...r })) } };
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: async (key) => settings.get(key) ?? null,
   setSetting: async (key, value) => {
     settings.set(key, value);

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getSetting, setSetting } from "../database/init.js";
+import { getSetting, setSetting } from "../database/init.ts";
 import { createLogger } from "./logger.ts";
 
 const log = createLogger("Setup");

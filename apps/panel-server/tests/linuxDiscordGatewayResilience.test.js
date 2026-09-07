@@ -19,7 +19,7 @@ if (!isWindows) {
   }
 }
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: async () => null,
   getServers: async () => [],
   getSetting: async () => null,

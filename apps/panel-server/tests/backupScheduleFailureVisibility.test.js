@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-const { logScheduleExecution, setSetting } = await import("../database/init.js");
+const { logScheduleExecution, setSetting } = await import("../database/init.ts");
 const { BackupService } = await import("../services/backupService.ts");
 
 afterEach(async () => {

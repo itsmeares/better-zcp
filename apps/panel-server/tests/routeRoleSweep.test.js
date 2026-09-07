@@ -6,7 +6,7 @@ vi.mock("../services/discordBot.ts", () => ({
 }));
 
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getRoleByName: mockGetRoleByName,
 }));
 

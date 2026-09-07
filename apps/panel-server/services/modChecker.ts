@@ -10,7 +10,7 @@ import {
   getActiveServer,
   isModIgnored,
   markModsChecked,
-} from "../database/init.js";
+} from "../database/init.ts";
 import fs from "fs";
 import path from "path";
 import { EventEmitter } from "events";
@@ -1192,7 +1192,7 @@ export class ModChecker extends EventEmitter {
         this.lastSteamTimestamps = steamData;
 
         try {
-          const { setModPreviewUrl } = await import("../database/init.js");
+          const { setModPreviewUrl } = await import("../database/init.ts");
           for (const mod of trackedMods) {
             const steam = steamData.get(mod.workshop_id);
             if (
@@ -1502,7 +1502,7 @@ export class ModChecker extends EventEmitter {
 
   async addModToTrack(workshopId: string): Promise<AnyRecord> {
     try {
-      const { addTrackedMod } = await import("../database/init.js");
+      const { addTrackedMod } = await import("../database/init.ts");
 
       const nameFromDisk = this.resolveModNameFromDisk(workshopId);
       const modName = nameFromDisk || `Workshop Mod ${workshopId}`;

@@ -6,7 +6,7 @@ const preflightActivation = vi.fn();
 const managedStatus = vi.fn();
 const directStatus = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getServers: vi.fn().mockResolvedValue([]),
   getServer,
   getActiveServer: vi.fn(),

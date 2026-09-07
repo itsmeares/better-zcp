@@ -11,7 +11,7 @@ import {
   getUsersForRole,
   getUsersForRoleAccounting,
   reassignRoleMembers,
-} from "../database/init.js";
+} from "../database/init.ts";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { createLogger } from "../utils/logger.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
@@ -668,7 +668,7 @@ export async function deleteRole(
 
   let targetRole: Role | null = null;
   if (reassignTo) {
-    targetRole = await getRoleById(reassignTo);
+    targetRole = (await getRoleById(reassignTo)) as Role | null;
     if (!targetRole) {
       throw makeError(ErrorCode.ROLE_NOT_FOUND, "reassignTo role not found", 404);
     }

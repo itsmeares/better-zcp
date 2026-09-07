@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const settings = new Map();
 const db = { data: { users: [] } };
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: async (key) => settings.get(key) ?? null,
   setSetting: async (key, value) => {
     settings.set(key, value);

@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { createServer, setActiveServer, getActiveServer, deleteServer } from "../database/init.js";
+import { createServer, setActiveServer, getActiveServer, deleteServer } from "../database/init.ts";
 
 
 function createResponse() {

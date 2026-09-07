@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 
 const getActiveServer = vi.fn();
-vi.mock("../database/init.js", () => ({ getActiveServer }));
+vi.mock("../database/init.ts", () => ({ getActiveServer }));
 
 const fakeBridge = { isModConnected: vi.fn(() => false) };
 vi.mock("../services/panelBridge.ts", () => ({ default: fakeBridge }));

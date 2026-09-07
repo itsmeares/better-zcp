@@ -6,7 +6,7 @@ import path from "path";
 
 let logServerEventShouldThrow = false;
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: async () => null,
   getSetting: async () => undefined,
   setSetting: async () => {},

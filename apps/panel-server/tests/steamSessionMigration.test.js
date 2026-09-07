@@ -7,7 +7,7 @@ const settings = new Map();
 const initDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-steammigrate-init-"));
 let tmpDir = initDir;
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: async (key) => settings.get(key) ?? null,
   setSetting: async (key, value) => {
     settings.set(key, value);

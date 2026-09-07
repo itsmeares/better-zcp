@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getActiveServer = vi.fn();
 const getSetting = vi.fn();
-vi.mock("../database/init.js", () => ({ getActiveServer, getSetting }));
+vi.mock("../database/init.ts", () => ({ getActiveServer, getSetting }));
 
 const getDiskFree = vi.fn();
 vi.mock("../utils/diskSpace.ts", () => ({ getDiskFree }));

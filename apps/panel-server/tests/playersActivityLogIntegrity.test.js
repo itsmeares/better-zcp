@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const logPlayerAction = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   logPlayerAction,
   getPlayerLogs: vi.fn(),
   getPlayerNotes: vi.fn(),
@@ -346,7 +346,7 @@ describe("players toggle routes: enabled must remain a boolean", () => {
 describe("player notes: persisted values must keep their documented shape", () => {
   it("rejects a non-text note instead of storing an object", async () => {
     const response = createResponse();
-    const upsert = (await import("../database/init.js")).upsertPlayerNote;
+    const upsert = (await import("../database/init.ts")).upsertPlayerNote;
 
     await getRouteHandler("post", "/notes")(
       createRequest({ playerName: "Bob", note: { malicious: true } }, {}),
@@ -363,7 +363,7 @@ describe("player notes: persisted values must keep their documented shape", () =
 
   it("rejects an invalid player name before reaching persistence", async () => {
     const response = createResponse();
-    const upsert = (await import("../database/init.js")).upsertPlayerNote;
+    const upsert = (await import("../database/init.ts")).upsertPlayerNote;
 
     await getRouteHandler("post", "/notes")(
       createRequest({ playerName: "bad\\name", note: "note" }, {}),

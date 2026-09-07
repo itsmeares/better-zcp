@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 
-const { runMigrations } = await import("../database/init.js");
+const { runMigrations } = await import("../database/init.ts");
 
 function makeSyntheticV1Db() {
   return {

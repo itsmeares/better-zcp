@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Updates");
-import { getSetting, setSetting, getActiveServer } from "../database/init.js";
+import { getSetting, setSetting, getActiveServer } from "../database/init.ts";
 import { resolveManagedContainer } from "./managedContainer.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import {
@@ -598,6 +598,10 @@ export class UpdateChecker {
         return;
       }
       const activeServer = await getActiveServer();
+      if (!activeServer) {
+        fail("NOT_CONFIGURED", "No active server is configured");
+      }
+      const configuredActiveServer = activeServer as NonNullable<typeof activeServer>;
       targetServerId = activeServer?.id ?? null;
       const steamcmdPath = await getSetting("steamcmdPath");
       const managed = await resolveManagedContainer({ serverId: activeServer?.id });
@@ -636,7 +640,7 @@ export class UpdateChecker {
       const branch = ["public", "stable"].includes(updateInfo.installed.branch) ? [] : ["-beta", updateInfo.installed.branch];
       const loginArgs = await getSteamLoginArgs();
 
-      const candidateInstallPath = path.normalize(activeServer.installPath).toLowerCase();
+      const candidateInstallPath = path.normalize(String(configuredActiveServer.installPath)).toLowerCase();
       if (hasActiveSteamOperation(candidateInstallPath)) {
         fail(
           "STEAM_OPERATION_IN_PROGRESS",
@@ -654,7 +658,7 @@ export class UpdateChecker {
       let code: number | null;
       try {
         code = await new Promise<number | null>((resolve, reject) => {
-          const child = spawn(steamcmdExe, ["+force_install_dir", activeServer.installPath, ...loginArgs, "+app_update", "380870", ...branch, "validate", "+quit"], { cwd: steamcmdPath });
+          const child = spawn(steamcmdExe, ["+force_install_dir", String(configuredActiveServer.installPath), ...loginArgs, "+app_update", "380870", ...branch, "validate", "+quit"], { cwd: steamcmdPath });
           child.once("error", reject);
           child.once("close", resolve);
         });
@@ -664,7 +668,7 @@ export class UpdateChecker {
       if (code !== 0) fail("STEAMCMD_EXIT_CODE", `SteamCMD exited with code ${code}`, { code });
 
       const postUpdate = await this.getInstalledBuildInfo(
-        activeServer.installPath,
+        String(configuredActiveServer.installPath),
       );
       const postBuildId = postUpdate?.buildId
         ? parseInt(postUpdate.buildId, 10)

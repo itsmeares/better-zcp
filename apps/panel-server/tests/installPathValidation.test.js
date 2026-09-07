@@ -12,7 +12,7 @@ const testRconConnection = vi.fn();
 
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.js";
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getServers,
   getSetting,
   getAllSettings,

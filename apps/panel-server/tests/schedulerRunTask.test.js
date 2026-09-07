@@ -16,7 +16,7 @@ const ROLES = {
   },
 };
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn(),
   createScheduledTask: vi.fn(),
   updateScheduledTask: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock("../database/init.js", () => ({
 
 const { Scheduler } = await import("../services/scheduler.ts");
 const { getScheduledTasks, createScheduledTask, logScheduleExecution } =
-  await import("../database/init.js");
+  await import("../database/init.ts");
 const { default: router, parseTaskId } = await import("../routes/scheduler.ts");
 
 function makeScheduler() {
@@ -284,7 +284,7 @@ describe("unattended schedule frequency validation", () => {
 
 describe("PUT /api/scheduler/tasks/:id", () => {
   it("keeps an enabled task scheduled when enabled is omitted", async () => {
-    const { updateScheduledTask } = await import("../database/init.js");
+    const { updateScheduledTask } = await import("../database/init.ts");
     const scheduleTask = vi.fn();
     const cancelTask = vi.fn();
     updateScheduledTask.mockResolvedValue({
@@ -316,7 +316,7 @@ describe("PUT /api/scheduler/tasks/:id", () => {
   });
 
   it("rejects stringified enabled values instead of treating false as true", async () => {
-    const { updateScheduledTask } = await import("../database/init.js");
+    const { updateScheduledTask } = await import("../database/init.ts");
     updateScheduledTask.mockClear();
     const response = createResponse();
 
@@ -413,7 +413,7 @@ describe("rcon.execute gate on raw scheduled commands", () => {
 
   describe("PUT /api/scheduler/tasks/:id", () => {
     it("refuses to change a task's command to a raw one for automation.manage alone", async () => {
-      const { updateScheduledTask } = await import("../database/init.js");
+      const { updateScheduledTask } = await import("../database/init.ts");
       updateScheduledTask.mockClear();
       const response = createResponse();
 
@@ -432,7 +432,7 @@ describe("rcon.execute gate on raw scheduled commands", () => {
     });
 
     it("does not require rcon.execute when the update leaves command untouched, even if the task's stored command is raw", async () => {
-      const { updateScheduledTask } = await import("../database/init.js");
+      const { updateScheduledTask } = await import("../database/init.ts");
       updateScheduledTask.mockClear();
       updateScheduledTask.mockResolvedValue({
         id: 8,
@@ -811,7 +811,7 @@ describe("POST /api/scheduler/restart-now labels its Schedule History entry as m
   }
 
   it("calls scheduler.performRestart with label: 'Manual restart'", async () => {
-    const { getActiveServer } = await import("../database/init.js");
+    const { getActiveServer } = await import("../database/init.ts");
     getActiveServer.mockResolvedValue(null);
     const performRestart = vi.fn().mockResolvedValue({ success: true });
     const response = createResponse();
@@ -838,7 +838,7 @@ describe("POST /api/scheduler/restart-now requires server.control in addition to
   }
 
   it("refuses a caller who holds automation.manage but not server.control", async () => {
-    const { getActiveServer } = await import("../database/init.js");
+    const { getActiveServer } = await import("../database/init.ts");
     getActiveServer.mockResolvedValue(null);
     const performRestart = vi.fn().mockResolvedValue({ success: true });
     const response = createResponse();
@@ -857,7 +857,7 @@ describe("POST /api/scheduler/restart-now requires server.control in addition to
   });
 
   it("allows a caller who holds both automation.manage and server.control", async () => {
-    const { getActiveServer } = await import("../database/init.js");
+    const { getActiveServer } = await import("../database/init.ts");
     getActiveServer.mockResolvedValue(null);
     const performRestart = vi.fn().mockResolvedValue({ success: true });
     const response = createResponse();

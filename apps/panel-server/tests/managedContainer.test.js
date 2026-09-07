@@ -5,7 +5,7 @@ const { getServer, getActiveServer } = vi.hoisted(() => ({
   getActiveServer: vi.fn(),
 }));
 
-vi.mock("../database/init.js", () => ({ getServer, getActiveServer }));
+vi.mock("../database/init.ts", () => ({ getServer, getActiveServer }));
 
 const { runManagedLifecycle, resolveManagedContainer, resolveDockerHostSignal, setDockerClient } =
   await import("../services/managedContainer.ts");

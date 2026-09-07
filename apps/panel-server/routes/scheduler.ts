@@ -13,7 +13,7 @@ import {
   clearScheduleHistory,
   getActiveServer,
   getServer
-} from '../database/init.js';
+} from '../database/init.ts';
 import { requirePermission } from '../services/permissions.ts';
 import { requiredCapabilityForScheduledCommand } from '../services/scheduler.ts';
 import {

@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 
 const getActiveServer = vi.fn();
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: (...args) => getActiveServer(...args),
   getServers: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),

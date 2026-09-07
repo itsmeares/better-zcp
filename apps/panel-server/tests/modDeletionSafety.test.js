@@ -13,7 +13,7 @@ const {
   getTrackedMods: vi.fn(),
 }));
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer,
   getSetting,
   getTrackedMods,

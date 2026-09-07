@@ -6,7 +6,7 @@ import { promisify } from "util";
 import type { Request, Response as ExpressResponse } from "express";
 import { createLogger } from "../utils/logger.ts";
 import { getDataPaths } from "../utils/paths.ts";
-import { getActiveServer } from "../database/init.js";
+import { getActiveServer } from "../database/init.ts";
 import { listPersistedVehicles } from "../utils/vehiclesDb.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 const log = createLogger("API:MapProxy");

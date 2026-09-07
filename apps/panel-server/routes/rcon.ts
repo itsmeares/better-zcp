@@ -1,7 +1,7 @@
 import express from 'express';
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:RCON');
-import { getCommandHistory } from '../database/init.js';
+import { getCommandHistory } from '../database/init.ts';
 import { PZ_COMMANDS } from '../utils/commands.ts';
 import {
   parseBoundedInteger,

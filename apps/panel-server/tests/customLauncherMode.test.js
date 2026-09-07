@@ -5,7 +5,7 @@ import path from "path";
 import { resolveLaunchMode } from "../services/serverManager.ts";
 
 const getActiveServer = vi.fn();
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: (...args) => getActiveServer(...args),
   getServers: vi.fn(async () => []),
   getSetting: vi.fn(async () => null),

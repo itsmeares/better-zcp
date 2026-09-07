@@ -1,4 +1,4 @@
-import { getSetting } from "../database/init.js";
+import { getSetting } from "../database/init.ts";
 import { readSecret } from "../utils/secrets.ts";
 
 export async function getSteamApiKey(): Promise<unknown> {

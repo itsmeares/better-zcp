@@ -31,7 +31,7 @@ import {
   getCircuitBreakerStatus,
   getRoleByName,
   getDatabaseFilePath,
-} from "../database/init.js";
+} from "../database/init.ts";
 import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { checkSandboxBraceBalance } from "./serverFiles.ts";

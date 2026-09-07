@@ -5,7 +5,7 @@ import path from "path";
 
 
 const { createServerSpy } = vi.hoisted(() => ({ createServerSpy: vi.fn() }));
-vi.mock("../database/init.js", async (importOriginal) => {
+vi.mock("../database/init.ts", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,

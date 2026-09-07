@@ -8,7 +8,7 @@ const ROLES = {
   },
 };
 
-vi.mock('../database/init.js', () => ({
+vi.mock('../database/init.ts', () => ({
   getRoleByName: vi.fn((name) => Promise.resolve(ROLES[name] || null)),
 }));
 

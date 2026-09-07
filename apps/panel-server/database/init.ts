@@ -18,8 +18,63 @@ import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import { isPidAlive } from "../utils/pidLiveness.ts";
 const log = createLogger("DB");
 
+type AnyRecord = Record<string, any>;
+type Collection = AnyRecord[];
+type ServerRecord = AnyRecord & {
+  id: string | number;
+  provider?: string | null;
+  dockerContainerId?: unknown;
+  dockerContainerName?: unknown;
+  isRemote?: boolean;
+  serverName?: string;
+  serverConfigPath?: string | null;
+  zomboidDataPath?: string | null;
+  installPath?: string | null;
+};
 
-export function rehydratePanelBridgeSftpPassword(data, log) {
+type DatabaseData = {
+  command_history: Collection;
+  scheduled_tasks: Collection;
+  schedule_history: Collection;
+  player_logs: Collection;
+  server_events: Collection;
+  tracked_mods: Collection;
+  ignored_mods: Collection;
+  ignored_mod_pairs: Collection;
+  servers: Collection;
+  player_notes: Collection;
+  player_stats: Collection;
+  mod_presets: Collection;
+  user_templates: Collection;
+  steamid_bans: Collection;
+  performance_history: Collection;
+  bridge_logs: Collection;
+  discord_webhooks: Collection;
+  users: Collection;
+  roles: Collection;
+  settings: AnyRecord;
+  _schemaVersion: number;
+  [key: string]: any;
+};
+
+type DatabaseAdapter = {
+  read: () => Promise<DatabaseData | null>;
+  write: (data: DatabaseData) => Promise<void>;
+  close?: () => void;
+};
+
+type RawSqliteSnapshotStore = {
+  read: () => Promise<unknown>;
+  write: (data: unknown) => Promise<void>;
+  close: () => void;
+};
+
+type Database = Low<DatabaseData>;
+
+export function rehydratePanelBridgeSftpPassword(
+  data: DatabaseData,
+  log: any,
+): DatabaseData {
   if (!data.settings) data.settings = {};
   if (!data.settings.panelBridgeSftpPassword) {
     const fromFile = readUiSecretFile("panelBridgeSftpPassword", log);
@@ -28,7 +83,9 @@ export function rehydratePanelBridgeSftpPassword(data, log) {
   return data;
 }
 
-export function redactPanelBridgeSftpPasswordForWrite(data) {
+export function redactPanelBridgeSftpPasswordForWrite(
+  data: DatabaseData,
+): DatabaseData {
   if (!data.settings?.panelBridgeSftpPassword) return data;
   writeUiSecretFile("panelBridgeSftpPassword", data.settings.panelBridgeSftpPassword);
   const { panelBridgeSftpPassword: _panelBridgeSftpPassword, ...restSettings } =
@@ -71,7 +128,7 @@ for (const dir of [dataDir, backupDir]) {
   if (!fs.existsSync(dir)) {
     try {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    } catch (err) {
+    } catch (err: any) {
       if (
         (err.code === "EACCES" || err.code === "EPERM") &&
         checkAndExitIfOwnershipBlocked([dataDir, backupDir])
@@ -89,7 +146,7 @@ for (const dir of [dataDir, backupDir]) {
 }
 
 
-const defaultData = {
+const defaultData: DatabaseData = {
   command_history: [],
   scheduled_tasks: [],
   schedule_history: [],
@@ -176,7 +233,7 @@ const MIGRATION_V2_ADMIN_CAPABILITIES = [
   "panel.settings",
 ];
 
-export function runMigrations(data) {
+export function runMigrations(data: DatabaseData): DatabaseData {
   const version = data._schemaVersion || 0;
   if (version >= CURRENT_SCHEMA_VERSION) return data;
 
@@ -186,7 +243,7 @@ export function runMigrations(data) {
   if (version < 2) {
     if (!data.roles) data.roles = [];
 
-    const seedRole = (id, name, capabilities) => {
+    const seedRole = (id: string, name: string, capabilities: string[]) => {
       if (data.roles.some((r) => r.id === id)) return;
       data.roles.push({
         id,
@@ -226,9 +283,9 @@ export function runMigrations(data) {
 }
 
 
-let db = null;
-let _writeTimer = null;
-let _writePromise = null;
+let db: Database = null as unknown as Database;
+let _writeTimer: ReturnType<typeof setTimeout> | null = null;
+let _writePromise: Promise<void> | null = null;
 let _dirty = false;
 let _writeRetries = 0;
 const MAX_WRITE_RETRIES = 5;
@@ -236,29 +293,39 @@ const WRITE_BACKOFF_BASE_MS = 1000;
 const WRITE_BACKOFF_MAX_MS = 16_000;
 let _writeCircuitOpenUntil = 0;
 const CIRCUIT_OPEN_MS = 60_000;
-let _lastWriteError = null;
+let _lastWriteError: string | null = null;
 let _circuitFailCount = 0;
-let _backupTimer = null;
+let _backupTimer: ReturnType<typeof setInterval> | null = null;
 let _shutdownRegistered = false;
-let _shutdownPromise = null;
-let createSqliteSnapshotStore;
+let _shutdownPromise: Promise<void> | null = null;
+let createSqliteSnapshotStore:
+  | ((filePath: string) => RawSqliteSnapshotStore)
+  | null = null;
 
-async function createSqliteAdapter() {
-  createSqliteSnapshotStore ??= (
-    await import("./sqlite/snapshotStore.ts")
-  ).createSqliteSnapshotStore;
-  const store = createSqliteSnapshotStore(dbPath);
+function closeDatabaseAdapter(database: Database): void {
+  (database.adapter as DatabaseAdapter).close?.();
+}
+
+async function createSqliteAdapter(): Promise<DatabaseAdapter> {
+  const factory =
+    createSqliteSnapshotStore ??
+    (createSqliteSnapshotStore = (
+      await import("./sqlite/snapshotStore.ts")
+    ).createSqliteSnapshotStore);
+  const store = factory(dbPath);
   return {
-    read: () => store.read(),
-    write: (data) =>
+    read: async () => (await store.read()) as DatabaseData | null,
+    write: (data: DatabaseData) =>
       store.write(
-        redactPanelBridgeSftpPasswordForWrite(redactRconSecretsForWrite(data)),
+        redactPanelBridgeSftpPasswordForWrite(
+          redactRconSecretsForWrite(data as any) as DatabaseData,
+        ),
       ),
     close: () => store.close(),
   };
 }
 
-function scheduleWrite() {
+function scheduleWrite(): void {
   _dirty = true;
 
   if (Date.now() < _writeCircuitOpenUntil) return;
@@ -279,7 +346,7 @@ function scheduleWrite() {
   }, delay);
 }
 
-export async function flushWrites() {
+export async function flushWrites(): Promise<void> {
   if (!_dirty || !db) return;
   _dirty = false;
 
@@ -291,7 +358,7 @@ export async function flushWrites() {
     }
   }
 
-  let tmpPath;
+  let tmpPath = "";
   let tmpWriteSucceeded = false;
   _writePromise = (async () => {
     try {
@@ -308,7 +375,9 @@ export async function flushWrites() {
 
       tmpPath = `${dbPath}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
       const data = JSON.stringify(
-        redactPanelBridgeSftpPasswordForWrite(redactRconSecretsForWrite(db.data)),
+        redactPanelBridgeSftpPasswordForWrite(
+          redactRconSecretsForWrite(db.data as any) as DatabaseData,
+        ),
         null,
         2,
       );
@@ -324,7 +393,7 @@ export async function flushWrites() {
       _lastWriteError = null;
       _circuitFailCount = 0;
       log.debug(`DB flushed (${Math.round(data.length / 1024)}KB)`);
-    } catch (err) {
+    } catch (err: any) {
       if (tmpWriteSucceeded) {
         try {
           fs.unlinkSync(tmpPath);
@@ -383,7 +452,7 @@ export async function commitNow() {
 }
 
 export function closeDatabase() {
-  if (useSqliteDatabase && db) db.adapter.close();
+  if (useSqliteDatabase && db) closeDatabaseAdapter(db);
 }
 
 
@@ -395,7 +464,7 @@ export function sweepOrphanedTmpFiles() {
   let entries;
   try {
     entries = fs.readdirSync(dataDir);
-  } catch (err) {
+  } catch (err: any) {
     log.debug(`Tmp sweep: could not read ${dataDir}: ${err.message}`);
     return;
   }
@@ -413,14 +482,14 @@ export function sweepOrphanedTmpFiles() {
       if (Date.now() - stat.mtimeMs < MIN_ORPHAN_AGE_MS) continue;
       fs.unlinkSync(filePath);
       log.warn(`Removed orphaned tmp file from dead pid ${pid}: ${name}`);
-    } catch (err) {
+    } catch (err: any) {
       log.debug(`Tmp sweep: could not inspect/remove ${name}: ${err.message}`);
     }
   }
 }
 
 
-function createBackup(label = "") {
+function createBackup(label: string = ""): string | null {
   try {
     if (!fs.existsSync(dbPath)) return null;
 
@@ -445,7 +514,7 @@ function createBackup(label = "") {
     }
     pruneBackups();
     return backupFile;
-  } catch (err) {
+  } catch (err: any) {
     log.error(`Backup failed: ${err.message}`);
     return null;
   }
@@ -453,9 +522,9 @@ function createBackup(label = "") {
 
 const BACKUP_COLLISION_SUFFIX_RE = /^(.*)-(\d+)$/;
 
-function sortBackupFilenamesNewestFirst(filenames) {
+function sortBackupFilenamesNewestFirst(filenames: string[]): string[] {
   return filenames
-    .map((name) => {
+    .map((name: string) => {
       const withoutExt = name.slice(0, -dbFileExtension.length);
       const match = withoutExt.match(BACKUP_COLLISION_SUFFIX_RE);
       return match
@@ -480,12 +549,12 @@ function pruneBackups() {
     for (const file of files.slice(MAX_BACKUPS)) {
       fs.unlinkSync(path.join(backupDir, file));
     }
-  } catch (err) {
+  } catch (err: any) {
     log.debug(`Backup pruning error: ${err.message}`);
   }
 }
 
-function listBackupsNewestFirst() {
+function listBackupsNewestFirst(): string[] {
   try {
     const files = fs
       .readdirSync(backupDir)
@@ -533,10 +602,10 @@ function registerShutdownHandlers() {
   if (_shutdownRegistered) return;
   _shutdownRegistered = true;
 
-  const shutdown = (signal) => {
+  const shutdown = (signal: "SIGINT" | "SIGTERM" | "beforeExit"): Promise<void> => {
     if (_shutdownPromise) {
       if (signal === "beforeExit" && useSqliteDatabase && db) {
-        return _shutdownPromise.then(() => db?.adapter.close());
+        return _shutdownPromise.then(() => closeDatabaseAdapter(db));
       }
       return _shutdownPromise;
     }
@@ -552,7 +621,7 @@ function registerShutdownHandlers() {
       // The main application's shutdown path closes SQLite after all of its
       // own async cleanup has finished. Closing here would race that flush.
       if (signal === "beforeExit" && useSqliteDatabase && db) {
-        db.adapter.close();
+        closeDatabaseAdapter(db);
       }
     })();
     return _shutdownPromise;
@@ -564,9 +633,9 @@ function registerShutdownHandlers() {
 }
 
 
-function validateData(data) {
-  const repaired = { ...defaultData };
-  const replacedKeys = [];
+function validateData(data: AnyRecord): DatabaseData {
+  const repaired: DatabaseData = { ...defaultData };
+  const replacedKeys: string[] = [];
 
   for (const [key, defaultValue] of Object.entries(defaultData)) {
     if (Array.isArray(defaultValue)) {
@@ -608,7 +677,7 @@ function validateData(data) {
       log.warn(
         `Saved a snapshot of the pre-repair file for recovery: ${snapshotPath}`,
       );
-    } catch (snapErr) {
+    } catch (snapErr: any) {
       log.error(`Could not snapshot pre-repair data: ${snapErr.message}`);
     }
   }
@@ -616,7 +685,12 @@ function validateData(data) {
   return repaired;
 }
 
-function appendCapped(arr, item, max, { newest = true } = {}) {
+function appendCapped(
+  arr: any[],
+  item: any,
+  max: number,
+  { newest = true }: { newest?: boolean } = {},
+) {
   if (newest) {
     arr.unshift(item);
     if (arr.length > max) arr.length = max;
@@ -627,12 +701,12 @@ function appendCapped(arr, item, max, { newest = true } = {}) {
   return arr;
 }
 
-function compactData(data) {
-  const trimArray = (arr, max) => {
+function compactData(data: DatabaseData): DatabaseData {
+  const trimArray = (arr: any[], max: number) => {
     if (Array.isArray(arr) && arr.length > max) return arr.slice(0, max);
     return arr;
   };
-  const trimArrayEnd = (arr, max) => {
+  const trimArrayEnd = (arr: any[], max: number) => {
     if (Array.isArray(arr) && arr.length > max) return arr.slice(-max);
     return arr;
   };
@@ -667,7 +741,7 @@ function compactData(data) {
   return data;
 }
 
-export async function getDb() {
+export async function getDb(): Promise<Database> {
   if (!db) {
     if (
       useSqliteDatabase &&
@@ -702,20 +776,20 @@ export async function getDb() {
       /* backupDir may not be readable yet on first run */
     }
 
-    const adapter = useSqliteDatabase
+    const adapter: DatabaseAdapter = useSqliteDatabase
       ? await createSqliteAdapter()
-      : new JSONFile(dbPath);
-    db = new Low(adapter, defaultData);
+      : new JSONFile<DatabaseData>(dbPath);
+    db = new Low<DatabaseData>(adapter, defaultData);
 
     let loadedCleanly = false;
     try {
       await db.read();
       loadedCleanly = true;
-    } catch (err) {
+    } catch (err: any) {
       log.error(`Failed to read database: ${err.message}`);
 
       if (useSqliteDatabase) {
-        db.adapter.close();
+        closeDatabaseAdapter(db);
       }
 
       if (err.code === "EACCES" || err.code === "EPERM") {
@@ -761,9 +835,9 @@ export async function getDb() {
             );
             recovered = true;
             break;
-          } catch (recoverErr) {
+          } catch (recoverErr: any) {
             if (useSqliteDatabase) {
-              db.adapter.close();
+              closeDatabaseAdapter(db);
             }
             log.error(
               `Recovery from ${path.basename(backup)} failed: ${recoverErr.message}`,
@@ -793,7 +867,7 @@ export async function getDb() {
     db.data = validateData(db.data);
     db.data = runMigrations(db.data);
     db.data = compactData(db.data);
-    db.data = rehydrateRconSecrets(db.data, log);
+    db.data = rehydrateRconSecrets(db.data, log) as DatabaseData;
     db.data = rehydratePanelBridgeSftpPassword(db.data, log);
 
     _dirty = true;
@@ -814,7 +888,7 @@ export async function getDb() {
   return db;
 }
 
-export async function initDatabase() {
+export async function initDatabase(): Promise<Database> {
   await getDb();
   return db;
 }
@@ -825,7 +899,7 @@ function getDatabaseStatsSync() {
   let fileSize = 0;
   try {
     fileSize = fs.statSync(dbPath).size;
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`DB file stat failed (may not exist yet): ${e.message}`);
   }
 
@@ -834,7 +908,7 @@ function getDatabaseStatsSync() {
     backupCount = fs
       .readdirSync(backupDir)
       .filter((f) => f.startsWith("db-") && f.endsWith(dbFileExtension)).length;
-  } catch (e) {
+  } catch (e: any) {
     log.debug(`Backup dir read failed: ${e.message}`);
   }
 
@@ -898,7 +972,7 @@ function generateId() {
   return randomUUID();
 }
 
-function generateNumericId(collection) {
+function generateNumericId(collection: any[]) {
   const maxExisting = Array.isArray(collection)
     ? collection.reduce(
         (max, item) => Math.max(max, typeof item.id === "number" ? item.id : 0),
@@ -909,12 +983,12 @@ function generateNumericId(collection) {
 }
 
 
-export async function logCommand(command, response, success = true) {
+export async function logCommand(command: any, response: any, success: boolean = true) {
   const db = await getDb();
   const redactedCommand = redactRconCommandSecrets(command);
   const redactedResponse = redactRconCommandSecrets(response);
   const truncatedResponse =
-    redactedResponse && redactedResponse.length > 4096
+    typeof redactedResponse === "string" && redactedResponse.length > 4096
       ? redactedResponse.substring(0, 4096) + "... [truncated]"
       : redactedResponse;
 
@@ -931,7 +1005,7 @@ export async function logCommand(command, response, success = true) {
   return entry;
 }
 
-export async function getCommandHistory(limit = 100) {
+export async function getCommandHistory(limit: unknown = 100) {
   const db = await getDb();
   const safeLimit = parseClampedInteger(limit, 100, 1, RETENTION.command_history);
   return db.data.command_history.slice(0, safeLimit);
@@ -939,11 +1013,11 @@ export async function getCommandHistory(limit = 100) {
 
 
 export async function logBridgeCommand(
-  action,
-  args,
-  result,
-  success = true,
-  durationMs = 0,
+  action: string,
+  args: AnyRecord,
+  result: any,
+  success: boolean = true,
+  durationMs: number = 0,
 ) {
   const db = await getDb();
   if (!db.data.bridge_logs) db.data.bridge_logs = [];
@@ -974,7 +1048,7 @@ export async function logBridgeCommand(
   return entry;
 }
 
-export async function getBridgeLogs(limit = 100) {
+export async function getBridgeLogs(limit: unknown = 100) {
   const db = await getDb();
   if (!db.data.bridge_logs) return [];
   const safeLimit = parseClampedInteger(limit, 100, 1, RETENTION.bridge_logs);
@@ -1002,10 +1076,10 @@ export async function getScheduledTasks() {
 }
 
 export async function createScheduledTask(
-  name,
-  cronExpression,
-  command,
-  serverId = null,
+  name: string,
+  cronExpression: string,
+  command: string,
+  serverId: any = null,
 ) {
   const db = await getDb();
   if (!Array.isArray(db.data.scheduled_tasks)) db.data.scheduled_tasks = [];
@@ -1029,12 +1103,12 @@ export async function createScheduledTask(
 }
 
 export async function updateScheduledTask(
-  id,
-  name,
-  cronExpression,
-  command,
-  enabled,
-  serverId,
+  id: any,
+  name: string | undefined,
+  cronExpression: string | undefined,
+  command: string | undefined,
+  enabled: boolean | number | undefined,
+  serverId: any,
 ) {
   const db = await getDb();
   const index = db.data.scheduled_tasks.findIndex((t) => t.id === id);
@@ -1050,7 +1124,7 @@ export async function updateScheduledTask(
   return task;
 }
 
-export async function deleteScheduledTask(id) {
+export async function deleteScheduledTask(id: any) {
   const db = await getDb();
   const index = db.data.scheduled_tasks.findIndex((t) => t.id === id);
   if (index === -1) return false;
@@ -1060,7 +1134,7 @@ export async function deleteScheduledTask(id) {
   return true;
 }
 
-export async function updateTaskLastRun(id) {
+export async function updateTaskLastRun(id: any) {
   const db = await getDb();
   const task = db.data.scheduled_tasks.find((t) => t.id === id);
   if (task) {
@@ -1071,12 +1145,12 @@ export async function updateTaskLastRun(id) {
 
 
 export async function logScheduleExecution(
-  taskId,
-  taskName,
-  command,
-  success,
-  message = null,
-  duration = null,
+  taskId: any,
+  taskName: string,
+  command: string,
+  success: boolean,
+  message: any = null,
+  duration: number | null = null,
 ) {
   const db = await getDb();
   if (!db.data.schedule_history) db.data.schedule_history = [];
@@ -1097,7 +1171,7 @@ export async function logScheduleExecution(
   return entry;
 }
 
-export async function getScheduleHistory(limit = 100, taskId = null) {
+export async function getScheduleHistory(limit: unknown = 100, taskId: any = null) {
   const db = await getDb();
   if (!db.data.schedule_history) return [];
 
@@ -1115,14 +1189,14 @@ export async function clearScheduleHistory() {
   scheduleWrite();
 }
 
-export async function getLatestScheduleExecutionByCommand(command) {
+export async function getLatestScheduleExecutionByCommand(command: string) {
   const db = await getDb();
   const history = db.data.schedule_history || [];
   return history.find((h) => h.command === command) || null;
 }
 
 
-export async function logPlayerAction(playerName, action, details = null) {
+export async function logPlayerAction(playerName: string, action: string, details: any = null) {
   const db = await getDb();
   const entry = {
     id: generateId(),
@@ -1137,7 +1211,7 @@ export async function logPlayerAction(playerName, action, details = null) {
   return entry;
 }
 
-export async function getPlayerLogs(playerName = null, limit = 100) {
+export async function getPlayerLogs(playerName: string | null = null, limit: unknown = 100) {
   const db = await getDb();
   let logs = db.data.player_logs;
   if (playerName) {
@@ -1148,7 +1222,7 @@ export async function getPlayerLogs(playerName = null, limit = 100) {
 }
 
 
-export async function logServerEvent(eventType, message = null) {
+export async function logServerEvent(eventType: string, message: any = null) {
   try {
     const db = await getDb();
     const entry = {
@@ -1161,7 +1235,7 @@ export async function logServerEvent(eventType, message = null) {
     appendCapped(db.data.server_events, entry, RETENTION.server_events);
     scheduleWrite();
     return entry;
-  } catch (error) {
+  } catch (error: any) {
     log.warn(`Could not record server event ${eventType}: ${error.message}`);
     return null;
   }
@@ -1181,7 +1255,7 @@ export async function getTrackedMods() {
   return db.data.tracked_mods.filter((m) => m.server_id === serverId);
 }
 
-export async function addTrackedMod(workshopId, name = null) {
+export async function addTrackedMod(workshopId: string, name: string | null = null) {
   const db = await getDb();
   const serverId = await getActiveServerId();
   const existing = db.data.tracked_mods.find(
@@ -1212,7 +1286,7 @@ export async function addTrackedMod(workshopId, name = null) {
   return mod;
 }
 
-export async function setModPreviewUrl(workshopId, previewUrl) {
+export async function setModPreviewUrl(workshopId: string, previewUrl: string | null) {
   const db = await getDb();
   const serverId = await getActiveServerId();
   const mod = db.data.tracked_mods.find(
@@ -1226,7 +1300,7 @@ export async function setModPreviewUrl(workshopId, previewUrl) {
   }
 }
 
-export async function updateModTimestamp(workshopId, lastUpdated) {
+export async function updateModTimestamp(workshopId: string, lastUpdated: any) {
   const db = await getDb();
   const serverId = await getActiveServerId();
   const mod = db.data.tracked_mods.find(
@@ -1242,7 +1316,7 @@ export async function updateModTimestamp(workshopId, lastUpdated) {
   }
 }
 
-export async function setModUpdateAvailable(workshopId, available) {
+export async function setModUpdateAvailable(workshopId: string, available: boolean) {
   const db = await getDb();
   const serverId = await getActiveServerId();
   const mod = db.data.tracked_mods.find(
@@ -1257,7 +1331,10 @@ export async function setModUpdateAvailable(workshopId, available) {
   }
 }
 
-export async function markModsChecked(checkedIds, updatesById = new Map()) {
+export async function markModsChecked(
+  checkedIds: Set<any>,
+  updatesById: Map<any, any> = new Map(),
+) {
   if (!checkedIds || checkedIds.size === 0) return;
   const db = await getDb();
   const serverId = await getActiveServerId();
@@ -1274,7 +1351,7 @@ export async function markModsChecked(checkedIds, updatesById = new Map()) {
   if (touched > 0) scheduleWrite();
 }
 
-export async function removeTrackedMod(workshopId) {
+export async function removeTrackedMod(workshopId: string) {
   const db = await getDb();
   const serverId = await getActiveServerId();
   const index = db.data.tracked_mods.findIndex(
@@ -1311,7 +1388,7 @@ export async function getIgnoredMods() {
   );
 }
 
-export async function addIgnoredMod(workshopId, name = null) {
+export async function addIgnoredMod(workshopId: string, name: string | null = null) {
   const db = await getDb();
   if (!db.data.ignored_mods) db.data.ignored_mods = [];
   const serverId = await getActiveServerId();
@@ -1332,7 +1409,7 @@ export async function addIgnoredMod(workshopId, name = null) {
   return entry;
 }
 
-export async function removeIgnoredMod(workshopId) {
+export async function removeIgnoredMod(workshopId: string) {
   const db = await getDb();
   if (!db.data.ignored_mods) db.data.ignored_mods = [];
   const serverId = await getActiveServerId();
@@ -1360,7 +1437,7 @@ export async function clearAllIgnoredMods() {
   return removed;
 }
 
-export async function isModIgnored(workshopId) {
+export async function isModIgnored(workshopId: string) {
   const db = await getDb();
   if (!db.data.ignored_mods) return false;
   const serverId = await getActiveServerId();
@@ -1372,7 +1449,7 @@ export async function isModIgnored(workshopId) {
 }
 
 
-function _normalizePair(modIdA, modIdB) {
+function _normalizePair(modIdA: any, modIdB: any): [string, string] | null {
   const a = String(modIdA || "").trim();
   const b = String(modIdB || "").trim();
   if (!a || !b || a === b) return null;
@@ -1389,7 +1466,7 @@ export async function getIgnoredModPairs() {
   );
 }
 
-export async function addIgnoredModPair(modIdA, modIdB, reason = null) {
+export async function addIgnoredModPair(modIdA: any, modIdB: any, reason: string | null = null) {
   const pair = _normalizePair(modIdA, modIdB);
   if (!pair) return null;
   const db = await getDb();
@@ -1414,7 +1491,7 @@ export async function addIgnoredModPair(modIdA, modIdB, reason = null) {
   return entry;
 }
 
-export async function removeIgnoredModPair(modIdA, modIdB) {
+export async function removeIgnoredModPair(modIdA: any, modIdB: any) {
   const pair = _normalizePair(modIdA, modIdB);
   if (!pair) return false;
   const db = await getDb();
@@ -1435,24 +1512,29 @@ export async function removeIgnoredModPair(modIdA, modIdB) {
 }
 
 
-export async function getSetting(key) {
+export async function getSetting(key: string): Promise<any> {
   const db = await getDb();
   return db.data.settings[key] ?? null;
 }
 
-export async function setSetting(key, value) {
+export async function setSetting(key: string, value: any) {
   const db = await getDb();
   db.data.settings[key] = value;
   scheduleWrite();
 }
 
-export async function getAllSettings() {
+export async function getAllSettings(): Promise<AnyRecord> {
   const db = await getDb();
   return db.data.settings;
 }
 
 
-export function normalizeServerMemory(server) {
+export function normalizeServerMemory(server: null): null;
+export function normalizeServerMemory(server: ServerRecord): ServerRecord;
+export function normalizeServerMemory(server: AnyRecord): AnyRecord;
+export function normalizeServerMemory(
+  server: AnyRecord | null,
+): AnyRecord | null {
   if (!server) return server;
   const installPath = server.installPath || process.env.PZ_SERVER_PATH || "";
   const zomboidDataPath =
@@ -1487,21 +1569,25 @@ export async function getServers() {
   return (db.data.servers || []).map(normalizeServerMemory);
 }
 
-export async function getServer(id) {
+export async function getServer(id: any): Promise<ServerRecord | null> {
   const db = await getDb();
-  return normalizeServerMemory(
-    db.data.servers.find((s) => String(s.id) === String(id)) || null,
-  );
+  const server = db.data.servers.find(
+    (s) => String(s.id) === String(id),
+  ) as ServerRecord | undefined;
+  return server ? normalizeServerMemory(server) : null;
 }
 
-export async function getActiveServer() {
+export async function getActiveServer(): Promise<ServerRecord | null> {
   const db = await getDb();
-  return normalizeServerMemory(
-    db.data.servers.find((s) => s.isActive) || db.data.servers[0] || null,
-  );
+  const server = (db.data.servers.find((s) => s.isActive) ||
+    db.data.servers[0] ||
+    null) as ServerRecord | null;
+  return server ? normalizeServerMemory(server) : null;
 }
 
-export async function createServer(serverConfig) {
+export async function createServer(
+  serverConfig: AnyRecord,
+): Promise<ServerRecord> {
   const db = await getDb();
   if (!db.data.servers) db.data.servers = [];
 
@@ -1540,10 +1626,10 @@ export async function createServer(serverConfig) {
   }
 
   scheduleWrite();
-  return normalizeServerMemory(server);
+  return normalizeServerMemory(server as ServerRecord);
 }
 
-export async function updateServer(id, updates) {
+export async function updateServer(id: any, updates: AnyRecord) {
   const db = await getDb();
   const index = db.data.servers.findIndex((s) => String(s.id) === String(id));
   if (index === -1) return null;
@@ -1566,7 +1652,7 @@ export async function updateServer(id, updates) {
   return normalizeServerMemory(db.data.servers[index]);
 }
 
-export async function deleteServer(id) {
+export async function deleteServer(id: any) {
   const db = await getDb();
   const index = db.data.servers.findIndex((s) => String(s.id) === String(id));
   if (index === -1) return false;
@@ -1589,7 +1675,7 @@ export async function deleteServer(id) {
   return true;
 }
 
-export async function setActiveServer(id) {
+export async function setActiveServer(id: any) {
   const db = await getDb();
   const server = db.data.servers.find((s) => String(s.id) === String(id));
   if (!server) return null;
@@ -1603,7 +1689,7 @@ export async function setActiveServer(id) {
   return server;
 }
 
-function syncServerToSettings(db, server) {
+function syncServerToSettings(db: Database, server: AnyRecord) {
   const normalizedServer = normalizeServerMemory(server);
   db.data.settings.serverPath = server.installPath;
   db.data.settings.serverName = server.serverName;
@@ -1623,18 +1709,18 @@ export async function getRoles() {
   return db.data.roles || [];
 }
 
-export async function getRoleById(id) {
+export async function getRoleById(id: any): Promise<AnyRecord | null> {
   const db = await getDb();
   return (db.data.roles || []).find((r) => String(r.id) === String(id)) || null;
 }
 
-export async function getRoleByName(name) {
+export async function getRoleByName(name: unknown): Promise<AnyRecord | null> {
   if (!name) return null;
   const db = await getDb();
   return (db.data.roles || []).find((r) => r.name === name) || null;
 }
 
-export async function insertRole(role) {
+export async function insertRole(role: AnyRecord) {
   const db = await getDb();
   if (!db.data.roles) db.data.roles = [];
   db.data.roles.push(role);
@@ -1642,7 +1728,7 @@ export async function insertRole(role) {
   return role;
 }
 
-export async function replaceRoleById(id, updatedRole) {
+export async function replaceRoleById(id: any, updatedRole: AnyRecord) {
   const db = await getDb();
   const roles = db.data.roles || [];
   const index = roles.findIndex((r) => String(r.id) === String(id));
@@ -1652,7 +1738,7 @@ export async function replaceRoleById(id, updatedRole) {
   return updatedRole;
 }
 
-export async function removeRoleById(id) {
+export async function removeRoleById(id: any) {
   const db = await getDb();
   const roles = db.data.roles || [];
   const index = roles.findIndex((r) => String(r.id) === String(id));
@@ -1662,7 +1748,7 @@ export async function removeRoleById(id) {
   return true;
 }
 
-export async function getUsersForRole(role) {
+export async function getUsersForRole(role: AnyRecord) {
   const db = await getDb();
   const users = db.data.users || [];
   return users.filter(
@@ -1680,7 +1766,7 @@ export async function getUsersForRoleAccounting() {
   }));
 }
 
-export async function reassignRoleMembers(fromRole, toRole) {
+export async function reassignRoleMembers(fromRole: AnyRecord, toRole: AnyRecord) {
   const db = await getDb();
   let count = 0;
   for (const user of db.data.users || []) {
@@ -1702,7 +1788,7 @@ export async function getPlayerNotes() {
   return db.data.player_notes;
 }
 
-export async function getPlayerNote(playerName) {
+export async function getPlayerNote(playerName: string) {
   const db = await getDb();
   if (!db.data.player_notes) db.data.player_notes = [];
   return (
@@ -1712,7 +1798,7 @@ export async function getPlayerNote(playerName) {
   );
 }
 
-export async function upsertPlayerNote(playerName, note, tags = []) {
+export async function upsertPlayerNote(playerName: string, note: string, tags: any[] = []) {
   const db = await getDb();
   if (!db.data.player_notes) db.data.player_notes = [];
 
@@ -1720,7 +1806,7 @@ export async function upsertPlayerNote(playerName, note, tags = []) {
     (p) => p.player_name.toLowerCase() === playerName.toLowerCase(),
   );
 
-  const entry = {
+  const entry: AnyRecord = {
     player_name: playerName,
     note: note || "",
     tags: tags || [],
@@ -1742,7 +1828,7 @@ export async function upsertPlayerNote(playerName, note, tags = []) {
   return entry;
 }
 
-export async function deletePlayerNote(playerName) {
+export async function deletePlayerNote(playerName: string) {
   const db = await getDb();
   if (!db.data.player_notes) return false;
 
@@ -1763,7 +1849,7 @@ export async function getPlayerStats() {
   return db.data.player_stats;
 }
 
-export async function getPlayerStat(playerName) {
+export async function getPlayerStat(playerName: string) {
   const db = await getDb();
   if (!db.data.player_stats) db.data.player_stats = [];
   return (
@@ -1773,7 +1859,7 @@ export async function getPlayerStat(playerName) {
   );
 }
 
-export async function recordPlayerSession(playerName, action) {
+export async function recordPlayerSession(playerName: string, action: string) {
   const db = await getDb();
   if (!db.data.player_stats) db.data.player_stats = [];
 
@@ -1804,7 +1890,9 @@ export async function recordPlayerSession(playerName, action) {
   } else if (action === "disconnect" && playerStat.last_session_start) {
     const sessionStart = new Date(playerStat.last_session_start);
     const sessionEnd = new Date(now);
-    const sessionDuration = Math.floor((sessionEnd - sessionStart) / 1000);
+    const sessionDuration = Math.floor(
+      (sessionEnd.getTime() - sessionStart.getTime()) / 1000,
+    );
 
     playerStat.total_playtime_seconds += sessionDuration;
     playerStat.last_seen = now;
@@ -1830,7 +1918,7 @@ export async function recordPlayerSession(playerName, action) {
 }
 
 
-export async function recordPerformanceSnapshot(snapshot) {
+export async function recordPerformanceSnapshot(snapshot: AnyRecord) {
   const db = await getDb();
   if (!db.data.performance_history) db.data.performance_history = [];
 
@@ -1850,7 +1938,7 @@ export async function recordPerformanceSnapshot(snapshot) {
   return entry;
 }
 
-export async function getPerformanceHistory(limit = 60) {
+export async function getPerformanceHistory(limit: unknown = 60) {
   const db = await getDb();
   if (!db.data.performance_history) return [];
   const safeLimit = parseClampedInteger(
@@ -1876,11 +1964,11 @@ export async function getModPresets() {
 }
 
 export async function createModPreset(
-  name,
-  description,
-  mods,
-  workshopIds,
-  maps,
+  name: string,
+  description: string,
+  mods: any[],
+  workshopIds: any[],
+  maps: any[],
 ) {
   const db = await getDb();
   if (!db.data.mod_presets) db.data.mod_presets = [];
@@ -1900,7 +1988,7 @@ export async function createModPreset(
   return preset;
 }
 
-export async function updateModPreset(id, updates) {
+export async function updateModPreset(id: any, updates: AnyRecord) {
   const db = await getDb();
   if (!db.data.mod_presets) return null;
 
@@ -1916,7 +2004,7 @@ export async function updateModPreset(id, updates) {
   return db.data.mod_presets[index];
 }
 
-export async function deleteModPreset(id) {
+export async function deleteModPreset(id: any) {
   const db = await getDb();
   if (!db.data.mod_presets) return false;
 
@@ -1935,13 +2023,13 @@ export async function getUserTemplates() {
   return db.data.user_templates;
 }
 
-export async function getUserTemplate(id) {
+export async function getUserTemplate(id: any) {
   const db = await getDb();
   if (!db.data.user_templates) db.data.user_templates = [];
   return db.data.user_templates.find((t) => t.meta?.id === id) || null;
 }
 
-export async function saveUserTemplate(template) {
+export async function saveUserTemplate(template: AnyRecord) {
   const db = await getDb();
   if (!db.data.user_templates) db.data.user_templates = [];
 
@@ -1957,7 +2045,7 @@ export async function saveUserTemplate(template) {
   return template;
 }
 
-export async function deleteUserTemplate(id) {
+export async function deleteUserTemplate(id: any) {
   const db = await getDb();
   if (!db.data.user_templates) return false;
 
@@ -1976,7 +2064,7 @@ export async function getSteamIdBans() {
   return db.data.steamid_bans;
 }
 
-export async function addSteamIdBan(steamId, reason = null) {
+export async function addSteamIdBan(steamId: string, reason: string | null = null) {
   const db = await getDb();
   if (!db.data.steamid_bans) db.data.steamid_bans = [];
 
@@ -1990,7 +2078,7 @@ export async function addSteamIdBan(steamId, reason = null) {
   scheduleWrite();
 }
 
-export async function removeSteamIdBan(steamId) {
+export async function removeSteamIdBan(steamId: string) {
   const db = await getDb();
   if (!db.data.steamid_bans) return false;
 

@@ -8,7 +8,7 @@ function seedRole(id, name, capabilities) {
   rolesById.set(id, { id, name, capabilities, isSeeded: false });
 }
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getRoles: async () => Array.from(rolesById.values()),
   getRoleById: async (id) => rolesById.get(String(id)) || null,
   getRoleByName: async (name) =>

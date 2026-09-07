@@ -4,7 +4,7 @@ const logPlayerAction = vi.fn();
 const addSteamIdBan = vi.fn();
 const removeSteamIdBan = vi.fn();
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   logPlayerAction,
   getPlayerLogs: vi.fn(),
   getPlayerNotes: vi.fn(),

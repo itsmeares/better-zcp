@@ -1,6 +1,6 @@
 
 import { createLogger } from '../utils/logger.ts';
-import { getSetting } from '../database/init.js';
+import { getSetting } from '../database/init.ts';
 import {
   getSteamSessionCredentials,
   setSteamSessionCredentials,

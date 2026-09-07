@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let store;
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async (key) => store[key] ?? null),
   setSetting: vi.fn(async (key, value) => {
     store[key] = value;

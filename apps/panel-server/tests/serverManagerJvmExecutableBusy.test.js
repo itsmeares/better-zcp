@@ -7,7 +7,7 @@ import path from "path";
 const isLinux = process.platform !== "win32";
 
 const getActiveServer = vi.fn();
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: (...args) => getActiveServer(...args),
   getServer: vi.fn(async () => null),
   getServers: vi.fn(async () => []),

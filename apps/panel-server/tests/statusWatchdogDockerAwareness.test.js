@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 
 const getActiveServer = vi.fn();
-vi.mock("../database/init.js", () => ({ getActiveServer }));
+vi.mock("../database/init.ts", () => ({ getActiveServer }));
 
 const resolveDockerHostSignal = vi.fn();
 vi.mock("../services/managedContainer.ts", () => ({

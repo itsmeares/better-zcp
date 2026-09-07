@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { getAllSettings, getSetting } from "../database/init.js";
+import { getAllSettings, getSetting } from "../database/init.ts";
 
 
 const { default: router } = await import("../routes/config.ts");

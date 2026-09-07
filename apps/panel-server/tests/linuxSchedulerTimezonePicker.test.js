@@ -20,7 +20,7 @@ vi.mock("../utils/logger.ts", () => ({
   }),
 }));
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn(async () => []),
   updateTaskLastRun: vi.fn(async () => {}),
   logServerEvent: vi.fn(async () => {}),
@@ -32,7 +32,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { Scheduler } = await import("../services/scheduler.ts");
-const { getScheduledTasks } = await import("../database/init.js");
+const { getScheduledTasks } = await import("../database/init.ts");
 
 function makeScheduler() {
   return new Scheduler({}, {});

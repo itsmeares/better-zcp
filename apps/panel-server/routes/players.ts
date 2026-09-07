@@ -17,7 +17,7 @@ import {
   addSteamIdBan,
   removeSteamIdBan,
   getActiveServer,
-} from '../database/init.js';
+} from '../database/init.ts';
 import { VEHICLES, PERKS, PERK_CATALOG, ACCESS_LEVELS } from '../utils/commands.ts';
 import { sanitizeError } from '../utils/sanitize.ts';
 import bridge from '../services/panelBridge.ts';
@@ -890,7 +890,7 @@ router.get('/notes', requirePermission("players.view"), async (req, res) => {
 
 router.get('/notes/:playerName', requirePermission("players.view"), async (req, res) => {
   try {
-    const note = await getPlayerNote(req.params.playerName);
+    const note = await getPlayerNote(String(req.params.playerName));
     res.json({ success: true, note });
   } catch (error: unknown) {
     log.error(`Failed to get player note: ${errorMessage(error)}`);
@@ -924,7 +924,7 @@ router.post('/notes', requirePermission("players.moderate"), async (req, res) =>
       return res.status(400).json({ error: 'Tags must be strings (max 50 chars each)', code: ErrorCode.PLAYERS_NOTE_INVALID_TAGS });
     }
 
-    const result = await upsertPlayerNote(playerName, note, tags);
+    const result = await upsertPlayerNote(String(playerName), note, tags);
     res.json({ success: true, note: result });
   } catch (error: unknown) {
     log.error(`Failed to save player note: ${errorMessage(error)}`);
@@ -934,7 +934,7 @@ router.post('/notes', requirePermission("players.moderate"), async (req, res) =>
 
 router.delete('/notes/:playerName', requirePermission("players.moderate"), async (req, res) => {
   try {
-    const success = await deletePlayerNote(req.params.playerName);
+    const success = await deletePlayerNote(String(req.params.playerName));
     if (!success) {
       return res.status(404).json({
         success: false,
@@ -962,7 +962,7 @@ router.get('/stats', requirePermission("players.view"), async (req, res) => {
 
 router.get('/stats/:playerName', requirePermission("players.view"), async (req, res) => {
   try {
-    const stat = await getPlayerStat(req.params.playerName);
+    const stat = await getPlayerStat(String(req.params.playerName));
     res.json({ success: true, stat });
   } catch (error: unknown) {
     log.error(`Failed to get player stat: ${errorMessage(error)}`);

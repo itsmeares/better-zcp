@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getSetting: vi.fn(async (key) => {
     if (key === "serverAutoUpdate") return true;
     if (key === "steamcmdPath") return "/opt/steamcmd";
@@ -18,7 +18,7 @@ vi.mock("../services/managedContainer.ts", () => ({
 }));
 
 const { UpdateChecker } = await import("../services/updateChecker.ts");
-const dbModule = await import("../database/init.js");
+const dbModule = await import("../database/init.ts");
 
 describe("UpdateChecker.runAutoUpdate fails closed when process detection can't confirm the server is stopped", () => {
   function buildChecker({ getServerProcessDetails, startServer }) {

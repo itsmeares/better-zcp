@@ -9,7 +9,7 @@ import {
   getActiveServer,
   updateServer,
   getServers,
-} from "../database/init.js";
+} from "../database/init.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { requirePermission, getRoleByName } from "../services/permissions.ts";
 import { deleteVehiclesInBoxes } from "../utils/vehiclesDb.ts";

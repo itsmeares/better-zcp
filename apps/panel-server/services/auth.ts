@@ -5,7 +5,7 @@ import type { JwtPayload } from "jsonwebtoken";
 import crypto from "crypto";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { createLogger } from "../utils/logger.ts";
-import { getSetting, setSetting, getDb, commitNow } from "../database/init.js";
+import { getSetting, setSetting, getDb, commitNow } from "../database/init.ts";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
 import {
   loadOrCreateJwtSecret,

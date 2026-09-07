@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 
 const { getDb, commitNow, deleteServer } = await import(
-  "../database/init.js"
+  "../database/init.ts"
 );
 const { getDataPaths } = await import("../utils/paths.ts");
 
@@ -20,7 +20,7 @@ function readServerSecretFile(serverId) {
   );
 }
 
-describe("rconPassword end-to-end through the real database/init.js write/read pipeline", () => {
+describe("rconPassword end-to-end through the real database/init.ts write/read pipeline", () => {
   const serverId = `e2e-test-server-${Date.now()}`;
 
   afterAll(async () => {

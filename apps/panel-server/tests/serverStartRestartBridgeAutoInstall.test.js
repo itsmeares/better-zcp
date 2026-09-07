@@ -5,7 +5,7 @@ import path from "path";
 
 
 let activeServer;
-vi.mock("../database/init.js", () => ({
+vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(async () => activeServer),
 }));
 
