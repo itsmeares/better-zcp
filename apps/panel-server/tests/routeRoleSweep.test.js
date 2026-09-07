@@ -88,17 +88,17 @@ describe("mods.js: admin+technician (mods/config is technician's job, not modera
 
 describe("discord.js: admin+technician (integration config, not player authority)", () => {
   it("refuses a moderator", async () => {
-    const { default: router } = await import("../routes/discord.js");
+    const { default: router } = await import("../routes/discord.ts");
     const { res } = await runFirstUseLayer(router, { user: { role: "moderator" } });
     expect(res.getStatusCode()).toBe(403);
   });
   it("does not refuse a technician", async () => {
-    const { default: router } = await import("../routes/discord.js");
+    const { default: router } = await import("../routes/discord.ts");
     const { calledNext } = await runFirstUseLayer(router, { user: { role: "technician" } });
     expect(calledNext).toBe(true);
   });
   it("refuses a role that isn't in the allow list at all, not just 'moderator' specifically", async () => {
-    const { default: router } = await import("../routes/discord.js");
+    const { default: router } = await import("../routes/discord.ts");
     const { res } = await runFirstUseLayer(router, { user: { role: "definitely-not-a-real-role" } });
     expect(res.getStatusCode()).toBe(403);
   });

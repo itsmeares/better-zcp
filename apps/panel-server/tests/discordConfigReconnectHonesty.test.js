@@ -11,7 +11,7 @@ vi.mock("../database/init.js", () => ({
   setSetting: vi.fn(async () => {}),
 }));
 
-const { default: router } = await import("../routes/discord.js");
+const { default: router } = await import("../routes/discord.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

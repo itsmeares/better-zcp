@@ -228,7 +228,7 @@ import configRoutes from "./routes/config.js";
 import schedulerRoutes from "./routes/scheduler.ts";
 import modsRoutes from "./routes/mods.js";
 import chunksRoutes from "./routes/chunks.js";
-import discordRoutes from "./routes/discord.js";
+import discordRoutes from "./routes/discord.ts";
 import debugRoutes, { addLogToBuffer } from "./routes/debug.js";
 import { getDiskFree } from "./utils/diskSpace.ts";
 import { getSwapInfo } from "./utils/swapInfo.ts";

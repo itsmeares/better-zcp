@@ -1,4 +1,5 @@
 import express from "express";
+import type { Request } from "express";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { normalizeChatRelayScope } from "../services/discordBot.js";
@@ -9,7 +10,20 @@ const log = createLogger("API:Discord");
 
 const router = express.Router();
 
-const DISCORD_COMMAND_CAPABILITY = {
+type AuthenticatedRequest = Request & {
+  user?: { role?: string } | null;
+};
+
+type DiscordEvent = {
+  enabled: boolean;
+  template: string;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+const DISCORD_COMMAND_CAPABILITY: Record<string, string | null> = {
   status: null,
   players: "players.view",
   save: "server.control",
@@ -36,9 +50,9 @@ router.get("/status", async (req, res) => {
 
     const status = discordBot.getStatus();
     res.json(status);
-  } catch (error) {
-    log.error(`Failed to get Discord bot status: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get Discord bot status: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -69,9 +83,9 @@ router.get("/config", async (req, res) => {
       chatRelayChannelId: discordBot.chatRelayChannelId || "",
       chatRelayScope: normalizeChatRelayScope(discordBot.chatRelayScope),
     });
-  } catch (error) {
-    log.error(`Failed to get Discord config: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get Discord config: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -208,9 +222,9 @@ router.put("/config", async (req, res) => {
       success: true,
       message: "Discord bot configuration updated",
     });
-  } catch (error) {
-    log.error(`Failed to update Discord config: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to update Discord config: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -241,9 +255,9 @@ router.post("/start", async (req, res) => {
         params: sanitizeErrorParams({ reason }),
       });
     }
-  } catch (error) {
-    log.error(`Failed to start Discord bot: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to start Discord bot: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -263,9 +277,9 @@ router.post("/stop", async (req, res) => {
 
     await discordBot.stop();
     res.json({ success: true, message: "Discord bot stopped" });
-  } catch (error) {
-    log.error(`Failed to stop Discord bot: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to stop Discord bot: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -284,9 +298,9 @@ router.post("/reset", async (req, res) => {
       success: true,
       message: "Discord bot settings wiped. Setup can start from scratch.",
     });
-  } catch (error) {
-    log.error(`Failed to reset Discord config: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to reset Discord config: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -360,9 +374,9 @@ router.post("/test", async (req, res) => {
       },
       inviteUrl,
     });
-  } catch (error) {
-    log.error(`Discord test failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Discord test failed: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -395,9 +409,9 @@ router.post("/test-message", async (req, res) => {
       });
     }
     res.json({ success: true, message: "Test message sent" });
-  } catch (error) {
-    log.error(`Failed to send test message: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to send test message: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -442,9 +456,9 @@ router.get("/webhook-events", async (req, res) => {
     const events = { ...defaultEvents, ...savedEvents };
 
     res.json({ events });
-  } catch (error) {
-    log.error(`Failed to get webhook events: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get webhook events: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -476,7 +490,7 @@ router.put("/webhook-events", async (req, res) => {
       "playerDeath",
     ];
 
-    const sanitizedEvents = {};
+    const sanitizedEvents: Record<string, DiscordEvent> = {};
     for (const key of VALID_EVENT_KEYS) {
       if (events[key] && typeof events[key] === "object") {
         const template =
@@ -494,9 +508,9 @@ router.put("/webhook-events", async (req, res) => {
     await discordBot.saveWebhookEvents(merged);
 
     res.json({ success: true, message: "Webhook events updated" });
-  } catch (error) {
-    log.error(`Failed to update webhook events: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to update webhook events: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -511,9 +525,9 @@ router.get("/permissions", async (req, res) => {
     }
 
     res.json({ permissions: discordBot.getCommandPermissions() });
-  } catch (error) {
-    log.error(`Failed to get command permissions: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get command permissions: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -543,7 +557,8 @@ router.put("/permissions", async (req, res) => {
       if (!requiredCapability) continue;
       if (!(command in current) || current[command] === tier) continue;
       if (callerCapabilities === null) {
-        const role = req.user ? await getRoleByName(req.user.role) : null;
+        const user = (req as AuthenticatedRequest).user;
+        const role = user?.role ? await getRoleByName(user.role) : null;
         callerCapabilities = Array.isArray(role?.capabilities)
           ? role.capabilities
           : [];
@@ -566,9 +581,9 @@ router.put("/permissions", async (req, res) => {
 
     const updated = await discordBot.updateCommandPermissions(permissions);
     res.json({ success: true, permissions: updated });
-  } catch (error) {
-    log.error(`Failed to update command permissions: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to update command permissions: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
