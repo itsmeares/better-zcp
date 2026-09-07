@@ -27,7 +27,7 @@ import {
 import { parseAutoUpdateWarningMinutes } from "../services/updateChecker.ts";
 import { BackupService } from "../services/backupService.js";
 import authService from "../services/auth.ts";
-import { parsePlayerExportFile } from "../routes/players.js";
+import { parsePlayerExportFile } from "../routes/players.ts";
 import { requireStoppedForLocalConfigMutation } from "../services/configMutationGuard.ts";
 
 

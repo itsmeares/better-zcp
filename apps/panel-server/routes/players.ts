@@ -1,5 +1,7 @@
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
-import express from 'express';
+import express, { type Request } from "express";
+import fs from "fs";
+import path from "path";
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Players');
 import {
@@ -25,10 +27,47 @@ import { ErrorCode } from '../utils/errorCodes.ts';
 
 const router = express.Router();
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+type PlayerActionLogger = (
+  playerName: string,
+  action: string,
+  details?: unknown | null,
+) => Promise<unknown>;
+
+function recordPlayerAction(
+  playerName: string,
+  action: string,
+  details?: unknown | null,
+): Promise<unknown> {
+  return (logPlayerAction as PlayerActionLogger)(playerName, action, details);
+}
+
+function readPlayerLogs(
+  playerName?: string | null,
+  limit?: number,
+): Promise<unknown> {
+  return (getPlayerLogs as (
+    playerName?: string | null,
+    limit?: number,
+  ) => Promise<unknown>)(playerName, limit);
+}
+
+function recordSteamIdBan(
+  steamId: string,
+  reason?: string | null,
+): Promise<unknown> {
+  return (addSteamIdBan as (
+    steamId: string,
+    reason?: string | null,
+  ) => Promise<unknown>)(steamId, reason);
+}
 
 const MAX_EXPORT_FILE_BYTES = 5 * 1024 * 1024;
 
-export function parsePlayerExportFile(filePath) {
+export function parsePlayerExportFile(filePath: string): Record<string, unknown> {
   let stat;
   try {
     stat = fs.statSync(filePath);
@@ -65,21 +104,25 @@ const USERNAME_REGEX = /^[^\x00-\x1F\x7F"\\]{1,64}$/;
 const SAFE_TEXT_REGEX = /^[a-zA-Z0-9\s.,!?'":;()@#&+=%_\-\u00C0-\u024F]{0,256}$/;
 const ITEM_REGEX = /^[A-Za-z0-9_]+\.[A-Za-z0-9_&#+.\-]+$/;
 
-function isValidUsername(username) {
+function isValidUsername(username: unknown): username is string {
   if (typeof username !== 'string') return false;
   const trimmed = username.trim();
   return trimmed.length > 0 && USERNAME_REGEX.test(trimmed);
 }
 
-function isValidText(text) {
+function isValidText(text: unknown): text is string {
   return typeof text === 'string' && SAFE_TEXT_REGEX.test(text);
 }
 
-function isValidItem(item) {
+function isValidItem(item: unknown): item is string {
   return typeof item === 'string' && ITEM_REGEX.test(item);
 }
 
-function isValidNumber(num, min = -Infinity, max = Infinity) {
+function isValidNumber(
+  num: unknown,
+  min = -Infinity,
+  max = Infinity,
+): boolean {
   if (
     num === null ||
     num === undefined ||
@@ -91,15 +134,21 @@ function isValidNumber(num, min = -Infinity, max = Infinity) {
   return Number.isFinite(n) && n >= min && n <= max;
 }
 
-function requireBooleanToggle(value) {
+function requireBooleanToggle(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
 
-export function normalizePlayerLogLimit(value) {
+export function normalizePlayerLogLimit(value: unknown): number {
   return parseClampedInteger(value, 100, 1, 500);
 }
 
-async function setPlayerMode(req, bridgeAction, rconMethod, username, enabled) {
+async function setPlayerMode(
+  req: Request,
+  bridgeAction: string,
+  rconMethod: string,
+  username: string,
+  enabled: boolean,
+) {
   if (bridge.isRunning) {
     const result = await bridge.sendCommand(bridgeAction, { username, enabled: enabled === true });
     return { ...result, via: 'bridge' };
@@ -115,14 +164,14 @@ async function setPlayerMode(req, bridgeAction, rconMethod, username, enabled) {
 router.get('/activity', requirePermission("players.view"), async (req, res) => {
   try {
     const { player, limit = 100 } = req.query;
-    const logs = await getPlayerLogs(
-      player || null,
+    const logs = await readPlayerLogs(
+      typeof player === "string" ? player : null,
       normalizePlayerLogLimit(limit),
     );
     res.json({ success: true, logs });
-  } catch (error) {
-    log.error(`Failed to get player activity logs: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get player activity logs: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -137,9 +186,9 @@ router.get('/', requirePermission("players.view"), async (req, res) => {
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to get players: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get players: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -163,13 +212,13 @@ router.post('/kick', requirePermission("players.moderate"), async (req, res) => 
     const result = await rconService.kickPlayer(username, reason);
     log.info(`POST /kick: ${username} (reason=${reason || 'none'})`);
     if (result?.success) {
-      await logPlayerAction(username, 'kick', reason);
+      await recordPlayerAction(username, 'kick', reason);
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to kick player: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to kick player: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -200,13 +249,13 @@ router.post('/ban', requirePermission("players.moderate"), async (req, res) => {
       `POST /ban: ${username} (banIp=${banIp}, reason=${sentReason || 'none'}${sentReason !== reason ? ` [requested: ${reason}]` : ''})`,
     );
     if (result?.success) {
-      await logPlayerAction(username, 'ban', `IP: ${banIp}, Reason: ${sentReason}`);
+      await recordPlayerAction(username, 'ban', `IP: ${banIp}, Reason: ${sentReason}`);
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to ban player: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to ban player: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -226,13 +275,13 @@ router.post('/unban', requirePermission("players.moderate"), async (req, res) =>
     const result = await rconService.unbanPlayer(username);
     log.info(`POST /unban: ${username}`);
     if (result?.success) {
-      await logPlayerAction(username, 'unban', null);
+      await recordPlayerAction(username, 'unban', null);
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to unban player: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to unban player: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -269,13 +318,13 @@ router.post('/access-level', requirePermission("players.moderate"), async (req, 
     const result = await rconService.setAccessLevel(username, level);
     log.info(`POST /access-level: ${username} → ${level}`);
     if (result?.success) {
-      await logPlayerAction(username, 'access_level', level);
+      await recordPlayerAction(username, 'access_level', level);
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to set access level: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to set access level: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -298,12 +347,12 @@ router.post('/whitelist/add', requirePermission("players.moderate"), async (req,
     const result = await rconService.addToWhitelist(username, password);
     if (!result?.success) return res.status(400).json(result);
     log.info(`POST /whitelist/add: ${username}`);
-    await logPlayerAction(username, 'whitelist_add', null);
+    await recordPlayerAction(username, 'whitelist_add', null);
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to add to whitelist: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to add to whitelist: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -323,12 +372,12 @@ router.post('/whitelist/remove', requirePermission("players.moderate"), async (r
     const result = await rconService.removeFromWhitelist(username);
     if (!result?.success) return res.status(400).json(result);
     log.info(`POST /whitelist/remove: ${username}`);
-    await logPlayerAction(username, 'whitelist_remove', null);
+    await recordPlayerAction(username, 'whitelist_remove', null);
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to remove from whitelist: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to remove from whitelist: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -376,9 +425,9 @@ router.post('/teleport', requirePermission("players.gm_tools"), async (req, res)
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to teleport: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to teleport: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -412,13 +461,13 @@ router.post('/add-item', requirePermission("players.gm_tools"), async (req, res)
     result = await rconService.addItem(username, item, itemCount);
     log.info(`POST /add-item: ${item} x${itemCount} to ${username} via RCON`);
     if (username && result?.success) {
-      await logPlayerAction(username, 'add_item', `${item} x${itemCount}`);
+      await recordPlayerAction(username, 'add_item', `${item} x${itemCount}`);
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to add item: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to add item: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -450,13 +499,13 @@ router.post('/add-xp', requirePermission("players.gm_tools"), async (req, res) =
     const result = await rconService.addXp(username, perk, amount);
     log.info(`POST /add-xp: ${perk}=${amount} to ${username}`);
     if (result?.success) {
-      await logPlayerAction(username, 'add_xp', `${perk}=${amount}`);
+      await recordPlayerAction(username, 'add_xp', `${perk}=${amount}`);
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to add XP: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to add XP: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -480,13 +529,13 @@ router.post('/add-vehicle', requirePermission("players.gm_tools"), async (req, r
     const result = await rconService.addVehicle(vehicle, username);
     log.info(`POST /add-vehicle: ${vehicle} for ${username || 'self'}`);
     if (username && result?.success) {
-      await logPlayerAction(username, 'add_vehicle', vehicle);
+      await recordPlayerAction(username, 'add_vehicle', vehicle);
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to spawn vehicle: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to spawn vehicle: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -511,9 +560,9 @@ router.post('/add-vehicle-at', requirePermission("players.gm_tools"), async (req
     const result = await rconService.addVehicleAt(vehicle, ...coordinates);
     log.info(`POST /add-vehicle-at: ${vehicle} at ${coordinates.map(Math.floor).join(',')}`);
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to spawn vehicle at coordinate: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to spawn vehicle at coordinate: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -534,13 +583,13 @@ router.post('/godmode', requirePermission("players.gm_tools"), async (req, res) 
     const result = await setPlayerMode(req, 'setGodMode', 'setGodMode', username, enabled);
     log.info(`POST /godmode: ${username} → ${enabled ? 'ON' : 'OFF'} via ${result.via}`);
     if (result?.success) {
-      await logPlayerAction(username, 'godmode', enabled ? 'enabled' : 'disabled');
+      await recordPlayerAction(username, 'godmode', enabled ? 'enabled' : 'disabled');
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to set godmode: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to set godmode: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -561,13 +610,13 @@ router.post('/invisible', requirePermission("players.gm_tools"), async (req, res
     const result = await setPlayerMode(req, 'setInvisible', 'setInvisible', username, enabled);
     log.info(`POST /invisible: ${username} → ${enabled ? 'ON' : 'OFF'} via ${result.via}`);
     if (result?.success) {
-      await logPlayerAction(username, 'invisible', enabled ? 'enabled' : 'disabled');
+      await recordPlayerAction(username, 'invisible', enabled ? 'enabled' : 'disabled');
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to set invisible: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to set invisible: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -588,13 +637,13 @@ router.post('/noclip', requirePermission("players.gm_tools"), async (req, res) =
     const result = await setPlayerMode(req, 'setNoclip', 'setNoclip', username, enabled);
     log.info(`POST /noclip: ${username} → ${enabled ? 'ON' : 'OFF'} via ${result.via}`);
     if (result?.success) {
-      await logPlayerAction(username, 'noclip', enabled ? 'enabled' : 'disabled');
+      await recordPlayerAction(username, 'noclip', enabled ? 'enabled' : 'disabled');
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to set noclip: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to set noclip: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -620,9 +669,9 @@ router.get('/access-levels', requirePermission("players.view"), async (req, res)
       available: result.available,
       ...(result.reason ? { reason: result.reason } : {}),
     });
-  } catch (error) {
-    log.error(`Failed to get access levels: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get access levels: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -630,9 +679,9 @@ router.get('/steamid-bans', requirePermission("players.view"), async (req, res) 
   try {
     const bans = await getSteamIdBans();
     res.json({ bans });
-  } catch (error) {
-    log.error(`Failed to get SteamID bans: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get SteamID bans: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -657,14 +706,14 @@ router.post('/banid', requirePermission("players.moderate"), async (req, res) =>
     const result = await rconService.banSteamId(steamId);
     log.info(`POST /banid: SteamID ${steamId}`);
     if (result?.success) {
-      await addSteamIdBan(steamId, normalizedReason || null);
-      await logPlayerAction(steamId, 'banid', normalizedReason || null);
+      await recordSteamIdBan(steamId, normalizedReason || null);
+      await recordPlayerAction(steamId, 'banid', normalizedReason || null);
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to ban SteamID: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to ban SteamID: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -685,13 +734,13 @@ router.post('/unbanid', requirePermission("players.moderate"), async (req, res) 
     log.info(`POST /unbanid: SteamID ${steamId}`);
     if (result?.success) {
       await removeSteamIdBan(steamId);
-      await logPlayerAction(steamId, 'unbanid', null);
+      await recordPlayerAction(steamId, 'unbanid', null);
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to unban SteamID: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to unban SteamID: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -714,13 +763,13 @@ router.post('/voiceban', requirePermission("players.moderate"), async (req, res)
     const result = await rconService.voiceBan(username, enabled);
     log.info(`POST /voiceban: ${username} → ${enabled ? 'ON' : 'OFF'}`);
     if (result?.success) {
-      await logPlayerAction(username, 'voiceban', enabled ? 'enabled' : 'disabled');
+      await recordPlayerAction(username, 'voiceban', enabled ? 'enabled' : 'disabled');
     }
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to set voice ban: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to set voice ban: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -743,12 +792,12 @@ router.post('/adduser', requirePermission("players.moderate"), async (req, res) 
 
     const result = await rconService.addUser(username, password);
     if (!result?.success) return res.status(400).json(result);
-    await logPlayerAction(username, 'adduser', null);
+    await recordPlayerAction(username, 'adduser', null);
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to add user: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to add user: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -758,9 +807,9 @@ router.post('/whitelist/addall', requirePermission("players.moderate"), async (r
     const result = await rconService.addAllToWhitelist();
 
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to add all to whitelist: ${error.message}`);
-    res.status(400).json({ success: false, error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to add all to whitelist: ${errorMessage(error)}`);
+    res.status(400).json({ success: false, error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -772,11 +821,11 @@ router.post('/whitelist/steamid/add', requirePermission("players.moderate"), asy
     }
     const result = await req.app.get('rconService').addAllowedSteamId(String(steamId));
     if (!result?.success) return res.status(400).json(result);
-    await logPlayerAction(String(steamId), 'whitelist_steamid_add', null);
+    await recordPlayerAction(String(steamId), 'whitelist_steamid_add', null);
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to add allowed SteamID: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to add allowed SteamID: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -788,11 +837,11 @@ router.post('/whitelist/steamid/remove', requirePermission("players.moderate"), 
     }
     const result = await req.app.get('rconService').removeAllowedSteamId(String(steamId));
     if (!result?.success) return res.status(400).json(result);
-    await logPlayerAction(String(steamId), 'whitelist_steamid_remove', null);
+    await recordPlayerAction(String(steamId), 'whitelist_steamid_remove', null);
     res.json(result);
-  } catch (error) {
-    log.error(`Failed to remove allowed SteamID: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to remove allowed SteamID: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -822,9 +871,9 @@ router.get('/whitelist', requirePermission("players.view"), async (req, res) => 
       ...result,
       server: { id: activeServer.id, name: activeServer.serverName },
     });
-  } catch (error) {
-    log.error(`Failed to list whitelist accounts: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to list whitelist accounts: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -833,9 +882,9 @@ router.get('/notes', requirePermission("players.view"), async (req, res) => {
   try {
     const notes = await getPlayerNotes();
     res.json({ success: true, notes });
-  } catch (error) {
-    log.error(`Failed to get player notes: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get player notes: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -843,9 +892,9 @@ router.get('/notes/:playerName', requirePermission("players.view"), async (req, 
   try {
     const note = await getPlayerNote(req.params.playerName);
     res.json({ success: true, note });
-  } catch (error) {
-    log.error(`Failed to get player note: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get player note: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -877,9 +926,9 @@ router.post('/notes', requirePermission("players.moderate"), async (req, res) =>
 
     const result = await upsertPlayerNote(playerName, note, tags);
     res.json({ success: true, note: result });
-  } catch (error) {
-    log.error(`Failed to save player note: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to save player note: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -894,9 +943,9 @@ router.delete('/notes/:playerName', requirePermission("players.moderate"), async
       });
     }
     res.json({ success });
-  } catch (error) {
-    log.error(`Failed to delete player note: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to delete player note: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -905,9 +954,9 @@ router.get('/stats', requirePermission("players.view"), async (req, res) => {
   try {
     const stats = await getPlayerStats();
     res.json({ success: true, stats });
-  } catch (error) {
-    log.error(`Failed to get player stats: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get player stats: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
@@ -915,14 +964,12 @@ router.get('/stats/:playerName', requirePermission("players.view"), async (req, 
   try {
     const stat = await getPlayerStat(req.params.playerName);
     res.json({ success: true, stat });
-  } catch (error) {
-    log.error(`Failed to get player stat: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get player stat: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
-import fs from 'fs';
-import path from 'path';
 import { getDataPaths } from '../utils/paths.ts';
 
 router.get('/exports', requirePermission("players.gm_tools"), async (req, res) => {
@@ -937,8 +984,9 @@ router.get('/exports', requirePermission("players.gm_tools"), async (req, res) =
 
     const results = [];
 
-    const players = username
-      ? [username.replace(/[^a-zA-Z0-9_-]/g, '_')]
+    const requestedUsername = typeof username === "string" ? username : null;
+    const players = requestedUsername
+      ? [requestedUsername.replace(/[^a-zA-Z0-9_-]/g, '_')]
       : fs.readdirSync(exportsRoot).filter(f => {
           try { return fs.statSync(path.join(exportsRoot, f)).isDirectory(); } catch { return false; }
         });
@@ -960,15 +1008,16 @@ router.get('/exports', requirePermission("players.gm_tools"), async (req, res) =
 
     results.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     res.json({ exports: results });
-  } catch (error) {
-    log.error(`Failed to list exports: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to list exports: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
 router.get('/exports/:username/:filename', requirePermission("players.gm_tools"), async (req, res) => {
   try {
-    const { username, filename } = req.params;
+    const username = String(req.params.username);
+    const filename = String(req.params.filename);
     if (!/^[a-zA-Z0-9_-]+$/.test(username) || !/^[a-zA-Z0-9_.-]+\.json$/.test(filename)) {
       return res.status(400).json({ error: 'Invalid parameters', code: ErrorCode.PLAYERS_EXPORT_INVALID_PARAMETERS });
     }
@@ -982,15 +1031,16 @@ router.get('/exports/:username/:filename', requirePermission("players.gm_tools")
 
     const data = parsePlayerExportFile(filePath);
     res.json(data);
-  } catch (error) {
-    log.error(`Failed to get export: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to get export: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 
 router.delete('/exports/:username/:filename', requirePermission("players.gm_tools"), async (req, res) => {
   try {
-    const { username, filename } = req.params;
+    const username = String(req.params.username);
+    const filename = String(req.params.filename);
     if (!/^[a-zA-Z0-9_-]+$/.test(username) || !/^[a-zA-Z0-9_.-]+\.json$/.test(filename)) {
       return res.status(400).json({ error: 'Invalid parameters', code: ErrorCode.PLAYERS_EXPORT_INVALID_PARAMETERS });
     }
@@ -1004,9 +1054,9 @@ router.delete('/exports/:username/:filename', requirePermission("players.gm_tool
 
     fs.unlinkSync(filePath);
     res.json({ success: true });
-  } catch (error) {
-    log.error(`Failed to delete export: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
+  } catch (error: unknown) {
+    log.error(`Failed to delete export: ${errorMessage(error)}`);
+    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
 

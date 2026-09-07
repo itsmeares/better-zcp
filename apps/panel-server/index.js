@@ -222,7 +222,7 @@ import discoveryRoutes from "./routes/discovery.ts";
 import serversRoutes from "./routes/servers.js";
 import serverStatusRoutes from "./routes/serverStatus.ts";
 import serverFilesRoutes from "./routes/serverFiles.js";
-import playerRoutes from "./routes/players.js";
+import playerRoutes from "./routes/players.ts";
 import rconRoutes from "./routes/rcon.ts";
 import configRoutes from "./routes/config.ts";
 import schedulerRoutes from "./routes/scheduler.ts";

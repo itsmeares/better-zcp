@@ -165,7 +165,7 @@ describe("players.js: split into players.moderate/gm_tools/view, all still open 
     describe(`${capability} (${method.toUpperCase()} ${routePath})`, () => {
       for (const role of ["admin", "technician", "moderator"]) {
         it(`does not refuse a ${role}`, async () => {
-          const { default: router } = await import("../routes/players.js");
+          const { default: router } = await import("../routes/players.ts");
           const { calledNext } = await runFirstHandlerOnly(router, routePath, method, {
             user: { role },
           });

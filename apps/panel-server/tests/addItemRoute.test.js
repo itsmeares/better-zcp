@@ -18,7 +18,7 @@ vi.mock("../database/init.js", () => ({
 }));
 
 const { default: router, normalizePlayerLogLimit } = await import(
-  "../routes/players.js"
+  "../routes/players.ts"
 );
 
 function createResponse() {

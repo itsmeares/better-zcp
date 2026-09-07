@@ -23,7 +23,7 @@ vi.mock("../services/panelBridge.js", () => ({
   default: { isRunning: false, sendCommand: vi.fn() },
 }));
 
-const { default: router } = await import("../routes/players.js");
+const { default: router } = await import("../routes/players.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };

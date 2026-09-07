@@ -21,7 +21,7 @@ vi.mock("../database/init.js", () => ({
 vi.mock("../utils/whitelistDb.ts", () => ({ listWhitelistAccounts: vi.fn(), listServerRoleNames }));
 vi.mock("../services/panelBridge.js", () => ({ isRunning: false }));
 
-const { default: router } = await import("../routes/players.js");
+const { default: router } = await import("../routes/players.ts");
 
 function getHandler(routePath, method) {
   const layer = router.stack.find(
