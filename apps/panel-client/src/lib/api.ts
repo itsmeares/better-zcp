@@ -8,6 +8,25 @@ import {
   getCapabilitiesWithFallback,
   getRolesWithFallback,
 } from "./serverPermissions";
+import {
+  assignManagedUserRole,
+  changePassword,
+  createManagedRole,
+  createManagedUser,
+  deleteManagedRole,
+  generateRecoveryCodes,
+  getAppSettingsWithFallback,
+  getDebugRamWithFallback,
+  getManagedUsersWithFallback,
+  getOidcSettingsWithFallback,
+  getPerformanceHistoryWithFallback,
+  getRecoveryCodes,
+  regenerateJwtSecret,
+  removeManagedUser,
+  testOidcConnection,
+  updateManagedRole,
+  updateOidcSettings,
+} from "./serverAdmin";
 
 const API_BASE = "/api";
 
@@ -185,7 +204,23 @@ function toApiError(error: unknown): ApiError {
   }
 
   if (error instanceof Error) {
-    return new ApiError(error.message);
+    const serverError = error as Error & {
+      status?: unknown;
+      code?: unknown;
+      params?: unknown;
+      data?: unknown;
+    };
+    return new ApiError(error.message, {
+      status:
+        typeof serverError.status === "number" ? serverError.status : undefined,
+      code: typeof serverError.code === "string" ? serverError.code : undefined,
+      data:
+        serverError.data !== undefined
+          ? serverError.data
+          : serverError.params !== undefined
+            ? { params: serverError.params }
+            : undefined,
+    });
   }
 
   return new ApiError(
@@ -245,6 +280,20 @@ function buildResponseError(response: Response, payload?: unknown): ApiError {
       response.status === 408,
     data: payload,
   });
+}
+
+async function serverCall<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    const result = await operation();
+    if (result instanceof Response) {
+      const payload = await parseResponseBody(result);
+      if (!result.ok) throw buildResponseError(result, payload);
+      return payload as T;
+    }
+    return result;
+  } catch (error) {
+    throw toApiError(error);
+  }
 }
 
 async function responseHasCode(
@@ -1348,7 +1397,8 @@ export const chunksApi = {
 };
 
 export const configApi = {
-  getAppSettings: () => apiGet("/config/app-settings"),
+  getAppSettings: (): Promise<{ settings: Record<string, any> }> =>
+    serverCall(() => getAppSettingsWithFallback()),
   updateAppSettings: (settings: Record<string, unknown>) =>
     apiPut("/config/app-settings", { settings }),
   getCorsDiagnostics: () =>
@@ -2592,7 +2642,7 @@ export const panelBridgeApi = {
     apiPost("/panel-bridge/utilities/shutoff", {
       power: power !== false,
       water: water !== false,
-    }) as Promise<UtilitiesChangeResult>,
+  }) as Promise<UtilitiesChangeResult>,
 
 
   exportCharacter: (username: string): Promise<CharacterExportResponse> =>
@@ -2844,7 +2894,7 @@ export const debugApi = {
     freeGB: number;
     recommendedMin: number;
     recommendedMax: number;
-  }> => apiGet("/debug/ram"),
+  }> => serverCall(() => getDebugRamWithFallback()),
   getPerformanceHistory: (
     limit: number = 30,
   ): Promise<{
@@ -2857,7 +2907,7 @@ export const debugApi = {
       hostMemUsed?: number;
       hostMemTotal?: number;
     }>;
-  }> => apiGet(`/debug/performance-history?limit=${limit}`),
+  }> => serverCall(() => getPerformanceHistoryWithFallback(limit)),
 };
 
 export const authApi = {
@@ -2865,23 +2915,25 @@ export const authApi = {
     currentPassword: string,
     newPassword: string,
   ): Promise<{ success: boolean; message?: string }> =>
-    apiPost("/auth/change-password", { currentPassword, newPassword }),
+    serverCall(() =>
+      changePassword({ data: { currentPassword, newPassword } }),
+    ),
 
   getRecoveryCodes: (): Promise<{
     configured: boolean;
     remaining: number;
     total: number;
     createdAt: string | null;
-  }> => apiGet("/auth/recovery-codes"),
+  }> => serverCall(() => getRecoveryCodes()),
 
   generateRecoveryCodes: (): Promise<{
     success: boolean;
     codes: string[];
     createdAt: string;
-  }> => apiPost("/auth/recovery-codes", {}),
+  }> => serverCall(() => generateRecoveryCodes()),
 
   regenerateJwtSecret: (): Promise<{ success: boolean; message?: string }> =>
-    apiPost("/auth/regenerate-jwt-secret", {}),
+    serverCall(() => regenerateJwtSecret()),
 };
 
 export const serversDetectApi = {
@@ -3148,7 +3200,7 @@ export const permissionsApi = {
     name: string;
     capabilities: string[];
   }): Promise<{ success: boolean; role: RoleInfo }> =>
-    apiPost("/permissions/roles", data),
+    serverCall(() => createManagedRole({ data })),
 
   updateRole: (
     id: string,
@@ -3158,7 +3210,7 @@ export const permissionsApi = {
       confirmSelfCapabilityLoss?: boolean;
     },
   ): Promise<{ success: boolean; role: RoleInfo }> =>
-    apiPut(`/permissions/roles/${encodeURIComponent(id)}`, data),
+    serverCall(() => updateManagedRole({ data: { id, ...data } })),
 
   deleteRole: (
     id: string,
@@ -3168,12 +3220,7 @@ export const permissionsApi = {
     deleted: boolean;
     reassigned: number;
     reassignedTo: string | null;
-  }> =>
-    apiDelete(
-      `/permissions/roles/${encodeURIComponent(id)}${
-        reassignTo ? `?reassignTo=${encodeURIComponent(reassignTo)}` : ""
-      }`,
-    ),
+  }> => serverCall(() => deleteManagedRole({ data: { id, reassignTo } })),
 };
 
 export interface ManagedUserAccount {
@@ -3186,29 +3233,26 @@ export interface ManagedUserAccount {
 }
 
 export const usersApi = {
-  list: (): Promise<{ users: ManagedUserAccount[] }> => apiGet("/auth/users"),
+  list: (): Promise<{ users: ManagedUserAccount[] }> =>
+    serverCall(() => getManagedUsersWithFallback()),
 
   create: (data: {
     username: string;
     password: string;
     role: "admin" | "technician" | "moderator";
   }): Promise<{ success: boolean; user: ManagedUserAccount }> =>
-    apiPost("/auth/users", data),
+    serverCall(() => createManagedUser({ data })),
 
   assignRole: (
     userId: string,
     roleId: string,
   ): Promise<{ success: boolean; user: ManagedUserAccount }> =>
-    apiFetch(`/auth/users/${encodeURIComponent(userId)}/role`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roleId }),
-    }).then((response) => handleResponse(response)),
+    serverCall(() => assignManagedUserRole({ data: { userId, roleId } })),
 
   remove: (
     userId: string,
   ): Promise<{ success: boolean; user: { id: string; username: string } }> =>
-    apiDelete(`/auth/users/${encodeURIComponent(userId)}`),
+    serverCall(() => removeManagedUser({ data: { userId } })),
 };
 
 export interface OidcSettingsFields {
@@ -3242,17 +3286,16 @@ export interface OidcDiscoveredMetadata {
 }
 
 export const oidcSettingsApi = {
-  get: (): Promise<OidcSettingsWithEnv> => apiGet("/auth/oidc/settings"),
+  get: (): Promise<OidcSettingsWithEnv> =>
+    serverCall(() => getOidcSettingsWithFallback()),
 
-  update: (updates: OidcSettingsUpdate): Promise<{ success: boolean } & OidcSettings> =>
-    apiFetch("/auth/oidc/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    }).then((response) => handleResponse(response)),
+  update: (
+    updates: OidcSettingsUpdate,
+  ): Promise<{ success: boolean } & OidcSettings> =>
+    serverCall(() => updateOidcSettings({ data: updates })),
 
   testConnection: (
     updates: OidcSettingsUpdate,
   ): Promise<{ success: true; metadata: OidcDiscoveredMetadata }> =>
-    apiPost("/auth/oidc/test-connection", updates),
+    serverCall(() => testOidcConnection({ data: updates })),
 };

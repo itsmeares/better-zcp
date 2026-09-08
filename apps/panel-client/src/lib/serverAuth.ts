@@ -24,7 +24,7 @@ export type CurrentUser = {
   }
 }
 
-type AuthContextUser = {
+export type AuthContextUser = {
   userId: string | null
   username: string | null
   role: string
@@ -51,26 +51,57 @@ const authRequestMiddleware = createMiddleware({ type: 'request' }).server(async
   return next({ context: { authenticatedUser: result.user } })
 })
 
-const rolesPermissionMiddleware = createMiddleware({ type: 'request' }).server(async ({ context, next }) => {
-  const user = (context as unknown as { authenticatedUser?: AuthContextUser }).authenticatedUser
-  if (!user) {
-    return Response.json(
-      { error: 'Authentication required', code: 'AUTH_REQUIRED' },
-      { status: 401 },
-    )
-  }
+function permissionMiddleware(capability: string) {
+  return createMiddleware({ type: 'request' }).server(
+    async ({ context, next }) => {
+      const user = (
+        context as unknown as { authenticatedUser?: AuthContextUser }
+      ).authenticatedUser
+      if (!user) {
+        return Response.json(
+          { error: 'Authentication required', code: 'AUTH_REQUIRED' },
+          { status: 401 },
+        )
+      }
 
-  const { getCapabilitiesForRole } = await import('../../../panel-server/services/permissions.ts')
-  const capabilities = await getCapabilitiesForRole(user.role)
-  if (!capabilities?.includes('roles.manage')) {
-    return Response.json(
-      { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
-      { status: 403 },
-    )
-  }
+      const { getCapabilitiesForRole } =
+        await import('../../../panel-server/services/permissions.ts')
+      const capabilities = await getCapabilitiesForRole(user.role)
+      if (!capabilities?.includes(capability)) {
+        return Response.json(
+          { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+          { status: 403 },
+        )
+      }
 
-  return next()
-})
+      return next()
+    },
+  )
+}
+
+function roleMiddleware(role: string) {
+  return createMiddleware({ type: 'request' }).server(
+    async ({ context, next }) => {
+      const user = (
+        context as unknown as { authenticatedUser?: AuthContextUser }
+      ).authenticatedUser
+      if (!user) {
+        return Response.json(
+          { error: 'Authentication required', code: 'AUTH_REQUIRED' },
+          { status: 401 },
+        )
+      }
+      if (user.role !== role) {
+        return Response.json(
+          { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+          { status: 403 },
+        )
+      }
+
+      return next()
+    },
+  )
+}
 
 export const protectedServerFunctionMiddleware = [
   authClientMiddleware,
@@ -80,7 +111,37 @@ export const protectedServerFunctionMiddleware = [
 export const rolesReadMiddleware = [
   authClientMiddleware,
   authRequestMiddleware,
-  rolesPermissionMiddleware,
+  permissionMiddleware('roles.manage'),
+] as const
+
+export const usersManageMiddleware = [
+  authClientMiddleware,
+  authRequestMiddleware,
+  permissionMiddleware('users.manage'),
+] as const
+
+export const rolesManageMiddleware = [
+  authClientMiddleware,
+  authRequestMiddleware,
+  permissionMiddleware('roles.manage'),
+] as const
+
+export const panelSettingsMiddleware = [
+  authClientMiddleware,
+  authRequestMiddleware,
+  permissionMiddleware('panel.settings'),
+] as const
+
+export const diagnosticsMiddleware = [
+  authClientMiddleware,
+  authRequestMiddleware,
+  permissionMiddleware('diagnostics.manage'),
+] as const
+
+export const adminRoleMiddleware = [
+  authClientMiddleware,
+  authRequestMiddleware,
+  roleMiddleware('admin'),
 ] as const
 
 export const getAuthStatus = createServerFn({ method: 'GET' }).handler(async () => {
