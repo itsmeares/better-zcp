@@ -28,6 +28,21 @@ import {
   updateOidcSettings,
 } from "./serverAdmin";
 import {
+  exportTemplateWithFallback,
+  getBackupHistoryWithFallback,
+  getBackupInfoWithFallback,
+  getBackupsWithFallback,
+  getBackupStatusWithFallback,
+  getHiddenTemplatesWithFallback,
+  getPlayerActivityWithFallback,
+  getPlayerNoteWithFallback,
+  getPlayerNotesWithFallback,
+  getPlayerStatWithFallback,
+  getPlayerStatsWithFallback,
+  getTemplateWithFallback,
+  getTemplatesWithFallback,
+} from "./serverResourceReadsRpc";
+import {
   addAllToWhitelist,
   addAllowedSteamId,
   addPlayerItem,
@@ -868,19 +883,15 @@ export const playersApi = {
     serverCall(() => addRconUser({ data: { username, password } })),
   addAllToWhitelist: () => serverCall(() => addAllToWhitelist()),
   getActivityLogs: (player?: string, limit?: number) =>
-    apiGet(
-      `/players/activity?${player ? `player=${encodeURIComponent(player)}&` : ""}limit=${limit || 100}`,
-    ),
-  getNotes: () => apiGet("/players/notes"),
-  getNote: (playerName: string) =>
-    apiGet(`/players/notes/${encodeURIComponent(playerName)}`),
+    getPlayerActivityWithFallback(player, limit || 100),
+  getNotes: () => getPlayerNotesWithFallback(),
+  getNote: (playerName: string) => getPlayerNoteWithFallback(playerName),
   saveNote: (playerName: string, note: string, tags: string[]) =>
     apiPost("/players/notes", { playerName, note, tags }),
   deleteNote: (playerName: string) =>
     apiDelete(`/players/notes/${encodeURIComponent(playerName)}`),
-  getStats: () => apiGet("/players/stats"),
-  getStat: (playerName: string) =>
-    apiGet(`/players/stats/${encodeURIComponent(playerName)}`),
+  getStats: () => getPlayerStatsWithFallback(),
+  getStat: (playerName: string) => getPlayerStatWithFallback(playerName),
   getExports: (username?: string) =>
     apiGet(
       `/players/exports${username ? `?username=${encodeURIComponent(username)}` : ""}`,
@@ -2153,9 +2164,10 @@ export interface SimTemplateApplyResult {
 }
 
 export const templatesApi = {
-  list: () => apiGet("/templates") as Promise<{ templates: SimTemplate[] }>,
+  list: () =>
+    getTemplatesWithFallback() as Promise<{ templates: SimTemplate[] }>,
   get: (id: string) =>
-    apiGet(`/templates/${encodeURIComponent(id)}`) as Promise<{
+    getTemplateWithFallback(id) as Promise<{
       template: SimTemplate;
     }>,
   create: (input: Record<string, unknown>) =>
@@ -2171,11 +2183,9 @@ export const templatesApi = {
       error?: string;
     }>,
   export: (id: string) =>
-    apiGet(`/templates/${encodeURIComponent(id)}/export`) as Promise<SimTemplate>,
+    exportTemplateWithFallback(id) as Promise<SimTemplate>,
   downloadExport: async (id: string, filenameBase: string) => {
-    const template = await apiGet<SimTemplate>(
-      `/templates/${encodeURIComponent(id)}/export`,
-    );
+    const template = await exportTemplateWithFallback(id);
     const blob = new Blob([JSON.stringify(template, null, 2)], {
       type: "application/json",
     });
@@ -2206,7 +2216,8 @@ export const templatesApi = {
       success: boolean;
       error?: string;
     }>,
-  listHidden: () => apiGet("/templates/hidden") as Promise<{ templates: SimTemplate[] }>,
+  listHidden: () =>
+    getHiddenTemplatesWithFallback() as Promise<{ templates: SimTemplate[] }>,
   unhide: (id: string) =>
     apiPost(`/templates/${encodeURIComponent(id)}/unhide`, {}) as Promise<{
       success: boolean;
@@ -2878,14 +2889,15 @@ export interface BackupContentsInfo {
 }
 
 export const backupApi = {
-  getStatus: (): Promise<BackupStatus> => apiGet("/backup/status"),
+  getStatus: (): Promise<BackupStatus> => getBackupStatusWithFallback(),
 
-  getInfo: (): Promise<BackupContentsInfo> => apiGet("/backup/info"),
+  getInfo: (): Promise<BackupContentsInfo> => getBackupInfoWithFallback(),
 
-  listBackups: (): Promise<{ backups: ServerBackupArchive[] }> => apiGet("/backup/list"),
+  listBackups: (): Promise<{ backups: ServerBackupArchive[] }> =>
+    getBackupsWithFallback(),
 
   getHistory: (serverId?: string | number) =>
-    apiGet(`/backup/history${serverId != null ? `?serverId=${encodeURIComponent(serverId)}` : ""}`) as Promise<{
+    getBackupHistoryWithFallback(serverId) as Promise<{
       records: BackupHistoryRecord[];
     }>,
 

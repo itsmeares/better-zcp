@@ -155,7 +155,7 @@ export function applySandboxValue(
         indent: string,
         matchedKey: string,
         eq: string,
-        oldValue: string,
+        _oldValue: string,
         comma: string,
         offset: number,
       ) => {

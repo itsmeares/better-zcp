@@ -1059,6 +1059,7 @@ app.set("checkServerStatusNow", checkServerStatusNow);
 setPanelRuntime({
   rconService,
   serverManager,
+  backupService,
   scheduler,
   discordBot,
   panelBridge,
