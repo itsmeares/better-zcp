@@ -97,7 +97,6 @@ export class PacketReader {
     return packets;
   }
 }
-
 export class SourceRconClient {
   host: string;
   port: number;
@@ -106,7 +105,6 @@ export class SourceRconClient {
   reader: PacketReader;
   private _pending: Map<number, PendingRequest>;
   private _authPending: AuthPending | null;
-  private _destroyed: boolean;
 
   constructor({
     host = "",
@@ -120,7 +118,6 @@ export class SourceRconClient {
     this.reader = new PacketReader();
     this._pending = new Map();
     this._authPending = null;
-    this._destroyed = false;
   }
 
   get connected(): boolean {
@@ -276,7 +273,6 @@ export class SourceRconClient {
   }
 
   disconnect(): void {
-    this._destroyed = true;
     if (this.socket) {
       try {
         this.socket.destroy();

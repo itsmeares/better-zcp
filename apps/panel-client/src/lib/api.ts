@@ -27,6 +27,72 @@ import {
   updateManagedRole,
   updateOidcSettings,
 } from "./serverAdmin";
+import {
+  addAllToWhitelist,
+  addAllowedSteamId,
+  addPlayerItem,
+  addPlayerVehicle,
+  addPlayerVehicleAt,
+  addPlayerXp,
+  addRconUser,
+  addToWhitelist,
+  alarm,
+  banPlayer,
+  banSteamId,
+  clearSchedulerHistory,
+  connectRcon,
+  createHorde,
+  deleteScheduledTask,
+  disconnectRcon,
+  executeRcon,
+  getActiveManagedServerWithFallback,
+  getGameServerStatusWithFallback,
+  getManagedServerWithFallback,
+  getManagedServersWithFallback,
+  getNetworkInterfacesWithFallback,
+  getPlayerAccessLevelsWithFallback,
+  getPlayerPerksWithFallback,
+  getPlayersWithFallback,
+  getPlayerVehiclesWithFallback,
+  getRconCommandsWithFallback,
+  getRconHistoryWithFallback,
+  getRconStatusWithFallback,
+  getSchedulerHistoryWithFallback,
+  getSchedulerPresetsWithFallback,
+  getSchedulerStatusWithFallback,
+  getSchedulerTasksWithFallback,
+  getSteamIdBansWithFallback,
+  getWhitelistWithFallback,
+  kickPlayer,
+  reloadLua,
+  removeAllowedSteamId,
+  removeFromWhitelist,
+  removeZombies,
+  restartScheduledServer,
+  saveGameWorld,
+  sendServerMessage,
+  setAccessLevel,
+  setGodMode,
+  setInvisible,
+  setLogLevel,
+  setNoclip,
+  setSchedulerRestartWarning,
+  setSchedulerTimezone,
+  setServerStats,
+  setVoiceBan,
+  startRain,
+  startStorm,
+  stopRain,
+  stopWeather,
+  teleportPlayer,
+  testRconConnection,
+  triggerChopper,
+  triggerGunshot,
+  triggerLightning,
+  triggerThunder,
+  unbanPlayer,
+  unbanSteamId,
+} from "./serverGameControlRpc";
 
 const API_BASE = "/api";
 
@@ -282,16 +348,31 @@ function buildResponseError(response: Response, payload?: unknown): ApiError {
   });
 }
 
-async function serverCall<T>(operation: () => Promise<T>): Promise<T> {
+async function runServerFallback<T>(fallback: () => Promise<T>): Promise<T> {
+  try {
+    return await fallback();
+  } catch (error) {
+    throw toApiError(error);
+  }
+}
+
+async function serverCall<T>(
+  operation: () => Promise<T>,
+  fallback?: () => Promise<T>,
+): Promise<T> {
   try {
     const result = await operation();
+    if (result === undefined && fallback) return runServerFallback(fallback);
     if (result instanceof Response) {
       const payload = await parseResponseBody(result);
       if (!result.ok) throw buildResponseError(result, payload);
+      showBackupWarning(payload);
       return payload as T;
     }
+    showBackupWarning(result);
     return result;
   } catch (error) {
+    if (fallback) return runServerFallback(fallback);
     throw toApiError(error);
   }
 }
@@ -416,8 +497,10 @@ async function fetchWithRetry(
   throw toApiError(lastError);
 }
 
-export function apiFetch(endpoint: string, options?: RequestInit) {
-  return fetchWithRetry(`${API_BASE}${endpoint}`, options);
+export function apiFetch(endpoint: string, options?: RequestInit,
+  retries?: number,
+) {
+  return fetchWithRetry(`${API_BASE}${endpoint}`, options, retries);
 }
 
 async function handleResponse<T = any>(response: Response): Promise<T> {
@@ -434,15 +517,21 @@ async function handleResponse<T = any>(response: Response): Promise<T> {
   if ((data as { success?: unknown }).success === false) {
     throw buildResponseError(response, data);
   }
-  const backupWarning = (data as { backupWarning?: unknown }).backupWarning;
-  if (typeof backupWarning === "string" && backupWarning) {
-    toast({
-      variant: "warning",
-      title: i18n.t("toastTitle", { ns: "backupWarning" }),
-      description: backupWarning,
-    });
-  }
+  showBackupWarning(data);
   return data as T;
+}
+
+function showBackupWarning(data: unknown): void {
+  const backupWarning =
+    data && typeof data === "object"
+      ? (data as { backupWarning?: unknown }).backupWarning
+      : undefined;
+  if (typeof backupWarning !== "string" || !backupWarning) return;
+  toast({
+    variant: "warning",
+    title: i18n.t("toastTitle", { ns: "backupWarning" }),
+    description: backupWarning,
+  });
 }
 
 function apiGet<T = any>(
@@ -568,18 +657,21 @@ export interface CharacterImportResponse {
 
 export const serverApi = {
   getStatus: (options?: { retries?: number }) =>
-    apiGet("/server/status", undefined, options?.retries),
+    serverCall(() =>
+      getGameServerStatusWithFallback(undefined, options?.retries),
+    ),
   getNetworkInterfaces: (): Promise<{
     interfaces: { name: string; address: string }[];
-  }> => apiGet("/server/network-interfaces"),
+  }> => serverCall(() => getNetworkInterfacesWithFallback()),
   start: () => apiPost("/server/start"),
   stop: () => apiPost("/server/stop"),
   forceStop: () => apiPost("/server/force-stop"),
   restart: (warningMinutes?: number) =>
     apiPost("/server/restart", { warningMinutes }),
   restartNow: () => apiPost("/server/restart", { warningMinutes: 0 }),
-  save: () => apiPost("/server/save"),
-  sendMessage: (message: string) => apiPost("/server/message", { message }),
+  save: () => serverCall(() => saveGameWorld()),
+  sendMessage: (message: string) =>
+    serverCall(() => sendServerMessage({ data: { message } })),
 
   wipePreview: (targets: string[]) =>
     apiPost("/server/wipe/preview", { targets }),
@@ -644,31 +736,32 @@ export const serverApi = {
     }>,
 
   startRain: (intensity?: number) =>
-    apiPost("/server/weather/start-rain", { intensity }),
-  stopRain: () => apiPost("/server/weather/stop-rain"),
+    serverCall(() => startRain({ data: { intensity } })),
+  stopRain: () => serverCall(() => stopRain()),
   startStorm: (duration?: number) =>
-    apiPost("/server/weather/start-storm", { duration }),
-  stopWeather: () => apiPost("/server/weather/stop"),
+    serverCall(() => startStorm({ data: { duration } })),
+  stopWeather: () => serverCall(() => stopWeather()),
 
-  triggerChopper: () => apiPost("/server/events/chopper"),
-  triggerGunshot: () => apiPost("/server/events/gunshot"),
+  triggerChopper: () => serverCall(() => triggerChopper()),
+  triggerGunshot: () => serverCall(() => triggerGunshot()),
   triggerLightning: (username?: string) =>
-    apiPost("/server/events/lightning", { username }),
+    serverCall(() => triggerLightning({ data: { username } })),
   triggerThunder: (username?: string) =>
-    apiPost("/server/events/thunder", { username }),
+    serverCall(() => triggerThunder({ data: { username } })),
   createHorde: (count: number, username?: string) =>
-    apiPost("/server/events/horde", { count, username }),
+    serverCall(() => createHorde({ data: { count, username } })),
 
-  alarm: () => apiPost("/server/alarm"),
-  removeZombies: () => apiPost("/server/removezombies"),
+  alarm: () => serverCall(() => alarm()),
+  removeZombies: () => serverCall(() => removeZombies()),
 
-  reloadLua: (filename: string) => apiPost("/server/reloadlua", { filename }),
+  reloadLua: (filename: string) =>
+    serverCall(() => reloadLua({ data: { filename } })),
 
   setLogLevel: (type: string, level: string) =>
-    apiPost("/server/log", { type, level }),
+    serverCall(() => setLogLevel({ data: { type, level } })),
 
   setStats: (mode: string, period?: number) =>
-    apiPost("/server/stats", { mode, period }),
+    serverCall(() => setServerStats({ data: { mode, period } })),
 
   releaseSafehouse: () => apiPost("/server/releasesafehouse"),
 
@@ -687,8 +780,10 @@ export const serverApi = {
 
 export const playersApi = {
   getPlayers: (options?: { retries?: number }) =>
-    apiGet("/players", undefined, options?.retries),
-  getWhitelist: () => apiGet<{
+    options?.retries !== undefined
+      ? apiGet("/players", undefined, options.retries)
+      : serverCall(() => getPlayersWithFallback()),
+  getWhitelist: (): Promise<{
     success: boolean
     available: boolean
     accounts: Array<{
@@ -704,63 +799,74 @@ export const playersApi = {
     allowedSteamIds: string[]
     reason?: string
     server?: { id: string | number; name: string }
-  }>("/players/whitelist"),
+  }> => serverCall(() => getWhitelistWithFallback()),
   kick: (username: string, reason?: string) =>
-    apiPost("/players/kick", { username, reason }),
+    serverCall(() => kickPlayer({ data: { username, reason } })),
   ban: (username: string, banIp?: boolean, reason?: string) =>
-    apiPost("/players/ban", { username, banIp, reason }),
-  unban: (username: string) => apiPost("/players/unban", { username }),
+    serverCall(() => banPlayer({ data: { username, banIp, reason } })),
+  unban: (username: string) =>
+    serverCall(
+      () => unbanPlayer({ data: { username } }),
+      () => apiPost("/players/unban", { username }),
+    ),
   setAccessLevel: (username: string, level: string) =>
-    apiPost("/players/access-level", { username, level }),
+    serverCall(() => setAccessLevel({ data: { username, level } })),
   addToWhitelist: (username: string, password: string) =>
-    apiPost("/players/whitelist/add", { username, password }),
+    serverCall(() => addToWhitelist({ data: { username, password } })),
   removeFromWhitelist: (username: string) =>
-    apiPost("/players/whitelist/remove", { username }),
+    serverCall(() => removeFromWhitelist({ data: { username } })),
   addAllowedSteamId: (steamId: string) =>
-    apiPost("/players/whitelist/steamid/add", { steamId }),
+    serverCall(() => addAllowedSteamId({ data: { steamId } })),
   removeAllowedSteamId: (steamId: string) =>
-    apiPost("/players/whitelist/steamid/remove", { steamId }),
+    serverCall(() => removeAllowedSteamId({ data: { steamId } })),
   teleport: (
     player1: string,
     destination?: string | { x: number; y: number; z?: number },
   ) => {
     if (destination && typeof destination === "object") {
-      return apiPost<BridgeCommandResult>("/players/teleport", {
-        player1,
-        x: destination.x,
-        y: destination.y,
-        z: destination.z ?? 0,
-      });
+      return serverCall(() =>
+        teleportPlayer({
+          data: {
+            player1,
+            x: destination.x,
+            y: destination.y,
+            z: destination.z ?? 0,
+          },
+        }),
+      );
     }
 
-    return apiPost("/players/teleport", { player1, player2: destination });
+    return serverCall(() =>
+      teleportPlayer({ data: { player1, player2: destination } }),
+    );
   },
   addItem: (username: string | null, item: string, count?: number) =>
-    apiPost("/players/add-item", { username, item, count }),
+    serverCall(() => addPlayerItem({ data: { username, item, count } })),
   addXp: (username: string, perk: string, amount: number) =>
-    apiPost("/players/add-xp", { username, perk, amount }),
+    serverCall(() => addPlayerXp({ data: { username, perk, amount } })),
   addVehicle: (vehicle: string, username?: string) =>
-    apiPost("/players/add-vehicle", { vehicle, username }),
+    serverCall(() => addPlayerVehicle({ data: { vehicle, username } })),
   addVehicleAt: (vehicle: string, x: number, y: number, z = 0) =>
-    apiPost("/players/add-vehicle-at", { vehicle, x, y, z }),
+    serverCall(() => addPlayerVehicleAt({ data: { vehicle, x, y, z } })),
   setGodMode: (username: string | null, enabled: boolean) =>
-    apiPost("/players/godmode", { username, enabled }),
+    serverCall(() => setGodMode({ data: { username, enabled } })),
   setInvisible: (username: string | null, enabled: boolean) =>
-    apiPost("/players/invisible", { username, enabled }),
+    serverCall(() => setInvisible({ data: { username, enabled } })),
   setNoclip: (username: string | null, enabled: boolean) =>
-    apiPost("/players/noclip", { username, enabled }),
-  getVehicles: () => apiGet("/players/vehicles"),
-  getPerks: () => apiGet("/players/perks"),
-  getAccessLevels: () => apiGet("/players/access-levels"),
+    serverCall(() => setNoclip({ data: { username, enabled } })),
+  getVehicles: () => serverCall(() => getPlayerVehiclesWithFallback()),
+  getPerks: () => serverCall(() => getPlayerPerksWithFallback()),
+  getAccessLevels: () => serverCall(() => getPlayerAccessLevelsWithFallback()),
   banSteamId: (steamId: string, reason?: string) =>
-    apiPost("/players/banid", { steamId, reason }),
-  unbanSteamId: (steamId: string) => apiPost("/players/unbanid", { steamId }),
-  getSteamIdBans: () => apiGet("/players/steamid-bans"),
+    serverCall(() => banSteamId({ data: { steamId, reason } })),
+  unbanSteamId: (steamId: string) =>
+    serverCall(() => unbanSteamId({ data: { steamId } })),
+  getSteamIdBans: () => serverCall(() => getSteamIdBansWithFallback()),
   voiceBan: (username: string, enabled: boolean) =>
-    apiPost("/players/voiceban", { username, enabled }),
+    serverCall(() => setVoiceBan({ data: { username, enabled } })),
   addUser: (username: string, password: string) =>
-    apiPost("/players/adduser", { username, password }),
-  addAllToWhitelist: () => apiPost("/players/whitelist/addall"),
+    serverCall(() => addRconUser({ data: { username, password } })),
+  addAllToWhitelist: () => serverCall(() => addAllToWhitelist()),
   getActivityLogs: (player?: string, limit?: number) =>
     apiGet(
       `/players/activity?${player ? `player=${encodeURIComponent(player)}&` : ""}limit=${limit || 100}`,
@@ -796,15 +902,17 @@ export interface RconTestResult {
 }
 
 export const rconApi = {
-  execute: (command: string) => apiPost("/rcon/execute", { command }),
-  getStatus: () => apiGet("/rcon/status"),
+  execute: (command: string) =>
+    serverCall(() => executeRcon({ data: { command } })),
+  getStatus: () => serverCall(() => getRconStatusWithFallback()),
   connect: (host?: string, port?: number, password?: string) =>
-    apiPost("/rcon/connect", { host, port, password }),
-  disconnect: () => apiPost("/rcon/disconnect"),
-  getHistory: (limit?: number) => apiGet(`/rcon/history?limit=${limit || 100}`),
-  getCommands: () => apiGet("/rcon/commands"),
+    serverCall(() => connectRcon({ data: { host, port, password } })),
+  disconnect: () => serverCall(() => disconnectRcon()),
+  getHistory: (limit?: number) =>
+    serverCall(() => getRconHistoryWithFallback(limit)),
+  getCommands: () => serverCall(() => getRconCommandsWithFallback()),
   testConnection: (host: string, port: number, password: string) =>
-    apiPost<RconTestResult>("/rcon/test", { host, port, password }),
+    serverCall(() => testRconConnection({ data: { host, port, password } })),
 };
 
 export interface ScheduleHistoryEntry {
@@ -835,8 +943,9 @@ export interface SchedulerStatus {
 }
 
 export const schedulerApi = {
-  getStatus: () => apiGet("/scheduler/status") as Promise<SchedulerStatus>,
-  getTasks: () => apiGet("/scheduler/tasks"),
+  getStatus: () =>
+    serverCall(() => getSchedulerStatusWithFallback()) as Promise<SchedulerStatus>,
+  getTasks: () => serverCall(() => getSchedulerTasksWithFallback()),
   createTask: (
     name: string,
     cronExpression: string,
@@ -859,15 +968,18 @@ export const schedulerApi = {
       enabled,
       serverId,
     }),
-  deleteTask: (id: number) => apiDelete(`/scheduler/tasks/${id}`),
+  deleteTask: (id: number) =>
+    serverCall(() => deleteScheduledTask({ data: { id } })),
   runTask: (id: number) => apiPost(`/scheduler/tasks/${id}/run`),
   restartNow: (warningMinutes?: number) =>
-    apiPost("/scheduler/restart-now", { warningMinutes }) as Promise<{
+    serverCall(() =>
+      restartScheduledServer({ data: { warningMinutes } }),
+    ) as Promise<{
       success: boolean;
       message: string;
       warningMinutes: number;
     }>,
-  getCronPresets: () => apiGet("/scheduler/cron-presets"),
+  getCronPresets: () => serverCall(() => getSchedulerPresetsWithFallback()),
   validateCron: (cronExpression: string) =>
     apiPost("/scheduler/validate-cron", { cronExpression }) as Promise<{
       valid: boolean;
@@ -875,24 +987,24 @@ export const schedulerApi = {
       code?: string;
     }>,
   getHistory: (limit?: number, taskId?: number) => {
-    const params = new URLSearchParams();
-    if (limit) params.set("limit", limit.toString());
-    if (taskId) params.set("taskId", taskId.toString());
-    const query = params.toString();
-    return apiGet(`/scheduler/history${query ? `?${query}` : ""}`) as Promise<{
+    return serverCall(() =>
+      getSchedulerHistoryWithFallback(limit, taskId),
+    ) as Promise<{
       history: ScheduleHistoryEntry[];
     }>;
   },
-  clearHistory: () => apiDelete("/scheduler/history"),
+  clearHistory: () => serverCall(() => clearSchedulerHistory()),
   setTimezone: (timezone: string) =>
-    apiPut("/scheduler/timezone", { timezone }) as Promise<{
+    serverCall(() => setSchedulerTimezone({ data: { timezone } })) as Promise<{
       success: boolean;
       timezone: string;
       configuredTimezone: string | null;
       timezoneFallback: { configured: string; effective: string } | null;
     }>,
   setRestartWarning: (restartWarning: RestartWarningSettings) =>
-    apiPut("/scheduler/restart-warning", restartWarning) as Promise<{
+    serverCall(() =>
+      setSchedulerRestartWarning({ data: restartWarning }),
+    ) as Promise<{
       success: boolean;
       restartWarning: RestartWarningSettings;
     }>,
@@ -1568,21 +1680,22 @@ export interface ComposedServerStatus {
 }
 
 export const serversApi = {
-  getAll: () => apiGet("/servers") as Promise<{
-    servers: ServerInstance[];
-    lifecycleCapabilities?: {
-      supported: boolean;
-      platform: string;
-      containerized: boolean;
-      providers: Array<"direct" | "systemd" | "openrc">;
-    };
-  }>,
+  getAll: () =>
+    serverCall(() => getManagedServersWithFallback()) as Promise<{
+      servers: ServerInstance[];
+      lifecycleCapabilities?: {
+        supported: boolean;
+        platform: string;
+        containerized: boolean;
+        providers: Array<"direct" | "systemd" | "openrc">;
+      };
+    }>,
   getActive: () =>
-    apiGet("/servers/active") as Promise<{ server: ServerInstance }>,
+    serverCall(() => getActiveManagedServerWithFallback()) as Promise<{ server: ServerInstance }>,
   getComposedStatus: (options?: { retries?: number }) =>
     apiGet("/servers/active/status", undefined, options?.retries) as Promise<ComposedServerStatus>,
   getResolvedActive: async () => {
-    const data = (await apiGet("/servers")) as { servers: ServerInstance[] };
+    const data = (await getManagedServersWithFallback()) as { servers: ServerInstance[] };
     return {
       server:
         data.servers.find((server) => server.isActive) ??
@@ -1605,10 +1718,18 @@ export const serversApi = {
     }>,
   getRconStatuses: () =>
     apiGet("/servers/rcon-status") as Promise<{
-      servers: Array<{ id: string; status: "connected" | "unreachable" | "auth_failed" | "unconfigured" | "unavailable" }>;
+      servers: Array<{
+        id: string;
+        status:
+          | "connected"
+          | "unreachable"
+          | "auth_failed"
+          | "unconfigured"
+          | "unavailable";
+      }>;
     }>,
   get: (id: string | number) =>
-    apiGet(`/servers/${id}`) as Promise<{ server: ServerInstance }>,
+    serverCall(() => getManagedServerWithFallback(id)) as Promise<{ server: ServerInstance }>,
   create: (
     config: Partial<ServerInstance> & {
       importIniFrom?: { dataPath: string; serverName: string };

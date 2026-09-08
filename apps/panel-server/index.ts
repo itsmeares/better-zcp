@@ -32,6 +32,7 @@ import {
   logBanner,
   logReady,
 } from "./utils/logger.ts";
+import { setPanelRuntime } from "./utils/panelRuntime.ts";
 const log = createLogger("Panel");
 
 type AnyRecord = Record<string, any>;
@@ -1054,6 +1055,16 @@ app.set("refreshCorsConfig", refreshCorsConfig);
 app.set("getCorsDebugSnapshot", getCorsDebugSnapshot);
 app.set("clearCorsBlockedOrigins", clearCorsBlockedOrigins);
 app.set("checkServerStatusNow", checkServerStatusNow);
+
+setPanelRuntime({
+  rconService,
+  serverManager,
+  scheduler,
+  discordBot,
+  panelBridge,
+  io,
+  checkServerStatusNow,
+});
 
 const updateChecker = new UpdateChecker(io, { rconService, serverManager });
 app.set("updateChecker", updateChecker);
