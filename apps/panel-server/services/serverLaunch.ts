@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";
@@ -220,10 +219,25 @@ export function formatWritablePathError(
   };
 }
 
+function resolveExistingDirectory(inputPath: unknown): string | null {
+  if (typeof inputPath !== "string" || !path.isAbsolute(inputPath)) {
+    return null;
+  }
+  try {
+    const resolved = fs.realpathSync(path.resolve(inputPath));
+    return fs.statSync(resolved).isDirectory() ? resolved : null;
+  } catch {
+    return null;
+  }
+}
+
 function buildClasspathEntries(installPath: string) {
   const entries = ["java/."];
+  const resolvedInstallPath = resolveExistingDirectory(installPath);
+  if (!resolvedInstallPath) return entries.concat("java/projectzomboid.jar");
+
   try {
-    const javaDir = path.join(installPath, "java");
+    const javaDir = path.join(resolvedInstallPath, "java");
     if (fs.existsSync(javaDir)) {
       const jars = fs
         .readdirSync(javaDir)
@@ -359,8 +373,28 @@ export LD_LIBRARY_PATH="\${INSTDIR}/natives/:\${INSTDIR}/natives/linux64/:\${INS
 
 const SCRIPT_FINGERPRINT_FILE = ".pz-panel-scripts.json";
 
-function hashScriptContent(content: string) {
-  return crypto.createHash("sha256").update(content, "utf8").digest("hex");
+type ScriptFileSignature = {
+  size: number;
+  mtimeMs: number;
+  ino: number;
+};
+
+function getFileSignature(filePath: string): ScriptFileSignature {
+  const stat = fs.statSync(filePath);
+  return { size: stat.size, mtimeMs: stat.mtimeMs, ino: stat.ino };
+}
+
+function isSameFileSignature(
+  left: unknown,
+  right: ScriptFileSignature,
+): left is ScriptFileSignature {
+  if (!left || typeof left !== "object") return false;
+  const signature = left as Partial<ScriptFileSignature>;
+  return (
+    signature.size === right.size &&
+    signature.mtimeMs === right.mtimeMs &&
+    signature.ino === right.ino
+  );
 }
 
 export function regenerateStartupScriptsWithBackup(
@@ -368,7 +402,7 @@ export function regenerateStartupScriptsWithBackup(
   files: Array<{ path: string; content: string }>,
 ) {
   const fingerprintPath = path.join(installPath, SCRIPT_FINGERPRINT_FILE);
-  let fingerprints: Record<string, string> = {};
+  let fingerprints: Record<string, ScriptFileSignature> = {};
   try {
     fingerprints = JSON.parse(fs.readFileSync(fingerprintPath, "utf8"));
   } catch {
@@ -378,17 +412,16 @@ export function regenerateStartupScriptsWithBackup(
   const backupMessages: string[] = [];
   for (const { path: filePath, content } of files) {
     const fileName = path.basename(filePath);
-    let existingContent = null;
+    let existingSignature: ScriptFileSignature | null = null;
     try {
-      existingContent = fs.readFileSync(filePath, "utf8");
+      existingSignature = getFileSignature(filePath);
     } catch {
-      existingContent = null;
+      existingSignature = null;
     }
 
-    if (existingContent !== null) {
-      const knownHash = fingerprints[fileName];
-      const currentHash = hashScriptContent(existingContent);
-      if (!knownHash || knownHash !== currentHash) {
+    if (existingSignature !== null) {
+      const knownSignature = fingerprints[fileName];
+      if (!isSameFileSignature(knownSignature, existingSignature)) {
         let backupPath = `${filePath}.bak-${new Date().toISOString().replace(/[:.]/g, "-")}`;
         if (fs.existsSync(backupPath)) {
           let suffix = 2;
@@ -414,7 +447,7 @@ export function regenerateStartupScriptsWithBackup(
         content,
         filePath.endsWith(".sh") ? { encoding: "utf8", mode: 0o750 } : "utf8",
       );
-      fingerprints[fileName] = hashScriptContent(content);
+      fingerprints[fileName] = getFileSignature(filePath);
     } catch (writeError: any) {
       log.warn(`Could not write ${filePath}: ${writeError.message}`);
     }

@@ -33,6 +33,22 @@ describe("regenerateStartupScriptsWithBackup()", () => {
     expect(entries.some((e) => e.includes(".bak-"))).toBe(false);
   });
 
+  it("stores file metadata instead of a hash of script contents", () => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-startscript-"));
+    const files = makeFiles({ bat: "adminpassword secret-value" });
+
+    regenerateStartupScriptsWithBackup(tmpRoot, files);
+
+    const fingerprints = JSON.parse(
+      fs.readFileSync(path.join(tmpRoot, ".pz-panel-scripts.json"), "utf8"),
+    );
+    expect(fingerprints["StartServer_Test.bat"]).toMatchObject({
+      size: files[0].content.length,
+      mtimeMs: expect.any(Number),
+      ino: expect.any(Number),
+    });
+  });
+
   it("regenerating byte-identical content twice produces no backup (repeated Start with no config change)", () => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-startscript-"));
     const files = makeFiles();
