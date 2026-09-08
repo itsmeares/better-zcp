@@ -40,7 +40,7 @@ jobs:
         run: corepack enable && corepack install
 
       - name: Install client dependencies
-        run: pnpm install --filter @better-zcp/panel-client --frozen-lockfile
+        run: pnpm install --filter @better-zcp/panel-client --filter @better-zcp/panel-server --frozen-lockfile
 
       - name: Build static demo
         env:
