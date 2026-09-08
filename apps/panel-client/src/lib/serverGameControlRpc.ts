@@ -83,6 +83,26 @@ export const saveGameWorld = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) => invoke('saveGameWorld', { data, context }))
 
+export const startServer = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('server.control'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) => invoke('startServer', { data, context }))
+
+export const stopServer = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('server.control'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) => invoke('stopServer', { data, context }))
+
+export const forceStopServer = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('server.control'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) => invoke('forceStopServer', { data, context }))
+
+export const restartServer = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('server.control'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) => invoke('restartServer', { data, context }))
+
 export const sendServerMessage = createServerFn({ method: 'POST' })
   .middleware(capabilityMiddleware('server.world_events'))
   .validator((data: unknown) => record(data))

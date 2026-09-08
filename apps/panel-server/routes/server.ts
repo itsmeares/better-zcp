@@ -17,7 +17,6 @@ import {
 } from "../database/init.ts";
 import { sanitizeError, sanitizeIniValue } from "../utils/sanitize.ts";
 import { hasIniKeyValue, setIniKeyLine } from "../utils/iniKeyWrite.ts";
-import { resolveLaunchMode } from "../services/serverManager.ts";
 import {
   isSteamOperationIdle,
   getActiveSteamOperations,
@@ -25,27 +24,53 @@ import {
   hasActiveSteamOperation,
   STEAM_OPERATION_IDLE_TIMEOUT_MS,
 } from "../services/activeSteamOperations.ts";
-import { normalizeMemoryGb } from "../utils/memory.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
 import { requirePermission } from "../services/permissions.ts";
-import { runManagedLifecycle } from "../services/managedContainer.ts";
 import {
-  acquireLifecycleLock,
   getActiveLifecycleOperation,
-  lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { ProgressCode } from "../utils/progressCodes.ts";
 import { invalidateMapFolderScan } from "./chunks.ts";
-import { emitActionResult } from "./scheduler.ts";
-import { autoInstallBridgeIfNeeded } from "../services/panelBridgeInstaller.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
-import { isContainerized } from "../utils/dockerDetect.ts";
 import {
   buildServerSignal,
   resolveLifecycleState,
 } from "../utils/serverStatusModel.ts";
+import {
+  attemptBoundedSaveBeforeForceStop,
+  candidateIniPaths,
+  ensureRconConfigured,
+  formatWritablePathError,
+  generateStartupScripts,
+  isFirstBootMissingAdminPassword,
+  monitorGracefulStop,
+  refreshLaunchTargetBeforeStart,
+  regenerateStartupScriptsWithBackup,
+  sanitizeForBatch,
+  waitForRconAfterStart,
+} from "../services/serverLaunch.ts";
+import {
+  startServerAction,
+  stopServerAction,
+  forceStopServerAction,
+  restartServerAction,
+} from "../services/serverLifecycleActions.ts";
+
+export {
+  attemptBoundedSaveBeforeForceStop,
+  candidateIniPaths,
+  ensureRconConfigured,
+  formatWritablePathError,
+  generateStartupScripts,
+  isFirstBootMissingAdminPassword,
+  monitorGracefulStop,
+  refreshLaunchTargetBeforeStart,
+  regenerateStartupScriptsWithBackup,
+  sanitizeForBatch,
+  waitForRconAfterStart,
+};
 
 const router = express.Router();
 
@@ -299,150 +324,6 @@ async function findSteamCmdPath() {
 
 const activeSteamOperations = getActiveSteamOperations();
 
-export function isFirstBootMissingAdminPassword(activeServer: AnyRecord | null) {
-  if (
-    !activeServer ||
-    activeServer.isRemote ||
-    !activeServer.serverName ||
-    !activeServer.zomboidDataPath ||
-    activeServer.adminPassword
-  ) {
-    return false;
-  }
-  const saveDir = path.join(
-    activeServer.zomboidDataPath,
-    "Saves",
-    "Multiplayer",
-    activeServer.serverName,
-  );
-  return !fs.existsSync(saveDir);
-}
-
-export function candidateIniPaths(
-  serverConfigPath: string,
-  zomboidDataPath: string | null,
-  serverName: string,
-) {
-  const candidates = [];
-  if (serverConfigPath) {
-    candidates.push(path.join(serverConfigPath, `${serverName}.ini`));
-  }
-  if (zomboidDataPath) {
-    candidates.push(path.join(zomboidDataPath, `${serverName}.ini`));
-    candidates.push(path.join(zomboidDataPath, "servertest.ini"));
-    candidates.push(path.join(zomboidDataPath, "serveroptions.ini"));
-  }
-  return candidates;
-}
-
-export async function ensureRconConfigured() {
-  let serverConfigPathKind: "install" | "data" = "install";
-  let serverConfigPath: string | null = null;
-  try {
-    const activeServer = await getActiveServer();
-    if (!activeServer) {
-      log.debug("ensureRconConfigured: No active server");
-      return false;
-    }
-
-    serverConfigPathKind = activeServer.serverConfigPath ? "install" : "data";
-    serverConfigPath =
-      activeServer.serverConfigPath ||
-      (activeServer.zomboidDataPath
-        ? path.join(activeServer.zomboidDataPath, "Server")
-        : null);
-    const serverName = activeServer.serverName;
-    const rconPassword = activeServer.rconPassword;
-    const rconPort = activeServer.rconPort || 27015;
-
-    if (!serverConfigPath || !serverName) {
-      log.debug("ensureRconConfigured: Missing serverConfigPath or serverName");
-      return false;
-    }
-    const configPath = serverConfigPath;
-
-    if (!rconPassword) {
-      log.debug("ensureRconConfigured: No RCON password configured");
-      return false;
-    }
-
-    const iniPath =
-      candidateIniPaths(
-        serverConfigPath,
-        activeServer.zomboidDataPath ?? null,
-        serverName,
-      ).find((candidate) => fs.existsSync(candidate)) ||
-      path.join(serverConfigPath, `${serverName}.ini`);
-
-    return await withFileLock(iniPath, async () => {
-      if (!fs.existsSync(iniPath)) {
-        log.info(
-          `ensureRconConfigured: INI not found — pre-creating ${iniPath} with RCON settings`,
-        );
-        try {
-          if (!fs.existsSync(configPath)) {
-            fs.mkdirSync(configPath, { recursive: true });
-            log.info(`Created server config directory: ${configPath}`);
-          }
-          const safePassword = sanitizeIniValue(rconPassword);
-          const minimalIni = `# Auto-generated by Zomboid Control Panel\n# PZ will add remaining default settings on first server start\nRCONPort=${rconPort}\nRCONPassword=${safePassword}\n`;
-          writeFileAtomic(iniPath, minimalIni, {
-            encoding: "utf-8",
-            mode: 0o600,
-          });
-          log.info(`Pre-created INI with RCON settings (port: ${rconPort})`);
-          return true;
-        } catch (createError: any) {
-          if (createError.code === "EACCES") {
-            const guidance = formatWritablePathError(
-              serverConfigPathKind,
-              configPath,
-            );
-            log.error(
-              `Failed to pre-create INI file: ${createError.message} -- ${guidance.message}`,
-            );
-          } else {
-            log.error(`Failed to pre-create INI file: ${createError.message}`);
-          }
-          return false;
-        }
-      }
-
-      let content = fs.readFileSync(iniPath, "utf-8").replace(/\r\n/g, "\n");
-      const hasCorrectPassword = hasIniKeyValue(content, "RCONPassword", rconPassword);
-      const hasCorrectPort = hasIniKeyValue(content, "RCONPort", rconPort);
-
-      if (hasCorrectPassword && hasCorrectPort) {
-        log.debug("ensureRconConfigured: RCON already configured correctly");
-        return true;
-      }
-
-      log.info(`Auto-configuring RCON in ${iniPath}`);
-
-      const safePassword = sanitizeIniValue(rconPassword);
-      content = setIniKeyLine(content, "RCONPassword", safePassword);
-      content = setIniKeyLine(content, "RCONPort", rconPort);
-
-      writeFileAtomic(iniPath, content, { encoding: "utf-8", mode: 0o600 });
-      log.info("RCON auto-configured successfully in server .ini file");
-      return true;
-    });
-  } catch (error: any) {
-    if (error.code === "EACCES" && serverConfigPath) {
-      const guidance = formatWritablePathError(
-        serverConfigPathKind,
-        serverConfigPath,
-      );
-      log.error(
-        `ensureRconConfigured error: ${error.message} -- ${guidance.message}`,
-      );
-    } else {
-      log.error(`ensureRconConfigured error: ${error.message}`);
-    }
-    return false;
-  }
-}
-
 async function getServerConfigPath() {
   const activeServer = await getActiveServer();
   if (activeServer?.serverConfigPath) {
@@ -459,17 +340,6 @@ async function getServerName() {
   }
   const legacyName = await getSetting("serverName");
   return legacyName || null;
-}
-
-function sanitizeForBatch(str: any): string {
-  if (!str) return "";
-  return String(str)
-    .replace(/[\x00-\x1F\x7F]/g, "")
-    // a newline here closes out the current script line early and starts a
-    // new one that the supervisor then executes as its own command)
-    .replace(/[&|<>^%"`;$(){}[\]!]/g, "")
-    .replace(/\.\./g, "")
-    .trim();
 }
 
 function isValidServerName(name: any) {
@@ -506,47 +376,6 @@ function resolveZomboidPaths(installPath: string, zomboidDataPath: string | null
 function ensureWritableDirectory(directoryPath: string) {
   fs.mkdirSync(directoryPath, { recursive: true });
   fs.accessSync(directoryPath, fs.constants.W_OK);
-}
-
-const WRITABLE_PATH_LABELS = Object.freeze({
-  install: "Installation path",
-  data: "Zomboid data folder",
-});
-
-export function formatWritablePathError(
-  kind: "install" | "data",
-  directoryPath: string,
-  platformIsWindows = isWindows,
-) {
-  const label = WRITABLE_PATH_LABELS[kind];
-  const isContainer = !platformIsWindows && isContainerized();
-  const baseMessage = `${label} is not writable: ${directoryPath}.`;
-
-  if (isContainer) {
-    return {
-      message:
-        `${baseMessage} Set PUID/PGID in your .env file to match the owner ` +
-        `of this bind-mounted host folder (see docker-compose.yml's Quick ` +
-        `Start), then recreate the container.`,
-      code:
-        kind === "install"
-          ? ErrorCode.WRITABLE_PATH_INSTALL_CONTAINER
-          : ErrorCode.WRITABLE_PATH_DATA_CONTAINER,
-      params: { path: directoryPath },
-    };
-  }
-
-  return {
-    message:
-      `${baseMessage} The user running the panel does not own this folder ` +
-      `or lacks write permission to it -- fix it with chown/chmod, or ` +
-      `choose a folder the panel can already write to.`,
-    code:
-      kind === "install"
-        ? ErrorCode.WRITABLE_PATH_INSTALL_BAREMETAL
-        : ErrorCode.WRITABLE_PATH_DATA_BAREMETAL,
-    params: { path: directoryPath },
-  };
 }
 
 export function formatDirectoryReadError(
@@ -612,239 +441,6 @@ export function requireIntInRange(
   return { ok: true, value: num };
 }
 
-function buildClasspathEntries(installPath: string) {
-  const entries = ["java/."];
-  try {
-    const javaDir = path.join(installPath, "java");
-    if (fs.existsSync(javaDir)) {
-      const jars = fs
-        .readdirSync(javaDir)
-        .filter((f) => f.toLowerCase().endsWith(".jar"))
-        .sort();
-      for (const jar of jars) {
-        entries.push(`java/${jar}`);
-      }
-    }
-  } catch (e: any) {
-    log.warn(`Could not enumerate java/ jars for classpath: ${e.message}`);
-  }
-  if (entries.length === 1) {
-    entries.push("java/projectzomboid.jar");
-  }
-  return entries;
-}
-
-export function generateStartupScripts(options: AnyRecord) {
-  const {
-    installPath,
-    serverName,
-    minMemory = 4,
-    maxMemory = 8,
-    zomboidDataPath,
-    adminPassword,
-    serverPort = 16261,
-    useNoSteam = false,
-    useDebug = false,
-  } = options;
-
-  const safeServerName = sanitizeForBatch(serverName);
-  const safeAdminPassword = adminPassword
-    ? sanitizeForBatch(adminPassword)
-    : "";
-  const safeZomboidDataPath = zomboidDataPath
-    ? sanitizeForBatch(zomboidDataPath)
-    : "";
-  const normalizedMinMemory = normalizeMemoryGb(minMemory, 4);
-  const normalizedMaxMemory = normalizeMemoryGb(maxMemory, 8);
-
-  const softMaxMemory = Math.max(1, Math.round(normalizedMaxMemory * 0.6));
-
-  const jvmArgs = [
-    "-XX:+IgnoreUnrecognizedVMOptions",
-    "-Djava.awt.headless=true",
-    useNoSteam ? "-Dzomboid.steam=0" : "-Dzomboid.steam=1",
-    "-Dzomboid.znetlog=1",
-    "-XX:+UseZGC",
-    `-XX:SoftMaxHeapSize=${softMaxMemory}g`,
-    // Return freed heap to the OS in 2 minutes instead of the 5-minute default.
-    "-XX:ZUncommitDelay=120",
-    // JDK 25+: 8-byte object headers. PZ's heap is millions of small objects
-    // (grid squares, tile properties, items), so this is a real footprint win.
-    "-XX:+UseCompactObjectHeaders",
-    // Scripts/tiles/item names load a lot of duplicate strings.
-    "-XX:+UseStringDeduplication",
-    "-XX:-CreateCoredumpOnCrash",
-    "-XX:-OmitStackTraceInFastThrow",
-    `-Xms${normalizedMinMemory}g`,
-    `-Xmx${normalizedMaxMemory}g`,
-  ];
-
-  if (useDebug) {
-    jvmArgs.push("-Ddebug");
-  }
-
-  const linuxJvmArgs = [
-    ...jvmArgs,
-    "-XX:+UseTransparentHugePages",
-    "-Djava.security.egd=file:/dev/urandom",
-  ];
-
-  const gameArgs = [`-servername "${safeServerName}"`];
-
-  if (safeZomboidDataPath) {
-    gameArgs.push(`-cachedir="${safeZomboidDataPath}"`);
-  }
-
-  if (safeAdminPassword) {
-    gameArgs.push(`-adminpassword "${safeAdminPassword}"`);
-  }
-
-  if (serverPort !== 16261) {
-    gameArgs.push(`-port ${serverPort}`);
-  }
-
-  if (useNoSteam) {
-    gameArgs.push("-nosteam");
-  }
-
-  const classpathEntries = buildClasspathEntries(installPath);
-
-  const batchContent = `@echo off
-@setlocal enableextensions
-@cd /d "%~dp0"
-
-REM =====================================================
-REM Project Zomboid Server Startup Script
-REM Generated by PZ Server Manager
-REM Server Name: ${safeServerName}
-REM Memory: ${normalizedMinMemory}GB - ${normalizedMaxMemory}GB
-REM =====================================================
-
-SET PZ_CLASSPATH=${classpathEntries.join(";")}
-
-".\\jre64\\bin\\java.exe" ${jvmArgs.join(" ")} -Djava.library.path=natives/;natives/win64/;. -cp %PZ_CLASSPATH% zombie.network.GameServer ${gameArgs.join(" ")}
-
-PAUSE
-`;
-
-  const shellContent = `#!/bin/bash
-cd "\$(dirname "\$0")"
-
-# =====================================================
-# Project Zomboid Server Startup Script
-# Generated by PZ Server Manager
-# Server Name: ${safeServerName}
-# Memory: ${normalizedMinMemory}GB - ${normalizedMaxMemory}GB
-# =====================================================
-
-PZ_CLASSPATH="${classpathEntries.join(":")}"
-
-JAVA_CMD="./jre64/bin/java"
-if [ ! -f "$JAVA_CMD" ]; then
-  # Try common system Java locations (CentOS, Ubuntu, etc.)
-  for JPATH in /usr/bin/java /usr/local/bin/java /usr/lib/jvm/jre/bin/java; do
-    if [ -f "$JPATH" ]; then
-      JAVA_CMD="$JPATH"
-      break
-    fi
-  done
-  if [ ! -f "$JAVA_CMD" ]; then
-    JAVA_CMD="java"
-  fi
-fi
-
-# Verify Java is actually available
-if ! command -v "$JAVA_CMD" >/dev/null 2>&1; then
-  echo "ERROR: Java not found. Install OpenJDK: sudo yum install java-17-openjdk (CentOS) or sudo apt install openjdk-17-jre (Ubuntu)"
-  exit 1
-fi
-
-INSTDIR="$(dirname "$0")"
-export LD_LIBRARY_PATH="\${INSTDIR}/natives/:\${INSTDIR}/natives/linux64/:\${INSTDIR}/linux64/:\${INSTDIR}:\${INSTDIR}/jre64/lib/amd64:\${INSTDIR}/jre64/lib/x86_64:/usr/lib64:\${LD_LIBRARY_PATH}"
-
-"$JAVA_CMD" ${linuxJvmArgs.join(" ")} -Djava.library.path=natives/:natives/linux64/:linux64/:. -cp "$PZ_CLASSPATH" zombie.network.GameServer ${gameArgs.join(" ")}
-`;
-
-  return { bat: batchContent, sh: shellContent };
-}
-
-const SCRIPT_FINGERPRINT_FILE = ".pz-panel-scripts.json";
-
-function hashScriptContent(content: string) {
-  return crypto.createHash("sha256").update(content, "utf8").digest("hex");
-}
-
-export function regenerateStartupScriptsWithBackup(
-  installPath: string,
-  files: Array<{ path: string; content: string }>,
-) {
-  const fingerprintPath = path.join(installPath, SCRIPT_FINGERPRINT_FILE);
-  let fingerprints: Record<string, string> = {};
-  try {
-    fingerprints = JSON.parse(fs.readFileSync(fingerprintPath, "utf8"));
-  } catch {
-    fingerprints = {};
-  }
-
-  const backupMessages: string[] = [];
-  for (const { path: filePath, content } of files) {
-    const fileName = path.basename(filePath);
-    let existingContent = null;
-    try {
-      existingContent = fs.readFileSync(filePath, "utf8");
-    } catch {
-      existingContent = null;
-    }
-
-    if (existingContent !== null) {
-      const knownHash = fingerprints[fileName];
-      const currentHash = hashScriptContent(existingContent);
-      if (!knownHash || knownHash !== currentHash) {
-        let backupPath = `${filePath}.bak-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-        if (fs.existsSync(backupPath)) {
-          let suffix = 2;
-          while (fs.existsSync(`${backupPath}-${suffix}`)) suffix++;
-          backupPath = `${backupPath}-${suffix}`;
-        }
-        try {
-          fs.copyFileSync(filePath, backupPath);
-          backupMessages.push(
-            `${fileName} had content the panel didn't last write (a hand-edit, or an install from before this backup existed) -- your version was saved to ${path.basename(backupPath)} before regenerating.`,
-          );
-        } catch (backupErr: any) {
-          log.warn(
-            `Could not back up ${filePath} before regenerating: ${backupErr.message}`,
-          );
-        }
-      }
-    }
-
-    try {
-      writeFileAtomic(
-        filePath,
-        content,
-        filePath.endsWith(".sh") ? { encoding: "utf8", mode: 0o750 } : "utf8",
-      );
-      fingerprints[fileName] = hashScriptContent(content);
-    } catch (writeErr: any) {
-      log.warn(`Could not write ${filePath}: ${writeErr.message}`);
-    }
-  }
-
-  try {
-    writeFileAtomic(
-      fingerprintPath,
-      JSON.stringify(fingerprints, null, 2),
-      "utf8",
-    );
-  } catch (fpErr: any) {
-    log.warn(`Could not persist script fingerprint file: ${fpErr.message}`);
-  }
-
-  return backupMessages;
-}
-
-
 router.get("/status", async (req, res) => {
   try {
     const serverManager = req.app.get("serverManager");
@@ -888,688 +484,68 @@ router.get("/network-interfaces", async (req, res) => {
   }
 });
 
-export async function refreshLaunchTargetBeforeStart(
-  activeServer: AnyRecord | null,
-  { managedHandled = false }: { managedHandled?: boolean } = {},
+function lifecycleRuntime(req: any) {
+  return {
+    serverManager: req.app.get("serverManager"),
+    rconService: req.app.get("rconService"),
+    scheduler: req.app.get("scheduler"),
+    discordBot: req.app.get("discordBot"),
+    io: req.app.get("io"),
+    checkServerStatusNow: req.app.get("checkServerStatusNow"),
+  };
+}
+
+function lifecycleErrorResponse(error: any) {
+  const details = error && typeof error === "object" ? error : {};
+  const extra =
+    details.params &&
+    typeof details.params === "object" &&
+    !Array.isArray(details.params)
+      ? details.params
+      : {};
+  const body: AnyRecord = {
+    ...extra,
+    error: sanitizeError(details.message || error),
+  };
+  if (typeof details.code === "string") body.code = details.code;
+  return {
+    status: Number.isInteger(details.status) ? details.status : 500,
+    body,
+  };
+}
+
+async function runLifecycleRoute(
+  req: any,
+  res: any,
+  action: (runtime: any, data: AnyRecord) => Promise<unknown>,
+  data: AnyRecord = {},
 ) {
   try {
-    const rconReady = await ensureRconConfigured();
-    if (rconReady) {
-      log.info("RCON pre-configured in INI before server start");
-    } else {
-      log.warn(
-        "Could not pre-configure RCON — will retry during startup polling",
-      );
-    }
-  } catch (rconErr: any) {
-    log.warn(`RCON pre-configuration failed: ${rconErr.message}`);
-  }
-
-  let scriptBackupWarnings: string[] = [];
-  const launchMode = resolveLaunchMode(activeServer);
-  if (
-    !managedHandled &&
-    activeServer &&
-    !activeServer.startCommand &&
-    activeServer.installPath &&
-    launchMode.mode === "custom"
-  ) {
-    log.info(
-      `Custom launcher mode active (${launchMode.launcherPath}) — not regenerating; the panel does not manage this script.`,
-    );
-  } else if (
-    !managedHandled &&
-    activeServer &&
-    !activeServer.startCommand &&
-    activeServer.installPath
-  ) {
-    try {
-      const scripts = generateStartupScripts({
-        installPath: activeServer.installPath,
-        serverName: activeServer.serverName,
-        minMemory: activeServer.minMemory || 4,
-        maxMemory: activeServer.maxMemory || 8,
-        zomboidDataPath: activeServer.zomboidDataPath || "",
-        adminPassword: activeServer.adminPassword || "",
-        serverPort: activeServer.serverPort || 16261,
-        useNoSteam: activeServer.useNoSteam || false,
-        useDebug: activeServer.useDebug || false,
-      });
-      const batPath = path.join(
-        activeServer.installPath,
-        `StartServer_${activeServer.serverName}.bat`,
-      );
-      const shPath = path.join(
-        activeServer.installPath,
-        `start-server_${activeServer.serverName}.sh`,
-      );
-      scriptBackupWarnings = regenerateStartupScriptsWithBackup(
-        activeServer.installPath,
-        [
-          { path: batPath, content: scripts.bat },
-          { path: shPath, content: scripts.sh.replace(/\r\n/g, "\n") },
-        ],
-      );
-      if (scriptBackupWarnings.length > 0) {
-        log.warn(
-          `Startup script regeneration backed up existing content: ${scriptBackupWarnings.join(" ")}`,
-        );
-      }
-      log.info("Regenerated startup scripts with current server config");
-    } catch (scriptErr: any) {
-      log.warn(`Could not regenerate startup scripts: ${scriptErr.message}`);
-    }
-  }
-  return { scriptBackupWarnings };
-}
-
-async function waitForRconAfterStart({
-  rconService,
-  discordBot,
-  io,
-}: {
-  rconService: any;
-  discordBot: any;
-  io?: { emit?: (event: string, payload: unknown) => void };
-}) {
-  log.info("Waiting for RCON to be ready - starting port polling...");
-
-  await rconService.loadConfig();
-  const rconHost = rconService.config.host || "127.0.0.1";
-  const rconPort = rconService.config.port || 27015;
-  log.info(`Monitoring TCP port ${rconHost}:${rconPort} for activity...`);
-
-  let rconConnected = false;
-  let rconConfigured = false;
-  let portOpen = false;
-
-  const maxPollAttempts = 60;
-
-  for (let i = 0; i < maxPollAttempts; i++) {
-    if (!portOpen) {
-      portOpen = await rconService.checkPortOpen(rconHost, rconPort);
-
-      if (!portOpen) {
-        log.debug(
-          `RCON startup: Port ${rconHost}:${rconPort} not yet open (poll ${i + 1}/${maxPollAttempts})...`,
-        );
-        await new Promise((r) => setTimeout(r, 5000));
-
-        if (!rconConfigured && i % 3 === 0) {
-          rconConfigured = await ensureRconConfigured();
-          if (rconConfigured) {
-            log.info(
-              "RCON settings auto-configured in server .ini file during startup wait",
-            );
-          }
-        }
-        continue;
-      }
-      log.info(
-        `RCON port ${rconHost}:${rconPort} is now open! Initiating connection...`,
-      );
-    }
-
-    if (rconService.forceResetConnectionState) {
-      rconService.forceResetConnectionState();
-    }
-
-    try {
-      const connectPromise = rconService.connect();
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Connection attempt timed out after 15s")),
-          15000,
-        ),
-      );
-
-      await Promise.race([connectPromise, timeoutPromise]);
-
-      if (rconService.connected) {
-        log.info("RCON connected successfully after server startup");
-        rconConnected = true;
-        break;
-      } else {
-        log.warn(
-          `RCON connected to port but authentication/handshake failed. Retrying...`,
-        );
-        await new Promise((r) => setTimeout(r, 5000));
-      }
-    } catch (e: any) {
-      log.warn(`RCON connection attempt failed: ${e.message}`);
-      await new Promise((r) => setTimeout(r, 5000));
-    }
-  }
-
-  if (rconConnected) {
-    log.info("RCON startup sequence completed - connected");
-    io?.emit?.("server:status", { running: true, state: "ready" });
-    discordBot
-      ?.sendEventNotification("serverStart", {})
-      .catch((err: any) =>
-        log.debug(`Discord serverStart notification failed: ${err.message}`),
-      );
-  } else {
-    log.warn(
-      "RCON startup sequence completed - NOT connected (auto-reconnect will keep trying every 30s)",
-    );
-    io?.emit?.("server:status", {
-      running: true,
-      state: "running-not-ready",
-    });
-  }
-
-  if (rconService.setServerStarting) {
-    rconService.setServerStarting(false);
-  } else {
-    rconService.serverStarting = false;
+    return res.json(await action(lifecycleRuntime(req), data));
+  } catch (error: any) {
+    log.error(`Lifecycle action failed: ${error.message}`);
+    const response = lifecycleErrorResponse(error);
+    return res.status(response.status).json(response.body);
   }
 }
 
-router.post("/start", requirePermission("server.control"), async (req, res) => {
-  const activeServerForLock = await getActiveServer();
-  const lifecycleLock = acquireLifecycleLock(
-    "start",
-    activeServerForLock?.name || activeServerForLock?.serverName || null,
-  );
-  if (!lifecycleLock) {
-    return res.status(409).json(lifecycleInProgressResponse());
-  }
-  let lifecycleLockTransferred = false;
-  let lifecycleLockReleased = false;
-  const releaseLifecycleLock = () => {
-    if (lifecycleLockReleased) return;
-    lifecycleLockReleased = true;
-    lifecycleLock.release();
-  };
-  try {
-    const activeServer = activeServerForLock;
-    log.info(
-      `POST /start (server=${activeServer?.name || "unknown"}, remote=${activeServer?.isRemote || false})`,
-    );
-    if (activeServer?.isRemote) {
-      return res.status(400).json({
-        error:
-          "Cannot start a remote server. Remote servers are managed externally — use RCON to interact.",
-        code: ErrorCode.SERVER_START_REMOTE_REFUSED,
-      });
-    }
-    if (!activeServer) {
-      return res.status(404).json({ error: "No active server configured" });
-    }
+router.post("/start", requirePermission("server.control"), async (req, res) =>
+  runLifecycleRoute(req, res, startServerAction),
+);
 
-    const serverManager = req.app.get("serverManager");
-    const rconService = req.app.get("rconService");
+router.post("/stop", requirePermission("server.control"), async (req, res) =>
+  runLifecycleRoute(req, res, stopServerAction),
+);
 
-    autoInstallBridgeIfNeeded(activeServer);
+router.post(
+  "/force-stop",
+  requirePermission("server.control"),
+  async (req, res) => runLifecycleRoute(req, res, forceStopServerAction),
+);
 
-    const managed = await runManagedLifecycle("start", {
-      serverId: activeServer?.id ?? null,
-    });
-    if (managed.handled && !managed.success) {
-      return res.status(502).json({ error: sanitizeError(managed.error) });
-    }
-    if (managed.alreadyRunning) {
-      return res.json(managed);
-    }
-
-    if (!managed.handled && isFirstBootMissingAdminPassword(activeServer)) {
-      return res.status(400).json({
-        error:
-          `${activeServer.name || activeServer.serverName} has never started before and has no admin password set. ` +
-          `Project Zomboid needs one to create the admin account on first boot, or the server process hangs waiting ` +
-          `for console input that will never come and crashes. Set an admin password for this server (My Servers → ` +
-          `${activeServer.name || activeServer.serverName} → Admin Password), then try starting again.`,
-      });
-    }
-
-    const { scriptBackupWarnings } = await refreshLaunchTargetBeforeStart(
-      activeServer,
-      { managedHandled: Boolean(managed.handled) },
-    );
-
-    const result = managed.handled
-      ? { success: true, message: managed.message || "Container starting" }
-      : await serverManager.startServer({
-          serverId: activeServer?.id ?? null,
-        });
-    if (scriptBackupWarnings.length > 0) {
-      result.scriptWarnings = scriptBackupWarnings;
-    }
-
-    const io = req.app.get("io");
-
-    if (rconService.setServerStarting) {
-      rconService.setServerStarting(true);
-    } else {
-      rconService.serverStarting = true;
-    }
-
-    io?.emit?.("server:status", { state: "starting" });
-
-    if (managed.handled) {
-      log.info("Container start confirmed by Docker; skipping local process poll");
-      lifecycleLockTransferred = true;
-      void waitForRconAfterStart({
-        rconService,
-        discordBot: req.app.get("discordBot"),
-        io,
-      })
-        .catch((err: any) =>
-          log.error(`Post-start RCON wait failed: ${err.message}`),
-        )
-        .finally(() => releaseLifecycleLock());
-      res.json(result);
-      return;
-    }
-
-    let attempts = 0;
-    const maxAttempts = 30;
-    let pollCleared = false;
-
-    const pollInterval = setInterval(async () => {
-      if (pollCleared) return;
-      try {
-        attempts++;
-        const processDetails =
-          typeof serverManager.getServerProcessDetails === "function"
-            ? await serverManager.getServerProcessDetails()
-            : { running: false, scanFailed: true };
-
-        if (!processDetails || processDetails.scanFailed) {
-          if (attempts >= maxAttempts) {
-            pollCleared = true;
-            clearInterval(pollInterval);
-            releaseLifecycleLock();
-            if (rconService.setServerStarting) {
-              rconService.setServerStarting(false);
-            } else {
-              rconService.serverStarting = false;
-            }
-            io?.emit?.("server:status", { state: "unknown" });
-            log.warn(
-              "Server start polling timed out without confirming process state",
-            );
-          }
-          return;
-        }
-
-        const isRunning = Boolean(processDetails.running);
-
-        if (isRunning) {
-          pollCleared = true;
-          clearInterval(pollInterval);
-          log.info("Server detected as running");
-          await waitForRconAfterStart({
-            rconService,
-            discordBot: req.app.get("discordBot"),
-            io,
-          });
-          releaseLifecycleLock();
-        } else if (attempts >= maxAttempts) {
-          pollCleared = true;
-          clearInterval(pollInterval);
-          releaseLifecycleLock();
-          if (rconService.setServerStarting) {
-            rconService.setServerStarting(false);
-          } else {
-            rconService.serverStarting = false;
-          }
-          io?.emit?.("server:status", { state: "stopped", running: false });
-          log.warn("Server start polling timed out");
-        }
-      } catch (err: any) {
-        pollCleared = true;
-        clearInterval(pollInterval);
-        releaseLifecycleLock();
-        if (rconService.setServerStarting) {
-          rconService.setServerStarting(false);
-        } else {
-          rconService.serverStarting = false;
-        }
-        io?.emit?.("server:status", { state: "unknown" });
-        log.error(`Server status poll failed: ${err.message}`);
-      }
-    }, 1000);
-    lifecycleLockTransferred = true;
-
-    res.json(result);
-  } catch (error: any) {
-    log.error(`Failed to start server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  } finally {
-    if (!lifecycleLockTransferred) releaseLifecycleLock();
-  }
-});
-
-router.post("/stop", requirePermission("server.control"), async (req, res) => {
-  const activeServerForLock = await getActiveServer();
-  const lifecycleLock = acquireLifecycleLock(
-    "stop",
-    activeServerForLock?.name || activeServerForLock?.serverName || null,
-  );
-  if (!lifecycleLock) {
-    return res.status(409).json(lifecycleInProgressResponse());
-  }
-  let lifecycleLockTransferred = false;
-  let lifecycleLockReleased = false;
-  const releaseLifecycleLock = () => {
-    if (lifecycleLockReleased) return;
-    lifecycleLockReleased = true;
-    lifecycleLock.release();
-  };
-  try {
-    const activeServer = activeServerForLock;
-    const rconService = req.app.get("rconService");
-    const serverManager = req.app.get("serverManager");
-    const io = req.app.get("io");
-    log.info("POST /stop — graceful shutdown requested");
-
-    if (!rconService.connected) {
-      return res
-        .status(400)
-        .json({
-          error: "RCON not connected. Cannot gracefully stop server.",
-          code: ErrorCode.SERVER_STOP_RCON_NOT_CONNECTED,
-        });
-    }
-
-    const saved = await rconService.save({ retryOnConnectionError: false });
-    if (!saved?.success) {
-      return res.status(502).json({
-        error: `Save failed, so the server was left running: ${sanitizeError(saved?.error)}`,
-        code: ErrorCode.SERVER_STOP_SAVE_FAILED,
-      });
-    }
-
-    io?.emit?.("server:status", { state: "stopping" });
-
-    const managed = await runManagedLifecycle("stop", {
-      serverId: activeServer?.id ?? null,
-    });
-    if (managed.handled && !managed.success) {
-      return res.status(502).json({
-        error: `The world was saved, but the container could not be stopped: ${sanitizeError(managed.error)}`,
-        code: ErrorCode.SERVER_STOP_CONTAINER_STOP_FAILED,
-      });
-    }
-
-    if (!managed.handled && serverManager.loadConfig) {
-      await serverManager.loadConfig(activeServer?.id ?? null);
-    }
-    const serviceManaged = Boolean(
-      !managed.handled && serverManager.usesManagedServiceLifecycle?.(),
-    );
-    const result = managed.handled
-      ? { success: true, message: managed.message || "Container stopping" }
-      : serviceManaged
-        ? await serverManager.stopServer(false, {
-            serverId: activeServer?.id ?? null,
-          })
-        : await rconService.quit({ retryOnConnectionError: false });
-
-    if (!result?.success || result.confirmed === false) {
-      return res.status(502).json({
-        ...result,
-        success: false,
-        error: result?.error || result?.message || "Server stop failed",
-      });
-    }
-
-    if (managed.handled || serviceManaged) {
-      serverManager?.markServerStopped?.();
-      io?.emit?.("server:status", { running: false, state: "stopped" });
-      const checkServerStatusNow = req.app.get("checkServerStatusNow");
-      if (typeof checkServerStatusNow === "function") {
-        Promise.resolve(checkServerStatusNow("managed-stop")).catch((err: any) =>
-          log.debug(`Post-stop status re-check failed: ${err.message}`),
-        );
-      }
-      await logServerEventBestEffort(
-        "server_stop",
-        serviceManaged
-          ? `Server stopped through ${serverManager.lifecycleProvider}`
-          : "Server stopped via web UI",
-      );
-      req.app
-        .get("discordBot")
-        ?.sendEventNotification("serverStop", {})
-        .catch((err: any) =>
-          log.debug(`Discord serverStop notification failed: ${err.message}`),
-        );
-    } else {
-      const checkServerStatusNow = req.app.get("checkServerStatusNow");
-      if (typeof checkServerStatusNow === "function") {
-        Promise.resolve(checkServerStatusNow("graceful-stop")).catch((err) =>
-          log.debug(`Post-stop status re-check failed: ${err.message}`),
-        );
-      }
-      await logServerEventBestEffort(
-        "server_stop",
-        "Graceful shutdown requested via web UI",
-      );
-      result.message =
-        result.message || result.response || "Shutdown requested";
-      result.confirmed = false;
-      monitorGracefulStop(serverManager, releaseLifecycleLock);
-      lifecycleLockTransferred = true;
-    }
-
-    res.json(result);
-  } catch (error: any) {
-    log.error(`Failed to stop server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  } finally {
-    if (!lifecycleLockTransferred) releaseLifecycleLock();
-  }
-});
-
-const FORCE_STOP_SAVE_TIMEOUT_MS = 3000;
-const GRACEFUL_STOP_CONFIRMATION_TIMEOUT_MS = 5 * 60 * 1000;
-
-function monitorGracefulStop(serverManager: any, releaseLifecycleLock: any) {
-  if (typeof serverManager?.getServerProcessDetails !== "function") {
-    releaseLifecycleLock();
-    return;
-  }
-
-  const deadline = Date.now() + GRACEFUL_STOP_CONFIRMATION_TIMEOUT_MS;
-  const poll = async () => {
-    try {
-      const details = await serverManager.getServerProcessDetails();
-      if (details && !details.scanFailed && details.running === false) {
-        releaseLifecycleLock();
-        return;
-      }
-    } catch (error: any) {
-      log.debug(`Graceful stop confirmation failed: ${error.message}`);
-    }
-
-    if (Date.now() >= deadline) {
-      log.warn("Graceful stop confirmation timed out; releasing lifecycle lock");
-      releaseLifecycleLock();
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      void poll();
-    }, 1000);
-    timer.unref?.();
-  };
-
-  void poll();
-}
-
-async function attemptBoundedSaveBeforeForceStop(rconService: any) {
-  if (!rconService?.connected) return "skipped";
-  try {
-    const saveResult = await Promise.race([
-      rconService.save({ retryOnConnectionError: false }),
-      new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Force-stop save timed out")),
-          FORCE_STOP_SAVE_TIMEOUT_MS,
-        ),
-      ),
-    ]);
-    return saveResult?.success ? "saved" : "failed";
-  } catch {
-    return "timedOut";
-  }
-}
-
-router.post("/force-stop", requirePermission("server.control"), async (req, res) => {
-  const activeServerForLock = await getActiveServer();
-  const lifecycleLock = acquireLifecycleLock(
-    "force-stop",
-    activeServerForLock?.name || activeServerForLock?.serverName || null,
-  );
-  if (!lifecycleLock) {
-    return res.status(409).json(lifecycleInProgressResponse());
-  }
-  try {
-    log.info("POST /force-stop — force kill requested");
-    const activeServer = activeServerForLock;
-    if (activeServer?.isRemote) {
-      return res.status(400).json({
-        error:
-          "Cannot force-stop a remote server. The process is not managed by this panel.",
-        code: ErrorCode.SERVER_FORCE_STOP_REMOTE_REFUSED,
-      });
-    }
-
-    const rconService = req.app.get("rconService");
-    const saveOutcome = await attemptBoundedSaveBeforeForceStop(rconService);
-    log.info(`POST /force-stop — pre-stop save attempt: ${saveOutcome}`);
-    const io = req.app.get("io");
-    io?.emit?.("server:status", { state: "stopping" });
-
-    const managed = await runManagedLifecycle("stop", {
-      serverId: activeServer?.id ?? null,
-    });
-    if (managed.handled && !managed.success) {
-      return res
-        .status(502)
-        .json({ error: sanitizeError(managed.error), saveOutcome });
-    }
-
-    const serverManager = req.app.get("serverManager");
-    const result = managed.handled
-      ? {
-          success: true,
-          message: managed.message || "Container stopped.",
-        }
-      : await serverManager.stopServer(false, {
-          serverId: activeServer?.id ?? null,
-        });
-
-    if (!result?.success || result.confirmed === false) {
-      return res.status(502).json({
-        ...result,
-        success: false,
-        error: result?.error || result?.message || "Force stop failed",
-        saveOutcome,
-      });
-    }
-
-    serverManager?.markServerStopped?.();
-
-    io?.emit?.("server:status", { running: false, state: "stopped" });
-    const checkServerStatusNow = req.app.get("checkServerStatusNow");
-    if (typeof checkServerStatusNow === "function") {
-      Promise.resolve(checkServerStatusNow("force-stop")).catch((err) =>
-        log.debug(`Post-stop status re-check failed: ${err.message}`),
-      );
-    }
-
-    res.json({ ...result, saveOutcome });
-  } catch (error: any) {
-    log.error(`Failed to force stop server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  } finally {
-    lifecycleLock.release();
-  }
-});
-
-router.post("/restart", requirePermission("server.control"), async (req, res) => {
-  const activeServerForLock = await getActiveServer();
-  const lifecycleLock = acquireLifecycleLock(
-    "restart",
-    activeServerForLock?.name || activeServerForLock?.serverName || null,
-  );
-  if (!lifecycleLock) {
-    return res.status(409).json(lifecycleInProgressResponse());
-  }
-  let lifecycleLockTransferred = false;
-  try {
-    const activeServer = activeServerForLock;
-    if (activeServer?.isRemote) {
-      return res.status(400).json({
-        error:
-          "Cannot restart a remote server. The process is not managed by this panel.",
-        code: ErrorCode.SERVER_RESTART_REMOTE_REFUSED,
-      });
-    }
-
-    const scheduler = req.app.get("scheduler");
-    if (scheduler.restartInProgress) {
-      lifecycleLock.release();
-      return res.status(409).json(lifecycleInProgressResponse());
-    }
-    let warningMinutes = parseBoundedInteger(
-      req.body?.warningMinutes,
-      5,
-      0,
-      Number.MAX_SAFE_INTEGER,
-    );
-    if (warningMinutes > 60) {
-      warningMinutes = 60;
-    }
-
-    const io = req.app.get("io");
-
-    autoInstallBridgeIfNeeded(activeServer);
-
-    const restartPromise = Promise.resolve(
-      scheduler.performRestart(warningMinutes, {
-        label: "Manual restart",
-        lifecycleLock,
-      }),
-    );
-    lifecycleLockTransferred = true;
-    void restartPromise
-      .then((result) => {
-        emitActionResult(io, {
-          kind: "restart",
-          success: !!result?.success,
-          message: result?.message || (result?.success ? "Restart completed" : "Restart failed"),
-        });
-      })
-      .catch((err) => {
-        log.error(`Restart failed: ${err.message}`);
-        emitActionResult(io, {
-          kind: "restart",
-          success: false,
-          message: err.message,
-        });
-      })
-      .finally(() => lifecycleLock.release());
-
-    res.json({
-      success: true,
-      message:
-        warningMinutes > 0
-          ? `Restart initiated with ${warningMinutes} minute warning`
-          : "Immediate restart initiated",
-    });
-  } catch (error: any) {
-    log.error(`Failed to restart server: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  } finally {
-    if (!lifecycleLockTransferred) lifecycleLock.release();
-  }
-});
-
+router.post("/restart", requirePermission("server.control"), async (req, res) =>
+  runLifecycleRoute(req, res, restartServerAction, req.body || {}),
+);
 router.post("/save", requirePermission("server.control"), async (req, res) => {
   try {
     const rconService = req.app.get("rconService");
