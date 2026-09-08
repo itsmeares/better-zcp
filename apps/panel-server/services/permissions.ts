@@ -345,7 +345,7 @@ export function requirePermission(capability: string): RequestHandler {
     log.error(
       `requirePermission() called with an unregistered capability: "${capability}" -- refusing every request to this route until fixed.`,
     );
-    return (req: Request, res: Response) => {
+    return (_req: Request, res: Response) => {
       res.status(403).json({
         error: "Insufficient permissions",
         code: ErrorCode.PERMISSION_DENIED,
