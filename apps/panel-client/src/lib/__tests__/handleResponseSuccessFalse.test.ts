@@ -18,24 +18,40 @@ describe('handleResponse: HTTP 200 with success:false', () => {
   })
 
   it('throws with the SERVER-SUPPLIED message, not a generic one — the message must survive the fix', async () => {
-    vi.mocked(fetch).mockResolvedValue(
-      jsonResponse({ success: false, error: 'Server is not running' }),
-    )
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({ success: false, error: 'Server is not running' }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ success: false, error: 'Server is not running' }),
+      )
 
-    await expect(playersApi.unban('griefer123')).rejects.toThrow('Server is not running')
+    await expect(playersApi.unban('griefer123')).rejects.toThrow(
+      'Server is not running',
+    )
   })
 
   it('does NOT throw for a genuine success (success: true)', async () => {
-    vi.mocked(fetch).mockResolvedValue(
-      jsonResponse({ success: true, response: 'Unbanned griefer123' }),
-    )
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({ success: true, response: 'Unbanned griefer123' }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ success: true, response: 'Unbanned griefer123' }),
+      )
 
-    await expect(playersApi.unban('griefer123')).resolves.toMatchObject({ success: true })
+    await expect(playersApi.unban('griefer123')).resolves.toMatchObject({
+      success: true,
+    })
   })
 
   it('does NOT throw when the response has no `success` field at all — most endpoints never had one', async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({ servers: [] }))
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ servers: [] }))
+      .mockResolvedValueOnce(jsonResponse({ servers: [] }))
 
-    await expect(playersApi.unban('griefer123')).resolves.toEqual({ servers: [] })
+    await expect(playersApi.unban('griefer123')).resolves.toEqual({
+      servers: [],
+    })
   })
 })

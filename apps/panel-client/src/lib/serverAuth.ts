@@ -51,7 +51,7 @@ const authRequestMiddleware = createMiddleware({ type: 'request' }).server(async
   return next({ context: { authenticatedUser: result.user } })
 })
 
-function permissionMiddleware(capability: string) {
+export function permissionMiddleware(capability: string) {
   return createMiddleware({ type: 'request' }).server(
     async ({ context, next }) => {
       const user = (
@@ -189,11 +189,19 @@ export const getCurrentUser = createServerFn({ method: 'GET' })
     }
   })
 
-export async function getProtectedApiJson<T>(endpoint: string, signal?: AbortSignal): Promise<T> {
+export async function getProtectedApiJson<T>(
+  endpoint: string,
+  signal?: AbortSignal,
+  retries?: number,
+): Promise<T> {
   const { apiFetch } = await import('./api.ts')
-  const response = await apiFetch(endpoint, signal ? { signal } : undefined)
+  const response = await apiFetch(
+    endpoint,
+    signal ? { signal } : undefined,
+    retries,
+  )
   if (!response.ok) throw new Error(`Protected API returned ${response.status}`)
-  return await response.json() as T
+  return (await response.json()) as T
 }
 
 export async function getAuthStatusWithFallback(): Promise<AuthStatus> {
