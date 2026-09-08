@@ -1153,6 +1153,47 @@ function taskId(value: unknown): number | null {
   return Number.isInteger(number) && number > 0 ? number : null
 }
 
+type CronCheck =
+  | { valid: true }
+  | { valid: false; error: string; code: string }
+
+async function checkCronExpression(expression: string): Promise<CronCheck> {
+  const {
+    hasUnsupportedCronFieldCount,
+    isCronTooFrequent,
+    isSupportedFiveFieldCron,
+  } = await import('../../../panel-server/utils/cronValidation.ts')
+  if (!isSupportedFiveFieldCron(expression))
+    return {
+      valid: false,
+      error: 'Invalid cron expression format',
+      code: 'SCHEDULER_INVALID_CRON_EXPRESSION',
+    }
+  if (hasUnsupportedCronFieldCount(expression))
+    return {
+      valid: false,
+      error:
+        'The panel does not support seconds-precision schedules. Use exactly 5 fields: minute hour day month weekday.',
+      code: 'SCHEDULER_CRON_SECONDS_UNSUPPORTED',
+    }
+  if (isCronTooFrequent(expression))
+    return {
+      valid: false,
+      error: 'Tasks cannot run more frequently than every 5 minutes',
+      code: 'SCHEDULER_CRON_TOO_FREQUENT',
+    }
+  return { valid: true }
+}
+
+function assertCronCheck(check: CronCheck): asserts check is { valid: true } {
+  if (!check.valid) invalid(check.error, check.code)
+}
+
+function emitSchedulerAction(runtime: AnyRecord, payload: AnyRecord): void {
+  if (typeof runtime.io?.emit === 'function')
+    runtime.io.emit('scheduler:action_result', payload)
+}
+
 export const getSchedulerStatus = createControlRead(
   'automation.manage',
   async () => (await panelRuntime()).scheduler.getStatus() as SchedulerStatus,
@@ -1164,6 +1205,278 @@ export const getSchedulerTasks = createControlRead(
     const { getScheduledTasks } =
       await import('../../../panel-server/database/init.ts')
     return { tasks: await getScheduledTasks() }
+  },
+)
+
+export const validateSchedulerCron = createControlAction(
+  'automation.manage',
+  async (_runtime, data) => {
+    const expression = data.cronExpression
+    if (typeof expression !== 'string' || !expression)
+      invalid(
+        'cronExpression is required',
+        'SCHEDULER_CRON_EXPRESSION_REQUIRED',
+      )
+    return checkCronExpression(expression)
+  },
+)
+
+export const createScheduledTaskAction = createControlAction(
+  'automation.manage',
+  async (runtime, data, context) => {
+    if (!data.name || !data.cronExpression || !data.command)
+      invalid(
+        'Name, cronExpression, and command are required',
+        'SCHEDULER_TASK_FIELDS_REQUIRED',
+      )
+    if (typeof data.name !== 'string' || data.name.length > 100)
+      invalid(
+        'Invalid task name (max 100 chars)',
+        'SCHEDULER_INVALID_TASK_NAME',
+      )
+    if (typeof data.command !== 'string' || data.command.length > 2000)
+      invalid(
+        'Invalid command (max 2000 chars)',
+        'SCHEDULER_INVALID_COMMAND',
+      )
+    if (
+      typeof data.cronExpression !== 'string' ||
+      data.cronExpression.length > 100
+    )
+      invalid(
+        'Invalid cron expression format',
+        'SCHEDULER_INVALID_CRON_FORMAT',
+      )
+
+    const { requiredCapabilityForScheduledCommand } =
+      await import('../../../panel-server/utils/schedulerPermissions.ts')
+    await assertCapability(
+      context,
+      requiredCapabilityForScheduledCommand(data.command),
+    )
+    assertCronCheck(await checkCronExpression(data.cronExpression))
+
+    const { createScheduledTask, deleteScheduledTask, getActiveServer, getServer } =
+      await import('../../../panel-server/database/init.ts')
+    let serverId = data.serverId ?? null
+    if (serverId) {
+      if (!(await getServer(serverId)))
+        invalid('Target server not found', 'SCHEDULER_TARGET_SERVER_NOT_FOUND')
+    } else {
+      const active = await getActiveServer()
+      serverId = active ? active.id : null
+    }
+
+    const result = await createScheduledTask(
+      data.name,
+      data.cronExpression,
+      data.command,
+      serverId,
+    )
+    const task = {
+      id: result.id,
+      name: data.name,
+      cron_expression: data.cronExpression,
+      command: data.command,
+      server_id: serverId,
+      enabled: 1,
+    }
+
+    try {
+      const scheduleResult = runtime.scheduler.scheduleTask(task)
+      if (scheduleResult === false) throw new Error('Scheduler rejected the task')
+      return {
+        success: true,
+        task,
+        dstWarning: scheduleResult?.dstWarning || null,
+      }
+    } catch (error) {
+      await deleteScheduledTask(result.id)
+      throwControlError(
+        Object.assign(
+          new Error(`Failed to schedule task: ${errorMessage(error)}`),
+          {
+            code: 'SCHEDULER_TASK_SCHEDULING_FAILED',
+            params: { reason: errorMessage(error) },
+          },
+        ),
+      )
+    }
+  },
+)
+
+export const updateScheduledTaskAction = createControlAction(
+  'automation.manage',
+  async (runtime, data, context) => {
+    const id = taskId(data.id)
+    if (id === null) invalid('Invalid task ID', 'SCHEDULER_INVALID_TASK_ID')
+    if (
+      data.name !== undefined &&
+      (typeof data.name !== 'string' || data.name.length > 100)
+    )
+      invalid(
+        'Invalid task name (max 100 characters)',
+        'SCHEDULER_INVALID_TASK_NAME',
+      )
+    if (
+      data.command !== undefined &&
+      (typeof data.command !== 'string' || data.command.length > 2000)
+    )
+      invalid(
+        'Invalid command (max 2000 characters)',
+        'SCHEDULER_INVALID_COMMAND',
+      )
+    if (data.command !== undefined) {
+      const { requiredCapabilityForScheduledCommand } =
+        await import('../../../panel-server/utils/schedulerPermissions.ts')
+      await assertCapability(
+        context,
+        requiredCapabilityForScheduledCommand(data.command),
+      )
+    }
+    if (
+      data.enabled !== undefined &&
+      ![true, false, 0, 1].includes(data.enabled)
+    )
+      invalid(
+        'enabled must be a boolean or 0/1',
+        'SCHEDULER_INVALID_ENABLED_VALUE',
+      )
+    const enabled =
+      data.enabled === undefined
+        ? undefined
+        : data.enabled === true || data.enabled === 1
+    if (data.cronExpression) {
+      if (typeof data.cronExpression !== 'string')
+        invalid(
+          'Invalid cron expression format',
+          'SCHEDULER_INVALID_CRON_FORMAT',
+        )
+      assertCronCheck(await checkCronExpression(data.cronExpression))
+    }
+
+    const { getScheduledTasks, getServer, updateScheduledTask } =
+      await import('../../../panel-server/database/init.ts')
+    if (data.serverId !== undefined && data.serverId !== null) {
+      if (!(await getServer(data.serverId)))
+        invalid('Target server not found', 'SCHEDULER_TARGET_SERVER_NOT_FOUND')
+    }
+    const tasksBeforeUpdate = await getScheduledTasks()
+    const previousTaskRecord = Array.isArray(tasksBeforeUpdate)
+      ? tasksBeforeUpdate.find((task: AnyRecord) => String(task.id) === String(id))
+      : null
+    const previousTask = previousTaskRecord
+      ? { ...previousTaskRecord }
+      : null
+    const updated = await updateScheduledTask(
+      id,
+      data.name,
+      data.cronExpression,
+      data.command,
+      enabled,
+      data.serverId,
+    )
+    if (!updated)
+      throwControlError(
+        Object.assign(new Error('Task not found'), {
+          status: 404,
+          code: 'SCHEDULER_TASK_NOT_FOUND',
+        }),
+        404,
+      )
+
+    let dstWarning: string | null = null
+    if (updated.enabled) {
+      try {
+        const scheduleResult = runtime.scheduler.scheduleTask({
+          id,
+          name: updated.name,
+          cron_expression: updated.cron_expression,
+          command: updated.command,
+          server_id: updated.server_id,
+          enabled: 1,
+        })
+        if (scheduleResult === false)
+          throw new Error('Scheduler rejected the updated task')
+        dstWarning = scheduleResult?.dstWarning || null
+      } catch (error) {
+        if (previousTask) {
+          try {
+            await updateScheduledTask(
+              id,
+              previousTask.name,
+              previousTask.cron_expression,
+              previousTask.command,
+              previousTask.enabled,
+              previousTask.server_id,
+            )
+            if (previousTask.enabled) runtime.scheduler.scheduleTask(previousTask)
+            else runtime.scheduler.cancelTask(id)
+          } catch (rollbackError) {
+            void rollbackError
+          }
+        }
+        throwControlError(
+          Object.assign(
+            new Error(`Failed to reschedule task: ${errorMessage(error)}`),
+            {
+              code: 'SCHEDULER_TASK_RESCHEDULE_FAILED',
+              params: { reason: errorMessage(error) },
+            },
+          ),
+        )
+      }
+    } else {
+      runtime.scheduler.cancelTask(id)
+    }
+    return { success: true, message: 'Task updated', dstWarning }
+  },
+)
+
+export const runScheduledTask = createControlAction(
+  'automation.manage',
+  async (runtime, data, context) => {
+    const id = taskId(data.id)
+    if (id === null) invalid('Invalid task ID', 'SCHEDULER_INVALID_TASK_ID')
+    const { getScheduledTasks } =
+      await import('../../../panel-server/database/init.ts')
+    const tasks = (await getScheduledTasks()) as AnyRecord[]
+    const task = tasks.find((candidate) => candidate.id === id)
+    if (!task)
+      throwControlError(
+        Object.assign(new Error('Task not found'), {
+          status: 404,
+          code: 'SCHEDULER_TASK_NOT_FOUND',
+        }),
+        404,
+      )
+
+    const { requiredCapabilityForScheduledCommand } =
+      await import('../../../panel-server/utils/schedulerPermissions.ts')
+    await assertCapability(
+      context,
+      requiredCapabilityForScheduledCommand(task.command),
+    )
+    void runtime.scheduler
+      .runTaskNow(task)
+      .then((result: AnyRecord) =>
+        emitSchedulerAction(runtime, {
+          kind: 'task',
+          taskName: task.name,
+          success: !!result?.success,
+          message:
+            result?.message || (result?.success ? 'Task completed' : 'Task failed'),
+        }),
+      )
+      .catch((error: unknown) =>
+        emitSchedulerAction(runtime, {
+          kind: 'task',
+          taskName: task.name,
+          success: false,
+          message: errorMessage(error),
+        }),
+      )
+    return { success: true, message: 'Task triggered' }
   },
 )
 

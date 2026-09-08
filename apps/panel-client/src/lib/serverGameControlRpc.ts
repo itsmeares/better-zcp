@@ -160,6 +160,11 @@ export const setServerStats = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) => invoke('setServerStats', { data, context }))
 
+export const releaseSafehouse = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('server.world_events'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) => invoke('releaseSafehouse', { data, context }))
+
 export const getPlayers = createServerFn({ method: 'GET' })
   .middleware(capabilityMiddleware('players.view'))
   .validator((data: unknown) => record(data))
@@ -358,6 +363,34 @@ export const getSchedulerTasks = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
     invoke('getSchedulerTasks', { data, context }),
+  )
+
+export const validateSchedulerCron = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('automation.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('validateSchedulerCron', { data, context }),
+  )
+
+export const createScheduledTask = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('automation.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('createScheduledTaskAction', { data, context }),
+  )
+
+export const updateScheduledTask = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('automation.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('updateScheduledTaskAction', { data, context }),
+  )
+
+export const runScheduledTask = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('automation.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('runScheduledTask', { data, context }),
   )
 
 export const deleteScheduledTask = createServerFn({ method: 'POST' })
