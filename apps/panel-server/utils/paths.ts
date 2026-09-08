@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const isPkg = typeof process.pkg !== 'undefined';
+const isPkg = typeof (process as NodeJS.Process & { pkg?: unknown }).pkg !== 'undefined';
 
 const baseDir = isPkg
   ? path.dirname(process.execPath)

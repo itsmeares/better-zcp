@@ -4,9 +4,11 @@ WORKDIR /src
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/panel-client/package.json ./apps/panel-client/package.json
+COPY apps/panel-server/package.json ./apps/panel-server/package.json
 COPY .husky/install.mjs ./.husky/install.mjs
-RUN corepack install && pnpm install --filter @better-zcp/panel-client --frozen-lockfile
+RUN corepack install && pnpm install --filter @better-zcp/panel-client --filter @better-zcp/panel-server --frozen-lockfile
 COPY apps/panel-client/ ./apps/panel-client/
+COPY apps/panel-server/ ./apps/panel-server/
 ARG PANEL_BUILD_SHA=""
 ENV PANEL_BUILD_SHA=${PANEL_BUILD_SHA}
 RUN pnpm --filter @better-zcp/panel-client build
