@@ -1,0 +1,51 @@
+import type { Express } from "express";
+import authRoutes from "../routes/auth.ts";
+import oidcRoutes from "../routes/oidc.ts";
+import serverRoutes from "../routes/server.ts";
+import discoveryRoutes from "../routes/discovery.ts";
+import serversRoutes from "../routes/servers.ts";
+import serverStatusRoutes from "../routes/serverStatus.ts";
+import serverFilesRoutes from "../routes/serverFiles.ts";
+import playerRoutes from "../routes/players.ts";
+import rconRoutes from "../routes/rcon.ts";
+import configRoutes from "../routes/config.ts";
+import schedulerRoutes from "../routes/scheduler.ts";
+import modsRoutes from "../routes/mods.ts";
+import chunksRoutes from "../routes/chunks.ts";
+import discordRoutes from "../routes/discord.ts";
+import debugRoutes from "../routes/debug.ts";
+import serverFinderRoutes from "../routes/serverFinder.ts";
+import panelBridgeRoutes from "../routes/panelBridge.ts";
+import backupRoutes from "../routes/backup.ts";
+import mapProxyRoutes from "../routes/mapProxy.ts";
+import systemRoutes from "../routes/system.ts";
+import templatesRoutes from "../routes/templates.ts";
+import dockerRoutes from "../routes/docker.ts";
+import permissionsRoutes from "../routes/permissions.ts";
+
+export function registerApiRoutes(app: Express): void {
+  app.use("/api/auth", authRoutes);
+  app.use("/api/auth/oidc", oidcRoutes);
+
+  app.use("/api/server", serverRoutes);
+  app.use("/api/servers", discoveryRoutes);
+  app.use("/api/servers", serversRoutes);
+  app.use("/api/servers", serverStatusRoutes);
+  app.use("/api/server-files", serverFilesRoutes);
+  app.use("/api/players", playerRoutes);
+  app.use("/api/rcon", rconRoutes);
+  app.use("/api/config", configRoutes);
+  app.use("/api/scheduler", schedulerRoutes);
+  app.use("/api/mods", modsRoutes);
+  app.use("/api/chunks", chunksRoutes);
+  app.use("/api/discord", discordRoutes);
+  app.use("/api/debug", debugRoutes);
+  app.use("/api/server-finder", serverFinderRoutes);
+  app.use("/api/panel-bridge", panelBridgeRoutes);
+  app.use("/api/backup", backupRoutes);
+  app.use("/api/map", mapProxyRoutes);
+  app.use("/api/system", systemRoutes);
+  app.use("/api/templates", templatesRoutes);
+  app.use("/api/docker", dockerRoutes);
+  app.use("/api/permissions", permissionsRoutes);
+}

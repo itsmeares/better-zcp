@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
+import { registerPanelWebRoutes } from "../http/panelWeb.ts";
 import { sendClientIndex } from "../index.ts";
 
 let temporaryRoot;
@@ -48,5 +49,49 @@ describe("SPA fallback", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("<title>panel</title>");
+  });
+
+  it("prefers the TanStack Start handler and keeps API misses as JSON", async () => {
+    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-start-web-"));
+    const clientDistPath = path.join(temporaryRoot, "client", "dist");
+    const startDistPath = path.join(temporaryRoot, "client", "dist-start-server");
+    fs.mkdirSync(clientDistPath, { recursive: true });
+    fs.mkdirSync(startDistPath, { recursive: true });
+    fs.writeFileSync(path.join(temporaryRoot, "package.json"), '{"type":"module"}');
+    fs.writeFileSync(path.join(clientDistPath, "index.html"), "static shell");
+    fs.writeFileSync(
+      path.join(startDistPath, "server.js"),
+      "export default { fetch: async () => new Response('<html>start page</html>', { headers: { 'content-type': 'text/html' } }) }",
+    );
+
+    const app = express();
+    registerPanelWebRoutes(app, {
+      isPackaged: false,
+      clientDistPath,
+      externalClientDistPath: clientDistPath,
+      embeddedClientDistPath: null,
+      buildMetadata: {
+        panelVersion: "2.0.0",
+        buildSha: "test-build",
+        apiContractVersion: 1,
+      },
+      logger: { debug() {}, warn() {}, error() {} },
+    });
+    server = await new Promise((resolve) => {
+      const listener = app.listen(0, () => resolve(listener));
+    });
+
+    const address = server.address();
+    const startResponse = await fetch(`http://127.0.0.1:${address.port}/players`);
+    expect(startResponse.status).toBe(200);
+    expect(await startResponse.text()).toContain("start page");
+
+    const missingApiResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/not-found`,
+    );
+    expect(missingApiResponse.status).toBe(404);
+    expect(await missingApiResponse.json()).toEqual({
+      error: "API endpoint not found",
+    });
   });
 });

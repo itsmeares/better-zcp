@@ -6,24 +6,14 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { permissionsPolicy } from "./middleware/permissionsPolicy.ts";
 import { logSetupTokenIfNeeded } from "./utils/setupToken.ts";
-import {
-  appendCspScriptHashes,
-  computeInlineScriptCspHashes,
-  computeInlineScriptCspHashesFromHtml,
-} from "./utils/cspScriptHash.ts";
-import {
-  loadTanStackStartHandler,
-  sendTanStackStartResponse,
-  toTanStackStartRequest,
-  type TanStackStartHandler,
-} from "./utils/tanstackStartServer.ts";
+import { computeInlineScriptCspHashes } from "./utils/cspScriptHash.ts";
 import { parseTrustProxySetting } from "./utils/trustProxy.ts";
 import { isUncompressedBinaryProxyPath } from "./utils/compressionFilter.ts";
 import { createServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import { Server } from "socket.io";
 import type { Socket } from "socket.io";
-import type { Request, Response, NextFunction } from "express";
+import type { NextFunction, Request, Response } from "express";
 import type { Server as HttpsServer } from "https";
 import dotenv from "dotenv";
 import path from "path";
@@ -116,8 +106,12 @@ import { DiskMonitor } from "./services/diskMonitor.ts";
 import authService from "./services/auth.ts";
 import { getRoleByName } from "./services/permissions.ts";
 import { requireRole } from "./services/auth.ts";
-import authRoutes from "./routes/auth.ts";
-import oidcRoutes from "./routes/oidc.ts";
+import { registerApiRoutes } from "./http/registerApiRoutes.ts";
+import {
+  apiErrorHandler as handleApiError,
+  registerPanelWebRoutes,
+  sendClientIndex,
+} from "./http/panelWeb.ts";
 import { loadOrCreateCerts } from "./utils/certs.ts";
 import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";
 import { ErrorCode } from "./utils/errorCodes.ts";
@@ -129,9 +123,7 @@ import {
   writeLuaAtomic,
 } from "./utils/embeddedLua.ts";
 import {
-  clientDistMatchesMetadata,
   getEmbeddedClientDistPath,
-  readClientDistMetadata,
   resolveClientDistPath,
 } from "./utils/embeddedClient.ts";
 import { resolveObservedServerRunning } from "./utils/serverStatus.ts";
@@ -263,29 +255,9 @@ async function gracefulShutdown(signal: string) {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-import serverRoutes from "./routes/server.ts";
-import discoveryRoutes from "./routes/discovery.ts";
-import serversRoutes from "./routes/servers.ts";
-import serverStatusRoutes from "./routes/serverStatus.ts";
-import serverFilesRoutes from "./routes/serverFiles.ts";
-import playerRoutes from "./routes/players.ts";
-import rconRoutes from "./routes/rcon.ts";
-import configRoutes from "./routes/config.ts";
-import schedulerRoutes from "./routes/scheduler.ts";
-import modsRoutes from "./routes/mods.ts";
-import chunksRoutes from "./routes/chunks.ts";
-import discordRoutes from "./routes/discord.ts";
-import debugRoutes, { addLogToBuffer } from "./routes/debug.ts";
+import { addLogToBuffer } from "./routes/debug.ts";
 import { getDiskFree } from "./utils/diskSpace.ts";
 import { getSwapInfo } from "./utils/swapInfo.ts";
-import serverFinderRoutes from "./routes/serverFinder.ts";
-import panelBridgeRoutes from "./routes/panelBridge.ts";
-import backupRoutes from "./routes/backup.ts";
-import mapProxyRoutes from "./routes/mapProxy.ts";
-import systemRoutes from "./routes/system.ts";
-import templatesRoutes from "./routes/templates.ts";
-import dockerRoutes from "./routes/docker.ts";
-import permissionsRoutes from "./routes/permissions.ts";
 import panelBridge from "./services/panelBridge.ts";
 
 dotenv.config();
@@ -1092,30 +1064,7 @@ app.set("panelUpdateChecker", panelUpdateChecker);
 const diskMonitor = new DiskMonitor(io);
 app.set("diskMonitor", diskMonitor);
 
-app.use("/api/auth", authRoutes);
-app.use("/api/auth/oidc", oidcRoutes);
-
-app.use("/api/server", serverRoutes);
-app.use("/api/servers", discoveryRoutes);
-app.use("/api/servers", serversRoutes);
-app.use("/api/servers", serverStatusRoutes);
-app.use("/api/server-files", serverFilesRoutes);
-app.use("/api/players", playerRoutes);
-app.use("/api/rcon", rconRoutes);
-app.use("/api/config", configRoutes);
-app.use("/api/scheduler", schedulerRoutes);
-app.use("/api/mods", modsRoutes);
-app.use("/api/chunks", chunksRoutes);
-app.use("/api/discord", discordRoutes);
-app.use("/api/debug", debugRoutes);
-app.use("/api/server-finder", serverFinderRoutes);
-app.use("/api/panel-bridge", panelBridgeRoutes);
-app.use("/api/backup", backupRoutes);
-app.use("/api/map", mapProxyRoutes);
-app.use("/api/system", systemRoutes);
-app.use("/api/templates", templatesRoutes);
-app.use("/api/docker", dockerRoutes);
-app.use("/api/permissions", permissionsRoutes);
+registerApiRoutes(app);
 
 let _pkgVersion: string;
 let _buildSha: string;
@@ -1516,158 +1465,26 @@ app.post(
 
 const isPackaged = typeof process.pkg !== "undefined";
 const clientDistPath = cspClientDistPath;
-const tanStackStartServerPath = isPackaged
-  ? path.join(externalClientDistPath, ".start-server", "server.js")
-  : path.join(__dirname, "../panel-client/dist-start-server/server.js");
-let tanStackStartHandlerPromise:
-  | Promise<TanStackStartHandler | null>
-  | undefined;
-
-async function getTanStackStartHandler(): Promise<TanStackStartHandler | null> {
-  if (!fs.existsSync(tanStackStartServerPath)) return null;
-  tanStackStartHandlerPromise ??= loadTanStackStartHandler(
-    tanStackStartServerPath,
-  ).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    log.warn(
-      `TanStack Start server bundle could not be loaded (${message}); using the static client shell`,
-    );
-    return null;
-  });
-  return tanStackStartHandlerPromise;
-}
-
-async function trySendTanStackStartPage(
-  req: Request,
-  res: Response,
-): Promise<boolean> {
-  try {
-    const handler = await getTanStackStartHandler();
-    if (!handler) return false;
-
-    const response = await handler.fetch(toTanStackStartRequest(req));
-    if (response.headers.get("content-type")?.includes("text/html")) {
-      const hashes = computeInlineScriptCspHashesFromHtml(
-        await response.clone().text(),
-      );
-      const cspHeader = res.getHeader("Content-Security-Policy");
-      if (typeof cspHeader === "string") {
-        res.setHeader(
-          "Content-Security-Policy",
-          appendCspScriptHashes(cspHeader, hashes),
-        );
-      }
-    }
-
-    await sendTanStackStartResponse(response, res);
-    return true;
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    log.warn(
-      `TanStack Start page render failed (${message}); using the static client shell`,
-    );
-    return false;
-  }
-}
-const legacyClientMetadata =
-  isPackaged && !embeddedClientDistPath
-    ? readClientDistMetadata(clientDistPath)
-    : null;
-const legacyClientMismatch =
-  isPackaged &&
-  !embeddedClientDistPath &&
-  !clientDistMatchesMetadata(clientDistPath, _buildMetadata);
-
-function buildLegacyClientRecoveryPage() {
-  const escapeHtml = (value: unknown): string =>
-    String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  const frontendMetadata = legacyClientMetadata || "unavailable";
-  return `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Panel update required</title></head>
-<body><main>
-<h1>Panel update required</h1>
-<p>The executable and web interface are from different releases.</p>
-<p>Executable: ${escapeHtml(`${_buildMetadata.panelVersion} / ${_buildMetadata.buildSha.slice(0, 12)}`)}</p>
-<p>Frontend: ${escapeHtml(typeof frontendMetadata === "string" ? frontendMetadata : `${frontendMetadata.panelVersion} / ${frontendMetadata.buildSha.slice(0, 12)}`)}</p>
-<p>Download the latest full package, extract it over this installation without replacing the <code>data</code> folder, then start the panel again.</p>
-<p><a href="https://github.com/itsmeares/better-zcp/releases/latest">Download the latest release</a></p>
-</main></body>
-</html>`;
-}
-
-if (legacyClientMismatch) {
-  log.error(
-    `Packaged frontend does not match executable ${_buildMetadata.panelVersion}/${_buildMetadata.buildSha}; serving recovery page instead of mixed client/dist`,
-  );
-  app.use((req, res, next) => {
-    if (req.method !== "GET" || req.path.startsWith("/api")) return next();
-    res.status(503).type("html").send(buildLegacyClientRecoveryPage());
-  });
-}
-
-log.debug(`Serving client from: ${clientDistPath}`);
-if (!legacyClientMismatch) {
-  app.use(
-    express.static(clientDistPath, {
-      maxAge: "7d",
-      immutable: true,
-      setHeaders(res, filePath) {
-        if (filePath.endsWith(".html")) {
-          res.setHeader("Cache-Control", "no-cache");
-        }
-      },
-    }),
-  );
-}
-
-export function sendClientIndex(
-  res: Response,
-  clientDistPath: string,
-  callback?: (error?: Error) => void,
-) {
-  return res.sendFile("index.html", { root: clientDistPath }, callback);
-}
-
-// Global API error handler — sanitize internal details from error responses
-const REGISTERED_ERROR_CODES: Set<string> = new Set(Object.values(ErrorCode));
 export function apiErrorHandler(
   err: AnyRecord,
   req: Request,
   res: Response,
-  _next: NextFunction,
+  next: NextFunction,
 ): void {
-  log.error(`Unhandled API error on ${req.method} ${req.path}: ${err.message}`);
-  const status = err.status || 500;
-  const body: AnyRecord = { error: sanitizeError(err.message) };
-  if (typeof err.code === "string" && REGISTERED_ERROR_CODES.has(err.code)) {
-    body.code = err.code;
-  }
-  res.status(status).json(body);
+  handleApiError(log, err, req, res, next);
 }
-app.use("/api", apiErrorHandler);
 
-app.use((req, res, next) => {
-  if (req.method !== "GET" && req.method !== "HEAD") return next();
-  if (req.path.startsWith("/api")) {
-    res.status(404).json({ error: "API endpoint not found" });
-  } else {
-    void trySendTanStackStartPage(req, res).then((handled) => {
-      if (handled || res.headersSent) return;
-      sendClientIndex(res, clientDistPath, (err) => {
-        if (err) {
-          log.error(`Failed to serve index.html: ${err.message}`);
-          res.status(500).send("Page not available");
-        }
-      });
-    });
-  }
+app.use("/api", apiErrorHandler);
+registerPanelWebRoutes(app, {
+  isPackaged,
+  clientDistPath,
+  externalClientDistPath,
+  embeddedClientDistPath,
+  buildMetadata: _buildMetadata,
+  logger: log,
 });
+
+export { sendClientIndex };
 
 io.use(async (socket: AuthenticatedSocket, next) => {
   try {
