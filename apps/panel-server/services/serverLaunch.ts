@@ -219,42 +219,12 @@ export function formatWritablePathError(
   };
 }
 
-function resolveExistingDirectory(inputPath: unknown): string | null {
-  if (typeof inputPath !== "string" || !path.isAbsolute(inputPath)) {
-    return null;
-  }
-  try {
-    const resolved = fs.realpathSync(path.resolve(inputPath));
-    return fs.statSync(resolved).isDirectory() ? resolved : null;
-  } catch {
-    return null;
-  }
-}
-
-function buildClasspathEntries(installPath: string) {
-  const entries = ["java/."];
-  const resolvedInstallPath = resolveExistingDirectory(installPath);
-  if (!resolvedInstallPath) return entries.concat("java/projectzomboid.jar");
-
-  try {
-    const javaDir = path.join(resolvedInstallPath, "java");
-    if (fs.existsSync(javaDir)) {
-      const jars = fs
-        .readdirSync(javaDir)
-        .filter((fileName) => fileName.toLowerCase().endsWith(".jar"))
-        .sort();
-      for (const jar of jars) entries.push(`java/${jar}`);
-    }
-  } catch (error: any) {
-    log.warn(`Could not enumerate java/ jars for classpath: ${error.message}`);
-  }
-  if (entries.length === 1) entries.push("java/projectzomboid.jar");
-  return entries;
+function buildClasspathEntries() {
+  return ["java/.", "java/*"];
 }
 
 export function generateStartupScripts(options: AnyRecord) {
   const {
-    installPath,
     serverName,
     minMemory = 4,
     maxMemory = 8,
@@ -310,7 +280,7 @@ export function generateStartupScripts(options: AnyRecord) {
   if (serverPort !== 16261) gameArgs.push(`-port ${serverPort}`);
   if (useNoSteam) gameArgs.push("-nosteam");
 
-  const classpathEntries = buildClasspathEntries(installPath);
+  const classpathEntries = buildClasspathEntries();
 
   const batchContent = `@echo off
 @setlocal enableextensions
