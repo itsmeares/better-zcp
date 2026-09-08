@@ -54,6 +54,7 @@ import {
   alarm,
   banPlayer,
   banSteamId,
+  createScheduledTask,
   clearSchedulerHistory,
   connectRcon,
   createHorde,
@@ -83,7 +84,9 @@ import {
   removeAllowedSteamId,
   removeFromWhitelist,
   removeZombies,
+  releaseSafehouse,
   restartScheduledServer,
+  runScheduledTask,
   saveGameWorld,
   sendServerMessage,
   setAccessLevel,
@@ -105,8 +108,10 @@ import {
   triggerGunshot,
   triggerLightning,
   triggerThunder,
+  updateScheduledTask,
   unbanPlayer,
   unbanSteamId,
+  validateSchedulerCron,
 } from "./serverGameControlRpc";
 
 const API_BASE = "/api";
@@ -778,7 +783,7 @@ export const serverApi = {
   setStats: (mode: string, period?: number) =>
     serverCall(() => setServerStats({ data: { mode, period } })),
 
-  releaseSafehouse: () => apiPost("/server/releasesafehouse"),
+  releaseSafehouse: () => serverCall(() => releaseSafehouse()),
 
   getConsoleLog: (lines?: number) =>
     apiGet(`/server/console-log${lines ? `?lines=${lines}` : ""}`),
@@ -963,7 +968,9 @@ export const schedulerApi = {
     command: string,
     serverId?: string | number,
   ) =>
-    apiPost("/scheduler/tasks", { name, cronExpression, command, serverId }),
+    serverCall(() =>
+      createScheduledTask({ data: { name, cronExpression, command, serverId } }),
+    ),
   updateTask: (
     id: number,
     name: string,
@@ -972,16 +979,14 @@ export const schedulerApi = {
     enabled: boolean,
     serverId?: string | number,
   ) =>
-    apiPut(`/scheduler/tasks/${id}`, {
-      name,
-      cronExpression,
-      command,
-      enabled,
-      serverId,
-    }),
+    serverCall(() =>
+      updateScheduledTask({
+        data: { id, name, cronExpression, command, enabled, serverId },
+      }),
+    ),
   deleteTask: (id: number) =>
     serverCall(() => deleteScheduledTask({ data: { id } })),
-  runTask: (id: number) => apiPost(`/scheduler/tasks/${id}/run`),
+  runTask: (id: number) => serverCall(() => runScheduledTask({ data: { id } })),
   restartNow: (warningMinutes?: number) =>
     serverCall(() =>
       restartScheduledServer({ data: { warningMinutes } }),
@@ -992,7 +997,7 @@ export const schedulerApi = {
     }>,
   getCronPresets: () => serverCall(() => getSchedulerPresetsWithFallback()),
   validateCron: (cronExpression: string) =>
-    apiPost("/scheduler/validate-cron", { cronExpression }) as Promise<{
+    serverCall(() => validateSchedulerCron({ data: { cronExpression } })) as Promise<{
       valid: boolean;
       error?: string;
       code?: string;
