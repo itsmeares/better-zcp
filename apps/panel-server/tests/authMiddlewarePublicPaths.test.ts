@@ -116,6 +116,26 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
     expect(res.status).not.toHaveBeenCalled();
     expect(req.user).toMatchObject({ role: "admin", authDisabled: true });
   });
+
+  it("shares the same authentication result with non-Express callers", async () => {
+    await expect(authService.authenticateApiRequest()).resolves.toEqual({
+      ok: false,
+      status: 401,
+      error: "Authentication required",
+      code: "AUTH_REQUIRED",
+    });
+
+    authService.jwtSecret = "test-secret-for-shared-auth";
+    const jwt = (await import("jsonwebtoken")).default;
+    const token = jwt.sign({ userId: "u1", tokenGen: 0 }, authService.jwtSecret);
+
+    await expect(
+      authService.authenticateApiRequest(`Bearer ${token}`),
+    ).resolves.toMatchObject({
+      ok: true,
+      user: { userId: "u1", username: "admin", role: "admin" },
+    });
+  });
 });
 
 describe("requireRole() — the guard itself fails closed, independent of middleware()", () => {

@@ -61,13 +61,17 @@ type AuthRole = {
   isSeeded?: boolean;
 };
 
-type AuthenticatedUser = {
+export type AuthenticatedUser = {
   userId: string | null;
   username: string | null;
   role: string;
   tokenGen: number | null;
   authDisabled?: boolean;
 };
+
+export type ApiAuthenticationResult =
+  | { ok: true; user: AuthenticatedUser }
+  | { ok: false; status: 401; error: string; code: string };
 
 type AuthenticatedRequest = Request & {
   user?: AuthenticatedUser;
@@ -311,6 +315,53 @@ class AuthService {
     } catch (error) {
       return null;
     }
+  }
+
+  async authenticateApiRequest(
+    authHeader: string | null | undefined,
+  ): Promise<ApiAuthenticationResult> {
+    if (await this.needsSetup()) {
+      return {
+        ok: false,
+        status: 401,
+        error: "First-run setup required",
+        code: "SETUP_REQUIRED",
+      };
+    }
+
+    if (!(await this.isAuthEnabled())) {
+      return {
+        ok: true,
+        user: {
+          userId: null,
+          username: null,
+          role: "admin",
+          tokenGen: null,
+          authDisabled: true,
+        },
+      };
+    }
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return {
+        ok: false,
+        status: 401,
+        error: "Authentication required",
+        code: "AUTH_REQUIRED",
+      };
+    }
+
+    const user = await this.authenticateAccessToken(authHeader.substring(7));
+    if (!user) {
+      return {
+        ok: false,
+        status: 401,
+        error: "Invalid or expired token",
+        code: "TOKEN_EXPIRED",
+      };
+    }
+
+    return { ok: true, user };
   }
 
   async init(): Promise<void> {
@@ -1091,43 +1142,16 @@ class AuthService {
           return next();
         }
 
-        const needsSetup = await this.needsSetup();
-        if (needsSetup) {
-          return res
-            .status(401)
-            .json({ error: "First-run setup required", code: "SETUP_REQUIRED" });
+        const result = await this.authenticateApiRequest(req.headers.authorization);
+        if (!result.ok) {
+          return res.status(result.status).json({
+            error: result.error,
+            code: result.code,
+          });
         }
 
-        const authEnabled = await this.isAuthEnabled();
-        if (!authEnabled) {
-          authenticatedRequest.user = {
-            userId: null,
-            username: null,
-            role: "admin",
-            tokenGen: null,
-            authDisabled: true,
-          };
-          return next();
-        }
-
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-          return res
-            .status(401)
-            .json({ error: "Authentication required", code: "AUTH_REQUIRED" });
-        }
-
-        const token = authHeader.substring(7);
-        const payload = await this.authenticateAccessToken(token);
-
-        if (!payload) {
-          return res
-            .status(401)
-            .json({ error: "Invalid or expired token", code: "TOKEN_EXPIRED" });
-        }
-
-        authenticatedRequest.user = payload;
-        next();
+        authenticatedRequest.user = result.user;
+        return next();
       } catch (error: unknown) {
         log.error(`Auth middleware error: ${errorMessage(error)}`);
         return res.status(500).json({ error: "Authentication error" });
