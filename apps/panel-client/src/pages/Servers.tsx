@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext, useRef, useCallback, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trans, useTranslation } from 'react-i18next'
 import {
   Server,
@@ -81,7 +82,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { serversApi, serversDetectApi, dockerApi, DockerContainerStats, DockerContainerSummary, ServerInstance, configApi, serverApi, updateApi, UpdateStatus, DiscoveredMount, ComposedServerStatus } from '@/lib/api'
+import { serversApi, serversDetectApi, dockerApi, DockerContainerStats, DockerContainerSummary, ServerInstance, configApi, serverApi, updateApi, UpdateStatus, DiscoveredMount } from '@/lib/api'
 import { resolveClientProvider, resolveServerCardRunning, waitForServerState } from '@/lib/serverStatus'
 import { getInstallProgressMessage } from '@/lib/installProgressMessage'
 import { ServerStatusBadge } from '@/components/ServerStatusBadge'
@@ -98,6 +99,7 @@ import { DiscoverySetup } from '@/components/DiscoverySetup'
 import { DisabledReason } from '@/components/DisabledReason'
 import { HelpTip } from '@/components/HelpTip'
 import { platformTranslationKey, useRuntimeInfo } from '@/hooks/useRuntimeInfo'
+import { panelQueryKeys } from '@/lib/queryClient'
 
 interface DetectedServerConfig {
   dataPath: string
@@ -233,20 +235,109 @@ export default function Servers() {
   const canServerInstall = can('server.install')
   const canServersDiscover = can('servers.discover')
   const canInlineStartStop = canServersManage && canServerControl
-  const [servers, setServers] = useState<ServerInstance[] | null>(null)
+  const { toast } = useToast()
+  const socket = useContext(SocketContext)
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  const {
+    data: serversData,
+    error: serversQueryError,
+    isPending: serversPending,
+    refetch: refetchServers,
+  } = useQuery({
+    queryKey: panelQueryKeys.servers,
+    queryFn: () => serversApi.getAll(),
+    retry: false,
+    staleTime: 0,
+  })
+  const servers = serversData?.servers ?? null
+  const managedLifecycleSupported = serversData?.lifecycleCapabilities?.supported === true
+  const activeServerId = servers?.find((server) => server.isActive)?.id ?? null
+
+  const {
+    data: serverStatusData,
+    refetch: refetchServerStatuses,
+  } = useQuery({
+    queryKey: panelQueryKeys.serversStatus,
+    queryFn: () => serversApi.getStatus({ retries: 0 }),
+    retry: false,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  })
+  const serverStatuses = useMemo(() => {
+    const next: Record<string, { running: boolean; pid: string | null; stateUnknown?: boolean }> = {}
+    for (const server of serverStatusData?.servers || []) {
+      next[String(server.id)] = {
+        running: !!server.running,
+        pid: server.pid,
+        stateUnknown: server.stateUnknown === true,
+      }
+    }
+    return next
+  }, [serverStatusData])
+
+  const {
+    data: rconStatusData,
+  } = useQuery({
+    queryKey: panelQueryKeys.rconStatuses,
+    queryFn: () => serversApi.getRconStatuses(),
+    retry: false,
+    staleTime: 0,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  })
+  const rconStatuses = useMemo(
+    () => Object.fromEntries((rconStatusData?.servers || []).map((server) => [String(server.id), server.status])),
+    [rconStatusData],
+  )
+
+  const {
+    data: dockerData,
+    refetch: refetchDockerState,
+  } = useQuery({
+    queryKey: panelQueryKeys.dockerStatus,
+    queryFn: async () => {
+      const status = await dockerApi.getStatus()
+      if (!status.enabled || !status.available) return { ...status, stats: {} as Record<string, DockerContainerStats> }
+      const stats = await dockerApi.getStats()
+      return { ...status, stats: stats.containers || {} }
+    },
+    retry: false,
+    staleTime: 0,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
+  })
+  const dockerAvailable = Boolean(dockerData?.enabled && dockerData?.available)
+  const dockerContainers = dockerData?.containers ?? []
+  const dockerStats = dockerData?.stats ?? {}
+
+  const {
+    data: activeStatusData,
+  } = useQuery({
+    queryKey: panelQueryKeys.activeServerStatusFor(activeServerId),
+    queryFn: () => serversApi.getComposedStatus({ retries: 0 }),
+    enabled: activeServerId !== null,
+    retry: false,
+    staleTime: 0,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
+  })
+  const currentActiveStatus = activeServerId !== null ? activeStatusData ?? null : null
+
   const [fetchError, setFetchError] = useState<string | null>(null)
   const serversConfirmedEmpty = servers !== null && servers.length === 0
-  const [serverStatuses, setServerStatuses] = useState<Record<string, { running: boolean; pid: string | null; stateUnknown?: boolean }>>({})
-  const [rconStatuses, setRconStatuses] = useState<Record<string, string>>({})
-  const [dockerAvailable, setDockerAvailable] = useState(false)
-  const [dockerContainers, setDockerContainers] = useState<DockerContainerSummary[]>([])
-  const [dockerStats, setDockerStats] = useState<Record<string, DockerContainerStats>>({})
   const [dockerActionPending, setDockerActionPending] = useState<string | null>(null)
-  const [activeStatus, setActiveStatus] = useState<ComposedServerStatus | null>(null)
-  const [activeStatusServerId, setActiveStatusServerId] = useState<string | number | null>(null)
-  const activeStatusRequestRef = useRef(0)
   const [loading, setLoading] = useState(true)
-  const [managedLifecycleSupported, setManagedLifecycleSupported] = useState(false)
+  useEffect(() => {
+    if (serversPending) return
+    setLoading(false)
+    if (serversQueryError) {
+      reportClientError('Failed to fetch servers.', serversQueryError)
+      setFetchError(getUserErrorMessage(serversQueryError, t('fetchError.fallback')))
+    }
+  }, [serversPending, serversQueryError, t])
   const [editingServer, setEditingServer] = useState<ServerInstance | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [lifecyclePending, setLifecyclePending] = useState(false)
@@ -336,74 +427,30 @@ export default function Servers() {
   const connectableMounts = discoveredMounts.filter(
     (mount) => mount.dataPath && mount.serverNames.length > 0,
   )
-  const activeServerId = servers?.find((server) => server.isActive)?.id ?? null
-
-  const { toast } = useToast()
-  const socket = useContext(SocketContext)
-  const navigate = useNavigate()
-  const currentActiveStatus = activeServerId !== null &&
-    activeStatusServerId !== null &&
-    String(activeServerId) === String(activeStatusServerId)
-    ? activeStatus
-    : null
-
-
-
   const fetchServers = useCallback(async () => {
     setFetchError(null)
     try {
-      const data = await serversApi.getAll()
-      setServers(data.servers || [])
-      setManagedLifecycleSupported(data.lifecycleCapabilities?.supported === true)
+      const result = await refetchServers()
+      if (result.error) throw result.error
     } catch (error) {
       reportClientError('Failed to fetch servers.', error)
       setFetchError(getUserErrorMessage(error, t('fetchError.fallback')))
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [refetchServers, t])
 
   const fetchServerStatuses = useCallback(async () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-    try {
-      const data = await serversApi.getStatus({ retries: 0 })
-      const next: Record<string, { running: boolean; pid: string | null; stateUnknown?: boolean }> = {}
-      for (const s of data.servers || []) {
-        next[String(s.id)] = { running: !!s.running, pid: s.pid, stateUnknown: s.stateUnknown === true }
-      }
-      setServerStatuses(next)
-    } catch (error) {
-      reportClientWarning('Failed to fetch per-server status.', error)
-    }
-  }, [])
-
-  const fetchRconStatuses = useCallback(async () => {
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-    try {
-      const data = await serversApi.getRconStatuses()
-      setRconStatuses(Object.fromEntries((data.servers || []).map((server) => [String(server.id), server.status])))
-    } catch (error) {
-      reportClientWarning('Failed to fetch per-server RCON status.', error)
-    }
-  }, [])
+    const result = await refetchServerStatuses()
+    if (result.error) reportClientWarning('Failed to fetch per-server status.', result.error)
+  }, [refetchServerStatuses])
 
   const fetchDockerState = useCallback(async () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-    try {
-      const status = await dockerApi.getStatus()
-      setDockerAvailable(status.enabled && status.available)
-      setDockerContainers(status.containers || [])
-      if (!status.enabled || !status.available) {
-        setDockerStats({})
-        return
-      }
-      const stats = await dockerApi.getStats()
-      setDockerStats(stats.containers || {})
-    } catch (error) {
-      setDockerAvailable(false)
-      reportClientWarning('Failed to fetch managed Docker state.', error)
-    }
-  }, [])
+    const result = await refetchDockerState()
+    if (result.error) reportClientWarning('Failed to fetch managed Docker state.', result.error)
+  }, [refetchDockerState])
 
   const handleDockerAction = useCallback(async (
     container: DockerContainerSummary,
@@ -448,30 +495,7 @@ export default function Servers() {
     }
   }, [fetchServers, navigate, toast, t, canServersManage])
 
-  const fetchActiveStatus = useCallback(async (serverId: string | number) => {
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-    const requestId = ++activeStatusRequestRef.current
-    try {
-      const nextStatus = await serversApi.getComposedStatus({ retries: 0 })
-      if (requestId !== activeStatusRequestRef.current) return
-      setActiveStatus(nextStatus)
-      setActiveStatusServerId(serverId)
-    } catch (error) {
-      if (requestId !== activeStatusRequestRef.current) return
-      setActiveStatus(null)
-      setActiveStatusServerId(null)
-      reportClientWarning('Failed to fetch active server status.', error)
-    }
-  }, [])
-
   useEffect(() => {
-    fetchServers()
-    fetchServerStatuses()
-    fetchRconStatuses()
-    fetchDockerState()
-    const statusInterval = setInterval(fetchServerStatuses, 15000)
-    const rconStatusInterval = setInterval(fetchRconStatuses, 30000)
-    const dockerInterval = setInterval(fetchDockerState, 10000)
     configApi.getAppSettings().then(data => {
       if (data.settings?.steamcmdPath) {
         setSteamcmdPath(data.settings.steamcmdPath)
@@ -485,43 +509,20 @@ export default function Servers() {
         setGameVersion(status.gameVersion)
       }
     }).catch(e => reportClientWarning('Failed to load update status.', e))
-    return () => {
-      clearInterval(statusInterval)
-      clearInterval(rconStatusInterval)
-      clearInterval(dockerInterval)
-    }
-  }, [fetchServers, fetchServerStatuses, fetchRconStatuses, fetchDockerState])
+  }, [])
 
   useEffect(() => {
-    activeStatusRequestRef.current += 1
-    setActiveStatus(null)
-    setActiveStatusServerId(null)
-    if (activeServerId === null) {
-      return
-    }
-    void fetchActiveStatus(activeServerId)
-    const interval = setInterval(() => void fetchActiveStatus(activeServerId), 10000)
-    return () => {
-      clearInterval(interval)
-      activeStatusRequestRef.current += 1
-    }
-  }, [activeServerId, fetchActiveStatus])
+    if (!socket) return
 
-  useEffect(() => {
-    if (!socket || activeServerId === null) return
-
-    const handleServerStatus = (data: { running?: boolean }) => {
-      if (typeof data.running !== 'boolean') return
-      setServerStatuses(prev => ({
-        ...prev,
-        [String(activeServerId)]: { running: data.running as boolean, pid: null },
-      }))
-      void fetchActiveStatus(activeServerId)
+    const handleServerStatus = () => {
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.serversStatus })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServerStatus })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.rconStatuses })
     }
 
     socket.on('server:status', handleServerStatus)
     return () => { socket.off('server:status', handleServerStatus) }
-  }, [socket, activeServerId, fetchActiveStatus])
+  }, [socket, queryClient])
 
   useEffect(() => {
     serversApi.discoverMounts()
@@ -640,17 +641,18 @@ export default function Servers() {
     if (!socket) return
 
     const handleActiveServerChanged = () => {
-      activeStatusRequestRef.current += 1
-      setActiveStatus(null)
-      setActiveStatusServerId(null)
-      fetchServers()
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.servers })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServer })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.serverStatus })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServerStatus })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.rconStatuses })
     }
 
     socket.on('activeServerChanged', handleActiveServerChanged)
     return () => {
       socket.off('activeServerChanged', handleActiveServerChanged)
     }
-  }, [socket, fetchServers])
+  }, [socket, queryClient])
 
   useEffect(() => {
     if (!socket) return
@@ -876,13 +878,20 @@ export default function Servers() {
       serverId,
       expectedRunning,
       (serverStatus) => {
-        setServerStatuses(prev => ({
-          ...prev,
-          [String(serverStatus.id)]: { running: serverStatus.running, pid: serverStatus.pid },
-        }))
+        queryClient.setQueryData(panelQueryKeys.serversStatus, (previous) => {
+          if (!previous || typeof previous !== 'object' || !('servers' in previous) || !Array.isArray(previous.servers)) return previous
+          return {
+            ...previous,
+            servers: previous.servers.map((entry) =>
+              String(entry.id) === String(serverStatus.id)
+                ? { ...entry, running: serverStatus.running, pid: serverStatus.pid }
+                : entry,
+            ),
+          }
+        })
       },
     )
-  }, [])
+  }, [queryClient])
 
   const handleInlineStart = useCallback(async (server: ServerInstance) => {
     if (!canInlineStartStop) return

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import type { ReactElement } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Trans, useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -21,7 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   serverApi, rconApi, playersApi, panelBridgeApi, backupApi, configApi, serversApi, debugApi,
-  panelUpdateApi, modsApi, schedulerApi, ServerInstance, PanelUpdateStatus, ComposedServerStatus,
+  panelUpdateApi, modsApi, schedulerApi, PanelUpdateStatus,
 } from '@/lib/api'
 import { formatUptime } from '@/lib/utils'
 import { resolveClientProvider, deriveDashboardStatus } from '@/lib/serverStatus'
@@ -37,6 +38,7 @@ import { DisabledReason } from '@/components/DisabledReason'
 import { AutoUpdateResultBanner } from '@/components/AutoUpdateResultBanner'
 import { cn, copyText } from '@/lib/utils'
 import { getUserErrorMessage, getRecoveryUrl } from '@/lib/errorMessage'
+import { panelQueryKeys } from '@/lib/queryClient'
 import { VerdictBand, WorkList } from '@/components/dashboard/DashboardVerdict'
 import type { Verdict, WorkItem } from '@/components/dashboard/DashboardVerdict'
 
@@ -175,8 +177,6 @@ function ConnLine({
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation('dashboard')
-  const [status, setStatus] = useState<ServerStatus | null>(null)
-  const [composedStatus, setComposedStatus] = useState<ComposedServerStatus | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus | null>(null)
   const [zombieCount, setZombieCount] = useState<number | null>(null)
@@ -190,7 +190,6 @@ export default function Dashboard() {
   const [, setTick] = useState(0)
   const [autoStartServer, setAutoStartServer] = useState<boolean>(false)
   const [panelInfo, setPanelInfo] = useState<{ localIp: string; port: number; url: string } | null>(null)
-  const [activeServer, setActiveServer] = useState<ServerInstance | null>(null)
   const [showPerformanceCharts, setShowPerformanceCharts] = useState(false)
   const [showQuickStart, setShowQuickStart] = useState<boolean>(() => {
     try { return localStorage.getItem(DASHBOARD_ONBOARDING_DISMISSED_KEY) !== 'true' } catch { return true }
@@ -244,8 +243,51 @@ export default function Dashboard() {
   const canControlServer = can('server.control')
   const canWipeServer = can('server.wipe')
 
+  const {
+    data: activeServerData,
+    refetch: refetchActiveServer,
+  } = useQuery({
+    queryKey: panelQueryKeys.activeServer,
+    queryFn: serversApi.getResolvedActive,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const activeServer = activeServerData?.server ?? null
+  const {
+    data: statusData,
+    dataUpdatedAt: statusUpdatedAt,
+    refetch: refetchStatus,
+  } = useQuery({
+    queryKey: panelQueryKeys.serverStatus,
+    queryFn: () => serverApi.getStatus({ retries: 0 }),
+    retry: false,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  })
+  const {
+    data: composedStatus,
+    dataUpdatedAt: composedStatusUpdatedAt,
+    refetch: refetchComposedStatus,
+  } = useQuery({
+    queryKey: panelQueryKeys.activeServerStatusFor(activeServer?.id),
+    queryFn: () => serversApi.getComposedStatus({ retries: 0 }),
+    enabled: activeServer !== null,
+    retry: false,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  })
+  const status = (statusData ?? null) as ServerStatus | null
+  const activeServerId = activeServer?.id ?? null
+
   useEffect(() => { initialLoadingRef.current = initialLoading }, [initialLoading])
   useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 10000); return () => clearInterval(t) }, [])
+
+  useEffect(() => {
+    const updatedAt = Math.max(statusUpdatedAt, composedStatusUpdatedAt)
+    if (updatedAt > 0) setLastUpdated(new Date(updatedAt))
+  }, [statusUpdatedAt, composedStatusUpdatedAt])
 
   useEffect(() => {
     let cancelled = false
@@ -302,14 +344,21 @@ export default function Dashboard() {
   }
 
   const fetchStatus = useCallback(async () => {
-    try { const data = await serverApi.getStatus({ retries: 0 }); setStatus(data); setFetchError(null); setLastUpdated(new Date()) }
-    catch { setFetchError(t('errors.failedToConnect')) }
-  }, [t])
+    const result = await refetchStatus()
+    if (result.error) {
+      setFetchError(t('errors.failedToConnect'))
+      return result.data
+    }
+    setFetchError(null)
+    setLastUpdated(new Date())
+    return result.data
+  }, [refetchStatus, t])
 
   const fetchComposedStatus = useCallback(async () => {
-    try { setComposedStatus(await serversApi.getComposedStatus({ retries: 0 })) }
-    catch { setComposedStatus(null) }
-  }, [])
+    if (activeServerId === null) return undefined
+    const result = await refetchComposedStatus()
+    return result.data
+  }, [activeServerId, refetchComposedStatus])
 
   usePageShortcut('r', () => { if (loading === null) { fetchStatus(); fetchComposedStatus() } })
 
@@ -374,8 +423,9 @@ export default function Dashboard() {
     }
   }, [])
   const fetchActiveServer = useCallback(async () => {
-    try { const d = await serversApi.getResolvedActive(); setActiveServer(d.server ?? null) } catch { setActiveServer(null) }
-  }, [])
+    const result = await refetchActiveServer()
+    return result.data
+  }, [refetchActiveServer])
   const fetchMaintenance = useCallback(async () => {
     const [backupRes, modsRes, tasksRes, schedRes, errorRes] = await Promise.allSettled([
       backupApi.getStatus(),
@@ -439,8 +489,6 @@ export default function Dashboard() {
 
     const interval = setInterval(() => {
       if (document.visibilityState === 'hidden') return
-      fetchStatus()
-      fetchComposedStatus()
       fetchPlayers()
       fetchPlayerActivity()
     }, 15000)
@@ -460,17 +508,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!socket) return
-    const onStatus = (data: Partial<ServerStatus>) => {
-      setStatus(prev => {
-        if (prev) return { ...prev, ...data }
-        return prev
-      })
-      setLastUpdated(new Date())
+    const onStatus = () => {
+      void fetchStatus()
+      void fetchComposedStatus()
     }
     const onPlayers = (d: Player[]) => setPlayers(d)
-    const onActiveServer = (d?: { server?: ServerInstance | null }) => {
-      if (d?.server !== undefined) setActiveServer(d.server); else fetchActiveServer()
-      fetchStatus(); fetchComposedStatus(); fetchPlayers(); fetchBridgeStatus()
+    const onActiveServer = () => {
+      void fetchActiveServer()
+      void fetchStatus(); void fetchComposedStatus(); void fetchPlayers(); void fetchBridgeStatus()
     }
     const onBridgeMod = (d: { alive: boolean; version?: string; serverName?: string; playerCount?: number }) => {
       setBridgeStatus(prev => ({
@@ -614,8 +659,7 @@ export default function Dashboard() {
         pollIntervalRef.current = setInterval(async () => {
           attempts++
           try {
-            const data = await serverApi.getStatus({ retries: 0 })
-            setStatus(data)
+            const data = await fetchStatus()
             if (data?.running || attempts >= 15) {
               if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null }
             }

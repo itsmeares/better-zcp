@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
-import { useCallback, useEffect, useRef, useState, useContext } from 'react'
+import { useEffect, useRef, useState, useContext } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import {
   LayoutDashboard,
@@ -57,6 +57,7 @@ import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp'
 import { panelHealthQueryOptions } from '@/lib/panelHealth'
 import { preloadRouteModule } from '@/lib/routePreload'
 import { LanguageSwitcher } from './LanguageSwitcher'
+import { panelQueryKeys } from '@/lib/queryClient'
 
 const dashboardItem = { to: '/', icon: Gauge, label: 'Dashboard', labelKey: 'nav.dashboard' }
 
@@ -307,14 +308,21 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { t } = useTranslation('shell')
   const { t: tScheduler } = useTranslation('scheduler')
-  const [activeServer, setActiveServer] = useState<ServerInstance | null>(null)
+  const queryClient = useQueryClient()
+  const { data: serversData } = useQuery({
+    queryKey: panelQueryKeys.servers,
+    queryFn: serversApi.getAll,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const servers = serversData?.servers ?? null
+  const activeServer = servers?.find((server) => server.isActive) ?? null
 
   const isBlockedByRemote = (item: NavItem) =>
     !!item.requiresLocal &&
     !!activeServer?.isRemote &&
     !(item.allowRemoteConfigMirror && activeServer.remoteConfigConfigured)
   const provider = resolveClientProvider(activeServer)
-  const [servers, setServers] = useState<ServerInstance[] | null>(null)
   const serversConfirmedEmpty = servers !== null && servers.length === 0
   const isBlockedByNoServer = (section: NavSection) => !!section.requiresServer && serversConfirmedEmpty
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -335,6 +343,25 @@ export default function Layout({ children }: LayoutProps) {
   const socket = useContext(SocketContext)
   const { toast } = useToast()
   const { helpOpen, setHelpOpen, shortcuts } = useKeyboardShortcuts()
+
+  const { data: runtimeStatus } = useQuery({
+    queryKey: panelQueryKeys.serverStatus,
+    queryFn: () => serverApi.getStatus({ retries: 0 }),
+    enabled: provider === 'native',
+    retry: false,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  })
+  const { data: composedStatus } = useQuery({
+    queryKey: panelQueryKeys.activeServerStatusFor(activeServer?.id),
+    queryFn: () => serversApi.getComposedStatus({ retries: 0 }),
+    enabled: provider !== null && provider !== 'native',
+    retry: false,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  })
 
   useEffect(() => {
     if (!socket) return
@@ -381,51 +408,59 @@ export default function Layout({ children }: LayoutProps) {
     })
   }
 
-  const refreshServerRunState = useCallback(async () => {
-    if (provider === 'native') {
-      try {
-        const data = await serverApi.getStatus()
-        const lifecycleState = toClientRunState(data?.state)
-        if (lifecycleState) { setServerRunState(lifecycleState); return }
-        if (typeof data?.running === 'boolean') setServerRunState(data.running ? 'running' : 'stopped')
-      } catch { /* transient fetch failure -- keep the last known state */ }
+  useEffect(() => {
+    if (provider === null) {
+      setServerRunState('unknown')
       return
     }
-    if (provider == null) { setServerRunState('unknown'); return }
-    try {
-      const composed = await serversApi.getComposedStatus()
-      const lifecycleState = toClientRunState(composed.state)
-      if (lifecycleState) { setServerRunState(lifecycleState); return }
-      const hostRunning = composed.host.status === 'running'
-      const rconConnected = composed.server.status === 'connected'
-      const bridgeActive = composed.bridge.status === 'active'
-      const hostUnknown = ['unknown', 'not-applicable'].includes(composed.host.status)
+
+    const status = provider === 'native' ? runtimeStatus : composedStatus
+    const lifecycleState = toClientRunState(status?.state)
+    if (lifecycleState) {
+      setServerRunState(lifecycleState)
+      return
+    }
+
+    if (provider === 'native' && typeof runtimeStatus?.running === 'boolean') {
+      setServerRunState(runtimeStatus.running ? 'running' : 'stopped')
+      return
+    }
+
+    if (composedStatus) {
+      const hostRunning = composedStatus.host.status === 'running'
+      const rconConnected = composedStatus.server.status === 'connected'
+      const bridgeActive = composedStatus.bridge.status === 'active'
+      const hostUnknown = ['unknown', 'not-applicable'].includes(composedStatus.host.status)
       setServerRunState(
         hostRunning || rconConnected || bridgeActive ? 'running' : hostUnknown ? 'unknown' : 'stopped',
       )
-    } catch {
-      setServerRunState('unknown')
     }
-  }, [provider])
-
-  useEffect(() => {
-    void refreshServerRunState()
-  }, [activeServer?.id, refreshServerRunState])
+  }, [provider, runtimeStatus, composedStatus])
 
   useEffect(() => {
     if (!socket) return
     const onStatus = (data?: { running?: boolean; isRunning?: boolean; state?: string }) => {
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.serverStatus })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServerStatus })
       const lifecycleState = toClientRunState(data?.state)
       if (lifecycleState) { setServerRunState(lifecycleState); return }
       if (provider === 'native') {
         const running = typeof data?.running === 'boolean' ? data.running : data?.isRunning
         if (typeof running === 'boolean') { setServerRunState(running ? 'running' : 'stopped'); return }
       }
-      void refreshServerRunState()
+    }
+    const refreshComposedStatus = () => {
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServerStatus })
     }
     socket.on('server:status', onStatus)
-    return () => { socket.off('server:status', onStatus) }
-  }, [socket, provider, refreshServerRunState])
+    socket.on('panelBridge:status', refreshComposedStatus)
+    socket.on('panelBridge:modStatus', refreshComposedStatus)
+    return () => {
+      socket.off('server:status', onStatus)
+      socket.off('panelBridge:status', refreshComposedStatus)
+      socket.off('panelBridge:modStatus', refreshComposedStatus)
+    }
+  }, [socket, provider, queryClient])
 
   useEffect(() => {
     let cancelled = false
@@ -501,46 +536,21 @@ export default function Layout({ children }: LayoutProps) {
   }, [mobileMenuOpen])
 
   useEffect(() => {
-    const fetchServers = async () => {
-      try {
-        const data = await serversApi.getAll()
-        setServers(data.servers || [])
-        const active = data.servers?.find((s: ServerInstance) => s.isActive) || null
-        setActiveServer(active)
-      } catch {
-        toast({
-          title: t('serverListErrors.listUnavailableTitle'),
-          description: t('serverListErrors.listUnavailableDesc'),
-          variant: 'destructive',
-        })
-      }
-    }
-    fetchServers()
-  }, [toast, t])
-
-  useEffect(() => {
     if (!socket) return
 
-    const handleActiveServerChanged = async () => {
-      try {
-        const data = await serversApi.getAll()
-        setServers(data.servers || [])
-        const active = data.servers?.find((s: ServerInstance) => s.isActive) || null
-        setActiveServer(active)
-      } catch {
-        toast({
-          title: t('serverListErrors.refreshFailedTitle'),
-          description: t('serverListErrors.refreshFailedDesc'),
-          variant: 'destructive',
-        })
-      }
+    const handleActiveServerChanged = () => {
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.servers })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServer })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.serverStatus })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServerStatus })
+      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.rconStatuses })
     }
 
     socket.on('activeServerChanged', handleActiveServerChanged)
     return () => {
       socket.off('activeServerChanged', handleActiveServerChanged)
     }
-  }, [socket, toast, t])
+  }, [socket, queryClient])
 
   useEffect(() => {
     if (!socket) return
