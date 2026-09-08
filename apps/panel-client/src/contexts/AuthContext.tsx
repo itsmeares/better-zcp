@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo, t
 import { clearAccessToken, getAccessToken, setAccessToken } from '../lib/authToken'
 import { ApiError } from '../lib/api'
 import { getUserErrorMessage } from '../lib/errorMessage'
-import { getAuthStatusWithFallback } from '../lib/serverAuth'
+import { getAuthStatusWithFallback, getCurrentUserWithFallback } from '../lib/serverAuth'
 
 interface User {
   id: string
@@ -94,11 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const token = getToken()
       if (token) {
-        const meRes = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (meRes.ok) {
-          const data = await meRes.json()
+        try {
+          const data = await getCurrentUserWithFallback()
           setState({
             user: data.user,
             isAuthenticated: true,
@@ -107,8 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             authEnabled: true,
           })
           return
+        } catch {
+          clearAccessToken()
         }
-        clearAccessToken()
       }
 
       const refreshRes = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })

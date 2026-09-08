@@ -3,6 +3,11 @@ import { clearAccessToken, getAccessToken, setAccessToken } from "./authToken";
 import { toast } from "@/components/ui/use-toast";
 import i18n from "@/i18n";
 import type { LifecycleState } from "./serverStatus";
+import { getRuntimeInfoWithFallback } from "./serverSystem";
+import {
+  getCapabilitiesWithFallback,
+  getRolesWithFallback,
+} from "./serverPermissions";
 
 const API_BASE = "/api";
 
@@ -3108,7 +3113,7 @@ export const systemApi = {
   getDiskSpace: (): Promise<DiskSpaceReport> => apiGet("/system/disk-space"),
   getStorageHealth: (): Promise<StorageHealth> =>
     apiGet("/system/storage-health"),
-  getRuntime: (): Promise<RuntimeInfo> => apiGet("/system/runtime", undefined, 0),
+  getRuntime: (): Promise<RuntimeInfo> => getRuntimeInfoWithFallback(),
 };
 
 
@@ -3135,9 +3140,9 @@ export interface RoleInfo {
 
 export const permissionsApi = {
   getCapabilities: (): Promise<{ groups: CapabilityGroup[] }> =>
-    apiGet("/permissions/capabilities"),
+    getCapabilitiesWithFallback(),
 
-  getRoles: (): Promise<{ roles: RoleInfo[] }> => apiGet("/permissions/roles"),
+  getRoles: (): Promise<{ roles: RoleInfo[] }> => getRolesWithFallback(),
 
   createRole: (data: {
     name: string;
