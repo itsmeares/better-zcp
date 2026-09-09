@@ -61,10 +61,11 @@ describe("SPA fallback", () => {
     fs.writeFileSync(path.join(clientDistPath, "index.html"), "static shell");
     fs.writeFileSync(
       path.join(startDistPath, "server.js"),
-      "export default { fetch: async () => new Response('<html>start page</html>', { headers: { 'content-type': 'text/html' } }) }",
+      "export default { fetch: async (request) => request.method === 'POST' ? Response.json({ method: request.method, body: await request.json() }) : new Response('<html>start page</html>', { headers: { 'content-type': 'text/html' } }) }",
     );
 
     const app = express();
+    app.use(express.json());
     registerPanelWebRoutes(app, {
       isPackaged: false,
       clientDistPath,
@@ -85,6 +86,20 @@ describe("SPA fallback", () => {
     const startResponse = await fetch(`http://127.0.0.1:${address.port}/players`);
     expect(startResponse.status).toBe(200);
     expect(await startResponse.text()).toContain("start page");
+
+    const serverFunctionResponse = await fetch(
+      `http://127.0.0.1:${address.port}/_serverFn/test-command`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "ping" }),
+      },
+    );
+    expect(serverFunctionResponse.status).toBe(200);
+    expect(await serverFunctionResponse.json()).toEqual({
+      method: "POST",
+      body: { action: "ping" },
+    });
 
     const missingApiResponse = await fetch(
       `http://127.0.0.1:${address.port}/api/not-found`,

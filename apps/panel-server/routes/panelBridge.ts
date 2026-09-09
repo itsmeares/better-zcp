@@ -50,7 +50,21 @@ import {
   resetRemoteConfigSession,
   validateRemoteConfigTransport,
 } from "../services/remoteConfigFiles.ts";
+import {
+  BRIDGE_ACTION_CAPABILITY,
+  ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS,
+  GM_TOOLS_ONLY_ACTIONS,
+  ITEM_TYPE_REGEX,
+  VALID_ACTIONS,
+  VEHICLE_SCRIPT_REGEX,
+} from "../services/panelBridgePolicy.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
+export {
+  BRIDGE_ACTION_CAPABILITY,
+  ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS,
+  GM_TOOLS_ONLY_ACTIONS,
+  VALID_ACTIONS,
+} from "../services/panelBridgePolicy.ts";
 const log = createLogger("API:PanelBridge");
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,9 +80,6 @@ type BridgePath = {
   exists: boolean;
   priority: number;
 };
-
-const ITEM_TYPE_REGEX = /^[A-Za-z0-9_]+\.[A-Za-z0-9_&#+.\-]+$/;
-const VEHICLE_SCRIPT_REGEX = /^[A-Za-z0-9_]+\.[A-Za-z0-9_&#+.\-]+$/;
 
 const SFTP_SETTING_KEYS = {
   enabled: "panelBridgeSftpEnabled",
@@ -110,150 +121,6 @@ async function resolveSftpLogConfig(input: AnyRecord = {}) {
     logPath: input.logPath ?? settings[SFTP_LOG_PATH_KEY],
   };
 }
-
-export const VALID_ACTIONS = new Set([
-  "ping",
-  "getServerInfo",
-  "getWeather",
-  "getGameTime",
-  "getWorldStats",
-  "getPlayerDetails",
-  "getAllPlayerDetails",
-  "healPlayer",
-  "killPlayer",
-  "teleportPlayer",
-  "setGodMode",
-  "setInvisible",
-  "setNoclip",
-  "giveItem",
-  "exportPlayerData",
-  "importPlayerData",
-  "triggerBlizzard",
-  "triggerTropicalStorm",
-  "triggerStorm",
-  "stopWeather",
-  "startRain",
-  "stopRain",
-  "setSnow",
-  "generateWeather",
-  "setTemperature",
-  "setWind",
-  "setFog",
-  "setClouds",
-  "setDayLight",
-  "setNightStrength",
-  "setDesaturation",
-  "setViewDistance",
-  "setAmbient",
-  "setClimateFloat",
-  "resetClimateOverrides",
-  "getClimateFloats",
-  "setGameTime",
-  "triggerLightning",
-  "playWorldSound",
-  "playSoundNearPlayer",
-  "triggerGunshot",
-  "triggerAlarmSound",
-  "createNoise",
-  "sendToServerChat",
-  "sendToAdminChat",
-  "sendToGeneralChat",
-  "getChatInfo",
-  "getUtilitiesStatus",
-  "restoreUtilities",
-  "shutOffUtilities",
-  "saveWorld",
-  "getSandboxOptions",
-  "getAllSandboxOptions",
-  "setSandboxOption",
-  "getZombieCount",
-  "clearZombiesNearPlayer",
-  "clearAllZombies",
-  "spawnHordeNearPlayer",
-  "spawnHordeBehindPlayer",
-  "airdrop",
-  "getSafehouses",
-  "safehouseAddPlayer",
-  "safehouseRemovePlayer",
-  "safehouseSetOwner",
-  "safehouseSetRespawn",
-  "getFactions",
-  "createFaction",
-  "factionAddPlayer",
-  "factionRemovePlayer",
-  "factionSetTag",
-  "removeFaction",
-  "getVehiclesDetailed",
-  "vehicleRepair",
-  "vehicleSetAlarm",
-  "vehicleSetSiren",
-  "vehicleSetTrunkLocked",
-  "vehicleSetFuel",
-  "vehicleSetBattery",
-  "removeVehicle",
-  "removeVehiclesInArea",
-  "spawnVehicleAt",
-  "vehicleHotwire",
-  "getTimeSpeed",
-  "setTimeSpeed",
-  "triggerHelicopterEvent",
-  "stopHelicopterEvent",
-  "triggerSwarmEvent",
-  "runEventSequence",
-  "getInfrastructureSnapshot",
-  "moderationKickUser",
-  "moderationBanUser",
-  "moderationBanIP",
-  "moderationBanSteamID",
-  "getDebugLog",
-  "setDebugMode",
-  "getStats",
-  "checkAPI",
-  "getAvailableHandlers",
-  "clearErrors",
-  "getItemCatalog",
-  "getVehicleCatalog",
-  // Keep this allowlist aligned with the Lua handlers and dedicated routes.
-  "debugItemScript",
-]);
-
-export const BRIDGE_ACTION_CAPABILITY: Record<string, string> = {
-  moderationKickUser: "players.moderate",
-  moderationBanUser: "players.moderate",
-  moderationBanIP: "players.moderate",
-  moderationBanSteamID: "players.moderate",
-  setGodMode: "players.gm_tools",
-  setInvisible: "players.gm_tools",
-  setNoclip: "players.gm_tools",
-  healPlayer: "players.gm_tools",
-  debugItemScript: "bridge.diagnostics",
-  playSoundNearPlayer: "players.endanger_or_impersonate",
-  triggerGunshot: "players.endanger_or_impersonate",
-  triggerAlarmSound: "players.endanger_or_impersonate",
-  createNoise: "players.endanger_or_impersonate",
-  spawnHordeNearPlayer: "players.endanger_or_impersonate",
-  spawnHordeBehindPlayer: "players.endanger_or_impersonate",
-  sendToAdminChat: "players.endanger_or_impersonate",
-  sendToGeneralChat: "players.endanger_or_impersonate",
-};
-
-export const GM_TOOLS_ONLY_ACTIONS = new Set([
-  "setGodMode",
-  "setInvisible",
-  "setNoclip",
-  "healPlayer",
-]);
-
-export const ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS = new Set([
-  "playSoundNearPlayer",
-  "triggerGunshot",
-  "triggerAlarmSound",
-  "createNoise",
-  "spawnHordeNearPlayer",
-  "spawnHordeBehindPlayer",
-  "sendToAdminChat",
-  "sendToGeneralChat",
-]);
 
 const requireBridgeCommand = requirePermission("bridge.command");
 function requireBridgeCommandUnlessGmToolsOnly(req: any, res: any, next: any) {

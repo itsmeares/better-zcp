@@ -191,6 +191,7 @@ import {
   unbanSteamId,
   validateSchedulerCron,
 } from "./serverGameControlRpc";
+import { sendPanelBridgeCommand } from "./serverPanelBridgeRpc";
 
 const API_BASE = "/api";
 
@@ -2708,17 +2709,38 @@ export const panelBridgeApi = {
     action: string,
     args?: Record<string, unknown>,
   ) =>
-    apiPost<BridgeCommandResult<T>>("/panel-bridge/command", { action, args }),
+    serverCall(
+      () => sendPanelBridgeCommand({ data: { action, args } }),
+      () =>
+        apiPost<BridgeCommandResult<T>>("/panel-bridge/command", {
+          action,
+          args,
+        }),
+    ),
 
   triggerHelicopterEvent: () =>
-    apiPost<BridgeCommandResult<{ message: string }>>(
-      "/panel-bridge/command",
-      { action: "triggerHelicopterEvent", args: {} },
+    serverCall(
+      () =>
+        sendPanelBridgeCommand({
+          data: { action: "triggerHelicopterEvent", args: {} },
+        }),
+      () =>
+        apiPost<BridgeCommandResult<{ message: string }>>(
+          "/panel-bridge/command",
+          { action: "triggerHelicopterEvent", args: {} },
+        ),
     ),
   stopHelicopterEvent: () =>
-    apiPost<BridgeCommandResult<{ message: string }>>(
-      "/panel-bridge/command",
-      { action: "stopHelicopterEvent", args: {} },
+    serverCall(
+      () =>
+        sendPanelBridgeCommand({
+          data: { action: "stopHelicopterEvent", args: {} },
+        }),
+      () =>
+        apiPost<BridgeCommandResult<{ message: string }>>(
+          "/panel-bridge/command",
+          { action: "stopHelicopterEvent", args: {} },
+        ),
     ),
 
   getWeather: () =>
@@ -3002,10 +3024,24 @@ export const panelBridgeApi = {
     if (!Number.isFinite(options.x) || !Number.isFinite(options.y)) {
       return Promise.reject(new Error("Invalid coordinates"));
     }
-    return apiPost("/panel-bridge/command", {
-      action: "airdrop",
-      args: { ...options, x: Math.round(options.x), y: Math.round(options.y) },
-    });
+    return serverCall(
+      () =>
+        sendPanelBridgeCommand({
+          data: {
+            action: "airdrop",
+            args: {
+              ...options,
+              x: Math.round(options.x),
+              y: Math.round(options.y),
+            },
+          },
+        }),
+      () =>
+        apiPost("/panel-bridge/command", {
+          action: "airdrop",
+          args: { ...options, x: Math.round(options.x), y: Math.round(options.y) },
+        }),
+    );
   },
 
 
