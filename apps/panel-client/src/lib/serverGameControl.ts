@@ -257,6 +257,42 @@ export const saveGameWorld = createControlAction('server.control', (runtime) =>
   runtime.rconService.save(),
 )
 
+export const startServer = createControlAction(
+  'server.control',
+  async (runtime, data) => {
+    const { startServerAction } =
+      await import('../../../panel-server/services/serverLifecycleActions.ts')
+    return startServerAction(runtime, data)
+  },
+)
+
+export const stopServer = createControlAction(
+  'server.control',
+  async (runtime, data) => {
+    const { stopServerAction } =
+      await import('../../../panel-server/services/serverLifecycleActions.ts')
+    return stopServerAction(runtime, data)
+  },
+)
+
+export const forceStopServer = createControlAction(
+  'server.control',
+  async (runtime, data) => {
+    const { forceStopServerAction } =
+      await import('../../../panel-server/services/serverLifecycleActions.ts')
+    return forceStopServerAction(runtime, data)
+  },
+)
+
+export const restartServer = createControlAction(
+  'server.control',
+  async (runtime, data) => {
+    const { restartServerAction } =
+      await import('../../../panel-server/services/serverLifecycleActions.ts')
+    return restartServerAction(runtime, data)
+  },
+)
+
 export const sendServerMessage = createControlAction(
   'server.world_events',
   (runtime, data) => {

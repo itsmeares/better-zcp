@@ -85,6 +85,7 @@ import {
   removeFromWhitelist,
   removeZombies,
   releaseSafehouse,
+  restartServer,
   restartScheduledServer,
   runScheduledTask,
   saveGameWorld,
@@ -98,10 +99,13 @@ import {
   setSchedulerTimezone,
   setServerStats,
   setVoiceBan,
+  startServer,
   startRain,
   startStorm,
+  stopServer,
   stopRain,
   stopWeather,
+  forceStopServer,
   teleportPlayer,
   testRconConnection,
   triggerChopper,
@@ -683,12 +687,13 @@ export const serverApi = {
   getNetworkInterfaces: (): Promise<{
     interfaces: { name: string; address: string }[];
   }> => serverCall(() => getNetworkInterfacesWithFallback()),
-  start: () => apiPost("/server/start"),
-  stop: () => apiPost("/server/stop"),
-  forceStop: () => apiPost("/server/force-stop"),
+  start: () => serverCall(() => startServer()),
+  stop: () => serverCall(() => stopServer()),
+  forceStop: () => serverCall(() => forceStopServer()),
   restart: (warningMinutes?: number) =>
-    apiPost("/server/restart", { warningMinutes }),
-  restartNow: () => apiPost("/server/restart", { warningMinutes: 0 }),
+    serverCall(() => restartServer({ data: { warningMinutes } })),
+  restartNow: () =>
+    serverCall(() => restartServer({ data: { warningMinutes: 0 } })),
   save: () => serverCall(() => saveGameWorld()),
   sendMessage: (message: string) =>
     serverCall(() => sendServerMessage({ data: { message } })),
