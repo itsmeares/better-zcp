@@ -50,6 +50,7 @@ function createAction(name: string, capability?: string) {
 export const createTemplate = createAction('createTemplate', 'templates.manage')
 export const importTemplate = createAction('importTemplate', 'templates.manage')
 export const previewTemplate = createAction('previewTemplate')
+export const applyTemplate = createAction('applyTemplate', 'templates.manage')
 export const deleteTemplate = createAction('deleteTemplate', 'templates.manage')
 export const unhideTemplate = createAction('unhideTemplate', 'templates.manage')
 export const updateBackupSettings = createAction(
@@ -61,3 +62,5 @@ export const deleteBackupsOlderThan = createAction(
   'deleteBackupsOlderThan',
   'backups.manage',
 )
+export const createBackup = createAction('createBackup', 'backups.manage')
+export const restoreBackup = createAction('restoreBackup', 'backups.restore')

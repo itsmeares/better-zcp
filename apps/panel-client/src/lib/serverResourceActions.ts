@@ -114,6 +114,94 @@ export const previewTemplate = createResourceAction(undefined, async (data) => {
   return result
 })
 
+export const applyTemplate = createResourceAction(
+  'templates.manage',
+  async (data) => {
+    if (!data.serverId)
+      invalid('serverId is required', 'SIM_TEMPLATE_SERVER_ID_REQUIRED')
+
+    const [{ getActiveServer }, { ErrorCode }] = await Promise.all([
+      import('../../../panel-server/database/init.ts'),
+      import('../../../panel-server/utils/errorCodes.ts'),
+    ])
+    const runtime = await panelRuntime()
+    const activeServer = await getActiveServer()
+    if (String(activeServer?.id) !== String(data.serverId)) {
+      throwResourceError(
+        Object.assign(
+          new Error(
+            "Can't verify this server's running state — the panel can only check the currently active server. Switch to this server first, then apply the template.",
+          ),
+          { code: ErrorCode.SIM_TEMPLATE_APPLY_INACTIVE_SERVER_UNVERIFIABLE },
+        ),
+        409,
+      )
+    }
+
+    const serverManager = runtime.serverManager
+    if (!serverManager?.getServerProcessDetails) {
+      throwResourceError(
+        Object.assign(new Error('Unable to verify server state'), {
+          code: ErrorCode.SIM_TEMPLATE_APPLY_STATE_UNKNOWN,
+        }),
+        503,
+      )
+    }
+
+    try {
+      const details = await serverManager.getServerProcessDetails()
+      if (details.scanFailed) {
+        throwResourceError(
+          Object.assign(new Error('Unable to verify server state'), {
+            code: ErrorCode.SIM_TEMPLATE_APPLY_STATE_UNKNOWN,
+          }),
+          503,
+        )
+      }
+      if (details.running) {
+        throwResourceError(
+          Object.assign(
+            new Error('Stop the server before applying a template'),
+            {
+              code: ErrorCode.SIM_TEMPLATE_APPLY_SERVER_RUNNING,
+            },
+          ),
+          409,
+        )
+      }
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        typeof (error as Error & { status?: unknown }).status === 'number'
+      ) {
+        throw error
+      }
+      throwResourceError(
+        Object.assign(new Error('Unable to verify server state'), {
+          code: ErrorCode.SIM_TEMPLATE_APPLY_STATE_UNKNOWN,
+        }),
+        503,
+      )
+    }
+
+    const { applyTemplate: applyTemplateService } =
+      await import('../../../panel-server/services/templateService.ts')
+    const options =
+      data.options &&
+      typeof data.options === 'object' &&
+      !Array.isArray(data.options)
+        ? data.options
+        : {}
+    const result = await applyTemplateService(
+      String(data.id ?? ''),
+      String(data.serverId),
+      options,
+    )
+    if (!result.success) throwResourceError(result, 400)
+    return result
+  },
+)
+
 export const deleteTemplate = createResourceAction(
   'templates.manage',
   async (data) => {
@@ -224,5 +312,144 @@ export const deleteBackupsOlderThan = createResourceAction(
       )
     const runtime = await panelRuntime()
     return runtime.backupService.deleteBackupsOlderThan(data.days)
+  },
+)
+
+export const createBackup = createResourceAction(
+  'backups.manage',
+  async (data) => {
+    const { getActiveServer } =
+      await import('../../../panel-server/database/init.ts')
+    const { ErrorCode } =
+      await import('../../../panel-server/utils/errorCodes.ts')
+    const activeServer = await getActiveServer()
+    if (activeServer?.isRemote) {
+      throwResourceError(
+        Object.assign(
+          new Error(
+            'Backups are not available for remote servers. The server filesystem is not accessible from this panel.',
+          ),
+          { code: ErrorCode.BACKUP_REMOTE_NOT_AVAILABLE },
+        ),
+        400,
+      )
+    }
+
+    const runtime = await panelRuntime()
+    const result = await runtime.backupService.createBackup({
+      includeDb: data.includeDb === true,
+      io: runtime.io,
+    })
+    if (!result.success) throwResourceError(result, 400)
+    if (result.skippedFiles?.length > 0) {
+      return {
+        ...result,
+        warnings: [
+          `${result.skippedFiles.length} file(s) could not be included in the backup: ${result.skippedFiles.join(', ')}. This is usually a temp, log, or lock file the running server rewrote mid-backup, or a symbolic link that was deliberately not followed -- check that the backup still restores correctly if any of these look like save data.`,
+        ],
+      }
+    }
+    return result
+  },
+)
+
+export const restoreBackup = createResourceAction(
+  'backups.restore',
+  async (data) => {
+    const [
+      { getActiveServer },
+      { acquireLifecycleLock, lifecycleInProgressResponse },
+      { ErrorCode },
+      pathModule,
+    ] = await Promise.all([
+      import('../../../panel-server/database/init.ts'),
+      import('../../../panel-server/services/lifecycleCoordinator.ts'),
+      import('../../../panel-server/utils/errorCodes.ts'),
+      import('node:path'),
+    ])
+    const activeServerForLock = await getActiveServer()
+    const lifecycleLock = acquireLifecycleLock(
+      'restore',
+      activeServerForLock?.name || activeServerForLock?.serverName || null,
+    )
+    if (!lifecycleLock) {
+      throwResourceError(lifecycleInProgressResponse(), 409)
+    }
+
+    try {
+      if (activeServerForLock?.isRemote) {
+        throwResourceError(
+          Object.assign(
+            new Error(
+              'Backup restore is not available for remote servers. The server filesystem is not accessible from this panel.',
+            ),
+            { code: ErrorCode.BACKUP_RESTORE_REMOTE_NOT_AVAILABLE },
+          ),
+          400,
+        )
+      }
+
+      const runtime = await panelRuntime()
+      const safeName = pathModule.basename(String(data.name ?? ''))
+      if (!safeName.endsWith('.zip')) {
+        throwResourceError(
+          Object.assign(new Error('Invalid backup file'), {
+            code: ErrorCode.BACKUP_INVALID_FILE,
+          }),
+          400,
+        )
+      }
+
+      const processDetails =
+        await runtime.serverManager.getServerProcessDetails()
+      if (processDetails.scanFailed) {
+        throwResourceError(
+          Object.assign(
+            new Error(
+              "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
+            ),
+            { code: ErrorCode.SERVER_STATE_UNKNOWN },
+          ),
+          503,
+        )
+      }
+      if (processDetails.running) {
+        throwResourceError(
+          Object.assign(
+            new Error(
+              'Server must be stopped before restoring a backup. Please stop the server first.',
+            ),
+            { code: ErrorCode.BACKUP_RESTORE_SERVER_RUNNING },
+          ),
+          400,
+        )
+      }
+
+      const options =
+        data.options &&
+        typeof data.options === 'object' &&
+        !Array.isArray(data.options)
+          ? data.options
+          : {}
+      const result = await runtime.backupService.restoreBackup(safeName, {
+        ...options,
+        io: runtime.io,
+      })
+      if (result.success) return result
+
+      const isRollbackFailureMessage =
+        typeof result.message === 'string' &&
+        result.message.startsWith(
+          'Restore failed and the previous save could not be put back automatically.',
+        )
+      const message = isRollbackFailureMessage
+        ? result.message
+        : (
+            await import('../../../panel-server/utils/sanitize.ts')
+          ).sanitizeError(result.message)
+      throwResourceError(new Error(message || 'Backup restore failed'), 400)
+    } finally {
+      lifecycleLock.release()
+    }
   },
 )

@@ -150,6 +150,22 @@ export const getBackups = createResourceRead(
   }),
 )
 
+export const getBackupSnapshot = createResourceRead(
+  'backups.manage',
+  async (data) => {
+    const result = await (
+      await panelRuntime()
+    ).backupService.getBackupSnapshot(String(data.name ?? ''))
+    if (!result.success) {
+      throwResourceError(
+        new Error(result.message || 'Could not read backup snapshot'),
+        404,
+      )
+    }
+    return result
+  },
+)
+
 export const getBackupHistory = createResourceRead(
   undefined,
   async (data) => {
