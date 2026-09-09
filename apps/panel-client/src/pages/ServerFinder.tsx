@@ -48,82 +48,28 @@ import {
 } from '@/components/ui/tooltip'
 import { Link } from '@tanstack/react-router'
 import { useToast } from '@/components/ui/use-toast'
-import { apiFetch, ApiError } from '@/lib/api'
+import {
+  getServerFinderWithFallback,
+  pingServerFinderWithFallback,
+  type ServerFinderResponse,
+  type ServerFinderServer,
+} from '@/lib/serverFinder'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { copyText } from '@/lib/utils'
 
-interface GameServer {
-  name: string
-  ip: string
-  port: number | null
-  gamePort?: number | null
-  players: number
-  maxPlayers: number
-  map: string
-  version: string
-  vac: boolean
-  isPrivate: boolean
-  os: string
-  dedicated?: boolean
-  bots?: number
-  keywords?: string
-  tags?: string[]
-  ping?: number | null
-}
+type GameServer = ServerFinderServer
 
 type SortField = 'name' | 'players' | 'maxPlayers' | 'ping'
 type SortDirection = 'asc' | 'desc'
 
-type ServerFinderResponse = {
-  servers: GameServer[]
-  source: string
-  cached: boolean
-  count: number
-  totalPlayers: number
-  activeServers: number
-  totalCapacity: number
-  apiKeyConfigured: boolean
-  emptyReason?: string
-}
-
 const SERVER_FINDER_QUERY_KEY = ['server-finder'] as const
 const EMPTY_SERVERS: GameServer[] = []
-
-function responseNumber(value: unknown): number {
-  return typeof value === 'number' ? value : 0
-}
 
 async function fetchServerFinder(
   signal: AbortSignal,
   forceRefresh = false,
 ): Promise<ServerFinderResponse> {
-  const endpoint = forceRefresh ? '/server-finder?refresh=true' : '/server-finder'
-  const response = await apiFetch(endpoint, { signal })
-  const data = await response.json().catch(() => null) as Record<string, unknown> | null
-
-  if (!response.ok || !data || data.success === false) {
-    throw new ApiError(
-      typeof data?.error === 'string' ? data.error : `HTTP ${response.status}`,
-      {
-        status: response.status,
-        code: typeof data?.code === 'string' ? data.code : undefined,
-      },
-    )
-  }
-
-  const servers = Array.isArray(data.servers) ? data.servers as GameServer[] : []
-
-  return {
-    servers,
-    source: typeof data.source === 'string' ? data.source : 'unknown',
-    cached: data.cached === true,
-    count: responseNumber(data.count) || servers.length,
-    totalPlayers: responseNumber(data.totalPlayers),
-    activeServers: responseNumber(data.activeServers),
-    totalCapacity: responseNumber(data.totalCapacity),
-    apiKeyConfigured: data.apiKeyConfigured !== false,
-    emptyReason: typeof data.emptyReason === 'string' ? data.emptyReason : undefined,
-  }
+  return getServerFinderWithFallback(forceRefresh, signal)
 }
 
 export function pingKey(server: Pick<GameServer, 'ip' | 'port'>): string | null {
@@ -372,8 +318,7 @@ export default function ServerFinder() {
     setPingingServers(prev => new Set([...prev, key]))
 
     try {
-      const response = await apiFetch(`/server-finder/ping?ip=${ip}&port=${port}`)
-      const data = await response.json()
+      const data = await pingServerFinderWithFallback(ip, port)
 
       if (data.success && data.ping !== null) {
         setServerPings(prev => ({ ...prev, [key]: data.ping }))
