@@ -43,6 +43,42 @@ import {
   getTemplatesWithFallback,
 } from "./serverResourceReadsRpc";
 import {
+  addCollectionItem,
+  addIgnoredModPair,
+  cancelPendingModRestart,
+  clearAllIgnoredMods,
+  deleteModPreset,
+  getIgnoredModPairsWithFallback,
+  getIgnoredModsWithFallback,
+  getModPresetsWithFallback,
+  getModsStatusWithFallback,
+  getServerModsWithFallback,
+  getTrackedModsWithFallback,
+  getWorkshopStatusWithFallback,
+  removeCollectionItem,
+  removeCollectionTracking,
+  removeIgnoredModPair,
+  saveCollectionCookies,
+  setModAutoRestart,
+  setModRestartOptions,
+  startModChecker,
+  stopModChecker,
+  trackMod,
+  unignoreMod,
+  untrackMod,
+  updateModPreset,
+} from "./serverModsRpc";
+import {
+  createTemplate,
+  deleteBackup,
+  deleteBackupsOlderThan,
+  deleteTemplate,
+  importTemplate,
+  previewTemplate,
+  unhideTemplate,
+  updateBackupSettings,
+} from "./serverResourceActionsRpc";
+import {
   addAllToWhitelist,
   addAllowedSteamId,
   addPlayerItem,
@@ -1032,17 +1068,35 @@ export const schedulerApi = {
 };
 
 export const modsApi = {
-  getStatus: (options?: RequestInit) => apiGet("/mods/status", options),
-  getTrackedMods: (options?: RequestInit) => apiGet("/mods/tracked", options),
-  trackMod: (workshopId: string) => apiPost("/mods/track", { workshopId }),
-  untrackMod: (workshopId: string) => apiDelete(`/mods/track/${workshopId}`),
+  getStatus: (options?: RequestInit) =>
+    getModsStatusWithFallback(options?.signal ?? undefined),
+  getTrackedMods: (options?: RequestInit) =>
+    getTrackedModsWithFallback(options?.signal ?? undefined),
+  trackMod: (workshopId: string) =>
+    serverCall(
+      () => trackMod({ data: { workshopId } }),
+      () => apiPost("/mods/track", { workshopId }),
+    ),
+  untrackMod: (workshopId: string) =>
+    serverCall(
+      () => untrackMod({ data: { workshopId } }),
+      () => apiDelete(`/mods/track/${workshopId}`),
+    ),
 
-  getIgnoredMods: () => apiGet("/mods/ignored"),
-  unignoreMod: (workshopId: string) => apiDelete(`/mods/ignored/${workshopId}`),
-  clearAllIgnoredMods: () => apiDelete("/mods/ignored"),
+  getIgnoredMods: () => getIgnoredModsWithFallback(),
+  unignoreMod: (workshopId: string) =>
+    serverCall(
+      () => unignoreMod({ data: { workshopId } }),
+      () => apiDelete(`/mods/ignored/${workshopId}`),
+    ),
+  clearAllIgnoredMods: () =>
+    serverCall(
+      () => clearAllIgnoredMods(),
+      () => apiDelete("/mods/ignored"),
+    ),
 
   getIgnoredModPairs: () =>
-    apiGet("/mods/ignored-pairs") as Promise<
+    getIgnoredModPairsWithFallback() as Promise<
       Array<{
         mod_a: string;
         mod_b: string;
@@ -1052,34 +1106,58 @@ export const modsApi = {
       }>
     >,
   addIgnoredModPair: (modIdA: string, modIdB: string, reason?: string) =>
-    apiPost("/mods/ignored-pairs", { modIdA, modIdB, reason }),
+    serverCall(
+      () => addIgnoredModPair({ data: { modIdA, modIdB, reason } }),
+      () => apiPost("/mods/ignored-pairs", { modIdA, modIdB, reason }),
+    ),
   removeIgnoredModPair: (modIdA: string, modIdB: string) =>
-    fetchWithRetry(`${API_BASE}/mods/ignored-pairs`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ modIdA, modIdB }),
-    }).then(handleResponse),
+    serverCall(
+      () => removeIgnoredModPair({ data: { modIdA, modIdB } }),
+      () =>
+        fetchWithRetry(`${API_BASE}/mods/ignored-pairs`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modIdA, modIdB }),
+        }).then(handleResponse),
+    ),
   checkUpdates: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/check-updates", undefined, options),
-  getServerMods: () => apiGet("/mods/server-mods"),
+  getServerMods: () => getServerModsWithFallback(),
   syncFromServer: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/sync-from-server", undefined, options),
   clearUpdates: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/clear-updates", undefined, options),
   start: (options?: { signal?: AbortSignal }) =>
-    apiPost("/mods/start", undefined, options),
+    serverCall(
+      () => startModChecker(),
+      () => apiPost("/mods/start", undefined, options),
+    ),
   stop: (options?: { signal?: AbortSignal }) =>
-    apiPost("/mods/stop", undefined, options),
+    serverCall(
+      () => stopModChecker(),
+      () => apiPost("/mods/stop", undefined, options),
+    ),
   setAutoRestart: (enabled: boolean) =>
-    apiPost("/mods/auto-restart", { enabled }),
+    serverCall(
+      () => setModAutoRestart({ data: { enabled } }),
+      () => apiPost("/mods/auto-restart", { enabled }),
+    ),
   setRestartOptions: (options: {
     warningMinutes?: number;
     delayIfPlayersOnline?: boolean;
     maxDelayMinutes?: number;
     checkInterval?: number;
-  }) => apiPut("/mods/restart-options", options),
-  cancelPendingRestart: () => apiPost("/mods/cancel-pending-restart"),
-  getWorkshopStatus: () => apiGet("/mods/workshop-status"),
+  }) =>
+    serverCall(
+      () => setModRestartOptions({ data: options }),
+      () => apiPut("/mods/restart-options", options),
+    ),
+  cancelPendingRestart: () =>
+    serverCall(
+      () => cancelPendingModRestart(),
+      () => apiPost("/mods/cancel-pending-restart"),
+    ),
+  getWorkshopStatus: () => getWorkshopStatusWithFallback(),
 
   importCollection: (collectionUrl: string) =>
     apiPost("/mods/import-collection", { collectionUrl }),
@@ -1292,19 +1370,28 @@ export const modsApi = {
       serverConfigRead?: boolean;
     }>,
   collectionAddItem: (workshopId: string) =>
-    apiPost("/mods/collection/items", { workshopId }) as Promise<{
+    serverCall(
+      () => addCollectionItem({ data: { workshopId } }),
+      () => apiPost("/mods/collection/items", { workshopId }),
+    ) as Promise<{
       ok: true;
       workshopId: string;
       action: "add";
     }>,
   collectionRemoveItem: (workshopId: string) =>
-    apiDelete(`/mods/collection/items/${workshopId}`) as Promise<{
+    serverCall(
+      () => removeCollectionItem({ data: { workshopId } }),
+      () => apiDelete(`/mods/collection/items/${workshopId}`),
+    ) as Promise<{
       ok: true;
       workshopId: string;
       action: "remove";
     }>,
   collectionUntrack: (workshopId: string) =>
-    apiDelete(`/mods/collection/tracking/${workshopId}`) as Promise<{
+    serverCall(
+      () => removeCollectionTracking({ data: { workshopId } }),
+      () => apiDelete(`/mods/collection/tracking/${workshopId}`),
+    ) as Promise<{
       ok: true;
       workshopId: string;
       removed: boolean;
@@ -1360,7 +1447,10 @@ export const modsApi = {
       error?: string | null;
     }>,
   collectionSaveCookies: (sessionid: string, steamLoginSecure: string) =>
-    apiPost("/mods/collection/save-cookies", { sessionid, steamLoginSecure }) as Promise<{
+    serverCall(
+      () => saveCollectionCookies({ data: { sessionid, steamLoginSecure } }),
+      () => apiPost("/mods/collection/save-cookies", { sessionid, steamLoginSecure }),
+    ) as Promise<{
       ok: boolean;
       message: string;
     }>,
@@ -1413,7 +1503,7 @@ export const modsApi = {
       message: string;
     }>,
 
-  getPresets: () => apiGet("/mods/presets"),
+  getPresets: () => getModPresetsWithFallback(),
   createPreset: (name: string, description?: string) =>
     apiPost("/mods/presets", { name, description }),
   updatePreset: (
@@ -1424,8 +1514,16 @@ export const modsApi = {
       workshopIds?: string[];
       modIds?: string[];
     },
-  ) => apiPut(`/mods/presets/${id}`, data),
-  deletePreset: (id: number) => apiDelete(`/mods/presets/${id}`),
+  ) =>
+    serverCall(
+      () => updateModPreset({ data: { id, ...data } }),
+      () => apiPut(`/mods/presets/${id}`, data),
+    ),
+  deletePreset: (id: number) =>
+    serverCall(
+      () => deleteModPreset({ data: { id } }),
+      () => apiDelete(`/mods/presets/${id}`),
+    ),
   applyPreset: (id: number) => apiPost(`/mods/presets/${id}/apply`),
 
   saveModOrder: (modIds: string[]) => apiPost("/mods/save-order", { modIds }),
@@ -2181,13 +2279,19 @@ export const templatesApi = {
       template: SimTemplate;
     }>,
   create: (input: Record<string, unknown>) =>
-    apiPost("/templates", input) as Promise<{
+    serverCall(
+      () => createTemplate({ data: input }),
+      () => apiPost("/templates", input),
+    ) as Promise<{
       success: boolean;
       template?: SimTemplate;
       error?: string;
     }>,
   import: (template: unknown) =>
-    apiPost("/templates/import", { template }) as Promise<{
+    serverCall(
+      () => importTemplate({ data: { template } }),
+      () => apiPost("/templates/import", { template }),
+    ) as Promise<{
       success: boolean;
       template?: SimTemplate;
       error?: string;
@@ -2209,9 +2313,13 @@ export const templatesApi = {
     URL.revokeObjectURL(url);
   },
   preview: (id: string, serverId: string | number) =>
-    apiPost(`/templates/${encodeURIComponent(id)}/preview`, {
-      serverId,
-    }) as Promise<{ success: boolean; diff?: SimTemplateDiff; error?: string }>,
+    serverCall(
+      () => previewTemplate({ data: { id, serverId } }),
+      () =>
+        apiPost(`/templates/${encodeURIComponent(id)}/preview`, {
+          serverId,
+        }),
+    ) as Promise<{ success: boolean; diff?: SimTemplateDiff; error?: string }>,
   apply: (
     id: string,
     serverId: string | number,
@@ -2222,14 +2330,20 @@ export const templatesApi = {
       options,
     }) as Promise<SimTemplateApplyResult>,
   delete: (id: string) =>
-    apiDelete(`/templates/${encodeURIComponent(id)}`) as Promise<{
+    serverCall(
+      () => deleteTemplate({ data: { id } }),
+      () => apiDelete(`/templates/${encodeURIComponent(id)}`),
+    ) as Promise<{
       success: boolean;
       error?: string;
     }>,
   listHidden: () =>
     getHiddenTemplatesWithFallback() as Promise<{ templates: SimTemplate[] }>,
   unhide: (id: string) =>
-    apiPost(`/templates/${encodeURIComponent(id)}/unhide`, {}) as Promise<{
+    serverCall(
+      () => unhideTemplate({ data: { id } }),
+      () => apiPost(`/templates/${encodeURIComponent(id)}/unhide`, {}),
+    ) as Promise<{
       success: boolean;
       error?: string;
     }>,
@@ -2917,7 +3031,10 @@ export const backupApi = {
   updateSettings: (
     settings: Partial<BackupSettings>,
   ): Promise<{ success: boolean; settings: BackupSettings }> =>
-    apiPost("/backup/settings", settings),
+    serverCall(
+      () => updateBackupSettings({ data: settings }),
+      () => apiPost("/backup/settings", settings),
+    ),
 
   createBackup: (options?: {
     includeDb?: boolean;
@@ -2931,10 +3048,14 @@ export const backupApi = {
   deleteBackup: (
     name: string,
   ): Promise<{ success: boolean; message?: string }> =>
-    fetchWithRetry(`${API_BASE}/backup/${encodeURIComponent(name)}`, {
-      method: "DELETE",
-    }).then((response) =>
-      handleResponse<{ success: boolean; message?: string }>(response),
+    serverCall(
+      () => deleteBackup({ data: { name } }),
+      () =>
+        fetchWithRetry(`${API_BASE}/backup/${encodeURIComponent(name)}`, {
+          method: "DELETE",
+        }).then((response) =>
+          handleResponse<{ success: boolean; message?: string }>(response),
+        ),
     ),
 
   restoreBackup: (
@@ -2954,7 +3075,11 @@ export const backupApi = {
     failed?: number;
     deletedNames?: string[];
     message?: string;
-  }> => apiPost("/backup/delete-older-than", { days }),
+  }> =>
+    serverCall(
+      () => deleteBackupsOlderThan({ data: { days } }),
+      () => apiPost("/backup/delete-older-than", { days }),
+    ),
 
   getDownloadUrl: (name: string): string =>
     `${API_BASE}/backup/download/${encodeURIComponent(name)}`,
