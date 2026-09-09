@@ -79,6 +79,23 @@ import {
   updateBackupSettings,
 } from "./serverResourceActionsRpc";
 import {
+  getDiscordConfigWithFallback,
+  getDiscordPermissionsWithFallback,
+  getDiscordStatusWithFallback,
+  getDiscordWebhookEventsWithFallback,
+  getDockerStatsWithFallback,
+  getDockerStatusWithFallback,
+  resetDiscordConfig,
+  runDockerAction,
+  sendDiscordTestMessage,
+  startDiscordBot,
+  stopDiscordBot,
+  testDiscordToken,
+  updateDiscordConfig,
+  updateDiscordPermissions,
+  updateDiscordWebhookEvents,
+} from "./serverIntegrationsRpc";
+import {
   addAllToWhitelist,
   addAllowedSteamId,
   addPlayerItem,
@@ -1701,8 +1718,8 @@ export interface ConfigTestRconResult {
 }
 
 export const discordApi = {
-  getStatus: () => apiGet("/discord/status"),
-  getConfig: () => apiGet("/discord/config"),
+  getStatus: () => serverCall(() => getDiscordStatusWithFallback()),
+  getConfig: () => serverCall(() => getDiscordConfigWithFallback()),
   updateConfig: (
     token: string,
     guildId: string,
@@ -1714,32 +1731,77 @@ export const discordApi = {
     chatRelayChannelId?: string,
     chatRelayScope?: "public" | "no-yell" | "general",
   ) =>
-    apiPut("/discord/config", {
-      token,
-      guildId,
-      adminRoleId,
-      modRoleId,
-      channelId,
-      autoStart,
-      chatRelayEnabled,
-      chatRelayChannelId,
-      chatRelayScope,
-    }),
-  resetConfig: () => apiPost("/discord/reset"),
-  start: () => apiPost("/discord/start"),
-  stop: () => apiPost("/discord/stop"),
-  testToken: (token: string) => apiPost("/discord/test", { token }),
-  sendTestMessage: () => apiPost("/discord/test-message"),
-  getWebhookEvents: () => apiGet("/discord/webhook-events"),
+    serverCall(
+      () =>
+        updateDiscordConfig({
+          data: {
+            token,
+            guildId,
+            adminRoleId,
+            modRoleId,
+            channelId,
+            autoStart,
+            chatRelayEnabled,
+            chatRelayChannelId,
+            chatRelayScope,
+          },
+        }),
+      () =>
+        apiPut("/discord/config", {
+          token,
+          guildId,
+          adminRoleId,
+          modRoleId,
+          channelId,
+          autoStart,
+          chatRelayEnabled,
+          chatRelayChannelId,
+          chatRelayScope,
+        }),
+    ),
+  resetConfig: () =>
+    serverCall(
+      () => resetDiscordConfig(),
+      () => apiPost("/discord/reset"),
+    ),
+  start: () =>
+    serverCall(
+      () => startDiscordBot(),
+      () => apiPost("/discord/start"),
+    ),
+  stop: () =>
+    serverCall(
+      () => stopDiscordBot(),
+      () => apiPost("/discord/stop"),
+    ),
+  testToken: (token: string) =>
+    serverCall(
+      () => testDiscordToken({ data: { token } }),
+      () => apiPost("/discord/test", { token }),
+    ),
+  sendTestMessage: () =>
+    serverCall(
+      () => sendDiscordTestMessage(),
+      () => apiPost("/discord/test-message"),
+    ),
+  getWebhookEvents: () =>
+    serverCall(() => getDiscordWebhookEventsWithFallback()),
   updateWebhookEvents: (
     events: Record<string, { enabled: boolean; template: string }>,
-  ) => apiPut("/discord/webhook-events", { events }),
+  ) =>
+    serverCall(
+      () => updateDiscordWebhookEvents({ data: { events } }),
+      () => apiPut("/discord/webhook-events", { events }),
+    ),
   getPermissions: () =>
-    apiGet("/discord/permissions") as Promise<{
+    serverCall(() => getDiscordPermissionsWithFallback()) as Promise<{
       permissions: Record<string, string>;
     }>,
   updatePermissions: (permissions: Record<string, string>) =>
-    apiPut("/discord/permissions", { permissions }) as Promise<{
+    serverCall(
+      () => updateDiscordPermissions({ data: { permissions } }),
+      () => apiPut("/discord/permissions", { permissions }),
+    ) as Promise<{
       success: boolean;
       permissions: Record<string, string>;
     }>,
@@ -1960,16 +2022,30 @@ export interface DockerContainerStats {
 }
 
 export const dockerApi = {
-  getStatus: () => apiGet("/docker/status") as Promise<{
+  getStatus: () => serverCall(() => getDockerStatusWithFallback()) as Promise<{
     enabled: boolean;
     available: boolean;
     containers: DockerContainerSummary[];
   }>,
-  getStats: () => apiGet("/docker/stats") as Promise<{
+  getStats: () => serverCall(() => getDockerStatsWithFallback()) as Promise<{
     containers: Record<string, DockerContainerStats>;
   }>,
-  runAction: (id: string, action: "start" | "stop" | "restart", serverId: string | number) =>
-    apiPost(`/docker/containers/${encodeURIComponent(id)}/${action}`, { serverId }) as Promise<{
+  runAction: (
+    id: string,
+    action: "start" | "stop" | "restart",
+    serverId: string | number,
+  ) =>
+    serverCall(
+      () =>
+        runDockerAction({
+          data: { id, action, serverId },
+        }),
+      () =>
+        apiPost(
+          "/docker/containers/" + encodeURIComponent(id) + "/" + action,
+          { serverId },
+        ),
+    ) as Promise<{
       success: boolean;
       message?: string;
       error?: string;

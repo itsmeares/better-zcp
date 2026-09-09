@@ -1059,6 +1059,7 @@ app.set("checkServerStatusNow", checkServerStatusNow);
 setPanelRuntime({
   rconService,
   serverManager,
+  dockerClient,
   modChecker,
   backupService,
   scheduler,
