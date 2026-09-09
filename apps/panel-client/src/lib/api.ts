@@ -211,6 +211,11 @@ import {
   sendPanelBridgeEndangerCommand,
 } from "./serverPanelBridgeEffectsRpc";
 import { sendPanelBridgeDiagnosticsCommand } from "./serverPanelBridgeDiagnosticsRpc";
+import {
+  getPanelBridgeStatus,
+  pingPanelBridge,
+  sendPanelBridgeSetupCommand,
+} from "./serverPanelBridgeSetupRpc";
 
 const API_BASE = "/api";
 
@@ -2514,7 +2519,10 @@ export interface BridgeCommandResult<T = Record<string, unknown>> {
 
 export const panelBridgeApi = {
   getStatus: () =>
-    apiGet("/panel-bridge/status") as Promise<{
+    serverCall(
+      () => getPanelBridgeStatus(),
+      () => apiGet("/panel-bridge/status"),
+    ) as Promise<{
       configured: boolean;
       bridgePath: string | null;
       isRunning: boolean;
@@ -2584,7 +2592,13 @@ export const panelBridgeApi = {
     }>,
 
   autoConfigure: (serverId?: string | number) =>
-    apiPost("/panel-bridge/auto-configure", { serverId }) as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "autoConfigure", args: { serverId } },
+        }),
+      () => apiPost("/panel-bridge/auto-configure", { serverId }),
+    ) as Promise<{
       success: boolean;
       message?: string;
       bridgePath: string;
@@ -2601,7 +2615,14 @@ export const panelBridgeApi = {
     }>,
 
   scanForServer: (serverId: string | number) =>
-    apiGet(`/panel-bridge/scan-server/${serverId}`) as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "scanServer", args: { serverId } },
+        }),
+      () =>
+        apiGet(`/panel-bridge/scan-server/${encodeURIComponent(String(serverId))}`),
+    ) as Promise<{
       success: boolean;
       serverName: string;
       paths: Array<{
@@ -2616,13 +2637,34 @@ export const panelBridgeApi = {
     }>,
 
   autoDetect: (serverName: string, zomboidUserFolder?: string) =>
-    apiPost("/panel-bridge/auto-detect", { serverName, zomboidUserFolder }),
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: {
+            action: "autoDetect",
+            args: { serverName, zomboidUserFolder },
+          },
+        }),
+      () => apiPost("/panel-bridge/auto-detect", { serverName, zomboidUserFolder }),
+    ),
 
   configure: (zomboidSavePath: string) =>
-    apiPost("/panel-bridge/configure", { zomboidSavePath }),
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "configure", args: { zomboidSavePath } },
+        }),
+      () => apiPost("/panel-bridge/configure", { zomboidSavePath }),
+    ),
 
   configureDirect: (bridgePath: string) =>
-    apiPost("/panel-bridge/configure-direct", { bridgePath }) as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "configureDirect", args: { bridgePath } },
+        }),
+      () => apiPost("/panel-bridge/configure-direct", { bridgePath }),
+    ) as Promise<{
       success: boolean;
       message?: string;
       bridgePath: string;
@@ -2636,7 +2678,14 @@ export const panelBridgeApi = {
     password: string;
     bridgePath: string;
     pollIntervalSeconds: string;
-  }) => apiPost("/panel-bridge/sftp/configure", config) as Promise<{
+  }) =>
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "configureSftp", args: config },
+        }),
+      () => apiPost("/panel-bridge/sftp/configure", config),
+    ) as Promise<{
     success: boolean;
     bridgePath: string;
     transport: { type: "sftp"; running: boolean; lastLatencyMs?: number | null };
@@ -2648,7 +2697,14 @@ export const panelBridgeApi = {
     username?: string;
     password?: string;
     logPath?: string;
-  }) => apiPost("/panel-bridge/sftp/logs/list", config) as Promise<{
+  }) =>
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "listSftpLogs", args: config },
+        }),
+      () => apiPost("/panel-bridge/sftp/logs/list", config),
+    ) as Promise<{
     success: boolean;
     logPath: string;
     files: Array<{ name: string; size: number; modifiedAt: string | null }>;
@@ -2660,7 +2716,14 @@ export const panelBridgeApi = {
     username?: string;
     password?: string;
     configPath?: string;
-  }) => apiPost("/panel-bridge/sftp/config/list", config) as Promise<{
+  }) =>
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "listRemoteConfig", args: config },
+        }),
+      () => apiPost("/panel-bridge/sftp/config/list", config),
+    ) as Promise<{
     success: boolean;
     configPath: string;
     files: Array<{ name: string; size: number; modifiedAt: string | null }>;
@@ -2674,7 +2737,14 @@ export const panelBridgeApi = {
     username?: string;
     password?: string;
     logPath?: string;
-  }) => apiPost("/panel-bridge/sftp/logs/tail", config) as Promise<{
+  }) =>
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "tailSftpLog", args: config },
+        }),
+      () => apiPost("/panel-bridge/sftp/logs/tail", config),
+    ) as Promise<{
     success: boolean;
     name: string;
     size: number;
@@ -2690,7 +2760,14 @@ export const panelBridgeApi = {
     password: string;
     bridgePath: string;
     pollIntervalSeconds: string;
-  }) => apiPost("/panel-bridge/sftp/test", config) as Promise<{
+  }) =>
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "testSftp", args: config },
+        }),
+      () => apiPost("/panel-bridge/sftp/test", config),
+    ) as Promise<{
     success: boolean;
     statusExists: boolean;
     foldersReady: boolean;
@@ -2698,14 +2775,41 @@ export const panelBridgeApi = {
     nextStep: string;
   }>,
 
-  start: () => apiPost("/panel-bridge/start"),
+  start: () =>
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "start", args: {} },
+        }),
+      () => apiPost("/panel-bridge/start"),
+    ),
 
-  stop: () => apiPost("/panel-bridge/stop"),
+  stop: () =>
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "stop", args: {} },
+        }),
+      () => apiPost("/panel-bridge/stop"),
+    ),
 
-  refresh: () => apiPost("/panel-bridge/refresh"),
+  refresh: () =>
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "refresh", args: {} },
+        }),
+      () => apiPost("/panel-bridge/refresh"),
+    ),
 
   scanPaths: () =>
-    apiGet("/panel-bridge/scan-paths") as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "scanPaths", args: {} },
+        }),
+      () => apiGet("/panel-bridge/scan-paths"),
+    ) as Promise<{
       foundBridges: Array<{
         path: string;
         serverName: string;
@@ -2722,7 +2826,11 @@ export const panelBridgeApi = {
       modConnected: boolean;
     }>,
 
-  ping: () => apiGet("/panel-bridge/ping"),
+  ping: () =>
+    serverCall(
+      () => pingPanelBridge(),
+      () => apiGet("/panel-bridge/ping"),
+    ),
 
   sendCommand: <T = Record<string, unknown>>(
     action: string,
@@ -3213,7 +3321,13 @@ export const panelBridgeApi = {
     }>,
 
   installModAuto: (serverId?: string | number) =>
-    apiPost("/panel-bridge/install-mod-auto", { serverId }) as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgeSetupCommand({
+          data: { action: "installModAuto", args: { serverId } },
+        }),
+      () => apiPost("/panel-bridge/install-mod-auto", { serverId }),
+    ) as Promise<{
       success: boolean;
       message: string;
       path: string;
