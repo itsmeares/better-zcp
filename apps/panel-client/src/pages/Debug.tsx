@@ -1593,21 +1593,18 @@ export default function Debug() {
     [toast, t],
   );
 
-  const bridgeDiagFetch = useCallback(
-    async (path: string, options?: RequestInit) => {
-      const res = await authFetch(path, options);
-      if (res.status === 403) {
-        setBridgeDiagPermissionDenied(true);
-        throw new Error(await parseDownloadError(res, "HTTP 403"));
-      }
-      if (!res.ok) {
-        throw new Error(await parseDownloadError(res, `HTTP ${res.status}`));
-      }
+  const bridgeDiagCall = useCallback(async <T,>(operation: () => Promise<T>) => {
+    try {
+      const result = await operation();
       setBridgeDiagPermissionDenied(false);
-      return res.json();
-    },
-    [authFetch],
-  );
+      return result;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        setBridgeDiagPermissionDenied(true);
+      }
+      throw error;
+    }
+  }, []);
 
   const checkBridgeDiagStatus = useCallback(async () => {
     setBridgeDiagStatusLoading(true);
@@ -1632,37 +1629,40 @@ export default function Debug() {
     () =>
       runProbe(
         "bridgeStats",
-        () => bridgeDiagFetch("/api/panel-bridge/debug/stats"),
+        () => bridgeDiagCall(() => panelBridgeApi.getBridgeDebugStats()),
         (r: unknown) => {
           const data = (r as { data?: unknown })?.data;
           return { count: null, sample: data ?? null };
         },
       ),
-    [runProbe, bridgeDiagFetch],
+    [runProbe, bridgeDiagCall],
   );
 
   const probeCheckApi = useCallback(
     () =>
       runProbe(
         "checkApi",
-        () => {
-          const params = new URLSearchParams({ object: checkApiObject });
-          if (checkApiMethod.trim()) params.set("method", checkApiMethod.trim());
-          return bridgeDiagFetch(`/api/panel-bridge/debug/api?${params.toString()}`);
-        },
+        () =>
+          bridgeDiagCall(
+            () =>
+              panelBridgeApi.checkBridgeApi(
+                checkApiObject,
+                checkApiMethod.trim() || undefined,
+              ),
+          ),
         (r: unknown) => {
           const data = (r as { data?: unknown })?.data;
           return { count: null, sample: data ?? null };
         },
       ),
-    [runProbe, bridgeDiagFetch, checkApiObject, checkApiMethod],
+    [runProbe, bridgeDiagCall, checkApiObject, checkApiMethod],
   );
 
   const probeAvailableHandlers = useCallback(
     () =>
       runProbe(
         "availableHandlers",
-        () => bridgeDiagFetch("/api/panel-bridge/debug/handlers"),
+        () => bridgeDiagCall(() => panelBridgeApi.getBridgeAvailableHandlers()),
         (r: unknown) => {
           const data = (r as {
             data?: { handlers?: string[]; count?: number; version?: string };
@@ -1673,20 +1673,17 @@ export default function Debug() {
           };
         },
       ),
-    [runProbe, bridgeDiagFetch],
+    [runProbe, bridgeDiagCall],
   );
 
   const probeDebugLog = useCallback(
     () =>
       runProbe(
         "debugLog",
-        () => {
-          const params = new URLSearchParams({
-            limit: String(debugLogLimit),
-            level: debugLogMinLevel,
-          });
-          return bridgeDiagFetch(`/api/panel-bridge/debug/log?${params.toString()}`);
-        },
+        () =>
+          bridgeDiagCall(() =>
+            panelBridgeApi.getBridgeDebugLog(debugLogLimit, debugLogMinLevel),
+          ),
         (r: unknown) => {
           const data = (r as {
             data?: { entries?: unknown[]; totalEntries?: number };
@@ -1697,21 +1694,21 @@ export default function Debug() {
           };
         },
       ),
-    [runProbe, bridgeDiagFetch, debugLogLimit, debugLogMinLevel],
+    [runProbe, bridgeDiagCall, debugLogLimit, debugLogMinLevel],
   );
 
   const probeSelfTest = useCallback(
     () =>
       runProbe(
         "selfTest",
-        () => bridgeDiagFetch("/api/panel-bridge/catalog/debug-item-script", { method: "POST" }),
+        () => bridgeDiagCall(() => panelBridgeApi.runBridgeDebugItemScript()),
         (r: unknown) => {
           const data = (r as { data?: { probes?: unknown[] } })?.data;
           const probes = Array.isArray(data?.probes) ? data.probes : [];
           return { count: probes.length, sample: probes };
         },
       ),
-    [runProbe, bridgeDiagFetch],
+    [runProbe, bridgeDiagCall],
   );
 
   const toggleBridgeDebugMode = useCallback(
@@ -1719,18 +1716,14 @@ export default function Debug() {
       runAction(
         "bridgeDebugMode",
         async () => {
-          await bridgeDiagFetch("/api/panel-bridge/debug/mode", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ enabled: nextEnabled }),
-          });
+          await bridgeDiagCall(() => panelBridgeApi.setBridgeDebugMode(nextEnabled));
           await probeBridgeStats();
         },
         nextEnabled
           ? t("bridgeTab.debugModeEnabledTitle")
           : t("bridgeTab.debugModeDisabledTitle"),
       ),
-    [runAction, bridgeDiagFetch, probeBridgeStats, t],
+    [runAction, bridgeDiagCall, probeBridgeStats, t],
   );
 
   const clearBridgeErrors = useCallback(async () => {
@@ -1744,15 +1737,13 @@ export default function Debug() {
     await runAction(
       "bridgeClearErrors",
       async () => {
-        const res = await bridgeDiagFetch("/api/panel-bridge/debug/clear-errors", {
-          method: "POST",
-        });
+        const result = await bridgeDiagCall(() => panelBridgeApi.clearBridgeErrors());
         await probeBridgeStats();
-        return res;
+        return result;
       },
       t("bridgeTab.clearErrorsSuccessTitle"),
     );
-  }, [confirm, t, runAction, bridgeDiagFetch, probeBridgeStats]);
+  }, [confirm, t, runAction, bridgeDiagCall, probeBridgeStats]);
 
   const fetchLogFiles = async () => {
     try {

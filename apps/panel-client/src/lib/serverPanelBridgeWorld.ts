@@ -119,6 +119,36 @@ function requireUsername(
   return args.username
 }
 
+async function persistUtilities(
+  power: boolean,
+  water: boolean,
+  on: boolean,
+): Promise<AnyRecord> {
+  const values: AnyRecord = {}
+  if (power) {
+    values.ElecShut = on ? 9 : 1
+    values.ElecShutModifier = on ? 2147483647 : 0
+  }
+  if (water) {
+    values.WaterShut = on ? 9 : 1
+    values.WaterShutModifier = on ? 2147483647 : 0
+  }
+
+  try {
+    const { persistSandboxValues } =
+      await import('../../../panel-server/services/sandboxPersistence.ts')
+    const { persisted, reason } = await persistSandboxValues(values)
+    return { persisted, persistReason: reason }
+  } catch (error) {
+    const { sanitizeError } =
+      await import('../../../panel-server/utils/sanitize.ts')
+    return {
+      persisted: false,
+      persistReason: sanitizeError(errorMessage(error)),
+    }
+  }
+}
+
 async function executeWorldAction(data: AnyRecord): Promise<unknown> {
   const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
   const action = data.action
@@ -142,6 +172,22 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
       return withBridge(false, (bridge) => bridge.getGameTime())
     case 'getWorldStats':
       return withBridge(false, (bridge) => bridge.getWorldStats())
+    case 'getUtilitiesStatus':
+      return withBridge(false, (bridge) =>
+        bridge.sendCommand('getUtilitiesStatus', {}),
+      )
+    case 'restoreUtilities':
+    case 'shutOffUtilities': {
+      const power = args.power !== false
+      const water = args.water !== false
+      const result = (await withBridge(false, (bridge) =>
+        bridge.sendCommand(action, { power, water }),
+      )) as AnyRecord
+      return {
+        ...result,
+        ...(await persistUtilities(power, water, action === 'restoreUtilities')),
+      }
+    }
     case 'playWorldSound': {
       const { x, y, z, radius, volume } = args
       if (x === undefined || y === undefined) {

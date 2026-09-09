@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmProvider } from '@/contexts/ConfirmContext'
 import { getRequiredCapabilityForCheck } from '../Debug'
 import Debug from '../Debug'
-import { apiFetch, modsApi, serverApi, rconApi, backupApi, panelBridgeApi, serverFilesApi } from '@/lib/api'
+import { ApiError, apiFetch, modsApi, serverApi, rconApi, backupApi, panelBridgeApi, serverFilesApi } from '@/lib/api'
 
 
 let mockCan = (_capability: string) => true
@@ -32,7 +32,17 @@ vi.mock('@/lib/api', async () => {
     serverApi: { ...actual.serverApi, start: vi.fn() },
     rconApi: { ...actual.rconApi, connect: vi.fn() },
     backupApi: { ...actual.backupApi, createBackup: vi.fn() },
-    panelBridgeApi: { ...actual.panelBridgeApi, autoConfigure: vi.fn() },
+    panelBridgeApi: {
+      ...actual.panelBridgeApi,
+      autoConfigure: vi.fn(),
+      getBridgeDebugStats: vi.fn(),
+      checkBridgeApi: vi.fn(),
+      getBridgeAvailableHandlers: vi.fn(),
+      getBridgeDebugLog: vi.fn(),
+      runBridgeDebugItemScript: vi.fn(),
+      setBridgeDebugMode: vi.fn(),
+      clearBridgeErrors: vi.fn(),
+    },
     serverFilesApi: { ...actual.serverFilesApi, repairSandbox: vi.fn() },
   }
 })
@@ -43,6 +53,7 @@ const serverStart = vi.mocked(serverApi.start)
 const rconConnect = vi.mocked(rconApi.connect)
 const createBackup = vi.mocked(backupApi.createBackup)
 const bridgeAutoConfigure = vi.mocked(panelBridgeApi.autoConfigure)
+const bridgeDebugStats = vi.mocked(panelBridgeApi.getBridgeDebugStats)
 const repairSandbox = vi.mocked(serverFilesApi.repairSandbox)
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
@@ -432,6 +443,7 @@ describe('Debug.tsx: a 403 from the diagnostics fetch replaces the whole page, n
 describe('Debug.tsx: the PanelBridge tab gates its own data on bridge.diagnostics, separate from the page-wide gate', () => {
   it('shows the tab-scoped permission-denied state and never renders the Stats card when a bridge.diagnostics route returns 403', async () => {
     mockCan = () => true
+    bridgeDebugStats.mockRejectedValue(new ApiError('Forbidden', { status: 403 }))
     mockedApiFetch.mockImplementation(async (endpoint: string) => {
       if (endpoint.startsWith('/debug/diagnostics')) return jsonResponse(diagnosticsFixture)
       if (endpoint.startsWith('/panel-bridge/status')) {
@@ -456,6 +468,20 @@ describe('Debug.tsx: the PanelBridge tab gates its own data on bridge.diagnostic
 
   it('renders the real Stats card (not the permission-denied state) when the bridge.diagnostics routes succeed', async () => {
     mockCan = () => true
+    bridgeDebugStats.mockResolvedValue({
+      success: true,
+      data: {
+        version: '1.7.40',
+        uptime: 120,
+        commandsProcessed: 10,
+        commandsSucceeded: 9,
+        commandsFailed: 1,
+        debugMode: false,
+        lastError: null,
+        recentErrors: [],
+        detectedVersion: { build: '42.13.1', isB42: true, isB41: false, features: {} },
+      },
+    })
     mockedApiFetch.mockImplementation(async (endpoint: string) => {
       if (endpoint.startsWith('/debug/diagnostics')) return jsonResponse(diagnosticsFixture)
       if (endpoint.startsWith('/panel-bridge/status')) {

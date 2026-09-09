@@ -61,6 +61,7 @@ export default defineConfig(({ mode }) => {
     ],
     ssr: {
       noExternal: true,
+      external: ['ssh2-sftp-client'],
     },
     environments: {
       client: {
