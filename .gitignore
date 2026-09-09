@@ -6,6 +6,7 @@ node_modules/
 
 # Database (user data)
 data/db.json
+data/*.sqlite*
 data/backups/
 *.db
 

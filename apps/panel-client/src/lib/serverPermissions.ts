@@ -1,9 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import type { CapabilityGroup, RoleInfo } from './api'
-import {
-  getProtectedApiJson,
-  rolesReadMiddleware,
-} from './serverAuth'
+import { rolesReadMiddleware } from './serverAuth'
 
 export const getCapabilities = createServerFn({ method: 'GET' })
   .middleware(rolesReadMiddleware)
@@ -29,19 +25,3 @@ export const getRoles = createServerFn({ method: 'GET' })
       })),
     }
   })
-
-export async function getCapabilitiesWithFallback(signal?: AbortSignal): Promise<{ groups: CapabilityGroup[] }> {
-  try {
-    return await getCapabilities()
-  } catch {
-    return getProtectedApiJson<{ groups: CapabilityGroup[] }>('/permissions/capabilities', signal)
-  }
-}
-
-export async function getRolesWithFallback(signal?: AbortSignal): Promise<{ roles: RoleInfo[] }> {
-  try {
-    return await getRoles()
-  } catch {
-    return getProtectedApiJson<{ roles: RoleInfo[] }>('/permissions/roles', signal)
-  }
-}

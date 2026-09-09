@@ -49,8 +49,8 @@ import {
 import { Link } from '@tanstack/react-router'
 import { useToast } from '@/components/ui/use-toast'
 import {
-  getServerFinderWithFallback,
-  pingServerFinderWithFallback,
+  getServerFinder,
+  pingServerFinder,
   type ServerFinderResponse,
   type ServerFinderServer,
 } from '@/lib/serverFinder'
@@ -66,10 +66,10 @@ const SERVER_FINDER_QUERY_KEY = ['server-finder'] as const
 const EMPTY_SERVERS: GameServer[] = []
 
 async function fetchServerFinder(
-  signal: AbortSignal,
+  _signal: AbortSignal,
   forceRefresh = false,
 ): Promise<ServerFinderResponse> {
-  return getServerFinderWithFallback(forceRefresh, signal)
+  return getServerFinder({ data: { refresh: forceRefresh } })
 }
 
 export function pingKey(server: Pick<GameServer, 'ip' | 'port'>): string | null {
@@ -318,7 +318,7 @@ export default function ServerFinder() {
     setPingingServers(prev => new Set([...prev, key]))
 
     try {
-      const data = await pingServerFinderWithFallback(ip, port)
+      const data = await pingServerFinder({ data: { ip, port } })
 
       if (data.success && data.ping !== null) {
         setServerPings(prev => ({ ...prev, [key]: data.ping }))

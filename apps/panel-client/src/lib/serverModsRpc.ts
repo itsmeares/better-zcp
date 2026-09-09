@@ -1,6 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
 import {
-  getProtectedApiJson,
   permissionMiddleware,
   protectedServerFunctionMiddleware,
 } from './serverAuth'
@@ -180,47 +179,3 @@ export const saveCollectionCookies = createServerFn({ method: 'POST' })
   .handler(({ data, context }) =>
     invoke('saveCollectionCookies', { data, context }),
   )
-
-async function withFallback<T>(
-  operation: () => Promise<T>,
-  endpoint: string,
-  signal?: AbortSignal,
-): Promise<T> {
-  try {
-    return await operation()
-  } catch {
-    return getProtectedApiJson<T>(endpoint, signal)
-  }
-}
-
-export function getModsStatusWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getModsStatus(), '/mods/status', signal)
-}
-
-export function getTrackedModsWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getTrackedMods(), '/mods/tracked', signal)
-}
-
-export function getIgnoredModsWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getIgnoredMods(), '/mods/ignored', signal)
-}
-
-export function getIgnoredModPairsWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getIgnoredModPairs(), '/mods/ignored-pairs', signal)
-}
-
-export function getServerModsWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getServerMods(), '/mods/server-mods', signal)
-}
-
-export function getWorkshopStatusWithFallback(signal?: AbortSignal) {
-  return withFallback(
-    () => getWorkshopStatus(),
-    '/mods/workshop-status',
-    signal,
-  )
-}
-
-export function getModPresetsWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getModPresets(), '/mods/presets', signal)
-}

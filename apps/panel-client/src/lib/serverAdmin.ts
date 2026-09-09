@@ -15,7 +15,6 @@ import type {
 import {
   adminRoleMiddleware,
   diagnosticsMiddleware,
-  getProtectedApiJson,
   panelSettingsMiddleware,
   permissionMiddleware,
   protectedServerFunctionMiddleware,
@@ -753,70 +752,3 @@ export const regenerateJwtSecret = createServerFn({ method: 'POST' })
       throwServerError(error, 400)
     }
   })
-
-export async function getManagedUsersWithFallback(signal?: AbortSignal) {
-  try {
-    return await getManagedUsers()
-  } catch {
-    return getProtectedApiJson<{ users: ManagedUserAccount[] }>(
-      '/auth/users',
-      signal,
-    )
-  }
-}
-
-export async function getOidcSettingsWithFallback(signal?: AbortSignal) {
-  try {
-    return await getOidcSettings()
-  } catch {
-    return getProtectedApiJson<OidcSettingsWithEnv>(
-      '/auth/oidc/settings',
-      signal,
-    )
-  }
-}
-
-export async function getAppSettingsWithFallback(signal?: AbortSignal) {
-  try {
-    return await getAppSettings()
-  } catch {
-    return getProtectedApiJson<{ settings: AppSettings }>(
-      '/config/app-settings',
-      signal,
-    )
-  }
-}
-
-export async function getDebugRamWithFallback(signal?: AbortSignal) {
-  try {
-    return await getDebugRam()
-  } catch {
-    return getProtectedApiJson<{
-      totalGB: number
-      freeGB: number
-      recommendedMin: number
-      recommendedMax: number
-    }>('/debug/ram', signal)
-  }
-}
-
-export async function getPerformanceHistoryWithFallback(
-  limit: number,
-  signal?: AbortSignal,
-) {
-  try {
-    return await getPerformanceHistory({ data: { limit } })
-  } catch {
-    return getProtectedApiJson<{
-      history: Array<{
-        timestamp: string
-        playerCount: number
-        memoryUsed: number
-        pzMemUsed?: number
-        cpuUsage?: number
-        hostMemUsed?: number
-        hostMemTotal?: number
-      }>
-    }>(`/debug/performance-history?limit=${limit}`, signal)
-  }
-}

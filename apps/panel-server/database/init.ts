@@ -1,5 +1,3 @@
-import { Low } from "lowdb";
-import { JSONFile } from "lowdb/node";
 import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
@@ -69,7 +67,42 @@ type RawSqliteSnapshotStore = {
   close: () => void;
 };
 
-type Database = Low<DatabaseData>;
+type Database = {
+  data: DatabaseData;
+  adapter: DatabaseAdapter;
+  read: () => Promise<void>;
+  write: () => Promise<void>;
+};
+
+function createJsonAdapter(filePath: string): DatabaseAdapter {
+  return {
+    read: async () => {
+      if (!fs.existsSync(filePath)) return null;
+      return JSON.parse(fs.readFileSync(filePath, "utf8")) as DatabaseData;
+    },
+    write: async (data) => {
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+    },
+  };
+}
+
+function createDatabase(adapter: DatabaseAdapter): Database {
+  const database: Database = {
+    data: structuredClone(defaultData),
+    adapter,
+    async read() {
+      const data = await database.adapter.read();
+      if (data !== null) database.data = data;
+    },
+    async write() {
+      await database.adapter.write(database.data);
+    },
+  };
+  return database;
+}
 
 export function rehydratePanelBridgeSftpPassword(
   data: DatabaseData,
@@ -112,6 +145,11 @@ const MAX_BACKUPS = 5;
 const paths = getDataPaths();
 const dataDir = paths.dataDir;
 const databaseDriver = process.env.PANEL_DATABASE_DRIVER ?? "sqlite";
+if (databaseDriver !== "sqlite" && databaseDriver !== "json") {
+  throw new Error(
+    `Unsupported PANEL_DATABASE_DRIVER "${databaseDriver}". Use "sqlite" (default) or "json" only for legacy compatibility.`,
+  );
+}
 const useSqliteDatabase = databaseDriver === "sqlite";
 const legacyDbPath = paths.dbPath;
 const dbPath = useSqliteDatabase
@@ -778,8 +816,8 @@ export async function getDb(): Promise<Database> {
 
     const adapter: DatabaseAdapter = useSqliteDatabase
       ? await createSqliteAdapter()
-      : new JSONFile<DatabaseData>(dbPath);
-    db = new Low<DatabaseData>(adapter, defaultData);
+      : createJsonAdapter(dbPath);
+    db = createDatabase(adapter);
 
     let loadedCleanly = false;
     try {

@@ -786,7 +786,7 @@ async function findPanelBridgePath() {
     const savedPath = settings.panelBridge.bridgePath;
     const statusFile = path.join(savedPath, "status.json");
     if (fs.existsSync(statusFile)) {
-      return { path: savedPath, source: "db.json (saved)", serverName };
+      return { path: savedPath, source: "database (saved)", serverName };
     }
   }
 

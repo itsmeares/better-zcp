@@ -259,6 +259,28 @@ building from source.
 
 If you installed a brand-new server with the Setup Wizard, steps 2 and 3 are already done — the wizard fills them in as part of installing.
 
+### Database storage
+
+New installations store panel data in `data/db.sqlite`. The panel creates it
+automatically and uses SQLite through Drizzle.
+
+An older `data/db.json` is never changed or silently replaced. To move one to
+the new format, first preview the import, then run it with `--apply` only after
+checking the report:
+
+```bash
+pnpm --filter @better-zcp/panel-server db:import -- \
+  --source /path/to/data/db.json \
+  --target /path/to/data/db.sqlite
+pnpm --filter @better-zcp/panel-server db:import -- \
+  --source /path/to/data/db.json \
+  --target /path/to/data/db.sqlite \
+  --apply
+```
+
+The source file stays untouched. Passwords and tokens are moved to the
+panel's separate secret files during an applied import.
+
 ### PanelBridge (Optional)
 
 PanelBridge is a server-side Lua drop-in that enables features RCON can't reach — teleport, heal, weather control, character export/import, inventory editing, sound triggers.

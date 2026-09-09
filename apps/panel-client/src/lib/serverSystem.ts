@@ -1,9 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { DiskSpaceReport, RuntimeInfo, StorageHealth } from './api'
-import {
-  getProtectedApiJson,
-  protectedServerFunctionMiddleware,
-} from './serverAuth'
+import { protectedServerFunctionMiddleware } from './serverAuth'
 
 export const getRuntimeInfo = createServerFn({ method: 'GET' })
   .middleware(protectedServerFunctionMiddleware)
@@ -48,33 +45,3 @@ export const getStorageHealth = createServerFn({ method: 'GET' })
       },
     }
   })
-
-export async function getRuntimeInfoWithFallback(
-  signal?: AbortSignal,
-): Promise<RuntimeInfo> {
-  try {
-    return await getRuntimeInfo()
-  } catch {
-    return getProtectedApiJson<RuntimeInfo>('/system/runtime', signal)
-  }
-}
-
-export async function getDiskSpaceWithFallback(
-  signal?: AbortSignal,
-): Promise<DiskSpaceReport> {
-  try {
-    return await getDiskSpace()
-  } catch {
-    return getProtectedApiJson<DiskSpaceReport>('/system/disk-space', signal)
-  }
-}
-
-export async function getStorageHealthWithFallback(
-  signal?: AbortSignal,
-): Promise<StorageHealth> {
-  try {
-    return await getStorageHealth()
-  } catch {
-    return getProtectedApiJson<StorageHealth>('/system/storage-health', signal)
-  }
-}
