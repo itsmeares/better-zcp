@@ -83,6 +83,13 @@ export const getBackups = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) => invoke('getBackups', { data, context }))
 
+export const getBackupSnapshot = createServerFn({ method: 'GET' })
+  .middleware(capabilityMiddleware('backups.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('getBackupSnapshot', { data, context }),
+  )
+
 export const getBackupHistory = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
@@ -179,6 +186,17 @@ export function getBackupInfoWithFallback(signal?: AbortSignal) {
 
 export function getBackupsWithFallback(signal?: AbortSignal) {
   return withFallback(() => getBackups(), '/backup/list', signal)
+}
+
+export function getBackupSnapshotWithFallback(
+  name: string,
+  signal?: AbortSignal,
+) {
+  return withFallback(
+    () => getBackupSnapshot({ data: { name } }),
+    `/backup/${encodeURIComponent(name)}/snapshot`,
+    signal,
+  )
 }
 
 export function getBackupHistoryWithFallback(

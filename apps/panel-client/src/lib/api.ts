@@ -37,6 +37,7 @@ import {
   updateOidcSettings,
 } from "./serverAdmin";
 import {
+  getBackupSnapshotWithFallback,
   exportTemplateWithFallback,
   getBackupHistoryWithFallback,
   getBackupInfoWithFallback,
@@ -78,12 +79,15 @@ import {
   updateModPreset,
 } from "./serverModsRpc";
 import {
+  applyTemplate,
+  createBackup as createBackupServer,
   createTemplate,
   deleteBackup,
   deleteBackupsOlderThan,
   deleteTemplate,
   importTemplate,
   previewTemplate,
+  restoreBackup as restoreBackupServer,
   unhideTemplate,
   updateBackupSettings,
 } from "./serverResourceActionsRpc";
@@ -2454,10 +2458,14 @@ export const templatesApi = {
     serverId: string | number,
     options?: { backup?: boolean; applyIni?: boolean; applySandbox?: boolean },
   ) =>
-    apiPost(`/templates/${encodeURIComponent(id)}/apply`, {
-      serverId,
-      options,
-    }) as Promise<SimTemplateApplyResult>,
+    serverCall(
+      () => applyTemplate({ data: { id, serverId, options } }),
+      () =>
+        apiPost(`/templates/${encodeURIComponent(id)}/apply`, {
+          serverId,
+          options,
+        }),
+    ) as Promise<SimTemplateApplyResult>,
   delete: (id: string) =>
     serverCall(
       () => deleteTemplate({ data: { id } }),
@@ -3155,7 +3163,7 @@ export const backupApi = {
     }>,
 
   getSnapshot: (name: string): Promise<{ success: boolean; snapshot?: BackupSnapshot; message?: string }> =>
-    apiGet(`/backup/${encodeURIComponent(name)}/snapshot`),
+    getBackupSnapshotWithFallback(name),
 
   updateSettings: (
     settings: Partial<BackupSettings>,
@@ -3172,7 +3180,11 @@ export const backupApi = {
     backup?: ServerBackupArchive;
     duration?: number;
     message?: string;
-  }> => apiPost("/backup/create", options || {}),
+  }> =>
+    serverCall(
+      () => createBackupServer({ data: options || {} }),
+      () => apiPost("/backup/create", options || {}),
+    ),
 
   deleteBackup: (
     name: string,
@@ -3194,7 +3206,11 @@ export const backupApi = {
     success: boolean;
     message?: string;
     duration?: number;
-  }> => apiPost(`/backup/restore/${encodeURIComponent(name)}`, options || {}),
+  }> =>
+    serverCall(
+      () => restoreBackupServer({ data: { name, options } }),
+      () => apiPost(`/backup/restore/${encodeURIComponent(name)}`, options || {}),
+    ),
 
   deleteOlderThan: (
     days: number,
