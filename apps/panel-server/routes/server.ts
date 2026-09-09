@@ -17,6 +17,7 @@ import {
 } from "../database/init.ts";
 import { sanitizeError, sanitizeIniValue } from "../utils/sanitize.ts";
 import { hasIniKeyValue, setIniKeyLine } from "../utils/iniKeyWrite.ts";
+import { applyUpnpToIni } from "../utils/upnpConfig.ts";
 import {
   isSteamOperationIdle,
   getActiveSteamOperations,
@@ -57,6 +58,8 @@ import {
   forceStopServerAction,
   restartServerAction,
 } from "../services/serverLifecycleActions.ts";
+
+export { applyUpnpToIni } from "../utils/upnpConfig.ts";
 
 export {
   attemptBoundedSaveBeforeForceStop,
@@ -1805,28 +1808,6 @@ router.post("/configure-rcon", requirePermission("server.configure"), async (req
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
-
-export async function applyUpnpToIni(
-  serverConfigPath: string,
-  serverName: string,
-  useUpnp: boolean,
-) {
-  const iniPath = path.join(serverConfigPath, `${serverName}.ini`);
-  if (!fs.existsSync(iniPath)) {
-    return { applied: false, reason: `Server config not found at ${iniPath}` };
-  }
-  try {
-    await withFileLock(iniPath, async () => {
-      let content = fs.readFileSync(iniPath, "utf-8").replace(/\r\n/g, "\n");
-      const upnpValue = useUpnp ? "true" : "false";
-      content = setIniKeyLine(content, "UPnP", upnpValue);
-      writeFileAtomic(iniPath, content, { encoding: "utf-8", mode: 0o600 });
-    });
-    return { applied: true };
-  } catch (error: any) {
-    return { applied: false, reason: sanitizeError(error.message) };
-  }
-}
 
 router.post("/configure-network", requirePermission("server.configure"), async (req, res) => {
   try {

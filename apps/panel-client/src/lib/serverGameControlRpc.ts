@@ -11,7 +11,6 @@ type ExecuteOptions = {
   data?: unknown
   context?: unknown
 }
-
 type ImplementationFunction = {
   __executeServer?: (
     options: ExecuteOptions,
@@ -77,6 +76,62 @@ export const getManagedServer = createServerFn({ method: 'GET' })
   .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) => invoke('getManagedServer', { data, context }))
+
+export const createManagedServer = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('servers.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('createManagedServer', { data, context }),
+  )
+
+export const updateManagedServer = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('servers.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('updateManagedServer', { data, context }),
+  )
+
+export const deleteManagedServer = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('servers.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('deleteManagedServer', { data, context }),
+  )
+
+export const activateManagedServer = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('servers.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('activateManagedServer', { data, context }),
+  )
+
+export const getLifecycleTemplate = createServerFn({ method: 'GET' })
+  .middleware(capabilityMiddleware('servers.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('getLifecycleTemplate', { data, context }),
+  )
+
+export const activateManagedLifecycleProvider = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('servers.manage'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('activateManagedLifecycleProvider', { data, context }),
+  )
+
+export const getDiscoveredMounts = createServerFn({ method: 'GET' })
+  .middleware(capabilityMiddleware('servers.discover'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('getDiscoveredMounts', { data, context }),
+  )
+
+export const createServerFromDiscovery = createServerFn({ method: 'POST' })
+  .middleware(capabilityMiddleware('servers.discover'))
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke('createServerFromDiscovery', { data, context }),
+  )
 
 export const saveGameWorld = createServerFn({ method: 'POST' })
   .middleware(capabilityMiddleware('server.control'))
@@ -511,6 +566,31 @@ export function getManagedServerWithFallback(
   return withFallback(
     () => getManagedServer({ data: { id: String(id) } }),
     `/servers/${encodedId}`,
+    signal,
+  )
+}
+
+export function getLifecycleTemplateWithFallback(
+  id: string | number,
+  provider: 'systemd' | 'openrc',
+  signal?: AbortSignal,
+) {
+  const encodedId = encodeURIComponent(String(id))
+  const query = new URLSearchParams({ provider })
+  return withFallback(
+    () =>
+      getLifecycleTemplate({
+        data: { id: String(id), provider },
+      }),
+    `/servers/${encodedId}/lifecycle-template?${query.toString()}`,
+    signal,
+  )
+}
+
+export function getDiscoveredMountsWithFallback(signal?: AbortSignal) {
+  return withFallback(
+    () => getDiscoveredMounts(),
+    '/servers/discover-mounts',
     signal,
   )
 }
