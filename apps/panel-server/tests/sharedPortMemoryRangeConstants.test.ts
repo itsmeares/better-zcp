@@ -16,7 +16,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_JS = path.join(__dirname, "..", "routes", "server.ts");
-const CONFIG_TS = path.join(__dirname, "..", "routes", "config.ts");
+const APP_SETTINGS_TS = path.join(__dirname, "..", "services", "appSettings.ts");
 
 describe("BIND_PORT_MIN/MAX, DESTINATION_PORT_MIN/MAX, GAME_PORT_MAX, MEMORY_GB_MIN/MIN_MEMORY_GB_MAX/MAX_MEMORY_GB_MAX", () => {
   it("match the ranges every existing behavioural test was written against", () => {
@@ -65,8 +65,8 @@ describe("requireIntInRange call sites use named constants, not hand-typed liter
     ).toEqual([]);
   });
 
-  it("config.ts has no bare numeric min/max at a requireIntInRange call site", () => {
-    const offenders = findLiteralRangeCallSites(CONFIG_TS);
+  it("appSettings.ts has no bare numeric min/max at a requireIntInRange call site", () => {
+    const offenders = findLiteralRangeCallSites(APP_SETTINGS_TS);
     expect(
       offenders,
       offenders.length
@@ -78,7 +78,7 @@ describe("requireIntInRange call sites use named constants, not hand-typed liter
   it("sanity check: the scan actually finds call sites in both files (guards against the regex silently matching nothing)", () => {
     const source = fs.readFileSync(SERVER_JS, "utf8");
     expect((source.match(/requireIntInRange\(/g) || []).length).toBeGreaterThanOrEqual(10);
-    const configSource = fs.readFileSync(CONFIG_TS, "utf8");
-    expect((configSource.match(/requireIntInRange\(/g) || []).length).toBeGreaterThanOrEqual(6);
+    const appSettingsSource = fs.readFileSync(APP_SETTINGS_TS, "utf8");
+    expect((appSettingsSource.match(/requireIntInRange\(/g) || []).length).toBeGreaterThanOrEqual(6);
   });
 });
