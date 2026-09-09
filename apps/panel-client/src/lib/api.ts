@@ -192,6 +192,11 @@ import {
   validateSchedulerCron,
 } from "./serverGameControlRpc";
 import { sendPanelBridgeCommand } from "./serverPanelBridgeRpc";
+import {
+  getPanelBridgeServerInfo,
+  savePanelBridgeWorld,
+  sendPanelBridgeWorldCommand,
+} from "./serverPanelBridgeWorldRpc";
 
 const API_BASE = "/api";
 
@@ -2744,7 +2749,10 @@ export const panelBridgeApi = {
     ),
 
   getWeather: () =>
-    apiGet("/panel-bridge/weather") as Promise<{
+    serverCall(
+      () => sendPanelBridgeWorldCommand({ data: { action: "getWeather" } }),
+      () => apiGet("/panel-bridge/weather"),
+    ) as Promise<{
       success: boolean;
       data: {
         temperature: number;
@@ -2765,23 +2773,71 @@ export const panelBridgeApi = {
       };
     }>,
 
-  getServerInfo: () => apiGet("/panel-bridge/server-info"),
+  getServerInfo: () =>
+    serverCall(
+      () => getPanelBridgeServerInfo(),
+      () => apiGet("/panel-bridge/server-info"),
+    ),
 
   triggerBlizzard: (duration?: number) =>
-    apiPost("/panel-bridge/weather/blizzard", { duration }),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "triggerBlizzard", args: { duration } },
+        }),
+      () => apiPost("/panel-bridge/weather/blizzard", { duration }),
+    ),
   triggerTropicalStorm: (duration?: number) =>
-    apiPost("/panel-bridge/weather/tropical-storm", { duration }),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "triggerTropicalStorm", args: { duration } },
+        }),
+      () => apiPost("/panel-bridge/weather/tropical-storm", { duration }),
+    ),
   triggerStorm: (duration?: number) =>
-    apiPost("/panel-bridge/weather/storm", { duration }),
-  stopWeather: () => apiPost("/panel-bridge/weather/stop"),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "triggerStorm", args: { duration } },
+        }),
+      () => apiPost("/panel-bridge/weather/storm", { duration }),
+    ),
+  stopWeather: () =>
+    serverCall(
+      () => sendPanelBridgeWorldCommand({ data: { action: "stopWeather" } }),
+      () => apiPost("/panel-bridge/weather/stop"),
+    ),
   setSnow: (enabled: boolean) =>
-    apiPost("/panel-bridge/weather/snow", { enabled }),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "setSnow", args: { enabled } },
+        }),
+      () => apiPost("/panel-bridge/weather/snow", { enabled }),
+    ),
   generateWeather: (strength?: number, frontType?: number) =>
-    apiPost("/panel-bridge/weather/generate", { strength, frontType }),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "generateWeather", args: { strength, frontType } },
+        }),
+      () => apiPost("/panel-bridge/weather/generate", { strength, frontType }),
+    ),
 
   startRain: (intensity?: number) =>
-    apiPost("/panel-bridge/weather/rain/start", { intensity }),
-  stopRain: () => apiPost("/panel-bridge/weather/rain/stop"),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "startRain", args: { intensity } },
+        }),
+      () => apiPost("/panel-bridge/weather/rain/start", { intensity }),
+    ),
+  stopRain: () =>
+    serverCall(
+      () => sendPanelBridgeWorldCommand({ data: { action: "stopRain" } }),
+      () => apiPost("/panel-bridge/weather/rain/stop"),
+    ),
   triggerLightning: (
     x?: number,
     y?: number,
@@ -2789,10 +2845,30 @@ export const panelBridgeApi = {
     light?: boolean,
     rumble?: boolean,
   ) =>
-    apiPost("/panel-bridge/weather/lightning", { x, y, strike, light, rumble }),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: {
+            action: "triggerLightning",
+            args: { x, y, strike, light, rumble },
+          },
+        }),
+      () =>
+        apiPost("/panel-bridge/weather/lightning", {
+          x,
+          y,
+          strike,
+          light,
+          rumble,
+        }),
+    ),
 
   getClimateFloats: () =>
-    apiGet("/panel-bridge/climate/floats") as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({ data: { action: "getClimateFloats" } }),
+      () => apiGet("/panel-bridge/climate/floats"),
+    ) as Promise<{
       success: boolean;
       data: {
         floats: Array<{
@@ -2805,13 +2881,32 @@ export const panelBridgeApi = {
           isAdminEnabled: boolean;
         }>;
       };
-    }>,
+  }>,
   setClimateFloat: (floatId: number, value: number, enable?: boolean) =>
-    apiPost("/panel-bridge/climate/float", { floatId, value, enable }),
-  resetClimateOverrides: () => apiPost("/panel-bridge/climate/reset"),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: {
+            action: "setClimateFloat",
+            args: { floatId, value, enable },
+          },
+        }),
+      () => apiPost("/panel-bridge/climate/float", { floatId, value, enable }),
+    ),
+  resetClimateOverrides: () =>
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "resetClimateOverrides" },
+        }),
+      () => apiPost("/panel-bridge/climate/reset"),
+    ),
 
   getGameTime: () =>
-    apiGet("/panel-bridge/time") as Promise<{
+    serverCall(
+      () => sendPanelBridgeWorldCommand({ data: { action: "getGameTime" } }),
+      () => apiGet("/panel-bridge/time"),
+    ) as Promise<{
       success: boolean;
       data: {
         year: number;
@@ -2831,20 +2926,39 @@ export const panelBridgeApi = {
     day?: number;
     month?: number;
     year?: number;
-  }) => apiPost("/panel-bridge/time", options),
+  }) =>
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "setGameTime", args: options },
+        }),
+      () => apiPost("/panel-bridge/time", options),
+    ),
 
   getWorldStats: () =>
-    apiGet("/panel-bridge/world/stats") as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({ data: { action: "getWorldStats" } }),
+      () => apiGet("/panel-bridge/world/stats"),
+    ) as Promise<{
       success: boolean;
       data: { serverName: string; map: string; zombiesInCell: number };
     }>,
 
   getZombieCount: () =>
-    apiGet("/panel-bridge/zombies/count") as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({ data: { action: "getZombieCount" } }),
+      () => apiGet("/panel-bridge/zombies/count"),
+    ) as Promise<{
       success: boolean;
       data: { zombieCount: number; note: string };
     }>,
-  saveWorld: () => apiPost("/panel-bridge/world/save"),
+  saveWorld: () =>
+    serverCall(
+      () => savePanelBridgeWorld(),
+      () => apiPost("/panel-bridge/world/save"),
+    ),
 
   getAllPlayerDetails: () =>
     apiGet("/panel-bridge/players") as Promise<{
