@@ -14,10 +14,15 @@ const luaHandlers = new Set(
   [...lua.matchAll(/^\s*handlers\.([a-zA-Z]+)/gm)].map((m) => m[1]),
 );
 
-const routes = readFirst("apps/panel-server/routes/panelBridge.ts", "apps/panel-server/routes/panelBridge.js");
-const validBlock = routes.slice(routes.indexOf("const VALID_ACTIONS"));
+const policy = readFirst(
+  "apps/panel-server/services/panelBridgePolicy.ts",
+  "apps/panel-server/services/panelBridgePolicy.js",
+  "apps/panel-server/routes/panelBridge.ts",
+  "apps/panel-server/routes/panelBridge.js",
+);
+const validBlock = policy.slice(policy.indexOf("VALID_ACTIONS"));
 const allowList = new Set(
-  [...validBlock.slice(0, validBlock.indexOf("]);")).matchAll(/"([a-zA-Z]+)"/g)].map(
+  [...validBlock.slice(0, validBlock.indexOf("]);")).matchAll(/["']([a-zA-Z]+)["']/g)].map(
     (m) => m[1],
   ),
 );

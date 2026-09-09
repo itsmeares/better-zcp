@@ -15,6 +15,12 @@ const luaHandlers = new Set(
 );
 
 const routes = readFirst("apps/panel-server/routes/panelBridge.ts", "apps/panel-server/routes/panelBridge.js");
+const policy = readFirst(
+  "apps/panel-server/services/panelBridgePolicy.ts",
+  "apps/panel-server/services/panelBridgePolicy.js",
+  "apps/panel-server/routes/panelBridge.ts",
+  "apps/panel-server/routes/panelBridge.js",
+);
 
 const segments = [];
 const routeRe = /router\.(get|post|put|delete)\(\s*"([^"]+)"/g;
@@ -52,14 +58,14 @@ for (const segment of segments) {
 }
 
 const capabilityAnchor = "export const BRIDGE_ACTION_CAPABILITY";
-const capabilityIdx = routes.indexOf(capabilityAnchor);
+const capabilityIdx = policy.indexOf(capabilityAnchor);
 const capabilityActions = [];
 if (capabilityIdx !== -1) {
-  const openingBrace = routes.indexOf("{", capabilityIdx);
-  const block = routes.slice(openingBrace === -1 ? capabilityIdx : openingBrace + 1);
+  const openingBrace = policy.indexOf("{", capabilityIdx);
+  const block = policy.slice(openingBrace === -1 ? capabilityIdx : openingBrace + 1);
   const closeIdx = block.indexOf("\n};");
   const body = closeIdx === -1 ? block : block.slice(0, closeIdx);
-  for (const m of body.matchAll(/^\s*([a-zA-Z]+):\s*"/gm)) {
+  for (const m of body.matchAll(/^\s*([a-zA-Z]+):\s*["']/gm)) {
     capabilityActions.push(m[1]);
   }
 }
