@@ -197,6 +197,14 @@ import {
   savePanelBridgeWorld,
   sendPanelBridgeWorldCommand,
 } from "./serverPanelBridgeWorldRpc";
+import {
+  getPanelBridgeChatInfo,
+  sendPanelBridgeAdminChat,
+  sendPanelBridgeChatAlert,
+  sendPanelBridgeGeneralChat,
+  sendPanelBridgePlayerCommand,
+  sendPanelBridgeServerMessage,
+} from "./serverPanelBridgePlayerChatRpc";
 
 const API_BASE = "/api";
 
@@ -2961,7 +2969,13 @@ export const panelBridgeApi = {
     ),
 
   getAllPlayerDetails: () =>
-    apiGet("/panel-bridge/players") as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgePlayerCommand({
+          data: { action: "getAllPlayerDetails" },
+        }),
+      () => apiGet("/panel-bridge/players"),
+    ) as Promise<{
       success: boolean;
       data: {
         players: Array<{
@@ -2981,7 +2995,13 @@ export const panelBridgeApi = {
       };
     }>,
   getPlayerDetails: (username: string) =>
-    apiGet(`/panel-bridge/players/${encodeURIComponent(username)}`) as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgePlayerCommand({
+          data: { action: "getPlayerDetails", args: { username } },
+        }),
+      () => apiGet(`/panel-bridge/players/${encodeURIComponent(username)}`),
+    ) as Promise<{
       success: boolean;
       data: {
         username?: string;
@@ -3016,34 +3036,73 @@ export const panelBridgeApi = {
       error?: string;
     }>,
   teleportPlayerBridge: (username: string, x: number, y: number, z?: number) =>
-    apiPost(`/panel-bridge/players/${encodeURIComponent(username)}/teleport`, {
-      x,
-      y,
-      z,
-    }),
+    serverCall(
+      () =>
+        sendPanelBridgePlayerCommand({
+          data: {
+            action: "teleportPlayer",
+            args: { username, x, y, z },
+          },
+        }),
+      () =>
+        apiPost(`/panel-bridge/players/${encodeURIComponent(username)}/teleport`, {
+          x,
+          y,
+          z,
+        }),
+    ),
 
   killPlayer: (username: string) =>
-    apiPost<BridgeCommandResult<{ message: string; username: string; isDead: boolean; debug: string }>>(
-      `/panel-bridge/players/${encodeURIComponent(username)}/kill`,
+    serverCall(
+      () =>
+        sendPanelBridgePlayerCommand({
+          data: { action: "killPlayer", args: { username } },
+        }),
+      () =>
+        apiPost<BridgeCommandResult<{ message: string; username: string; isDead: boolean; debug: string }>>(
+          `/panel-bridge/players/${encodeURIComponent(username)}/kill`,
+        ),
     ),
 
   sendServerMessage: (message: string, color?: string) =>
-    apiPost("/panel-bridge/message", { message, color }),
+    serverCall(
+      () => sendPanelBridgeServerMessage({ data: { message, color } }),
+      () => apiPost("/panel-bridge/message", { message, color }),
+    ),
 
   sendToServerChat: (message: string, alert?: boolean) =>
-    apiPost("/panel-bridge/chat/alert", { message, alert: alert ?? false }),
+    serverCall(
+      () =>
+        sendPanelBridgeChatAlert({
+          data: { message, alert: alert ?? false },
+        }),
+      () => apiPost("/panel-bridge/chat/alert", { message, alert: alert ?? false }),
+    ),
 
   sendToAdminChat: (message: string) =>
-    apiPost("/panel-bridge/chat/admin", { message }),
+    serverCall(
+      () => sendPanelBridgeAdminChat({ data: { message } }),
+      () => apiPost("/panel-bridge/chat/admin", { message }),
+    ),
 
   sendToGeneralChat: (message: string, author?: string) =>
-    apiPost("/panel-bridge/chat/general", {
-      message,
-      author: author?.trim() || "Server",
-    }),
+    serverCall(
+      () =>
+        sendPanelBridgeGeneralChat({
+          data: { message, author: author?.trim() || "Server" },
+        }),
+      () =>
+        apiPost("/panel-bridge/chat/general", {
+          message,
+          author: author?.trim() || "Server",
+        }),
+    ),
 
   getChatInfo: () =>
-    apiGet("/panel-bridge/chat/info") as Promise<{
+    serverCall(
+      () => getPanelBridgeChatInfo(),
+      () => apiGet("/panel-bridge/chat/info"),
+    ) as Promise<{
       success: boolean;
       data: { chatServerAvailable: boolean; rconFallback: boolean };
     }>,
