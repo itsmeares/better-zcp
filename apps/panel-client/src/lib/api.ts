@@ -205,6 +205,11 @@ import {
   sendPanelBridgePlayerCommand,
   sendPanelBridgeServerMessage,
 } from "./serverPanelBridgePlayerChatRpc";
+import {
+  getPanelBridgeCatalog,
+  scanPanelBridgeCatalog,
+  sendPanelBridgeEndangerCommand,
+} from "./serverPanelBridgeEffectsRpc";
 
 const API_BASE = "/api";
 
@@ -3146,34 +3151,78 @@ export const panelBridgeApi = {
     radius?: number,
     volume?: number,
   ) =>
-    apiPost("/panel-bridge/sound/world", {
-      x,
-      y,
-      z: z ?? 0,
-      radius: radius ?? 50,
-      volume: volume ?? 100,
-    }),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: {
+            action: "playWorldSound",
+            args: {
+              x,
+              y,
+              z: z ?? 0,
+              radius: radius ?? 50,
+              volume: volume ?? 100,
+            },
+          },
+        }),
+      () =>
+        apiPost("/panel-bridge/sound/world", {
+          x,
+          y,
+          z: z ?? 0,
+          radius: radius ?? 50,
+          volume: volume ?? 100,
+        }),
+    ),
 
   playSoundNearPlayer: (username: string, radius?: number, volume?: number) =>
-    apiPost("/panel-bridge/sound/near-player", {
-      username,
-      radius: radius ?? 50,
-      volume: volume ?? 100,
-    }),
+    serverCall(
+      () =>
+        sendPanelBridgeEndangerCommand({
+          data: {
+            action: "playSoundNearPlayer",
+            args: {
+              username,
+              radius: radius ?? 50,
+              volume: volume ?? 100,
+            },
+          },
+        }),
+      () =>
+        apiPost("/panel-bridge/sound/near-player", {
+          username,
+          radius: radius ?? 50,
+          volume: volume ?? 100,
+        }),
+    ),
 
   triggerGunshotBridge: (options: {
     x?: number;
     y?: number;
     z?: number;
     username?: string;
-  }) => apiPost("/panel-bridge/sound/gunshot", options),
+  }) =>
+    serverCall(
+      () =>
+        sendPanelBridgeEndangerCommand({
+          data: { action: "triggerGunshot", args: options },
+        }),
+      () => apiPost("/panel-bridge/sound/gunshot", options),
+    ),
 
   triggerAlarmBridge: (options: {
     x?: number;
     y?: number;
     z?: number;
     username?: string;
-  }) => apiPost("/panel-bridge/sound/alarm", options),
+  }) =>
+    serverCall(
+      () =>
+        sendPanelBridgeEndangerCommand({
+          data: { action: "triggerAlarmSound", args: options },
+        }),
+      () => apiPost("/panel-bridge/sound/alarm", options),
+    ),
 
   createNoise: (options: {
     x?: number;
@@ -3182,7 +3231,14 @@ export const panelBridgeApi = {
     radius?: number;
     volume?: number;
     username?: string;
-  }) => apiPost("/panel-bridge/sound/noise", options),
+  }) =>
+    serverCall(
+      () =>
+        sendPanelBridgeEndangerCommand({
+          data: { action: "createNoise", args: options },
+        }),
+      () => apiPost("/panel-bridge/sound/noise", options),
+    ),
 
 
   triggerAirdrop: (options: {
@@ -3258,18 +3314,67 @@ export const panelBridgeApi = {
 
 
   spawnHordeNear: (username: string, count: number) =>
-    apiPost<BridgeCommandResult>("/panel-bridge/zombies/spawn-near", { username, count }),
+    serverCall(
+      () =>
+        sendPanelBridgeEndangerCommand({
+          data: {
+            action: "spawnHordeNearPlayer",
+            args: { username, count },
+          },
+        }),
+      () =>
+        apiPost<BridgeCommandResult>("/panel-bridge/zombies/spawn-near", {
+          username,
+          count,
+        }),
+    ),
 
   spawnHordeBehind: (username: string, count: number) =>
-    apiPost<BridgeCommandResult>("/panel-bridge/zombies/spawn-behind", { username, count }),
+    serverCall(
+      () =>
+        sendPanelBridgeEndangerCommand({
+          data: {
+            action: "spawnHordeBehindPlayer",
+            args: { username, count },
+          },
+        }),
+      () =>
+        apiPost<BridgeCommandResult>("/panel-bridge/zombies/spawn-behind", {
+          username,
+          count,
+        }),
+    ),
 
-  clearAllZombies: () => apiPost("/panel-bridge/zombies/clear-all"),
+  clearAllZombies: () =>
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "clearAllZombies" },
+        }),
+      () => apiPost("/panel-bridge/zombies/clear-all"),
+    ),
   clearZombiesNearPlayer: (username: string, radius?: number) =>
-    apiPost("/panel-bridge/zombies/clear-near-player", { username, radius }),
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: {
+            action: "clearZombiesNearPlayer",
+            args: { username, radius },
+          },
+        }),
+      () =>
+        apiPost("/panel-bridge/zombies/clear-near-player", {
+          username,
+          radius,
+        }),
+    ),
 
 
   getCatalogItems: () =>
-    apiGet("/panel-bridge/catalog/items") as Promise<{
+    serverCall(
+      () => getPanelBridgeCatalog({ data: { kind: "items" } }),
+      () => apiGet("/panel-bridge/catalog/items"),
+    ) as Promise<{
       items: Array<{
         id: string;
         name: string;
@@ -3281,7 +3386,10 @@ export const panelBridgeApi = {
     }>,
 
   getCatalogVehicles: () =>
-    apiGet("/panel-bridge/catalog/vehicles") as Promise<{
+    serverCall(
+      () => getPanelBridgeCatalog({ data: { kind: "vehicles" } }),
+      () => apiGet("/panel-bridge/catalog/vehicles"),
+    ) as Promise<{
       vehicles: Array<{
         id: string;
         name: string;
@@ -3293,7 +3401,10 @@ export const panelBridgeApi = {
     }>,
 
   scanCatalogItems: () =>
-    apiPost("/panel-bridge/catalog/scan-items") as Promise<{
+    serverCall(
+      () => scanPanelBridgeCatalog({ data: { kind: "items" } }),
+      () => apiPost("/panel-bridge/catalog/scan-items"),
+    ) as Promise<{
       items: Array<{
         id: string;
         name: string;
@@ -3305,7 +3416,10 @@ export const panelBridgeApi = {
     }>,
 
   scanCatalogVehicles: () =>
-    apiPost("/panel-bridge/catalog/scan-vehicles") as Promise<{
+    serverCall(
+      () => scanPanelBridgeCatalog({ data: { kind: "vehicles" } }),
+      () => apiPost("/panel-bridge/catalog/scan-vehicles"),
+    ) as Promise<{
       vehicles: Array<{
         id: string;
         name: string;

@@ -10,6 +10,9 @@ type ServiceError = {
   status?: unknown
 }
 
+// eslint-disable-next-line no-control-regex
+const BRIDGE_USERNAME_REGEX = /^(?=.*\S)[^\x00-\x1F\x7F"\\]{1,64}$/
+
 function record(data: unknown): AnyRecord {
   return data && typeof data === 'object' && !Array.isArray(data)
     ? (data as AnyRecord)
@@ -56,6 +59,7 @@ async function panelBridge(): Promise<AnyRecord> {
 async function withBridge<T>(
   requirePath: boolean,
   operation: (bridge: AnyRecord) => Promise<T>,
+  notRunningCode?: string,
 ): Promise<T> {
   try {
     const bridge = await panelBridge()
@@ -65,7 +69,10 @@ async function withBridge<T>(
       invalid('Bridge not configured', ErrorCode.BRIDGE_NOT_CONFIGURED)
     }
     if (!bridge.isRunning) {
-      invalid('Bridge not running. Start it first.', ErrorCode.BRIDGE_NOT_RUNNING)
+      invalid(
+        'Bridge not running. Start it first.',
+        notRunningCode ?? ErrorCode.BRIDGE_NOT_RUNNING,
+      )
     }
 
     return await operation(bridge)
@@ -98,6 +105,20 @@ function isIntegerInRange(value: unknown, min: number, max: number): value is nu
   return Number.isInteger(value) && isNumberInRange(value, min, max)
 }
 
+function requireUsername(
+  args: AnyRecord,
+  message: string,
+  code: string,
+): string {
+  if (
+    typeof args.username !== 'string' ||
+    !BRIDGE_USERNAME_REGEX.test(args.username)
+  ) {
+    invalid(message, code)
+  }
+  return args.username
+}
+
 async function executeWorldAction(data: AnyRecord): Promise<unknown> {
   const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
   const action = data.action
@@ -121,8 +142,60 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
       return withBridge(false, (bridge) => bridge.getGameTime())
     case 'getWorldStats':
       return withBridge(false, (bridge) => bridge.getWorldStats())
+    case 'playWorldSound': {
+      const { x, y, z, radius, volume } = args
+      if (x === undefined || y === undefined) {
+        invalid(
+          'x and y coordinates are required',
+          ErrorCode.BRIDGE_XY_COORDS_REQUIRED,
+        )
+      }
+      if (
+        !isNumberInRange(x, 0, 24000) ||
+        !isNumberInRange(y, 0, 24000)
+      ) {
+        invalid(
+          'Coordinates out of range (valid: 0-24000)',
+          ErrorCode.PANELBRIDGE_SOUND_COORDS_OUT_OF_RANGE,
+        )
+      }
+      return withBridge(false, (bridge) =>
+        bridge.playWorldSound(x, y, z, radius, volume),
+      )
+    }
     case 'getZombieCount':
       return withBridge(false, (bridge) => bridge.sendCommand('getZombieCount', {}))
+    case 'clearZombiesNearPlayer': {
+      const username = requireUsername(
+        args,
+        'Valid username is required',
+        ErrorCode.BRIDGE_VALID_USERNAME_REQUIRED,
+      )
+      const radius = args.radius === undefined ? 50 : args.radius
+      if (
+        typeof radius !== 'number' ||
+        !Number.isFinite(radius) ||
+        radius < 1 ||
+        radius > 500
+      ) {
+        invalid(
+          'radius must be 1-500',
+          ErrorCode.PANELBRIDGE_CLEAR_ZOMBIES_RADIUS_INVALID,
+        )
+      }
+      return withBridge(
+        false,
+        (bridge) =>
+          bridge.sendCommand('clearZombiesNearPlayer', { username, radius }),
+        ErrorCode.BRIDGE_NOT_RUNNING_BARE,
+      )
+    }
+    case 'clearAllZombies':
+      return withBridge(
+        false,
+        (bridge) => bridge.sendCommand('clearAllZombies', {}),
+        ErrorCode.BRIDGE_NOT_RUNNING_BARE,
+      )
     case 'triggerBlizzard':
       return withBridge(false, (bridge) => bridge.triggerBlizzard(args.duration))
     case 'triggerTropicalStorm':
