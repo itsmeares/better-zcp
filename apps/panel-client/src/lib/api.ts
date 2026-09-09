@@ -210,6 +210,7 @@ import {
   scanPanelBridgeCatalog,
   sendPanelBridgeEndangerCommand,
 } from "./serverPanelBridgeEffectsRpc";
+import { sendPanelBridgeDiagnosticsCommand } from "./serverPanelBridgeDiagnosticsRpc";
 
 const API_BASE = "/api";
 
@@ -3112,6 +3113,86 @@ export const panelBridgeApi = {
       data: { chatServerAvailable: boolean; rconFallback: boolean };
     }>,
 
+  getBridgeDebugStats: () =>
+    serverCall(
+      () =>
+        sendPanelBridgeDiagnosticsCommand({
+          data: { action: "getStats" },
+        }),
+      () => apiGet("/panel-bridge/debug/stats"),
+    ) as Promise<BridgeCommandResult>,
+
+  checkBridgeApi: (object?: string, method?: string) =>
+    serverCall(
+      () =>
+        sendPanelBridgeDiagnosticsCommand({
+          data: { action: "checkAPI", args: { object, method } },
+        }),
+      () => {
+        const params = new URLSearchParams();
+        if (object) params.set("object", object);
+        if (method) params.set("method", method);
+        const query = params.toString();
+        return apiGet(
+          `/panel-bridge/debug/api${query ? `?${query}` : ""}`,
+        );
+      },
+    ) as Promise<BridgeCommandResult>,
+
+  getBridgeAvailableHandlers: () =>
+    serverCall(
+      () =>
+        sendPanelBridgeDiagnosticsCommand({
+          data: { action: "getAvailableHandlers" },
+        }),
+      () => apiGet("/panel-bridge/debug/handlers"),
+    ) as Promise<BridgeCommandResult>,
+
+  getBridgeDebugLog: (limit: number = 50, level: string = "DEBUG") =>
+    serverCall(
+      () =>
+        sendPanelBridgeDiagnosticsCommand({
+          data: {
+            action: "getDebugLog",
+            args: { limit, level },
+          },
+        }),
+      () => {
+        const params = new URLSearchParams({
+          limit: String(limit),
+          level,
+        });
+        return apiGet(`/panel-bridge/debug/log?${params.toString()}`);
+      },
+    ) as Promise<BridgeCommandResult>,
+
+  runBridgeDebugItemScript: () =>
+    serverCall(
+      () =>
+        sendPanelBridgeDiagnosticsCommand({
+          data: { action: "debugItemScript" },
+        }),
+      () => apiPost("/panel-bridge/catalog/debug-item-script"),
+    ) as Promise<BridgeCommandResult>,
+
+  setBridgeDebugMode: (enabled: boolean) =>
+    serverCall(
+      () =>
+        sendPanelBridgeDiagnosticsCommand({
+          data: { action: "setDebugMode", args: { enabled } },
+        }),
+      () => apiPost("/panel-bridge/debug/mode", { enabled }),
+    ) as Promise<BridgeCommandResult>,
+
+  clearBridgeErrors: () =>
+    serverCall(
+      () =>
+        sendPanelBridgeDiagnosticsCommand({
+          data: { action: "clearErrors" },
+        }),
+      () => apiPost("/panel-bridge/debug/clear-errors"),
+    ) as Promise<BridgeCommandResult>,
+
   getSandboxOptions: () => apiGet("/panel-bridge/sandbox"),
 
   getCommands: () =>
@@ -3275,7 +3356,13 @@ export const panelBridgeApi = {
 
 
   getUtilitiesStatus: () =>
-    apiGet("/panel-bridge/utilities/status") as Promise<{
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: { action: "getUtilitiesStatus" },
+        }),
+      () => apiGet("/panel-bridge/utilities/status"),
+    ) as Promise<{
       success: boolean;
       data: {
         hydroPowerOn: boolean;
@@ -3291,16 +3378,36 @@ export const panelBridgeApi = {
     }>,
 
   restoreUtilities: (power?: boolean, water?: boolean) =>
-    apiPost("/panel-bridge/utilities/restore", {
-      power: power !== false,
-      water: water !== false,
-    }) as Promise<UtilitiesChangeResult>,
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: {
+            action: "restoreUtilities",
+            args: { power: power !== false, water: water !== false },
+          },
+        }),
+      () =>
+        apiPost("/panel-bridge/utilities/restore", {
+          power: power !== false,
+          water: water !== false,
+        }),
+    ) as Promise<UtilitiesChangeResult>,
 
   shutOffUtilities: (power?: boolean, water?: boolean) =>
-    apiPost("/panel-bridge/utilities/shutoff", {
-      power: power !== false,
-      water: water !== false,
-  }) as Promise<UtilitiesChangeResult>,
+    serverCall(
+      () =>
+        sendPanelBridgeWorldCommand({
+          data: {
+            action: "shutOffUtilities",
+            args: { power: power !== false, water: water !== false },
+          },
+        }),
+      () =>
+        apiPost("/panel-bridge/utilities/shutoff", {
+          power: power !== false,
+          water: water !== false,
+        }),
+    ) as Promise<UtilitiesChangeResult>,
 
 
   exportCharacter: (username: string): Promise<CharacterExportResponse> =>

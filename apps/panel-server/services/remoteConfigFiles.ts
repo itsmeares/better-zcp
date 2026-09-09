@@ -1,3 +1,5 @@
+/// <reference path="../types/ssh2-sftp-client.d.ts" />
+
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -40,10 +42,6 @@ interface RemoteSession {
   pulledAt: number;
   serverName: string;
   transportKey: string;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function safeRemoteDir(value: unknown): string {
@@ -161,18 +159,18 @@ export async function listRemoteConfigFiles(
   return withClient(config, async (client) => {
     const entries = await client.list(config.configPath);
     const files = entries
-      .filter((entry) => entry.type === "-")
-      .filter((entry) =>
+      .filter((entry: any) => entry.type === "-")
+      .filter((entry: any) =>
         CONFIG_EXTENSIONS.some((ext) => entry.name.toLowerCase().endsWith(ext)),
       )
-      .map((entry) => ({
+      .map((entry: any) => ({
         name: entry.name,
         size: entry.size,
         modifiedAt: entry.modifyTime
           ? new Date(entry.modifyTime).toISOString()
           : null,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name))
       .slice(0, LIST_MAX);
     return { configPath: config.configPath, files };
   });
