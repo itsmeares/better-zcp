@@ -21,8 +21,8 @@ fs.writeFileSync(
   "utf8",
 );
 process.env.PANEL_PATHS_CONFIG_PATH = configPath;
-// Unit tests still exercise the legacy JSON path unless a test explicitly
-// starts a SQLite child. Production defaults to SQLite.
+// Most unit tests exercise the legacy JSON compatibility path so they can
+// inspect redaction and recovery behavior. Production defaults to SQLite.
 process.env.PANEL_DATABASE_DRIVER = "json";
 
 afterAll(() => {

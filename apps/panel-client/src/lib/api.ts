@@ -4,13 +4,13 @@ import { toast } from "@/components/ui/use-toast";
 import i18n from "@/i18n";
 import type { LifecycleState } from "./serverStatus";
 import {
-  getDiskSpaceWithFallback,
-  getRuntimeInfoWithFallback,
-  getStorageHealthWithFallback,
+  getDiskSpace,
+  getRuntimeInfo,
+  getStorageHealth,
 } from "./serverSystem";
 import {
-  getCapabilitiesWithFallback,
-  getRolesWithFallback,
+  getCapabilities,
+  getRoles,
 } from "./serverPermissions";
 import {
   assignManagedUserRole,
@@ -19,11 +19,11 @@ import {
   createManagedUser,
   deleteManagedRole,
   generateRecoveryCodes,
-  getAppSettingsWithFallback,
-  getDebugRamWithFallback,
-  getManagedUsersWithFallback,
-  getOidcSettingsWithFallback,
-  getPerformanceHistoryWithFallback,
+  getAppSettings,
+  getDebugRam,
+  getManagedUsers,
+  getOidcSettings,
+  getPerformanceHistory,
   getRecoveryCodes,
   regenerateJwtSecret,
   removeManagedUser,
@@ -37,20 +37,20 @@ import {
   updateOidcSettings,
 } from "./serverAdmin";
 import {
-  getBackupSnapshotWithFallback,
-  exportTemplateWithFallback,
-  getBackupHistoryWithFallback,
-  getBackupInfoWithFallback,
-  getBackupsWithFallback,
-  getBackupStatusWithFallback,
-  getHiddenTemplatesWithFallback,
-  getPlayerActivityWithFallback,
-  getPlayerNoteWithFallback,
-  getPlayerNotesWithFallback,
-  getPlayerStatWithFallback,
-  getPlayerStatsWithFallback,
-  getTemplateWithFallback,
-  getTemplatesWithFallback,
+  getBackupSnapshot,
+  exportTemplate,
+  getBackupHistory,
+  getBackupInfo,
+  getBackups,
+  getBackupStatus,
+  getHiddenTemplates,
+  getPlayerActivity,
+  getPlayerNote,
+  getPlayerNotes,
+  getPlayerStat,
+  getPlayerStats,
+  getTemplate,
+  getTemplates,
 } from "./serverResourceReadsRpc";
 import {
   addCollectionItem,
@@ -58,13 +58,13 @@ import {
   cancelPendingModRestart,
   clearAllIgnoredMods,
   deleteModPreset,
-  getIgnoredModPairsWithFallback,
-  getIgnoredModsWithFallback,
-  getModPresetsWithFallback,
-  getModsStatusWithFallback,
-  getServerModsWithFallback,
-  getTrackedModsWithFallback,
-  getWorkshopStatusWithFallback,
+  getIgnoredModPairs,
+  getIgnoredMods,
+  getModPresets,
+  getModsStatus,
+  getServerMods,
+  getTrackedMods,
+  getWorkshopStatus,
   removeCollectionItem,
   removeCollectionTracking,
   removeIgnoredModPair,
@@ -92,12 +92,12 @@ import {
   updateBackupSettings,
 } from "./serverResourceActionsRpc";
 import {
-  getDiscordConfigWithFallback,
-  getDiscordPermissionsWithFallback,
-  getDiscordStatusWithFallback,
-  getDiscordWebhookEventsWithFallback,
-  getDockerStatsWithFallback,
-  getDockerStatusWithFallback,
+  getDiscordConfig,
+  getDiscordPermissions,
+  getDiscordStatus,
+  getDiscordWebhookEvents,
+  getDockerStats,
+  getDockerStatus,
   resetDiscordConfig,
   runDockerAction,
   sendDiscordTestMessage,
@@ -132,26 +132,26 @@ import {
   deleteManagedServer,
   disconnectRcon,
   executeRcon,
-  getActiveManagedServerWithFallback,
-  getDiscoveredMountsWithFallback,
-  getGameServerStatusWithFallback,
-  getLifecycleTemplateWithFallback,
-  getManagedServerWithFallback,
-  getManagedServersWithFallback,
-  getNetworkInterfacesWithFallback,
-  getPlayerAccessLevelsWithFallback,
-  getPlayerPerksWithFallback,
-  getPlayersWithFallback,
-  getPlayerVehiclesWithFallback,
-  getRconCommandsWithFallback,
-  getRconHistoryWithFallback,
-  getRconStatusWithFallback,
-  getSchedulerHistoryWithFallback,
-  getSchedulerPresetsWithFallback,
-  getSchedulerStatusWithFallback,
-  getSchedulerTasksWithFallback,
-  getSteamIdBansWithFallback,
-  getWhitelistWithFallback,
+  getActiveManagedServer,
+  getDiscoveredMounts,
+  getGameServerStatus,
+  getLifecycleTemplate,
+  getManagedServer,
+  getManagedServers,
+  getNetworkInterfaces,
+  getPlayerAccessLevels,
+  getPlayerPerks,
+  getPlayers,
+  getPlayerVehicles,
+  getRconCommands,
+  getRconHistory,
+  getRconStatus,
+  getSchedulerHistory,
+  getSchedulerPresets,
+  getSchedulerStatus,
+  getSchedulerTasks,
+  getSteamIdBans,
+  getWhitelist,
   kickPlayer,
   reloadLua,
   removeAllowedSteamId,
@@ -471,21 +471,9 @@ function buildResponseError(response: Response, payload?: unknown): ApiError {
   });
 }
 
-async function runServerFallback<T>(fallback: () => Promise<T>): Promise<T> {
-  try {
-    return await fallback();
-  } catch (error) {
-    throw toApiError(error);
-  }
-}
-
-async function serverCall<T>(
-  operation: () => Promise<T>,
-  fallback?: () => Promise<T>,
-): Promise<T> {
+async function serverCall<T>(operation: () => Promise<T>): Promise<T> {
   try {
     const result = await operation();
-    if (result === undefined && fallback) return runServerFallback(fallback);
     if (result instanceof Response) {
       const payload = await parseResponseBody(result);
       if (!result.ok) throw buildResponseError(result, payload);
@@ -495,7 +483,6 @@ async function serverCall<T>(
     showBackupWarning(result);
     return result;
   } catch (error) {
-    if (fallback) return runServerFallback(fallback);
     throw toApiError(error);
   }
 }
@@ -779,13 +766,11 @@ export interface CharacterImportResponse {
 }
 
 export const serverApi = {
-  getStatus: (options?: { retries?: number }) =>
-    serverCall(() =>
-      getGameServerStatusWithFallback(undefined, options?.retries),
-    ),
+  getStatus: (_options?: { retries?: number }) =>
+    serverCall(() => getGameServerStatus()),
   getNetworkInterfaces: (): Promise<{
     interfaces: { name: string; address: string }[];
-  }> => serverCall(() => getNetworkInterfacesWithFallback()),
+  }> => serverCall(() => getNetworkInterfaces()),
   start: () => serverCall(() => startServer()),
   stop: () => serverCall(() => stopServer()),
   forceStop: () => serverCall(() => forceStopServer()),
@@ -903,10 +888,8 @@ export const serverApi = {
 };
 
 export const playersApi = {
-  getPlayers: (options?: { retries?: number }) =>
-    options?.retries !== undefined
-      ? apiGet("/players", undefined, options.retries)
-      : serverCall(() => getPlayersWithFallback()),
+  getPlayers: (_options?: { retries?: number }) =>
+    serverCall(() => getPlayers()),
   getWhitelist: (): Promise<{
     success: boolean
     available: boolean
@@ -923,16 +906,13 @@ export const playersApi = {
     allowedSteamIds: string[]
     reason?: string
     server?: { id: string | number; name: string }
-  }> => serverCall(() => getWhitelistWithFallback()),
+  }> => serverCall(() => getWhitelist()),
   kick: (username: string, reason?: string) =>
     serverCall(() => kickPlayer({ data: { username, reason } })),
   ban: (username: string, banIp?: boolean, reason?: string) =>
     serverCall(() => banPlayer({ data: { username, banIp, reason } })),
   unban: (username: string) =>
-    serverCall(
-      () => unbanPlayer({ data: { username } }),
-      () => apiPost("/players/unban", { username }),
-    ),
+    serverCall(() => unbanPlayer({ data: { username } })),
   setAccessLevel: (username: string, level: string) =>
     serverCall(() => setAccessLevel({ data: { username, level } })),
   addToWhitelist: (username: string, password: string) =>
@@ -978,29 +958,29 @@ export const playersApi = {
     serverCall(() => setInvisible({ data: { username, enabled } })),
   setNoclip: (username: string | null, enabled: boolean) =>
     serverCall(() => setNoclip({ data: { username, enabled } })),
-  getVehicles: () => serverCall(() => getPlayerVehiclesWithFallback()),
-  getPerks: () => serverCall(() => getPlayerPerksWithFallback()),
-  getAccessLevels: () => serverCall(() => getPlayerAccessLevelsWithFallback()),
+  getVehicles: () => serverCall(() => getPlayerVehicles()),
+  getPerks: () => serverCall(() => getPlayerPerks()),
+  getAccessLevels: () => serverCall(() => getPlayerAccessLevels()),
   banSteamId: (steamId: string, reason?: string) =>
     serverCall(() => banSteamId({ data: { steamId, reason } })),
   unbanSteamId: (steamId: string) =>
     serverCall(() => unbanSteamId({ data: { steamId } })),
-  getSteamIdBans: () => serverCall(() => getSteamIdBansWithFallback()),
+  getSteamIdBans: () => serverCall(() => getSteamIdBans()),
   voiceBan: (username: string, enabled: boolean) =>
     serverCall(() => setVoiceBan({ data: { username, enabled } })),
   addUser: (username: string, password: string) =>
     serverCall(() => addRconUser({ data: { username, password } })),
   addAllToWhitelist: () => serverCall(() => addAllToWhitelist()),
   getActivityLogs: (player?: string, limit?: number) =>
-    getPlayerActivityWithFallback(player, limit || 100),
-  getNotes: () => getPlayerNotesWithFallback(),
-  getNote: (playerName: string) => getPlayerNoteWithFallback(playerName),
+    getPlayerActivity({ data: { player, limit: limit || 100 } }),
+  getNotes: () => getPlayerNotes(),
+  getNote: (playerName: string) => getPlayerNote({ data: { playerName } }),
   saveNote: (playerName: string, note: string, tags: string[]) =>
     apiPost("/players/notes", { playerName, note, tags }),
   deleteNote: (playerName: string) =>
     apiDelete(`/players/notes/${encodeURIComponent(playerName)}`),
-  getStats: () => getPlayerStatsWithFallback(),
-  getStat: (playerName: string) => getPlayerStatWithFallback(playerName),
+  getStats: () => getPlayerStats(),
+  getStat: (playerName: string) => getPlayerStat({ data: { playerName } }),
   getExports: (username?: string) =>
     apiGet(
       `/players/exports${username ? `?username=${encodeURIComponent(username)}` : ""}`,
@@ -1024,13 +1004,13 @@ export interface RconTestResult {
 export const rconApi = {
   execute: (command: string) =>
     serverCall(() => executeRcon({ data: { command } })),
-  getStatus: () => serverCall(() => getRconStatusWithFallback()),
+  getStatus: () => serverCall(() => getRconStatus()),
   connect: (host?: string, port?: number, password?: string) =>
     serverCall(() => connectRcon({ data: { host, port, password } })),
   disconnect: () => serverCall(() => disconnectRcon()),
   getHistory: (limit?: number) =>
-    serverCall(() => getRconHistoryWithFallback(limit)),
-  getCommands: () => serverCall(() => getRconCommandsWithFallback()),
+    serverCall(() => getRconHistory({ data: { limit } })),
+  getCommands: () => serverCall(() => getRconCommands()),
   testConnection: (host: string, port: number, password: string) =>
     serverCall(() => testRconConnection({ data: { host, port, password } })),
 };
@@ -1064,8 +1044,8 @@ export interface SchedulerStatus {
 
 export const schedulerApi = {
   getStatus: () =>
-    serverCall(() => getSchedulerStatusWithFallback()) as Promise<SchedulerStatus>,
-  getTasks: () => serverCall(() => getSchedulerTasksWithFallback()),
+    serverCall(() => getSchedulerStatus()) as Promise<SchedulerStatus>,
+  getTasks: () => serverCall(() => getSchedulerTasks()),
   createTask: (
     name: string,
     cronExpression: string,
@@ -1099,7 +1079,7 @@ export const schedulerApi = {
       message: string;
       warningMinutes: number;
     }>,
-  getCronPresets: () => serverCall(() => getSchedulerPresetsWithFallback()),
+  getCronPresets: () => serverCall(() => getSchedulerPresets()),
   validateCron: (cronExpression: string) =>
     serverCall(() => validateSchedulerCron({ data: { cronExpression } })) as Promise<{
       valid: boolean;
@@ -1108,7 +1088,7 @@ export const schedulerApi = {
     }>,
   getHistory: (limit?: number, taskId?: number) => {
     return serverCall(() =>
-      getSchedulerHistoryWithFallback(limit, taskId),
+      getSchedulerHistory({ data: { limit, taskId } }),
     ) as Promise<{
       history: ScheduleHistoryEntry[];
     }>;
@@ -1131,35 +1111,23 @@ export const schedulerApi = {
 };
 
 export const modsApi = {
-  getStatus: (options?: RequestInit) =>
-    getModsStatusWithFallback(options?.signal ?? undefined),
-  getTrackedMods: (options?: RequestInit) =>
-    getTrackedModsWithFallback(options?.signal ?? undefined),
+  getStatus: (_options?: RequestInit) =>
+    getModsStatus(),
+  getTrackedMods: (_options?: RequestInit) =>
+    getTrackedMods(),
   trackMod: (workshopId: string) =>
-    serverCall(
-      () => trackMod({ data: { workshopId } }),
-      () => apiPost("/mods/track", { workshopId }),
-    ),
+    serverCall(() => trackMod({ data: { workshopId } })),
   untrackMod: (workshopId: string) =>
-    serverCall(
-      () => untrackMod({ data: { workshopId } }),
-      () => apiDelete(`/mods/track/${workshopId}`),
-    ),
+    serverCall(() => untrackMod({ data: { workshopId } })),
 
-  getIgnoredMods: () => getIgnoredModsWithFallback(),
+  getIgnoredMods: () => getIgnoredMods(),
   unignoreMod: (workshopId: string) =>
-    serverCall(
-      () => unignoreMod({ data: { workshopId } }),
-      () => apiDelete(`/mods/ignored/${workshopId}`),
-    ),
+    serverCall(() => unignoreMod({ data: { workshopId } })),
   clearAllIgnoredMods: () =>
-    serverCall(
-      () => clearAllIgnoredMods(),
-      () => apiDelete("/mods/ignored"),
-    ),
+    serverCall(() => clearAllIgnoredMods()),
 
   getIgnoredModPairs: () =>
-    getIgnoredModPairsWithFallback() as Promise<
+    getIgnoredModPairs() as Promise<
       Array<{
         mod_a: string;
         mod_b: string;
@@ -1169,58 +1137,32 @@ export const modsApi = {
       }>
     >,
   addIgnoredModPair: (modIdA: string, modIdB: string, reason?: string) =>
-    serverCall(
-      () => addIgnoredModPair({ data: { modIdA, modIdB, reason } }),
-      () => apiPost("/mods/ignored-pairs", { modIdA, modIdB, reason }),
-    ),
+    serverCall(() => addIgnoredModPair({ data: { modIdA, modIdB, reason } })),
   removeIgnoredModPair: (modIdA: string, modIdB: string) =>
-    serverCall(
-      () => removeIgnoredModPair({ data: { modIdA, modIdB } }),
-      () =>
-        fetchWithRetry(`${API_BASE}/mods/ignored-pairs`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ modIdA, modIdB }),
-        }).then(handleResponse),
-    ),
+    serverCall(() => removeIgnoredModPair({ data: { modIdA, modIdB } })),
   checkUpdates: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/check-updates", undefined, options),
-  getServerMods: () => getServerModsWithFallback(),
+  getServerMods: () => getServerMods(),
   syncFromServer: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/sync-from-server", undefined, options),
   clearUpdates: (options?: { signal?: AbortSignal }) =>
     apiPost("/mods/clear-updates", undefined, options),
-  start: (options?: { signal?: AbortSignal }) =>
-    serverCall(
-      () => startModChecker(),
-      () => apiPost("/mods/start", undefined, options),
-    ),
-  stop: (options?: { signal?: AbortSignal }) =>
-    serverCall(
-      () => stopModChecker(),
-      () => apiPost("/mods/stop", undefined, options),
-    ),
+  start: (_options?: { signal?: AbortSignal }) =>
+    serverCall(() => startModChecker()),
+  stop: (_options?: { signal?: AbortSignal }) =>
+    serverCall(() => stopModChecker()),
   setAutoRestart: (enabled: boolean) =>
-    serverCall(
-      () => setModAutoRestart({ data: { enabled } }),
-      () => apiPost("/mods/auto-restart", { enabled }),
-    ),
+    serverCall(() => setModAutoRestart({ data: { enabled } })),
   setRestartOptions: (options: {
     warningMinutes?: number;
     delayIfPlayersOnline?: boolean;
     maxDelayMinutes?: number;
     checkInterval?: number;
   }) =>
-    serverCall(
-      () => setModRestartOptions({ data: options }),
-      () => apiPut("/mods/restart-options", options),
-    ),
+    serverCall(() => setModRestartOptions({ data: options })),
   cancelPendingRestart: () =>
-    serverCall(
-      () => cancelPendingModRestart(),
-      () => apiPost("/mods/cancel-pending-restart"),
-    ),
-  getWorkshopStatus: () => getWorkshopStatusWithFallback(),
+    serverCall(() => cancelPendingModRestart()),
+  getWorkshopStatus: () => getWorkshopStatus(),
 
   importCollection: (collectionUrl: string) =>
     apiPost("/mods/import-collection", { collectionUrl }),
@@ -1433,28 +1375,19 @@ export const modsApi = {
       serverConfigRead?: boolean;
     }>,
   collectionAddItem: (workshopId: string) =>
-    serverCall(
-      () => addCollectionItem({ data: { workshopId } }),
-      () => apiPost("/mods/collection/items", { workshopId }),
-    ) as Promise<{
+    serverCall(() => addCollectionItem({ data: { workshopId } })) as Promise<{
       ok: true;
       workshopId: string;
       action: "add";
     }>,
   collectionRemoveItem: (workshopId: string) =>
-    serverCall(
-      () => removeCollectionItem({ data: { workshopId } }),
-      () => apiDelete(`/mods/collection/items/${workshopId}`),
-    ) as Promise<{
+    serverCall(() => removeCollectionItem({ data: { workshopId } })) as Promise<{
       ok: true;
       workshopId: string;
       action: "remove";
     }>,
   collectionUntrack: (workshopId: string) =>
-    serverCall(
-      () => removeCollectionTracking({ data: { workshopId } }),
-      () => apiDelete(`/mods/collection/tracking/${workshopId}`),
-    ) as Promise<{
+    serverCall(() => removeCollectionTracking({ data: { workshopId } })) as Promise<{
       ok: true;
       workshopId: string;
       removed: boolean;
@@ -1510,10 +1443,7 @@ export const modsApi = {
       error?: string | null;
     }>,
   collectionSaveCookies: (sessionid: string, steamLoginSecure: string) =>
-    serverCall(
-      () => saveCollectionCookies({ data: { sessionid, steamLoginSecure } }),
-      () => apiPost("/mods/collection/save-cookies", { sessionid, steamLoginSecure }),
-    ) as Promise<{
+    serverCall(() => saveCollectionCookies({ data: { sessionid, steamLoginSecure } })) as Promise<{
       ok: boolean;
       message: string;
     }>,
@@ -1566,7 +1496,7 @@ export const modsApi = {
       message: string;
     }>,
 
-  getPresets: () => getModPresetsWithFallback(),
+  getPresets: () => getModPresets(),
   createPreset: (name: string, description?: string) =>
     apiPost("/mods/presets", { name, description }),
   updatePreset: (
@@ -1578,15 +1508,9 @@ export const modsApi = {
       modIds?: string[];
     },
   ) =>
-    serverCall(
-      () => updateModPreset({ data: { id, ...data } }),
-      () => apiPut(`/mods/presets/${id}`, data),
-    ),
+    serverCall(() => updateModPreset({ data: { id, ...data } })),
   deletePreset: (id: number) =>
-    serverCall(
-      () => deleteModPreset({ data: { id } }),
-      () => apiDelete(`/mods/presets/${id}`),
-    ),
+    serverCall(() => deleteModPreset({ data: { id } })),
   applyPreset: (id: number) => apiPost(`/mods/presets/${id}/apply`),
 
   saveModOrder: (modIds: string[]) => apiPost("/mods/save-order", { modIds }),
@@ -1692,17 +1616,11 @@ export const chunksApi = {
 
 export const configApi = {
   getAppSettings: (): Promise<{ settings: Record<string, any> }> =>
-    serverCall(() => getAppSettingsWithFallback()),
+    serverCall(() => getAppSettings()),
   updateAppSettings: (settings: Record<string, unknown>) =>
-    serverCall(
-      () => updateAppSettings({ data: { settings } }),
-      () => apiPut("/config/app-settings", { settings }),
-    ),
+    serverCall(() => updateAppSettings({ data: { settings } })),
   getCorsDiagnostics: () =>
-    serverCall(
-      () => getCorsDiagnostics(),
-      () => apiGet("/config/cors-debug"),
-    ) as Promise<{
+    serverCall(() => getCorsDiagnostics()) as Promise<{
       diagnostics: {
         allowAll: boolean;
         allowPrivateNetworks: boolean;
@@ -1720,10 +1638,7 @@ export const configApi = {
       };
     }>,
   reloadCorsDiagnostics: () =>
-    serverCall(
-      () => reloadCorsDiagnostics(),
-      () => apiPost("/config/cors-debug/reload"),
-    ) as Promise<{
+    serverCall(() => reloadCorsDiagnostics()) as Promise<{
       success: boolean;
       diagnostics: {
         allowAll: boolean;
@@ -1742,10 +1657,7 @@ export const configApi = {
       };
     }>,
   clearCorsBlockedOrigins: () =>
-    serverCall(
-      () => clearCorsBlockedOrigins(),
-      () => apiDelete("/config/cors-debug/blocked"),
-    ) as Promise<{
+    serverCall(() => clearCorsBlockedOrigins()) as Promise<{
       success: boolean;
       diagnostics: {
         allowAll: boolean;
@@ -1764,10 +1676,7 @@ export const configApi = {
       };
     }>,
   testRcon: () =>
-    serverCall(
-      () => testAppRconConnection(),
-      () => apiPost<ConfigTestRconResult>("/config/test-rcon"),
-    ),
+    serverCall(() => testAppRconConnection()),
 };
 
 export interface ConfigTestRconResult {
@@ -1780,8 +1689,8 @@ export interface ConfigTestRconResult {
 }
 
 export const discordApi = {
-  getStatus: () => serverCall(() => getDiscordStatusWithFallback()),
-  getConfig: () => serverCall(() => getDiscordConfigWithFallback()),
+  getStatus: () => serverCall(() => getDiscordStatus()),
+  getConfig: () => serverCall(() => getDiscordConfig()),
   updateConfig: (
     token: string,
     guildId: string,
@@ -1793,8 +1702,7 @@ export const discordApi = {
     chatRelayChannelId?: string,
     chatRelayScope?: "public" | "no-yell" | "general",
   ) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         updateDiscordConfig({
           data: {
             token,
@@ -1807,63 +1715,29 @@ export const discordApi = {
             chatRelayChannelId,
             chatRelayScope,
           },
-        }),
-      () =>
-        apiPut("/discord/config", {
-          token,
-          guildId,
-          adminRoleId,
-          modRoleId,
-          channelId,
-          autoStart,
-          chatRelayEnabled,
-          chatRelayChannelId,
-          chatRelayScope,
-        }),
-    ),
+        })),
   resetConfig: () =>
-    serverCall(
-      () => resetDiscordConfig(),
-      () => apiPost("/discord/reset"),
-    ),
+    serverCall(() => resetDiscordConfig()),
   start: () =>
-    serverCall(
-      () => startDiscordBot(),
-      () => apiPost("/discord/start"),
-    ),
+    serverCall(() => startDiscordBot()),
   stop: () =>
-    serverCall(
-      () => stopDiscordBot(),
-      () => apiPost("/discord/stop"),
-    ),
+    serverCall(() => stopDiscordBot()),
   testToken: (token: string) =>
-    serverCall(
-      () => testDiscordToken({ data: { token } }),
-      () => apiPost("/discord/test", { token }),
-    ),
+    serverCall(() => testDiscordToken({ data: { token } })),
   sendTestMessage: () =>
-    serverCall(
-      () => sendDiscordTestMessage(),
-      () => apiPost("/discord/test-message"),
-    ),
+    serverCall(() => sendDiscordTestMessage()),
   getWebhookEvents: () =>
-    serverCall(() => getDiscordWebhookEventsWithFallback()),
+    serverCall(() => getDiscordWebhookEvents()),
   updateWebhookEvents: (
     events: Record<string, { enabled: boolean; template: string }>,
   ) =>
-    serverCall(
-      () => updateDiscordWebhookEvents({ data: { events } }),
-      () => apiPut("/discord/webhook-events", { events }),
-    ),
+    serverCall(() => updateDiscordWebhookEvents({ data: { events } })),
   getPermissions: () =>
-    serverCall(() => getDiscordPermissionsWithFallback()) as Promise<{
+    serverCall(() => getDiscordPermissions()) as Promise<{
       permissions: Record<string, string>;
     }>,
   updatePermissions: (permissions: Record<string, string>) =>
-    serverCall(
-      () => updateDiscordPermissions({ data: { permissions } }),
-      () => apiPut("/discord/permissions", { permissions }),
-    ) as Promise<{
+    serverCall(() => updateDiscordPermissions({ data: { permissions } })) as Promise<{
       success: boolean;
       permissions: Record<string, string>;
     }>,
@@ -1924,7 +1798,7 @@ export interface ComposedServerStatus {
 
 export const serversApi = {
   getAll: () =>
-    serverCall(() => getManagedServersWithFallback()) as Promise<{
+    serverCall(() => getManagedServers()) as Promise<{
       servers: ServerInstance[];
       lifecycleCapabilities?: {
         supported: boolean;
@@ -1934,11 +1808,11 @@ export const serversApi = {
       };
     }>,
   getActive: () =>
-    serverCall(() => getActiveManagedServerWithFallback()) as Promise<{ server: ServerInstance }>,
+    serverCall(() => getActiveManagedServer()) as Promise<{ server: ServerInstance }>,
   getComposedStatus: (options?: { retries?: number }) =>
     apiGet("/servers/active/status", undefined, options?.retries) as Promise<ComposedServerStatus>,
   getResolvedActive: async () => {
-    const data = (await getManagedServersWithFallback()) as { servers: ServerInstance[] };
+    const data = (await getManagedServers()) as { servers: ServerInstance[] };
     return {
       server:
         data.servers.find((server) => server.isActive) ??
@@ -1972,24 +1846,18 @@ export const serversApi = {
       }>;
     }>,
   get: (id: string | number) =>
-    serverCall(() => getManagedServerWithFallback(id)) as Promise<{ server: ServerInstance }>,
+    serverCall(() => getManagedServer({ data: { id: String(id) } })) as Promise<{ server: ServerInstance }>,
   create: (
     config: Partial<ServerInstance> & {
       importIniFrom?: { dataPath: string; serverName: string };
     },
   ) =>
-    serverCall(
-      () => createManagedServer({ data: config }),
-      () => apiPost("/servers", config),
-    ) as Promise<{
+    serverCall(() => createManagedServer({ data: config })) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
   update: (id: string | number, updates: Partial<ServerInstance>) =>
-    serverCall(
-      () => updateManagedServer({ data: { id: String(id), updates } }),
-      () => apiPut(`/servers/${id}`, updates),
-    ) as Promise<{
+    serverCall(() => updateManagedServer({ data: { id: String(id), updates } })) as Promise<{
       server: ServerInstance;
       message: string;
       warnings?: string[];
@@ -1998,7 +1866,7 @@ export const serversApi = {
     id: string | number,
     provider: "systemd" | "openrc",
   ) =>
-    getLifecycleTemplateWithFallback(id, provider) as Promise<{
+    getLifecycleTemplate({ data: { id: String(id), provider } }) as Promise<{
       provider: "systemd" | "openrc";
       serviceName: string;
       filename: string;
@@ -2011,33 +1879,20 @@ export const serversApi = {
     id: string | number,
     provider: "direct" | "systemd" | "openrc",
   ) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         activateManagedLifecycleProvider({
           data: { id: String(id), provider, confirm: true },
-        }),
-      () =>
-        apiPost(`/servers/${id}/lifecycle-provider`, {
-          provider,
-          confirm: true,
-        }),
-    ) as Promise<{
+        })) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
   delete: (id: string | number) =>
-    serverCall(
-      () => deleteManagedServer({ data: { id: String(id) } }),
-      () => apiDelete(`/servers/${id}`),
-    ) as Promise<{
+    serverCall(() => deleteManagedServer({ data: { id: String(id) } })) as Promise<{
       success: boolean;
       message: string;
     }>,
   activate: (id: string | number) =>
-    serverCall(
-      () => activateManagedServer({ data: { id: String(id) } }),
-      () => apiPost(`/servers/${id}/activate`),
-    ) as Promise<{
+    serverCall(() => activateManagedServer({ data: { id: String(id) } })) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
@@ -2065,7 +1920,7 @@ export const serversApi = {
     }) as Promise<{ success: boolean; message: string }>,
 
   discoverMounts: () =>
-    getDiscoveredMountsWithFallback() as Promise<{
+    getDiscoveredMounts() as Promise<{
       mounts: DiscoveredMount[];
     }>,
 
@@ -2075,10 +1930,7 @@ export const serversApi = {
     serverName?: string;
     name?: string;
   }) =>
-    serverCall(
-      () => createServerFromDiscovery({ data }),
-      () => apiPost("/servers/create-from-discovery", data),
-    ) as Promise<{
+    serverCall(() => createServerFromDiscovery({ data })) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
@@ -2104,12 +1956,12 @@ export interface DockerContainerStats {
 }
 
 export const dockerApi = {
-  getStatus: () => serverCall(() => getDockerStatusWithFallback()) as Promise<{
+  getStatus: () => serverCall(() => getDockerStatus()) as Promise<{
     enabled: boolean;
     available: boolean;
     containers: DockerContainerSummary[];
   }>,
-  getStats: () => serverCall(() => getDockerStatsWithFallback()) as Promise<{
+  getStats: () => serverCall(() => getDockerStats()) as Promise<{
     containers: Record<string, DockerContainerStats>;
   }>,
   runAction: (
@@ -2117,17 +1969,10 @@ export const dockerApi = {
     action: "start" | "stop" | "restart",
     serverId: string | number,
   ) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         runDockerAction({
           data: { id, action, serverId },
-        }),
-      () =>
-        apiPost(
-          "/docker/containers/" + encodeURIComponent(id) + "/" + action,
-          { serverId },
-        ),
-    ) as Promise<{
+        })) as Promise<{
       success: boolean;
       message?: string;
       error?: string;
@@ -2431,33 +2276,27 @@ export interface SimTemplateApplyResult {
 
 export const templatesApi = {
   list: () =>
-    getTemplatesWithFallback() as Promise<{ templates: SimTemplate[] }>,
+    getTemplates() as Promise<{ templates: SimTemplate[] }>,
   get: (id: string) =>
-    getTemplateWithFallback(id) as Promise<{
+    getTemplate({ data: { id } }) as Promise<{
       template: SimTemplate;
     }>,
   create: (input: Record<string, unknown>) =>
-    serverCall(
-      () => createTemplate({ data: input }),
-      () => apiPost("/templates", input),
-    ) as Promise<{
+    serverCall(() => createTemplate({ data: input })) as Promise<{
       success: boolean;
       template?: SimTemplate;
       error?: string;
     }>,
   import: (template: unknown) =>
-    serverCall(
-      () => importTemplate({ data: { template } }),
-      () => apiPost("/templates/import", { template }),
-    ) as Promise<{
+    serverCall(() => importTemplate({ data: { template } })) as Promise<{
       success: boolean;
       template?: SimTemplate;
       error?: string;
     }>,
   export: (id: string) =>
-    exportTemplateWithFallback(id) as Promise<SimTemplate>,
+    exportTemplate({ data: { id } }) as Promise<SimTemplate>,
   downloadExport: async (id: string, filenameBase: string) => {
-    const template = await exportTemplateWithFallback(id);
+    const template = await exportTemplate({ data: { id } });
     const blob = new Blob([JSON.stringify(template, null, 2)], {
       type: "application/json",
     });
@@ -2471,41 +2310,22 @@ export const templatesApi = {
     URL.revokeObjectURL(url);
   },
   preview: (id: string, serverId: string | number) =>
-    serverCall(
-      () => previewTemplate({ data: { id, serverId } }),
-      () =>
-        apiPost(`/templates/${encodeURIComponent(id)}/preview`, {
-          serverId,
-        }),
-    ) as Promise<{ success: boolean; diff?: SimTemplateDiff; error?: string }>,
+    serverCall(() => previewTemplate({ data: { id, serverId } })) as Promise<{ success: boolean; diff?: SimTemplateDiff; error?: string }>,
   apply: (
     id: string,
     serverId: string | number,
     options?: { backup?: boolean; applyIni?: boolean; applySandbox?: boolean },
   ) =>
-    serverCall(
-      () => applyTemplate({ data: { id, serverId, options } }),
-      () =>
-        apiPost(`/templates/${encodeURIComponent(id)}/apply`, {
-          serverId,
-          options,
-        }),
-    ) as Promise<SimTemplateApplyResult>,
+    serverCall(() => applyTemplate({ data: { id, serverId, options } })) as Promise<SimTemplateApplyResult>,
   delete: (id: string) =>
-    serverCall(
-      () => deleteTemplate({ data: { id } }),
-      () => apiDelete(`/templates/${encodeURIComponent(id)}`),
-    ) as Promise<{
+    serverCall(() => deleteTemplate({ data: { id } })) as Promise<{
       success: boolean;
       error?: string;
     }>,
   listHidden: () =>
-    getHiddenTemplatesWithFallback() as Promise<{ templates: SimTemplate[] }>,
+    getHiddenTemplates() as Promise<{ templates: SimTemplate[] }>,
   unhide: (id: string) =>
-    serverCall(
-      () => unhideTemplate({ data: { id } }),
-      () => apiPost(`/templates/${encodeURIComponent(id)}/unhide`, {}),
-    ) as Promise<{
+    serverCall(() => unhideTemplate({ data: { id } })) as Promise<{
       success: boolean;
       error?: string;
     }>,
@@ -2519,10 +2339,7 @@ export interface BridgeCommandResult<T = Record<string, unknown>> {
 
 export const panelBridgeApi = {
   getStatus: () =>
-    serverCall(
-      () => getPanelBridgeStatus(),
-      () => apiGet("/panel-bridge/status"),
-    ) as Promise<{
+    serverCall(() => getPanelBridgeStatus()) as Promise<{
       configured: boolean;
       bridgePath: string | null;
       isRunning: boolean;
@@ -2592,13 +2409,10 @@ export const panelBridgeApi = {
     }>,
 
   autoConfigure: (serverId?: string | number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "autoConfigure", args: { serverId } },
-        }),
-      () => apiPost("/panel-bridge/auto-configure", { serverId }),
-    ) as Promise<{
+        })) as Promise<{
       success: boolean;
       message?: string;
       bridgePath: string;
@@ -2615,14 +2429,10 @@ export const panelBridgeApi = {
     }>,
 
   scanForServer: (serverId: string | number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "scanServer", args: { serverId } },
-        }),
-      () =>
-        apiGet(`/panel-bridge/scan-server/${encodeURIComponent(String(serverId))}`),
-    ) as Promise<{
+        })) as Promise<{
       success: boolean;
       serverName: string;
       paths: Array<{
@@ -2637,34 +2447,25 @@ export const panelBridgeApi = {
     }>,
 
   autoDetect: (serverName: string, zomboidUserFolder?: string) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: {
             action: "autoDetect",
             args: { serverName, zomboidUserFolder },
           },
-        }),
-      () => apiPost("/panel-bridge/auto-detect", { serverName, zomboidUserFolder }),
-    ),
+        })),
 
   configure: (zomboidSavePath: string) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "configure", args: { zomboidSavePath } },
-        }),
-      () => apiPost("/panel-bridge/configure", { zomboidSavePath }),
-    ),
+        })),
 
   configureDirect: (bridgePath: string) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "configureDirect", args: { bridgePath } },
-        }),
-      () => apiPost("/panel-bridge/configure-direct", { bridgePath }),
-    ) as Promise<{
+        })) as Promise<{
       success: boolean;
       message?: string;
       bridgePath: string;
@@ -2679,13 +2480,10 @@ export const panelBridgeApi = {
     bridgePath: string;
     pollIntervalSeconds: string;
   }) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "configureSftp", args: config },
-        }),
-      () => apiPost("/panel-bridge/sftp/configure", config),
-    ) as Promise<{
+        })) as Promise<{
     success: boolean;
     bridgePath: string;
     transport: { type: "sftp"; running: boolean; lastLatencyMs?: number | null };
@@ -2698,13 +2496,10 @@ export const panelBridgeApi = {
     password?: string;
     logPath?: string;
   }) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "listSftpLogs", args: config },
-        }),
-      () => apiPost("/panel-bridge/sftp/logs/list", config),
-    ) as Promise<{
+        })) as Promise<{
     success: boolean;
     logPath: string;
     files: Array<{ name: string; size: number; modifiedAt: string | null }>;
@@ -2717,13 +2512,10 @@ export const panelBridgeApi = {
     password?: string;
     configPath?: string;
   }) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "listRemoteConfig", args: config },
-        }),
-      () => apiPost("/panel-bridge/sftp/config/list", config),
-    ) as Promise<{
+        })) as Promise<{
     success: boolean;
     configPath: string;
     files: Array<{ name: string; size: number; modifiedAt: string | null }>;
@@ -2738,13 +2530,10 @@ export const panelBridgeApi = {
     password?: string;
     logPath?: string;
   }) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "tailSftpLog", args: config },
-        }),
-      () => apiPost("/panel-bridge/sftp/logs/tail", config),
-    ) as Promise<{
+        })) as Promise<{
     success: boolean;
     name: string;
     size: number;
@@ -2761,13 +2550,10 @@ export const panelBridgeApi = {
     bridgePath: string;
     pollIntervalSeconds: string;
   }) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "testSftp", args: config },
-        }),
-      () => apiPost("/panel-bridge/sftp/test", config),
-    ) as Promise<{
+        })) as Promise<{
     success: boolean;
     statusExists: boolean;
     foldersReady: boolean;
@@ -2776,40 +2562,28 @@ export const panelBridgeApi = {
   }>,
 
   start: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "start", args: {} },
-        }),
-      () => apiPost("/panel-bridge/start"),
-    ),
+        })),
 
   stop: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "stop", args: {} },
-        }),
-      () => apiPost("/panel-bridge/stop"),
-    ),
+        })),
 
   refresh: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "refresh", args: {} },
-        }),
-      () => apiPost("/panel-bridge/refresh"),
-    ),
+        })),
 
   scanPaths: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "scanPaths", args: {} },
-        }),
-      () => apiGet("/panel-bridge/scan-paths"),
-    ) as Promise<{
+        })) as Promise<{
       foundBridges: Array<{
         path: string;
         serverName: string;
@@ -2827,54 +2601,27 @@ export const panelBridgeApi = {
     }>,
 
   ping: () =>
-    serverCall(
-      () => pingPanelBridge(),
-      () => apiGet("/panel-bridge/ping"),
-    ),
+    serverCall(() => pingPanelBridge()),
 
-  sendCommand: <T = Record<string, unknown>>(
+  sendCommand: (
     action: string,
     args?: Record<string, unknown>,
   ) =>
-    serverCall(
-      () => sendPanelBridgeCommand({ data: { action, args } }),
-      () =>
-        apiPost<BridgeCommandResult<T>>("/panel-bridge/command", {
-          action,
-          args,
-        }),
-    ),
+    serverCall(() => sendPanelBridgeCommand({ data: { action, args } })),
 
   triggerHelicopterEvent: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeCommand({
           data: { action: "triggerHelicopterEvent", args: {} },
-        }),
-      () =>
-        apiPost<BridgeCommandResult<{ message: string }>>(
-          "/panel-bridge/command",
-          { action: "triggerHelicopterEvent", args: {} },
-        ),
-    ),
+        })),
   stopHelicopterEvent: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeCommand({
           data: { action: "stopHelicopterEvent", args: {} },
-        }),
-      () =>
-        apiPost<BridgeCommandResult<{ message: string }>>(
-          "/panel-bridge/command",
-          { action: "stopHelicopterEvent", args: {} },
-        ),
-    ),
+        })),
 
   getWeather: () =>
-    serverCall(
-      () => sendPanelBridgeWorldCommand({ data: { action: "getWeather" } }),
-      () => apiGet("/panel-bridge/weather"),
-    ) as Promise<{
+    serverCall(() => sendPanelBridgeWorldCommand({ data: { action: "getWeather" } })) as Promise<{
       success: boolean;
       data: {
         temperature: number;
@@ -2896,70 +2643,43 @@ export const panelBridgeApi = {
     }>,
 
   getServerInfo: () =>
-    serverCall(
-      () => getPanelBridgeServerInfo(),
-      () => apiGet("/panel-bridge/server-info"),
-    ),
+    serverCall(() => getPanelBridgeServerInfo()),
 
   triggerBlizzard: (duration?: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "triggerBlizzard", args: { duration } },
-        }),
-      () => apiPost("/panel-bridge/weather/blizzard", { duration }),
-    ),
+        })),
   triggerTropicalStorm: (duration?: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "triggerTropicalStorm", args: { duration } },
-        }),
-      () => apiPost("/panel-bridge/weather/tropical-storm", { duration }),
-    ),
+        })),
   triggerStorm: (duration?: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "triggerStorm", args: { duration } },
-        }),
-      () => apiPost("/panel-bridge/weather/storm", { duration }),
-    ),
+        })),
   stopWeather: () =>
-    serverCall(
-      () => sendPanelBridgeWorldCommand({ data: { action: "stopWeather" } }),
-      () => apiPost("/panel-bridge/weather/stop"),
-    ),
+    serverCall(() => sendPanelBridgeWorldCommand({ data: { action: "stopWeather" } })),
   setSnow: (enabled: boolean) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "setSnow", args: { enabled } },
-        }),
-      () => apiPost("/panel-bridge/weather/snow", { enabled }),
-    ),
+        })),
   generateWeather: (strength?: number, frontType?: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "generateWeather", args: { strength, frontType } },
-        }),
-      () => apiPost("/panel-bridge/weather/generate", { strength, frontType }),
-    ),
+        })),
 
   startRain: (intensity?: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "startRain", args: { intensity } },
-        }),
-      () => apiPost("/panel-bridge/weather/rain/start", { intensity }),
-    ),
+        })),
   stopRain: () =>
-    serverCall(
-      () => sendPanelBridgeWorldCommand({ data: { action: "stopRain" } }),
-      () => apiPost("/panel-bridge/weather/rain/stop"),
-    ),
+    serverCall(() => sendPanelBridgeWorldCommand({ data: { action: "stopRain" } })),
   triggerLightning: (
     x?: number,
     y?: number,
@@ -2967,30 +2687,17 @@ export const panelBridgeApi = {
     light?: boolean,
     rumble?: boolean,
   ) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: {
             action: "triggerLightning",
             args: { x, y, strike, light, rumble },
           },
-        }),
-      () =>
-        apiPost("/panel-bridge/weather/lightning", {
-          x,
-          y,
-          strike,
-          light,
-          rumble,
-        }),
-    ),
+        })),
 
   getClimateFloats: () =>
-    serverCall(
-      () =>
-        sendPanelBridgeWorldCommand({ data: { action: "getClimateFloats" } }),
-      () => apiGet("/panel-bridge/climate/floats"),
-    ) as Promise<{
+    serverCall(() =>
+        sendPanelBridgeWorldCommand({ data: { action: "getClimateFloats" } })) as Promise<{
       success: boolean;
       data: {
         floats: Array<{
@@ -3005,30 +2712,21 @@ export const panelBridgeApi = {
       };
   }>,
   setClimateFloat: (floatId: number, value: number, enable?: boolean) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: {
             action: "setClimateFloat",
             args: { floatId, value, enable },
           },
-        }),
-      () => apiPost("/panel-bridge/climate/float", { floatId, value, enable }),
-    ),
+        })),
   resetClimateOverrides: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "resetClimateOverrides" },
-        }),
-      () => apiPost("/panel-bridge/climate/reset"),
-    ),
+        })),
 
   getGameTime: () =>
-    serverCall(
-      () => sendPanelBridgeWorldCommand({ data: { action: "getGameTime" } }),
-      () => apiGet("/panel-bridge/time"),
-    ) as Promise<{
+    serverCall(() => sendPanelBridgeWorldCommand({ data: { action: "getGameTime" } })) as Promise<{
       success: boolean;
       data: {
         year: number;
@@ -3049,47 +2747,32 @@ export const panelBridgeApi = {
     month?: number;
     year?: number;
   }) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "setGameTime", args: options },
-        }),
-      () => apiPost("/panel-bridge/time", options),
-    ),
+        })),
 
   getWorldStats: () =>
-    serverCall(
-      () =>
-        sendPanelBridgeWorldCommand({ data: { action: "getWorldStats" } }),
-      () => apiGet("/panel-bridge/world/stats"),
-    ) as Promise<{
+    serverCall(() =>
+        sendPanelBridgeWorldCommand({ data: { action: "getWorldStats" } })) as Promise<{
       success: boolean;
       data: { serverName: string; map: string; zombiesInCell: number };
     }>,
 
   getZombieCount: () =>
-    serverCall(
-      () =>
-        sendPanelBridgeWorldCommand({ data: { action: "getZombieCount" } }),
-      () => apiGet("/panel-bridge/zombies/count"),
-    ) as Promise<{
+    serverCall(() =>
+        sendPanelBridgeWorldCommand({ data: { action: "getZombieCount" } })) as Promise<{
       success: boolean;
       data: { zombieCount: number; note: string };
     }>,
   saveWorld: () =>
-    serverCall(
-      () => savePanelBridgeWorld(),
-      () => apiPost("/panel-bridge/world/save"),
-    ),
+    serverCall(() => savePanelBridgeWorld()),
 
   getAllPlayerDetails: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgePlayerCommand({
           data: { action: "getAllPlayerDetails" },
-        }),
-      () => apiGet("/panel-bridge/players"),
-    ) as Promise<{
+        })) as Promise<{
       success: boolean;
       data: {
         players: Array<{
@@ -3109,13 +2792,10 @@ export const panelBridgeApi = {
       };
     }>,
   getPlayerDetails: (username: string) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgePlayerCommand({
           data: { action: "getPlayerDetails", args: { username } },
-        }),
-      () => apiGet(`/panel-bridge/players/${encodeURIComponent(username)}`),
-    ) as Promise<{
+        })) as Promise<{
       success: boolean;
       data: {
         username?: string;
@@ -3150,156 +2830,88 @@ export const panelBridgeApi = {
       error?: string;
     }>,
   teleportPlayerBridge: (username: string, x: number, y: number, z?: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgePlayerCommand({
           data: {
             action: "teleportPlayer",
             args: { username, x, y, z },
           },
-        }),
-      () =>
-        apiPost(`/panel-bridge/players/${encodeURIComponent(username)}/teleport`, {
-          x,
-          y,
-          z,
-        }),
-    ),
+        })),
 
   killPlayer: (username: string) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgePlayerCommand({
           data: { action: "killPlayer", args: { username } },
-        }),
-      () =>
-        apiPost<BridgeCommandResult<{ message: string; username: string; isDead: boolean; debug: string }>>(
-          `/panel-bridge/players/${encodeURIComponent(username)}/kill`,
-        ),
-    ),
+        })),
 
   sendServerMessage: (message: string, color?: string) =>
-    serverCall(
-      () => sendPanelBridgeServerMessage({ data: { message, color } }),
-      () => apiPost("/panel-bridge/message", { message, color }),
-    ),
+    serverCall(() => sendPanelBridgeServerMessage({ data: { message, color } })),
 
   sendToServerChat: (message: string, alert?: boolean) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeChatAlert({
           data: { message, alert: alert ?? false },
-        }),
-      () => apiPost("/panel-bridge/chat/alert", { message, alert: alert ?? false }),
-    ),
+        })),
 
   sendToAdminChat: (message: string) =>
-    serverCall(
-      () => sendPanelBridgeAdminChat({ data: { message } }),
-      () => apiPost("/panel-bridge/chat/admin", { message }),
-    ),
+    serverCall(() => sendPanelBridgeAdminChat({ data: { message } })),
 
   sendToGeneralChat: (message: string, author?: string) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeGeneralChat({
           data: { message, author: author?.trim() || "Server" },
-        }),
-      () =>
-        apiPost("/panel-bridge/chat/general", {
-          message,
-          author: author?.trim() || "Server",
-        }),
-    ),
+        })),
 
   getChatInfo: () =>
-    serverCall(
-      () => getPanelBridgeChatInfo(),
-      () => apiGet("/panel-bridge/chat/info"),
-    ) as Promise<{
+    serverCall(() => getPanelBridgeChatInfo()) as Promise<{
       success: boolean;
       data: { chatServerAvailable: boolean; rconFallback: boolean };
     }>,
 
   getBridgeDebugStats: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeDiagnosticsCommand({
           data: { action: "getStats" },
-        }),
-      () => apiGet("/panel-bridge/debug/stats"),
-    ) as Promise<BridgeCommandResult>,
+        })) as Promise<BridgeCommandResult>,
 
   checkBridgeApi: (object?: string, method?: string) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeDiagnosticsCommand({
           data: { action: "checkAPI", args: { object, method } },
-        }),
-      () => {
-        const params = new URLSearchParams();
-        if (object) params.set("object", object);
-        if (method) params.set("method", method);
-        const query = params.toString();
-        return apiGet(
-          `/panel-bridge/debug/api${query ? `?${query}` : ""}`,
-        );
-      },
-    ) as Promise<BridgeCommandResult>,
+        })) as Promise<BridgeCommandResult>,
 
   getBridgeAvailableHandlers: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeDiagnosticsCommand({
           data: { action: "getAvailableHandlers" },
-        }),
-      () => apiGet("/panel-bridge/debug/handlers"),
-    ) as Promise<BridgeCommandResult>,
+        })) as Promise<BridgeCommandResult>,
 
   getBridgeDebugLog: (limit: number = 50, level: string = "DEBUG") =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeDiagnosticsCommand({
           data: {
             action: "getDebugLog",
             args: { limit, level },
           },
-        }),
-      () => {
-        const params = new URLSearchParams({
-          limit: String(limit),
-          level,
-        });
-        return apiGet(`/panel-bridge/debug/log?${params.toString()}`);
-      },
-    ) as Promise<BridgeCommandResult>,
+        })) as Promise<BridgeCommandResult>,
 
   runBridgeDebugItemScript: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeDiagnosticsCommand({
           data: { action: "debugItemScript" },
-        }),
-      () => apiPost("/panel-bridge/catalog/debug-item-script"),
-    ) as Promise<BridgeCommandResult>,
+        })) as Promise<BridgeCommandResult>,
 
   setBridgeDebugMode: (enabled: boolean) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeDiagnosticsCommand({
           data: { action: "setDebugMode", args: { enabled } },
-        }),
-      () => apiPost("/panel-bridge/debug/mode", { enabled }),
-    ) as Promise<BridgeCommandResult>,
+        })) as Promise<BridgeCommandResult>,
 
   clearBridgeErrors: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeDiagnosticsCommand({
           data: { action: "clearErrors" },
-        }),
-      () => apiPost("/panel-bridge/debug/clear-errors"),
-    ) as Promise<BridgeCommandResult>,
+        })) as Promise<BridgeCommandResult>,
 
   getSandboxOptions: () => apiGet("/panel-bridge/sandbox"),
 
@@ -3321,13 +2933,10 @@ export const panelBridgeApi = {
     }>,
 
   installModAuto: (serverId?: string | number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeSetupCommand({
           data: { action: "installModAuto", args: { serverId } },
-        }),
-      () => apiPost("/panel-bridge/install-mod-auto", { serverId }),
-    ) as Promise<{
+        })) as Promise<{
       success: boolean;
       message: string;
       path: string;
@@ -3346,8 +2955,7 @@ export const panelBridgeApi = {
     radius?: number,
     volume?: number,
   ) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: {
             action: "playWorldSound",
@@ -3359,20 +2967,10 @@ export const panelBridgeApi = {
               volume: volume ?? 100,
             },
           },
-        }),
-      () =>
-        apiPost("/panel-bridge/sound/world", {
-          x,
-          y,
-          z: z ?? 0,
-          radius: radius ?? 50,
-          volume: volume ?? 100,
-        }),
-    ),
+        })),
 
   playSoundNearPlayer: (username: string, radius?: number, volume?: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeEndangerCommand({
           data: {
             action: "playSoundNearPlayer",
@@ -3382,14 +2980,7 @@ export const panelBridgeApi = {
               volume: volume ?? 100,
             },
           },
-        }),
-      () =>
-        apiPost("/panel-bridge/sound/near-player", {
-          username,
-          radius: radius ?? 50,
-          volume: volume ?? 100,
-        }),
-    ),
+        })),
 
   triggerGunshotBridge: (options: {
     x?: number;
@@ -3397,13 +2988,10 @@ export const panelBridgeApi = {
     z?: number;
     username?: string;
   }) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeEndangerCommand({
           data: { action: "triggerGunshot", args: options },
-        }),
-      () => apiPost("/panel-bridge/sound/gunshot", options),
-    ),
+        })),
 
   triggerAlarmBridge: (options: {
     x?: number;
@@ -3411,13 +2999,10 @@ export const panelBridgeApi = {
     z?: number;
     username?: string;
   }) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeEndangerCommand({
           data: { action: "triggerAlarmSound", args: options },
-        }),
-      () => apiPost("/panel-bridge/sound/alarm", options),
-    ),
+        })),
 
   createNoise: (options: {
     x?: number;
@@ -3427,13 +3012,10 @@ export const panelBridgeApi = {
     volume?: number;
     username?: string;
   }) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeEndangerCommand({
           data: { action: "createNoise", args: options },
-        }),
-      () => apiPost("/panel-bridge/sound/noise", options),
-    ),
+        })),
 
 
   triggerAirdrop: (options: {
@@ -3448,8 +3030,7 @@ export const panelBridgeApi = {
     if (!Number.isFinite(options.x) || !Number.isFinite(options.y)) {
       return Promise.reject(new Error("Invalid coordinates"));
     }
-    return serverCall(
-      () =>
+    return serverCall(() =>
         sendPanelBridgeCommand({
           data: {
             action: "airdrop",
@@ -3459,24 +3040,15 @@ export const panelBridgeApi = {
               y: Math.round(options.y),
             },
           },
-        }),
-      () =>
-        apiPost("/panel-bridge/command", {
-          action: "airdrop",
-          args: { ...options, x: Math.round(options.x), y: Math.round(options.y) },
-        }),
-    );
+        }));
   },
 
 
   getUtilitiesStatus: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "getUtilitiesStatus" },
-        }),
-      () => apiGet("/panel-bridge/utilities/status"),
-    ) as Promise<{
+        })) as Promise<{
       success: boolean;
       data: {
         hydroPowerOn: boolean;
@@ -3492,36 +3064,22 @@ export const panelBridgeApi = {
     }>,
 
   restoreUtilities: (power?: boolean, water?: boolean) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: {
             action: "restoreUtilities",
             args: { power: power !== false, water: water !== false },
           },
-        }),
-      () =>
-        apiPost("/panel-bridge/utilities/restore", {
-          power: power !== false,
-          water: water !== false,
-        }),
-    ) as Promise<UtilitiesChangeResult>,
+        })) as Promise<UtilitiesChangeResult>,
 
   shutOffUtilities: (power?: boolean, water?: boolean) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: {
             action: "shutOffUtilities",
             args: { power: power !== false, water: water !== false },
           },
-        }),
-      () =>
-        apiPost("/panel-bridge/utilities/shutoff", {
-          power: power !== false,
-          water: water !== false,
-        }),
-    ) as Promise<UtilitiesChangeResult>,
+        })) as Promise<UtilitiesChangeResult>,
 
 
   exportCharacter: (username: string): Promise<CharacterExportResponse> =>
@@ -3535,67 +3093,40 @@ export const panelBridgeApi = {
 
 
   spawnHordeNear: (username: string, count: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeEndangerCommand({
           data: {
             action: "spawnHordeNearPlayer",
             args: { username, count },
           },
-        }),
-      () =>
-        apiPost<BridgeCommandResult>("/panel-bridge/zombies/spawn-near", {
-          username,
-          count,
-        }),
-    ),
+        })),
 
   spawnHordeBehind: (username: string, count: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeEndangerCommand({
           data: {
             action: "spawnHordeBehindPlayer",
             args: { username, count },
           },
-        }),
-      () =>
-        apiPost<BridgeCommandResult>("/panel-bridge/zombies/spawn-behind", {
-          username,
-          count,
-        }),
-    ),
+        })),
 
   clearAllZombies: () =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: { action: "clearAllZombies" },
-        }),
-      () => apiPost("/panel-bridge/zombies/clear-all"),
-    ),
+        })),
   clearZombiesNearPlayer: (username: string, radius?: number) =>
-    serverCall(
-      () =>
+    serverCall(() =>
         sendPanelBridgeWorldCommand({
           data: {
             action: "clearZombiesNearPlayer",
             args: { username, radius },
           },
-        }),
-      () =>
-        apiPost("/panel-bridge/zombies/clear-near-player", {
-          username,
-          radius,
-        }),
-    ),
+        })),
 
 
   getCatalogItems: () =>
-    serverCall(
-      () => getPanelBridgeCatalog({ data: { kind: "items" } }),
-      () => apiGet("/panel-bridge/catalog/items"),
-    ) as Promise<{
+    serverCall(() => getPanelBridgeCatalog({ data: { kind: "items" } })) as Promise<{
       items: Array<{
         id: string;
         name: string;
@@ -3607,10 +3138,7 @@ export const panelBridgeApi = {
     }>,
 
   getCatalogVehicles: () =>
-    serverCall(
-      () => getPanelBridgeCatalog({ data: { kind: "vehicles" } }),
-      () => apiGet("/panel-bridge/catalog/vehicles"),
-    ) as Promise<{
+    serverCall(() => getPanelBridgeCatalog({ data: { kind: "vehicles" } })) as Promise<{
       vehicles: Array<{
         id: string;
         name: string;
@@ -3622,10 +3150,7 @@ export const panelBridgeApi = {
     }>,
 
   scanCatalogItems: () =>
-    serverCall(
-      () => scanPanelBridgeCatalog({ data: { kind: "items" } }),
-      () => apiPost("/panel-bridge/catalog/scan-items"),
-    ) as Promise<{
+    serverCall(() => scanPanelBridgeCatalog({ data: { kind: "items" } })) as Promise<{
       items: Array<{
         id: string;
         name: string;
@@ -3637,10 +3162,7 @@ export const panelBridgeApi = {
     }>,
 
   scanCatalogVehicles: () =>
-    serverCall(
-      () => scanPanelBridgeCatalog({ data: { kind: "vehicles" } }),
-      () => apiPost("/panel-bridge/catalog/scan-vehicles"),
-    ) as Promise<{
+    serverCall(() => scanPanelBridgeCatalog({ data: { kind: "vehicles" } })) as Promise<{
       vehicles: Array<{
         id: string;
         name: string;
@@ -3694,28 +3216,25 @@ export interface BackupContentsInfo {
 }
 
 export const backupApi = {
-  getStatus: (): Promise<BackupStatus> => getBackupStatusWithFallback(),
+  getStatus: (): Promise<BackupStatus> => getBackupStatus(),
 
-  getInfo: (): Promise<BackupContentsInfo> => getBackupInfoWithFallback(),
+  getInfo: (): Promise<BackupContentsInfo> => getBackupInfo(),
 
   listBackups: (): Promise<{ backups: ServerBackupArchive[] }> =>
-    getBackupsWithFallback(),
+    getBackups(),
 
   getHistory: (serverId?: string | number) =>
-    getBackupHistoryWithFallback(serverId) as Promise<{
+    getBackupHistory({ data: { serverId } }) as Promise<{
       records: BackupHistoryRecord[];
     }>,
 
   getSnapshot: (name: string): Promise<{ success: boolean; snapshot?: BackupSnapshot; message?: string }> =>
-    getBackupSnapshotWithFallback(name),
+    getBackupSnapshot({ data: { name } }),
 
   updateSettings: (
     settings: Partial<BackupSettings>,
   ): Promise<{ success: boolean; settings: BackupSettings }> =>
-    serverCall(
-      () => updateBackupSettings({ data: settings }),
-      () => apiPost("/backup/settings", settings),
-    ),
+    serverCall(() => updateBackupSettings({ data: settings })),
 
   createBackup: (options?: {
     includeDb?: boolean;
@@ -3725,23 +3244,12 @@ export const backupApi = {
     duration?: number;
     message?: string;
   }> =>
-    serverCall(
-      () => createBackupServer({ data: options || {} }),
-      () => apiPost("/backup/create", options || {}),
-    ),
+    serverCall(() => createBackupServer({ data: options || {} })),
 
   deleteBackup: (
     name: string,
   ): Promise<{ success: boolean; message?: string }> =>
-    serverCall(
-      () => deleteBackup({ data: { name } }),
-      () =>
-        fetchWithRetry(`${API_BASE}/backup/${encodeURIComponent(name)}`, {
-          method: "DELETE",
-        }).then((response) =>
-          handleResponse<{ success: boolean; message?: string }>(response),
-        ),
-    ),
+    serverCall(() => deleteBackup({ data: { name } })),
 
   restoreBackup: (
     name: string,
@@ -3751,10 +3259,7 @@ export const backupApi = {
     message?: string;
     duration?: number;
   }> =>
-    serverCall(
-      () => restoreBackupServer({ data: { name, options } }),
-      () => apiPost(`/backup/restore/${encodeURIComponent(name)}`, options || {}),
-    ),
+    serverCall(() => restoreBackupServer({ data: { name, options } })),
 
   deleteOlderThan: (
     days: number,
@@ -3765,10 +3270,7 @@ export const backupApi = {
     deletedNames?: string[];
     message?: string;
   }> =>
-    serverCall(
-      () => deleteBackupsOlderThan({ data: { days } }),
-      () => apiPost("/backup/delete-older-than", { days }),
-    ),
+    serverCall(() => deleteBackupsOlderThan({ data: { days } })),
 
   getDownloadUrl: (name: string): string =>
     `${API_BASE}/backup/download/${encodeURIComponent(name)}`,
@@ -3851,7 +3353,7 @@ export const debugApi = {
     freeGB: number;
     recommendedMin: number;
     recommendedMax: number;
-  }> => serverCall(() => getDebugRamWithFallback()),
+  }> => serverCall(() => getDebugRam()),
   getPerformanceHistory: (
     limit: number = 30,
   ): Promise<{
@@ -3864,7 +3366,7 @@ export const debugApi = {
       hostMemUsed?: number;
       hostMemTotal?: number;
     }>;
-  }> => serverCall(() => getPerformanceHistoryWithFallback(limit)),
+  }> => serverCall(() => getPerformanceHistory({ data: { limit } })),
 };
 
 export const authApi = {
@@ -4120,10 +3622,10 @@ export interface RuntimeInfo {
 
 export const systemApi = {
   getDiskSpace: (): Promise<DiskSpaceReport> =>
-    getDiskSpaceWithFallback(),
+    getDiskSpace(),
   getStorageHealth: (): Promise<StorageHealth> =>
-    getStorageHealthWithFallback(),
-  getRuntime: (): Promise<RuntimeInfo> => getRuntimeInfoWithFallback(),
+    getStorageHealth(),
+  getRuntime: (): Promise<RuntimeInfo> => getRuntimeInfo(),
 };
 
 
@@ -4150,9 +3652,9 @@ export interface RoleInfo {
 
 export const permissionsApi = {
   getCapabilities: (): Promise<{ groups: CapabilityGroup[] }> =>
-    getCapabilitiesWithFallback(),
+    getCapabilities(),
 
-  getRoles: (): Promise<{ roles: RoleInfo[] }> => getRolesWithFallback(),
+  getRoles: (): Promise<{ roles: RoleInfo[] }> => getRoles(),
 
   createRole: (data: {
     name: string;
@@ -4192,7 +3694,7 @@ export interface ManagedUserAccount {
 
 export const usersApi = {
   list: (): Promise<{ users: ManagedUserAccount[] }> =>
-    serverCall(() => getManagedUsersWithFallback()),
+    serverCall(() => getManagedUsers()),
 
   create: (data: {
     username: string;
@@ -4245,7 +3747,7 @@ export interface OidcDiscoveredMetadata {
 
 export const oidcSettingsApi = {
   get: (): Promise<OidcSettingsWithEnv> =>
-    serverCall(() => getOidcSettingsWithFallback()),
+    serverCall(() => getOidcSettings()),
 
   update: (
     updates: OidcSettingsUpdate,

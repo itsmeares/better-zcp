@@ -6,7 +6,7 @@ vi.mock('@/components/ui/use-toast', () => ({
   useToast: () => ({ toast: toastSpy, dismiss: vi.fn(), toasts: [] }),
 }))
 
-import { playersApi } from '../api'
+import { serverApi } from '../api'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -26,23 +26,15 @@ describe('handleResponse: backupWarning', () => {
   })
 
   it('surfaces a warning toast when a response carries backupWarning', async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        jsonResponse({
-          success: true,
-          backupWarning:
-            'Could not back up the previous version before saving: ENOSPC. Your change was saved, but there is no safety copy of what was there before.',
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          success: true,
-          backupWarning:
-            'Could not back up the previous version before saving: ENOSPC. Your change was saved, but there is no safety copy of what was there before.',
-        }),
-      )
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        success: true,
+        backupWarning:
+          'Could not back up the previous version before saving: ENOSPC. Your change was saved, but there is no safety copy of what was there before.',
+      }),
+    )
 
-    await playersApi.unban('griefer123')
+    await serverApi.getPanelInfo()
 
     expect(toastSpy).toHaveBeenCalledTimes(1)
     expect(toastSpy).toHaveBeenCalledWith(
@@ -54,25 +46,19 @@ describe('handleResponse: backupWarning', () => {
   })
 
   it('does NOT fire when there is no backupWarning field -- the normal, successful case', async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse({ success: true }))
-      .mockResolvedValueOnce(jsonResponse({ success: true }))
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ success: true }))
 
-    await playersApi.unban('griefer123')
+    await serverApi.getPanelInfo()
 
     expect(toastSpy).not.toHaveBeenCalled()
   })
 
   it('does NOT fire for a non-string backupWarning -- defensive against a malformed response', async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        jsonResponse({ success: true, backupWarning: null }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({ success: true, backupWarning: null }),
-      )
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({ success: true, backupWarning: null }),
+    )
 
-    await playersApi.unban('griefer123')
+    await serverApi.getPanelInfo()
 
     expect(toastSpy).not.toHaveBeenCalled()
   })

@@ -1,6 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
 import {
-  getProtectedApiJson,
   permissionMiddleware,
   protectedServerFunctionMiddleware,
 } from './serverAuth'
@@ -128,47 +127,3 @@ export const runDockerAction = createIntegrationRpc(
   'POST',
   'docker.manage',
 )
-
-async function withFallback<T>(
-  operation: () => Promise<T>,
-  endpoint: string,
-  signal?: AbortSignal,
-): Promise<T> {
-  try {
-    return await operation()
-  } catch {
-    return getProtectedApiJson<T>(endpoint, signal)
-  }
-}
-
-export function getDiscordStatusWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getDiscordStatus(), '/discord/status', signal)
-}
-
-export function getDiscordConfigWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getDiscordConfig(), '/discord/config', signal)
-}
-
-export function getDiscordWebhookEventsWithFallback(signal?: AbortSignal) {
-  return withFallback(
-    () => getDiscordWebhookEvents(),
-    '/discord/webhook-events',
-    signal,
-  )
-}
-
-export function getDiscordPermissionsWithFallback(signal?: AbortSignal) {
-  return withFallback(
-    () => getDiscordPermissions(),
-    '/discord/permissions',
-    signal,
-  )
-}
-
-export function getDockerStatusWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getDockerStatus(), '/docker/status', signal)
-}
-
-export function getDockerStatsWithFallback(signal?: AbortSignal) {
-  return withFallback(() => getDockerStats(), '/docker/stats', signal)
-}
