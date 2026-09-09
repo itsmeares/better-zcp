@@ -268,7 +268,7 @@ async function autoConfigureBridge(
     const searchedLocations: AnyRecord[] = []
     const safeReadDir = (dirPath: string): string[] => {
       try {
-        return fs.existsSync(dirPath) ? fs.readdirSync(dirPath) : []
+        return fs.readdirSync(dirPath)
       } catch {
         return []
       }
@@ -388,14 +388,30 @@ async function autoConfigureBridge(
         let sourceContent = getEmbeddedPanelBridgeLua()
         if (!sourceContent) {
           const sourcePath = resolveSourcePath()
-          if (sourcePath) sourceContent = fs.readFileSync(sourcePath, 'utf8')
+          if (sourcePath) {
+            try {
+              sourceContent = fs.readFileSync(sourcePath, 'utf8')
+            } catch {
+              sourceContent = null
+            }
+          }
         }
         if (sourceContent) {
-          let needsCopy = !fs.existsSync(destination)
-          if (!needsCopy) {
+          let destinationContent: string | null = null
+          try {
+            const fd = fs.openSync(destination, 'r')
+            try {
+              destinationContent = fs.readFileSync(fd, 'utf8')
+            } finally {
+              fs.closeSync(fd)
+            }
+          } catch {
+            // A missing or unreadable destination is repaired below.
+          }
+          let needsCopy = destinationContent === null
+          if (destinationContent !== null) {
             modInstalled = true
             try {
-              const destinationContent = fs.readFileSync(destination, 'utf8')
               const sourceVersion = (sourceContent.match(
                 /VERSION\s*=\s*"([^"]+)"/,
               ) || [])[1]
@@ -481,7 +497,7 @@ async function scanServerBridge(
     const possiblePaths: BridgePath[] = []
     const safeReadDir = (dirPath: string): string[] => {
       try {
-        return fs.existsSync(dirPath) ? fs.readdirSync(dirPath) : []
+        return fs.readdirSync(dirPath)
       } catch {
         return []
       }
@@ -855,7 +871,7 @@ async function scanBridgePaths(): Promise<AnyRecord> {
     const scannedDirs: string[] = []
 
     const searchForBridge = (baseDir: string, depth = 0, maxDepth = 3) => {
-      if (depth > maxDepth || !baseDir || !fs.existsSync(baseDir)) return
+      if (depth > maxDepth || !baseDir) return
       try {
         const contents = fs.readdirSync(baseDir, { withFileTypes: true })
         for (const item of contents) {
@@ -871,19 +887,21 @@ async function scanBridgePaths(): Promise<AnyRecord> {
                 const serverPath = path.join(itemPath, serverFolder.name)
                 const statusFile = path.join(serverPath, 'status.json')
                 const initFile = path.join(serverPath, '.init')
-                const hasStatus = fs.existsSync(statusFile)
                 const hasInit = fs.existsSync(initFile)
+                let hasStatus = false
                 let statusAge: number | null = null
                 let modVersion: string | null = null
-                if (hasStatus) {
+                try {
+                  const fd = fs.openSync(statusFile, 'r')
                   try {
-                    statusAge = Date.now() - fs.statSync(statusFile).mtimeMs
-                    modVersion = JSON.parse(
-                      fs.readFileSync(statusFile, 'utf8'),
-                    ).version
-                  } catch {
-                    // A partially written status file is not fatal to scanning.
+                    hasStatus = true
+                    statusAge = Date.now() - fs.fstatSync(fd).mtimeMs
+                    modVersion = JSON.parse(fs.readFileSync(fd, 'utf8')).version
+                  } finally {
+                    fs.closeSync(fd)
                   }
+                } catch {
+                  // A missing or partially written status file is not fatal to scanning.
                 }
                 foundBridges.push({
                   path: serverPath,
@@ -903,10 +921,8 @@ async function scanBridgePaths(): Promise<AnyRecord> {
           }
           if (item.name === 'Lua') {
             const bridgePath = path.join(itemPath, 'panelbridge')
-            if (fs.existsSync(bridgePath)) {
-              scannedDirs.push(bridgePath)
-              searchForBridge(bridgePath, depth + 1, maxDepth)
-            }
+            scannedDirs.push(bridgePath)
+            searchForBridge(bridgePath, depth + 1, maxDepth)
             continue
           }
           if (
