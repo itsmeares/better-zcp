@@ -200,6 +200,15 @@ export function registerPanelWebRoutes(
   const sendTanStackStartPage = createTanStackStartPageSender(options, getHandler);
 
   app.use((req, res, next) => {
+    if (!req.path.startsWith("/_serverFn/")) return next();
+
+    void sendTanStackStartPage(req, res).then((handled) => {
+      if (handled || res.headersSent) return;
+      res.status(503).json({ error: "TanStack Start server functions unavailable" });
+    }).catch(next);
+  });
+
+  app.use((req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") return next();
     if (req.path.startsWith("/api")) {
       res.status(404).json({ error: "API endpoint not found" });

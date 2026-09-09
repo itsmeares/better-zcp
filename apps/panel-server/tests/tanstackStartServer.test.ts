@@ -24,6 +24,27 @@ describe("TanStack Start Express adapter", () => {
     expect(request.headers.get("x-panel")).toBe("test");
   });
 
+  it("forwards parsed JSON bodies for server-function requests", async () => {
+    const request = toTanStackStartRequest({
+      method: "POST",
+      originalUrl: "/_serverFn/command",
+      url: "/_serverFn/command",
+      protocol: "https",
+      headers: {
+        "content-type": "application/json",
+        "content-length": "2",
+      },
+      body: { action: "ping" },
+      socket: { encrypted: true },
+      get(name: string) {
+        return name.toLowerCase() === "host" ? "panel.example" : undefined;
+      },
+    } as unknown as ExpressRequest);
+
+    expect(await request.json()).toEqual({ action: "ping" });
+    expect(request.headers.get("content-length")).toBeNull();
+  });
+
   it("copies the Start response status, headers, and body to Express", async () => {
     const sent = {
       body: undefined as Buffer | undefined,

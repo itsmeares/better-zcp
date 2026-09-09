@@ -30,10 +30,24 @@ export function toTanStackStartRequest(req: ExpressRequest): Request {
   const protocol = req.protocol || "http";
   const host = req.get("host") || "localhost";
   const url = new URL(req.originalUrl || req.url, `${protocol}://${host}`);
+  const body =
+    req.method === "GET" || req.method === "HEAD" || req.body === undefined
+      ? undefined
+      : Buffer.isBuffer(req.body)
+        ? req.body.toString("utf8")
+        : typeof req.body === "string"
+          ? req.body
+          : JSON.stringify(req.body);
+
+  if (body !== undefined) {
+    headers.delete("content-length");
+    headers.delete("transfer-encoding");
+  }
 
   return new Request(url, {
     method: req.method,
     headers,
+    ...(body === undefined ? {} : { body }),
   });
 }
 
