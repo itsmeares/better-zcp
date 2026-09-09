@@ -35,6 +35,7 @@ vi.mock('@/lib/api', async () => {
     panelBridgeApi: {
       ...actual.panelBridgeApi,
       autoConfigure: vi.fn(),
+      getStatus: vi.fn(),
       getBridgeDebugStats: vi.fn(),
       checkBridgeApi: vi.fn(),
       getBridgeAvailableHandlers: vi.fn(),
@@ -53,6 +54,7 @@ const serverStart = vi.mocked(serverApi.start)
 const rconConnect = vi.mocked(rconApi.connect)
 const createBackup = vi.mocked(backupApi.createBackup)
 const bridgeAutoConfigure = vi.mocked(panelBridgeApi.autoConfigure)
+const bridgeStatus = vi.mocked(panelBridgeApi.getStatus)
 const bridgeDebugStats = vi.mocked(panelBridgeApi.getBridgeDebugStats)
 const repairSandbox = vi.mocked(serverFilesApi.repairSandbox)
 
@@ -151,6 +153,11 @@ function setUpApiFetch() {
 }
 
 function renderDebug() {
+  bridgeStatus.mockResolvedValue({
+    isRunning: true,
+    modConnected: true,
+    connection: { canSendCommands: true },
+  } as Awaited<ReturnType<typeof panelBridgeApi.getStatus>>)
   return render(
     <MemoryRouter>
       <TooltipProvider>

@@ -89,7 +89,7 @@ const SFTP_ERROR_CLASSIFIERS: SftpErrorClassifier[] = [
     code: ErrorCode.SFTP_REMOTE_PATH_MISSING,
     guidance:
       'Verify the remote bridge folder is the VPS path to Lua/panelbridge/<server name>. The panel will create its inbox and outbox folders after the parent path is correct.',
-    test: (message, error) => isMissingRemotePath(error),
+    test: (_message, error) => isMissingRemotePath(error),
   },
   {
     code: ErrorCode.SFTP_PATH_OCCUPIED,

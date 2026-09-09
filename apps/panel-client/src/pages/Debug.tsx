@@ -1609,9 +1609,7 @@ export default function Debug() {
   const checkBridgeDiagStatus = useCallback(async () => {
     setBridgeDiagStatusLoading(true);
     try {
-      const res = await authFetch("/api/panel-bridge/status");
-      if (!res.ok) throw new Error(await parseDownloadError(res, `HTTP ${res.status}`));
-      const data = await res.json();
+      const data = await panelBridgeApi.getStatus();
       setBridgeDiagRunning(data?.isRunning === true);
       setBridgeDiagConnected(data?.modConnected === true);
       setBridgeDiagHealthy(data?.connection?.canSendCommands === true);
@@ -1623,7 +1621,7 @@ export default function Debug() {
     } finally {
       setBridgeDiagStatusLoading(false);
     }
-  }, [authFetch]);
+  }, []);
 
   const probeBridgeStats = useCallback(
     () =>
