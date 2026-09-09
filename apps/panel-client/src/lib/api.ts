@@ -112,6 +112,8 @@ import {
   addPlayerVehicleAt,
   addPlayerXp,
   addRconUser,
+  activateManagedLifecycleProvider,
+  activateManagedServer,
   addToWhitelist,
   alarm,
   banPlayer,
@@ -120,11 +122,16 @@ import {
   clearSchedulerHistory,
   connectRcon,
   createHorde,
+  createManagedServer,
+  createServerFromDiscovery,
   deleteScheduledTask,
+  deleteManagedServer,
   disconnectRcon,
   executeRcon,
   getActiveManagedServerWithFallback,
+  getDiscoveredMountsWithFallback,
   getGameServerStatusWithFallback,
+  getLifecycleTemplateWithFallback,
   getManagedServerWithFallback,
   getManagedServersWithFallback,
   getNetworkInterfacesWithFallback,
@@ -175,6 +182,7 @@ import {
   triggerLightning,
   triggerThunder,
   updateScheduledTask,
+  updateManagedServer,
   unbanPlayer,
   unbanSteamId,
   validateSchedulerCron,
@@ -1941,12 +1949,18 @@ export const serversApi = {
       importIniFrom?: { dataPath: string; serverName: string };
     },
   ) =>
-    apiPost("/servers", config) as Promise<{
+    serverCall(
+      () => createManagedServer({ data: config }),
+      () => apiPost("/servers", config),
+    ) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
   update: (id: string | number, updates: Partial<ServerInstance>) =>
-    apiPut(`/servers/${id}`, updates) as Promise<{
+    serverCall(
+      () => updateManagedServer({ data: { id: String(id), updates } }),
+      () => apiPut(`/servers/${id}`, updates),
+    ) as Promise<{
       server: ServerInstance;
       message: string;
       warnings?: string[];
@@ -1955,9 +1969,7 @@ export const serversApi = {
     id: string | number,
     provider: "systemd" | "openrc",
   ) =>
-    apiGet(
-      `/servers/${id}/lifecycle-template?provider=${encodeURIComponent(provider)}`,
-    ) as Promise<{
+    getLifecycleTemplateWithFallback(id, provider) as Promise<{
       provider: "systemd" | "openrc";
       serviceName: string;
       filename: string;
@@ -1970,20 +1982,33 @@ export const serversApi = {
     id: string | number,
     provider: "direct" | "systemd" | "openrc",
   ) =>
-    apiPost(`/servers/${id}/lifecycle-provider`, {
-      provider,
-      confirm: true,
-    }) as Promise<{
+    serverCall(
+      () =>
+        activateManagedLifecycleProvider({
+          data: { id: String(id), provider, confirm: true },
+        }),
+      () =>
+        apiPost(`/servers/${id}/lifecycle-provider`, {
+          provider,
+          confirm: true,
+        }),
+    ) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
   delete: (id: string | number) =>
-    apiDelete(`/servers/${id}`) as Promise<{
+    serverCall(
+      () => deleteManagedServer({ data: { id: String(id) } }),
+      () => apiDelete(`/servers/${id}`),
+    ) as Promise<{
       success: boolean;
       message: string;
     }>,
   activate: (id: string | number) =>
-    apiPost(`/servers/${id}/activate`) as Promise<{
+    serverCall(
+      () => activateManagedServer({ data: { id: String(id) } }),
+      () => apiPost(`/servers/${id}/activate`),
+    ) as Promise<{
       server: ServerInstance;
       message: string;
     }>,
@@ -2011,7 +2036,7 @@ export const serversApi = {
     }) as Promise<{ success: boolean; message: string }>,
 
   discoverMounts: () =>
-    apiGet("/servers/discover-mounts") as Promise<{
+    getDiscoveredMountsWithFallback() as Promise<{
       mounts: DiscoveredMount[];
     }>,
 
@@ -2021,7 +2046,10 @@ export const serversApi = {
     serverName?: string;
     name?: string;
   }) =>
-    apiPost("/servers/create-from-discovery", data) as Promise<{
+    serverCall(
+      () => createServerFromDiscovery({ data }),
+      () => apiPost("/servers/create-from-discovery", data),
+    ) as Promise<{
       server: ServerInstance;
       message: string;
     }>,

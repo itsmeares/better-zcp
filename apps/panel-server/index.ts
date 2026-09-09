@@ -85,7 +85,7 @@ import { RconService } from "./services/rcon.ts";
 import { ServerManager } from "./services/serverManager.ts";
 import { DockerClient } from "./services/dockerClient.ts";
 import { setDockerClient } from "./services/managedContainer.ts";
-import { ModChecker } from "./services/modChecker.ts";
+import { ModChecker, refreshWorkshopChecker } from "./services/modChecker.ts";
 import { Scheduler } from "./services/scheduler.ts";
 import { DiscordBot } from "./services/discordBot.ts";
 import { BackupService } from "./services/backupService.ts";
@@ -117,7 +117,10 @@ import { loadOrCreateCerts } from "./utils/certs.ts";
 import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";
 import { ErrorCode } from "./utils/errorCodes.ts";
 import { getSftpCachePath } from "./services/panelBridgeSftp.ts";
-import { resolveInstallDir } from "./services/panelBridgeInstaller.ts";
+import {
+  autoInstallBridgeIfNeeded,
+  resolveInstallDir,
+} from "./services/panelBridgeInstaller.ts";
 import {
   getEmbeddedPanelBridgeLua,
   compareModVersions,
@@ -1046,6 +1049,8 @@ app.set("rconService", rconService);
 app.set("serverManager", serverManager);
 app.set("dockerClient", dockerClient);
 app.set("modChecker", modChecker);
+app.set("refreshWorkshopChecker", refreshWorkshopChecker);
+app.set("autoInstallBridgeIfNeeded", autoInstallBridgeIfNeeded);
 app.set("scheduler", scheduler);
 app.set("discordBot", discordBot);
 backupService.setServerManager(serverManager);
@@ -1069,6 +1074,8 @@ setPanelRuntime({
   serverManager,
   dockerClient,
   modChecker,
+  refreshWorkshopChecker,
+  autoInstallBridgeIfNeeded,
   backupService,
   scheduler,
   discordBot,

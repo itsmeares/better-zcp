@@ -3,6 +3,7 @@
 /// <reference path="../../../panel-server/types/sql-js.d.ts" />
 
 import { createServerFn } from '@tanstack/react-start'
+import { setResponseStatus } from '@tanstack/react-start/server'
 import type { ScheduleHistoryEntry, SchedulerStatus } from './api'
 import {
   permissionMiddleware,
@@ -14,6 +15,7 @@ type ServiceError = {
   code?: unknown
   params?: unknown
   status?: unknown
+  details?: unknown
 }
 
 type AnyRecord = Record<string, any>
@@ -33,10 +35,17 @@ function throwControlError(error: unknown, fallbackStatus = 500): never {
     error && typeof error === 'object' ? (error as ServiceError) : {}
   const status =
     typeof details.status === 'number' ? details.status : fallbackStatus
+  const extraDetails =
+    details.details &&
+    typeof details.details === 'object' &&
+    !Array.isArray(details.details)
+      ? details.details
+      : {}
   const safeError = Object.assign(new Error(errorMessage(error)), {
     status,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
     ...(details.params !== undefined ? { params: details.params } : {}),
+    ...extraDetails,
   })
   throw safeError
 }
@@ -253,10 +262,125 @@ export const getManagedServer = createControlRead(null, async (data) => {
   return { server: sanitizeServerResponse(server) }
 })
 
+export const createManagedServer = createControlAction(
+  'servers.manage',
+  async (_runtime, data, context) => {
+    const allowIniImport =
+      data.importIniFrom && typeof data.importIniFrom === 'object'
+    if (allowIniImport) await assertCapability(context, 'servers.discover')
+    const { createServerProfile } =
+      await import('../../../panel-server/services/serverProfiles.ts')
+    const { sanitizeServerResponse } =
+      await import('../../../panel-server/utils/sanitize.ts')
+    const server = await createServerProfile(data, { allowIniImport: true })
+    setResponseStatus(201)
+    return {
+      server: sanitizeServerResponse(server),
+      message: 'Server created successfully',
+    }
+  },
+)
+
+export const updateManagedServer = createControlAction(
+  'servers.manage',
+  async (runtime, data) => {
+    const { updateServerProfile } =
+      await import('../../../panel-server/services/serverProfiles.ts')
+    const { sanitizeServerResponse } =
+      await import('../../../panel-server/utils/sanitize.ts')
+    const result = await updateServerProfile(data.id, data.updates, runtime)
+    return {
+      ...result,
+      server: sanitizeServerResponse(result.server),
+    }
+  },
+)
+
+export const deleteManagedServer = createControlAction(
+  'servers.manage',
+  async (runtime, data) => {
+    const { deleteServerProfile } =
+      await import('../../../panel-server/services/serverProfiles.ts')
+    return deleteServerProfile(data.id, runtime)
+  },
+)
+
+export const activateManagedServer = createControlAction(
+  'servers.manage',
+  async (runtime, data) => {
+    const { activateServerProfile } =
+      await import('../../../panel-server/services/serverProfiles.ts')
+    const { sanitizeServerResponse } =
+      await import('../../../panel-server/utils/sanitize.ts')
+    const result = await activateServerProfile(data.id, runtime)
+    return {
+      ...result,
+      server: sanitizeServerResponse(result.server),
+    }
+  },
+)
+
+export const getLifecycleTemplate = createControlRead(
+  'servers.manage',
+  async (data) => {
+    const { getLifecycleTemplateForServer } =
+      await import('../../../panel-server/services/serverProfiles.ts')
+    return getLifecycleTemplateForServer(
+      data.id,
+      data.provider,
+      data.serviceUser,
+    )
+  },
+)
+
+export const activateManagedLifecycleProvider = createControlAction(
+  'servers.manage',
+  async (runtime, data) => {
+    const { activateLifecycleProvider } =
+      await import('../../../panel-server/services/serverProfiles.ts')
+    const { sanitizeServerResponse } =
+      await import('../../../panel-server/utils/sanitize.ts')
+    const result = await activateLifecycleProvider(
+      data.id,
+      data.provider,
+      data.confirm,
+      runtime,
+    )
+    return {
+      ...result,
+      server: sanitizeServerResponse(result.server),
+    }
+  },
+)
+
+export const getDiscoveredMounts = createControlRead(
+  'servers.discover',
+  async () => {
+    const { discoverMountsForServer } =
+      await import('../../../panel-server/services/serverProfiles.ts')
+    return discoverMountsForServer()
+  },
+)
+
+export const createServerFromDiscovery = createControlAction(
+  'servers.discover',
+  async (_runtime, data) => {
+    const { createServerFromDiscovery: createFromDiscovery } =
+      await import('../../../panel-server/services/serverProfiles.ts')
+    const { sanitizeServerResponse } =
+      await import('../../../panel-server/utils/sanitize.ts')
+    const server = await createFromDiscovery(data)
+    setResponseStatus(201)
+    return {
+      server: sanitizeServerResponse(server),
+      message: 'Server created from discovered mount',
+    }
+  },
+)
+
 export const saveGameWorld = createControlAction('server.control', (runtime) =>
   runtime.rconService.save(),
 )
-
 export const startServer = createControlAction(
   'server.control',
   async (runtime, data) => {
