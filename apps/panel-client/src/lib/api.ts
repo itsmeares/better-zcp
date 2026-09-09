@@ -3,7 +3,11 @@ import { clearAccessToken, getAccessToken, setAccessToken } from "./authToken";
 import { toast } from "@/components/ui/use-toast";
 import i18n from "@/i18n";
 import type { LifecycleState } from "./serverStatus";
-import { getRuntimeInfoWithFallback } from "./serverSystem";
+import {
+  getDiskSpaceWithFallback,
+  getRuntimeInfoWithFallback,
+  getStorageHealthWithFallback,
+} from "./serverSystem";
 import {
   getCapabilitiesWithFallback,
   getRolesWithFallback,
@@ -23,7 +27,12 @@ import {
   getRecoveryCodes,
   regenerateJwtSecret,
   removeManagedUser,
+  clearCorsBlockedOrigins,
+  getCorsDiagnostics,
+  reloadCorsDiagnostics,
+  testAppRconConnection,
   testOidcConnection,
+  updateAppSettings,
   updateManagedRole,
   updateOidcSettings,
 } from "./serverAdmin";
@@ -1648,9 +1657,15 @@ export const configApi = {
   getAppSettings: (): Promise<{ settings: Record<string, any> }> =>
     serverCall(() => getAppSettingsWithFallback()),
   updateAppSettings: (settings: Record<string, unknown>) =>
-    apiPut("/config/app-settings", { settings }),
+    serverCall(
+      () => updateAppSettings({ data: { settings } }),
+      () => apiPut("/config/app-settings", { settings }),
+    ),
   getCorsDiagnostics: () =>
-    apiGet("/config/cors-debug") as Promise<{
+    serverCall(
+      () => getCorsDiagnostics(),
+      () => apiGet("/config/cors-debug"),
+    ) as Promise<{
       diagnostics: {
         allowAll: boolean;
         allowPrivateNetworks: boolean;
@@ -1668,7 +1683,10 @@ export const configApi = {
       };
     }>,
   reloadCorsDiagnostics: () =>
-    apiPost("/config/cors-debug/reload") as Promise<{
+    serverCall(
+      () => reloadCorsDiagnostics(),
+      () => apiPost("/config/cors-debug/reload"),
+    ) as Promise<{
       success: boolean;
       diagnostics: {
         allowAll: boolean;
@@ -1687,7 +1705,10 @@ export const configApi = {
       };
     }>,
   clearCorsBlockedOrigins: () =>
-    apiDelete("/config/cors-debug/blocked") as Promise<{
+    serverCall(
+      () => clearCorsBlockedOrigins(),
+      () => apiDelete("/config/cors-debug/blocked"),
+    ) as Promise<{
       success: boolean;
       diagnostics: {
         allowAll: boolean;
@@ -1705,7 +1726,11 @@ export const configApi = {
         lastLoadedAt: string | null;
       };
     }>,
-  testRcon: () => apiPost<ConfigTestRconResult>("/config/test-rcon"),
+  testRcon: () =>
+    serverCall(
+      () => testAppRconConnection(),
+      () => apiPost<ConfigTestRconResult>("/config/test-rcon"),
+    ),
 };
 
 export interface ConfigTestRconResult {
@@ -3506,9 +3531,10 @@ export interface RuntimeInfo {
 }
 
 export const systemApi = {
-  getDiskSpace: (): Promise<DiskSpaceReport> => apiGet("/system/disk-space"),
+  getDiskSpace: (): Promise<DiskSpaceReport> =>
+    getDiskSpaceWithFallback(),
   getStorageHealth: (): Promise<StorageHealth> =>
-    apiGet("/system/storage-health"),
+    getStorageHealthWithFallback(),
   getRuntime: (): Promise<RuntimeInfo> => getRuntimeInfoWithFallback(),
 };
 

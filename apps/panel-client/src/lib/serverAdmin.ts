@@ -17,6 +17,7 @@ import {
   diagnosticsMiddleware,
   getProtectedApiJson,
   panelSettingsMiddleware,
+  permissionMiddleware,
   protectedServerFunctionMiddleware,
   rolesManageMiddleware,
   usersManageMiddleware,
@@ -27,6 +28,7 @@ type ServiceError = {
   message?: unknown
   code?: unknown
   params?: unknown
+  missing?: unknown
   status?: unknown
 }
 
@@ -38,6 +40,16 @@ type PerformanceHistoryEntry = {
   cpuUsage?: number
   hostMemUsed?: number
   hostMemTotal?: number
+}
+
+type AppRconTestResult = {
+  success: boolean
+  connected: boolean
+  message?: string
+  warning?: boolean
+  error?: string
+  detail?: string
+  code?: string
 }
 
 type AppSettings = Record<string, any>
@@ -55,6 +67,7 @@ function throwServerError(error: unknown, fallbackStatus: number): never {
     status,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
     ...(details.params !== undefined ? { params: details.params } : {}),
+    ...(details.missing !== undefined ? { missing: details.missing } : {}),
   })
   setResponseStatus(status)
   throw safeError
@@ -469,6 +482,166 @@ export const getAppSettings = createServerFn({ method: 'GET' }).handler(
     }
   },
 )
+
+const serverConfigureMiddleware = [
+  ...protectedServerFunctionMiddleware,
+  permissionMiddleware('server.configure'),
+] as const
+
+async function getPanelRuntime() {
+  const { getPanelRuntime: readPanelRuntime } =
+    await import('../../../panel-server/utils/panelRuntime.ts')
+  return readPanelRuntime()
+}
+
+export const updateAppSettings = createServerFn({ method: 'POST' })
+  .middleware(panelSettingsMiddleware)
+  .validator((data: { settings?: unknown } | undefined) => data ?? {})
+  .handler(async ({ data, context }) => {
+    try {
+      const { saveAppSettings } =
+        await import('../../../panel-server/services/appSettings.ts')
+      return await saveAppSettings(data.settings, {
+        userRole: currentUser(context).role,
+        runtime: await getPanelRuntime(),
+      })
+    } catch (error) {
+      throwServerError(error, 500)
+    }
+  })
+
+export const getCorsDiagnostics = createServerFn({ method: 'GET' })
+  .middleware(diagnosticsMiddleware)
+  .handler(async () => {
+    const runtime = await getPanelRuntime()
+    if (typeof runtime.getCorsDebugSnapshot !== 'function') {
+      throwServerError(
+        Object.assign(new Error('CORS diagnostics are not available'), {
+          code: 'CONFIG_CORS_DIAGNOSTICS_UNAVAILABLE',
+        }),
+        500,
+      )
+    }
+    return { diagnostics: runtime.getCorsDebugSnapshot() }
+  })
+
+export const reloadCorsDiagnostics = createServerFn({ method: 'POST' })
+  .middleware(diagnosticsMiddleware)
+  .handler(async () => {
+    const runtime = await getPanelRuntime()
+    if (typeof runtime.refreshCorsConfig !== 'function') {
+      throwServerError(
+        Object.assign(new Error('CORS config reload is not available'), {
+          code: 'CONFIG_CORS_RELOAD_UNAVAILABLE',
+        }),
+        500,
+      )
+    }
+    return {
+      success: true,
+      diagnostics: await runtime.refreshCorsConfig(),
+    }
+  })
+
+export const clearCorsBlockedOrigins = createServerFn({ method: 'POST' })
+  .middleware(diagnosticsMiddleware)
+  .handler(async () => {
+    const runtime = await getPanelRuntime()
+    if (
+      typeof runtime.clearCorsBlockedOrigins !== 'function' ||
+      typeof runtime.getCorsDebugSnapshot !== 'function'
+    ) {
+      throwServerError(
+        Object.assign(new Error('CORS diagnostics are not available'), {
+          code: 'CONFIG_CORS_DIAGNOSTICS_UNAVAILABLE',
+        }),
+        500,
+      )
+    }
+    runtime.clearCorsBlockedOrigins()
+    return {
+      success: true,
+      diagnostics: runtime.getCorsDebugSnapshot(),
+    }
+  })
+
+export const testAppRconConnection = createServerFn({ method: 'POST' })
+  .middleware(serverConfigureMiddleware)
+  .handler(async (): Promise<AppRconTestResult> => {
+    const runtime = await getPanelRuntime()
+    const rconService = runtime.rconService
+    if (!rconService) {
+      throwServerError(new Error('RCON service is not available'), 500)
+    }
+
+    try {
+      const connected = await rconService.connect()
+      if (connected) {
+        try {
+          const probe = await rconService.execute('players', { skipLog: true })
+          if (!probe?.success) {
+            const { sanitizeError } =
+              await import('../../../panel-server/utils/sanitize.ts')
+            return {
+              success: true,
+              message: 'Connected but command failed: ' + sanitizeError(probe?.error),
+              connected: true,
+              warning: true,
+            }
+          }
+          return {
+            success: true,
+            message: 'RCON connection successful',
+            connected: true,
+          }
+        } catch (commandError: unknown) {
+          const { sanitizeError } =
+            await import('../../../panel-server/utils/sanitize.ts')
+          return {
+            success: true,
+            message:
+              'Connected but command failed: ' + sanitizeError(commandError),
+            connected: true,
+            warning: true,
+          }
+        }
+      }
+
+      const { host, port } = rconService.getConfig()
+      const {
+        checkTcpReachable,
+        RCON_UNREACHABLE_DETAIL,
+        RCON_AUTH_FAILED_DETAIL,
+        RCON_USER_ACTION_TIMEOUT_MS,
+      } = await import('../../../panel-server/services/rcon.ts')
+      if (!(await checkTcpReachable(host, port, RCON_USER_ACTION_TIMEOUT_MS))) {
+        return {
+          success: false,
+          error: 'unreachable' as const,
+          detail: RCON_UNREACHABLE_DETAIL,
+          message: RCON_UNREACHABLE_DETAIL,
+          connected: false,
+          code: 'RCON_CONNECT_UNREACHABLE',
+        }
+      }
+      return {
+        success: false,
+        error: 'auth_failed' as const,
+        detail: RCON_AUTH_FAILED_DETAIL,
+        message: RCON_AUTH_FAILED_DETAIL,
+        connected: false,
+        code: 'RCON_CONNECT_AUTH_FAILED',
+      }
+    } catch (error: unknown) {
+      const { sanitizeError } =
+        await import('../../../panel-server/utils/sanitize.ts')
+      return {
+        success: false,
+        error: sanitizeError(error),
+        connected: false,
+      }
+    }
+  })
 
 export const getDebugRam = createServerFn({ method: 'GET' })
   .middleware(diagnosticsMiddleware)

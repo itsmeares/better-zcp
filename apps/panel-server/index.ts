@@ -1056,6 +1056,14 @@ app.set("getCorsDebugSnapshot", getCorsDebugSnapshot);
 app.set("clearCorsBlockedOrigins", clearCorsBlockedOrigins);
 app.set("checkServerStatusNow", checkServerStatusNow);
 
+const updateChecker = new UpdateChecker(io, { rconService, serverManager });
+app.set("updateChecker", updateChecker);
+
+const panelUpdateChecker = new PanelUpdateChecker(io);
+app.set("panelUpdateChecker", panelUpdateChecker);
+
+const diskMonitor = new DiskMonitor(io);
+app.set("diskMonitor", diskMonitor);
 setPanelRuntime({
   rconService,
   serverManager,
@@ -1067,16 +1075,11 @@ setPanelRuntime({
   panelBridge,
   io,
   checkServerStatusNow,
+  refreshCorsConfig,
+  getCorsDebugSnapshot,
+  clearCorsBlockedOrigins,
+  diskMonitor,
 });
-
-const updateChecker = new UpdateChecker(io, { rconService, serverManager });
-app.set("updateChecker", updateChecker);
-
-const panelUpdateChecker = new PanelUpdateChecker(io);
-app.set("panelUpdateChecker", panelUpdateChecker);
-
-const diskMonitor = new DiskMonitor(io);
-app.set("diskMonitor", diskMonitor);
 
 registerApiRoutes(app);
 
