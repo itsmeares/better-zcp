@@ -2569,9 +2569,8 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
         code: ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS,
       });
     }
-    // Claim before the first await: the actual archive write happens after
-    // this handler returns, so releasing at the end of the handler is too
-    // early and lets a second request truncate the first archive.
+    // Claim before the first await: the download, extraction, and first-run
+    // setup continue after this handler returns and all touch installPath.
     steamcmdDownloadInProgress = true;
 
     const configuredSteamcmdPath = await getSetting("steamcmdPath");
@@ -2669,6 +2668,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
           fs.unlinkSync(zipFile);
           runFirstTimeSetup();
         } catch (extractError: any) {
+          steamcmdDownloadInProgress = false;
           io.emit("steamcmd:status", {
             status: "error",
             message: `Extraction failed: ${sanitizeError(extractError.message)}`,
@@ -2676,8 +2676,6 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
             params: { reason: sanitizeError(extractError.message) },
           });
           log.error(`SteamCMD extraction failed: ${extractError.message}`);
-        } finally {
-          steamcmdDownloadInProgress = false;
         }
       }
     } else {
@@ -2742,9 +2740,8 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
             } catch (e: any) {
               /* ignore */
             }
-            steamcmdDownloadInProgress = false;
-
             if (tarErr) {
+              steamcmdDownloadInProgress = false;
               io.emit("steamcmd:status", {
                 status: "error",
                 message: `Extraction failed: ${tarErr.message}`,
@@ -2794,12 +2791,14 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
     }
 
     function runFirstTimeSetup() {
-      runSteamCmdFirstTimeSetup(
+      return runSteamCmdFirstTimeSetup(
         getSteamCmdExe(installPath),
         installPath,
         io,
       ).catch((error: any) => {
         log.error(`SteamCMD first-run failed unexpectedly: ${error.message}`);
+      }).finally(() => {
+        steamcmdDownloadInProgress = false;
       });
     }
 

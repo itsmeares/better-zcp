@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it, vi } from "vitest";
+import { EventEmitter } from "events";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -9,10 +10,17 @@ Object.defineProperty(process, "platform", {
   configurable: true,
 });
 
-const { execMock } = vi.hoisted(() => ({ execMock: vi.fn() }));
+const { execMock, spawnMock } = vi.hoisted(() => ({
+  execMock: vi.fn(),
+  spawnMock: vi.fn(),
+}));
 vi.mock("child_process", async (importOriginal) => {
   const actual = await importOriginal();
-  return { ...actual, exec: (...args: any[]) => execMock(...args) };
+  return {
+    ...actual,
+    exec: (...args: any[]) => execMock(...args),
+    spawn: (...args: any[]) => spawnMock(...args),
+  };
 });
 
 const { getSettingMock, setSettingMock } = vi.hoisted(() => ({
@@ -116,6 +124,55 @@ describe("POST /api/server/steamcmd/download concurrency guard", () => {
       );
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the guard until SteamCMD first-run setup finishes", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-steamcmd-race-"));
+    const installPath = path.join(root, "steamcmd");
+    const io = { emit: vi.fn() };
+    const app = { get: (key: string) => (key === "io" ? io : undefined) };
+    const callbacks: Array<(error: Error | null) => void> = [];
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+    };
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+
+    try {
+      execMock.mockImplementation((_command: string, _options: unknown, callback: (error: Error | null) => void) => {
+        callbacks.push(callback);
+      });
+      spawnMock.mockReturnValue(child);
+      const handler = getDownloadHandler(await freshRouter());
+      const request = () => ({ app, body: { installPath } });
+      const responseA = createResponse();
+
+      await handler(request(), responseA);
+      callbacks[0](null);
+      callbacks[1](null);
+      callbacks[2](null);
+      fs.writeFileSync(path.join(installPath, "steamcmd.sh"), "");
+
+      const responseB = createResponse();
+      await handler(request(), responseB);
+      expect(responseB.status).toHaveBeenCalledWith(409);
+
+      child.emit("close", 0);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const responseC = createResponse();
+      await handler(request(), responseC);
+      expect(responseC.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true }),
+      );
+      callbacks[3](new Error("curl unavailable"));
+      callbacks[4](new Error("wget unavailable"));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      execMock.mockReset();
+      spawnMock.mockReset();
     }
   });
 });
