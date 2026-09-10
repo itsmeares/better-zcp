@@ -11,6 +11,10 @@ type ServiceError = {
   code?: unknown
   params?: unknown
   status?: unknown
+  success?: unknown
+  valid?: unknown
+  detail?: unknown
+  reason?: unknown
 }
 
 function record(data: unknown): AnyRecord {
@@ -38,6 +42,10 @@ function throwResourceError(error: unknown, fallbackStatus = 500): never {
     status,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
     ...(details.params !== undefined ? { params: details.params } : {}),
+    ...(details.success === false ? { success: false } : {}),
+    ...(details.valid === false ? { valid: false } : {}),
+    ...(typeof details.detail === 'string' ? { detail: details.detail } : {}),
+    ...(typeof details.reason === 'string' ? { reason: details.reason } : {}),
   })
 }
 
@@ -61,16 +69,20 @@ function createResourceAction<T>(
   capability: string | undefined,
   handler: (data: AnyRecord) => Promise<T> | T,
 ) {
-  return createServerFn({ method: 'POST' })
-    .middleware(capabilityMiddleware(capability))
-    .validator((data: unknown) => record(data))
-    .handler(async ({ data }) => {
-      try {
-        return (await handler(data)) as any
-      } catch (error) {
-        throwResourceError(error)
-      }
-    })
+  const implementation = async (data: AnyRecord): Promise<T> => {
+    try {
+      return (await handler(data)) as T
+    } catch (error) {
+      throwResourceError(error)
+    }
+  }
+  return Object.assign(
+    createServerFn({ method: 'POST' })
+      .middleware(capabilityMiddleware(capability))
+      .validator((data: unknown) => record(data))
+      .handler(({ data }) => implementation(data) as any),
+    { __executeImplementation: implementation },
+  )
 }
 
 async function panelRuntime(): Promise<AnyRecord> {
@@ -117,40 +129,42 @@ export const previewTemplate = createResourceAction(undefined, async (data) => {
 export const applyTemplate = createResourceAction(
   'templates.manage',
   async (data) => {
-    if (!data.serverId)
-      invalid('serverId is required', 'SIM_TEMPLATE_SERVER_ID_REQUIRED')
-
-    const [{ getActiveServer }, { ErrorCode }] = await Promise.all([
+    const [
+      { getActiveServer },
+      { ErrorCode },
+      { acquireLifecycleLock, lifecycleInProgressResponse },
+    ] = await Promise.all([
       import('../../../panel-server/database/init.ts'),
       import('../../../panel-server/utils/errorCodes.ts'),
+      import('../../../panel-server/services/lifecycleCoordinator.ts'),
     ])
-    const runtime = await panelRuntime()
-    const activeServer = await getActiveServer()
-    if (String(activeServer?.id) !== String(data.serverId)) {
-      throwResourceError(
-        Object.assign(
-          new Error(
-            "Can't verify this server's running state — the panel can only check the currently active server. Switch to this server first, then apply the template.",
-          ),
-          { code: ErrorCode.SIM_TEMPLATE_APPLY_INACTIVE_SERVER_UNVERIFIABLE },
-        ),
-        409,
-      )
-    }
-
-    const serverManager = runtime.serverManager
-    if (!serverManager?.getServerProcessDetails) {
-      throwResourceError(
-        Object.assign(new Error('Unable to verify server state'), {
-          code: ErrorCode.SIM_TEMPLATE_APPLY_STATE_UNKNOWN,
-        }),
-        503,
-      )
-    }
-
+    const lifecycleLock = acquireLifecycleLock('template-apply')
+    if (!lifecycleLock) throwResourceError(lifecycleInProgressResponse(), 409)
     try {
-      const details = await serverManager.getServerProcessDetails()
-      if (details.scanFailed) {
+      if (!data.serverId)
+        invalid('serverId is required', 'SIM_TEMPLATE_SERVER_ID_REQUIRED')
+
+      const runtime = await panelRuntime()
+      const activeServer = await getActiveServer()
+      if (String(activeServer?.id) !== String(data.serverId)) {
+        throwResourceError(
+          Object.assign(
+            new Error(
+              "Can't verify this server's running state — the panel can only check the currently active server. Switch to this server first, then apply the template.",
+            ),
+            {
+              code: ErrorCode.SIM_TEMPLATE_APPLY_INACTIVE_SERVER_UNVERIFIABLE,
+            },
+          ),
+          409,
+        )
+      }
+
+      const serverManager = runtime.serverManager
+      if (
+        !serverManager?.getServerProcessDetails ||
+        typeof serverManager.reloadConfig !== 'function'
+      ) {
         throwResourceError(
           Object.assign(new Error('Unable to verify server state'), {
             code: ErrorCode.SIM_TEMPLATE_APPLY_STATE_UNKNOWN,
@@ -158,47 +172,60 @@ export const applyTemplate = createResourceAction(
           503,
         )
       }
-      if (details.running) {
+
+      try {
+        await serverManager.reloadConfig()
+        const details = await serverManager.getServerProcessDetails()
+        if (details.scanFailed) {
+          throwResourceError(
+            Object.assign(new Error('Unable to verify server state'), {
+              code: ErrorCode.SIM_TEMPLATE_APPLY_STATE_UNKNOWN,
+            }),
+            503,
+          )
+        }
+        if (details.running) {
+          throwResourceError(
+            Object.assign(
+              new Error('Stop the server before applying a template'),
+              { code: ErrorCode.SIM_TEMPLATE_APPLY_SERVER_RUNNING },
+            ),
+            409,
+          )
+        }
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          typeof (error as Error & { status?: unknown }).status === 'number'
+        ) {
+          throw error
+        }
         throwResourceError(
-          Object.assign(
-            new Error('Stop the server before applying a template'),
-            {
-              code: ErrorCode.SIM_TEMPLATE_APPLY_SERVER_RUNNING,
-            },
-          ),
-          409,
+          Object.assign(new Error('Unable to verify server state'), {
+            code: ErrorCode.SIM_TEMPLATE_APPLY_STATE_UNKNOWN,
+          }),
+          503,
         )
       }
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        typeof (error as Error & { status?: unknown }).status === 'number'
-      ) {
-        throw error
-      }
-      throwResourceError(
-        Object.assign(new Error('Unable to verify server state'), {
-          code: ErrorCode.SIM_TEMPLATE_APPLY_STATE_UNKNOWN,
-        }),
-        503,
-      )
-    }
 
-    const { applyTemplate: applyTemplateService } =
-      await import('../../../panel-server/services/templateService.ts')
-    const options =
-      data.options &&
-      typeof data.options === 'object' &&
-      !Array.isArray(data.options)
-        ? data.options
-        : {}
-    const result = await applyTemplateService(
-      String(data.id ?? ''),
-      String(data.serverId),
-      options,
-    )
-    if (!result.success) throwResourceError(result, 400)
-    return result
+      const { applyTemplate: applyTemplateService } =
+        await import('../../../panel-server/services/templateService.ts')
+      const options =
+        data.options &&
+        typeof data.options === 'object' &&
+        !Array.isArray(data.options)
+          ? data.options
+          : {}
+      const result = await applyTemplateService(
+        String(data.id ?? ''),
+        String(data.serverId),
+        options,
+      )
+      if (!result.success) throwResourceError(result, 400)
+      return result
+    } finally {
+      lifecycleLock.release()
+    }
   },
 )
 

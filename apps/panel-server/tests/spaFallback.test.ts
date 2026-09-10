@@ -161,6 +161,73 @@ describe("SPA fallback", () => {
     expect(await startResponse.json()).toEqual({ source: "start" });
   });
 
+  it("can bridge non-GET API methods to Start and still fall through on misses", async () => {
+    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-start-api-all-"));
+    const clientDistPath = path.join(temporaryRoot, "client", "dist");
+    const startDistPath = path.join(
+      temporaryRoot,
+      "client",
+      "dist-start-server",
+    );
+    fs.mkdirSync(clientDistPath, { recursive: true });
+    fs.mkdirSync(startDistPath, { recursive: true });
+    fs.writeFileSync(path.join(temporaryRoot, "package.json"), '{"type":"module"}');
+    fs.writeFileSync(
+      path.join(startDistPath, "server.js"),
+      "export default { fetch: async (request) => new URL(request.url).pathname === '/api/compat' ? Response.json({ source: 'start', method: request.method, body: await request.json() }) : new Response(null, { status: 404 }) }",
+    );
+
+    const app = express();
+    app.use(express.json());
+    registerTanStackStartApiRoute(
+      app,
+      {
+        isPackaged: false,
+        clientDistPath,
+        externalClientDistPath: clientDistPath,
+        embeddedClientDistPath: null,
+        buildMetadata: {
+          panelVersion: "2.0.0",
+          buildSha: "test-build",
+          apiContractVersion: 1,
+        },
+        logger: { debug() {}, warn() {}, error() {} },
+      },
+      "/api",
+      "ALL",
+    );
+    app.post("/api/fallback", (_req, res) => {
+      res.json({ source: "express" });
+    });
+
+    server = await new Promise((resolve) => {
+      const listener = app.listen(0, () => resolve(listener));
+    });
+
+    const address = server.address();
+    const startResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/compat`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method: "post" }),
+      },
+    );
+    expect(startResponse.status).toBe(200);
+    expect(await startResponse.json()).toEqual({
+      source: "start",
+      method: "POST",
+      body: { method: "post" },
+    });
+
+    const fallbackResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/fallback`,
+      { method: "POST" },
+    );
+    expect(fallbackResponse.status).toBe(200);
+    expect(await fallbackResponse.json()).toEqual({ source: "express" });
+  });
+
   it("falls back when an old Start bundle renders an API path as HTML", async () => {
     temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-start-api-"));
     const clientDistPath = path.join(temporaryRoot, "client", "dist");

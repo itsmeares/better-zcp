@@ -1186,6 +1186,9 @@ app.get("/api/panel-info", async (req, res) => {
 
 registerTanStackStartApiRoute(app, panelWebOptions, "/api/system/runtime");
 registerTanStackStartApiRoute(app, panelWebOptions, "/api/system/disk-space");
+// Start owns the migrated JSON APIs; unmatched paths fall through to the
+// remaining Express routes (streams, uploads, binaries, and auth flows).
+registerTanStackStartApiRoute(app, panelWebOptions, "/api", "ALL");
 
 registerApiRoutes(app);
 

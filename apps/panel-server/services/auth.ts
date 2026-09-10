@@ -267,12 +267,25 @@ function emitSessionRevoked(event: SessionRevocationEvent): void {
 class AuthService {
   jwtSecret: string | null;
   initialized: boolean;
+  private initializationPromise: Promise<void> | null;
   _writeMutex: Promise<unknown>;
 
   constructor() {
     this.jwtSecret = null;
     this.initialized = false;
+    this.initializationPromise = null;
     this._writeMutex = Promise.resolve();
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.jwtSecret) return;
+    this.initializationPromise ??= this.init();
+    try {
+      await this.initializationPromise;
+    } catch (error) {
+      this.initializationPromise = null;
+      throw error;
+    }
   }
 
   _withMutex<T>(fn: () => Promise<T>): Promise<T> {
@@ -340,6 +353,7 @@ class AuthService {
 
   async authenticateAccessToken(token: string): Promise<AuthenticatedUser | null> {
     try {
+      await this.ensureInitialized();
       const payload = jwt.verify(token, this.jwtSecret as string, {
         algorithms: [JWT_ALGORITHM],
       }) as PanelJwtPayload;

@@ -1,4 +1,4 @@
-import { createServerFn } from '@tanstack/react-start'
+import { createServerFn, createServerOnlyFn } from '@tanstack/react-start'
 import { setResponseStatus } from '@tanstack/react-start/server'
 import {
   permissionMiddleware,
@@ -44,7 +44,7 @@ export type ServerFinderPingResponse = {
   reason?: string
 }
 
-type RecordData = Record<string, unknown>
+export type RecordData = Record<string, unknown>
 
 const finderMiddleware = [
   ...protectedServerFunctionMiddleware,
@@ -58,21 +58,24 @@ function record(data: unknown): RecordData {
 }
 
 function fail(message: string, status: number): never {
-  setResponseStatus(status)
   throw Object.assign(new Error(message), { status })
+}
+
+function errorStatus(error: unknown): number {
+  const status =
+    error && typeof error === 'object' ? (error as { status?: unknown }).status : null
+  return typeof status === 'number' && status >= 400 ? status : 500
 }
 
 async function sanitizeFailure(error: unknown): Promise<never> {
   const { sanitizeError } =
     await import('../../../panel-server/utils/sanitize.ts')
   const message = error instanceof Error ? error.message : String(error)
-  return fail(sanitizeError(message), 500)
+  return fail(sanitizeError(message), errorStatus(error))
 }
 
-export const getServerFinder = createServerFn({ method: 'GET' })
-  .middleware(finderMiddleware)
-  .validator((data: unknown) => record(data))
-  .handler(async ({ data }) => {
+const getServerFinderImplementation = createServerOnlyFn(
+  async (data: RecordData): Promise<ServerFinderResponse> => {
     try {
       const { getServerFinderResponse } =
         await import('../../../panel-server/services/serverFinder.ts')
@@ -82,12 +85,24 @@ export const getServerFinder = createServerFn({ method: 'GET' })
     } catch (error) {
       return sanitizeFailure(error)
     }
-  })
+  },
+)
 
-export const queryServerFinder = createServerFn({ method: 'GET' })
-  .middleware(finderMiddleware)
-  .validator((data: unknown) => record(data))
-  .handler(async ({ data }) => {
+export const getServerFinder = createServerFn({ method: 'GET' })
+    .middleware(finderMiddleware)
+    .validator((data: unknown) => record(data))
+    .handler(async ({ data }) => {
+      try {
+        return await getServerFinderImplementation(data)
+      } catch (error) {
+        setResponseStatus(errorStatus(error))
+        throw error
+      }
+    })
+;(getServerFinder as any).__executeImplementation = getServerFinderImplementation
+
+const queryServerFinderImplementation = createServerOnlyFn(
+  async (data: RecordData) => {
     const ip = data.ip
     const port = data.port
     if (!ip || !port) fail('IP and port are required', 400)
@@ -116,12 +131,24 @@ export const queryServerFinder = createServerFn({ method: 'GET' })
     } catch (error) {
       return sanitizeFailure(error)
     }
-  })
+  },
+)
 
-export const pingServerFinder = createServerFn({ method: 'GET' })
-  .middleware(finderMiddleware)
-  .validator((data: unknown) => record(data))
-  .handler(async ({ data }) => {
+export const queryServerFinder = createServerFn({ method: 'GET' })
+    .middleware(finderMiddleware)
+    .validator((data: unknown) => record(data))
+    .handler(async ({ data }) => {
+      try {
+        return await queryServerFinderImplementation(data)
+      } catch (error) {
+        setResponseStatus(errorStatus(error))
+        throw error
+      }
+    })
+;(queryServerFinder as any).__executeImplementation = queryServerFinderImplementation
+
+const pingServerFinderImplementation = createServerOnlyFn(
+  async (data: RecordData): Promise<ServerFinderPingResponse> => {
     const ip = data.ip
     const port = data.port
     if (!ip || !port) fail('IP and port are required', 400)
@@ -132,4 +159,40 @@ export const pingServerFinder = createServerFn({ method: 'GET' })
     const portNumber = parseQueryPort(port)
     if (portNumber === null) fail('Invalid port number', 400)
     return (await pingFinderServer(ip, portNumber)) as ServerFinderPingResponse
-  })
+  },
+)
+
+export const pingServerFinder = createServerFn({ method: 'GET' })
+    .middleware(finderMiddleware)
+    .validator((data: unknown) => record(data))
+    .handler(async ({ data }) => {
+      try {
+        return await pingServerFinderImplementation(data)
+      } catch (error) {
+        setResponseStatus(errorStatus(error))
+        throw error
+      }
+    })
+;(pingServerFinder as any).__executeImplementation = pingServerFinderImplementation
+
+const getServerFinderDebugImplementation = createServerOnlyFn(async () => {
+  try {
+    const { getServerFinderDebug: readServerFinderDebug } =
+      await import('../../../panel-server/services/serverFinder.ts')
+    return await readServerFinderDebug()
+  } catch (error) {
+    return sanitizeFailure(error)
+  }
+})
+
+export const getServerFinderDebug = createServerFn({ method: 'GET' })
+    .middleware(finderMiddleware)
+    .handler(async () => {
+      try {
+        return (await getServerFinderDebugImplementation()) as any
+      } catch (error) {
+        setResponseStatus(errorStatus(error))
+        throw error
+      }
+    })
+;(getServerFinderDebug as any).__executeImplementation = getServerFinderDebugImplementation

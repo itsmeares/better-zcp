@@ -7,10 +7,15 @@ import {
 type AnyRecord = Record<string, any>
 
 type ServiceError = {
+  error?: unknown
   message?: unknown
   code?: unknown
   params?: unknown
   status?: unknown
+  success?: unknown
+  valid?: unknown
+  detail?: unknown
+  reason?: unknown
 }
 
 function record(data: unknown): AnyRecord {
@@ -32,6 +37,10 @@ function throwResourceError(error: unknown, fallbackStatus = 500): never {
     status,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
     ...(details.params !== undefined ? { params: details.params } : {}),
+    ...(details.success === false ? { success: false } : {}),
+    ...(details.valid === false ? { valid: false } : {}),
+    ...(typeof details.detail === 'string' ? { detail: details.detail } : {}),
+    ...(typeof details.reason === 'string' ? { reason: details.reason } : {}),
   })
 }
 
@@ -58,15 +67,19 @@ function createResourceRead<T>(
     ? serverFn.middleware(capabilityMiddleware(capability))
     : serverFn
 
-  return secured
-    .validator((data: unknown) => record(data))
-    .handler(async ({ data }) => {
-      try {
-        return (await handler(data)) as any
-      } catch (error) {
-        throwResourceError(error)
-      }
-    })
+  const implementation = async (data: AnyRecord): Promise<T> => {
+    try {
+      return (await handler(data)) as T
+    } catch (error) {
+      throwResourceError(error)
+    }
+  }
+  return Object.assign(
+    secured
+      .validator((data: unknown) => record(data))
+      .handler(({ data }) => implementation(data) as any),
+    { __executeImplementation: implementation },
+  )
 }
 
 async function panelRuntime(): Promise<AnyRecord> {

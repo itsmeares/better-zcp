@@ -28,6 +28,7 @@ import { Route as ServersRouteImport } from './routes/servers'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as WorldMapRouteImport } from './routes/world-map'
+import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiPanelInfoRouteImport } from './routes/api/panel-info'
 import { Route as ApiSystemDiskSpaceRouteImport } from './routes/api/system/disk-space'
@@ -128,6 +129,11 @@ const WorldMapRoute = WorldMapRouteImport.update({
   path: '/world-map',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSplatRoute = ApiSplatRouteImport.update({
+  id: '/api/$',
+  path: '/api/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
   path: '/api/health',
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/world-map': typeof WorldMapRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/panel-info': typeof ApiPanelInfoRoute
   '/api/system/disk-space': typeof ApiSystemDiskSpaceRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/world-map': typeof WorldMapRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/panel-info': typeof ApiPanelInfoRoute
   '/api/system/disk-space': typeof ApiSystemDiskSpaceRoute
@@ -220,6 +228,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/world-map': typeof WorldMapRoute
+  '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
   '/api/panel-info': typeof ApiPanelInfoRoute
   '/api/system/disk-space': typeof ApiSystemDiskSpaceRoute
@@ -247,6 +256,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/templates'
     | '/world-map'
+    | '/api/$'
     | '/api/health'
     | '/api/panel-info'
     | '/api/system/disk-space'
@@ -272,6 +282,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/templates'
     | '/world-map'
+    | '/api/$'
     | '/api/health'
     | '/api/panel-info'
     | '/api/system/disk-space'
@@ -297,6 +308,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/templates'
     | '/world-map'
+    | '/api/$'
     | '/api/health'
     | '/api/panel-info'
     | '/api/system/disk-space'
@@ -323,6 +335,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
   WorldMapRoute: typeof WorldMapRoute
+  ApiSplatRoute: typeof ApiSplatRoute
   ApiHealthRoute: typeof ApiHealthRoute
   ApiPanelInfoRoute: typeof ApiPanelInfoRoute
   ApiSystemDiskSpaceRoute: typeof ApiSystemDiskSpaceRoute
@@ -464,6 +477,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorldMapRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/$': {
+      id: '/api/$'
+      path: '/api/$'
+      fullPath: '/api/$'
+      preLoaderRoute: typeof ApiSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/health': {
       id: '/api/health'
       path: '/api/health'
@@ -515,6 +535,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
   WorldMapRoute: WorldMapRoute,
+  ApiSplatRoute: ApiSplatRoute,
   ApiHealthRoute: ApiHealthRoute,
   ApiPanelInfoRoute: ApiPanelInfoRoute,
   ApiSystemDiskSpaceRoute: ApiSystemDiskSpaceRoute,
