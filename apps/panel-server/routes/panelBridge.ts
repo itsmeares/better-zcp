@@ -3181,7 +3181,9 @@ router.post("/character/import", requirePermission("players.gm_tools"), async (r
   try {
     const snapshot = await bridge.sendCommand("exportPlayerData", { username });
     const { dataDir } = getDataPaths();
-    const safeUsername = username.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const safeUsername = path.basename(
+      username.replace(/[^a-zA-Z0-9_-]/g, "_"),
+    );
     const exportDir = path.join(dataDir, "exports", safeUsername);
     fs.mkdirSync(exportDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -3189,7 +3191,10 @@ router.post("/character/import", requirePermission("players.gm_tools"), async (r
     const snapshotContents = JSON.stringify(snapshot.data ?? snapshot, null, 2);
     for (let collision = 1; ; collision++) {
       const suffix = collision === 1 ? "" : `-${collision}`;
-      snapshotPath = path.join(exportDir, `${snapshotBaseName}${suffix}.json`);
+      const snapshotFileName = path.basename(
+        `${snapshotBaseName}${suffix}.json`,
+      );
+      snapshotPath = path.join(exportDir, snapshotFileName);
       try {
         const descriptor = fs.openSync(snapshotPath, "wx");
         try {
