@@ -308,7 +308,7 @@ export class RconService extends EventEmitter {
     this.reconnecting = false;
     this.reconnectPromise = null;
 
-    this.connectionTimeout = 10000;
+    this.connectionTimeout = 13000;
     this.commandTimeout = 10000;
 
     this.healthCheckInterval = null;

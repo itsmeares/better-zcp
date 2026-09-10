@@ -324,6 +324,7 @@ export class ServerManager {
   _killTimeoutMs: number;
   _starting = false;
   _stopping = false;
+  _scanGeneration = 0;
   _launchLogFd: any = null;
 
   constructor({ lifecycleFactory = createLinuxServiceLifecycle }: { lifecycleFactory?: any } = {}) {
@@ -347,6 +348,7 @@ export class ServerManager {
     this.gamePort = null;
     this.fetchingIp = false;
     this._killTimeoutMs = KILL_EXEC_TIMEOUT_MS;
+    this._scanGeneration = 0;
   }
 
   async reloadConfig(serverId: string | null = null) {
@@ -535,7 +537,9 @@ export class ServerManager {
     const fastPath = await this._tryPidFileFastPath();
     if (fastPath) return fastPath;
 
-    const scan = await this._scanDedicatedServerProcesses();
+    const scanPromise = this._scanDedicatedServerProcesses();
+    const scanGeneration = this._scanGeneration;
+    const scan = await scanPromise;
     const descriptor = this._getOwnershipDescriptor();
 
     const owned = [];
@@ -569,7 +573,7 @@ export class ServerManager {
       };
     }
 
-    if (!scan.scanFailed) {
+    if (!scan.scanFailed && this._scanGeneration === scanGeneration) {
       this.isRunning = resolved.length > 0;
     }
     return {
@@ -584,6 +588,7 @@ export class ServerManager {
   }
 
   async _scanDedicatedServerProcesses(): Promise<ProcessDetails> {
+    const scanGeneration = ++this._scanGeneration;
     return new Promise<ProcessDetails>((resolve) => {
       log.debug(
         `getServerProcessDetails: starting detection (platform=${process.platform})`,
@@ -595,11 +600,12 @@ export class ServerManager {
       };
 
       const timeout = setTimeout(() => {
+        if (this._scanGeneration === scanGeneration) this._scanGeneration++;
         log.warn(
           "getServerProcessDetails: process detection timed out, cannot determine server state",
         );
         resolve({ running: false, matched: [], scanFailed: true });
-      }, 10000);
+      }, 18000);
 
       if (isWindows) {
         const powershellPath = path.join(
@@ -641,7 +647,7 @@ export class ServerManager {
             }
 
             if (!psStdout) {
-              this.isRunning = false;
+              if (this._scanGeneration === scanGeneration) this.isRunning = false;
               resolve({ running: false, matched: [] });
               return;
             }
@@ -680,7 +686,9 @@ export class ServerManager {
               return;
             }
 
-            this.isRunning = matched.length > 0;
+            if (this._scanGeneration === scanGeneration) {
+              this.isRunning = matched.length > 0;
+            }
             resolve({ running: matched.length > 0, matched, ambiguous });
           },
         );
@@ -726,7 +734,9 @@ export class ServerManager {
                 resolve({ running: false, matched: [], scanFailed: true });
                 return;
               }
-              this.isRunning = matched.length > 0;
+              if (this._scanGeneration === scanGeneration) {
+                this.isRunning = matched.length > 0;
+              }
               resolve({ running: matched.length > 0, matched, ambiguous });
               return;
             }
@@ -775,7 +785,9 @@ export class ServerManager {
                 resolve({ running: false, matched: [], scanFailed: true });
                 return;
               }
-              this.isRunning = matched.length > 0;
+              if (this._scanGeneration === scanGeneration) {
+                this.isRunning = matched.length > 0;
+              }
               resolve({ running: matched.length > 0, matched, ambiguous });
             });
           },
@@ -1519,7 +1531,7 @@ export class ServerManager {
       .then(() => this.getServerProcessDetails())
       .catch(() => null);
     const timeout = new Promise<null>((resolve) => {
-      timeoutId = setTimeout(() => resolve(null), 3000);
+      timeoutId = setTimeout(() => resolve(null), 19000);
     });
 
     try {
@@ -1575,8 +1587,8 @@ export class ServerManager {
   async restartServer(rconService: any, warningMinutes: number = 5) {
     try {
       const sendWarning = async (msg: string) => {
+        let timeoutId!: ReturnType<typeof setTimeout>;
         try {
-          let timeoutId!: ReturnType<typeof setTimeout>;
           const timeoutPromise = new Promise((_, reject) => {
             timeoutId = setTimeout(
               () => reject(new Error("RCON timeout")),
@@ -1584,9 +1596,10 @@ export class ServerManager {
             );
           });
           await Promise.race([rconService.serverMessage(msg), timeoutPromise]);
-          clearTimeout(timeoutId);
         } catch (e: any) {
           log.warn(`Failed to send restart warning: ${e.message}`);
+        } finally {
+          clearTimeout(timeoutId);
         }
       };
 
@@ -1601,8 +1614,8 @@ export class ServerManager {
       await sendWarning("Server restarting NOW!");
       await this.sleep(5000);
 
+      let saveTimeoutId!: ReturnType<typeof setTimeout>;
       try {
-        let saveTimeoutId!: ReturnType<typeof setTimeout>;
         const saveTimeout = new Promise((_, reject) => {
           saveTimeoutId = setTimeout(
             () => reject(new Error("Save timeout")),
@@ -1610,7 +1623,6 @@ export class ServerManager {
           );
         });
         const saveResult = await Promise.race([rconService.save(), saveTimeout]);
-        clearTimeout(saveTimeoutId);
         if (!saveResult?.success) {
           throw new Error(
             `Save before restart failed: ${saveResult?.error || "unknown error"}`,
@@ -1618,6 +1630,8 @@ export class ServerManager {
         }
       } catch (e: any) {
         throw new Error(`Save before restart failed: ${e.message}`);
+      } finally {
+        clearTimeout(saveTimeoutId);
       }
       await this.sleep(3000);
 
@@ -1644,8 +1658,8 @@ export class ServerManager {
         };
       }
 
+      let quitTimeoutId!: ReturnType<typeof setTimeout>;
       try {
-        let quitTimeoutId!: ReturnType<typeof setTimeout>;
         const quitTimeout = new Promise((_, reject) => {
           quitTimeoutId = setTimeout(
             () => reject(new Error("Quit timeout")),
@@ -1653,9 +1667,10 @@ export class ServerManager {
           );
         });
         await Promise.race([rconService.quit(), quitTimeout]);
-        clearTimeout(quitTimeoutId);
       } catch (e: any) {
         log.warn(`RCON quit failed, will force stop: ${e.message}`);
+      } finally {
+        clearTimeout(quitTimeoutId);
       }
       await this.sleep(10000);
 

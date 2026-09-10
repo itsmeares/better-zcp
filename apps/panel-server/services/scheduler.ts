@@ -1311,17 +1311,18 @@ export class Scheduler {
           rconService.forceResetConnectionState();
         }
 
+        let connectTimeoutId!: ReturnType<typeof setTimeout>;
         try {
           log.info(
             `Auto-restart: RCON attempting connection ${i + 1}/${rconDelays.length}...`,
           );
           const connectPromise = rconService.connect();
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(
+          const timeoutPromise = new Promise((_, reject) => {
+            connectTimeoutId = setTimeout(
               () => reject(new Error("Connection attempt timed out after 15s")),
               15000,
-            ),
-          );
+            );
+          });
 
           const connectResult = await Promise.race([
             connectPromise,
@@ -1342,6 +1343,8 @@ export class Scheduler {
           if (rconService.forceResetConnectionState) {
             rconService.forceResetConnectionState();
           }
+        } finally {
+          clearTimeout(connectTimeoutId);
         }
         // Don't toggle serverStarting - keep it true to block auto-reconnect
       }

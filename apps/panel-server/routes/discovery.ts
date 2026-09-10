@@ -17,7 +17,11 @@ function errorMessage(error: unknown): string {
 
 function sendProfileError(error: unknown, res: express.Response): boolean {
   if (!(error instanceof ServerProfileError)) return false;
-  res.status(error.status).json({ error: sanitizeError(error.message) });
+  res.status(error.status).json({
+    error: sanitizeError(error.message),
+    ...(error.code ? { code: error.code } : {}),
+    ...(error.details || {}),
+  });
   return true;
 }
 

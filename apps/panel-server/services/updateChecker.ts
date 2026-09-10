@@ -10,6 +10,8 @@ import {
   hasActiveSteamOperation,
   getActiveSteamOperations,
   clearActiveSteamOperation,
+  isSteamOperationIdle,
+  STEAM_OPERATION_IDLE_TIMEOUT_MS,
 } from "./activeSteamOperations.ts";
 import { acquireLifecycleLock } from "./lifecycleCoordinator.ts";
 import { buildLinuxWritableHomeEnv } from "../utils/steamEnvironment.ts";
@@ -663,6 +665,7 @@ export class UpdateChecker {
       normalizedInstallPath = candidateInstallPath;
 
       let code: number | null;
+      let killedByWatchdog = false;
       try {
         code = await new Promise<number | null>((resolve, reject) => {
           const autoUpdateSpawnOpts: SpawnOptions = { cwd: steamcmdPath };
@@ -685,9 +688,38 @@ export class UpdateChecker {
           );
           child.once("error", reject);
           child.once("close", resolve);
+
+          const bumpLastOutput = () => {
+            const operation = getActiveSteamOperations().get(candidateInstallPath);
+            if (operation) operation.lastOutputAt = Date.now();
+          };
+          child.stdout?.on("data", bumpLastOutput);
+          child.stderr?.on("data", bumpLastOutput);
+
+          const operation = getActiveSteamOperations().get(candidateInstallPath);
+          if (operation) {
+            operation.watchdog = setInterval(() => {
+              const activeOperation = getActiveSteamOperations().get(candidateInstallPath);
+              if (!activeOperation || !isSteamOperationIdle(activeOperation)) return;
+              log.error(
+                `Auto-update SteamCMD produced no output for ${STEAM_OPERATION_IDLE_TIMEOUT_MS / 60000} minutes; terminating the stalled process`,
+              );
+              killedByWatchdog = true;
+              child.kill();
+            }, 30_000);
+            operation.watchdog.unref?.();
+          }
         });
       } finally {
         clearActiveSteamOperation(normalizedInstallPath);
+      }
+      if (killedByWatchdog) {
+        const idleMinutes = STEAM_OPERATION_IDLE_TIMEOUT_MS / 60000;
+        fail(
+          "STEAMCMD_STALLED",
+          `SteamCMD produced no output for ${idleMinutes} minutes and was stopped`,
+          { minutes: idleMinutes },
+        );
       }
       if (code !== 0) fail("STEAMCMD_EXIT_CODE", `SteamCMD exited with code ${code}`, { code });
 

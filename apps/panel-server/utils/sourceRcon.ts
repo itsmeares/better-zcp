@@ -1,5 +1,8 @@
 import dns from "dns/promises";
 import net from "net";
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("SourceRcon");
 
 const TYPE_AUTH = 3;
 const TYPE_AUTH_RESPONSE = 2;
@@ -242,6 +245,8 @@ export class SourceRconClient {
           clearTimeout(entry.timer);
           this._pending.delete(packet.id);
           entry.resolve(entry.parts.join(""));
+        } else {
+          log.warn(`Orphaned RCON response for id=${packet.id}; the command already timed out`);
         }
       }
     }
