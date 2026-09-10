@@ -1113,8 +1113,6 @@ setPanelRuntime({
   diskMonitor,
 });
 
-registerApiRoutes(app);
-
 let _pkgVersion: string;
 let _buildSha: string;
 try {
@@ -1185,6 +1183,11 @@ app.get("/api/panel-info", async (req, res) => {
   const localIp = await serverManager.getLocalIp();
   res.json(buildPanelInfo(localIp, PORT));
 });
+
+registerTanStackStartApiRoute(app, panelWebOptions, "/api/system/runtime");
+registerTanStackStartApiRoute(app, panelWebOptions, "/api/system/disk-space");
+
+registerApiRoutes(app);
 
 app.post("/api/panel/restart", requireRole("admin"), async (req, res) => {
   log.info("Panel restart requested via API");
