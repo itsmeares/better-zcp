@@ -22,6 +22,10 @@ import {
 } from "./linuxServiceLifecycle.ts";
 import { hasActiveSteamOperation } from "./activeSteamOperations.ts";
 import { listNonInternalIPv4Interfaces } from "../utils/networkInterfaces.ts";
+import {
+  getConfiguredIpv4Address,
+  resolvePanelLocalIp,
+} from "../utils/panelInfo.ts";
 import { buildLinuxWritableHomeEnv } from "../utils/steamEnvironment.ts";
 
 const isWindows = process.platform === "win32";
@@ -53,11 +57,6 @@ export function resolveConfiguredRconPort(value: unknown, fallback: number = 270
     return fallback;
   }
   return parseBoundedInteger(value, null, 1, 65535);
-}
-
-function getConfiguredIpv4Address(variableName: string) {
-  const address = process.env[variableName]?.trim();
-  return address && net.isIP(address) === 4 ? address : null;
 }
 
 export function classifyProcessKillError(error: AnyRecord | null) {
@@ -1798,21 +1797,7 @@ export class ServerManager {
   }
 
   async getLocalIp() {
-    const interfaces = this.listNetworkInterfaces();
-
-    try {
-      const selected = await getSetting("lanIpAddress");
-      if (selected && interfaces.some((iface) => iface.address === selected)) {
-        return selected;
-      }
-    } catch (err: any) {
-      log.debug(`lanIpAddress setting lookup failed: ${err.message}`);
-    }
-
-    const configuredLanIp = getConfiguredIpv4Address("PANEL_LAN_IP");
-    if (configuredLanIp) return configuredLanIp;
-
-    return interfaces[0]?.address || "127.0.0.1";
+    return resolvePanelLocalIp(getSetting);
   }
 
   async loadGamePort() {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { resolvePanelPort } from "../index.ts";
+import { resolvePanelPort } from "../utils/panelInfo.ts";
 
 describe("resolvePanelPort", () => {
   it("accepts valid ports and warns when it falls back", () => {
