@@ -13,6 +13,10 @@ type ServiceError = {
   params?: unknown
   status?: unknown
   missing?: unknown
+  success?: unknown
+  valid?: unknown
+  detail?: unknown
+  reason?: unknown
 }
 
 type IntegrationContext = {
@@ -158,6 +162,14 @@ function throwIntegrationError(error: unknown, fallbackStatus = 500): never {
       ? { params: sanitizeParams(details.params) }
       : {}),
     ...(details.missing !== undefined ? { missing: details.missing } : {}),
+    ...(details.success === false ? { success: false } : {}),
+    ...(details.valid === false ? { valid: false } : {}),
+    ...(typeof details.detail === 'string'
+      ? { detail: sanitizeMessage(details.detail) }
+      : {}),
+    ...(typeof details.reason === 'string'
+      ? { reason: sanitizeMessage(details.reason) }
+      : {}),
   })
 }
 
@@ -197,32 +209,46 @@ function createIntegrationRead<T>(
   capability: string,
   handler: (data: AnyRecord, context: unknown) => Promise<T> | T,
 ) {
-  return createServerFn({ method: 'GET' })
-    .middleware(capabilityMiddleware(capability))
-    .validator((data: unknown) => record(data))
-    .handler(async ({ data, context }) => {
-      try {
-        return (await handler(data, context)) as any
-      } catch (error) {
-        throwIntegrationError(error)
-      }
-    })
+  const implementation = async (
+    data: AnyRecord,
+    context: unknown,
+  ): Promise<T> => {
+    try {
+      return (await handler(data, context)) as T
+    } catch (error) {
+      throwIntegrationError(error)
+    }
+  }
+  return Object.assign(
+    createServerFn({ method: 'GET' })
+      .middleware(capabilityMiddleware(capability))
+      .validator((data: unknown) => record(data))
+      .handler(({ data, context }) => implementation(data, context) as any),
+    { __executeImplementation: implementation },
+  )
 }
 
 function createIntegrationAction<T>(
   capability: string,
   handler: (data: AnyRecord, context: unknown) => Promise<T> | T,
 ) {
-  return createServerFn({ method: 'POST' })
-    .middleware(capabilityMiddleware(capability))
-    .validator((data: unknown) => record(data))
-    .handler(async ({ data, context }) => {
-      try {
-        return (await handler(data, context)) as any
-      } catch (error) {
-        throwIntegrationError(error)
-      }
-    })
+  const implementation = async (
+    data: AnyRecord,
+    context: unknown,
+  ): Promise<T> => {
+    try {
+      return (await handler(data, context)) as T
+    } catch (error) {
+      throwIntegrationError(error)
+    }
+  }
+  return Object.assign(
+    createServerFn({ method: 'POST' })
+      .middleware(capabilityMiddleware(capability))
+      .validator((data: unknown) => record(data))
+      .handler(({ data, context }) => implementation(data, context) as any),
+    { __executeImplementation: implementation },
+  )
 }
 
 export const getDiscordStatus = createIntegrationRead(
@@ -515,7 +541,10 @@ export const testDiscordToken = createIntegrationAction(
 export const sendDiscordTestMessage = createIntegrationAction(
   'integrations.manage',
   async () => {
-    const discordBot = await discordBotOrThrow()
+    const discordBot = (await panelRuntime()).discordBot
+    if (!discordBot) {
+      invalid('Discord bot not initialized', 'DISCORD_BOT_NOT_INITIALIZED')
+    }
     if (!discordBot.isRunning) {
       invalid('Bot is not running', 'DISCORD_BOT_NOT_RUNNING')
     }

@@ -11,11 +11,16 @@ import {
 } from './serverAuth'
 
 type ServiceError = {
+  error?: unknown
   message?: unknown
   code?: unknown
   params?: unknown
   status?: unknown
   details?: unknown
+  success?: unknown
+  valid?: unknown
+  detail?: unknown
+  reason?: unknown
 }
 
 type AnyRecord = Record<string, any>
@@ -27,7 +32,13 @@ async function panelRuntime(): Promise<AnyRecord> {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    const details = error as ServiceError
+    if (typeof details.error === 'string') return details.error
+    if (typeof details.message === 'string') return details.message
+  }
+  return String(error)
 }
 
 function throwControlError(error: unknown, fallbackStatus = 500): never {
@@ -45,6 +56,10 @@ function throwControlError(error: unknown, fallbackStatus = 500): never {
     status,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
     ...(details.params !== undefined ? { params: details.params } : {}),
+    ...(details.success === false ? { success: false } : {}),
+    ...(details.valid === false ? { valid: false } : {}),
+    ...(typeof details.detail === 'string' ? { detail: details.detail } : {}),
+    ...(typeof details.reason === 'string' ? { reason: details.reason } : {}),
     ...extraDetails,
   })
   throw safeError
@@ -140,15 +155,19 @@ function createControlRead<T>(
   const secured = capability
     ? serverFn.middleware(capabilityMiddleware(capability))
     : serverFn.middleware(protectedServerFunctionMiddleware)
-  return secured
+  const implementation = async (data: AnyRecord): Promise<T> => {
+    try {
+      return (await handler(data)) as T
+    } catch (error) {
+      throwControlError(error)
+    }
+  }
+  return Object.assign(
+    secured
     .validator((data: unknown) => record(data))
-    .handler(async ({ data }) => {
-      try {
-        return (await handler(data)) as any
-      } catch (error) {
-        throwControlError(error)
-      }
-    })
+    .handler(({ data }) => implementation(data) as any),
+    { __executeImplementation: implementation },
+  )
 }
 
 function createControlAction<T>(
@@ -159,16 +178,23 @@ function createControlAction<T>(
     context: AnyRecord,
   ) => Promise<T> | T,
 ) {
-  return createServerFn({ method: 'POST' })
-    .middleware(capabilityMiddleware(capability))
-    .validator((data: unknown) => record(data))
-    .handler(async ({ data, context }) => {
-      try {
-        return (await handler(await panelRuntime(), data, context)) as any
-      } catch (error) {
-        throwControlError(error)
-      }
-    })
+  const implementation = async (
+    data: AnyRecord,
+    context: AnyRecord,
+  ): Promise<T> => {
+    try {
+      return (await handler(await panelRuntime(), data, context)) as T
+    } catch (error) {
+      throwControlError(error)
+    }
+  }
+  return Object.assign(
+    createServerFn({ method: 'POST' })
+      .middleware(capabilityMiddleware(capability))
+      .validator((data: unknown) => record(data))
+      .handler(({ data, context }) => implementation(data, context) as any),
+    { __executeImplementation: implementation },
+  )
 }
 
 export const getGameServerStatus = createControlRead(null, async () => {
@@ -1196,14 +1222,13 @@ export const connectRcon = createControlAction(
     }
     let normalizedPort: number | undefined
     if (port !== undefined) {
-      normalizedPort = Number(port)
-      if (
-        !Number.isInteger(normalizedPort) ||
-        normalizedPort < 1 ||
-        normalizedPort > 65535
-      ) {
+      const { parseBoundedInteger } =
+        await import('../../../panel-server/utils/queryNumbers.ts')
+      const parsedPort = parseBoundedInteger(port, null, 1, 65535)
+      if (parsedPort === null) {
         invalid('Invalid port (1-65535)', 'RCON_INVALID_PORT')
       }
+      normalizedPort = parsedPort
     }
     if (
       password !== undefined &&
@@ -1260,57 +1285,99 @@ export const disconnectRcon = createControlAction('rcon.execute', (runtime) =>
 export const getRconHistory = createControlRead(
   'rcon.execute',
   async (data) => {
-    const { getCommandHistory } =
-      await import('../../../panel-server/database/init.ts')
-    const rawLimit = Number(data.limit ?? 100)
-    const limit = Number.isFinite(rawLimit)
-      ? Math.min(Math.max(Math.floor(rawLimit), 1), 1000)
-      : 100
+    const [{ getCommandHistory }, { parseClampedInteger }] = await Promise.all([
+      import('../../../panel-server/database/init.ts'),
+      import('../../../panel-server/utils/queryNumbers.ts'),
+    ])
+    const limit = parseClampedInteger(data.limit, 100, 1, 1000)
     return { history: await getCommandHistory(limit) }
   },
 )
 
-export const getRconCommands = createControlRead(null, async () => {
+export const getRconCommands = createControlRead(null, async (data) => {
   const { PZ_COMMANDS } =
     await import('../../../panel-server/utils/commands.ts')
-  return { commands: PZ_COMMANDS }
+  const category = typeof data.category === 'string' ? data.category : ''
+  if (!category) return { commands: PZ_COMMANDS }
+
+  const commands = Object.fromEntries(
+    Object.entries(PZ_COMMANDS).filter(([, command]) => command.category === category),
+  )
+  return { commands }
+})
+
+export const getRconHealth = createControlRead(null, async () => {
+  try {
+    const health = await (await panelRuntime()).rconService.healthCheck()
+    if (!health.healthy) setResponseStatus(503)
+    return { success: health.healthy, ...health }
+  } catch (error) {
+    throwControlError(
+      Object.assign(new Error(errorMessage(error)), {
+        success: false,
+        reason: errorMessage(error),
+      }),
+      500,
+    )
+  }
 })
 
 export const testRconConnection = createControlAction(
   ['rcon.execute', 'servers.manage'],
   async (_runtime, data) => {
     const host = data.host
-    const port = Number(data.port)
+    const { parseBoundedInteger } =
+      await import('../../../panel-server/utils/queryNumbers.ts')
+    const port = parseBoundedInteger(data.port, null, 1, 65535)
     const password = data.password
-    if (
+    const validationError =
       typeof host !== 'string' ||
       host.length > 255 ||
-      !/^[a-zA-Z0-9.-]+$/.test(host) ||
-      !Number.isInteger(port) ||
-      port < 1 ||
-      port > 65535 ||
-      (password !== undefined &&
-        (typeof password !== 'string' || password.length > 256))
-    ) {
+      !/^[a-zA-Z0-9.-]+$/.test(host)
+        ? 'Invalid host format'
+        : port === null
+          ? 'Invalid port (1-65535)'
+          : password !== undefined &&
+              (typeof password !== 'string' || password.length > 256)
+            ? 'Invalid password format'
+            : null
+    if (validationError) {
       return {
         success: false,
         error: 'invalid_input',
-        detail: 'Invalid RCON connection input',
+        detail: validationError,
       }
     }
-    const { testRconConnection: test } =
-      await import('../../../panel-server/services/rcon.ts')
-    return test({ host, port, password }) as Promise<{
-      success: boolean
-      error?: 'unreachable' | 'auth_failed' | 'invalid_input' | 'internal_error'
-      detail: string
-    }>
+    try {
+      const { testRconConnection: test } =
+        await import('../../../panel-server/services/rcon.ts')
+      return (await test({ host, port, password })) as {
+        success: boolean
+        error?:
+          | 'unreachable'
+          | 'auth_failed'
+          | 'invalid_input'
+          | 'internal_error'
+        detail: string
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: 'internal_error',
+        detail: errorMessage(error),
+      }
+    }
   },
 )
 
 function taskId(value: unknown): number | null {
-  const number = Number(value)
-  return Number.isInteger(number) && number > 0 ? number : null
+  const number =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /^[+-]?\d+$/.test(value.trim())
+        ? Number(value.trim())
+        : Number.NaN
+  return Number.isSafeInteger(number) && number > 0 ? number : null
 }
 
 type CronCheck =
@@ -1372,11 +1439,15 @@ export const validateSchedulerCron = createControlAction(
   'automation.manage',
   async (_runtime, data) => {
     const expression = data.cronExpression
-    if (typeof expression !== 'string' || !expression)
-      invalid(
-        'cronExpression is required',
-        'SCHEDULER_CRON_EXPRESSION_REQUIRED',
+    if (typeof expression !== 'string' || !expression) {
+      throwControlError(
+        Object.assign(new Error('cronExpression is required'), {
+          code: 'SCHEDULER_CRON_EXPRESSION_REQUIRED',
+          valid: false,
+        }),
+        400,
       )
+    }
     return checkCronExpression(expression)
   },
 )
@@ -1677,13 +1748,35 @@ export const restartScheduledServer = createControlAction(
         ),
         400,
       )
-    let warningMinutes = Number(data.warningMinutes ?? 5)
-    warningMinutes = Number.isFinite(warningMinutes)
-      ? Math.max(0, Math.min(Math.floor(warningMinutes), 60))
-      : 5
+    const { parseBoundedInteger } =
+      await import('../../../panel-server/utils/queryNumbers.ts')
+    const warningMinutes = Math.min(
+      parseBoundedInteger(
+        data.warningMinutes,
+        5,
+        0,
+        Number.MAX_SAFE_INTEGER,
+      ),
+      60,
+    )
     void runtime.scheduler
       .performRestart(warningMinutes, { label: 'Manual restart' })
-      .catch(() => undefined)
+      .then((result: AnyRecord) =>
+        emitSchedulerAction(runtime, {
+          kind: 'restart',
+          success: !!result?.success,
+          message:
+            result?.message ||
+            (result?.success ? 'Restart completed' : 'Restart failed'),
+        }),
+      )
+      .catch((error: unknown) =>
+        emitSchedulerAction(runtime, {
+          kind: 'restart',
+          success: false,
+          message: errorMessage(error),
+        }),
+      )
     return { success: true, message: 'Restart initiated', warningMinutes }
   },
 )
@@ -1691,12 +1784,11 @@ export const restartScheduledServer = createControlAction(
 export const getSchedulerHistory = createControlRead(
   'automation.manage',
   async (data) => {
-    const { getScheduleHistory } =
-      await import('../../../panel-server/database/init.ts')
-    const limit = Math.min(
-      Math.max(Math.floor(Number(data.limit ?? 100)) || 100, 1),
-      500,
-    )
+    const [{ getScheduleHistory }, { parseClampedInteger }] = await Promise.all([
+      import('../../../panel-server/database/init.ts'),
+      import('../../../panel-server/utils/queryNumbers.ts'),
+    ])
+    const limit = parseClampedInteger(data.limit, 100, 1, 500)
     const taskIdValue = data.taskId === undefined ? null : taskId(data.taskId)
     if (data.taskId !== undefined && taskIdValue === null)
       invalid('Invalid task ID', 'SCHEDULER_INVALID_TASK_ID')
@@ -1732,7 +1824,7 @@ export const setSchedulerTimezone = createControlAction(
       await import('../../../panel-server/utils/cronValidation.ts')
     if (!isValidIanaTimezone(timezone))
       invalid(
-        `"${timezone}" is not a valid timezone name`,
+        `"${timezone}" is not a valid timezone name (e.g. "America/New_York", "UTC")`,
         'SCHEDULER_INVALID_TIMEZONE',
         { tz: timezone },
       )
@@ -1742,10 +1834,16 @@ export const setSchedulerTimezone = createControlAction(
 
 export const setSchedulerRestartWarning = createControlAction(
   'automation.manage',
-  async (runtime, data) => ({
-    success: true,
-    restartWarning: await runtime.scheduler.setRestartWarning(data),
-  }),
+  async (runtime, data) => {
+    try {
+      return {
+        success: true,
+        restartWarning: await runtime.scheduler.setRestartWarning(data),
+      }
+    } catch (error) {
+      throwControlError(error, 400)
+    }
+  },
 )
 
 export const getSchedulerPresets = createControlRead(

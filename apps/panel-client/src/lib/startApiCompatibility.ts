@@ -1,0 +1,711 @@
+import {
+  sanitizeError,
+  sanitizeErrorParams,
+} from '../../../panel-server/utils/sanitize.ts'
+
+// Preserve the legacy HTTP contract for integrations while the panel UI uses
+// typed Server Functions. Streaming and binary APIs intentionally stay in Express.
+// The compatibility route calls the shared server-only implementations directly;
+// the compiler-generated RPC executor is reserved for the client transport.
+type AnyRecord = Record<string, any>
+
+type AuthenticatedUser = {
+  userId: string | null
+  username: string | null
+  role: string
+  tokenGen: number | null
+  authDisabled?: boolean
+}
+
+type ServerFunction = {
+  __executeImplementation?: (
+    data: unknown,
+    context?: unknown,
+  ) => Promise<unknown>
+  __executeServer?: (options: {
+    data?: unknown
+    context?: unknown
+  }) => Promise<{ result?: unknown; error?: unknown }>
+}
+
+type RouteSource =
+  | 'control'
+  | 'integrations'
+  | 'admin'
+  | 'permissions'
+  | 'resources'
+  | 'resourceActions'
+  | 'finder'
+
+type RouteStatus = number | ((result: any) => number)
+
+type RouteSpec = {
+  method: string
+  pattern: string
+  source: RouteSource
+  functionName: string
+  capability?: string | string[]
+  data?: (query: URLSearchParams, body: AnyRecord, params: AnyRecord) => AnyRecord
+  status?: RouteStatus
+  headers?: (params: AnyRecord) => Record<string, string>
+  bodyError?: AnyRecord
+}
+
+type ParsedBody = {
+  value: AnyRecord
+  isObject: boolean
+}
+
+const implementations: Record<
+  RouteSource,
+  () => Promise<Record<string, unknown>>
+> = {
+  control: () => import('./serverGameControl'),
+  integrations: () => import('./serverIntegrations'),
+  admin: () => import('./serverAdmin'),
+  permissions: () => import('./serverPermissions'),
+  resources: () => import('./serverResourceReads'),
+  resourceActions: () => import('./serverResourceActions'),
+  finder: () => import('./serverFinder'),
+}
+
+function mergeBody(
+  _query: URLSearchParams,
+  body: AnyRecord,
+  params: AnyRecord,
+): AnyRecord {
+  return { ...body, ...params }
+}
+
+function queryData(...keys: string[]) {
+  return (query: URLSearchParams): AnyRecord => {
+    const data: AnyRecord = {}
+    for (const key of keys) {
+      if (query.has(key)) data[key] = query.get(key)
+    }
+    return data
+  }
+}
+
+function matchPattern(pattern: string, pathname: string): AnyRecord | null {
+  const patternParts = pattern.split('/').filter(Boolean)
+  const pathParts = pathname.replace(/\/+$/, '').split('/').filter(Boolean)
+  if (patternParts.length !== pathParts.length) return null
+
+  const params: AnyRecord = {}
+  for (let index = 0; index < patternParts.length; index += 1) {
+    const patternPart = patternParts[index]
+    const pathPart = pathParts[index]
+    if (patternPart.startsWith(':')) {
+      try {
+        params[patternPart.slice(1)] = decodeURIComponent(pathPart)
+      } catch {
+        return null
+      }
+      continue
+    }
+    if (patternPart !== pathPart) return null
+  }
+  return params
+}
+
+const routes: RouteSpec[] = [
+  {
+    method: 'GET',
+    pattern: '/api/rcon/status',
+    source: 'control',
+    functionName: 'getRconStatus',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/rcon/execute',
+    source: 'control',
+    functionName: 'executeRcon',
+    capability: 'rcon.execute',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/rcon/connect',
+    source: 'control',
+    functionName: 'connectRcon',
+    capability: 'rcon.execute',
+    bodyError: { success: false, error: 'Request body must be an object' },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/rcon/test',
+    source: 'control',
+    functionName: 'testRconConnection',
+    capability: ['rcon.execute', 'servers.manage'],
+    status: (result) =>
+      result?.error === 'invalid_input'
+        ? 400
+        : result?.error === 'internal_error'
+          ? 500
+          : 200,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/rcon/health',
+    source: 'control',
+    functionName: 'getRconHealth',
+    status: (result) => (result?.success === false ? 503 : 200),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/rcon/disconnect',
+    source: 'control',
+    functionName: 'disconnectRcon',
+    capability: 'rcon.execute',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/rcon/history',
+    source: 'control',
+    functionName: 'getRconHistory',
+    capability: 'rcon.execute',
+    data: queryData('limit'),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/rcon/commands/:category',
+    source: 'control',
+    functionName: 'getRconCommands',
+    data: (_query, _body, params) => ({ category: params.category }),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/rcon/commands',
+    source: 'control',
+    functionName: 'getRconCommands',
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/scheduler/status',
+    source: 'control',
+    functionName: 'getSchedulerStatus',
+    capability: 'automation.manage',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/scheduler/timezone',
+    source: 'control',
+    functionName: 'setSchedulerTimezone',
+    capability: 'automation.manage',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/scheduler/restart-warning',
+    source: 'control',
+    functionName: 'setSchedulerRestartWarning',
+    capability: 'automation.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/scheduler/tasks',
+    source: 'control',
+    functionName: 'getSchedulerTasks',
+    capability: 'automation.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/scheduler/validate-cron',
+    source: 'control',
+    functionName: 'validateSchedulerCron',
+    capability: 'automation.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/scheduler/tasks',
+    source: 'control',
+    functionName: 'createScheduledTaskAction',
+    capability: 'automation.manage',
+    bodyError: {
+      error: 'Request body must be an object',
+      code: 'SCHEDULER_REQUEST_BODY_INVALID',
+    },
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/scheduler/tasks/:id',
+    source: 'control',
+    functionName: 'updateScheduledTaskAction',
+    capability: 'automation.manage',
+    data: mergeBody,
+    bodyError: {
+      error: 'Request body must be an object',
+      code: 'SCHEDULER_REQUEST_BODY_INVALID',
+    },
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/scheduler/tasks/:id',
+    source: 'control',
+    functionName: 'deleteScheduledTask',
+    capability: 'automation.manage',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/scheduler/tasks/:id/run',
+    source: 'control',
+    functionName: 'runScheduledTask',
+    capability: 'automation.manage',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/scheduler/restart-now',
+    source: 'control',
+    functionName: 'restartScheduledServer',
+    capability: 'automation.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/scheduler/cron-presets',
+    source: 'control',
+    functionName: 'getSchedulerPresets',
+    capability: 'automation.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/scheduler/history',
+    source: 'control',
+    functionName: 'getSchedulerHistory',
+    capability: 'automation.manage',
+    data: queryData('limit', 'taskId'),
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/scheduler/history',
+    source: 'control',
+    functionName: 'clearSchedulerHistory',
+    capability: 'automation.manage',
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/discord/status',
+    source: 'integrations',
+    functionName: 'getDiscordStatus',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/discord/config',
+    source: 'integrations',
+    functionName: 'getDiscordConfig',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/discord/config',
+    source: 'integrations',
+    functionName: 'updateDiscordConfig',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/discord/start',
+    source: 'integrations',
+    functionName: 'startDiscordBot',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/discord/stop',
+    source: 'integrations',
+    functionName: 'stopDiscordBot',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/discord/reset',
+    source: 'integrations',
+    functionName: 'resetDiscordConfig',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/discord/test',
+    source: 'integrations',
+    functionName: 'testDiscordToken',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/discord/test-message',
+    source: 'integrations',
+    functionName: 'sendDiscordTestMessage',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/discord/webhook-events',
+    source: 'integrations',
+    functionName: 'getDiscordWebhookEvents',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/discord/webhook-events',
+    source: 'integrations',
+    functionName: 'updateDiscordWebhookEvents',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/discord/permissions',
+    source: 'integrations',
+    functionName: 'getDiscordPermissions',
+    capability: 'integrations.manage',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/discord/permissions',
+    source: 'integrations',
+    functionName: 'updateDiscordPermissions',
+    capability: 'integrations.manage',
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/docker/status',
+    source: 'integrations',
+    functionName: 'getDockerStatus',
+    capability: 'docker.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/docker/stats',
+    source: 'integrations',
+    functionName: 'getDockerStats',
+    capability: 'docker.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/docker/containers/:id/:action',
+    source: 'integrations',
+    functionName: 'runDockerAction',
+    capability: 'docker.manage',
+    data: mergeBody,
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/permissions/capabilities',
+    source: 'permissions',
+    functionName: 'getCapabilities',
+    capability: 'roles.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/permissions/roles',
+    source: 'permissions',
+    functionName: 'getRoles',
+    capability: 'roles.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/permissions/roles',
+    source: 'admin',
+    functionName: 'createManagedRole',
+    capability: 'roles.manage',
+    status: 201,
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/permissions/roles/:id',
+    source: 'admin',
+    functionName: 'updateManagedRole',
+    capability: 'roles.manage',
+    data: mergeBody,
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/permissions/roles/:id',
+    source: 'admin',
+    functionName: 'deleteManagedRole',
+    capability: 'roles.manage',
+    data: (query, body, params) => ({
+      ...body,
+      ...params,
+      ...(query.has('reassignTo') ? { reassignTo: query.get('reassignTo') } : {}),
+    }),
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/templates/hidden',
+    source: 'resources',
+    functionName: 'getHiddenTemplates',
+    capability: 'templates.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/templates/:id/export',
+    source: 'resources',
+    functionName: 'exportTemplate',
+    headers: (params) => ({
+      'Content-Disposition': `attachment; filename="${String(params.id)
+        .replace(/["\\\r\n]/g, '_')}.json"`,
+    }),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/templates/:id',
+    source: 'resources',
+    functionName: 'getTemplate',
+    data: mergeBody,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/templates',
+    source: 'resources',
+    functionName: 'getTemplates',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/templates/import',
+    source: 'resourceActions',
+    functionName: 'importTemplate',
+    capability: 'templates.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/templates/:id/preview',
+    source: 'resourceActions',
+    functionName: 'previewTemplate',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/templates/:id/apply',
+    source: 'resourceActions',
+    functionName: 'applyTemplate',
+    capability: 'templates.manage',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/templates',
+    source: 'resourceActions',
+    functionName: 'createTemplate',
+    capability: 'templates.manage',
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/templates/:id',
+    source: 'resourceActions',
+    functionName: 'deleteTemplate',
+    capability: 'templates.manage',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/templates/:id/unhide',
+    source: 'resourceActions',
+    functionName: 'unhideTemplate',
+    capability: 'templates.manage',
+    data: mergeBody,
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/server-finder/query',
+    source: 'finder',
+    functionName: 'queryServerFinder',
+    capability: 'server.install',
+    data: queryData('ip', 'port'),
+    status: (result) => (result?.success === false ? 504 : 200),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-finder/ping',
+    source: 'finder',
+    functionName: 'pingServerFinder',
+    capability: 'server.install',
+    data: queryData('ip', 'port'),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-finder/debug',
+    source: 'finder',
+    functionName: 'getServerFinderDebug',
+    capability: 'server.install',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-finder',
+    source: 'finder',
+    functionName: 'getServerFinder',
+    capability: 'server.install',
+    data: (query) => ({ refresh: query.get('refresh') === 'true' }),
+  },
+]
+
+async function readBody(request: Request): Promise<ParsedBody> {
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    return { value: {}, isObject: false }
+  }
+  const contentType = request.headers.get('content-type') || ''
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return { value: {}, isObject: false }
+  }
+  const text = await request.text()
+  if (!text.trim()) return { value: {}, isObject: false }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw Object.assign(new Error('Invalid JSON request body'), {
+      status: 400,
+      code: 'AUTH_REQUEST_INVALID',
+    })
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { value: {}, isObject: false }
+  }
+  return { value: parsed as AnyRecord, isObject: true }
+}
+
+function requiredCapabilities(capability?: string | string[]): string[] {
+  if (!capability) return []
+  return Array.isArray(capability) ? capability : [capability]
+}
+
+function errorDetails(error: unknown): AnyRecord {
+  return error && typeof error === 'object' ? (error as AnyRecord) : {}
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  const details = errorDetails(error)
+  if (typeof details.error === 'string') return details.error
+  if (typeof details.message === 'string') return details.message
+  return String(error)
+}
+
+function errorResponse(error: unknown): Response {
+  const details = errorDetails(error)
+  const status =
+    typeof details.status === 'number' && details.status >= 400
+      ? details.status
+      : 500
+  const body: AnyRecord = {
+    error: sanitizeError(errorMessage(error)),
+  }
+  if (typeof details.code === 'string') body.code = details.code
+  if (details.success === false) body.success = false
+  if (details.valid === false) body.valid = false
+  if (typeof details.detail === 'string') {
+    body.detail = sanitizeError(details.detail)
+  }
+  if (typeof details.reason === 'string') {
+    body.reason = sanitizeError(details.reason)
+  }
+  if (details.params !== undefined) {
+    body.params = sanitizeErrorParams(details.params)
+  }
+  if (Array.isArray(details.missing)) body.missing = details.missing
+  return Response.json(body, { status })
+}
+
+async function authenticate(
+  request: Request,
+): Promise<AuthenticatedUser | Response> {
+  const { default: authService } =
+    await import('../../../panel-server/services/auth.ts')
+  const result = await authService.authenticateApiRequest(
+    request.headers.get('authorization'),
+  )
+  if (!result.ok) {
+    return Response.json(
+      { error: result.error, code: result.code },
+      { status: result.status },
+    )
+  }
+  return result.user
+}
+
+async function canAccess(
+  user: AuthenticatedUser,
+  capability?: string | string[],
+): Promise<boolean> {
+  const required = requiredCapabilities(capability)
+  if (required.length === 0) return true
+  const { getCapabilitiesForRole } =
+    await import('../../../panel-server/services/permissions.ts')
+  const capabilities = await getCapabilitiesForRole(user.role)
+  return required.every((item) => capabilities?.includes(item))
+}
+
+async function execute(
+  spec: RouteSpec,
+  data: AnyRecord,
+  user: AuthenticatedUser,
+): Promise<unknown> {
+  const implementation = await implementations[spec.source]()
+  const serverFunction = implementation[
+    spec.functionName
+  ] as unknown as ServerFunction | undefined
+  if (serverFunction?.__executeImplementation) {
+    return serverFunction.__executeImplementation(data, {
+      authenticatedUser: user,
+    })
+  }
+  if (!serverFunction?.__executeServer) {
+    throw new Error(`Server function ${spec.functionName} is not available`)
+  }
+  const outcome = await serverFunction.__executeServer({
+    data,
+    context: { authenticatedUser: user },
+  })
+  if (outcome.error) throw outcome.error
+  return outcome.result
+}
+
+export async function handleStartApiCompatibilityRequest(
+  request: Request,
+): Promise<Response> {
+  const url = new URL(request.url)
+  const method = request.method.toUpperCase() === 'HEAD' ? 'GET' : request.method.toUpperCase()
+  const pathname = url.pathname.replace(/\/+$/, '') || '/'
+  const spec = routes.find(
+    (candidate) =>
+      candidate.method === method && matchPattern(candidate.pattern, pathname),
+  )
+  if (!spec) return Response.json({ error: 'API endpoint not found' }, { status: 404 })
+
+  try {
+    const authenticated = await authenticate(request)
+    if (authenticated instanceof Response) return authenticated
+    if (!(await canAccess(authenticated, spec.capability))) {
+      return Response.json(
+        { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+        { status: 403 },
+      )
+    }
+
+    const parsedBody = await readBody(request)
+    if (spec.bodyError && !parsedBody.isObject) {
+      return Response.json(spec.bodyError, { status: 400 })
+    }
+    const body = parsedBody.value
+    const params = matchPattern(spec.pattern, pathname) || {}
+    const data = spec.data
+      ? spec.data(url.searchParams, body, params)
+      : mergeBody(url.searchParams, body, params)
+    const result = await execute(spec, data, authenticated)
+    const status =
+      typeof spec.status === 'function'
+        ? spec.status(result)
+        : spec.status || 200
+    const headers = spec.headers?.(params)
+    if (result === undefined) return new Response(null, { status, headers })
+    return Response.json(result, { status, headers })
+  } catch (error) {
+    return errorResponse(error)
+  }
+}

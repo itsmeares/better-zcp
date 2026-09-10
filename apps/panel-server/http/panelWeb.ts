@@ -159,10 +159,11 @@ export function registerTanStackStartApiRoute(
   app: Express,
   options: PanelWebOptions,
   routePath: string,
+  method: "GET" | "ALL" = "GET",
 ): void {
   const getHandler = createTanStackStartHandlerLoader(options);
 
-  app.get(routePath, (req, res, next) => {
+  const handler = (req: Request, res: Response, next: NextFunction) => {
     void (async () => {
       const handler = await getHandler();
       if (!handler) return next();
@@ -181,7 +182,13 @@ export function registerTanStackStartApiRoute(
       );
       if (!res.headersSent) next();
     });
-  });
+  };
+
+  if (method === "ALL") {
+    app.use(routePath, handler);
+  } else {
+    app.get(routePath, handler);
+  }
 }
 
 export function registerPanelWebRoutes(

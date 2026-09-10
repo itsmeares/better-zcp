@@ -1,4 +1,4 @@
-import { createServerFn } from '@tanstack/react-start'
+import { createServerFn, createServerOnlyFn } from '@tanstack/react-start'
 import {
   deleteCookie,
   getRequest,
@@ -57,26 +57,28 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function throwServerError(error: unknown, fallbackStatus: number): never {
-  const details =
-    error && typeof error === 'object' ? (error as ServiceError) : {}
-  const status =
-    typeof details.status === 'number' ? details.status : fallbackStatus
-  const safeError = Object.assign(new Error(errorMessage(error)), {
-    status,
-    ...(typeof details.code === 'string' ? { code: details.code } : {}),
-    ...(details.params !== undefined ? { params: details.params } : {}),
-    ...(details.missing !== undefined ? { missing: details.missing } : {}),
-  })
-  setResponseStatus(status)
-  throw safeError
-}
+const throwServerError: (error: unknown, fallbackStatus: number) => never = createServerOnlyFn(
+  (error: unknown, fallbackStatus: number): never => {
+    const details =
+      error && typeof error === 'object' ? (error as ServiceError) : {}
+    const status =
+      typeof details.status === 'number' ? details.status : fallbackStatus
+    const safeError = Object.assign(new Error(errorMessage(error)), {
+      status,
+      ...(typeof details.code === 'string' ? { code: details.code } : {}),
+      ...(details.params !== undefined ? { params: details.params } : {}),
+      ...(details.missing !== undefined ? { missing: details.missing } : {}),
+    })
+    setResponseStatus(status)
+    throw safeError
+  },
+)
 
 function currentUser(context: unknown): AuthContextUser {
   return (context as { authenticatedUser: AuthContextUser }).authenticatedUser
 }
 
-async function clearRefreshCookie() {
+const clearRefreshCookie = createServerOnlyFn(async () => {
   const request = getRequest()
   const { getRefreshCookieOptions } =
     await import('../../../panel-server/utils/refreshCookie.ts')
@@ -93,7 +95,7 @@ async function clearRefreshCookie() {
       false,
     ),
   )
-}
+})
 
 const MAX_SCOPE_LENGTH = 500
 const MAX_PROVIDER_NAME_LENGTH = 100
@@ -324,73 +326,103 @@ export const removeManagedUser = createServerFn({ method: 'POST' })
     }
   })
 
+async function createManagedRoleImplementation(
+  data: { name?: unknown; capabilities?: unknown },
+  context: unknown,
+) {
+  try {
+    const { createRole } =
+      await import('../../../panel-server/services/permissions.ts')
+    const role = await createRole(
+      { name: data.name, capabilities: data.capabilities },
+      { actingUser: { role: currentUser(context).role } },
+    )
+    return { success: true, role: role as unknown as RoleInfo }
+  } catch (error) {
+    throwServerError(error, 500)
+  }
+}
+
 export const createManagedRole = createServerFn({ method: 'POST' })
-  .middleware(rolesManageMiddleware)
-  .validator((data: { name?: unknown; capabilities?: unknown }) => data ?? {})
-  .handler(async ({ data, context }) => {
-    try {
-      const { createRole } =
-        await import('../../../panel-server/services/permissions.ts')
-      const role = await createRole({
-        name: data.name,
-        capabilities: data.capabilities,
-      }, { actingUser: { role: currentUser(context).role } })
+    .middleware(rolesManageMiddleware)
+    .validator((data: { name?: unknown; capabilities?: unknown }) => data ?? {})
+    .handler(async ({ data, context }) => {
+      const result = await createManagedRoleImplementation(data, context)
       setResponseStatus(201)
-      return { success: true, role: role as unknown as RoleInfo }
-    } catch (error) {
-      throwServerError(error, 500)
-    }
-  })
+      return result
+    })
+;(createManagedRole as any).__executeImplementation = createManagedRoleImplementation
+
+async function updateManagedRoleImplementation(
+  data: {
+    id: string
+    name?: unknown
+    capabilities?: unknown
+    confirmSelfCapabilityLoss?: boolean
+  },
+  context: unknown,
+) {
+  try {
+    const { updateRole } =
+      await import('../../../panel-server/services/permissions.ts')
+    const role = await updateRole(
+      data.id,
+      { name: data.name, capabilities: data.capabilities },
+      {
+        actingUser: { role: currentUser(context).role },
+        confirmSelfCapabilityLoss: data.confirmSelfCapabilityLoss === true,
+      },
+    )
+    return { success: true, role: role as unknown as RoleInfo }
+  } catch (error) {
+    throwServerError(error, 500)
+  }
+}
 
 export const updateManagedRole = createServerFn({ method: 'POST' })
-  .middleware(rolesManageMiddleware)
-  .validator(
-    (data: {
-      id: string
-      name?: unknown
-      capabilities?: unknown
-      confirmSelfCapabilityLoss?: boolean
-    }) => data,
-  )
-  .handler(async ({ data, context }) => {
-    try {
-      const { updateRole } =
-        await import('../../../panel-server/services/permissions.ts')
-      const role = await updateRole(
-        data.id,
-        { name: data.name, capabilities: data.capabilities },
-        {
-          actingUser: { role: currentUser(context).role },
-          confirmSelfCapabilityLoss: data.confirmSelfCapabilityLoss === true,
-        },
-      )
-      return { success: true, role: role as unknown as RoleInfo }
-    } catch (error) {
-      throwServerError(error, 500)
+    .middleware(rolesManageMiddleware)
+    .validator(
+      (data: {
+        id: string
+        name?: unknown
+        capabilities?: unknown
+        confirmSelfCapabilityLoss?: boolean
+      }) => data,
+    )
+    .handler(({ data, context }) =>
+      updateManagedRoleImplementation(data, context),
+    )
+;(updateManagedRole as any).__executeImplementation = updateManagedRoleImplementation
+
+async function deleteManagedRoleImplementation(
+  data: { id: string; reassignTo?: string },
+  context: unknown,
+) {
+  try {
+    const { deleteRole } =
+      await import('../../../panel-server/services/permissions.ts')
+    const result = await deleteRole(data.id, {
+      reassignTo: data.reassignTo || undefined,
+      actingUser: { role: currentUser(context).role },
+    })
+    return {
+      success: true,
+      ...result,
+      reassignedTo:
+        result.reassignedTo == null ? null : String(result.reassignedTo),
     }
-  })
+  } catch (error) {
+    throwServerError(error, 500)
+  }
+}
 
 export const deleteManagedRole = createServerFn({ method: 'POST' })
-  .middleware(rolesManageMiddleware)
-  .validator((data: { id: string; reassignTo?: string }) => data)
-  .handler(async ({ data, context }) => {
-    try {
-      const { deleteRole } =
-        await import('../../../panel-server/services/permissions.ts')
-      const result = await deleteRole(data.id, {
-        reassignTo: data.reassignTo || undefined,
-        actingUser: { role: currentUser(context).role },
-      })
-      return {
-        success: true,
-        ...result,
-        reassignedTo:
-          result.reassignedTo == null ? null : String(result.reassignedTo),
-      }
-    } catch (error) {
-      throwServerError(error, 500)
-    }
-  })
+    .middleware(rolesManageMiddleware)
+    .validator((data: { id: string; reassignTo?: string }) => data)
+    .handler(({ data, context }) =>
+      deleteManagedRoleImplementation(data, context),
+    )
+;(deleteManagedRole as any).__executeImplementation = deleteManagedRoleImplementation
 
 export const getOidcSettings = createServerFn({ method: 'GET' })
   .middleware(panelSettingsMiddleware)

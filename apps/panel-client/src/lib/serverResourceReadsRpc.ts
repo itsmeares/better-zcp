@@ -12,6 +12,10 @@ type ExecuteOptions = {
 }
 
 type ImplementationFunction = {
+  __executeImplementation?: (
+    data: unknown,
+    context?: unknown,
+  ) => Promise<unknown>
   __executeServer?: (
     options: ExecuteOptions,
   ) => Promise<{ result?: unknown; error?: unknown }>
@@ -35,6 +39,9 @@ async function invoke(name: string, options: ExecuteOptions): Promise<any> {
   const serverFunction = implementation[
     name as keyof typeof implementation
   ] as unknown as ImplementationFunction | undefined
+  if (serverFunction?.__executeImplementation) {
+    return serverFunction.__executeImplementation(options.data ?? {}, options.context)
+  }
   const executeServer = serverFunction?.__executeServer
   if (!executeServer)
     throw new Error(`Server function ${name} is not available`)
