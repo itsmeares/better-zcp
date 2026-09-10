@@ -22,21 +22,24 @@ export const getDiskSpace = createServerFn({ method: 'GET' })
   .middleware(protectedServerFunctionMiddleware)
   .handler(async () => getDiskSpaceReport())
 
+async function getStorageHealthImplementation(): Promise<StorageHealth> {
+  const { getCircuitBreakerStatus } =
+    await import('../../../panel-server/database/init.ts')
+  const { sanitizeError } =
+    await import('../../../panel-server/utils/sanitize.ts')
+  const circuitBreaker = getCircuitBreakerStatus()
+  return {
+    diskSpace: await getDiskSpaceReport(),
+    circuitBreaker: {
+      ...circuitBreaker,
+      lastError: circuitBreaker.lastError
+        ? sanitizeError(circuitBreaker.lastError)
+        : null,
+    },
+  }
+}
+
 export const getStorageHealth = createServerFn({ method: 'GET' })
   .middleware(protectedServerFunctionMiddleware)
-  .handler(async (): Promise<StorageHealth> => {
-    const { getCircuitBreakerStatus } =
-      await import('../../../panel-server/database/init.ts')
-    const { sanitizeError } =
-      await import('../../../panel-server/utils/sanitize.ts')
-    const circuitBreaker = getCircuitBreakerStatus()
-    return {
-      diskSpace: await getDiskSpaceReport(),
-      circuitBreaker: {
-        ...circuitBreaker,
-        lastError: circuitBreaker.lastError
-          ? sanitizeError(circuitBreaker.lastError)
-          : null,
-      },
-    }
-  })
+  .handler(getStorageHealthImplementation)
+;(getStorageHealth as any).__executeImplementation = getStorageHealthImplementation

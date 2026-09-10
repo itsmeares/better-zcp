@@ -59,29 +59,37 @@ async function panelRuntime(): Promise<AnyRecord> {
 }
 
 function createModRead<T>(handler: (data: AnyRecord) => Promise<T> | T) {
-  return createServerFn({ method: 'GET' })
-    .middleware(capabilityMiddleware())
-    .validator((data: unknown) => record(data))
-    .handler(async ({ data }) => {
-      try {
-        return (await handler(data)) as any
-      } catch (error) {
-        throwModsError(error)
-      }
-    })
+  const implementation = async (data: AnyRecord) => {
+    try {
+      return (await handler(data)) as T
+    } catch (error) {
+      throwModsError(error)
+    }
+  }
+  return Object.assign(
+    createServerFn({ method: 'GET' })
+      .middleware(capabilityMiddleware())
+      .validator((data: unknown) => record(data))
+      .handler(({ data }) => implementation(data) as any),
+    { __executeImplementation: implementation },
+  )
 }
 
 function createModAction<T>(handler: (data: AnyRecord) => Promise<T> | T) {
-  return createServerFn({ method: 'POST' })
-    .middleware(capabilityMiddleware())
-    .validator((data: unknown) => record(data))
-    .handler(async ({ data }) => {
-      try {
-        return (await handler(data)) as any
-      } catch (error) {
-        throwModsError(error)
-      }
-    })
+  const implementation = async (data: AnyRecord) => {
+    try {
+      return (await handler(data)) as T
+    } catch (error) {
+      throwModsError(error)
+    }
+  }
+  return Object.assign(
+    createServerFn({ method: 'POST' })
+      .middleware(capabilityMiddleware())
+      .validator((data: unknown) => record(data))
+      .handler(({ data }) => implementation(data) as any),
+    { __executeImplementation: implementation },
+  )
 }
 
 function workshopId(data: AnyRecord, key = 'workshopId'): string {

@@ -2,6 +2,7 @@ import {
   sanitizeError,
   sanitizeErrorParams,
 } from '../../../panel-server/utils/sanitize.ts'
+import { parseClampedInteger } from '../../../panel-server/utils/queryNumbers.ts'
 
 // Preserve the legacy HTTP contract for integrations while the panel UI uses
 // typed Server Functions. Streaming and binary APIs intentionally stay in Express.
@@ -32,10 +33,13 @@ type RouteSource =
   | 'control'
   | 'integrations'
   | 'admin'
+  | 'auth'
   | 'permissions'
   | 'resources'
   | 'resourceActions'
   | 'finder'
+  | 'mods'
+  | 'system'
 
 type RouteStatus = number | ((result: any) => number)
 
@@ -44,7 +48,10 @@ type RouteSpec = {
   pattern: string
   source: RouteSource
   functionName: string
+  public?: boolean
+  role?: string
   capability?: string | string[]
+  anyCapability?: string[]
   data?: (query: URLSearchParams, body: AnyRecord, params: AnyRecord) => AnyRecord
   status?: RouteStatus
   headers?: (params: AnyRecord) => Record<string, string>
@@ -63,10 +70,17 @@ const implementations: Record<
   control: () => import('./serverGameControl'),
   integrations: () => import('./serverIntegrations'),
   admin: () => import('./serverAdmin'),
+  auth: () => import('./serverAuth'),
   permissions: () => import('./serverPermissions'),
   resources: () => import('./serverResourceReads'),
   resourceActions: () => import('./serverResourceActions'),
   finder: () => import('./serverFinder'),
+  mods: () => import('./serverMods'),
+  system: () => import('./serverSystem'),
+}
+
+const sourceCapabilities: Partial<Record<RouteSource, string>> = {
+  mods: 'mods.manage',
 }
 
 function mergeBody(
@@ -85,6 +99,10 @@ function queryData(...keys: string[]) {
     }
     return data
   }
+}
+
+function performanceHistoryData(query: URLSearchParams): AnyRecord {
+  return { limit: parseClampedInteger(query.get('limit'), 60, 1, 1440) }
 }
 
 function matchPattern(pattern: string, pathname: string): AnyRecord | null {
@@ -963,6 +981,413 @@ const routes: RouteSpec[] = [
     capability: 'server.install',
     data: (query) => ({ refresh: query.get('refresh') === 'true' }),
   },
+
+  {
+    method: 'GET',
+    pattern: '/api/system/storage-health',
+    source: 'system',
+    functionName: 'getStorageHealth',
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/config/app-settings',
+    source: 'admin',
+    functionName: 'getAppSettings',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/config/app-settings',
+    source: 'admin',
+    functionName: 'updateAppSettings',
+    capability: 'panel.settings',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/config/cors-debug',
+    source: 'admin',
+    functionName: 'getCorsDiagnostics',
+    capability: 'diagnostics.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/config/cors-debug/reload',
+    source: 'admin',
+    functionName: 'reloadCorsDiagnostics',
+    capability: 'diagnostics.manage',
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/config/cors-debug/blocked',
+    source: 'admin',
+    functionName: 'clearCorsBlockedOrigins',
+    capability: 'diagnostics.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/config/test-rcon',
+    source: 'admin',
+    functionName: 'testAppRconConnection',
+    capability: 'server.configure',
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/backup/status',
+    source: 'resources',
+    functionName: 'getBackupStatus',
+    anyCapability: ['backups.manage', 'backups.download', 'backups.restore'],
+  },
+  {
+    method: 'GET',
+    pattern: '/api/backup/info',
+    source: 'resources',
+    functionName: 'getBackupInfo',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/backup/list',
+    source: 'resources',
+    functionName: 'getBackups',
+    anyCapability: ['backups.manage', 'backups.download', 'backups.restore'],
+  },
+  {
+    method: 'GET',
+    pattern: '/api/backup/history',
+    source: 'resources',
+    functionName: 'getBackupHistory',
+    anyCapability: ['backups.manage', 'backups.download', 'backups.restore'],
+    data: queryData('limit', 'serverId'),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/backup/:name/snapshot',
+    source: 'resources',
+    functionName: 'getBackupSnapshot',
+    capability: 'backups.manage',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/backup/settings',
+    source: 'resourceActions',
+    functionName: 'updateBackupSettings',
+    capability: 'backups.manage',
+    bodyError: {
+      success: false,
+      error: 'Request body must be an object',
+    },
+  },
+  {
+    method: 'POST',
+    pattern: '/api/backup/create',
+    source: 'resourceActions',
+    functionName: 'createBackup',
+    capability: 'backups.manage',
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/backup/:name',
+    source: 'resourceActions',
+    functionName: 'deleteBackup',
+    capability: 'backups.manage',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/backup/restore/:name',
+    source: 'resourceActions',
+    functionName: 'restoreBackup',
+    capability: 'backups.restore',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/backup/delete-older-than',
+    source: 'resourceActions',
+    functionName: 'deleteBackupsOlderThan',
+    capability: 'backups.manage',
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/mods/status',
+    source: 'mods',
+    functionName: 'getModsStatus',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/mods/tracked',
+    source: 'mods',
+    functionName: 'getTrackedMods',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/mods/track',
+    source: 'mods',
+    functionName: 'trackMod',
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/mods/track/:workshopId',
+    source: 'mods',
+    functionName: 'untrackMod',
+    data: mergeBody,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/mods/ignored',
+    source: 'mods',
+    functionName: 'getIgnoredMods',
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/mods/ignored/:workshopId',
+    source: 'mods',
+    functionName: 'unignoreMod',
+    data: mergeBody,
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/mods/ignored',
+    source: 'mods',
+    functionName: 'clearAllIgnoredMods',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/mods/ignored-pairs',
+    source: 'mods',
+    functionName: 'getIgnoredModPairs',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/mods/ignored-pairs',
+    source: 'mods',
+    functionName: 'addIgnoredModPair',
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/mods/ignored-pairs',
+    source: 'mods',
+    functionName: 'removeIgnoredModPair',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/mods/server-mods',
+    source: 'mods',
+    functionName: 'getServerMods',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/mods/start',
+    source: 'mods',
+    functionName: 'startModChecker',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/mods/stop',
+    source: 'mods',
+    functionName: 'stopModChecker',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/mods/auto-restart',
+    source: 'mods',
+    functionName: 'setModAutoRestart',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/mods/restart-options',
+    source: 'mods',
+    functionName: 'setModRestartOptions',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/mods/workshop-status',
+    source: 'mods',
+    functionName: 'getWorkshopStatus',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/mods/cancel-pending-restart',
+    source: 'mods',
+    functionName: 'cancelPendingModRestart',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/mods/presets',
+    source: 'mods',
+    functionName: 'getModPresets',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/mods/presets/:id',
+    source: 'mods',
+    functionName: 'updateModPreset',
+    data: mergeBody,
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/mods/presets/:id',
+    source: 'mods',
+    functionName: 'deleteModPreset',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/mods/collection/items',
+    source: 'mods',
+    functionName: 'addCollectionItem',
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/mods/collection/items/:workshopId',
+    source: 'mods',
+    functionName: 'removeCollectionItem',
+    data: mergeBody,
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/mods/collection/tracking/:workshopId',
+    source: 'mods',
+    functionName: 'removeCollectionTracking',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/mods/collection/save-cookies',
+    source: 'mods',
+    functionName: 'saveCollectionCookies',
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/debug/ram',
+    source: 'admin',
+    functionName: 'getDebugRam',
+    capability: 'diagnostics.manage',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/debug/performance-history',
+    source: 'admin',
+    functionName: 'getPerformanceHistory',
+    capability: 'diagnostics.manage',
+    data: performanceHistoryData,
+  },
+
+  {
+    method: 'GET',
+    pattern: '/api/auth/status',
+    source: 'auth',
+    functionName: 'getAuthStatus',
+    public: true,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/auth/me',
+    source: 'auth',
+    functionName: 'getCurrentUser',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/change-password',
+    source: 'admin',
+    functionName: 'changePassword',
+    data: mergeBody,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/auth/users',
+    source: 'admin',
+    functionName: 'getManagedUsers',
+    capability: 'users.manage',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/users',
+    source: 'admin',
+    functionName: 'createManagedUser',
+    capability: 'users.manage',
+    status: 201,
+  },
+  {
+    method: 'PATCH',
+    pattern: '/api/auth/users/:id/role',
+    source: 'admin',
+    functionName: 'assignManagedUserRole',
+    capability: 'users.manage',
+    data: (_query, body, params) => ({
+      ...body,
+      userId: params.id,
+    }),
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/auth/users/:id',
+    source: 'admin',
+    functionName: 'removeManagedUser',
+    capability: 'users.manage',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/regenerate-jwt-secret',
+    source: 'admin',
+    functionName: 'regenerateJwtSecret',
+    role: 'admin',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/auth/recovery-codes',
+    source: 'admin',
+    functionName: 'getRecoveryCodes',
+    role: 'admin',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/recovery-codes',
+    source: 'admin',
+    functionName: 'generateRecoveryCodes',
+    role: 'admin',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/auth/recovery-status',
+    source: 'auth',
+    functionName: 'getRecoveryStatus',
+    public: true,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/auth/oidc/status',
+    source: 'auth',
+    functionName: 'getOidcStatus',
+    public: true,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/auth/oidc/settings',
+    source: 'admin',
+    functionName: 'getOidcSettings',
+    capability: 'panel.settings',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/auth/oidc/settings',
+    source: 'admin',
+    functionName: 'updateOidcSettings',
+    capability: 'panel.settings',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/oidc/test-connection',
+    source: 'admin',
+    functionName: 'testOidcConnection',
+    capability: 'panel.settings',
+    data: mergeBody,
+  },
 ]
 
 async function readBody(request: Request): Promise<ParsedBody> {
@@ -1037,8 +1462,9 @@ async function authenticate(
 ): Promise<AuthenticatedUser | Response> {
   const { default: authService } =
     await import('../../../panel-server/services/auth.ts')
+  const token = new URL(request.url).searchParams.get('token')
   const result = await authService.authenticateApiRequest(
-    request.headers.get('authorization'),
+    request.headers.get('authorization') ?? (token ? `Bearer ${token}` : null),
   )
   if (!result.ok) {
     return Response.json(
@@ -1052,19 +1478,24 @@ async function authenticate(
 async function canAccess(
   user: AuthenticatedUser,
   capability?: string | string[],
+  anyCapability?: string[],
 ): Promise<boolean> {
   const required = requiredCapabilities(capability)
-  if (required.length === 0) return true
+  if (required.length === 0 && !anyCapability?.length) return true
   const { getCapabilitiesForRole } =
     await import('../../../panel-server/services/permissions.ts')
   const capabilities = await getCapabilitiesForRole(user.role)
-  return required.every((item) => capabilities?.includes(item))
+  return (
+    required.every((item) => capabilities?.includes(item)) &&
+    (!anyCapability?.length ||
+      anyCapability.some((item) => capabilities?.includes(item)))
+  )
 }
 
 async function execute(
   spec: RouteSpec,
   data: AnyRecord,
-  user: AuthenticatedUser,
+  user: AuthenticatedUser | null,
 ): Promise<unknown> {
   const implementation = await implementations[spec.source]()
   const serverFunction = implementation[
@@ -1099,9 +1530,22 @@ export async function handleStartApiCompatibilityRequest(
   if (!spec) return Response.json({ error: 'API endpoint not found' }, { status: 404 })
 
   try {
-    const authenticated = await authenticate(request)
+    const authenticated = spec.public ? null : await authenticate(request)
     if (authenticated instanceof Response) return authenticated
-    if (!(await canAccess(authenticated, spec.capability))) {
+    if (authenticated && spec.role && authenticated.role !== spec.role) {
+      return Response.json(
+        { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+        { status: 403 },
+      )
+    }
+    if (
+      authenticated &&
+      !(await canAccess(
+        authenticated,
+        spec.capability ?? sourceCapabilities[spec.source],
+        spec.anyCapability,
+      ))
+    ) {
       return Response.json(
         { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
         { status: 403 },

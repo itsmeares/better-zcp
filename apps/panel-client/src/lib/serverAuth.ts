@@ -172,16 +172,21 @@ export const adminRoleMiddleware = [
   roleMiddleware('admin'),
 ] as const
 
-export const getAuthStatus = createServerFn({ method: 'GET' }).handler(async () => {
+async function getAuthStatusImplementation() {
   const { default: authService } = await import('../../../panel-server/services/auth.ts')
 
   return {
     needsSetup: await authService.needsSetup(),
     authEnabled: await authService.isAuthEnabled(),
   }
-})
+}
 
-export const getOidcStatus = createServerFn({ method: 'GET' }).handler(async () => {
+export const getAuthStatus = createServerFn({ method: 'GET' }).handler(
+  getAuthStatusImplementation,
+)
+;(getAuthStatus as any).__executeImplementation = getAuthStatusImplementation
+
+async function getOidcStatusImplementation() {
   const { getOidcSettings, isOidcConfigured } = await import('../../../panel-server/services/oidc.ts')
   const settings = await getOidcSettings()
 
@@ -189,30 +194,49 @@ export const getOidcStatus = createServerFn({ method: 'GET' }).handler(async () 
     configured: isOidcConfigured(settings),
     providerName: settings.providerName,
   }
-})
+}
 
-export const getRecoveryStatus = createServerFn({ method: 'GET' }).handler(async () => {
+export const getOidcStatus = createServerFn({ method: 'GET' }).handler(
+  getOidcStatusImplementation,
+)
+;(getOidcStatus as any).__executeImplementation = getOidcStatusImplementation
+
+async function getRecoveryStatusImplementation() {
   const { default: authService } = await import('../../../panel-server/services/auth.ts')
   const status = await authService.getRecoveryCodeStatus()
 
   return { recoveryCodesAvailable: status.remaining > 0 }
-})
+}
+
+export const getRecoveryStatus = createServerFn({ method: 'GET' }).handler(
+  getRecoveryStatusImplementation,
+)
+;(getRecoveryStatus as any).__executeImplementation = getRecoveryStatusImplementation
+
+async function getCurrentUserImplementation(context: unknown) {
+  const user = (context as { authenticatedUser: AuthContextUser }).authenticatedUser
+  if (user.authDisabled || !user.userId || !user.username) {
+    throw Object.assign(new Error('Not authenticated'), {
+      status: 401,
+      code: 'NOT_AUTHENTICATED',
+    })
+  }
+
+  const { getCapabilitiesForRole } = await import('../../../panel-server/services/permissions.ts')
+  return {
+    user: {
+      id: user.userId,
+      username: user.username,
+      role: user.role,
+      capabilities: await getCapabilitiesForRole(user.role),
+    },
+  }
+}
 
 export const getCurrentUser = createServerFn({ method: 'GET' })
   .middleware(protectedServerFunctionMiddleware)
-  .handler(async ({ context }) => {
-    const user = (context as { authenticatedUser: AuthContextUser }).authenticatedUser
-    if (user.authDisabled || !user.userId || !user.username) {
-      throw new Error('Authentication required')
-    }
-
-    const { getCapabilitiesForRole } = await import('../../../panel-server/services/permissions.ts')
-    return {
-      user: {
-        id: user.userId,
-        username: user.username,
-        role: user.role,
-        capabilities: await getCapabilitiesForRole(user.role),
-      },
-    }
-  })
+  .handler(({ context }) => getCurrentUserImplementation(context))
+;(getCurrentUser as any).__executeImplementation = (
+  _data: unknown,
+  context: unknown,
+) => getCurrentUserImplementation(context)
