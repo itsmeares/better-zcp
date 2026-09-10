@@ -155,6 +155,35 @@ export function apiErrorHandler(
   res.status(status).json(body);
 }
 
+export function registerTanStackStartApiRoute(
+  app: Express,
+  options: PanelWebOptions,
+  routePath: string,
+): void {
+  const getHandler = createTanStackStartHandlerLoader(options);
+
+  app.get(routePath, (req, res, next) => {
+    void (async () => {
+      const handler = await getHandler();
+      if (!handler) return next();
+
+      const response = await handler.fetch(toTanStackStartRequest(req));
+      const contentType = response.headers.get("content-type") || "";
+      if (response.status === 404 || contentType.includes("text/html")) {
+        return next();
+      }
+
+      await sendTanStackStartResponse(response, res);
+    })().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      options.logger.warn(
+        `TanStack Start API route failed for ${routePath} (${message}); using Express fallback`,
+      );
+      if (!res.headersSent) next();
+    });
+  });
+}
+
 export function registerPanelWebRoutes(
   app: Express,
   options: PanelWebOptions,
