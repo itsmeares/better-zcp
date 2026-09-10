@@ -123,6 +123,11 @@ import {
 import { loadOrCreateCerts } from "./utils/certs.ts";
 import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";
 import { ErrorCode } from "./utils/errorCodes.ts";
+import {
+  buildPanelInfo,
+  resolvePanelInfoPort,
+  resolvePanelPort,
+} from "./utils/panelInfo.ts";
 import { getSftpCachePath } from "./services/panelBridgeSftp.ts";
 import {
   autoInstallBridgeIfNeeded,
@@ -302,27 +307,7 @@ let activePanelPort: number | null = null;
 
 let httpsServer: HttpsServer | null = null;
 
-export function resolvePanelPort(
-  rawValue: unknown,
-  { onInvalid }: { onInvalid?: (value: unknown) => void } = {},
-): number {
-  const configuredPort = Number(rawValue);
-  if (
-    Number.isInteger(configuredPort) &&
-    configuredPort >= 1 &&
-    configuredPort <= 65535
-  ) {
-    return configuredPort;
-  }
-  if (
-    rawValue !== undefined &&
-    rawValue !== null &&
-    String(rawValue).trim() !== ""
-  ) {
-    onInvalid?.(rawValue);
-  }
-  return 3001;
-}
+export { resolvePanelPort } from "./utils/panelInfo.ts";
 
 export function isHttpsServerActive() {
   return httpsServer !== null;
@@ -1193,16 +1178,12 @@ app.get("/api/health", (_req, res) => {
   res.json(buildPanelHealthPayload(_buildMetadata));
 });
 
+registerTanStackStartApiRoute(app, panelWebOptions, "/api/panel-info");
 app.get("/api/panel-info", async (req, res) => {
   const savedPort = await getSetting("panelPort");
-  const PORT =
-    activePanelPort ?? resolvePanelPort(process.env.PORT || savedPort || 3001);
+  const PORT = activePanelPort ?? resolvePanelInfoPort(savedPort);
   const localIp = await serverManager.getLocalIp();
-  res.json({
-    localIp,
-    port: PORT,
-    url: `http://${localIp}:${PORT}`,
-  });
+  res.json(buildPanelInfo(localIp, PORT));
 });
 
 app.post("/api/panel/restart", requireRole("admin"), async (req, res) => {

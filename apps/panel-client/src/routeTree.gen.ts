@@ -29,6 +29,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as WorldMapRouteImport } from './routes/world-map'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiPanelInfoRouteImport } from './routes/api/panel-info'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -130,6 +131,11 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
   path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPanelInfoRoute = ApiPanelInfoRouteImport.update({
+  id: '/api/panel-info',
+  path: '/api/panel-info',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/templates': typeof TemplatesRoute
   '/world-map': typeof WorldMapRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/panel-info': typeof ApiPanelInfoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/templates': typeof TemplatesRoute
   '/world-map': typeof WorldMapRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/panel-info': typeof ApiPanelInfoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -197,6 +205,7 @@ export interface FileRoutesById {
   '/templates': typeof TemplatesRoute
   '/world-map': typeof WorldMapRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/panel-info': typeof ApiPanelInfoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -221,6 +230,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/world-map'
     | '/api/health'
+    | '/api/panel-info'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/world-map'
     | '/api/health'
+    | '/api/panel-info'
   id:
     | '__root__'
     | '/'
@@ -265,6 +276,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/world-map'
     | '/api/health'
+    | '/api/panel-info'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -288,6 +300,7 @@ export interface RootRouteChildren {
   TemplatesRoute: typeof TemplatesRoute
   WorldMapRoute: typeof WorldMapRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiPanelInfoRoute: typeof ApiPanelInfoRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -432,6 +445,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/panel-info': {
+      id: '/api/panel-info'
+      path: '/api/panel-info'
+      fullPath: '/api/panel-info'
+      preLoaderRoute: typeof ApiPanelInfoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -456,6 +476,7 @@ const rootRouteChildren: RootRouteChildren = {
   TemplatesRoute: TemplatesRoute,
   WorldMapRoute: WorldMapRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiPanelInfoRoute: ApiPanelInfoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
