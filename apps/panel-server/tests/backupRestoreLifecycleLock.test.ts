@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import path from "path";
 
 
 vi.mock("../database/init.ts", () => ({ getActiveServer: vi.fn() }));
@@ -9,6 +10,15 @@ const {
   acquireLifecycleLock,
   isLifecycleLocked,
 } = await import("../services/lifecycleCoordinator.ts");
+const {
+  getActiveSteamOperations,
+  clearActiveSteamOperation,
+} = await import("../services/activeSteamOperations.ts");
+
+const restoreInstallPath = "/opt/restore-server";
+const normalizedRestoreInstallPath = path
+  .normalize(restoreInstallPath)
+  .toLowerCase();
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };
@@ -29,11 +39,53 @@ function deferred() {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  clearActiveSteamOperation(normalizedRestoreInstallPath);
   const stray = acquireLifecycleLock("test-cleanup");
   if (stray) stray.release();
 });
 
 describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
+  it("refuses while SteamCMD is writing the active server install path", async () => {
+    getActiveServer.mockResolvedValue({
+      name: "TestServer",
+      installPath: restoreInstallPath,
+      isRemote: false,
+    });
+    getActiveSteamOperations().set(normalizedRestoreInstallPath, {
+      type: "update",
+      pid: process.pid,
+    });
+    const backupService = { restoreBackup: vi.fn() };
+    const serverManager = {
+      getServerProcessDetails: vi.fn(async () => ({
+        running: false,
+        scanFailed: false,
+      })),
+    };
+    const app = {
+      get: (key) =>
+        key === "backupService"
+          ? backupService
+          : key === "serverManager"
+            ? serverManager
+            : {},
+    };
+
+    const response = createResponse();
+    const handler = getRestoreHandler();
+    await handler(
+      { params: { name: "good.zip" }, body: {}, app },
+      response,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(409);
+    expect(response.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "STEAM_OPERATION_IN_PROGRESS_PATH" }),
+    );
+    expect(backupService.restoreBackup).not.toHaveBeenCalled();
+    expect(serverManager.getServerProcessDetails).not.toHaveBeenCalled();
+  });
+
   it("holds the lock for the duration of the restore and releases it on success", async () => {
     getActiveServer.mockResolvedValue({ name: "TestServer", isRemote: false });
     const restoreGate = deferred();

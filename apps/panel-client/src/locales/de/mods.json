@@ -701,6 +701,8 @@
     "modOrderSavedDesc": "Die Ladereihenfolge der Mods wurde in der Server-INI aktualisiert.",
     "saveOrderFailedTitle": "Speichern der Reihenfolge fehlgeschlagen",
     "saveOrderFailedFallback": "Mod-Reihenfolge konnte nicht gespeichert werden",
+    "serverChangedSinceLoadTitle": "Active server changed",
+    "serverChangedSinceLoadDesc": "The active server changed while the mod order was being edited. Reset the order before saving.",
     "cannotReorderTitle": "Umsortieren nicht möglich",
     "cannotReorderDesc": "Eine dieser Mods ist nicht in der aktiven Ladereihenfolge.",
     "loadOrderUpdatedTitle": "Ladereihenfolge aktualisiert",

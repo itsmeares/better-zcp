@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import {
+  anyPermissionMiddleware,
   permissionMiddleware,
   protectedServerFunctionMiddleware,
 } from './serverAuth'
@@ -1136,7 +1137,10 @@ async function ping(): Promise<unknown> {
 }
 
 export const getPanelBridgeStatus = createServerFn({ method: 'GET' })
-  .middleware(protectedServerFunctionMiddleware)
+  .middleware([
+    ...protectedServerFunctionMiddleware,
+    anyPermissionMiddleware('bridge.setup', 'bridge.diagnostics'),
+  ] as const)
   .handler(getStatus)
 
 export const pingPanelBridge = createServerFn({ method: 'GET' })

@@ -134,6 +134,7 @@ describe('POST /api/rcon/connect route updates', () => {
     await getConnectHandler()(
       {
         body: { password: '' },
+        user: { role: 'admin' },
         app: {
           get: () => ({
             updateConfig,

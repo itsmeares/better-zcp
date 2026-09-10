@@ -1901,6 +1901,20 @@ export default function Debug() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only init
 
   useEffect(() => {
+    if (!socket) return;
+    const handleActiveServerChanged = () => {
+      fetchSystemInfo();
+      fetchHealthStatus();
+      fetchLogFiles();
+      fetchLogs();
+      fetchCrashLogs();
+      fetchDiagnostics();
+    };
+    socket.on("activeServerChanged", handleActiveServerChanged);
+    return () => { socket.off("activeServerChanged", handleActiveServerChanged); };
+  }, [socket]); // eslint-disable-line react-hooks/exhaustive-deps -- fetch functions are intentionally kept mount-stable here
+
+  useEffect(() => {
     if (activeTab !== "activity") return;
 
     fetchActivity();

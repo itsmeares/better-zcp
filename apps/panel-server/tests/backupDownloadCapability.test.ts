@@ -60,3 +60,28 @@ describe("GET /api/backup/download/:name — backups.download specifically, not 
     expect(res.status).toHaveBeenCalledWith(401);
   });
 });
+
+describe.each(["/status", "/list", "/history"])(
+  "GET /api/backup%s — any backup capability",
+  (routePath) => {
+    it.each(["backups.manage", "backups.download", "backups.restore"])(
+      "allows a role holding only %s",
+      async (capability) => {
+        db.data.roles = [{ name: "backup-reader", capabilities: [capability] }];
+        const { calledNext } = await runGate(routePath, "get", {
+          user: { role: "backup-reader" },
+        });
+        expect(calledNext).toBe(true);
+      },
+    );
+
+    it("refuses a role with no backup capability", async () => {
+      db.data.roles = [{ name: "viewer", capabilities: ["players.view"] }];
+      const { res, calledNext } = await runGate(routePath, "get", {
+        user: { role: "viewer" },
+      });
+      expect(calledNext).toBe(false);
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+  },
+);

@@ -150,6 +150,24 @@ describe("mods.js ini-rewriting routes back up the live ini before overwriting i
     expect(res.getStatusCode()).toBe(200);
     expect(readBackupFiles(configPath)).toHaveLength(1);
   });
+
+  it.each(["/batch-delete-disk-mods", "/resolve-orphan-workshop"])(
+    "%s rejects an oversized workshop batch before touching the filesystem",
+    async (routePath) => {
+      const workshopIds = Array.from({ length: 501 }, (_, index) =>
+        String(1000000000 + index),
+      );
+      const res = await runRoute(routePath, "post", { body: { workshopIds } });
+
+      expect(res.getStatusCode()).toBe(400);
+      expect(res.getBody()).toEqual(
+        expect.objectContaining({
+          code: "MODS_BATCH_REMOVE_TOO_MANY",
+        }),
+      );
+      expect(readBackupFiles(configPath)).toHaveLength(0);
+    },
+  );
 });
 
 describe("mods.js ini writes: a failed backup warns but never blocks the edit", () => {

@@ -969,6 +969,11 @@ class PanelBridge extends EventEmitter {
       if (now - cmd.timestamp > maxPendingAge) {
         clearTimeout(cmd.timeout);
         this.pendingCommands.delete(id);
+        cmd.reject(
+          new Error(
+            `Command timeout: ${cmd.action} (stale pending command cleaned up, no response from mod)`,
+          ),
+        );
         log.warn(`Cleaned up stale pending command: ${cmd.action} (age: ${Math.round((now - cmd.timestamp) / 1000)}s)`);
       }
     }
@@ -1123,6 +1128,17 @@ class PanelBridge extends EventEmitter {
         (err as AnyRecord).data = result.data;
         pending.reject(err);
       }
+    } else {
+      const lateMs =
+        typeof result.timestamp === 'number'
+          ? Date.now() - result.timestamp
+          : null;
+      log.warn(
+        `PanelBridge result: orphaned result id=${result.id} success=${result.success}` +
+          (lateMs !== null
+            ? ` -- arrived ${lateMs}ms after its command timed out; caller already saw a timeout failure`
+            : ' -- arrived after its command timed out; caller already saw a timeout failure'),
+      );
     }
 
     this.emit('result', result);
@@ -1300,16 +1316,20 @@ class PanelBridge extends EventEmitter {
     return this.modStatus?.alive === true;
   }
 
+  pingModStatusView() {
+    return { serverName: this.modStatus?.serverName ?? null };
+  }
+
   async ping() {
     if (!this.isRunning) {
       return { success: false, error: 'Bridge not running' };
     }
     if (!this.isModConnected()) {
-      return { success: false, error: 'Mod not connected', modStatus: this.modStatus };
+      return { success: false, error: 'Mod not connected', modStatus: this.pingModStatusView() };
     }
     try {
       const result = await this.sendCommand('ping', {});
-      return { ...result, modStatus: this.modStatus };
+      return { ...result, modStatus: this.pingModStatusView() };
     } catch (error: any) {
       return { success: false, error: error.message };
     }

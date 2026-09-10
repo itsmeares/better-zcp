@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { acquireLifecycleLock } from "../services/lifecycleCoordinator.ts";
 
 const getActiveServer = vi.fn();
 const saveTemplate = vi.fn();
@@ -82,6 +83,7 @@ describe("template mutation routes", () => {
         user: { role: "admin" },
         app: {
           get: () => ({
+            reloadConfig: vi.fn(async () => {}),
             getServerProcessDetails: vi.fn(async () => ({ running: true, scanFailed: false })),
           }),
         },
@@ -106,6 +108,7 @@ describe("template mutation routes", () => {
         user: { role: "admin" },
         app: {
           get: () => ({
+            reloadConfig: vi.fn(async () => {}),
             getServerProcessDetails: vi.fn(async () => {
               throw new Error("scan failed");
             }),
@@ -133,6 +136,7 @@ describe("template mutation routes", () => {
         app: {
           get: () => ({
             checkServerRunning: vi.fn(async () => false),
+            reloadConfig: vi.fn(async () => {}),
             getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: true })),
           }),
         },
@@ -157,6 +161,7 @@ describe("template mutation routes", () => {
         user: { role: "admin" },
         app: {
           get: () => ({
+            reloadConfig: vi.fn(async () => {}),
             getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })),
           }),
         },
@@ -202,6 +207,7 @@ describe("template mutation routes", () => {
         user: { role: "admin" },
         app: {
           get: () => ({
+            reloadConfig: vi.fn(async () => {}),
             getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })),
           }),
         },
@@ -212,6 +218,49 @@ describe("template mutation routes", () => {
     expect(applyTemplate).toHaveBeenCalledWith("template-1", "server-1", {});
     expect(response.status).not.toHaveBeenCalledWith(409);
     expect(response.status).not.toHaveBeenCalledWith(503);
+  });
+
+  it("holds the lifecycle lock through the stopped-check and template write", async () => {
+    getActiveServer.mockResolvedValue({ id: "server-1" });
+    let finishApply: (() => void) | undefined;
+    let applyReached!: () => void;
+    const applyStarted = new Promise<void>((resolve) => {
+      applyReached = resolve;
+    });
+    applyTemplate.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishApply = () => resolve({ success: true });
+          applyReached();
+        }),
+    );
+    const response = createResponse();
+
+    const routeCall = runRoute(
+      "/:id/apply",
+      "post",
+      {
+        params: { id: "template-1" },
+        body: { serverId: "server-1" },
+        user: { role: "admin" },
+        app: {
+          get: () => ({
+            reloadConfig: vi.fn(async () => {}),
+            getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })),
+          }),
+        },
+      },
+      response,
+    );
+
+    await applyStarted;
+    expect(acquireLifecycleLock("start", "server-1")).toBeNull();
+    finishApply?.();
+    await routeCall;
+
+    const afterApply = acquireLifecycleLock("start", "server-1");
+    expect(afterApply).not.toBeNull();
+    afterApply?.release();
   });
 
   it("rejects listing hidden templates by a non-admin user", async () => {

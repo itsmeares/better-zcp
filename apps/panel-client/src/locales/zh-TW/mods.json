@@ -701,6 +701,8 @@
     "modOrderSavedDesc": "模組載入順序已在伺服器 INI 中更新。",
     "saveOrderFailedTitle": "儲存順序失敗",
     "saveOrderFailedFallback": "儲存模組順序失敗",
+    "serverChangedSinceLoadTitle": "Active server changed",
+    "serverChangedSinceLoadDesc": "The active server changed while the mod order was being edited. Reset the order before saving.",
     "cannotReorderTitle": "無法重新排序",
     "cannotReorderDesc": "其中一個模組不在當前載入順序中。",
     "loadOrderUpdatedTitle": "載入順序已更新",

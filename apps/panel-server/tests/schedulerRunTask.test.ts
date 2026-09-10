@@ -457,6 +457,88 @@ describe("rcon.execute gate on raw scheduled commands", () => {
       expect(response.status).not.toHaveBeenCalledWith(403);
       expect(updateScheduledTask).toHaveBeenCalled();
     });
+
+    it("refuses to enable a disabled stored restart task without server.control", async () => {
+      const { updateScheduledTask } = await import("../database/init.ts");
+      updateScheduledTask.mockClear();
+      getScheduledTasks.mockResolvedValue([
+        { id: 13, name: "Nightly restart", command: "restart", enabled: 0 },
+      ]);
+      const response = createResponse();
+
+      await getUpdateHandler()(
+        {
+          user: { role: "automation_only" },
+          params: { id: "13" },
+          body: { enabled: true },
+          app: { get: () => ({ scheduleTask: vi.fn(), cancelTask: vi.fn() }) },
+        },
+        response,
+      );
+
+      expect(response.status).toHaveBeenCalledWith(403);
+      expect(updateScheduledTask).not.toHaveBeenCalled();
+    });
+
+    it("allows enabling that stored restart task when the caller has server.control", async () => {
+      const { updateScheduledTask } = await import("../database/init.ts");
+      updateScheduledTask.mockClear();
+      getScheduledTasks.mockResolvedValue([
+        { id: 14, name: "Nightly restart", command: "restart", enabled: 0 },
+      ]);
+      updateScheduledTask.mockResolvedValue({
+        id: 14,
+        name: "Nightly restart",
+        cron_expression: "0 3 * * *",
+        command: "restart",
+        enabled: 1,
+        server_id: null,
+      });
+      const response = createResponse();
+
+      await getUpdateHandler()(
+        {
+          user: { role: "automation_and_control" },
+          params: { id: "14" },
+          body: { enabled: true },
+          app: { get: () => ({ scheduleTask: vi.fn(), cancelTask: vi.fn() }) },
+        },
+        response,
+      );
+
+      expect(response.status).not.toHaveBeenCalledWith(403);
+      expect(updateScheduledTask).toHaveBeenCalled();
+    });
+
+    it("does not gate disabling a stored restart task", async () => {
+      const { updateScheduledTask } = await import("../database/init.ts");
+      updateScheduledTask.mockClear();
+      getScheduledTasks.mockResolvedValue([
+        { id: 15, name: "Nightly restart", command: "restart", enabled: 1 },
+      ]);
+      updateScheduledTask.mockResolvedValue({
+        id: 15,
+        name: "Nightly restart",
+        cron_expression: "0 3 * * *",
+        command: "restart",
+        enabled: 0,
+        server_id: null,
+      });
+      const response = createResponse();
+
+      await getUpdateHandler()(
+        {
+          user: { role: "automation_only" },
+          params: { id: "15" },
+          body: { enabled: false },
+          app: { get: () => ({ scheduleTask: vi.fn(), cancelTask: vi.fn() }) },
+        },
+        response,
+      );
+
+      expect(response.status).not.toHaveBeenCalledWith(403);
+      expect(updateScheduledTask).toHaveBeenCalled();
+    });
   });
 
   describe("POST /api/scheduler/tasks/:id/run", () => {

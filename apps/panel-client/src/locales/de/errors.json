@@ -81,6 +81,7 @@
   "INVALID_CAPABILITY": "Unbekanntes Recht: {{capability}}",
   "ROLE_LOCKOUT_LAST_MANAGER": "Nach dieser Änderung hätte niemand mehr das Recht: {{action}}",
   "ROLE_SELF_CAPABILITY_LOSS_CONFIRM": "Dies würde dir folgendes Recht entziehen: {{action}}",
+  "ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES": "Du kannst keine Berechtigungen vergeben, die deine eigene Rolle nicht besitzt",
   "ROLE_HAS_MEMBERS": "Noch zugewiesene Benutzer: {{count}}. Übergib reassignTo, um sie zuerst einer anderen Rolle zuzuweisen.",
   "ROLE_IS_SEEDED": "Integrierte Rollen können nicht gelöscht werden.",
   "SERVER_RUNNING_LEGACY": "Stoppe den Server, bevor du Chunks löschst. Laufende Server halten Spielstanddateien geöffnet und überschreiben deine Änderungen beim Herunterfahren.",
@@ -117,10 +118,12 @@
   "BACKUP_UPLOAD_REMOTE_NOT_AVAILABLE": "Der Backup-Upload ist für externe Server nicht verfügbar.",
   "BACKUP_UPLOAD_NO_FILE": "Keine Datei hochgeladen. Sende den ZIP-Inhalt mit Content-Type: application/zip.",
   "BACKUP_UPLOAD_INVALID_ZIP_SIGNATURE": "Die Datei sieht nicht wie ein gültiges .zip-Archiv aus.",
+  "BACKUP_UPLOAD_TOO_LARGE": "The backup upload is too large.",
   "BACKUP_UPLOAD_INVALID_EXTENSION": "Es werden nur .zip-Backups akzeptiert.",
   "BACKUP_UPLOAD_NAME_CONFLICT": "Ein Backup mit dem Namen „{{name}}“ existiert bereits. Lösche es zuerst oder benenne den Upload um.",
   "BACKUPS_FOLDER_UNAVAILABLE": "Backup-Ordner nicht verfügbar. Konfiguriere zuerst den Server.",
   "USER_SELF_DELETE_REFUSED": "Du kannst dein eigenes Konto nicht löschen. Bitte stattdessen einen anderen Administrator darum.",
+  "USER_SELF_ROLE_CHANGE_REFUSED": "Du kannst deine eigene Rolle nicht ändern. Bitte stattdessen einen anderen Administrator darum.",
   "SERVER_START_REMOTE_REFUSED": "Ein externer Server kann nicht gestartet werden. Externe Server werden extern verwaltet — verwende RCON zur Interaktion.",
   "SERVER_FORCE_STOP_REMOTE_REFUSED": "Ein externer Server kann nicht zwangsgestoppt werden. Der Prozess wird nicht von diesem Panel verwaltet.",
   "SERVER_RESTART_REMOTE_REFUSED": "Ein externer Server kann nicht neu gestartet werden. Der Prozess wird nicht von diesem Panel verwaltet.",
@@ -203,6 +206,7 @@
   "DELETE_CHUNKS_INVALID_X": "Ungültige Chunk-X-Koordinate — muss eine Ganzzahl sein",
   "DELETE_CHUNKS_INVALID_Y": "Ungültige Chunk-Y-Koordinate — muss eine Ganzzahl sein",
   "CHUNKS_SAVE_NOT_FOUND": "Spielstand nicht gefunden",
+  "CHUNKS_STALE_SERVER_SCAN": "The active server changed since these chunks were scanned. Refresh the save list and re-select before deleting.",
   "DELETE_REGION_FIELDS_REQUIRED": "Spielstandname und Regionsgrenzen erforderlich",
   "DELETE_REGION_BOUNDS_NOT_FINITE": "Regionsgrenzen müssen endliche Zahlen sein",
   "DELETE_REGION_BOUNDS_INVERTED": "Regionsgrenzen invertiert (minX > maxX oder minY > maxY)",
@@ -488,5 +492,7 @@
   "WRITABILITY_TARGET_UNSUPPORTED": "Unbekanntes oder nicht unterstütztes Ziel",
   "WRITABILITY_TARGET_MISSING": "Die Datei existiert nicht",
   "WRITABILITY_CHMOD_FAILED": "Dateiberechtigungen konnten nicht geändert werden",
-  "WRITABILITY_STILL_BLOCKED": "Die Datei ist nach dem Aufheben des Nur-Lesen-Attributs immer noch nicht beschreibbar -- dies deutet auf ein Besitz- oder Berechtigungsproblem hin"
+  "WRITABILITY_STILL_BLOCKED": "Die Datei ist nach dem Aufheben des Nur-Lesen-Attributs immer noch nicht beschreibbar -- dies deutet auf ein Besitz- oder Berechtigungsproblem hin",
+  "WRITABLE_PATH_INSTALL_WINDOWS": "Installation path is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator.",
+  "WRITABLE_PATH_DATA_WINDOWS": "Zomboid data folder is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator."
 }

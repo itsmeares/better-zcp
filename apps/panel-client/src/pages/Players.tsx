@@ -98,6 +98,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
 import { useAuth } from '@/contexts/AuthContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
+import { useSocket } from '@/contexts/SocketContext'
 import { cn, copyText } from '@/lib/utils'
 
 interface PerkChoice {
@@ -320,6 +321,7 @@ export default function Players() {
   const [initialLoading, setInitialLoading] = useState(true)
   const { toast } = useToast()
   const confirm = useConfirm()
+  const socket = useSocket()
 
   const [peakPlayers, setPeakPlayers] = useState(0)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
@@ -768,6 +770,20 @@ export default function Players() {
       clearInterval(interval)
     }
   }, [fetchPlayers, fetchData, fetchNotesAndStats, fetchBannedSteamIds, fetchWhitelist, fetchAccessLevels, fetchRosterVitals, canGmTools])
+
+  useEffect(() => {
+    if (!socket) return
+    const handleActiveServerChanged = () => {
+      fetchPlayers()
+      fetchNotesAndStats()
+      fetchBannedSteamIds()
+      fetchWhitelist()
+      fetchAccessLevels()
+      if (canGmTools) fetchRosterVitals()
+    }
+    socket.on('activeServerChanged', handleActiveServerChanged)
+    return () => { socket.off('activeServerChanged', handleActiveServerChanged) }
+  }, [socket, fetchPlayers, fetchNotesAndStats, fetchBannedSteamIds, fetchWhitelist, fetchAccessLevels, fetchRosterVitals, canGmTools])
 
   const requestedPlayerAppliedRef = useRef(false)
   useEffect(() => {

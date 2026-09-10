@@ -9,6 +9,7 @@ vi.mock("../database/init.ts", () => ({
   setSetting: vi.fn(async () => {}),
   getSetting: vi.fn(async () => null),
   getActiveServer: vi.fn(async () => null),
+  getServers: vi.fn(async () => []),
 }));
 
 vi.mock("../routes/chunks.ts", () => ({

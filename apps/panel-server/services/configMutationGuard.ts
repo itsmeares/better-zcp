@@ -16,6 +16,7 @@ interface ProcessDetails {
 }
 
 interface ServerManager {
+  reloadConfig?: () => Promise<unknown>;
   getServerProcessDetails?: () => Promise<ProcessDetails>;
 }
 
@@ -78,6 +79,8 @@ export async function requireStoppedForLocalConfigMutation(
       });
     }
 
+    await serverManager.reloadConfig!();
+
     const processDetails = await serverManager.getServerProcessDetails();
     if (processDetails.scanFailed) {
       return res.status(503).json({
@@ -128,6 +131,13 @@ export async function warnRunningForLocalConfigEdit(
       | ServerManager
       | undefined;
     if (typeof serverManager?.getServerProcessDetails !== "function") {
+      req.configEditRestartWarning = true;
+      return next();
+    }
+
+    try {
+      await serverManager.reloadConfig!();
+    } catch {
       req.configEditRestartWarning = true;
       return next();
     }

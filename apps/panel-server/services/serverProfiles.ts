@@ -27,6 +27,7 @@ import {
 } from "../utils/sanitize.ts";
 import { resolveLaunchMode, ServerManager } from "./serverManager.ts";
 import { applyUpnpToIni } from "../utils/upnpConfig.ts";
+import { resolveEnvRconHost } from "./rcon.ts";
 import {
   buildLifecycleTemplate,
   createLinuxServiceLifecycle,
@@ -77,6 +78,7 @@ export type ServerProfileRuntime = {
   modChecker?: JsonRecord | null;
   io?: JsonRecord | null;
   refreshWorkshopChecker?: (modChecker: JsonRecord) => Promise<unknown>;
+  logTailer?: { reloadConfig?: () => Promise<unknown> } | null;
   autoInstallBridgeIfNeeded?: (server: JsonRecord) => void;
 };
 
@@ -218,6 +220,14 @@ async function reloadServicesForActiveServer(
   }
 
   await refreshWorkshopCheckerIfAvailable(runtime);
+
+  if (runtime.logTailer?.reloadConfig) {
+    try {
+      await runtime.logTailer.reloadConfig();
+    } catch (error: unknown) {
+      log.warn(`LogTailer refresh failed: ${errorMessage(error)}`);
+    }
+  }
 
   if (runtime.rconService?.isConnected?.()) {
     await runtime.rconService.disconnect();
@@ -946,7 +956,7 @@ export async function createServerFromDiscovery(input: unknown) {
     serverName: resolvedName,
     installPath: discovered.installPath,
     zomboidDataPath: discovered.dataPath,
-    rconHost: "127.0.0.1",
+    rconHost: resolveEnvRconHost(),
     rconPort: iniSettings.rconPort,
     rconPassword: iniSettings.rconPassword,
     serverPort: iniSettings.serverPort,

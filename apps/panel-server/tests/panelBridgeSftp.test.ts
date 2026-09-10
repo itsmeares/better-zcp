@@ -221,7 +221,9 @@ describe('PanelBridge SFTP sync', () => {
     }
 
     const status = transport.getStatus();
-    expect(status.remotePath).toBe(valid.bridgePath);
+    expect(status).not.toHaveProperty('cachePath');
+    expect(status).not.toHaveProperty('remotePath');
+    expect(status).not.toHaveProperty('remoteDirectories');
     expect(status.diagnostics.failureCount).toBe(21);
     expect(status.diagnostics.recentErrors).toHaveLength(20);
     expect(status.diagnostics.recentErrors[0].message).toBe('failure-1');

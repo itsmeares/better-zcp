@@ -69,7 +69,7 @@ router.get("/roles", async (req, res) => {
 router.post("/roles", async (req, res) => {
   try {
     const { name, capabilities } = req.body || {};
-    const role = await createRole({ name, capabilities });
+    const role = await createRole({ name, capabilities }, { actingUser: (req as AuthenticatedRequest).user });
     res.status(201).json({ success: true, role });
   } catch (error: unknown) {
     respondWithServiceError(res, error, "Failed to create role");

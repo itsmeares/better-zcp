@@ -21,6 +21,13 @@ const log = createLogger("SandboxPersistence");
 
 type JsonRecord = Record<string, any>;
 
+export type ActiveServerContext = {
+  activeServer: JsonRecord | null;
+  serverConfigPath?: string;
+  serverName?: string;
+  configurationError?: ServerNotConfiguredError | RemoteConfigNotConfiguredError;
+};
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -57,22 +64,29 @@ export async function resolveRemoteConfigTransport(): Promise<any> {
   });
 }
 
-export async function getServerConfigPath(): Promise<string> {
-  const activeServer = await getActiveServer();
+export async function getServerConfigPath(
+  activeServer?: JsonRecord | null,
+  serverName?: string,
+): Promise<string> {
+  const resolvedActiveServer =
+    activeServer === undefined ? await getActiveServer() : activeServer;
 
-  if (activeServer?.isRemote) {
+  if (resolvedActiveServer?.isRemote) {
     const transport = await resolveRemoteConfigTransport();
     if (transport) {
-      return getMirrorPath(transport, await getServerName());
+      return getMirrorPath(
+        transport,
+        serverName ?? (await getServerName(resolvedActiveServer)),
+      );
     }
   }
 
-  if (activeServer?.serverConfigPath) {
-    return activeServer.serverConfigPath;
+  if (resolvedActiveServer?.serverConfigPath) {
+    return resolvedActiveServer.serverConfigPath;
   }
 
-  if (activeServer?.zomboidDataPath) {
-    return path.join(activeServer.zomboidDataPath, "Server");
+  if (resolvedActiveServer?.zomboidDataPath) {
+    return path.join(resolvedActiveServer.zomboidDataPath, "Server");
   }
 
   const settings = await getAllSettings();
@@ -83,18 +97,21 @@ export async function getServerConfigPath(): Promise<string> {
     return path.join(settings.zomboidDataPath, "Server");
   }
 
-  if (activeServer?.isRemote) {
+  if (resolvedActiveServer?.isRemote) {
     throw new RemoteConfigNotConfiguredError();
   }
 
   throw new ServerNotConfiguredError();
 }
 
-export async function getServerName(): Promise<string> {
-  const activeServer = await getActiveServer();
+export async function getServerName(
+  activeServer?: JsonRecord | null,
+): Promise<string> {
+  const resolvedActiveServer =
+    activeServer === undefined ? await getActiveServer() : activeServer;
   let raw;
-  if (activeServer?.serverName) {
-    raw = activeServer.serverName;
+  if (resolvedActiveServer?.serverName) {
+    raw = resolvedActiveServer.serverName;
   } else {
     const settings = await getAllSettings();
     raw = settings.serverName;
@@ -108,6 +125,40 @@ export async function getServerName(): Promise<string> {
     throw new Error("Configured server name contains invalid path characters");
   }
   return safe;
+}
+
+export async function getActiveServerContext(): Promise<ActiveServerContext> {
+  const activeServer = await getActiveServer();
+  let serverConfigPath: string | undefined;
+  let configurationError:
+    | ServerNotConfiguredError
+    | RemoteConfigNotConfiguredError
+    | undefined;
+
+  try {
+    serverConfigPath = await getServerConfigPath(activeServer);
+  } catch (error: unknown) {
+    if (
+      error instanceof ServerNotConfiguredError ||
+      error instanceof RemoteConfigNotConfiguredError
+    ) {
+      configurationError = error;
+    } else {
+      throw error;
+    }
+  }
+
+  let serverName: string | undefined;
+
+  try {
+    serverName = await getServerName(activeServer);
+  } catch (error: unknown) {
+    if (!(error instanceof ServerNotConfiguredError)) {
+      throw error;
+    }
+  }
+
+  return { activeServer, serverConfigPath, serverName, configurationError };
 }
 
 export function escapeLuaString(str: unknown): string {

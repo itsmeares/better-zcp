@@ -120,6 +120,12 @@ type ExternalIdentityInput = {
   email?: string;
 };
 
+export type SessionRevocationEvent =
+  | { scope: "all" }
+  | { scope: "user"; userId: string };
+
+type SessionRevocationCallback = (event: SessionRevocationEvent) => void;
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -205,6 +211,55 @@ async function assertNoRecoveryLockout(
         409,
         { action: capability },
       );
+    }
+  }
+}
+
+async function assertNoCapabilityEscalation(
+  actingUserId: string | number | null | undefined,
+  targetCapabilities: string[],
+): Promise<void> {
+  if (!actingUserId) return;
+
+  const db = await getDb();
+  const actingUser = ((db.data.users || []) as AuthUser[]).find(
+    (user) => String(user.id) === String(actingUserId),
+  );
+  if (!actingUser) return;
+
+  const actingRole = actingUser.roleId
+    ? await getRoleById(actingUser.roleId)
+    : await getRoleByName(actingUser.role);
+  const actingCapabilities = actingRole?.capabilities || [];
+  const missing = targetCapabilities.filter(
+    (capability) => !actingCapabilities.includes(capability),
+  );
+  if (missing.length > 0) {
+    const detail = missing.join(", ");
+    throw makeRoleError(
+      ErrorCode.ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES,
+      `Cannot grant a role that holds ${detail} without already holding ${
+        missing.length === 1 ? "it" : "them"
+      } yourself.`,
+      403,
+      { detail, missing },
+    );
+  }
+}
+
+const sessionRevocationCallbacks = new Set<SessionRevocationCallback>();
+
+export function onSessionRevoked(callback: SessionRevocationCallback): () => void {
+  sessionRevocationCallbacks.add(callback);
+  return () => sessionRevocationCallbacks.delete(callback);
+}
+
+function emitSessionRevoked(event: SessionRevocationEvent): void {
+  for (const callback of sessionRevocationCallbacks) {
+    try {
+      callback(event);
+    } catch (error: unknown) {
+      log.warn(`Session-revocation callback failed: ${errorMessage(error)}`);
     }
   }
 }
@@ -416,6 +471,7 @@ class AuthService {
         "existing access and refresh token is now invalid — every user, on " +
         "every device, must log in again.",
     );
+    emitSessionRevoked({ scope: "all" });
     return { path: secretPath };
   }
 
@@ -434,7 +490,18 @@ class AuthService {
     return authEnabled !== false;
   }
 
-  async createUser(username: string, password: string, role?: string): Promise<PublicUser> {
+  async createUser(
+    username: string,
+    password: string,
+    role?: string,
+    {
+      actingUserId,
+      roleId,
+    }: {
+      actingUserId?: string | number | null;
+      roleId?: string | number | null;
+    } = {},
+  ): Promise<PublicUser> {
     return this._withMutex(async () => {
       if (!username || !password) {
         throw new Error("Username and password are required");
@@ -465,14 +532,32 @@ class AuthService {
 
       const users = db.data.users as AuthUser[];
       const isFirstUser = users.length === 0;
+      const hasExplicitRoleId =
+        roleId !== undefined && roleId !== null && String(roleId).trim().length > 0;
       let resolvedRole: string;
+      let targetRole: AuthRole | null = null;
       if (isFirstUser) {
         resolvedRole = "admin";
+      } else if (hasExplicitRoleId) {
+        targetRole = (await getRoleById(roleId)) as AuthRole | null;
+        if (!targetRole) {
+          throw makeRoleError(
+            ErrorCode.ROLE_NOT_FOUND,
+            "That role does not exist.",
+            404,
+          );
+        }
+        resolvedRole = targetRole.name;
       } else {
         if (!role || !USER_ROLES.includes(role)) {
           throw new Error(`role must be one of: ${USER_ROLES.join(", ")}`);
         }
         resolvedRole = role;
+      }
+
+      if (!isFirstUser) {
+        targetRole ??= (await getRoleByName(resolvedRole)) as AuthRole | null;
+        await assertNoCapabilityEscalation(actingUserId, targetRole?.capabilities || []);
       }
 
       const existing = users.find(
@@ -488,6 +573,9 @@ class AuthService {
         username,
         password: hashedPassword,
         role: resolvedRole,
+        ...(hasExplicitRoleId && targetRole
+          ? { roleId: targetRole.id }
+          : {}),
         createdAt: new Date().toISOString(),
         lastLogin: null,
       };
@@ -496,11 +584,20 @@ class AuthService {
       await commitNow();
 
       log.info(`User created: ${username} (role: ${resolvedRole})`);
-      return { id: user.id, username: user.username, role: user.role };
+      return {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        ...(hasExplicitRoleId && targetRole ? { roleId: targetRole.id } : {}),
+      };
     });
   }
 
-  async changeUserRole(userId: string, newRole: string): Promise<PublicUser> {
+  async changeUserRole(
+    userId: string,
+    newRole: string,
+    { actingUserId }: { actingUserId?: string | number | null } = {},
+  ): Promise<PublicUser> {
     if (!USER_ROLES.includes(newRole)) {
       throw new Error(`role must be one of: ${USER_ROLES.join(", ")}`);
     }
@@ -512,11 +609,23 @@ class AuthService {
       );
     }
 
-    return this.changeUserRoleById(userId, targetRole.id);
+    return this.changeUserRoleById(userId, targetRole.id, { actingUserId });
   }
 
-  async changeUserRoleById(userId: string, roleId: string | number): Promise<PublicUser> {
+  async changeUserRoleById(
+    userId: string,
+    roleId: string | number,
+    { actingUserId }: { actingUserId?: string | number | null } = {},
+  ): Promise<PublicUser> {
     return this._withMutex(async () => {
+      if (actingUserId && String(actingUserId) === String(userId)) {
+        throw makeRoleError(
+          ErrorCode.USER_SELF_ROLE_CHANGE_REFUSED,
+          "You cannot change your own role. Ask another administrator to do it instead.",
+          400,
+        );
+      }
+
       const targetRole = await getRoleById(roleId);
       if (!targetRole) {
         throw makeRoleError(
@@ -540,6 +649,7 @@ class AuthService {
       const nextCapabilities = targetRole.capabilities || [];
 
       await assertNoRecoveryLockout(userId, currentCapabilities, nextCapabilities);
+      await assertNoCapabilityEscalation(actingUserId, nextCapabilities);
 
       user.role = targetRole.name;
       user.roleId = targetRole.id;
@@ -548,6 +658,7 @@ class AuthService {
       log.info(
         `Role changed for user ${user.username}: ${user.role} (roleId: ${user.roleId})`,
       );
+      emitSessionRevoked({ scope: "user", userId: user.id });
       return {
         id: user.id,
         username: user.username,
@@ -588,6 +699,7 @@ class AuthService {
       await commitNow();
 
       log.info(`Deleted user: ${user.username} (${user.id})`);
+      emitSessionRevoked({ scope: "user", userId: user.id });
       return { id: user.id, username: user.username };
     });
   }
@@ -783,6 +895,7 @@ class AuthService {
     await commitNow();
 
     log.info(`Password changed for user: ${user.username}`);
+    emitSessionRevoked({ scope: "user", userId: user.id });
     return true;
   }
 
@@ -993,6 +1106,7 @@ class AuthService {
       const revoked = this.revokeRefreshSession(user, payload.sessionId);
       if (revoked) {
         await commitNow();
+        emitSessionRevoked({ scope: "user", userId: user.id });
       }
 
       return revoked;
@@ -1026,6 +1140,7 @@ class AuthService {
     await commitNow();
 
     log.info(`Password reset for user: ${user.username}`);
+    emitSessionRevoked({ scope: "user", userId: user.id });
     return { username: user.username };
   }
 

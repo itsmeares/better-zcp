@@ -31,7 +31,11 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = async (file: File) => {
-    setText(await file.text())
+    try {
+      setText(await file.text())
+    } catch (err) {
+      setError(getUserErrorMessage(err, t('failedToReadFile')))
+    }
   }
 
   const handleImport = async () => {

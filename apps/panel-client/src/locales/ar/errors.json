@@ -81,6 +81,7 @@
   "INVALID_CAPABILITY": "قدرة غير معروفة: {{capability}}",
   "ROLE_LOCKOUT_LAST_MANAGER": "لن يترك هذا التغيير أي مستخدم قادرًا على {{action}}",
   "ROLE_SELF_CAPABILITY_LOSS_CONFIRM": "سيؤدي هذا إلى إزالة قدرتك أنت على {{action}}",
+  "ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES": "لا يمكنك منح صلاحيات لا يمتلكها دورك أنت",
   "ROLE_HAS_MEMBERS": "لا يزال هذا الدور بحوزة {{count}} من المستخدمين. مرّر reassignTo لنقلهم إلى دور آخر أولًا.",
   "ROLE_IS_SEEDED": "لا يمكن حذف الأدوار المدمجة.",
   "SERVER_RUNNING_LEGACY": "أوقف الخادم قبل حذف الـ chunks. فالخوادم العاملة تُبقي ملفات الحفظ مفتوحة وستستبدل تغييراتك عند الإغلاق.",
@@ -117,10 +118,12 @@
   "BACKUP_UPLOAD_REMOTE_NOT_AVAILABLE": "رفع النسخ الاحتياطية غير متاح للخوادم البعيدة.",
   "BACKUP_UPLOAD_NO_FILE": "لم يُرفع أي ملف. أرسل محتوى الـ zip مع Content-Type: application/zip.",
   "BACKUP_UPLOAD_INVALID_ZIP_SIGNATURE": "لا يبدو الملف أرشيف .zip صالحًا.",
+  "BACKUP_UPLOAD_TOO_LARGE": "The backup upload is too large.",
   "BACKUP_UPLOAD_INVALID_EXTENSION": "لا تُقبل سوى النسخ الاحتياطية بامتداد .zip.",
   "BACKUP_UPLOAD_NAME_CONFLICT": "توجد بالفعل نسخة احتياطية باسم \"{{name}}\". احذفها أولًا أو غيّر اسم الملف المرفوع.",
   "BACKUPS_FOLDER_UNAVAILABLE": "مجلد النسخ الاحتياطية غير متاح. أعِدّ الخادم أولًا.",
   "USER_SELF_DELETE_REFUSED": "لا يمكنك حذف حسابك الخاص. اطلب من مسؤول آخر القيام بذلك.",
+  "USER_SELF_ROLE_CHANGE_REFUSED": "لا يمكنك تغيير دورك بنفسك. اطلب من مسؤول آخر القيام بذلك.",
   "SERVER_START_REMOTE_REFUSED": "لا يمكن تشغيل خادم بعيد. فالخوادم البعيدة تُدار خارجيًا — استخدم RCON للتفاعل معها.",
   "SERVER_FORCE_STOP_REMOTE_REFUSED": "لا يمكن الإيقاف القسري لخادم بعيد. فالعملية ليست مُدارة من هذه اللوحة.",
   "SERVER_RESTART_REMOTE_REFUSED": "لا يمكن إعادة تشغيل خادم بعيد. فالعملية ليست مُدارة من هذه اللوحة.",
@@ -203,6 +206,7 @@
   "DELETE_CHUNKS_INVALID_X": "إحداثي x للـ chunk غير صالح — يجب أن يكون عددًا صحيحًا",
   "DELETE_CHUNKS_INVALID_Y": "إحداثي y للـ chunk غير صالح — يجب أن يكون عددًا صحيحًا",
   "CHUNKS_SAVE_NOT_FOUND": "لم يُعثر على الحفظ",
+  "CHUNKS_STALE_SERVER_SCAN": "The active server changed since these chunks were scanned. Refresh the save list and re-select before deleting.",
   "DELETE_REGION_FIELDS_REQUIRED": "اسم الحفظ وحدود المنطقة مطلوبان",
   "DELETE_REGION_BOUNDS_NOT_FINITE": "يجب أن تكون حدود المنطقة أعدادًا منتهية",
   "DELETE_REGION_BOUNDS_INVERTED": "حدود المنطقة معكوسة (minX > maxX أو minY > maxY)",
@@ -488,5 +492,7 @@
   "WRITABILITY_TARGET_UNSUPPORTED": "هدف قابلية كتابة غير معروف أو غير مدعوم",
   "WRITABILITY_TARGET_MISSING": "الملف غير موجود",
   "WRITABILITY_CHMOD_FAILED": "تعذّر تغيير أذونات الملف",
-  "WRITABILITY_STILL_BLOCKED": "لا يزال الملف غير قابل للكتابة بعد إزالة سمة القراءة فقط — يبدو أن هذه مشكلة ملكية أو أذونات"
+  "WRITABILITY_STILL_BLOCKED": "لا يزال الملف غير قابل للكتابة بعد إزالة سمة القراءة فقط — يبدو أن هذه مشكلة ملكية أو أذونات",
+  "WRITABLE_PATH_INSTALL_WINDOWS": "Installation path is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator.",
+  "WRITABLE_PATH_DATA_WINDOWS": "Zomboid data folder is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator."
 }

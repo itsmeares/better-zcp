@@ -22,6 +22,7 @@ class FakeXhr {
   method = ''
   url = ''
   sentBody: any = null
+  aborted = false
 
   open(method: string, url: string) {
     this.method = method
@@ -33,6 +34,11 @@ class FakeXhr {
   send(body: any) {
     this.sentBody = body
     FakeXhr.instances.push(this)
+  }
+
+  abort() {
+    this.aborted = true
+    this.onabort?.()
   }
 
   respond(status: number, body: unknown) {
@@ -52,6 +58,7 @@ describe('uploadBackup: TOKEN_EXPIRED triggers exactly one refresh-and-replay', 
   afterEach(() => {
     vi.unstubAllGlobals()
     clearAccessToken()
+    vi.useRealTimers()
   })
 
   it('refreshes and replays once when the first attempt 401s with TOKEN_EXPIRED', async () => {
@@ -99,5 +106,39 @@ describe('uploadBackup: TOKEN_EXPIRED triggers exactly one refresh-and-replay', 
     await expect(uploadPromise).rejects.toThrow('too large')
     expect(fetchMock).not.toHaveBeenCalled()
     expect(FakeXhr.instances).toHaveLength(1)
+  })
+
+  it('aborts and rejects when the upload makes no progress for three minutes', async () => {
+    vi.useFakeTimers()
+    const file = new File(['zip-bytes'], 'save.zip')
+    const uploadPromise = backupApi.uploadBackup(file)
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(FakeXhr.instances).toHaveLength(1)
+    const assertion = expect(uploadPromise).rejects.toThrow(/stalled/i)
+
+    await vi.advanceTimersByTimeAsync(3 * 60 * 1000)
+
+    expect(FakeXhr.instances[0].aborted).toBe(true)
+    await assertion
+  })
+
+  it('resets the stall clock on upload progress', async () => {
+    vi.useFakeTimers()
+    const file = new File(['zip-bytes'], 'save.zip')
+    const uploadPromise = backupApi.uploadBackup(file)
+
+    await Promise.resolve()
+    await Promise.resolve()
+    const xhr = FakeXhr.instances[0]
+
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1000)
+    xhr.upload.onprogress?.({ lengthComputable: true, loaded: 1, total: 2 })
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1000)
+    expect(xhr.aborted).toBe(false)
+
+    xhr.respond(200, { success: true, name: 'save.zip', size: 9, message: 'uploaded' })
+    await expect(uploadPromise).resolves.toMatchObject({ success: true })
   })
 })

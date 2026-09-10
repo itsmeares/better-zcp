@@ -96,7 +96,16 @@ describe("formatWritablePathError: variant split (2026-08-22 correction)", () =>
   it("container detection is skipped entirely on Windows, by design", () => {
     vi.spyOn(fs, "existsSync").mockReturnValue(true);
     const result = formatWritablePathError("install", "/srv/pz", true);
-    expect(result.code).toBe(ErrorCode.WRITABLE_PATH_INSTALL_BAREMETAL);
+    expect(result.code).toBe(ErrorCode.WRITABLE_PATH_INSTALL_WINDOWS);
+    expect(result.message).not.toContain("chown");
+    expect(result.message).not.toContain("chmod");
+  });
+
+  it("uses Windows remediation for the data path too", () => {
+    const result = formatWritablePathError("data", "C:\\Program Files\\pz_Data", true);
+    expect(result.code).toBe(ErrorCode.WRITABLE_PATH_DATA_WINDOWS);
+    expect(result.message).not.toContain("chown");
+    expect(result.message).not.toContain("chmod");
   });
 
   it.each([

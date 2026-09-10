@@ -206,6 +206,20 @@ export function formatWritablePathError(
     };
   }
 
+  if (platformIsWindows) {
+    return {
+      message:
+        `${baseMessage} The Windows account running the panel does not own ` +
+        `this folder or lacks write permission -- choose a writable folder, ` +
+        `grant access through Properties > Security, or run Start.bat as Administrator.`,
+      code:
+        kind === "install"
+          ? ErrorCode.WRITABLE_PATH_INSTALL_WINDOWS
+          : ErrorCode.WRITABLE_PATH_DATA_WINDOWS,
+      params: { path: directoryPath },
+    };
+  }
+
   return {
     message:
       `${baseMessage} The user running the panel does not own this folder ` +

@@ -66,6 +66,8 @@ function postSavePath(body, role = "technician") {
 
 describe("POST /save-path", () => {
   let zomboidDir;
+  const envName = "ZCP_CHUNKS_PATH_ORACLE_TEST";
+  let previousEnvValue;
 
   beforeEach(() => {
     getActiveServer.mockReset();
@@ -74,10 +76,13 @@ describe("POST /save-path", () => {
     getSetting.mockReset().mockResolvedValue(null);
     getRoleByName.mockClear();
     zomboidDir = fs.mkdtempSync(path.join(os.tmpdir(), "chunks-savepath-Zomboid-"));
+    previousEnvValue = process.env[envName];
   });
 
   afterEach(() => {
     fs.rmSync(zomboidDir, { recursive: true, force: true });
+    if (previousEnvValue === undefined) delete process.env[envName];
+    else process.env[envName] = previousEnvValue;
   });
 
   describe("input validation, before any path even touches disk", () => {
@@ -110,6 +115,22 @@ describe("POST /save-path", () => {
       expect(res.getBody().rejection).toMatchObject({ reason: "not-found" });
       expect(updateServer).not.toHaveBeenCalled();
       expect(setSetting).not.toHaveBeenCalled();
+    });
+
+    it("never echoes an expanded environment secret in a rejection", async () => {
+      const secret = "/srv/private/jwt-secret-value";
+      process.env[envName] = secret;
+      const rawPath = `%${envName}%/missing`;
+
+      const res = await postSavePath({ path: rawPath });
+
+      expect(res.getStatusCode()).toBe(400);
+      expect(res.getBody().error).toContain(rawPath);
+      expect(res.getBody().error).not.toContain(secret);
+      expect(res.getBody().rejection).toMatchObject({
+        reason: "not-found",
+        tried: rawPath,
+      });
     });
 
     it("a path that exists but is a FILE, not a directory -> 400, rejection.reason 'not-a-directory'", async () => {

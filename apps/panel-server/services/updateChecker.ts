@@ -12,6 +12,7 @@ import {
   clearActiveSteamOperation,
 } from "./activeSteamOperations.ts";
 import { acquireLifecycleLock } from "./lifecycleCoordinator.ts";
+import { buildLinuxWritableHomeEnv } from "../utils/steamEnvironment.ts";
 
 type UpdateSocket = {
   emit: (event: string, payload: unknown) => void;
@@ -344,7 +345,10 @@ export class UpdateChecker {
           ]
             .filter(Boolean)
             .join(":");
-          spawnOpts.env = { ...process.env, LD_LIBRARY_PATH: ldPaths };
+          spawnOpts.env = {
+            ...buildLinuxWritableHomeEnv(steamcmdPath),
+            LD_LIBRARY_PATH: ldPaths,
+          };
           log.debug(
             `SteamCMD spawn: exe=${steamcmdExe}, LD_LIBRARY_PATH=${ldPaths}`,
           );
@@ -661,7 +665,24 @@ export class UpdateChecker {
       let code: number | null;
       try {
         code = await new Promise<number | null>((resolve, reject) => {
-          const child = spawn(steamcmdExe, ["+force_install_dir", String(configuredActiveServer.installPath), ...loginArgs, "+app_update", "380870", ...branch, "validate", "+quit"], { cwd: steamcmdPath });
+          const autoUpdateSpawnOpts: SpawnOptions = { cwd: steamcmdPath };
+          if (process.platform !== "win32") {
+            autoUpdateSpawnOpts.env = buildLinuxWritableHomeEnv(steamcmdPath);
+          }
+          const child = spawn(
+            steamcmdExe,
+            [
+              "+force_install_dir",
+              String(configuredActiveServer.installPath),
+              ...loginArgs,
+              "+app_update",
+              "380870",
+              ...branch,
+              "validate",
+              "+quit",
+            ],
+            autoUpdateSpawnOpts,
+          );
           child.once("error", reject);
           child.once("close", resolve);
         });

@@ -766,6 +766,7 @@ describe("Admin-gated server discovery routes", () => {
 describe("DELETE /api/servers/:id: deleting the active server must reload live services for whichever server becomes active, same as POST /:id/activate does", () => {
   let serverManager;
   let rconService;
+  let logTailer;
   let io;
 
   function buildReq(id, overrides = {}) {
@@ -773,7 +774,7 @@ describe("DELETE /api/servers/:id: deleting the active server must reload live s
       params: { id },
       user: { role: "admin" },
       app: {
-        get: (key) => ({ serverManager, rconService, io, modChecker: null })[key],
+        get: (key) => ({ serverManager, rconService, logTailer, io, modChecker: null })[key],
       },
       ...overrides,
     };
@@ -790,6 +791,7 @@ describe("DELETE /api/servers/:id: deleting the active server must reload live s
       reloadConfig: vi.fn(async () => {}),
       connect: vi.fn(async () => {}),
     };
+    logTailer = { reloadConfig: vi.fn(async () => {}) };
     io = { emit: vi.fn() };
   });
 
@@ -809,6 +811,7 @@ describe("DELETE /api/servers/:id: deleting the active server must reload live s
     expect(serverManager.reloadConfig).toHaveBeenCalled();
     expect(rconService.reloadConfig).toHaveBeenCalled();
     expect(rconService.connect).toHaveBeenCalled();
+    expect(logTailer.reloadConfig).toHaveBeenCalled();
     expect(io.emit).toHaveBeenCalledWith(
       "activeServerChanged",
       expect.objectContaining({ server: expect.objectContaining({ id: "promoted-2" }) }),

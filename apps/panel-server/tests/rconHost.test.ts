@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { normalizeRconHost } from "../services/rcon.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { normalizeRconHost, resolveEnvRconHost } from "../services/rcon.ts";
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("normalizeRconHost", () => {
   it("strips whitespace pasted around a host", () => {
@@ -17,5 +19,20 @@ describe("normalizeRconHost", () => {
     expect(normalizeRconHost("   ")).toBe("127.0.0.1");
     expect(normalizeRconHost(undefined)).toBe("127.0.0.1");
     expect(normalizeRconHost(null)).toBe("127.0.0.1");
+  });
+});
+
+describe("resolveEnvRconHost", () => {
+  it("uses RCON_HOST for split-container deployments", () => {
+    vi.stubEnv("RCON_HOST", "projectzomboid");
+    expect(resolveEnvRconHost()).toBe("projectzomboid");
+  });
+
+  it("keeps the co-located fallback and ignores the template placeholder", () => {
+    vi.stubEnv("RCON_HOST", "CHANGE_ME");
+    expect(resolveEnvRconHost()).toBe("127.0.0.1");
+
+    vi.stubEnv("RCON_HOST", "");
+    expect(resolveEnvRconHost()).toBe("127.0.0.1");
   });
 });

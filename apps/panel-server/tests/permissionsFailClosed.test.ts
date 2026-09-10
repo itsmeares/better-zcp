@@ -159,3 +159,38 @@ describe("requirePermission() fails closed", () => {
     });
   });
 });
+
+describe("requireAnyPermission() accepts either capability and fails closed", () => {
+  it("allows a role with the first capability", async () => {
+    const { requireAnyPermission } = await import("../services/permissions.ts");
+    rolesById.clear();
+    rolesById.set("role-technician", {
+      id: "role-technician",
+      name: "technician",
+      capabilities: ["bridge.setup"],
+    });
+
+    const { calledNext } = await runGate(
+      requireAnyPermission("bridge.setup", "bridge.diagnostics"),
+      { userId: "u1", role: "technician" },
+    );
+    expect(calledNext).toBe(true);
+  });
+
+  it("refuses a role with neither capability", async () => {
+    const { requireAnyPermission } = await import("../services/permissions.ts");
+    rolesById.clear();
+    rolesById.set("role-moderator", {
+      id: "role-moderator",
+      name: "moderator",
+      capabilities: ["players.view"],
+    });
+
+    const { res, calledNext } = await runGate(
+      requireAnyPermission("bridge.setup", "bridge.diagnostics"),
+      { userId: "u1", role: "moderator" },
+    );
+    expect(calledNext).toBe(false);
+    expect(res.getStatusCode()).toBe(403);
+  });
+});

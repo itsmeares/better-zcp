@@ -52,6 +52,9 @@ export function getLoginErrorMessage(error: unknown): string {
   if (error instanceof ApiError && typeof error.status === 'number' && error.status >= 500) {
     return getUserErrorMessage(error, LOGIN_FAILED_MESSAGE)
   }
+  if (error instanceof ApiError && error.status === 429) {
+    return getUserErrorMessage(error, LOGIN_FAILED_MESSAGE)
+  }
   return LOGIN_FAILED_MESSAGE
 }
 

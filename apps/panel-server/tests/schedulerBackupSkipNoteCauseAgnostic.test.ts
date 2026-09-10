@@ -20,6 +20,7 @@ vi.mock("node-cron", () => ({
       capturedBackupCallback = callback;
       return {
         stop: vi.fn(),
+        on: vi.fn(),
         getNextRun: () => null,
       };
     }),

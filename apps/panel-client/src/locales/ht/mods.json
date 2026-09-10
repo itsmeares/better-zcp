@@ -686,6 +686,8 @@
     "modOrderSavedDesc": "Òd chajman mods lan mete ajou nan INI sèvè a.",
     "saveOrderFailedTitle": "Sovgad Òd Echwe",
     "saveOrderFailedFallback": "Sove òd mods lan echwe",
+    "serverChangedSinceLoadTitle": "Active server changed",
+    "serverChangedSinceLoadDesc": "The active server changed while the mod order was being edited. Reset the order before saving.",
     "cannotReorderTitle": "Pa ka reòdone",
     "cannotReorderDesc": "Youn nan mods sa yo pa nan òd chajman aktif la.",
     "loadOrderUpdatedTitle": "Òd chajman mete ajou",

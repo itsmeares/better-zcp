@@ -449,34 +449,45 @@ router.get("/users", requirePermission("users.manage"), async (req, res) => {
   }
 });
 
-router.post("/users", requirePermission("users.manage"), async (req, res) => {
+router.post("/users", requirePermission("users.manage"), async (req: AuthenticatedRequest, res) => {
   try {
-    const { username, password, role } = req.body || {};
+    const { username, password, role, roleId } = req.body || {};
     if (!isNonEmptyString(username) || !isNonEmptyString(password)) {
       return res.status(400).json({
         error: "Username and password are required",
         code: ErrorCode.AUTH_USERNAME_PASSWORD_REQUIRED,
       });
     }
-    if (!USER_ROLES.includes(role)) {
+    const normalizedRoleId =
+      typeof roleId === "string" && roleId.trim() ? roleId.trim() : undefined;
+    if (!normalizedRoleId && !USER_ROLES.includes(role)) {
       return res.status(400).json({
         error: `role must be one of: ${USER_ROLES.join(", ")}`,
         code: ErrorCode.AUTH_INVALID_ROLE,
       });
     }
-    const user = await authService.createUser(username, password, role);
-    log.info(`User created by admin: ${username} (role: ${role})`);
+    const user = await authService.createUser(username, password, role, {
+      actingUserId: req.user?.userId,
+      roleId: normalizedRoleId,
+    });
+    log.info(`User created by admin: ${username} (role: ${user.role})`);
     res.status(201).json({ success: true, user });
   } catch (error: unknown) {
     log.warn(`User creation failed: ${errorMessage(error)}`);
-    res.status(400).json({ error: sanitizeError(errorMessage(error)) });
+    const details = routeError(error);
+    const body: Record<string, unknown> = {
+      error: sanitizeError(errorMessage(error)),
+    };
+    if (details.code) body.code = details.code;
+    if (details.params) body.params = sanitizeErrorParams(details.params);
+    res.status(details.status || 400).json(body);
   }
 });
 
 router.patch(
   "/users/:id/role",
   requirePermission("users.manage"),
-  async (req, res) => {
+  async (req: AuthenticatedRequest, res) => {
     try {
       const { roleId, role } = req.body || {};
       let user;
@@ -484,6 +495,7 @@ router.patch(
         user = await authService.changeUserRoleById(
           String(req.params.id),
           roleId.trim(),
+          { actingUserId: req.user?.userId },
         );
       } else {
         if (!USER_ROLES.includes(role)) {
@@ -492,7 +504,9 @@ router.patch(
             code: ErrorCode.AUTH_INVALID_ROLE,
           });
         }
-        user = await authService.changeUserRole(String(req.params.id), role);
+        user = await authService.changeUserRole(String(req.params.id), role, {
+          actingUserId: req.user?.userId,
+        });
       }
       log.info(`Role changed by admin: ${user.username} -> ${user.role}`);
       res.json({ success: true, user });

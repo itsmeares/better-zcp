@@ -701,6 +701,8 @@
     "modOrderSavedDesc": "L'ordre de chargement des mods a été mis à jour dans l'INI du serveur.",
     "saveOrderFailedTitle": "Échec de l'enregistrement de l'ordre",
     "saveOrderFailedFallback": "Échec de l'enregistrement de l'ordre des mods",
+    "serverChangedSinceLoadTitle": "Active server changed",
+    "serverChangedSinceLoadDesc": "The active server changed while the mod order was being edited. Reset the order before saving.",
     "cannotReorderTitle": "Réorganisation impossible",
     "cannotReorderDesc": "L'un de ces mods n'est pas dans l'ordre de chargement actif.",
     "loadOrderUpdatedTitle": "Ordre de chargement mis à jour",

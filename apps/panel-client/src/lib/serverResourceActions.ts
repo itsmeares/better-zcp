@@ -359,11 +359,13 @@ export const restoreBackup = createResourceAction(
     const [
       { getActiveServer },
       { acquireLifecycleLock, lifecycleInProgressResponse },
+      { hasActiveSteamOperation },
       { ErrorCode },
       pathModule,
     ] = await Promise.all([
       import('../../../panel-server/database/init.ts'),
       import('../../../panel-server/services/lifecycleCoordinator.ts'),
+      import('../../../panel-server/services/activeSteamOperations.ts'),
       import('../../../panel-server/utils/errorCodes.ts'),
       import('node:path'),
     ])
@@ -387,6 +389,23 @@ export const restoreBackup = createResourceAction(
           ),
           400,
         )
+      }
+
+      if (activeServerForLock?.installPath) {
+        const normalizedRestoreTargetPath = pathModule
+          .normalize(activeServerForLock.installPath)
+          .toLowerCase()
+        if (hasActiveSteamOperation(normalizedRestoreTargetPath)) {
+          throwResourceError(
+            Object.assign(
+              new Error(
+                'A Steam operation is already in progress for this path. Please wait for it to complete.',
+              ),
+              { code: ErrorCode.STEAM_OPERATION_IN_PROGRESS_PATH },
+            ),
+            409,
+          )
+        }
       }
 
       const runtime = await panelRuntime()

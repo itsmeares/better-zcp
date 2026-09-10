@@ -92,6 +92,7 @@ function profileRuntime(req: Request) {
     rconService: get("rconService"),
     serverManager: get("serverManager"),
     modChecker: get("modChecker"),
+    logTailer: get("logTailer"),
     io: get("io"),
     refreshWorkshopChecker: get("refreshWorkshopChecker"),
     autoInstallBridgeIfNeeded: get("autoInstallBridgeIfNeeded"),

@@ -19,7 +19,7 @@ import {
 import { sanitizeError, sanitizeErrorParams, isMaskedSecret } from "../utils/sanitize.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { persistSandboxValues } from "../services/sandboxPersistence.ts";
-import { requirePermission } from "../services/permissions.ts";
+import { requireAnyPermission, requirePermission } from "../services/permissions.ts";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import {
   getEmbeddedPanelBridgeLua,
@@ -150,7 +150,10 @@ function isValidBridgePath(inputPath: any) {
 }
 
 
-router.get("/status", async (req, res) => {
+router.get(
+  "/status",
+  requireAnyPermission("bridge.setup", "bridge.diagnostics"),
+  async (req, res) => {
   const status = bridge.getStatus() as AnyRecord;
 
   let detectedPaths: AnyRecord | null = null;
@@ -192,7 +195,8 @@ router.get("/status", async (req, res) => {
     localInstall,
     remoteBridgeVersionCheck,
   });
-});
+  },
+);
 
 router.post("/auto-configure", requirePermission("bridge.setup"), async (req, res) => {
   try {
@@ -3181,14 +3185,24 @@ router.post("/character/import", requirePermission("players.gm_tools"), async (r
     const exportDir = path.join(dataDir, "exports", safeUsername);
     fs.mkdirSync(exportDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    snapshotPath = path.join(
-      exportDir,
-      `${safeUsername}_pre-import_${timestamp}.json`,
-    );
-    fs.writeFileSync(
-      snapshotPath,
-      JSON.stringify(snapshot.data ?? snapshot, null, 2),
-    );
+    const snapshotBaseName = `${safeUsername}_pre-import_${timestamp}`;
+    const snapshotContents = JSON.stringify(snapshot.data ?? snapshot, null, 2);
+    for (let collision = 1; ; collision++) {
+      const suffix = collision === 1 ? "" : `-${collision}`;
+      snapshotPath = path.join(exportDir, `${snapshotBaseName}${suffix}.json`);
+      try {
+        const descriptor = fs.openSync(snapshotPath, "wx");
+        try {
+          fs.writeFileSync(descriptor, snapshotContents);
+        } finally {
+          fs.closeSync(descriptor);
+        }
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") continue;
+        throw error;
+      }
+    }
   } catch (error: any) {
     return res.status(502).json({
       error: `Could not snapshot ${username}'s current data before import — refusing to overwrite without a recovery copy: ${sanitizeError(error.message)}`,

@@ -94,6 +94,26 @@ export class LogTailer extends EventEmitter {
     this.startWatching();
   }
 
+  async reloadConfig(): Promise<void> {
+    const wasWatching = this.isWatching;
+    if (wasWatching) this.stopWatching();
+
+    this.basePath = null;
+    this.logsDir = null;
+    this.logPath = null;
+    this.chatLogPath = null;
+    this.chatLogSize = 0;
+    this.currentSize = 0;
+    this.userLogPath = null;
+    this.userLogSize = 0;
+    this.consoleRemainder = '';
+    this.chatRemainder = '';
+    this.userRemainder = '';
+
+    await this.findLogPath();
+    if (wasWatching) await this.startWatching();
+  }
+
   async findLogPath(): Promise<void> {
     try {
         const activeServer = await getActiveServer();

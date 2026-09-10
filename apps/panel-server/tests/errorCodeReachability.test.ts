@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { apiErrorHandler, handlePanelUpdateDownload } from "../index.ts";
+import {
+  apiErrorHandler,
+  handlePanelUpdateDownload,
+  handlePanelUpdateStatus,
+} from "../index.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 
@@ -124,5 +128,34 @@ describe("handlePanelUpdateDownload: downloadUpdate()'s result reaches res.json(
 
     expect(res.status).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({ success: true, version: "1.2.3" });
+  });
+});
+
+describe("handlePanelUpdateStatus: checker failures become API errors", () => {
+  function createRequest(checker) {
+    return {
+      app: { get: (key) => (key === "panelUpdateChecker" ? checker : undefined) },
+    };
+  }
+
+  it("returns the checker status when it succeeds", async () => {
+    const res = createResponse();
+    await handlePanelUpdateStatus(
+      createRequest({ getStatus: () => ({ state: "idle" }) }),
+      res,
+    );
+
+    expect(res.json).toHaveBeenCalledWith({ state: "idle" });
+  });
+
+  it("returns a sanitized 500 response when getStatus throws", async () => {
+    const res = createResponse();
+    await handlePanelUpdateStatus(
+      createRequest({ getStatus: () => { throw new Error("status failed"); } }),
+      res,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: "status failed" });
   });
 });

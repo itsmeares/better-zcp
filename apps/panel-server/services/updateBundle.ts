@@ -538,10 +538,11 @@ export function applyUpdateBundle(journalPath: string): UpdateBundleJournal {
   try {
     stagedBinaryHash = sha256File(paths.stagedBinary);
   } catch (error) {
-    if (errorCode(error) === "ENOENT") {
-      throw updateError("av_quarantine", "Staged update binary is missing", error);
-    }
-    throw error;
+    throw updateError(
+      "hash_unverifiable",
+      "Could not verify staged update binary",
+      error,
+    );
   }
   if (stagedBinaryHash !== journal.hashes.binarySha256) {
     throw updateError("av_quarantine", "Staged update binary hash changed");
@@ -550,10 +551,11 @@ export function applyUpdateBundle(journalPath: string): UpdateBundleJournal {
   try {
     ({ hash: stagedClientHash } = sha256Directory(paths.stagedClient));
   } catch (error) {
-    if (errorCode(error) === "ENOENT") {
-      throw updateError("av_quarantine", "Staged client bundle is missing", error);
-    }
-    throw error;
+    throw updateError(
+      "hash_unverifiable",
+      "Could not verify staged client bundle",
+      error,
+    );
   }
   if (stagedClientHash !== journal.hashes.clientSha256) {
     throw updateError("av_quarantine", "Staged client bundle hash changed");

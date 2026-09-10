@@ -79,6 +79,34 @@ export function permissionMiddleware(capability: string) {
   )
 }
 
+export function anyPermissionMiddleware(...capabilities: string[]) {
+  return createMiddleware({ type: 'request' }).server(
+    async ({ context, next }) => {
+      const user = (
+        context as unknown as { authenticatedUser?: AuthContextUser }
+      ).authenticatedUser
+      if (!user) {
+        return Response.json(
+          { error: 'Authentication required', code: 'AUTH_REQUIRED' },
+          { status: 401 },
+        )
+      }
+
+      const { getCapabilitiesForRole } =
+        await import('../../../panel-server/services/permissions.ts')
+      const roleCapabilities = await getCapabilitiesForRole(user.role)
+      if (!roleCapabilities?.some((capability) => capabilities.includes(capability))) {
+        return Response.json(
+          { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+          { status: 403 },
+        )
+      }
+
+      return next()
+    },
+  )
+}
+
 function roleMiddleware(role: string) {
   return createMiddleware({ type: 'request' }).server(
     async ({ context, next }) => {

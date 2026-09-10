@@ -59,6 +59,19 @@ export function isLifecycleLocked(): boolean {
   return activeLock !== null;
 }
 
+export function isLifecycleLockedForServer(server: unknown): boolean {
+  if (!activeLock || !server || typeof server !== "object") return false;
+  const record = server as Record<string, unknown>;
+  if (record.id === undefined || record.id === null || record.id === "") {
+    return false;
+  }
+  const identifiers = [record.id, record.name, record.serverName]
+    .filter((value) => value !== undefined && value !== null && value !== "")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+  return identifiers.includes(activeLock.serverName || "");
+}
+
 export function getActiveLifecycleOperation(): string | null {
   return activeLock?.operation ?? null;
 }

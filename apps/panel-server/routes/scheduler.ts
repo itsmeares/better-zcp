@@ -316,6 +316,15 @@ router.put('/tasks/:id', async (req, res) => {
       ? { ...previousTaskRecord }
       : null;
 
+    if (command === undefined && normalizedEnabled === 1) {
+      const allowed = await requireCapabilityInline(
+        requiredCapabilityForScheduledCommand(previousTaskRecord?.command),
+        req,
+        res,
+      );
+      if (!allowed) return;
+    }
+
     const updated = await updateScheduledTask(taskId, name, cronExpression, command, normalizedEnabled, serverId);
     if (!updated) {
       return res.status(404).json({ error: 'Task not found', code: ErrorCode.SCHEDULER_TASK_NOT_FOUND });

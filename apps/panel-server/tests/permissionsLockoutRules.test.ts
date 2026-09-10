@@ -77,6 +77,49 @@ describe("createRole", () => {
     expect(role.capabilities.slice().sort()).toEqual(["players.gm_tools", "players.view"]);
     expect(role.isSeeded).toBe(false);
   });
+
+  it("refuses a caller from adding capabilities their own role does not hold", async () => {
+    seedRole("role-limited", "Limited Roles Editor", ["roles.manage"]);
+
+    await expect(
+      createRole(
+        { name: "Escalating Role", capabilities: ["roles.manage", "server.control"] },
+        { actingUser: { role: "Limited Roles Editor" } },
+      ),
+    ).rejects.toMatchObject({
+      code: "ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES",
+      params: { detail: "server.control", missing: ["server.control"] },
+    });
+    expect(Array.from(rolesById.values())).toHaveLength(1);
+  });
+});
+
+describe("updateRole -- capability escalation", () => {
+  it("refuses adding an unheld capability to an existing role before writing it", async () => {
+    seedRole("role-limited", "Limited Roles Editor", ["roles.manage"]);
+    seedRole("role-target", "Target", ["players.view"]);
+
+    await expect(
+      updateRole(
+        "role-target",
+        { capabilities: ["players.view", "server.control"] },
+        { actingUser: { role: "Limited Roles Editor" } },
+      ),
+    ).rejects.toMatchObject({ code: "ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES" });
+    expect(rolesById.get("role-target").capabilities).toEqual(["players.view"]);
+  });
+
+  it("allows edits that add no new capability, even when the role already has broader access", async () => {
+    seedRole("role-limited", "Limited Roles Editor", ["roles.manage"]);
+    seedRole("role-target", "Target", ["players.view", "server.control"]);
+
+    const updated = await updateRole(
+      "role-target",
+      { name: "Renamed Target", capabilities: ["players.view", "server.control"] },
+      { actingUser: { role: "Limited Roles Editor" } },
+    );
+    expect(updated.name).toBe("Renamed Target");
+  });
 });
 
 describe("updateRole -- lockout rule 1 (hard block, capability check not role-name check)", () => {

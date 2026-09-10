@@ -170,6 +170,8 @@
     "chunksDeletedVehicles_other": " + {{count}} 辆载具（存档数据库）",
     "chunksDeletedBackupSuffix": " （已创建备份）",
     "deleteChunksFailedFallback": "删除区块失败",
+    "activeServerChangedTitle": "Active server changed",
+    "activeServerChangedDesc": "The active server changed while chunks were loaded. The scan was cleared — pick a save again before deleting.",
     "chunksDeletedPartialTitle": "部分 Chunk 无法删除",
     "chunksDeletedPartialDesc_one": "已删除 {{deleted}} 个 Chunk，但 {{count}} 个失败。请确认文件未被其他进程占用后重试。",
     "chunksDeletedPartialDesc_other": "已删除 {{deleted}} 个 Chunk，但 {{count}} 个失败。请确认文件未被其他进程占用后重试。"

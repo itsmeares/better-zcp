@@ -559,15 +559,12 @@ export class PanelBridgeSftpTransport {
   getStatus(): {
     type: string;
     running: boolean;
-    cachePath: string | null;
     lastSyncAt: number | null;
     lastLatencyMs: number | null;
     lastError: string | null;
     lastErrorGuidance: string | null;
     lastErrorCode: string | null;
     pollIntervalSeconds: number | null;
-    remotePath: string | null;
-    remoteDirectories: { bridge: string; inbox: string; outbox: string } | null;
     diagnostics: {
       connected: boolean;
       connectionAttempts: number;
@@ -583,19 +580,12 @@ export class PanelBridgeSftpTransport {
     return {
       type: 'sftp',
       running: this.running,
-      cachePath: this.cachePath,
       lastSyncAt: this.lastSyncAt,
       lastLatencyMs: this.lastLatencyMs,
       lastError: this.lastError,
       lastErrorGuidance: this.lastError ? getSftpErrorGuidance({ message: this.lastError }) : null,
       lastErrorCode: this.lastError ? classifySftpErrorCode({ message: this.lastError }) : null,
       pollIntervalSeconds: this.config?.pollIntervalSeconds ?? null,
-      remotePath: this.config?.bridgePath ?? null,
-      remoteDirectories: this.config ? {
-        bridge: this.config.bridgePath,
-        inbox: `${this.config.bridgePath}/inbox`,
-        outbox: `${this.config.bridgePath}/outbox`,
-      } : null,
       diagnostics: {
         connected: Boolean(this.client),
         connectionAttempts: this.connectionAttempts,

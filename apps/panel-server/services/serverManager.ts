@@ -1,7 +1,6 @@
 import { spawn, exec, execFile } from "child_process";
 import path from "path";
 import fs from "fs";
-import os from "os";
 import net from "net";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("Server");
@@ -22,6 +21,8 @@ import {
   isManagedLifecycleProvider,
 } from "./linuxServiceLifecycle.ts";
 import { hasActiveSteamOperation } from "./activeSteamOperations.ts";
+import { listNonInternalIPv4Interfaces } from "../utils/networkInterfaces.ts";
+import { buildLinuxWritableHomeEnv } from "../utils/steamEnvironment.ts";
 
 const isWindows = process.platform === "win32";
 const PUBLIC_IP_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -1061,7 +1062,10 @@ export class ServerManager {
             cwd,
             detached: true,
             stdio: launchStdio,
-            env: { ...process.env, LD_LIBRARY_PATH: ldPath },
+            env: {
+              ...buildLinuxWritableHomeEnv(serverAbsPath),
+              LD_LIBRARY_PATH: ldPath,
+            },
           });
         } else {
           if (!isWindows) {
@@ -1076,7 +1080,7 @@ export class ServerManager {
             : (() => {
                 const serverAbsPath = path.resolve(cwd);
                 return {
-                  ...process.env,
+                  ...buildLinuxWritableHomeEnv(serverAbsPath),
                   LD_LIBRARY_PATH: buildLdLibraryPath(serverAbsPath),
                 };
               })();
@@ -1149,7 +1153,10 @@ export class ServerManager {
           cwd: this.serverPath,
           detached: true,
           stdio: launchStdio,
-          env: { ...process.env, LD_LIBRARY_PATH: ldPath },
+          env: {
+            ...buildLinuxWritableHomeEnv(serverAbsPath),
+            LD_LIBRARY_PATH: ldPath,
+          },
         });
       }
       this._closeLaunchLogFd();
@@ -1787,16 +1794,7 @@ export class ServerManager {
   }
 
   listNetworkInterfaces() {
-    const interfaces = os.networkInterfaces();
-    const result = [];
-    for (const name of Object.keys(interfaces)) {
-      for (const iface of interfaces[name] ?? []) {
-        if (iface.family === "IPv4" && !iface.internal) {
-          result.push({ name, address: iface.address });
-        }
-      }
-    }
-    return result;
+    return listNonInternalIPv4Interfaces();
   }
 
   async getLocalIp() {

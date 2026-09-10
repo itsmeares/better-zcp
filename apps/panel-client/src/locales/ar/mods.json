@@ -701,6 +701,8 @@
     "modOrderSavedDesc": "تم تحديث ترتيب تحميل المودات في ملف INI للخادم.",
     "saveOrderFailedTitle": "فشل حفظ الترتيب",
     "saveOrderFailedFallback": "تعذّر حفظ ترتيب المودات",
+    "serverChangedSinceLoadTitle": "Active server changed",
+    "serverChangedSinceLoadDesc": "The active server changed while the mod order was being edited. Reset the order before saving.",
     "cannotReorderTitle": "تعذّرت إعادة الترتيب",
     "cannotReorderDesc": "أحد هذه المودات ليس ضمن ترتيب التحميل النشط.",
     "loadOrderUpdatedTitle": "تم تحديث ترتيب التحميل",

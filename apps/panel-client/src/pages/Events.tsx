@@ -70,6 +70,7 @@ import { HelpTip } from '@/components/HelpTip'
 import { cn } from '@/lib/utils'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { useConfirm } from '@/contexts/ConfirmContext'
+import { useSocket } from '@/contexts/SocketContext'
 
 interface Player {
   name: string
@@ -1174,6 +1175,7 @@ export default function Events() {
 
   const { toast } = useToast()
   const confirm = useConfirm()
+  const socket = useSocket()
 
   const [activeSection, setActiveSection] = useState<EventSectionKey>('rain')
   const [sectionQuery, setSectionQuery] = useState('')
@@ -1326,6 +1328,16 @@ export default function Events() {
       clearInterval(bridgeInterval)
     }
   }, [fetchPlayers, checkBridgeStatus])
+
+  useEffect(() => {
+    if (!socket) return
+    const handleActiveServerChanged = () => {
+      fetchPlayers()
+      checkBridgeStatus()
+    }
+    socket.on('activeServerChanged', handleActiveServerChanged)
+    return () => { socket.off('activeServerChanged', handleActiveServerChanged) }
+  }, [socket, fetchPlayers, checkBridgeStatus])
 
   useEffect(() => {
     if (!bridgeConnected) {

@@ -25,7 +25,7 @@ function getHandler(routePath, method) {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
-  return layer.route.stack[0].handle;
+  return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
 function createResponse() {
