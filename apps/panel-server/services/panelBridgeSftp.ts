@@ -161,6 +161,7 @@ export function getSftpCachePath(
   username: string,
   bridgePath: string,
 ): string {
+  // codeql[js/insufficient-password-hash] This digest keys a cache from non-secret connection identity fields; the password is intentionally excluded.
   const key = crypto
     .createHash('sha256')
     .update(`${host}:${port}:${username}:${bridgePath}`)

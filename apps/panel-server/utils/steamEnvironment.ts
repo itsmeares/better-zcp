@@ -6,6 +6,7 @@ import { getDataPaths } from "./paths.ts";
 function getSteamHomePath(basePath: string): string {
   const base = path.resolve(basePath);
   const label = path.basename(base).replace(/[^a-zA-Z0-9_-]/g, "_") || "instance";
+  // codeql[js/insufficient-password-hash] This digest names a private HOME directory from an install path; it never receives a password or secret.
   const digest = crypto.createHash("sha256").update(base, "utf8").digest("hex").slice(0, 16);
   const homeRoot = path.join(getDataPaths().dataDir, "steam-homes");
   return path.join(homeRoot, `${label}-${digest}`);
