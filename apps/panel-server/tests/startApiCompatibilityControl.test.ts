@@ -82,6 +82,80 @@ const mocks = vi.hoisted(() => {
     getPlayerNote: resource("getPlayerNote"),
     getPlayerStats: resource("getPlayerStats"),
     getPlayerStat: resource("getPlayerStat"),
+    getBackupStatus: resource("getBackupStatus"),
+    getBackupInfo: resource("getBackupInfo"),
+    getBackups: resource("getBackups"),
+    getBackupHistory: resource("getBackupHistory"),
+    getBackupSnapshot: resource("getBackupSnapshot"),
+  };
+
+  const serverFunction = (name: string) => {
+    const implementation = vi.fn(async (data: unknown) => ({
+      handledBy: name,
+      data,
+    }));
+    return Object.assign(implementation, {
+      __executeImplementation: implementation,
+    });
+  };
+  const admin = Object.fromEntries(
+    [
+      "getAppSettings",
+      "updateAppSettings",
+      "getCorsDiagnostics",
+      "reloadCorsDiagnostics",
+      "clearCorsBlockedOrigins",
+      "testAppRconConnection",
+      "getDebugRam",
+      "getPerformanceHistory",
+      "changePassword",
+      "getManagedUsers",
+      "createManagedUser",
+      "assignManagedUserRole",
+      "removeManagedUser",
+      "regenerateJwtSecret",
+      "getRecoveryCodes",
+      "generateRecoveryCodes",
+      "getOidcSettings",
+      "updateOidcSettings",
+      "testOidcConnection",
+    ].map((name) => [name, serverFunction(name)]),
+  );
+  const auth = Object.fromEntries(
+    ["getAuthStatus", "getCurrentUser", "getRecoveryStatus", "getOidcStatus"].map(
+      (name) => [name, serverFunction(name)],
+    ),
+  );
+  const mods = Object.fromEntries(
+    [
+      "getModsStatus",
+      "getTrackedMods",
+      "trackMod",
+      "untrackMod",
+      "getIgnoredMods",
+      "unignoreMod",
+      "clearAllIgnoredMods",
+      "getIgnoredModPairs",
+      "addIgnoredModPair",
+      "removeIgnoredModPair",
+      "getServerMods",
+      "startModChecker",
+      "stopModChecker",
+      "setModAutoRestart",
+      "setModRestartOptions",
+      "getWorkshopStatus",
+      "cancelPendingModRestart",
+      "getModPresets",
+      "updateModPreset",
+      "deleteModPreset",
+      "addCollectionItem",
+      "removeCollectionItem",
+      "removeCollectionTracking",
+      "saveCollectionCookies",
+    ].map((name) => [name, serverFunction(name)]),
+  );
+  const system = {
+    getStorageHealth: serverFunction("getStorageHealth"),
   };
 
   return {
@@ -89,6 +163,10 @@ const mocks = vi.hoisted(() => {
     getCapabilities: vi.fn(),
     control,
     resources,
+    admin,
+    auth,
+    mods,
+    system,
   };
 });
 
@@ -100,6 +178,10 @@ vi.mock("../services/permissions.ts", () => ({
 }));
 vi.mock("../../panel-client/src/lib/serverGameControl.ts", () => mocks.control);
 vi.mock("../../panel-client/src/lib/serverResourceReads.ts", () => mocks.resources);
+vi.mock("../../panel-client/src/lib/serverAdmin.ts", () => mocks.admin);
+vi.mock("../../panel-client/src/lib/serverAuth.ts", () => mocks.auth);
+vi.mock("../../panel-client/src/lib/serverMods.ts", () => mocks.mods);
+vi.mock("../../panel-client/src/lib/serverSystem.ts", () => mocks.system);
 
 const { handleStartApiCompatibilityRequest } = await import(
   "../../panel-client/src/lib/startApiCompatibility.ts"
@@ -188,6 +270,9 @@ beforeEach(() => {
     "server.configure",
     "servers.manage",
     "servers.discover",
+    "panel.settings",
+    "diagnostics.manage",
+    "mods.manage",
     "players.view",
     "players.moderate",
     "players.gm_tools",
@@ -196,6 +281,10 @@ beforeEach(() => {
   for (const fn of [
     ...Object.values(mocks.control),
     ...Object.values(mocks.resources),
+    ...Object.values(mocks.admin),
+    ...Object.values(mocks.auth),
+    ...Object.values(mocks.mods),
+    ...Object.values(mocks.system),
   ]) {
     fn.mockClear();
   }
@@ -327,6 +416,125 @@ describe("Start compatibility server and player routes", () => {
       code: "PERMISSION_DENIED",
     });
     expect(mocks.control.kickPlayer).not.toHaveBeenCalled();
+  });
+
+  it("keeps public status endpoints public", async () => {
+    mocks.authenticate.mockRejectedValue(new Error("must not authenticate"));
+
+    const response = await handleStartApiCompatibilityRequest(
+      new Request("http://panel.test/api/auth/status"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await responseBody(response)).toEqual({
+      handledBy: "getAuthStatus",
+      data: {},
+    });
+    expect(mocks.authenticate).not.toHaveBeenCalled();
+  });
+
+  it("accepts any permitted backup capability", async () => {
+    mocks.getCapabilities.mockResolvedValue(["backups.download"]);
+
+    const response = await handleStartApiCompatibilityRequest(
+      makeRequest("GET", "/api/backup/history?limit=25&serverId=server-1"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await responseBody(response)).toEqual({
+      handledBy: "getBackupHistory",
+      data: { limit: "25", serverId: "server-1" },
+    });
+    expect(mocks.resources.getBackupHistory).toHaveBeenCalledWith(
+      { limit: "25", serverId: "server-1" },
+      expect.objectContaining({ authenticatedUser: expect.any(Object) }),
+    );
+  });
+
+  it("preserves legacy query-token authentication", async () => {
+    const response = await handleStartApiCompatibilityRequest(
+      new Request("http://panel.test/api/auth/me?token=query-token"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.authenticate).toHaveBeenCalledWith("Bearer query-token");
+  });
+
+  it.each([
+    ["POST", "/api/auth/regenerate-jwt-secret", "regenerateJwtSecret"],
+    ["GET", "/api/auth/recovery-codes", "getRecoveryCodes"],
+    ["POST", "/api/auth/recovery-codes", "generateRecoveryCodes"],
+  ])("keeps %s %s admin-only", async (method, path, functionName) => {
+    mocks.authenticate.mockResolvedValue({
+      ok: true,
+      user: {
+        userId: "user-1",
+        username: "operator",
+        role: "operator",
+        tokenGen: 0,
+      },
+    });
+
+    const response = await handleStartApiCompatibilityRequest(
+      makeRequest(method, path),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await responseBody(response)).toEqual({
+      error: "Insufficient permissions",
+      code: "PERMISSION_DENIED",
+    });
+    expect(mocks.admin[functionName]).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["GET", "/api/system/storage-health", "system", "getStorageHealth"],
+    ["PUT", "/api/config/app-settings", "admin", "updateAppSettings"],
+    ["GET", "/api/mods/status", "mods", "getModsStatus"],
+    ["DELETE", "/api/mods/track/123", "mods", "untrackMod"],
+    ["GET", "/api/auth/me", "auth", "getCurrentUser"],
+    ["GET", "/api/debug/performance-history?limit=12", "admin", "getPerformanceHistory"],
+  ])(
+    "dispatches the migrated %s %s endpoint to %s.%s",
+    async (method, path, source, functionName) => {
+      const response = await handleStartApiCompatibilityRequest(
+        makeRequest(method, path, method === "PUT" ? { settings: { darkMode: true } } : undefined),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await responseBody(response)).toEqual({
+        handledBy: functionName,
+        data:
+          path === "/api/config/app-settings"
+            ? { settings: { darkMode: true } }
+            : path === "/api/mods/track/123"
+              ? { workshopId: "123" }
+              : path.includes("performance-history")
+                ? { limit: 12 }
+                : {},
+      });
+      expect((mocks[source] as Record<string, ReturnType<typeof vi.fn>>)[functionName]).toHaveBeenCalled();
+    },
+  );
+
+  it("keeps the legacy performance-history default and clamp", async () => {
+    const response = await handleStartApiCompatibilityRequest(
+      makeRequest("GET", "/api/debug/performance-history?limit=9999"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await responseBody(response)).toEqual({
+      handledBy: "getPerformanceHistory",
+      data: { limit: 1440 },
+    });
+
+    const defaultResponse = await handleStartApiCompatibilityRequest(
+      makeRequest("GET", "/api/debug/performance-history"),
+    );
+    expect(await responseBody(defaultResponse)).toEqual({
+      handledBy: "getPerformanceHistory",
+      data: { limit: 60 },
+    });
   });
 
   it.each(["/api/servers/status", "/api/servers/rcon-status"])(
