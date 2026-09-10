@@ -116,6 +116,7 @@ import { requireRole } from "./services/auth.ts";
 import { registerApiRoutes } from "./http/registerApiRoutes.ts";
 import {
   apiErrorHandler as handleApiError,
+  registerTanStackStartApiRoute,
   registerPanelWebRoutes,
   sendClientIndex,
 } from "./http/panelWeb.ts";
@@ -138,6 +139,7 @@ import {
 } from "./utils/embeddedClient.ts";
 import { resolveObservedServerRunning } from "./utils/serverStatus.ts";
 import { discoverMounts } from "./services/mountDiscovery.ts";
+import { buildPanelHealthPayload } from "./utils/panelHealth.ts";
 import { shouldAutoOpenBrowser } from "./utils/browserLaunch.ts";
 import { isLinuxPanelSupervisor } from "./utils/restartSupervisor.ts";
 import { acquireLifecycleLock } from "./services/lifecycleCoordinator.ts";
@@ -1158,6 +1160,16 @@ const _buildMetadata = {
   buildSha: _buildSha,
   apiContractVersion: _apiContractVersion,
 };
+const isPackaged = typeof process.pkg !== "undefined";
+const clientDistPath = cspClientDistPath;
+const panelWebOptions = {
+  isPackaged,
+  clientDistPath,
+  externalClientDistPath,
+  embeddedClientDistPath,
+  buildMetadata: _buildMetadata,
+  logger: log,
+};
 
 function updateBundleJournalPath() {
   return path.join(path.dirname(panelUpdateChecker.getExeBasePath()), "update-bundle.json");
@@ -1176,13 +1188,9 @@ function inspectPendingPanelUpdate() {
     runningMetadata: _buildMetadata,
   });
 }
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    version: _pkgVersion,
-    ..._buildMetadata,
-    timestamp: new Date().toISOString(),
-  });
+registerTanStackStartApiRoute(app, panelWebOptions, "/api/health");
+app.get("/api/health", (_req, res) => {
+  res.json(buildPanelHealthPayload(_buildMetadata));
 });
 
 app.get("/api/panel-info", async (req, res) => {
@@ -1536,8 +1544,6 @@ app.post(
   handlePanelUpdateDownload,
 );
 
-const isPackaged = typeof process.pkg !== "undefined";
-const clientDistPath = cspClientDistPath;
 export function apiErrorHandler(
   err: AnyRecord,
   req: Request,
@@ -1548,14 +1554,7 @@ export function apiErrorHandler(
 }
 
 app.use("/api", apiErrorHandler);
-registerPanelWebRoutes(app, {
-  isPackaged,
-  clientDistPath,
-  externalClientDistPath,
-  embeddedClientDistPath,
-  buildMetadata: _buildMetadata,
-  logger: log,
-});
+registerPanelWebRoutes(app, panelWebOptions);
 
 export { sendClientIndex };
 

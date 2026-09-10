@@ -3,7 +3,10 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
-import { registerPanelWebRoutes } from "../http/panelWeb.ts";
+import {
+  registerPanelWebRoutes,
+  registerTanStackStartApiRoute,
+} from "../http/panelWeb.ts";
 import { sendClientIndex } from "../index.ts";
 
 let temporaryRoot;
@@ -108,5 +111,101 @@ describe("SPA fallback", () => {
     expect(await missingApiResponse.json()).toEqual({
       error: "API endpoint not found",
     });
+  });
+
+  it("serves the Start API route before its Express fallback", async () => {
+    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-start-api-"));
+    const clientDistPath = path.join(temporaryRoot, "client", "dist");
+    const startDistPath = path.join(
+      temporaryRoot,
+      "client",
+      "dist-start-server",
+    );
+    fs.mkdirSync(clientDistPath, { recursive: true });
+    fs.mkdirSync(startDistPath, { recursive: true });
+    fs.writeFileSync(path.join(temporaryRoot, "package.json"), '{"type":"module"}');
+    fs.writeFileSync(
+      path.join(startDistPath, "server.js"),
+      "export default { fetch: async (request) => new URL(request.url).pathname === '/api/health' ? Response.json({ source: 'start' }) : new Response('<html>not found</html>', { headers: { 'content-type': 'text/html' } }) }",
+    );
+
+    const app = express();
+    registerTanStackStartApiRoute(
+      app,
+      {
+        isPackaged: false,
+        clientDistPath,
+        externalClientDistPath: clientDistPath,
+        embeddedClientDistPath: null,
+        buildMetadata: {
+          panelVersion: "2.0.0",
+          buildSha: "test-build",
+          apiContractVersion: 1,
+        },
+        logger: { debug() {}, warn() {}, error() {} },
+      },
+      "/api/health",
+    );
+    app.get("/api/health", (_req, res) => {
+      res.json({ source: "express" });
+    });
+    server = await new Promise((resolve) => {
+      const listener = app.listen(0, () => resolve(listener));
+    });
+
+    const address = server.address();
+    const startResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/health`,
+    );
+    expect(startResponse.status).toBe(200);
+    expect(await startResponse.json()).toEqual({ source: "start" });
+  });
+
+  it("falls back when an old Start bundle renders an API path as HTML", async () => {
+    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-start-api-"));
+    const clientDistPath = path.join(temporaryRoot, "client", "dist");
+    const startDistPath = path.join(
+      temporaryRoot,
+      "client",
+      "dist-start-server",
+    );
+    fs.mkdirSync(clientDistPath, { recursive: true });
+    fs.mkdirSync(startDistPath, { recursive: true });
+    fs.writeFileSync(path.join(temporaryRoot, "package.json"), '{"type":"module"}');
+    fs.writeFileSync(
+      path.join(startDistPath, "server.js"),
+      "export default { fetch: async () => new Response('<html>legacy</html>', { headers: { 'content-type': 'text/html' } }) }",
+    );
+
+    const app = express();
+    registerTanStackStartApiRoute(
+      app,
+      {
+        isPackaged: false,
+        clientDistPath,
+        externalClientDistPath: clientDistPath,
+        embeddedClientDistPath: null,
+        buildMetadata: {
+          panelVersion: "2.0.0",
+          buildSha: "test-build",
+          apiContractVersion: 1,
+        },
+        logger: { debug() {}, warn() {}, error() {} },
+      },
+      "/api/health",
+    );
+    app.get("/api/health", (_req, res) => {
+      res.json({ source: "express" });
+    });
+    server = await new Promise((resolve) => {
+      const listener = app.listen(0, () => resolve(listener));
+    });
+
+    const address = server.address();
+    const fallbackResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/health`,
+    );
+    expect(fallbackResponse.status).toBe(200);
+    expect(await fallbackResponse.json()).toEqual({ source: "express" });
   });
 });
