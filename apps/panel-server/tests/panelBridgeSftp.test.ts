@@ -152,7 +152,7 @@ describe('getSftpCachePath: follows the configured data directory, not process.c
     const configuredRoot = path.join('T:', 'operator-configured-root', 'data');
     mockDataPaths.current = () => ({ dataDir: configuredRoot, logsDir: path.join('T:', 'operator-configured-root', 'logs') });
 
-    const cachePath = getSftpCachePath(valid);
+    const cachePath = getSftpCachePath(valid.host, valid.port, valid.username, valid.bridgePath);
 
     expect(cachePath.startsWith(path.join(configuredRoot, 'panelbridge-sftp-cache'))).toBe(true);
     expect(cachePath.startsWith(process.cwd())).toBe(false);
@@ -160,9 +160,9 @@ describe('getSftpCachePath: follows the configured data directory, not process.c
 
   it('a different configured data dir produces a different cache path for the same bridge config', () => {
     mockDataPaths.current = () => ({ dataDir: path.join('T:', 'root-a', 'data') });
-    const a = getSftpCachePath(valid);
+    const a = getSftpCachePath(valid.host, valid.port, valid.username, valid.bridgePath);
     mockDataPaths.current = () => ({ dataDir: path.join('T:', 'root-b', 'data') });
-    const b = getSftpCachePath(valid);
+    const b = getSftpCachePath(valid.host, valid.port, valid.username, valid.bridgePath);
 
     expect(a).not.toBe(b);
     expect(a.startsWith(path.join('T:', 'root-a', 'data'))).toBe(true);
@@ -172,9 +172,9 @@ describe('getSftpCachePath: follows the configured data directory, not process.c
   it('the cache key is stable for the same config and changes when the config changes -- proven independently of which data dir is configured', () => {
     mockDataPaths.current = () => ({ dataDir: path.join('T:', 'operator-configured-root', 'data') });
 
-    const a = getSftpCachePath(valid);
-    const b = getSftpCachePath(valid);
-    const c = getSftpCachePath({ ...valid, host: 'different.example.net' });
+    const a = getSftpCachePath(valid.host, valid.port, valid.username, valid.bridgePath);
+    const b = getSftpCachePath(valid.host, valid.port, valid.username, valid.bridgePath);
+    const c = getSftpCachePath('different.example.net', valid.port, valid.username, valid.bridgePath);
 
     expect(a).toBe(b);
     expect(a).not.toBe(c);
@@ -184,7 +184,7 @@ describe('getSftpCachePath: follows the configured data directory, not process.c
     const real = await vi.importActual('../utils/paths.ts');
     mockDataPaths.current = real.getDataPaths;
 
-    const cachePath = getSftpCachePath(valid);
+    const cachePath = getSftpCachePath(valid.host, valid.port, valid.username, valid.bridgePath);
 
     expect(cachePath.startsWith(path.join(real.getDataPaths().dataDir, 'panelbridge-sftp-cache'))).toBe(true);
   });

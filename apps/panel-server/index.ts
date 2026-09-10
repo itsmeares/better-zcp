@@ -919,7 +919,15 @@ async function tryStartPanelBridge(trigger: string = "unknown"): Promise<boolean
         bridgePath: settings.panelBridgeSftpBridgePath,
         pollIntervalSeconds: settings.panelBridgeSftpPollIntervalSeconds,
       };
-      await panelBridge.configureSftp(sftpConfig, getSftpCachePath(sftpConfig));
+      await panelBridge.configureSftp(
+        sftpConfig,
+        getSftpCachePath(
+          sftpConfig.host,
+          sftpConfig.port,
+          sftpConfig.username,
+          sftpConfig.bridgePath,
+        ),
+      );
       log.info(`Started SFTP transport (trigger: ${trigger})`);
       return true;
     } catch (error: any) {

@@ -740,7 +740,12 @@ router.post("/sftp/test", requirePermission("bridge.setup"), async (req, res) =>
 router.post("/sftp/configure", requirePermission("bridge.setup"), async (req, res) => {
   try {
     const config = await resolveSftpConfig(req.body);
-    const cachePath = getSftpCachePath(config);
+    const cachePath = getSftpCachePath(
+      config.host,
+      config.port,
+      config.username,
+      config.bridgePath,
+    );
     await bridge.configureSftp(config, cachePath);
     for (const [field, key] of Object.entries(SFTP_SETTING_KEYS)) {
       const value = field === "enabled" ? true : (config as AnyRecord)[field];

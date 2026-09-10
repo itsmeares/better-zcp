@@ -155,8 +155,17 @@ export function validateSftpBridgeConfig(config: SftpConfigInput): SftpBridgeCon
   };
 }
 
-export function getSftpCachePath(config: SftpBridgeConfig): string {
-  const key = crypto.createHash('sha256').update(`${config.host}:${config.port}:${config.username}:${config.bridgePath}`).digest('hex').slice(0, 24);
+export function getSftpCachePath(
+  host: string,
+  port: number,
+  username: string,
+  bridgePath: string,
+): string {
+  const key = crypto
+    .createHash('sha256')
+    .update(`${host}:${port}:${username}:${bridgePath}`)
+    .digest('hex')
+    .slice(0, 24);
   return path.join(getDataPaths().dataDir, 'panelbridge-sftp-cache', key);
 }
 
