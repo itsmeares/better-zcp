@@ -2,7 +2,10 @@ import express from "express";
 import type { Request } from "express";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
-import { normalizeChatRelayScope } from "../services/discordBot.ts";
+import {
+  normalizeChatRelayScope,
+  START_ALREADY_IN_PROGRESS,
+} from "../services/discordBot.ts";
 import { describeStartFailure } from "../services/discordStartFailure.ts";
 import { requirePermission, getRoleByName } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
@@ -114,6 +117,7 @@ router.put("/config", async (req, res) => {
       });
     }
 
+    await discordBot.withConfigMutex(async () => {
     await discordBot.loadConfig();
 
     const finalToken =
@@ -208,6 +212,13 @@ router.put("/config", async (req, res) => {
     if (discordBot.isRunning && credentialsChanged) {
       await discordBot.stop();
       const started = await discordBot.start();
+      if (started === START_ALREADY_IN_PROGRESS) {
+        return res.json({
+          success: true,
+          message: "Discord bot configuration saved; reconnect is already in progress.",
+          botStarted: null,
+        });
+      }
       if (!started) {
         return res.json({
           success: true,
@@ -221,6 +232,7 @@ router.put("/config", async (req, res) => {
     res.json({
       success: true,
       message: "Discord bot configuration updated",
+    });
     });
   } catch (error: unknown) {
     log.error(`Failed to update Discord config: ${errorMessage(error)}`);
@@ -504,8 +516,10 @@ router.put("/webhook-events", async (req, res) => {
       }
     }
 
-    const merged = { ...(discordBot.webhookEvents || {}), ...sanitizedEvents };
-    await discordBot.saveWebhookEvents(merged);
+    await discordBot.withConfigMutex(async () => {
+      const merged = { ...(discordBot.webhookEvents || {}), ...sanitizedEvents };
+      await discordBot.saveWebhookEvents(merged);
+    });
 
     res.json({ success: true, message: "Webhook events updated" });
   } catch (error: unknown) {
@@ -549,38 +563,40 @@ router.put("/permissions", async (req, res) => {
       });
     }
 
-    const current = discordBot.getCommandPermissions();
-    const missing = [];
-    let callerCapabilities = null;
-    for (const [command, tier] of Object.entries(permissions)) {
-      const requiredCapability = DISCORD_COMMAND_CAPABILITY[command];
-      if (!requiredCapability) continue;
-      if (!(command in current) || current[command] === tier) continue;
-      if (callerCapabilities === null) {
-        const user = (req as AuthenticatedRequest).user;
-        const role = user?.role ? await getRoleByName(user.role) : null;
-        callerCapabilities = Array.isArray(role?.capabilities)
-          ? role.capabilities
-          : [];
+    await discordBot.withConfigMutex(async () => {
+      const current = discordBot.getCommandPermissions();
+      const missing = [];
+      let callerCapabilities = null;
+      for (const [command, tier] of Object.entries(permissions)) {
+        const requiredCapability = DISCORD_COMMAND_CAPABILITY[command];
+        if (!requiredCapability) continue;
+        if (!(command in current) || current[command] === tier) continue;
+        if (callerCapabilities === null) {
+          const user = (req as AuthenticatedRequest).user;
+          const role = user?.role ? await getRoleByName(user.role) : null;
+          callerCapabilities = Array.isArray(role?.capabilities)
+            ? role.capabilities
+            : [];
+        }
+        if (!callerCapabilities.includes(requiredCapability)) {
+          missing.push({ command, requiredCapability });
+        }
       }
-      if (!callerCapabilities.includes(requiredCapability)) {
-        missing.push({ command, requiredCapability });
+      if (missing.length > 0) {
+        const detail = missing
+          .map((m) => `"${m.command}" needs ${m.requiredCapability}`)
+          .join(", ");
+        return res.status(403).json({
+          error: `Cannot change the Discord tier for ${detail} without holding that capability yourself.`,
+          code: ErrorCode.DISCORD_PERMISSIONS_CAPABILITY_REQUIRED,
+          params: sanitizeErrorParams({ detail }),
+          missing,
+        });
       }
-    }
-    if (missing.length > 0) {
-      const detail = missing
-        .map((m) => `"${m.command}" needs ${m.requiredCapability}`)
-        .join(", ");
-      return res.status(403).json({
-        error: `Cannot change the Discord tier for ${detail} without holding that capability yourself.`,
-        code: ErrorCode.DISCORD_PERMISSIONS_CAPABILITY_REQUIRED,
-        params: sanitizeErrorParams({ detail }),
-        missing,
-      });
-    }
 
-    const updated = await discordBot.updateCommandPermissions(permissions);
-    res.json({ success: true, permissions: updated });
+      const updated = await discordBot.updateCommandPermissions(permissions);
+      res.json({ success: true, permissions: updated });
+    });
   } catch (error: unknown) {
     log.error(`Failed to update command permissions: ${errorMessage(error)}`);
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });

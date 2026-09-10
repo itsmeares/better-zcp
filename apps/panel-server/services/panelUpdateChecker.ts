@@ -140,6 +140,7 @@ export class PanelUpdateChecker {
   lastError: string | null;
   dockerUpdateProxy: DockerUpdateProxy;
   isApplying: boolean;
+  _downloadAttemptSeq = 0;
   _stagedVersionCache: string | null = null;
   lastApplyResult: AnyRecord | null = null;
 
@@ -157,6 +158,11 @@ export class PanelUpdateChecker {
     this.lastError = null;
     this.dockerUpdateProxy = new DockerUpdateProxy();
     this.isApplying = false;
+  }
+
+  nextPartialCallId(): string {
+    this._downloadAttemptSeq += 1;
+    return `${process.pid}-${this._downloadAttemptSeq}`;
   }
 
   async start(currentVersion: string) {
@@ -431,8 +437,18 @@ export class PanelUpdateChecker {
       };
     }
 
-    const pre = await this.preflight();
+    // Claim before preflight: it is async, and two clicks must not both
+    // reach the shared staging slot while the first is still checking it.
+    this.isDownloading = true;
+    let pre: Awaited<ReturnType<typeof this.preflight>>;
+    try {
+      pre = await this.preflight();
+    } catch (error) {
+      this.isDownloading = false;
+      throw error;
+    }
     if (!pre.ok) {
+      this.isDownloading = false;
       return {
         success: false,
         error: pre.blockers[0] || "Preflight check failed",
@@ -442,7 +458,6 @@ export class PanelUpdateChecker {
 
     if (this.dockerUpdateProxy.enabled) {
       const version = latestRelease.version;
-      this.isDownloading = true;
       try {
         return await this.dockerUpdateProxy.apply(version);
       } catch (error: any) {
@@ -457,6 +472,7 @@ export class PanelUpdateChecker {
     const isPackaged = typeof process.pkg !== "undefined";
 
     if (!isPackaged) {
+      this.isDownloading = false;
       return {
         success: false,
         error: `Self-update is only available for standalone exe/binary builds. ${getDevModeUpgradeInstruction()}`,
@@ -485,6 +501,7 @@ export class PanelUpdateChecker {
     }
 
     if (!asset) {
+      this.isDownloading = false;
       return {
         success: false,
         error: `No ${isWindows ? "Windows" : "Linux"} binary found in release (looked for ${assetName})`,
@@ -498,24 +515,25 @@ export class PanelUpdateChecker {
       (candidate: ReleaseAsset) => candidate.name === archiveName,
     );
     if (!clientArchive) {
+      this.isDownloading = false;
       return {
         success: false,
         error: `Release is missing ${archiveName}, required to update the web interface safely.`,
       };
     }
 
-    this.isDownloading = true;
     this.downloadProgress = 0;
     this.lastError = null;
 
     const exePath = process.execPath;
     const exeDir = path.dirname(exePath);
     const stagedPath = this.getStageSlotPath();
-    const tmpDownloadPath = `${stagedPath}.partial.${process.pid}`;
+    const partialCallId = this.nextPartialCallId();
+    const tmpDownloadPath = `${stagedPath}.partial.${partialCallId}`;
     const clientArchiveExtension = isWindows ? ".zip" : ".tar.gz";
     const tmpClientArchivePath = path.join(
       exeDir,
-      `.client-dist-${latestRelease.version}.partial.${process.pid}${clientArchiveExtension}`,
+      `.client-dist-${latestRelease.version}.partial.${partialCallId}${clientArchiveExtension}`,
     );
     let incomingClientPath = null;
 
@@ -1559,9 +1577,11 @@ export class PanelUpdateChecker {
           },
         );
         req.on("error", reject);
-        req.setTimeout(GITHUB_API_TIMEOUT_MS, () =>
-          req.destroy(new Error("Timed out")),
-        );
+        req.setTimeout(GITHUB_API_TIMEOUT_MS, () => {
+          const timeoutError = new Error("Timed out");
+          timeoutError.code = "ETIMEDOUT";
+          req.destroy(timeoutError);
+        });
       };
 
       follow(url, 0);
@@ -1932,9 +1952,14 @@ export class PanelUpdateChecker {
     } catch {
       return;
     }
-    const partialPattern = /\.partial\.\d+$/;
+    const exeBaseName = path.basename(this.getExeBasePath());
+    const escapedBaseName = exeBaseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const partialPatterns = [
+      new RegExp(`^${escapedBaseName}\\.new2?\\.partial\\.\\d+(?:-\\d+)?$`),
+      /^\.client-dist-.+\.partial\.\d+(?:-\d+)?\.(?:zip|tar\.gz)$/,
+    ];
     for (const name of entries) {
-      if (!partialPattern.test(name)) continue;
+      if (!partialPatterns.some((pattern) => pattern.test(name))) continue;
       const fp = path.join(exeDir, name);
       try {
         fs.unlinkSync(fp);

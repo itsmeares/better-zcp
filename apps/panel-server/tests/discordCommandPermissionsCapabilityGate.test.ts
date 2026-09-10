@@ -60,6 +60,7 @@ async function runPutPermissions(discordBot, permissions, role) {
 
 function mockDiscordBot(current) {
   return {
+    withConfigMutex: vi.fn(async (fn) => fn()),
     getCommandPermissions: vi.fn(() => ({ ...current })),
     updateCommandPermissions: vi.fn(async (perms) => ({ ...current, ...perms })),
   };

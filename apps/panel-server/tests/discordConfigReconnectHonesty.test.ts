@@ -4,6 +4,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
 vi.mock("../services/discordBot.ts", () => ({
   normalizeChatRelayScope: vi.fn((value) => value),
+  START_ALREADY_IN_PROGRESS: Symbol("discord-start-already-in-progress"),
 }));
 
 vi.mock("../database/init.ts", () => ({
@@ -48,6 +49,7 @@ function mockDiscordBot({ startSucceeds, lastStartError = null }) {
     guildId: "111111111111111111",
     isRunning: true,
     lastStartError,
+    withConfigMutex: vi.fn(async (fn) => fn()),
     loadConfig: vi.fn(async () => {}),
     updateConfig: vi.fn(async () => {}),
     updateChatRelay: vi.fn(async () => {}),

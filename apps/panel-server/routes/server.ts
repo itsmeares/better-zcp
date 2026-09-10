@@ -149,6 +149,154 @@ function emitRawSteamCmdLine(io: any, event: string, type: string, text: string)
   io?.emit(event, { type, text });
 }
 
+function runSteamCmdFirstTimeSetup(
+  steamcmdExe: string,
+  installPath: string,
+  io: any,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    io?.emit("steamcmd:status", {
+      status: "initializing",
+      message: "Initializing SteamCMD (first run)...",
+      progressCode: ProgressCode.STEAMCMD_INITIALIZING,
+    });
+    log.info("Running SteamCMD first-time setup...");
+
+    const firstRunOpts: AnyRecord = { cwd: installPath };
+    if (!isWindows) {
+      const ldPaths = [
+        path.join(installPath, "linux32"),
+        path.join(installPath, "linux64"),
+        installPath,
+        process.env.LD_LIBRARY_PATH || "",
+      ]
+        .filter(Boolean)
+        .join(":");
+      firstRunOpts.env = {
+        ...buildLinuxWritableHomeEnv(installPath),
+        LD_LIBRARY_PATH: ldPaths,
+      };
+    }
+
+    const steamcmd = spawnProcess(steamcmdExe, ["+quit"], firstRunOpts);
+    steamcmd.stdout.on("data", (data: any) => {
+      emitRawSteamCmdLine(io, "steamcmd:log", "stdout", data.toString());
+    });
+    steamcmd.stderr.on("data", (data: any) => {
+      emitRawSteamCmdLine(io, "steamcmd:log", "stderr", data.toString());
+    });
+    steamcmd.once("close", (code: any) => {
+      if (code !== 0 && code !== 7) {
+        io?.emit("steamcmd:status", {
+          status: "error",
+          message: `SteamCMD setup failed with code ${code}`,
+          progressCode: ProgressCode.STEAMCMD_SETUP_FAILED,
+          params: { code },
+        });
+        reject(new Error(`SteamCMD first-run setup exited with code ${code}`));
+        return;
+      }
+      if (!fs.existsSync(steamcmdExe)) {
+        const message = `SteamCMD download completed but ${steamcmdExe} still missing`;
+        io?.emit("steamcmd:status", {
+          status: "error",
+          message: `SteamCMD setup failed unexpectedly: ${message}`,
+          progressCode: ProgressCode.STEAMCMD_SELF_SETUP_UNEXPECTED_ERROR,
+          params: { reason: message },
+        });
+        reject(new Error(message));
+        return;
+      }
+      io?.emit("steamcmd:status", {
+        status: "complete",
+        message: "SteamCMD installed successfully!",
+        path: installPath,
+        progressCode: ProgressCode.STEAMCMD_INSTALL_COMPLETE,
+      });
+      log.info(`SteamCMD installed successfully to ${installPath}`);
+      resolve(steamcmdExe);
+    });
+    steamcmd.once("error", (error: any) => {
+      io?.emit("steamcmd:status", {
+        status: "error",
+        message: `Failed to run SteamCMD: ${sanitizeError(error.message)}`,
+        progressCode: ProgressCode.STEAMCMD_RUN_FAILED,
+        params: { reason: sanitizeError(error.message) },
+      });
+      reject(error);
+    });
+  });
+}
+
+async function provisionSteamCmdWindows(installPath: string, io: any): Promise<void> {
+  const unzipper = await import("unzipper");
+  const zipPath = path.join(installPath, "steamcmd.zip");
+  const url = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip";
+
+  await new Promise<void>((resolve, reject) => {
+    const file = fs.createWriteStream(zipPath);
+    let settled = false;
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      file.close();
+      try {
+        fs.unlinkSync(zipPath);
+      } catch {
+        /* best effort */
+      }
+      reject(error);
+    };
+    file.on("error", fail);
+
+    const download = (downloadUrl: string) => {
+      const request = https
+        .get(downloadUrl, (response) => {
+          if (response.statusCode === 301 || response.statusCode === 302) {
+            if (response.headers.location) {
+              response.resume?.();
+              download(response.headers.location);
+            } else {
+              fail(new Error("SteamCMD redirect did not include a URL"));
+            }
+            return;
+          }
+          if (response.statusCode !== 200) {
+            fail(new Error(`HTTP ${response.statusCode}`));
+            return;
+          }
+          response.pipe(file);
+          file.once("close", () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+          });
+        })
+        .on("error", fail);
+      request.setTimeout?.(120000, () => {
+        request.destroy();
+        fail(new Error("SteamCMD download timed out"));
+      });
+    };
+    download(url);
+  });
+
+  io?.emit("steamcmd:status", {
+    status: "extracting",
+    message: "Extracting SteamCMD...",
+    progressCode: ProgressCode.STEAMCMD_EXTRACTING,
+  });
+  await fs
+    .createReadStream(zipPath)
+    .pipe(unzipper.default.Extract({ path: installPath }))
+    .promise();
+  try {
+    fs.unlinkSync(zipPath);
+  } catch {
+    /* best effort */
+  }
+}
+
 async function ensureSteamCmdLinux(installPath: string, io: any) {
   const steamcmdExe = await saveAndResolveSteamCmdExe(installPath);
   if (steamcmdExe && fs.existsSync(steamcmdExe)) return steamcmdExe;
@@ -216,61 +364,30 @@ async function ensureSteamCmdLinux(installPath: string, io: any) {
     /* ignore */
   }
 
-  emit("steamcmd:status", {
-    status: "initializing",
-    message: "Initializing SteamCMD (first run)...",
-    progressCode: ProgressCode.STEAMCMD_INITIALIZING,
-  });
   if (!steamcmdExe) {
     throw new Error("SteamCMD executable path is unavailable after download");
   }
-  const ldPaths = [
-    path.join(installPath, "linux32"),
-    path.join(installPath, "linux64"),
-    installPath,
-    process.env.LD_LIBRARY_PATH || "",
-  ]
-    .filter(Boolean)
-    .join(":");
+  return runSteamCmdFirstTimeSetup(steamcmdExe, installPath, io);
+}
 
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawnProcess(steamcmdExe, ["+quit"], {
-      cwd: installPath,
-      env: {
-        ...buildLinuxWritableHomeEnv(installPath),
-        LD_LIBRARY_PATH: ldPaths,
-      },
-    });
-    proc.stdout.on("data", (d: any) =>
-      emitRawSteamCmdLine(io, "steamcmd:log", "stdout", d.toString()),
-    );
-    proc.stderr.on("data", (d: any) =>
-      emitRawSteamCmdLine(io, "steamcmd:log", "stderr", d.toString()),
-    );
-    proc.on("close", (code: any) => {
-      if (code === 0 || code === 7) {
-        resolve();
-      } else {
-        reject(new Error(`SteamCMD first-run setup exited with code ${code}`));
-      }
-    });
-    proc.on("error", reject);
+async function ensureSteamCmdWindows(installPath: string, io: any) {
+  const steamcmdExe = await saveAndResolveSteamCmdExe(installPath);
+  if (steamcmdExe && fs.existsSync(steamcmdExe)) return steamcmdExe;
+
+  io?.emit("steamcmd:status", {
+    status: "downloading",
+    message: "SteamCMD missing — downloading it now...",
+    progressCode: ProgressCode.STEAMCMD_LINUX_AUTO_DOWNLOAD_START,
   });
-
-  if (!fs.existsSync(steamcmdExe)) {
-    throw new Error(
-      `SteamCMD download completed but ${steamcmdExe} still missing`,
-    );
+  if (!fs.existsSync(installPath)) {
+    fs.mkdirSync(installPath, { recursive: true });
   }
-
-  emit("steamcmd:status", {
-    status: "complete",
-    message: "SteamCMD installed successfully!",
-    path: installPath,
-    progressCode: ProgressCode.STEAMCMD_INSTALL_COMPLETE,
-  });
-  log.info(`SteamCMD auto-installed to ${installPath}`);
-  return steamcmdExe;
+  await provisionSteamCmdWindows(installPath, io);
+  return runSteamCmdFirstTimeSetup(
+    getSteamCmdExe(installPath),
+    installPath,
+    io,
+  );
 }
 
 function normalizeSteamBranch(branch: any) {
@@ -343,6 +460,25 @@ export async function findSteamCmdPath() {
 }
 
 const activeSteamOperations = getActiveSteamOperations();
+// Only one provisioning flow may write SteamCMD's fixed archive paths in a
+// panel process. activeSteamOperations is per-install and starts too late.
+let steamcmdDownloadInProgress = false;
+
+async function ensureSteamCmdInstalled(installPath: string, io: any) {
+  if (steamcmdDownloadInProgress) {
+    const error: any = new Error("A SteamCMD download is already in progress");
+    error.code = ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS;
+    throw error;
+  }
+  steamcmdDownloadInProgress = true;
+  try {
+    return isWindows
+      ? await ensureSteamCmdWindows(installPath, io)
+      : await ensureSteamCmdLinux(installPath, io);
+  } finally {
+    steamcmdDownloadInProgress = false;
+  }
+}
 
 async function getServerConfigPath() {
   const activeServer = await getActiveServer();
@@ -1076,19 +1212,26 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
 
     const safeAdminPassword = sanitizeForBatch(adminPassword);
 
+    if (steamcmdDownloadInProgress) {
+      return res.status(409).json({
+        error: "A SteamCMD download is already in progress",
+        code: ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS,
+      });
+    }
     let steamcmdExe = await saveAndResolveSteamCmdExe(steamcmdPath);
     if (!steamcmdExe || !fs.existsSync(steamcmdExe)) {
-      if (isWindows) {
-        return res
-          .status(400)
-          .json({ error: `SteamCMD not found at: ${steamcmdExe}`, code: ErrorCode.STEAMCMD_NOT_FOUND_AT_PATH });
-      }
       try {
-        steamcmdExe = await ensureSteamCmdLinux(
+        steamcmdExe = await ensureSteamCmdInstalled(
           steamcmdPath,
           req.app.get("io"),
         );
       } catch (dlErr: any) {
+        if (dlErr?.code === ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS) {
+          return res.status(409).json({
+            error: "A SteamCMD download is already in progress",
+            code: ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS,
+          });
+        }
         return res.status(500).json({
           error: `SteamCMD not found and auto-download failed: ${sanitizeError(dlErr.message)}`,
           code: ErrorCode.STEAMCMD_AUTO_DOWNLOAD_FAILED,
@@ -2143,19 +2286,26 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
       return res.status(409).json(lifecycleInProgressResponse());
     }
 
+    if (steamcmdDownloadInProgress) {
+      return res.status(409).json({
+        error: "A SteamCMD download is already in progress",
+        code: ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS,
+      });
+    }
     let steamcmdExe = await saveAndResolveSteamCmdExe(steamcmdPath);
     if (!steamcmdExe || !fs.existsSync(steamcmdExe)) {
-      if (isWindows) {
-        return res
-          .status(400)
-          .json({ error: `SteamCMD not found at: ${steamcmdExe}`, code: ErrorCode.STEAMCMD_NOT_FOUND_AT_PATH });
-      }
       try {
-        steamcmdExe = await ensureSteamCmdLinux(
+        steamcmdExe = await ensureSteamCmdInstalled(
           steamcmdPath,
           req.app.get("io"),
         );
       } catch (dlErr: any) {
+        if (dlErr?.code === ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS) {
+          return res.status(409).json({
+            error: "A SteamCMD download is already in progress",
+            code: ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS,
+          });
+        }
         return res.status(500).json({
           error: `SteamCMD not found and auto-download failed: ${sanitizeError(dlErr.message)}`,
           code: ErrorCode.STEAMCMD_AUTO_DOWNLOAD_FAILED,
@@ -2413,6 +2563,16 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
       return res.status(400).json({ error: "Invalid installation path", code: ErrorCode.STEAMCMD_DOWNLOAD_INVALID_PATH });
     }
 
+    if (steamcmdDownloadInProgress) {
+      return res.status(409).json({
+        error: "A SteamCMD download is already in progress",
+        code: ErrorCode.STEAMCMD_DOWNLOAD_ALREADY_IN_PROGRESS,
+      });
+    }
+    // Claim before the first await: the download, extraction, and first-run
+    // setup continue after this handler returns and all touch installPath.
+    steamcmdDownloadInProgress = true;
+
     const configuredSteamcmdPath = await getSetting("steamcmdPath");
     if (configuredSteamcmdPath !== installPath) {
       await setSetting("steamcmdPath", installPath);
@@ -2441,7 +2601,12 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
 
       const handleDownloadError = (err: any) => {
         file.close();
-        fs.unlink(zipPath, () => {});
+        try {
+          fs.unlinkSync(zipPath);
+        } catch {
+          /* best effort */
+        }
+        steamcmdDownloadInProgress = false;
         io.emit("steamcmd:status", {
           status: "error",
           message: `Download failed: ${err.message}`,
@@ -2503,6 +2668,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
           fs.unlinkSync(zipFile);
           runFirstTimeSetup();
         } catch (extractError: any) {
+          steamcmdDownloadInProgress = false;
           io.emit("steamcmd:status", {
             status: "error",
             message: `Extraction failed: ${sanitizeError(extractError.message)}`,
@@ -2540,6 +2706,7 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
             return;
           }
           if (dlErr) {
+            steamcmdDownloadInProgress = false;
             io.emit("steamcmd:status", {
               status: "error",
               message: `Download failed: ${dlErr.message}. Ensure curl or wget is installed.`,
@@ -2573,8 +2740,8 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
             } catch (e: any) {
               /* ignore */
             }
-
             if (tarErr) {
+              steamcmdDownloadInProgress = false;
               io.emit("steamcmd:status", {
                 status: "error",
                 message: `Extraction failed: ${tarErr.message}`,
@@ -2624,72 +2791,20 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
     }
 
     function runFirstTimeSetup() {
-      io.emit("steamcmd:status", {
-        status: "initializing",
-        message: "Initializing SteamCMD (first run)...",
-        progressCode: ProgressCode.STEAMCMD_INITIALIZING,
-      });
-      log.info("Running SteamCMD first-time setup...");
-
-      const steamcmdExe = getSteamCmdExe(installPath);
-      const firstRunOpts: AnyRecord = { cwd: installPath };
-      if (!isWindows) {
-        const ldPaths = [
-          path.join(installPath, "linux32"),
-          path.join(installPath, "linux64"),
-          installPath,
-          process.env.LD_LIBRARY_PATH || "",
-        ]
-          .filter(Boolean)
-          .join(":");
-        firstRunOpts.env = {
-          ...buildLinuxWritableHomeEnv(installPath),
-          LD_LIBRARY_PATH: ldPaths,
-        };
-      }
-      const steamcmd = spawnProcess(steamcmdExe, ["+quit"], firstRunOpts);
-
-      steamcmd.stdout.on("data", (data: any) => {
-        emitRawSteamCmdLine(io, "steamcmd:log", "stdout", data.toString());
-      });
-
-      steamcmd.stderr.on("data", (data: any) => {
-        emitRawSteamCmdLine(io, "steamcmd:log", "stderr", data.toString());
-      });
-
-      steamcmd.on("close", (code: any) => {
-        if (code === 0 || code === 7) {
-          io.emit("steamcmd:status", {
-            status: "complete",
-            message: "SteamCMD installed successfully!",
-            path: installPath,
-            progressCode: ProgressCode.STEAMCMD_INSTALL_COMPLETE,
-          });
-          log.info(`SteamCMD installed successfully to ${installPath}`);
-        } else {
-          io.emit("steamcmd:status", {
-            status: "error",
-            message: `SteamCMD setup failed with code ${code}`,
-            progressCode: ProgressCode.STEAMCMD_SETUP_FAILED,
-            params: { code },
-          });
-          log.error(`SteamCMD first-run failed with code ${code}`);
-        }
-      });
-
-      steamcmd.on("error", (error: any) => {
-        io.emit("steamcmd:status", {
-          status: "error",
-          message: `Failed to run SteamCMD: ${sanitizeError(error.message)}`,
-          progressCode: ProgressCode.STEAMCMD_RUN_FAILED,
-          params: { reason: sanitizeError(error.message) },
-        });
-        log.error(`SteamCMD run error: ${error.message}`);
+      return runSteamCmdFirstTimeSetup(
+        getSteamCmdExe(installPath),
+        installPath,
+        io,
+      ).catch((error: any) => {
+        log.error(`SteamCMD first-run failed unexpectedly: ${error.message}`);
+      }).finally(() => {
+        steamcmdDownloadInProgress = false;
       });
     }
 
     res.json({ success: true, message: "SteamCMD download started" });
   } catch (error: any) {
+    steamcmdDownloadInProgress = false;
     log.error(`SteamCMD download failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }

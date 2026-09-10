@@ -1666,15 +1666,19 @@ router.post("/restore/:filename", async (req, res) => {
 
     const targetPath = path.join(configPath, originalName);
 
-    let preRestoreBackupWarning = null;
-    if (fs.existsSync(targetPath)) {
-      const backup = await createBackup(configPath, originalName);
-      if (!backup.backedUp && backup.reason !== "no-source") {
-        preRestoreBackupWarning = `Could not back up the current ${originalName} before restoring over it: ${backup.error}. The version that was in place before this restore is not recoverable through this panel.`;
-      }
-    }
+    const backupData = await fs.promises.readFile(backupPath);
 
-    await fs.promises.copyFile(backupPath, targetPath);
+    let preRestoreBackupWarning = null;
+    await withFileLock(targetPath, async () => {
+      if (fs.existsSync(targetPath)) {
+        const backup = await createBackup(configPath, originalName);
+        if (!backup.backedUp && backup.reason !== "no-source") {
+          preRestoreBackupWarning = `Could not back up the current ${originalName} before restoring over it: ${backup.error}. The version that was in place before this restore is not recoverable through this panel.`;
+        }
+      }
+
+      writeFileAtomic(targetPath, backupData);
+    });
 
     log.info(`Restored from backup: ${filename} -> ${originalName}`);
     res.json({

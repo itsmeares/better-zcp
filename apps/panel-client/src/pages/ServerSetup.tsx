@@ -252,6 +252,7 @@ export default function ServerSetup() {
 
   const [downloadingSteamCmd, setDownloadingSteamCmd] = useState(false);
   const [steamCmdStatus, setSteamCmdStatus] = useState<string>("");
+  const installViaSteamCmdRef = useRef(false);
 
   const { toast } = useToast();
   const { can } = useAuth();
@@ -507,6 +508,7 @@ export default function ServerSetup() {
       clearInstallInFlightMarker();
       const displayMessage = getInstallProgressMessage(data, data.message);
       try {
+        installViaSteamCmdRef.current = false;
         if (data.success) {
           setLogs((prev) => [
             ...prev,
@@ -629,6 +631,16 @@ export default function ServerSetup() {
     }) => {
       const displayMessage = getInstallProgressMessage(data, data.message);
       setSteamCmdStatus(displayMessage);
+      if (installViaSteamCmdRef.current) {
+        addLog(
+          data.status === "complete"
+            ? "success"
+            : data.status === "error"
+              ? "error"
+              : "info",
+          displayMessage,
+        );
+      }
       if (data.status === "complete" && data.path) {
         setSteamCmdPath(data.path);
         setHasSteamCmd(true);
@@ -654,6 +666,12 @@ export default function ServerSetup() {
       params?: Record<string, string | number>;
     }) => {
       setSteamCmdStatus(getInstallProgressMessage(data, data.text.trim()));
+      if (installViaSteamCmdRef.current) {
+        addLog(
+          data.type === "stderr" ? "stderr" : "stdout",
+          getInstallProgressMessage(data, data.text.trim()),
+        );
+      }
     };
 
     socket.on("steamcmd:status", handleSteamCmdStatus);
@@ -769,6 +787,7 @@ export default function ServerSetup() {
       return;
     }
     setInstalling(true);
+    installViaSteamCmdRef.current = true;
     setLogs([]);
     setInstallProgress(null);
     addLog("info", t("toasts.startingInstallLog"));
@@ -792,6 +811,7 @@ export default function ServerSetup() {
       });
       writeInstallInFlightMarker({ installPath, serverName, startedAt: Date.now() });
     } catch (error) {
+      installViaSteamCmdRef.current = false;
       const rawMessage = rawErrorMessageIntentional(error, t("common.unknownError"));
       const displayMessage = getUserErrorMessage(error, t("common.unknownError"));
       const msg = installationErrorGuidance(rawMessage, displayMessage, t, serverPlatform);

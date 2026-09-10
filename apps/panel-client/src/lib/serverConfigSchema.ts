@@ -1,5 +1,5 @@
 
-import { resolveRegisteredTranslation } from './paramTranslation'
+import { resolveRegisteredTranslation, type TranslationParams } from './paramTranslation'
 
 export interface IniSetting {
   key: string
@@ -4668,8 +4668,8 @@ export function getSandboxSetting(key: string, section?: string): SandboxSetting
 }
 
 
-function translatedOrFallback(key: string, fallback: string): string {
-  return resolveRegisteredTranslation('serverconfig', key, undefined) ?? fallback
+function translatedOrFallback(key: string, fallback: string, params?: TranslationParams): string {
+  return resolveRegisteredTranslation('serverconfig', key, params) ?? fallback
 }
 
 function translatedSandboxLabel(key: string, fallback: string): string {
@@ -4760,6 +4760,7 @@ export function getUnrecognizedSandboxOptionWarning(value: number | string): str
   return translatedOrFallback(
     'unrecognizedSandboxOptionWarning',
     `This server is currently set to ${value}, which this panel does not recognize. The value is preserved and will not be changed unless you pick a different option here.`,
+    { value },
   )
 }
 

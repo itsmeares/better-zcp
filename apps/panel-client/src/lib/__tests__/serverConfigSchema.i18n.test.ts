@@ -15,6 +15,7 @@ import {
   getSandboxSettingLabel,
   getSandboxSettingDescription,
   getSandboxSettingSearchText,
+  getUnrecognizedSandboxOptionWarning,
   formatRawConfigValue,
 } from '../serverConfigSchema'
 
@@ -161,5 +162,17 @@ describe('serverConfigSchema translated accessors (proof: rcon category)', () =>
     for (const category of SANDBOX_CATEGORIES) if (!i18n.exists(`sandboxCategories.${category.id}.label`, { ns: 'serverconfig' })) missing.push(`sandboxCategories.${category.id}.label`)
     for (const group of SANDBOX_CATEGORY_GROUPS) if (!i18n.exists(`sandboxCategoryGroups.${group.id}.label`, { ns: 'serverconfig' })) missing.push(`sandboxCategoryGroups.${group.id}.label`)
     expect(missing).toEqual([])
+  })
+
+  it('passes values through the registered unrecognized-option warning translation', async () => {
+    await i18n.changeLanguage('en')
+    expect(getUnrecognizedSandboxOptionWarning(42)).toContain('set to 42')
+    expect(getUnrecognizedSandboxOptionWarning(42)).not.toContain('{{value}}')
+
+    i18n.addResourceBundle('de', 'serverconfig', {
+      unrecognizedSandboxOptionWarning: 'DE proof: value={{value}}',
+    }, true, true)
+    await i18n.changeLanguage('de')
+    expect(getUnrecognizedSandboxOptionWarning(42)).toBe('DE proof: value=42')
   })
 })

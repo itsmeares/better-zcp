@@ -149,6 +149,8 @@ const LIFECYCLE_DEDUPE_WINDOW_MS = 60_000;
 const PLAYER_PRESENCE_INTERVAL_MS = 60_000;
 const GATEWAY_DEGRADED_THRESHOLD_MS = 30_000;
 
+export const START_ALREADY_IN_PROGRESS = Symbol("discord-start-already-in-progress");
+
 export class DiscordBot {
   client: any = null;
   rconService: any;
@@ -161,6 +163,8 @@ export class DiscordBot {
   modRoleId: string | null = null;
   channelId: string | null = null;
   isRunning = false;
+  _starting = false;
+  _configMutex: Promise<void> = Promise.resolve();
   lastStartError: AnyRecord | null = null;
   webhookEvents: AnyRecord = {};
   commandPermissions: Record<string, string> = { ...DEFAULT_COMMAND_PERMISSIONS };
@@ -192,6 +196,8 @@ export class DiscordBot {
     this.modRoleId = null;
     this.channelId = null;
     this.isRunning = false;
+    this._starting = false;
+    this._configMutex = Promise.resolve();
     this.lastStartError = null;
     this.webhookEvents = {};
     this.commandPermissions = { ...DEFAULT_COMMAND_PERMISSIONS };
@@ -1448,6 +1454,15 @@ export class DiscordBot {
     }, PLAYER_PRESENCE_INTERVAL_MS);
   }
 
+  withConfigMutex<T>(fn: () => Promise<T> | T): Promise<T> {
+    const run = this._configMutex.then(fn, fn);
+    this._configMutex = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
   _stopPresenceUpdates(): void {
     if (this._presenceInterval) {
       clearInterval(this._presenceInterval);
@@ -1461,6 +1476,19 @@ export class DiscordBot {
       return true;
     }
 
+    if (this._starting) {
+      log.warn("start() called while a previous start() call is still in flight — ignoring");
+      return START_ALREADY_IN_PROGRESS;
+    }
+    this._starting = true;
+    try {
+      return await this._doStart();
+    } finally {
+      this._starting = false;
+    }
+  }
+
+  async _doStart() {
     await this.loadConfig();
 
     if (this.logTailer && !this._onGameChat) {

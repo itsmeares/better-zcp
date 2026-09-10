@@ -926,8 +926,18 @@ export async function createServerFromDiscovery(input: unknown) {
     fail("dataPath does not look like a PZ data folder");
   }
 
-  const resolvedName =
-    serverName || dataResult.serverNames[0] || installResult.serverNames[0];
+  const effectiveServerNames = dataResult.serverNames.length
+    ? dataResult.serverNames
+    : installResult.serverNames;
+  if (!serverName && effectiveServerNames.length > 1) {
+    fail(
+      `This location has ${effectiveServerNames.length} servers (${effectiveServerNames.join(", ")}) — specify serverName to choose one.`,
+      400,
+      undefined,
+      { serverNames: effectiveServerNames },
+    );
+  }
+  const resolvedName = serverName || effectiveServerNames[0];
   if (!resolvedName) {
     fail("No server config (Server/*.ini) found — specify serverName");
   }

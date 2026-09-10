@@ -68,6 +68,10 @@ import {
 } from "../utils/discordMessageRedaction.ts";
 import { getSteamApiKey } from "../services/steamApiKey.ts";
 import { hasActiveSteamOperation } from "../services/activeSteamOperations.ts";
+import {
+  acquireLifecycleLock,
+  lifecycleInProgressResponse,
+} from "../services/lifecycleCoordinator.ts";
 import { Transform } from "stream";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -5035,6 +5039,10 @@ router.post("/database/compact", requirePermission("diagnostics.manage"), async 
 });
 
 router.post("/clear-stale-locks", requirePermission("diagnostics.manage"), async (req, res) => {
+  const lifecycleLock = acquireLifecycleLock("clear-stale-locks");
+  if (!lifecycleLock) {
+    return res.status(409).json(lifecycleInProgressResponse());
+  }
   try {
     log.info("POST /clear-stale-locks");
     const serverManager = req.app.get("serverManager");
@@ -5178,6 +5186,8 @@ router.post("/clear-stale-locks", requirePermission("diagnostics.manage"), async
     res
       .status(500)
       .json({ success: false, error: sanitizeError(error.message) });
+  } finally {
+    lifecycleLock.release();
   }
 });
 

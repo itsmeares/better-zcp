@@ -63,6 +63,20 @@ type PermissionServiceError = Error & {
   params?: unknown;
 };
 
+// Role validation and its write must be one critical section. A process-wide
+// chain is enough here because role CRUD is low-volume and the database is
+// process-local; use per-role locks only if this becomes a throughput issue.
+let roleMutex: Promise<void> = Promise.resolve();
+
+function withRoleMutex<T>(fn: () => Promise<T> | T): Promise<T> {
+  const run = roleMutex.then(fn, fn);
+  roleMutex = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 
 export const CAPABILITIES: Capability[] = [
   {
@@ -552,42 +566,44 @@ export async function createRole({ name, capabilities }: {
   name: unknown;
   capabilities: unknown;
 }, { actingUser }: RoleUpdateOptions = {}): Promise<Role> {
-  if (typeof name !== "string" || !name.trim()) {
-    throw makeError(null, "name is required", 400);
-  }
-  const trimmedName = name.trim();
-  const capError = validateCapabilitiesArray(capabilities);
-  if (capError) {
-    throw makeError(
-      ErrorCode.INVALID_CAPABILITY,
-      capError.message,
-      400,
-      capError.capability !== undefined ? { capability: capError.capability } : undefined,
-    );
-  }
+  return withRoleMutex(async () => {
+    if (typeof name !== "string" || !name.trim()) {
+      throw makeError(null, "name is required", 400);
+    }
+    const trimmedName = name.trim();
+    const capError = validateCapabilitiesArray(capabilities);
+    if (capError) {
+      throw makeError(
+        ErrorCode.INVALID_CAPABILITY,
+        capError.message,
+        400,
+        capError.capability !== undefined ? { capability: capError.capability } : undefined,
+      );
+    }
 
-  const nextCapabilities = [...new Set(capabilities as string[])];
-  await assertNoRoleEditEscalation(actingUser, [], nextCapabilities);
+    const nextCapabilities = [...new Set(capabilities as string[])];
+    await assertNoRoleEditEscalation(actingUser, [], nextCapabilities);
 
-  const existingRoles = await getRoles() as Role[];
-  if (existingRoles.some((r) => r.name === trimmedName)) {
-    throw makeError(
-      ErrorCode.ROLE_NAME_TAKEN,
-      `A role named "${trimmedName}" already exists`,
-      409,
-      { name: trimmedName },
-    );
-  }
+    const existingRoles = await getRoles() as Role[];
+    if (existingRoles.some((r) => r.name === trimmedName)) {
+      throw makeError(
+        ErrorCode.ROLE_NAME_TAKEN,
+        `A role named "${trimmedName}" already exists`,
+        409,
+        { name: trimmedName },
+      );
+    }
 
-  const role: Role = {
-    id: `role-${randomToken()}`,
-    name: trimmedName,
-    capabilities: nextCapabilities,
-    isSeeded: false,
-    createdAt: new Date().toISOString(),
-  };
-  await insertRole(role);
-  return role;
+    const role: Role = {
+      id: `role-${randomToken()}`,
+      name: trimmedName,
+      capabilities: nextCapabilities,
+      isSeeded: false,
+      createdAt: new Date().toISOString(),
+    };
+    await insertRole(role);
+    return role;
+  });
 }
 
 async function checkLockoutRulesForCapabilityChange({
@@ -643,6 +659,7 @@ export async function updateRole(
   { name, capabilities }: { name?: unknown; capabilities?: unknown },
   { actingUser, confirmSelfCapabilityLoss = false }: RoleUpdateOptions = {},
 ): Promise<Role> {
+  return withRoleMutex(async () => {
   const roles = await getRoles() as Role[];
   const existing = roles.find((r) => String(r.id) === String(id));
   if (!existing) {
@@ -713,12 +730,14 @@ export async function updateRole(
   }
 
   return updated;
+  });
 }
 
 export async function deleteRole(
   id: string | number,
   { reassignTo, actingUser }: { reassignTo?: string | number; actingUser?: ActingUser } = {},
 ): Promise<{ deleted: true; reassigned: number; reassignedTo: string | number | null }> {
+  return withRoleMutex(async () => {
   const role = await getRoleById(id) as Role | null;
   if (!role) {
     throw makeError(ErrorCode.ROLE_NOT_FOUND, "Role not found", 404);
@@ -769,6 +788,7 @@ export async function deleteRole(
     throw makeError(ErrorCode.ROLE_NOT_FOUND, "Role not found", 404);
   }
   return { deleted: true, reassigned, reassignedTo: targetRole?.id || null };
+  });
 }
 
 function randomToken() {
