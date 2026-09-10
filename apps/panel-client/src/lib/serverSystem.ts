@@ -6,21 +6,16 @@ export const getRuntimeInfo = createServerFn({ method: 'GET' })
   .middleware(protectedServerFunctionMiddleware)
   .handler(async () => {
     const { buildRuntimeInfo } =
-      await import('../../../panel-server/routes/system.ts')
+      await import('../../../panel-server/utils/runtimeInfo.ts')
     return buildRuntimeInfo() as RuntimeInfo
   })
 
 async function getDiskSpaceReport(): Promise<DiskSpaceReport> {
-  const { getDataPaths } = await import('../../../panel-server/utils/paths.ts')
-  const { getDiskStatusForPath } =
-    await import('../../../panel-server/services/diskMonitor.ts')
   const { getPanelRuntime } =
     await import('../../../panel-server/utils/panelRuntime.ts')
-  const runtime = getPanelRuntime()
-  return {
-    saveVolume: runtime.diskMonitor?.getDiskStatus?.() ?? null,
-    panelData: await getDiskStatusForPath(getDataPaths().dataDir),
-  }
+  const { buildDiskSpace } =
+    await import('../../../panel-server/utils/systemInfo.ts')
+  return buildDiskSpace(getPanelRuntime().diskMonitor)
 }
 
 export const getDiskSpace = createServerFn({ method: 'GET' })
