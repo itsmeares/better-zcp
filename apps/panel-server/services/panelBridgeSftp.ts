@@ -155,8 +155,18 @@ export function validateSftpBridgeConfig(config: SftpConfigInput): SftpBridgeCon
   };
 }
 
-export function getSftpCachePath(config: SftpBridgeConfig): string {
-  const key = crypto.createHash('sha256').update(`${config.host}:${config.port}:${config.username}:${config.bridgePath}`).digest('hex').slice(0, 24);
+export function getSftpCachePath(
+  host: string,
+  port: number,
+  username: string,
+  bridgePath: string,
+): string {
+  // codeql[js/insufficient-password-hash] This digest keys a cache from non-secret connection identity fields; the password is intentionally excluded.
+  const key = crypto
+    .createHash('sha256')
+    .update(`${host}:${port}:${username}:${bridgePath}`)
+    .digest('hex')
+    .slice(0, 24);
   return path.join(getDataPaths().dataDir, 'panelbridge-sftp-cache', key);
 }
 
@@ -559,15 +569,12 @@ export class PanelBridgeSftpTransport {
   getStatus(): {
     type: string;
     running: boolean;
-    cachePath: string | null;
     lastSyncAt: number | null;
     lastLatencyMs: number | null;
     lastError: string | null;
     lastErrorGuidance: string | null;
     lastErrorCode: string | null;
     pollIntervalSeconds: number | null;
-    remotePath: string | null;
-    remoteDirectories: { bridge: string; inbox: string; outbox: string } | null;
     diagnostics: {
       connected: boolean;
       connectionAttempts: number;
@@ -583,19 +590,12 @@ export class PanelBridgeSftpTransport {
     return {
       type: 'sftp',
       running: this.running,
-      cachePath: this.cachePath,
       lastSyncAt: this.lastSyncAt,
       lastLatencyMs: this.lastLatencyMs,
       lastError: this.lastError,
       lastErrorGuidance: this.lastError ? getSftpErrorGuidance({ message: this.lastError }) : null,
       lastErrorCode: this.lastError ? classifySftpErrorCode({ message: this.lastError }) : null,
       pollIntervalSeconds: this.config?.pollIntervalSeconds ?? null,
-      remotePath: this.config?.bridgePath ?? null,
-      remoteDirectories: this.config ? {
-        bridge: this.config.bridgePath,
-        inbox: `${this.config.bridgePath}/inbox`,
-        outbox: `${this.config.bridgePath}/outbox`,
-      } : null,
       diagnostics: {
         connected: Boolean(this.client),
         connectionAttempts: this.connectionAttempts,

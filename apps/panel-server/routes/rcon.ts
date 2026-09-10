@@ -94,7 +94,7 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
     const { host, port, password } = req.body;
     log.info(`POST /connect (host=${host || 'default'}, port=${port || 'default'}, password=${password ? '***' : 'none'})`);
 
-    if (host !== undefined || port !== undefined) {
+    if (host !== undefined || port !== undefined || password !== undefined) {
       let canOverrideTarget = false;
       await requirePermission('servers.manage')(req, res, () => {
         canOverrideTarget = true;

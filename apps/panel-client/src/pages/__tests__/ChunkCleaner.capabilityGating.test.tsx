@@ -144,6 +144,7 @@ describe('ChunkCleaner.tsx: chunks.manage gates the Delete flow', () => {
         undefined,
         true,
         false,
+        null,
       ),
     )
   })

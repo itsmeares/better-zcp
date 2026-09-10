@@ -288,6 +288,7 @@ export default function Mods() {
   const [orderedModIds, setOrderedModIds] = useState<string[]>([])
   const [selectedActiveWsId, setSelectedActiveWsId] = useState<string | null>(null)
   const [savingModOrder, setSavingModOrder] = useState(false)
+  const [serverChangedSinceLoad, setServerChangedSinceLoad] = useState(false)
   const [autoSortPreview, setAutoSortPreview] = useState<AutoSortResult | null>(null)
   const [draggedModIndex, setDraggedModIndex] = useState<number | null>(null)
   const [repairingMaps, setRepairingMaps] = useState(false)
@@ -1753,6 +1754,14 @@ export default function Mods() {
 
   const handleSaveModOrder = async () => {
     if (busyRef.current || !canManageMods) return
+    if (serverChangedSinceLoad) {
+      toast({
+        title: t('toasts.serverChangedSinceLoadTitle'),
+        description: t('toasts.serverChangedSinceLoadDesc'),
+        variant: 'destructive',
+      })
+      return
+    }
     busyRef.current = true
     try {
       setSavingModOrder(true)
@@ -1778,6 +1787,14 @@ export default function Mods() {
 
   const promoteModOverOpponent = async (winnerModId: string, winnerName: string, loserModId: string, loserName: string) => {
     if (busyRef.current || !canManageMods) return
+    if (serverChangedSinceLoad) {
+      toast({
+        title: t('toasts.serverChangedSinceLoadTitle'),
+        description: t('toasts.serverChangedSinceLoadDesc'),
+        variant: 'destructive',
+      })
+      return
+    }
     const source = (iniConfig?.modIds && iniConfig.modIds.length > 0) ? iniConfig.modIds : orderedModIds
     const next = [...source]
     const wi = next.indexOf(winnerModId)
@@ -1822,6 +1839,33 @@ export default function Mods() {
     if (orderedModIds.length !== iniConfig.modIds.length) return true
     return orderedModIds.some((id, i) => id !== iniConfig.modIds[i])
   }, [orderedModIds, iniConfig?.modIds])
+
+  useEffect(() => {
+    if (!socket) return
+    const handleActiveServerChanged = () => {
+      if (hasModOrderChanged) {
+        setServerChangedSinceLoad(true)
+        toast({
+          title: t('toasts.serverChangedSinceLoadTitle'),
+          description: t('toasts.serverChangedSinceLoadDesc'),
+          variant: 'destructive',
+        })
+        return
+      }
+      void fetchData()
+    }
+    socket.on('activeServerChanged', handleActiveServerChanged)
+    return () => {
+      socket.off('activeServerChanged', handleActiveServerChanged)
+    }
+  }, [socket, fetchData, hasModOrderChanged, toast, t])
+
+  useEffect(() => {
+    if (serverChangedSinceLoad && !hasModOrderChanged) {
+      setServerChangedSinceLoad(false)
+      void fetchData()
+    }
+  }, [serverChangedSinceLoad, hasModOrderChanged, fetchData])
 
   const removeFromInstallList = (workshopId: string) => {
     setModsToInstall(prev => prev.filter(m => m.workshopId !== workshopId))
@@ -4915,7 +4959,7 @@ export default function Mods() {
                           <span className="text-[11px] text-warning">{t('loadOrder.unsavedChanges')}</span>
                           <div className="flex gap-2">
                             <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setAutoSortPreview(null); setOrderedModIds(iniConfig.modIds) }}>{t('loadOrder.reset')}</Button>
-                            <Button size="sm" className="h-8 text-xs" onClick={handleSaveModOrder} disabled={savingModOrder || !canManageMods}>
+                            <Button size="sm" className="h-8 text-xs" onClick={handleSaveModOrder} disabled={savingModOrder || !canManageMods || serverChangedSinceLoad}>
                               {savingModOrder ? <Loader2 className="w-3 h-3 me-1 animate-spin" /> : <Save className="w-3 h-3 me-1" />}
                               {t('loadOrder.saveOrder')}
                             </Button>

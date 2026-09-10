@@ -81,6 +81,7 @@
   "INVALID_CAPABILITY": "Kapasite enkoni: {{capability}}",
   "ROLE_LOCKOUT_LAST_MANAGER": "Chanjman sa a ap lakòz pa gen okenn itilizatè ki ka {{action}}",
   "ROLE_SELF_CAPABILITY_LOSS_CONFIRM": "Sa a ap retire kapasite pa ou pou {{action}}",
+  "ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES": "Ou pa ka bay kapasite wòl pa w la pa genyen",
   "ROLE_HAS_MEMBERS": "{{count}} itilizatè toujou gen wòl sa a. Pase reassignTo pou deplase yo nan yon lòt wòl dabò.",
   "ROLE_IS_SEEDED": "Wòl entegre yo pa ka efase.",
   "SERVER_RUNNING_LEGACY": "Sispann sèvè a anvan w efase kawo. Sèvè k ap kouri kenbe fichye sovgad yo louvri epi yo ap ekrase chanjman ou yo lè yo fèmen.",
@@ -117,10 +118,12 @@
   "BACKUP_UPLOAD_REMOTE_NOT_AVAILABLE": "Telechajman kopi sovgad pa disponib pou sèvè aleka.",
   "BACKUP_UPLOAD_NO_FILE": "Pa gen dosye telechaje. Voye kò zip la ak Content-Type: application/zip.",
   "BACKUP_UPLOAD_INVALID_ZIP_SIGNATURE": "Dosye a pa sanble ak yon achiv .zip valid.",
+  "BACKUP_UPLOAD_TOO_LARGE": "The backup upload is too large.",
   "BACKUP_UPLOAD_INVALID_EXTENSION": "Se sèlman kopi sovgad .zip ki aksepte.",
   "BACKUP_UPLOAD_NAME_CONFLICT": "Yon kopi sovgad ki rele \"{{name}}\" deja egziste. Efase l dabò oswa chanje non telechajman an.",
   "BACKUPS_FOLDER_UNAVAILABLE": "Dosye kopi sovgad pa disponib. Konfigire sèvè a dabò.",
   "USER_SELF_DELETE_REFUSED": "Ou pa ka efase pwòp kont pa ou. Mande yon lòt administratè fè l pito.",
+  "USER_SELF_ROLE_CHANGE_REFUSED": "Ou pa ka chanje pwòp wòl pa ou. Mande yon lòt administratè fè l pito.",
   "SERVER_START_REMOTE_REFUSED": "Pa ka demare yon sèvè aleka. Sèvè aleka jere soti deyò — itilize RCON pou entèraji.",
   "SERVER_FORCE_STOP_REMOTE_REFUSED": "Pa ka fòse sispann yon sèvè aleka. Pwosesis la pa jere pa panèl sa a.",
   "SERVER_RESTART_REMOTE_REFUSED": "Pa ka redemare yon sèvè aleka. Pwosesis la pa jere pa panèl sa a.",
@@ -203,6 +206,7 @@
   "DELETE_CHUNKS_INVALID_X": "Kowòdone x kawo envalid — dwe yon nonm antye",
   "DELETE_CHUNKS_INVALID_Y": "Kowòdone y kawo envalid — dwe yon nonm antye",
   "CHUNKS_SAVE_NOT_FOUND": "Sovgad pa jwenn",
+  "CHUNKS_STALE_SERVER_SCAN": "The active server changed since these chunks were scanned. Refresh the save list and re-select before deleting.",
   "DELETE_REGION_FIELDS_REQUIRED": "Non sovgad ak limit rejyon obligatwa",
   "DELETE_REGION_BOUNDS_NOT_FINITE": "Limit rejyon yo dwe nonm fini",
   "DELETE_REGION_BOUNDS_INVERTED": "Limit rejyon envèse (minX > maxX oswa minY > maxY)",
@@ -488,5 +492,7 @@
   "WRITABILITY_TARGET_UNSUPPORTED": "Sib enkoni oswa ki pa sipòte",
   "WRITABILITY_TARGET_MISSING": "Fichye a pa egziste",
   "WRITABILITY_CHMOD_FAILED": "Pa t kapab chanje pèmisyon fichye a",
-  "WRITABILITY_STILL_BLOCKED": "Fichye a toujou pa ka ekri ladan apre yo fin retire atribi lekti sèlman an -- sa sanble ak yon pwoblèm pwopriyetè oswa pèmisyon"
+  "WRITABILITY_STILL_BLOCKED": "Fichye a toujou pa ka ekri ladan apre yo fin retire atribi lekti sèlman an -- sa sanble ak yon pwoblèm pwopriyetè oswa pèmisyon",
+  "WRITABLE_PATH_INSTALL_WINDOWS": "Installation path is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator.",
+  "WRITABLE_PATH_DATA_WINDOWS": "Zomboid data folder is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator."
 }

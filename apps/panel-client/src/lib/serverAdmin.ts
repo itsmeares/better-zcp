@@ -232,10 +232,15 @@ export const getManagedUsers = createServerFn({ method: 'GET' })
 export const createManagedUser = createServerFn({ method: 'POST' })
   .middleware(usersManageMiddleware)
   .validator(
-    (data: { username?: unknown; password?: unknown; role?: unknown }) =>
+    (data: {
+      username?: unknown
+      password?: unknown
+      role?: unknown
+      roleId?: unknown
+    }) =>
       data ?? {},
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { default: authService, USER_ROLES } =
       await import('../../../panel-server/services/auth.ts')
     if (
@@ -251,7 +256,11 @@ export const createManagedUser = createServerFn({ method: 'POST' })
         400,
       )
     }
-    if (!USER_ROLES.includes(data.role as string)) {
+    const roleId =
+      typeof data.roleId === 'string' && data.roleId.trim()
+        ? data.roleId.trim()
+        : undefined
+    if (!roleId && !USER_ROLES.includes(data.role as string)) {
       throwServerError(
         Object.assign(
           new Error(`role must be one of: ${USER_ROLES.join(', ')}`),
@@ -266,6 +275,7 @@ export const createManagedUser = createServerFn({ method: 'POST' })
         data.username,
         data.password,
         data.role as string,
+        { actingUserId: currentUser(context).userId, roleId },
       )
       setResponseStatus(201)
       const managedUser = ((await authService.getUsers()).find(
@@ -280,13 +290,14 @@ export const createManagedUser = createServerFn({ method: 'POST' })
 export const assignManagedUserRole = createServerFn({ method: 'POST' })
   .middleware(usersManageMiddleware)
   .validator((data: { userId: string; roleId: string }) => data)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     try {
       const { default: authService } =
         await import('../../../panel-server/services/auth.ts')
       const user = await authService.changeUserRoleById(
         String(data.userId),
         String(data.roleId),
+        { actingUserId: currentUser(context).userId },
       )
       const managedUser = ((await authService.getUsers()).find(
         (candidate) => candidate.id === user.id,
@@ -316,14 +327,14 @@ export const removeManagedUser = createServerFn({ method: 'POST' })
 export const createManagedRole = createServerFn({ method: 'POST' })
   .middleware(rolesManageMiddleware)
   .validator((data: { name?: unknown; capabilities?: unknown }) => data ?? {})
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     try {
       const { createRole } =
         await import('../../../panel-server/services/permissions.ts')
       const role = await createRole({
         name: data.name,
         capabilities: data.capabilities,
-      })
+      }, { actingUser: { role: currentUser(context).role } })
       setResponseStatus(201)
       return { success: true, role: role as unknown as RoleInfo }
     } catch (error) {

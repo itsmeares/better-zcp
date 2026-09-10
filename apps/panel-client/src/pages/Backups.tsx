@@ -77,6 +77,7 @@ export default function Backups() {
   const canDownloadBackups = can('backups.download')
 
   const progressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ownBackupInFlightRef = useRef(false)
 
   const {
     data: activeServerData,
@@ -164,7 +165,9 @@ export default function Backups() {
     if (!backupStatus) return
     setBackupSchedule(backupStatus.schedule)
     setBackupMaxCount(backupStatus.maxBackups)
-    if (backupStatus.backupInProgress) setCreatingBackup(true)
+    if (backupStatus.backupInProgress) {
+      setCreatingBackup(true)
+    }
   }, [backupStatus])
 
   useEffect(() => {
@@ -181,6 +184,25 @@ export default function Backups() {
   const fetchBackups = useCallback(async () => {
     await refetchBackups()
   }, [refetchBackups])
+
+  useEffect(() => {
+    if (!creatingBackup || ownBackupInFlightRef.current) return
+    const interval = setInterval(async () => {
+      if (ownBackupInFlightRef.current) return
+      try {
+        const status = await backupApi.getStatus()
+        if (!status.backupInProgress) {
+          setCreatingBackup(false)
+          setBackupProgress(null)
+          await fetchBackups()
+          await fetchBackupStatus()
+        }
+      } catch {
+        // A transient status failure should not clear the in-progress state.
+      }
+    }, 10_000)
+    return () => clearInterval(interval)
+  }, [creatingBackup, fetchBackups, fetchBackupStatus])
 
   const refreshAll = useCallback(async () => {
     await Promise.all([
@@ -251,6 +273,7 @@ export default function Backups() {
       clearTimeout(progressTimeoutRef.current)
       progressTimeoutRef.current = null
     }
+    ownBackupInFlightRef.current = true
     setCreatingBackup(true)
     setBackupProgress({ phase: 'preparing', percent: 0, message: t('progress.startingFallback') })
     try {
@@ -279,6 +302,7 @@ export default function Backups() {
       progressTimeoutRef.current = setTimeout(() => setBackupProgress(null), 3000)
     } finally {
       setCreatingBackup(false)
+      ownBackupInFlightRef.current = false
     }
   }
 

@@ -81,6 +81,7 @@
   "INVALID_CAPABILITY": "Невідома можливість: {{capability}}",
   "ROLE_LOCKOUT_LAST_MANAGER": "Після цієї зміни жоден користувач не зможе {{action}}",
   "ROLE_SELF_CAPABILITY_LOSS_CONFIRM": "Це позбавить вас самих можливості {{action}}",
+  "ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES": "Ви не можете надавати дозволи, яких немає у вашої ролі",
   "ROLE_HAS_MEMBERS": "Цю роль досі мають {{count}} користувач(ів). Спершу передайте reassignTo, щоб перевести їх до іншої ролі.",
   "ROLE_IS_SEEDED": "Вбудовані ролі неможливо видалити.",
   "SERVER_RUNNING_LEGACY": "Зупиніть сервер перед видаленням чанків. Запущені сервери тримають файли збереження відкритими й перезапишуть ваші зміни під час вимкнення.",
@@ -117,10 +118,12 @@
   "BACKUP_UPLOAD_REMOTE_NOT_AVAILABLE": "Завантаження резервних копій недоступне для віддалених серверів.",
   "BACKUP_UPLOAD_NO_FILE": "Файл не завантажено. Надішліть тіло zip із Content-Type: application/zip.",
   "BACKUP_UPLOAD_INVALID_ZIP_SIGNATURE": "Файл не схожий на коректний архів .zip.",
+  "BACKUP_UPLOAD_TOO_LARGE": "The backup upload is too large.",
   "BACKUP_UPLOAD_INVALID_EXTENSION": "Приймаються лише резервні копії .zip.",
   "BACKUP_UPLOAD_NAME_CONFLICT": "Резервна копія з назвою \"{{name}}\" вже існує. Спершу видаліть її або перейменуйте завантажуваний файл.",
   "BACKUPS_FOLDER_UNAVAILABLE": "Тека резервних копій недоступна. Спершу налаштуйте сервер.",
   "USER_SELF_DELETE_REFUSED": "Ви не можете видалити власний обліковий запис. Попросіть це зробити іншого адміністратора.",
+  "USER_SELF_ROLE_CHANGE_REFUSED": "Ви не можете змінити власну роль. Попросіть це зробити іншого адміністратора.",
   "SERVER_START_REMOTE_REFUSED": "Неможливо запустити віддалений сервер. Віддаленими серверами керують ззовні — для взаємодії використовуйте RCON.",
   "SERVER_FORCE_STOP_REMOTE_REFUSED": "Неможливо примусово зупинити віддалений сервер. Процесом не керує ця панель.",
   "SERVER_RESTART_REMOTE_REFUSED": "Неможливо перезапустити віддалений сервер. Процесом не керує ця панель.",
@@ -203,6 +206,7 @@
   "DELETE_CHUNKS_INVALID_X": "Некоректна координата x чанка — має бути цілим числом",
   "DELETE_CHUNKS_INVALID_Y": "Некоректна координата y чанка — має бути цілим числом",
   "CHUNKS_SAVE_NOT_FOUND": "Збереження не знайдено",
+  "CHUNKS_STALE_SERVER_SCAN": "The active server changed since these chunks were scanned. Refresh the save list and re-select before deleting.",
   "DELETE_REGION_FIELDS_REQUIRED": "Потрібні назва збереження та межі регіону",
   "DELETE_REGION_BOUNDS_NOT_FINITE": "Межі регіону мають бути скінченними числами",
   "DELETE_REGION_BOUNDS_INVERTED": "Межі регіону перевернуті (minX > maxX або minY > maxY)",
@@ -488,5 +492,7 @@
   "WRITABILITY_TARGET_UNSUPPORTED": "Невідома або непідтримувана ціль перевірки запису",
   "WRITABILITY_TARGET_MISSING": "Файл не існує",
   "WRITABILITY_CHMOD_FAILED": "Не вдалося змінити права доступу до файлу",
-  "WRITABILITY_STILL_BLOCKED": "Файл досі недоступний для запису після зняття атрибута «лише для читання» — це схоже на проблему з власником або правами доступу"
+  "WRITABILITY_STILL_BLOCKED": "Файл досі недоступний для запису після зняття атрибута «лише для читання» — це схоже на проблему з власником або правами доступу",
+  "WRITABLE_PATH_INSTALL_WINDOWS": "Installation path is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator.",
+  "WRITABLE_PATH_DATA_WINDOWS": "Zomboid data folder is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator."
 }

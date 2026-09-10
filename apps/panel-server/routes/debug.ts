@@ -5181,6 +5181,15 @@ router.post("/clear-stale-locks", requirePermission("diagnostics.manage"), async
   }
 });
 
+function isCrashLogFilename(filename: unknown): filename is string {
+  return (
+    typeof filename === "string" &&
+    (filename.startsWith("hs_err_pid") ||
+      (filename.includes("crash") && filename.endsWith(".log")) ||
+      (filename.includes("error") && filename.endsWith(".log")))
+  );
+}
+
 router.get("/crash-logs", requirePermission("diagnostics.manage"), async (req, res) => {
   try {
     const serverManager = req.app.get("serverManager");
@@ -5210,11 +5219,7 @@ router.get("/crash-logs", requirePermission("diagnostics.manage"), async (req, r
           files.map(async (file) => {
             if (seenFiles.has(file)) return;
 
-            if (
-              file.startsWith("hs_err_pid") ||
-              (file.includes("crash") && file.endsWith(".log")) ||
-              (file.includes("error") && file.endsWith(".log"))
-            ) {
+            if (isCrashLogFilename(file)) {
               try {
                 const filePath = path.join(dir, file);
                 const stats = await fs.promises.stat(filePath);
@@ -5263,6 +5268,10 @@ router.get("/crash-logs/:filename", requirePermission("diagnostics.manage"), asy
       filename.includes("/") ||
       filename.includes("\\")
     ) {
+      return res.status(400).json({ error: "Invalid filename" });
+    }
+
+    if (!isCrashLogFilename(filename)) {
       return res.status(400).json({ error: "Invalid filename" });
     }
 

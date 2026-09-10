@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -160,6 +160,34 @@ const isLinux = process.platform !== "win32";
       expect(seen).toHaveLength(1);
       expect(seen[0].author).toBe("Eve");
       expect(seen[0].message).toBe("linux native");
+    });
+
+    it("reloadConfig clears the old server paths and resumes watching after an active-server switch", async () => {
+      tailer.isWatching = true;
+      tailer.basePath = "/old/server";
+      tailer.logsDir = "/old/server/Logs";
+      tailer.logPath = "/old/server/server-console.txt";
+      tailer.chatLogPath = "/old/server/Logs/old_chat.txt";
+      tailer.userLogPath = "/old/server/Logs/old_user.txt";
+      tailer.consoleRemainder = "old";
+      tailer.chatRemainder = "old";
+      tailer.userRemainder = "old";
+      tailer.checkTimer = setTimeout(() => {}, 60_000);
+      const findLogPath = vi.spyOn(tailer, "findLogPath").mockImplementation(async () => {
+        tailer.basePath = "/new/server";
+      });
+      const startWatching = vi.spyOn(tailer, "startWatching").mockResolvedValue();
+
+      await tailer.reloadConfig();
+
+      expect(findLogPath).toHaveBeenCalledOnce();
+      expect(startWatching).toHaveBeenCalledOnce();
+      expect(tailer.basePath).toBe("/new/server");
+      expect(tailer.logPath).toBeNull();
+      expect(tailer.chatLogPath).toBeNull();
+      expect(tailer.userLogPath).toBeNull();
+      expect(tailer.chatRemainder).toBe("");
+      expect(tailer.userRemainder).toBe("");
     });
   },
 );

@@ -1,4 +1,5 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
@@ -76,10 +77,10 @@ async function readDiskCache(relPath: string): Promise<Buffer | null> {
   }
 }
 
-function writeDiskCacheAsync(relPath: string, buffer: Buffer): void {
+export function writeDiskCacheAsync(relPath: string, buffer: Buffer): Promise<void> {
   const dest = diskPathFor(relPath);
-  const tmp = `${dest}.${process.pid}.${Date.now()}.tmp`;
-  fs.promises
+  const tmp = `${dest}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
+  return fs.promises
     .mkdir(path.dirname(dest), { recursive: true })
     .then(() => fs.promises.writeFile(tmp, buffer))
     .then(() => fs.promises.rename(tmp, dest))

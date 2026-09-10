@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
@@ -88,6 +89,30 @@ describe("debug.js crash-logs: scans the configured logs directory, not process.
       expect(res.getBody().content).toContain("distinctive content only this test writes");
     } finally {
       fs.rmSync(markerFile, { force: true });
+    }
+  });
+
+  it("GET /crash-logs/:filename refuses an arbitrary install-root file", async () => {
+    const installRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pz-crash-install-"));
+    const scriptName = "StartServer_TestServer.bat";
+    fs.writeFileSync(
+      path.join(installRoot, scriptName),
+      'start ProjectZomboid64.exe -adminpassword "not-a-log"',
+    );
+    try {
+      const res = await runRoute(
+        debugRouter,
+        "/crash-logs/:filename",
+        "get",
+        adminReq({
+          params: { filename: scriptName },
+          app: { get: () => ({ serverPath: installRoot }) },
+        }),
+      );
+      expect(res.getStatusCode()).toBe(400);
+      expect(res.getBody()).not.toHaveProperty("content");
+    } finally {
+      fs.rmSync(installRoot, { recursive: true, force: true });
     }
   });
 });

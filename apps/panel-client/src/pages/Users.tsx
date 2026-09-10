@@ -40,9 +40,9 @@ import {
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { panelQueryKeys } from '@/lib/queryClient'
 
+const EMPTY_ROLES: RoleInfo[] = []
 const LEGACY_USER_ROLES = ['admin', 'technician', 'moderator'] as const
 type LegacyUserRole = (typeof LEGACY_USER_ROLES)[number]
-const EMPTY_ROLES: RoleInfo[] = []
 function isLegacyUserRole(name: string): name is LegacyUserRole {
   return (LEGACY_USER_ROLES as readonly string[]).includes(name)
 }
@@ -224,35 +224,13 @@ export default function Users({ embedded = false }: { embedded?: boolean }) {
     setFormBusy(true)
     setFormError(null)
     try {
-      const creationRole: LegacyUserRole = isLegacyUserRole(targetRole.name)
-        ? targetRole.name
-        : 'moderator'
+      const legacyRole = isLegacyUserRole(targetRole.name) ? targetRole.name : undefined
       const { user } = await usersApi.create({
         username: username.trim(),
         password,
-        role: creationRole,
+        roleId: targetRole.id,
+        ...(legacyRole ? { role: legacyRole } : {}),
       })
-
-      if (creationRole !== targetRole.name) {
-        try {
-          await usersApi.assignRole(user.id, targetRole.id)
-        } catch (error) {
-          setCreateOpen(false)
-          queryClient.setQueryData<{ users: ManagedUserAccount[] }>(panelQueryKeys.users, (previous) =>
-            previous ? { ...previous, users: [...previous.users, user] } : { users: [user] },
-          )
-          toast({
-            title: t('toasts.userCreatedTitle'),
-            description: t('toasts.userCreatedRoleAssignFailedDescription', {
-              username: user.username,
-              role: targetRole.name,
-              reason: getUserErrorMessage(error, t('toasts.unknownError')),
-            }),
-            variant: 'destructive',
-          })
-          return
-        }
-      }
 
       setCreateOpen(false)
       await refetchUsers()

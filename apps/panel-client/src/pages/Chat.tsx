@@ -128,6 +128,12 @@ export default function Chat() {
   }, [fetchPlayers])
 
   useEffect(() => {
+    if (!socket) return
+    socket.on('activeServerChanged', fetchPlayers)
+    return () => { socket.off('activeServerChanged', fetchPlayers) }
+  }, [socket, fetchPlayers])
+
+  useEffect(() => {
     if (socket) {
       const handleSocketMessage = (data: { id?: string; type?: string; author?: string; message?: string; timestamp?: string }) => {
         const msg = data.message

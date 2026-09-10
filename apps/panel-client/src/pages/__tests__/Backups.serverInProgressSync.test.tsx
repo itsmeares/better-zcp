@@ -76,6 +76,7 @@ function renderBackups() {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  vi.useRealTimers()
 })
 
 describe('Backups.tsx: reflects the server-side backupInProgress/restoreInProgress mutex it was ignoring', () => {
@@ -118,5 +119,21 @@ describe('Backups.tsx: reflects the server-side backupInProgress/restoreInProgre
 
     const createButton = await screen.findByRole('button', { name: /create backup/i })
     await waitFor(() => expect(createButton).not.toBeDisabled())
+  })
+
+  it('rechecks an externally-running backup when its completion socket event is missed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    getResolvedActive.mockResolvedValue({ server: null })
+    getStatus
+      .mockResolvedValueOnce({ ...baseStatus, backupInProgress: true })
+      .mockResolvedValue({ ...baseStatus, backupInProgress: false })
+    listBackups.mockResolvedValue({ backups: [testBackup] })
+    getHistory.mockResolvedValue({ records: [] })
+
+    renderBackups()
+
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /creating/i })).toBeDisabled())
+    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /create backup/i })).not.toBeDisabled())
   })
 })

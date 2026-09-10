@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import {
+  anyPermissionMiddleware,
   permissionMiddleware,
   protectedServerFunctionMiddleware,
 } from './serverAuth'
@@ -52,7 +53,13 @@ function createRpc(name: string, method: 'GET' | 'POST', capability?: string) {
     .handler(({ data, context }) => invoke(name, { data, context }))
 }
 
-export const getPanelBridgeStatus = createRpc('getPanelBridgeStatus', 'GET')
+export const getPanelBridgeStatus = createServerFn({ method: 'GET' })
+  .middleware([
+    ...protectedServerFunctionMiddleware,
+    anyPermissionMiddleware('bridge.setup', 'bridge.diagnostics'),
+  ] as const)
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) => invoke('getPanelBridgeStatus', { data, context }))
 
 export const pingPanelBridge = createRpc('pingPanelBridge', 'GET')
 

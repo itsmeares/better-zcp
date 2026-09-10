@@ -39,6 +39,7 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 const { default: router } = await import("../routes/permissions.ts");
+const { CAPABILITIES } = await import("../services/permissions.ts");
 
 function createResponse() {
   const response = { status: () => response, json: () => response };
@@ -90,7 +91,7 @@ const ADMIN_ROLE_ID = "role-admin";
 beforeEach(() => {
   rolesById.clear();
   users = [];
-  seedRole(ADMIN_ROLE_ID, "admin", ["roles.manage", "users.manage", "server.control"]);
+  seedRole(ADMIN_ROLE_ID, "admin", CAPABILITIES.map((capability) => capability.key));
   users.push({ id: "u-admin", role: "admin", roleId: ADMIN_ROLE_ID });
 });
 

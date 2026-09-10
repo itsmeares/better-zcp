@@ -90,6 +90,33 @@ function recordScheduleExecution(
     duration: number,
   ) => Promise<unknown>)(taskId, taskName, command, success, message, duration);
 }
+
+function recordMissedExecution(
+  taskId: string | number | null,
+  label: string,
+  command: string,
+  context: any,
+): void {
+  const missedAt =
+    context?.dateLocalIso ||
+    (context?.date instanceof Date
+      ? context.date.toISOString()
+      : String(context?.date ?? "an unknown time"));
+  log.warn(
+    `Scheduled ${label ? `"${label}"` : "task"} (${command}) missed its run at ${missedAt} -- the panel likely was not running or was blocked at that moment`,
+  );
+  void recordScheduleExecution(
+    taskId,
+    label,
+    command,
+    false,
+    `Missed scheduled run at ${missedAt} -- the panel was not running or was blocked at that moment`,
+    0,
+  ).catch((error: unknown) => {
+    log.debug(`Could not record missed-execution history: ${errorMessage(error)}`);
+  });
+}
+
 export class Scheduler {
   rconService: any;
   serverManager: any;
@@ -282,6 +309,14 @@ export class Scheduler {
     const job = cron.schedule(task.cron_expression, () => this.runTaskNow(task), {
       timezone: this.effectiveTimezone,
     });
+    job.on("execution:missed", (context: any) =>
+      recordMissedExecution(
+        task.id,
+        task.name || task.command || "task",
+        task.command,
+        context,
+      ),
+    );
 
     this.jobs.set(task.id, job);
     this.jobLabels.set(task.id, task.name || task.command || "task");
@@ -701,6 +736,9 @@ export class Scheduler {
           log.error(`Scheduled backup error: ${errorMessage(error)}`);
         }
       }, { timezone: this.effectiveTimezone });
+      this.backupJob.on("execution:missed", (context: any) =>
+        recordMissedExecution(null, "Scheduled Backup", "backup", context),
+      );
 
       log.info(`Backup schedule configured: ${settings.schedule} (timezone: ${this.effectiveTimezone})`);
 
@@ -749,6 +787,9 @@ export class Scheduler {
         log.error(`Auto-restart cron tick failed: ${errorMessage(err)}`);
       }
     }, { timezone: this.effectiveTimezone });
+    this.autoRestartJob.on("execution:missed", (context: any) =>
+      recordMissedExecution(null, "Auto Restart", "restart", context),
+    );
 
     log.info(`Auto-restart scheduled: ${cronExpression} (timezone: ${this.effectiveTimezone})`);
 

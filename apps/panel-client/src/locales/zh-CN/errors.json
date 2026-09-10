@@ -81,6 +81,7 @@
   "INVALID_CAPABILITY": "未知权限项：{{capability}}",
   "ROLE_LOCKOUT_LAST_MANAGER": "此更改将导致没有用户能够{{action}}",
   "ROLE_SELF_CAPABILITY_LOSS_CONFIRM": "此操作将移除自身{{action}}的能力",
+  "ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES": "你不能授予自己角色不具备的权限",
   "ROLE_HAS_MEMBERS": "仍有 {{count}} 位用户持有此角色。请先通过 reassignTo 将其转移至其他角色。",
   "ROLE_IS_SEEDED": "内置角色无法删除。",
   "SERVER_RUNNING_LEGACY": "删除区块前请先停止服务器。运行中的服务器会占用存档文件，并在关闭时覆盖您的更改。",
@@ -117,10 +118,12 @@
   "BACKUP_UPLOAD_REMOTE_NOT_AVAILABLE": "远程服务器不支持上传备份。",
   "BACKUP_UPLOAD_NO_FILE": "未上传文件。请以 Content-Type: application/zip 发送 zip 数据。",
   "BACKUP_UPLOAD_INVALID_ZIP_SIGNATURE": "文件看起来不是有效的 .zip 压缩包。",
+  "BACKUP_UPLOAD_TOO_LARGE": "The backup upload is too large.",
   "BACKUP_UPLOAD_INVALID_EXTENSION": "仅接受 .zip 格式的备份。",
   "BACKUP_UPLOAD_NAME_CONFLICT": "名为「{{name}}」的备份已存在。请先删除它，或为上传文件重命名。",
   "BACKUPS_FOLDER_UNAVAILABLE": "备份文件夹不可用，请先配置服务器。",
   "USER_SELF_DELETE_REFUSED": "无法删除自己的账户，请让另一位管理员代为操作。",
+  "USER_SELF_ROLE_CHANGE_REFUSED": "无法更改自己的角色，请让另一位管理员代为操作。",
   "SERVER_START_REMOTE_REFUSED": "无法启动远程服务器。远程服务器由外部管理——请使用 RCON 进行交互。",
   "SERVER_FORCE_STOP_REMOTE_REFUSED": "无法强制停止远程服务器。该进程不受此面板管理。",
   "SERVER_RESTART_REMOTE_REFUSED": "无法重启远程服务器。该进程不受此面板管理。",
@@ -203,6 +206,7 @@
   "DELETE_CHUNKS_INVALID_X": "区块 x 坐标无效——必须为整数",
   "DELETE_CHUNKS_INVALID_Y": "区块 y 坐标无效——必须为整数",
   "CHUNKS_SAVE_NOT_FOUND": "未找到存档",
+  "CHUNKS_STALE_SERVER_SCAN": "The active server changed since these chunks were scanned. Refresh the save list and re-select before deleting.",
   "DELETE_REGION_FIELDS_REQUIRED": "存档名称和区域边界均为必填项",
   "DELETE_REGION_BOUNDS_NOT_FINITE": "区域边界必须为有限数字",
   "DELETE_REGION_BOUNDS_INVERTED": "区域边界颠倒（minX > maxX 或 minY > maxY）",
@@ -488,5 +492,7 @@
   "WRITABILITY_TARGET_UNSUPPORTED": "未知或不支持的目标",
   "WRITABILITY_TARGET_MISSING": "文件不存在",
   "WRITABILITY_CHMOD_FAILED": "无法更改文件权限",
-  "WRITABILITY_STILL_BLOCKED": "清除只读属性后文件仍然无法写入——这看起来是所有权或权限问题"
+  "WRITABILITY_STILL_BLOCKED": "清除只读属性后文件仍然无法写入——这看起来是所有权或权限问题",
+  "WRITABLE_PATH_INSTALL_WINDOWS": "Installation path is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator.",
+  "WRITABLE_PATH_DATA_WINDOWS": "Zomboid data folder is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator."
 }

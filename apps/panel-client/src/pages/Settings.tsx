@@ -1264,7 +1264,9 @@ export default function Settings() {
     }
   };
 
+  const canViewBridgeStatus = can("bridge.setup") || can("bridge.diagnostics");
   const fetchBridgeStatus = useCallback(async () => {
+    if (!canViewBridgeStatus) return;
     try {
       const status = await panelBridgeApi.getStatus();
       setBridgeStatus(status);
@@ -1275,7 +1277,7 @@ export default function Settings() {
         getUserErrorMessage(error, t("bridge.statusFetchFailedFallback")),
       );
     }
-  }, [t]);
+  }, [t, canViewBridgeStatus]);
 
   const fetchServers = useCallback(async () => {
     try {

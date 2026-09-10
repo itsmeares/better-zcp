@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import {
+  clearActiveSteamOperation,
+  getActiveSteamOperations,
+} from "../services/activeSteamOperations.ts";
+import { acquireLifecycleLock } from "../services/lifecycleCoordinator.ts";
 
 vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
@@ -15,6 +20,7 @@ vi.mock("../routes/chunks.ts", () => ({
 }));
 
 const { default: router } = await import("../routes/server.ts");
+const { getActiveServer } = await import("../database/init.ts");
 
 const SERVER_NAME = "servertest";
 
@@ -42,22 +48,98 @@ beforeEach(() => {
   saveDir = path.join(savePath, "Saves", "Multiplayer", SERVER_NAME);
   fs.mkdirSync(path.join(saveDir, "map"), { recursive: true });
   fs.writeFileSync(path.join(saveDir, "map", "0_0.bin"), "chunk");
+  getActiveServer.mockResolvedValue({
+    name: SERVER_NAME,
+    serverName: SERVER_NAME,
+    installPath: root,
+    zomboidDataPath: savePath,
+  });
 });
 
 afterEach(() => {
+  clearActiveSteamOperation(path.normalize(savePath).toLowerCase());
   fs.rmSync(root, { recursive: true, force: true });
 });
 
 function buildServerManager() {
   return {
     loadConfig: async () => {},
+    reloadConfig: async () => {},
     getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
     savePath,
     serverName: SERVER_NAME,
   };
 }
 
+it("refuses a wipe when its save path is inside a SteamCMD target install path", async () => {
+  const serverManager = {
+    ...buildServerManager(),
+    serverPath: root,
+  };
+  const normalizedInstallPath = path.normalize(root).toLowerCase();
+  getActiveSteamOperations().set(normalizedInstallPath, {
+    type: "update",
+    pid: process.pid,
+  });
+
+  const handler = getWipeHandler();
+  const response = createResponse();
+  await handler(
+    {
+      app: { get: () => serverManager },
+      body: { targets: ["map"], confirm: true, createBackup: false },
+    },
+    response,
+  );
+
+  expect(response.status).toHaveBeenCalledWith(409);
+  expect(response.json).toHaveBeenCalledWith(
+    expect.objectContaining({ code: "STEAM_OPERATION_IN_PROGRESS_PATH" }),
+  );
+  expect(fs.existsSync(path.join(saveDir, "map", "0_0.bin"))).toBe(true);
+});
+
 describe("POST /api/server/wipe backs up before deleting (default createBackup: true)", () => {
+  it("holds the shared lifecycle lock while the pre-wipe backup is running", async () => {
+    let markBackupStarted;
+    let resolveBackup;
+    const backupStarted = new Promise((resolve) => {
+      markBackupStarted = resolve;
+    });
+    const serverManager = buildServerManager();
+    const backupService = {
+      createBackup: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveBackup = resolve;
+            markBackupStarted();
+          }),
+      ),
+    };
+    const app = {
+      get: (key) => {
+        if (key === "serverManager") return serverManager;
+        if (key === "backupService") return backupService;
+        return undefined;
+      },
+    };
+
+    const response = createResponse();
+    const wipePromise = getWipeHandler()(
+      { app, body: { targets: ["map"], confirm: true } },
+      response,
+    );
+    await backupStarted;
+
+    expect(acquireLifecycleLock("start", SERVER_NAME)).toBeNull();
+    resolveBackup({ success: false, message: "disk full" });
+    await wipePromise;
+
+    const lockAfterWipe = acquireLifecycleLock("start", SERVER_NAME);
+    expect(lockAfterWipe).not.toBeNull();
+    lockAfterWipe.release();
+  });
+
   it("aborts the wipe and deletes nothing when the backup fails", async () => {
     const serverManager = buildServerManager();
     const backupService = {

@@ -120,7 +120,7 @@ describe("pre-update database backup lifecycle around a real bundle transaction"
 
     fs.unlinkSync(stagedBinaryPath);
     expect(() => applyUpdateBundle(journalPath)).toThrowError(
-      expect.objectContaining({ code: "av_quarantine" }),
+      expect.objectContaining({ code: "hash_unverifiable" }),
     );
     expect(fs.readFileSync(binaryPath, "utf8")).toBe("old-binary");
     expect(fs.readFileSync(dbPath, "utf8")).toBe(originalDbContent);

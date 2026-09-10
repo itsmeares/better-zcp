@@ -172,6 +172,30 @@ describe('PanelBridge pending commands', () => {
     });
     expect(pendingCommands.size).toBe(0);
   });
+
+  it('rejects stale pending commands instead of leaving their promises unresolved', async () => {
+    const { PanelBridge } = await import('../services/panelBridge.ts');
+    const bridge = new PanelBridge();
+    bridge.config.commandTimeoutMs = 1;
+    const reject = vi.fn();
+    const timeout = setTimeout(() => {}, 10000);
+    bridge.pendingCommands.set('stale-command', {
+      resolve: vi.fn(),
+      reject,
+      timeout,
+      action: 'teleportPlayer',
+      timestamp: Date.now() - 10,
+    });
+
+    bridge.cleanupResultTracking();
+
+    expect(reject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Command timeout: teleportPlayer'),
+      }),
+    );
+    expect(bridge.pendingCommands.has('stale-command')).toBe(false);
+  });
 });
 
 describe('PanelBridge queue recovery', () => {

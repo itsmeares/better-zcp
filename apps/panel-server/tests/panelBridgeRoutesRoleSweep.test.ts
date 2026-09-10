@@ -131,9 +131,22 @@ describe("panelBridge.js: POST /command stays admin-only (unchanged, whitelist-f
   });
 });
 
-describe("panelBridge.js: /status, /ping, /commands stay outside the matrix entirely", () => {
+describe("panelBridge.js: GET /status is limited to bridge operators", () => {
+  it("refuses a moderator", async () => {
+    const { default: router } = await import("../routes/panelBridge.ts");
+    const { res } = await runGate(router, "/status", "get", "moderator");
+    expect(res.getStatusCode()).toBe(403);
+  });
+
+  it.each(["admin", "technician"])("allows a %s", async (role) => {
+    const { default: router } = await import("../routes/panelBridge.ts");
+    const { calledNext } = await runGate(router, "/status", "get", role);
+    expect(calledNext).toBe(true);
+  });
+});
+
+describe("panelBridge.js: /ping and /commands stay outside the matrix entirely", () => {
   const TRULY_UNGATED = [
-    ["/status", "get"],
     ["/ping", "get"],
     ["/commands", "get"],
   ];

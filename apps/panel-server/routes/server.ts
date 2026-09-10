@@ -28,13 +28,20 @@ import {
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
 import { requirePermission } from "../services/permissions.ts";
 import {
+  acquireLifecycleLock,
   getActiveLifecycleOperation,
+  isLifecycleLockedForServer,
+  lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { ProgressCode } from "../utils/progressCodes.ts";
 import { invalidateMapFolderScan } from "./chunks.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
+import {
+  createLinuxServiceLifecycle,
+  isManagedLifecycleProvider,
+} from "../services/linuxServiceLifecycle.ts";
 import {
   buildServerSignal,
   resolveLifecycleState,
@@ -58,6 +65,9 @@ import {
   forceStopServerAction,
   restartServerAction,
 } from "../services/serverLifecycleActions.ts";
+import { scoreServerProcessOwnership } from "../services/serverManager.ts";
+import { buildLinuxWritableHomeEnv } from "../utils/steamEnvironment.ts";
+import { resolveEnvRconHost } from "../services/rcon.ts";
 
 export { applyUpnpToIni } from "../utils/upnpConfig.ts";
 
@@ -226,7 +236,10 @@ async function ensureSteamCmdLinux(installPath: string, io: any) {
   await new Promise<void>((resolve, reject) => {
     const proc = spawnProcess(steamcmdExe, ["+quit"], {
       cwd: installPath,
-      env: { ...process.env, LD_LIBRARY_PATH: ldPaths },
+      env: {
+        ...buildLinuxWritableHomeEnv(installPath),
+        LD_LIBRARY_PATH: ldPaths,
+      },
     });
     proc.stdout.on("data", (d: any) =>
       emitRawSteamCmdLine(io, "steamcmd:log", "stdout", d.toString()),
@@ -308,14 +321,18 @@ function recoverBlockedSteamManifest(installPath: string) {
   return { backupPath };
 }
 
-async function findSteamCmdPath() {
+export const STEAMCMD_FIXED_CANDIDATE_PATHS = [
+  "/home/steam/steamcmd",
+  "/home/steam/Steam/steamcmd",
+  "/opt/steamcmd",
+];
+
+export async function findSteamCmdPath() {
   const configuredPath = await getSetting("steamcmdPath");
   const candidates = [
     configuredPath,
     process.env.STEAMCMD_PATH,
-    "/home/steam/steamcmd",
-    "/home/steam/Steam/steamcmd",
-    "/opt/steamcmd",
+    ...STEAMCMD_FIXED_CANDIDATE_PATHS,
   ].filter(Boolean);
 
   for (const candidate of candidates) {
@@ -363,9 +380,10 @@ export function isValidPath(inputPath: any) {
   return true;
 }
 
-function resolveZomboidPaths(installPath: string, zomboidDataPath: string | null) {
+export function resolveZomboidPaths(installPath: string, zomboidDataPath: string | null) {
   const defaultZomboidDataPath =
-    process.env.PZ_SAVE_PATH || `${installPath}_Data`;
+    process.env.PZ_SAVE_PATH ||
+    path.join(path.dirname(installPath), `${path.basename(installPath)}_Data`);
   const zomboidPath = zomboidDataPath || defaultZomboidDataPath;
 
   return {
@@ -772,7 +790,10 @@ router.get("/branches", requirePermission("server.install"), async (req, res) =>
         ]
           .filter(Boolean)
           .join(":");
-        branchSpawnOpts.env = { ...process.env, LD_LIBRARY_PATH: ldPaths };
+        branchSpawnOpts.env = {
+          ...buildLinuxWritableHomeEnv(steamcmdPath),
+          LD_LIBRARY_PATH: ldPaths,
+        };
       }
       const steamcmd = spawnProcess(steamcmdExe, steamcmdArgs, branchSpawnOpts);
 
@@ -929,7 +950,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
   let activeOperationPath = null;
   try {
     const {
-      steamcmdPath,
+      steamcmdPath: suppliedSteamcmdPath,
       installPath,
       serverName,
       branch,
@@ -946,14 +967,25 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
       rconPort = 27015,
     } = req.body;
 
+    const steamcmdPath =
+      suppliedSteamcmdPath || (await findSteamCmdPath());
+
     const selectedBranch = branch || (useUnstable ? "unstable" : "stable");
     log.info(
       `POST /install (steamcmd=${steamcmdPath}, install=${installPath}, server=${serverName}, branch=${selectedBranch}, noSteam=${useNoSteam}, debug=${useDebug})`,
     );
 
     if (!steamcmdPath || !installPath || !serverName) {
+      const missing = [
+        !steamcmdPath && "steamcmdPath",
+        !installPath && "installPath",
+        !serverName && "serverName",
+      ].filter(Boolean);
+      const detectionHint = !steamcmdPath
+        ? ` SteamCMD was not found automatically either -- checked ${STEAMCMD_FIXED_CANDIDATE_PATHS.join(", ")}.`
+        : "";
       return res.status(400).json({
-        error: "Missing required fields: steamcmdPath, installPath, serverName",
+        error: `Missing required fields: ${missing.join(", ")}.${detectionHint}`,
         code: ErrorCode.INSTALL_MISSING_FIELDS,
       });
     }
@@ -1024,6 +1056,24 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
     const safeServerPort = serverPortCheck.value;
     const safeRconPort = rconPortCheck.value;
 
+    const installTargetServer = await resolveTargetServerForRunningCheck(installPath, {
+      serverName,
+      zomboidDataPath,
+    });
+    const installNotStoppedError = await checkSpecificServerStopped(
+      req.app.get("serverManager"),
+      installTargetServer,
+      "installing to this path",
+    );
+    if (installNotStoppedError) {
+      return res
+        .status(installNotStoppedError.status)
+        .json(installNotStoppedError.body);
+    }
+    if (isLifecycleLockedForServer(installTargetServer)) {
+      return res.status(409).json(lifecycleInProgressResponse());
+    }
+
     const safeAdminPassword = sanitizeForBatch(adminPassword);
 
     let steamcmdExe = await saveAndResolveSteamCmdExe(steamcmdPath);
@@ -1093,7 +1143,10 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
       ]
         .filter(Boolean)
         .join(":");
-      spawnOpts.env = { ...process.env, LD_LIBRARY_PATH: ldPaths };
+      spawnOpts.env = {
+        ...buildLinuxWritableHomeEnv(steamcmdPath),
+        LD_LIBRARY_PATH: ldPaths,
+      };
     }
     const steamcmd = spawnProcess(steamcmdExe, steamcmdArgs, spawnOpts);
     const installOperation = activeSteamOperations.get(normalizedPath);
@@ -1236,7 +1289,7 @@ router.post("/install", requirePermission("server.install"), async (req, res) =>
           try {
             await setSetting("rconPassword", rconPassword);
             await setSetting("rconPort", rconPort);
-            await setSetting("rconHost", "127.0.0.1");
+            await setSetting("rconHost", resolveEnvRconHost());
             io.emit("install:log", {
               type: "stdout",
               text: `RCON settings saved (port: ${rconPort})`,
@@ -1579,6 +1632,25 @@ router.post("/quick-setup", requirePermission("server.install"), async (req, res
     const safeMaxMemory = maxMemoryCheck.value;
     const safeServerPort = serverPortCheck.value;
     const safeRconPort = rconPortCheck.value;
+
+    const quickSetupTargetServer = await resolveTargetServerForRunningCheck(installPath, {
+      serverName,
+      zomboidDataPath,
+    });
+    const quickSetupNotStoppedError = await checkSpecificServerStopped(
+      req.app.get("serverManager"),
+      quickSetupTargetServer,
+      "running quick setup on this path",
+    );
+    if (quickSetupNotStoppedError) {
+      return res
+        .status(quickSetupNotStoppedError.status)
+        .json(quickSetupNotStoppedError.body);
+    }
+    if (isLifecycleLockedForServer(quickSetupTargetServer)) {
+      return res.status(409).json(lifecycleInProgressResponse());
+    }
+
     const safeAdminPassword = sanitizeForBatch(adminPassword);
 
     log.info(
@@ -1626,7 +1698,7 @@ router.post("/quick-setup", requirePermission("server.install"), async (req, res
     if (rconPassword) {
       await setSetting("rconPassword", rconPassword);
       await setSetting("rconPort", safeRconPort);
-      await setSetting("rconHost", "127.0.0.1");
+      await setSetting("rconHost", resolveEnvRconHost());
 
       try {
         const iniPath = path.join(serverConfigPath, `${serverName}.ini`);
@@ -1795,7 +1867,7 @@ router.post("/configure-rcon", requirePermission("server.configure"), async (req
 
     await setSetting("rconPassword", rconPassword);
     await setSetting("rconPort", rconPort);
-    await setSetting("rconHost", "127.0.0.1");
+    await setSetting("rconHost", resolveEnvRconHost());
 
     log.info(`RCON configured in ${iniPath}`);
     res.json({
@@ -2055,28 +2127,20 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
       return res.status(400).json({ error: "Invalid install path", code: ErrorCode.INSTALL_PATH_INVALID });
     }
 
-    const serverManager = req.app.get("serverManager");
-    try {
-      const processDetails = await serverManager.getServerProcessDetails();
-      if (processDetails.scanFailed) {
-        return res.status(503).json({
-          error: "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
-          code: ErrorCode.SERVER_STATE_UNKNOWN,
-        });
-      }
-      if (processDetails.running) {
-        return res.status(400).json({
-          error:
-            "Server is currently running. Please stop the server before updating.",
-          code: ErrorCode.STEAM_UPDATE_SERVER_RUNNING,
-        });
-      }
-    } catch (e: any) {
-      log.warn(`Could not verify server status before update: ${e.message}`);
-      return res.status(503).json({
-        error: "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
-        code: ErrorCode.SERVER_STATE_UNKNOWN,
-      });
+    const steamUpdateTargetServer = await resolveTargetServerForRunningCheck(installPath);
+    const steamUpdateNotStoppedError = await checkSpecificServerStopped(
+      req.app.get("serverManager"),
+      steamUpdateTargetServer,
+      "updating it",
+      ErrorCode.STEAM_UPDATE_SERVER_RUNNING,
+    );
+    if (steamUpdateNotStoppedError) {
+      return res
+        .status(steamUpdateNotStoppedError.status)
+        .json(steamUpdateNotStoppedError.body);
+    }
+    if (isLifecycleLockedForServer(steamUpdateTargetServer)) {
+      return res.status(409).json(lifecycleInProgressResponse());
     }
 
     let steamcmdExe = await saveAndResolveSteamCmdExe(steamcmdPath);
@@ -2177,7 +2241,10 @@ router.post("/steam-update", requirePermission("server.install"), async (req, re
       ]
         .filter(Boolean)
         .join(":");
-      updateSpawnOpts.env = { ...process.env, LD_LIBRARY_PATH: ldPaths };
+      updateSpawnOpts.env = {
+        ...buildLinuxWritableHomeEnv(steamcmdPath),
+        LD_LIBRARY_PATH: ldPaths,
+      };
     }
     const steamcmd = spawnProcess(steamcmdExe, steamcmdArgs, updateSpawnOpts);
     const updateOperation = activeSteamOperations.get(normalizedPath);
@@ -2575,7 +2642,10 @@ router.post("/steamcmd/download", requirePermission("server.install"), async (re
         ]
           .filter(Boolean)
           .join(":");
-        firstRunOpts.env = { ...process.env, LD_LIBRARY_PATH: ldPaths };
+        firstRunOpts.env = {
+          ...buildLinuxWritableHomeEnv(installPath),
+          LD_LIBRARY_PATH: ldPaths,
+        };
       }
       const steamcmd = spawnProcess(steamcmdExe, ["+quit"], firstRunOpts);
 
@@ -2650,8 +2720,66 @@ router.get("/steamcmd/check", requirePermission("server.install"), async (req, r
   }
 });
 
-async function checkServerConfirmedStopped(serverManager: any, actionLabel: string) {
-  const processDetails = await serverManager.getServerProcessDetails();
+async function checkSpecificServerStopped(
+  serverManager: any,
+  targetServer: AnyRecord,
+  actionLabel: string,
+  runningCode: string = ErrorCode.WIPE_SERVER_RUNNING,
+) {
+  const provider = String(targetServer.lifecycleProvider || "");
+  if (isManagedLifecycleProvider(provider)) {
+    try {
+      const status = await createLinuxServiceLifecycle(
+        targetServer as Parameters<typeof createLinuxServiceLifecycle>[0],
+        provider,
+      ).status();
+      if (status.scanFailed) {
+        return {
+          status: 503,
+          body: {
+            error:
+              "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error.",
+            code: ErrorCode.SERVER_STATE_UNKNOWN,
+          },
+        };
+      }
+      if (status.running) {
+        return {
+          status: 400,
+          body: {
+            error: `Server must be stopped before ${actionLabel}. Stop the server first.`,
+            code: runningCode,
+          },
+        };
+      }
+      return null;
+    } catch (error: unknown) {
+      return {
+        status: 503,
+        body: {
+          error: `Can't verify whether the server is actually stopped — ${error instanceof Error ? error.message : String(error)}`,
+          code: ErrorCode.SERVER_STATE_UNKNOWN,
+        },
+      };
+    }
+  }
+
+  const usesRawProcessScan =
+    typeof serverManager?._scanDedicatedServerProcesses === "function";
+  let processDetails: AnyRecord;
+  try {
+    processDetails = usesRawProcessScan
+      ? await serverManager._scanDedicatedServerProcesses()
+      : await serverManager.getServerProcessDetails();
+  } catch (error: unknown) {
+    return {
+      status: 503,
+      body: {
+        error: `Can't verify whether the server is actually stopped — ${error instanceof Error ? error.message : String(error)}`,
+        code: ErrorCode.SERVER_STATE_UNKNOWN,
+      },
+    };
+  }
   if (processDetails.scanFailed) {
     return {
       status: 503,
@@ -2661,27 +2789,86 @@ async function checkServerConfirmedStopped(serverManager: any, actionLabel: stri
       },
     };
   }
-  if (processDetails.running) {
+  if (!usesRawProcessScan) {
+    if (processDetails.running) {
+      return {
+        status: 400,
+        body: {
+          error: `Server must be stopped before ${actionLabel}. Stop the server first.`,
+          code: runningCode,
+        },
+      };
+    }
+    return null;
+  }
+
+  let owned = false;
+  let unattributable = false;
+  const descriptor = {
+    serverName: targetServer.serverName || targetServer.name,
+    savePath: targetServer.zomboidDataPath,
+    serverPath: targetServer.serverPath || targetServer.installPath,
+  };
+  for (const entry of Array.isArray(processDetails.matched)
+    ? processDetails.matched
+    : []) {
+    const score = scoreServerProcessOwnership(entry.cmd, descriptor);
+    if (score > 0) owned = true;
+    else if (score === 0) unattributable = true;
+  }
+
+  if (owned) {
     return {
       status: 400,
       body: {
         error: `Server must be stopped before ${actionLabel}. Stop the server first.`,
-        code: ErrorCode.WIPE_SERVER_RUNNING,
+        code: runningCode,
+      },
+    };
+  }
+  if (unattributable) {
+    return {
+      status: 503,
+      body: {
+        error:
+          "Can't verify whether the server is actually stopped — a dedicated PZ server process exists on this host that can't be confirmed to belong to a different server. Check the panel's log for the process, or stop it and try again.",
+        code: ErrorCode.SERVER_STATE_UNKNOWN,
       },
     };
   }
   return null;
 }
 
+async function resolveTargetServerForRunningCheck(
+  installPath: string,
+  fallback: AnyRecord = {},
+): Promise<AnyRecord> {
+  const configuredServers =
+    typeof getServers === "function" ? await getServers() : [];
+  const resolvedPath = path.resolve(installPath);
+  const matchedServer = (Array.isArray(configuredServers)
+    ? configuredServers
+    : []
+  ).find(
+    (server: AnyRecord) =>
+      server.installPath && path.resolve(server.installPath) === resolvedPath,
+  );
+  return (
+    matchedServer || {
+      ...fallback,
+      installPath,
+    }
+  );
+}
+
 router.post("/delete-files", requirePermission("server.wipe"), async (req, res) => {
+  const lifecycleLock = acquireLifecycleLock("delete-files");
+  if (!lifecycleLock) {
+    return res.status(409).json(lifecycleInProgressResponse());
+  }
+
   try {
     const serverManager = req.app.get("serverManager");
-    await serverManager.loadConfig();
-
-    const notStoppedError = await checkServerConfirmedStopped(serverManager, "deleting its files");
-    if (notStoppedError) {
-      return res.status(notStoppedError.status).json(notStoppedError.body);
-    }
 
     const { path: deletePath, confirm } = req.body || {};
     if (confirm !== true) {
@@ -2715,11 +2902,11 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
     }
 
     const resolvedDeletePath = path.resolve(deletePath);
-    const configuredServers = await getServers();
-    const matchesConfiguredServer = configuredServers.some(
+    const configuredServers = (await getServers()) as AnyRecord[];
+    const targetServer = configuredServers.find(
       (s) => s.installPath && path.resolve(s.installPath) === resolvedDeletePath,
     );
-    if (!matchesConfiguredServer) {
+    if (!targetServer) {
       return res.status(400).json({
         error:
           "This path doesn't match a server the panel has on record. Refusing to delete for safety.",
@@ -2727,7 +2914,18 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
       });
     }
 
-    const zomboidDataPath = serverManager.savePath;
+    const normalizedDeleteTargetPath = path
+      .normalize(deletePath)
+      .toLowerCase();
+    if (hasActiveSteamOperation(normalizedDeleteTargetPath)) {
+      return res.status(409).json({
+        error:
+          "A Steam operation is already in progress for this path. Please wait for it to complete.",
+        code: ErrorCode.STEAM_OPERATION_IN_PROGRESS_PATH,
+      });
+    }
+
+    const zomboidDataPath = targetServer.zomboidDataPath;
     if (zomboidDataPath) {
       const resolvedDeletePath = path.resolve(deletePath);
       if (confineToRoots(zomboidDataPath, [resolvedDeletePath])) {
@@ -2738,7 +2936,20 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
       }
     }
 
-    const stillNotStoppedError = await checkServerConfirmedStopped(serverManager, "deleting its files");
+    const notStoppedError = await checkSpecificServerStopped(
+      serverManager,
+      targetServer,
+      "deleting its files",
+    );
+    if (notStoppedError) {
+      return res.status(notStoppedError.status).json(notStoppedError.body);
+    }
+
+    const stillNotStoppedError = await checkSpecificServerStopped(
+      serverManager,
+      targetServer,
+      "deleting its files",
+    );
     if (stillNotStoppedError) {
       return res.status(stillNotStoppedError.status).json(stillNotStoppedError.body);
     }
@@ -2752,6 +2963,8 @@ router.post("/delete-files", requirePermission("server.wipe"), async (req, res) 
   } catch (error: any) {
     log.error(`Failed to delete server files: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
+  } finally {
+    lifecycleLock.release();
   }
 });
 
@@ -3455,7 +3668,22 @@ export async function countDir(dir: string, budget: any) {
 router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) => {
   try {
     const serverManager = req.app.get("serverManager");
-    await serverManager.loadConfig();
+    const activeServer = await getActiveServer();
+    if (!activeServer) {
+      return res.status(400).json({
+        error: "No active server configured",
+        code: ErrorCode.WIPE_ZOMBOID_DATA_PATH_NOT_CONFIGURED,
+      });
+    }
+    try {
+      await serverManager.reloadConfig();
+    } catch (error: unknown) {
+      return res.status(503).json({
+        error:
+          "Could not verify the active server's configuration — refusing to preview a wipe against possibly-stale state. Try again, or restart the panel.",
+        code: ErrorCode.SERVER_STATE_UNKNOWN,
+      });
+    }
 
     const { targets } = req.body || {};
     if (!Array.isArray(targets) || targets.length === 0) {
@@ -3475,11 +3703,12 @@ router.post("/wipe/preview", requirePermission("server.wipe"), async (req, res) 
         code: ErrorCode.WIPE_PREVIEW_INVALID_TARGETS,
       });
     }
-    const savePath = serverManager.savePath;
-    const serverName = serverManager.serverName || "servertest";
+    const savePath = activeServer.zomboidDataPath;
+    const serverName = activeServer.serverName || "servertest";
     if (!savePath) {
       return res.status(400).json({ error: "No zomboid data path configured", code: ErrorCode.WIPE_ZOMBOID_DATA_PATH_NOT_CONFIGURED });
     }
+
     if (/[/\\]/.test(serverName)) {
       return res.status(400).json({ error: "Invalid server name", code: ErrorCode.WIPE_INVALID_SERVER_NAME });
     }
@@ -3670,6 +3899,16 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
   }
   wipeInProgress = true;
 
+  const activeServerForLock = await getActiveServer();
+  const lifecycleLock = acquireLifecycleLock(
+    "wipe",
+    activeServerForLock?.name || activeServerForLock?.serverName || null,
+  );
+  if (!lifecycleLock) {
+    wipeInProgress = false;
+    return res.status(409).json(lifecycleInProgressResponse());
+  }
+
   let serverName = null;
   let backupResult = null;
   let results: AnyRecord = {};
@@ -3677,7 +3916,22 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
 
   try {
     const serverManager = req.app.get("serverManager");
-    await serverManager.loadConfig();
+    const activeServer = await getActiveServer();
+    if (!activeServer) {
+      return res.status(400).json({
+        error: "No active server configured",
+        code: ErrorCode.WIPE_ZOMBOID_DATA_PATH_NOT_CONFIGURED,
+      });
+    }
+    try {
+      await serverManager.reloadConfig();
+    } catch (error: unknown) {
+      return res.status(503).json({
+        error:
+          "Could not verify the active server's configuration — refusing to wipe against possibly-stale state. Nothing was deleted. Try again, or restart the panel.",
+        code: ErrorCode.SERVER_STATE_UNKNOWN,
+      });
+    }
 
     const processDetails = await serverManager.getServerProcessDetails();
     if (processDetails.scanFailed) {
@@ -3718,11 +3972,26 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
     }
     const wipeTargets = targets;
 
-    const savePath = serverManager.savePath;
-    serverName = serverManager.serverName || "servertest";
+    const savePath = activeServer.zomboidDataPath;
+    serverName = activeServer.serverName || "servertest";
     if (!savePath) {
       return res.status(400).json({ error: "No zomboid data path configured", code: ErrorCode.WIPE_ZOMBOID_DATA_PATH_NOT_CONFIGURED });
     }
+
+    if (
+      serverManager.serverPath &&
+      confineToRoots(savePath, [path.resolve(serverManager.serverPath)]) &&
+      hasActiveSteamOperation(
+        path.normalize(serverManager.serverPath).toLowerCase(),
+      )
+    ) {
+      return res.status(409).json({
+        error:
+          "A Steam operation is already in progress for this path. Please wait for it to complete.",
+        code: ErrorCode.STEAM_OPERATION_IN_PROGRESS_PATH,
+      });
+    }
+
     if (/[/\\]/.test(serverName)) {
       return res.status(400).json({ error: "Invalid server name", code: ErrorCode.WIPE_INVALID_SERVER_NAME });
     }
@@ -3748,7 +4017,11 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
         });
       }
       const io = req.app.get("io");
-      backupResult = await backupService.createBackup({ isPreWipe: true, io });
+      backupResult = await backupService.createBackup({
+        isPreWipe: true,
+        io,
+        activeServer,
+      });
       const backupIncomplete =
         backupResult.success && (backupResult.skippedFiles?.length ?? 0) > 0;
       if (!backupResult.success || backupIncomplete) {
@@ -3764,7 +4037,7 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
       if (targets.includes("accounts")) {
         try {
           const accountsBackupDir = path.join(
-            await backupService.getBackupsPath(),
+            await backupService.getBackupsPath(activeServer),
             `${serverName}_accounts_${Date.now()}`,
           );
           await fs.promises.mkdir(accountsBackupDir, { recursive: true });
@@ -3923,6 +4196,7 @@ router.post("/wipe", requirePermission("server.wipe"), async (req, res) => {
     });
   } finally {
     wipeInProgress = false;
+    lifecycleLock.release();
   }
 });
 

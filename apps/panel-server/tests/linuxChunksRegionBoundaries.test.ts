@@ -55,7 +55,13 @@ async function runRoute(routePath, method, req) {
 function postAs(routePath, body) {
   return runRoute(routePath, "post", {
     user: { role: "technician" },
-    body: { force: true, createBackup: false, deleteVehicles: false, ...body },
+    body: {
+      force: true,
+      createBackup: false,
+      deleteVehicles: false,
+      expectedServerId: "server-1",
+      ...body,
+    },
   });
 }
 

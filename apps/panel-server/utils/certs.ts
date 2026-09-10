@@ -4,6 +4,7 @@ import path from "path";
 import { createLogger } from "../utils/logger.ts";
 import { writeFileAtomic } from "./fileWriteQueue.ts";
 import { getDataPaths } from "../utils/paths.ts";
+import { listNonInternalIPv4Interfaces } from "./networkInterfaces.ts";
 
 const log = createLogger("HTTPS");
 
@@ -52,6 +53,49 @@ function generateSelfSignedCert(): GeneratedCertificate {
   return { key: privateKey, cert };
 }
 
+type SanTarget = { kind: "dns" | "ip"; value: string };
+
+function getCurrentSanTargets(): SanTarget[] {
+  const targets: SanTarget[] = [
+    { kind: "dns", value: "localhost" },
+    { kind: "ip", value: "127.0.0.1" },
+    { kind: "ip", value: "::1" },
+  ];
+  for (const { address } of listNonInternalIPv4Interfaces()) {
+    const octets = address.split(".").map(Number);
+    if (
+      octets.length === 4 &&
+      octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
+    ) {
+      targets.push({ kind: "ip", value: address });
+    }
+  }
+  return targets;
+}
+
+function buildSubjectAltNameExtension(): Buffer {
+  const generalNames = getCurrentSanTargets().map(({ kind, value }) => {
+    if (kind === "dns") return derTag(0x82, Buffer.from(value, "ascii"));
+    const bytes =
+      value === "::1" ? new Array(15).fill(0).concat(1) : value.split(".").map(Number);
+    return derTag(0x87, Buffer.from(bytes));
+  });
+  const extension = derSequence([
+    derOID([2, 5, 29, 17]),
+    derOctetString(derSequence(generalNames)),
+  ]);
+  return derExplicit(3, derSequence([extension]));
+}
+
+function certificateCoversCurrentAddresses(subjectAltName: string | undefined): boolean {
+  if (!subjectAltName) return false;
+  return getCurrentSanTargets().every(({ kind, value }) => {
+    if (kind === "dns") return subjectAltName.includes(`DNS:${value}`);
+    const rendered = value === "::1" ? "0:0:0:0:0:0:0:1" : value;
+    return subjectAltName.includes(`IP Address:${rendered}`);
+  });
+}
+
 function createSelfSignedCertPEM(
   privateKeyPem: string,
   publicKeyPem: string,
@@ -89,6 +133,7 @@ function createSelfSignedCertPEM(
     ]),
     subject, // subject
     pubKeyDer, // subjectPublicKeyInfo (already DER-encoded)
+    buildSubjectAltNameExtension(),
   ]);
 
   const signer = crypto.createSign("SHA256");
@@ -182,6 +227,10 @@ function derNull(): Buffer {
   return Buffer.from([0x05, 0x00]);
 }
 
+function derOctetString(content: Buffer): Buffer {
+  return derTag(0x04, content);
+}
+
 function derUTF8String(str: string): Buffer {
   return derTag(0x0c, Buffer.from(str, "utf8"));
 }
@@ -232,8 +281,16 @@ export function loadOrCreateCerts(
   try {
     const key = readRegularFile(KEY_FILE);
     const cert = readRegularFile(CERT_FILE);
-    log.info("Using existing self-signed certificate");
-    return { key, cert };
+    try {
+      const x509 = new crypto.X509Certificate(cert);
+      if (certificateCoversCurrentAddresses(x509.subjectAltName)) {
+        log.info("Using existing self-signed certificate");
+        return { key, cert };
+      }
+      log.warn("Existing self-signed certificate does not cover current network addresses; regenerating");
+    } catch (error: unknown) {
+      log.warn(`Existing self-signed certificate could not be parsed (${errorMessage(error)}); regenerating`);
+    }
   } catch {
     // A missing or incomplete pair is regenerated below.
   }

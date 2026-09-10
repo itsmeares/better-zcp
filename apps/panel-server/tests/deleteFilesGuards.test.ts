@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import {
+  clearActiveSteamOperation,
+  getActiveSteamOperations,
+} from "../services/activeSteamOperations.ts";
+import { acquireLifecycleLock } from "../services/lifecycleCoordinator.ts";
 
 vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
@@ -44,6 +49,7 @@ describe("POST /api/server/delete-files safety guards", () => {
   });
 
   afterEach(() => {
+    clearActiveSteamOperation(path.normalize(installDir).toLowerCase());
     fs.rmSync(installDir, { recursive: true, force: true });
   });
 
@@ -82,6 +88,35 @@ describe("POST /api/server/delete-files safety guards", () => {
     expect(fs.existsSync(installDir)).toBe(true);
   });
 
+  it("holds the shared lifecycle lock through the final stopped check and delete", async () => {
+    let calls = 0;
+    let markScanStarted;
+    let releaseScan;
+    const scanStarted = new Promise((resolve) => {
+      markScanStarted = resolve;
+    });
+    serverManager.getServerProcessDetails = async () => {
+      calls += 1;
+      if (calls === 1) return { running: false, scanFailed: false };
+      markScanStarted();
+      return new Promise((resolve) => {
+        releaseScan = () => resolve({ running: false, scanFailed: false });
+      });
+    };
+    const handler = getDeleteFilesHandler();
+    const response = createResponse();
+    const deletePromise = handler(buildRequest({ confirm: true }), response);
+    await scanStarted;
+
+    expect(acquireLifecycleLock("start", "target")).toBeNull();
+    releaseScan();
+    await deletePromise;
+
+    const lockAfterDelete = acquireLifecycleLock("start", "target");
+    expect(lockAfterDelete).not.toBeNull();
+    lockAfterDelete.release();
+  });
+
   it("refuses when it cannot be determined whether the server is running (fails closed)", async () => {
     serverManager.getServerProcessDetails = async () => ({
       running: false,
@@ -110,6 +145,24 @@ describe("POST /api/server/delete-files safety guards", () => {
       expect.objectContaining({ success: true }),
     );
     expect(fs.existsSync(installDir)).toBe(false);
+  });
+
+  it("refuses while SteamCMD is writing the target install path", async () => {
+    const normalizedInstallPath = path.normalize(installDir).toLowerCase();
+    getActiveSteamOperations().set(normalizedInstallPath, {
+      type: "update",
+      pid: process.pid,
+    });
+    const handler = getDeleteFilesHandler();
+    const response = createResponse();
+
+    await handler(buildRequest({ confirm: true }), response);
+
+    expect(response.status).toHaveBeenCalledWith(409);
+    expect(response.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "STEAM_OPERATION_IN_PROGRESS_PATH" }),
+    );
+    expect(fs.existsSync(installDir)).toBe(true);
   });
 
   describe("refuses a directory with real PZ markers that isn't a configured server's installPath", () => {
@@ -222,7 +275,9 @@ describe("POST /api/server/delete-files safety guards", () => {
     it("refuses when zomboidDataPath is a subfolder of the install path being deleted", async () => {
       const dataDir = path.join(installDir, "ZomboidData");
       fs.mkdirSync(dataDir, { recursive: true });
-      serverManager.savePath = dataDir;
+      getServers.mockResolvedValue([
+        { id: 1, installPath: installDir, zomboidDataPath: dataDir },
+      ]);
 
       const handler = getDeleteFilesHandler();
       const response = createResponse();
@@ -237,7 +292,9 @@ describe("POST /api/server/delete-files safety guards", () => {
     });
 
     it("refuses when zomboidDataPath equals the install path being deleted", async () => {
-      serverManager.savePath = installDir;
+      getServers.mockResolvedValue([
+        { id: 1, installPath: installDir, zomboidDataPath: installDir },
+      ]);
 
       const handler = getDeleteFilesHandler();
       const response = createResponse();
@@ -254,7 +311,9 @@ describe("POST /api/server/delete-files safety guards", () => {
     it("still deletes when zomboidDataPath is a sibling, not nested (the default layout)", async () => {
       const siblingDataDir = `${installDir}_Data`;
       fs.mkdirSync(siblingDataDir, { recursive: true });
-      serverManager.savePath = siblingDataDir;
+      getServers.mockResolvedValue([
+        { id: 1, installPath: installDir, zomboidDataPath: siblingDataDir },
+      ]);
 
       const handler = getDeleteFilesHandler();
       const response = createResponse();

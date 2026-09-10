@@ -118,7 +118,7 @@ describe("versioned panel update bundles", () => {
     fs.unlinkSync(stagedBinaryPath);
 
     expect(() => applyUpdateBundle(journalPath)).toThrowError(
-      expect.objectContaining({ code: "av_quarantine" }),
+      expect.objectContaining({ code: "hash_unverifiable" }),
     );
     expect(fs.readFileSync(binaryPath, "utf8")).toBe("old-binary");
     expect(fs.readFileSync(path.join(liveClientPath, "index.html"), "utf8")).toBe(
@@ -132,11 +132,26 @@ describe("versioned panel update bundles", () => {
     fs.rmSync(journal.paths.stagedClient, { recursive: true, force: true });
 
     expect(() => applyUpdateBundle(journalPath)).toThrowError(
-      expect.objectContaining({ code: "av_quarantine" }),
+      expect.objectContaining({ code: "hash_unverifiable" }),
     );
     expect(fs.readFileSync(binaryPath, "utf8")).toBe("old-binary");
     expect(fs.readFileSync(path.join(liveClientPath, "index.html"), "utf8")).toBe(
       "old-client",
+    );
+  });
+
+  it("wraps a staged-bundle read failure as hash_unverifiable, not as a hash mismatch", () => {
+    const { stagedBinaryPath, journalPath } = prepareBundle();
+    const originalReadFileSync = fs.readFileSync.bind(fs);
+    vi.spyOn(fs, "readFileSync").mockImplementation((filePath: any, ...args: any[]) => {
+      if (filePath === stagedBinaryPath) {
+        throw Object.assign(new Error("permission denied"), { code: "EACCES" });
+      }
+      return originalReadFileSync(filePath, ...args);
+    });
+
+    expect(() => applyUpdateBundle(journalPath)).toThrowError(
+      expect.objectContaining({ code: "hash_unverifiable" }),
     );
   });
 

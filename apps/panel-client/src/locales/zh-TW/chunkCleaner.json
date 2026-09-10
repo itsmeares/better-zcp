@@ -170,6 +170,8 @@
     "chunksDeletedVehicles_other": " + {{count}} 輛載具（存檔資料庫）",
     "chunksDeletedBackupSuffix": " （已建立備份）",
     "deleteChunksFailedFallback": "刪除區塊失敗",
+    "activeServerChangedTitle": "Active server changed",
+    "activeServerChangedDesc": "The active server changed while chunks were loaded. The scan was cleared — pick a save again before deleting.",
     "chunksDeletedPartialTitle": "部分 Chunk 無法刪除",
     "chunksDeletedPartialDesc_one": "已刪除 {{deleted}} 個 Chunk，但 {{count}} 個失敗。請確認檔案未被其他程序佔用後重試。",
     "chunksDeletedPartialDesc_other": "已刪除 {{deleted}} 個 Chunk，但 {{count}} 個失敗。請確認檔案未被其他程序佔用後重試。"

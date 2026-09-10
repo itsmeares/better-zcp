@@ -49,6 +49,7 @@ type BackupSettings = {
 };
 type BackupOptions = {
   io?: { emit: (event: string, payload: unknown) => void } | null;
+  activeServer?: Record<string, any> | null;
   isPreRestore?: boolean;
   isPreWipe?: boolean;
   includeDb?: boolean;
@@ -284,9 +285,12 @@ export class BackupService {
     this.serverManager = serverManager;
   }
 
-  async getSavesPath(): Promise<string | null> {
+  async getSavesPath(activeServerOverride?: any): Promise<string | null> {
     try {
-      const activeServer = await getActiveServer();
+      const activeServer =
+        activeServerOverride === undefined
+          ? await getActiveServer()
+          : activeServerOverride;
 
       const serverDataPath = activeServer?.zomboidDataPath;
       const serverName = activeServer?.serverName;
@@ -348,9 +352,12 @@ export class BackupService {
     }
   }
 
-  async getBackupsPath(): Promise<string | null> {
+  async getBackupsPath(activeServerOverride?: any): Promise<string | null> {
     try {
-      const activeServer = await getActiveServer();
+      const activeServer =
+        activeServerOverride === undefined
+          ? await getActiveServer()
+          : activeServerOverride;
       let basePath;
 
       if (activeServer?.zomboidDataPath) {
@@ -477,8 +484,12 @@ export class BackupService {
   ): Promise<BackupResult> {
     emitProgress("preparing", 5, "Preparing backup...");
 
-    const savesPath = await this.getSavesPath();
-    const backupsPath = await this.getBackupsPath();
+    const activeServer =
+      options.activeServer === undefined
+        ? await getActiveServer()
+        : options.activeServer;
+    const savesPath = await this.getSavesPath(activeServer);
+    const backupsPath = await this.getBackupsPath(activeServer);
 
     if (!savesPath) {
       throw new Error(
@@ -498,7 +509,6 @@ export class BackupService {
       .toISOString()
       .replace(/[:.]/g, "-")
       .slice(0, 23);
-    const activeServer = await getActiveServer();
     const serverName = activeServer?.serverName || "server";
     const baseBackupName = `${serverName}_${timestamp}`;
     let backupName = `${baseBackupName}.zip`;
@@ -627,7 +637,7 @@ export class BackupService {
 
         if (!options.isPreRestore && !options.isPreWipe) {
           try {
-            await this.cleanupOldBackups();
+            await this.cleanupOldBackups(activeServer);
           } catch (cleanupError: unknown) {
             log.warn(`Backup retention cleanup failed for ${backupName}: ${errorMessage(cleanupError)}`);
           }
@@ -726,9 +736,9 @@ export class BackupService {
     });
   }
 
-  async listBackups(): Promise<BackupSummary[]> {
+  async listBackups(activeServerOverride?: any): Promise<BackupSummary[]> {
     try {
-      const backupsPath = await this.getBackupsPath();
+      const backupsPath = await this.getBackupsPath(activeServerOverride);
       if (!backupsPath || !fs.existsSync(backupsPath)) {
         return [];
       }
@@ -839,10 +849,10 @@ export class BackupService {
     }
   }
 
-  async cleanupOldBackups(): Promise<void> {
+  async cleanupOldBackups(activeServerOverride?: any): Promise<void> {
     try {
       const settings = await this.getSettings();
-      const backups = await this.listBackups();
+      const backups = await this.listBackups(activeServerOverride);
       const prunable = backups.filter((b) => !b.name.startsWith("uploaded-"));
 
       if (prunable.length <= settings.maxBackups) {
@@ -921,6 +931,10 @@ export class BackupService {
     const backups = await this.listBackups();
     const savesPath = await this.getSavesPath();
     const backupsPath = await this.getBackupsPath();
+
+    if (!this.lastBackup && backups.length > 0) {
+      this.lastBackup = backups[0];
+    }
 
     const lastScheduledAttempt = settings.enabled
       ? await getLatestScheduleExecutionByCommand("backup")

@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import {
+  anyPermissionMiddleware,
   permissionMiddleware,
   protectedServerFunctionMiddleware,
 } from './serverAuth'
@@ -768,7 +769,12 @@ async function configureSftpBridge(args: AnyRecord): Promise<AnyRecord> {
       panelBridge(),
       import('../../../panel-server/database/init.ts'),
     ])
-    const cachePath = getSftpCachePath(config)
+    const cachePath = getSftpCachePath(
+      config.host,
+      config.port,
+      config.username,
+      config.bridgePath,
+    )
     await bridge.configureSftp(config, cachePath)
     for (const [field, key] of Object.entries(SFTP_SETTING_KEYS)) {
       const value = field === 'enabled' ? true : (config as AnyRecord)[field]
@@ -1136,7 +1142,10 @@ async function ping(): Promise<unknown> {
 }
 
 export const getPanelBridgeStatus = createServerFn({ method: 'GET' })
-  .middleware(protectedServerFunctionMiddleware)
+  .middleware([
+    ...protectedServerFunctionMiddleware,
+    anyPermissionMiddleware('bridge.setup', 'bridge.diagnostics'),
+  ] as const)
   .handler(getStatus)
 
 export const pingPanelBridge = createServerFn({ method: 'GET' })

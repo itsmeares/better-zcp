@@ -689,6 +689,8 @@
     "modOrderSavedDesc": "The mod load order has been updated in the server INI.",
     "saveOrderFailedTitle": "Save Order Failed",
     "saveOrderFailedFallback": "Failed to save mod order",
+    "serverChangedSinceLoadTitle": "Active server changed",
+    "serverChangedSinceLoadDesc": "The active server changed while the mod order was being edited. Reset the order before saving.",
     "cannotReorderTitle": "Cannot reorder",
     "cannotReorderDesc": "One of these mods is not in the active load order.",
     "loadOrderUpdatedTitle": "Load order updated",

@@ -4,7 +4,8 @@ vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(),
   setSetting: vi.fn(),
   getSetting: vi.fn(),
-  getActiveServer: vi.fn(),
+  getActiveServer: vi.fn(async () => ({ serverName: "servertest", zomboidDataPath: "/tmp/servertest" })),
+  getServers: vi.fn(async () => []),
 }));
 
 const { default: router } = await import("../routes/server.ts");
@@ -36,12 +37,18 @@ describe("POST /api/server/wipe concurrency guard", () => {
   it("rejects a second wipe that arrives while the first is still validating", async () => {
     let releaseRunningCheck;
     let checkCalls = 0;
+    let signalRunningCheckStarted!: () => void;
+    const runningCheckStarted = new Promise<void>((resolve) => {
+      signalRunningCheckStarted = resolve;
+    });
 
     const serverManager = {
       loadConfig: async () => {},
+      reloadConfig: async () => {},
       getServerProcessDetails: () => {
         checkCalls += 1;
         if (checkCalls === 1) {
+          signalRunningCheckStarted();
           return new Promise((resolve) => {
             releaseRunningCheck = () =>
               resolve({ running: true, scanFailed: false });
@@ -63,7 +70,7 @@ describe("POST /api/server/wipe concurrency guard", () => {
     const secondResponse = createResponse();
 
     const firstCall = handler(buildRequest(), firstResponse);
-    await Promise.resolve();
+    await runningCheckStarted;
 
     await handler(buildRequest(), secondResponse);
 
@@ -76,6 +83,7 @@ describe("POST /api/server/wipe concurrency guard", () => {
   it("releases the guard so a later wipe is not blocked forever", async () => {
     const serverManager = {
       loadConfig: async () => {},
+      reloadConfig: async () => {},
       getServerProcessDetails: async () => ({
         running: true,
         scanFailed: false,
@@ -105,6 +113,7 @@ describe("POST /api/server/wipe fails closed when detection can't confirm the se
   it("refuses the wipe instead of assuming the server is stopped", async () => {
     const serverManager = {
       loadConfig: async () => {},
+      reloadConfig: async () => {},
       getServerProcessDetails: async () => ({
         running: false,
         scanFailed: true,

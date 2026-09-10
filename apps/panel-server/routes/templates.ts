@@ -5,6 +5,10 @@ import { ErrorCode } from "../utils/errorCodes.ts";
 import { requirePermission } from "../services/permissions.ts";
 import { getActiveServer } from "../database/init.ts";
 import {
+  acquireLifecycleLock,
+  lifecycleInProgressResponse,
+} from "../services/lifecycleCoordinator.ts";
+import {
   listTemplates,
   listHiddenBuiltinTemplates,
   getTemplate,
@@ -118,6 +122,11 @@ router.post("/:id/preview", async (req, res) => {
 });
 
 router.post("/:id/apply", requirePermission("templates.manage"), async (req, res) => {
+  const lifecycleLock = acquireLifecycleLock("template-apply");
+  if (!lifecycleLock) {
+    return res.status(409).json(lifecycleInProgressResponse());
+  }
+
   try {
     const { serverId, options } = req.body || {};
     if (!serverId) {
@@ -136,6 +145,7 @@ router.post("/:id/apply", requirePermission("templates.manage"), async (req, res
         });
       }
       try {
+        await serverManager.reloadConfig();
         const details = await serverManager.getServerProcessDetails();
         if (details.scanFailed) {
           return res.status(503).json({
@@ -173,6 +183,8 @@ router.post("/:id/apply", requirePermission("templates.manage"), async (req, res
     const message = errorMessage(error);
     log.error(`Failed to apply template: ${message}`);
     res.status(500).json({ error: sanitizeError(message) });
+  } finally {
+    lifecycleLock.release();
   }
 });
 

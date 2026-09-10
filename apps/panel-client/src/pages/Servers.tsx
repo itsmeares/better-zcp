@@ -410,6 +410,8 @@ export default function Servers() {
   const [steamLogs, setSteamLogs] = useState<string[]>([])
   const [steamRunning, setSteamRunning] = useState(false)
   const [steamCompleted, setSteamCompleted] = useState<'success' | 'error' | null>(null)
+  const [steamStalled, setSteamStalled] = useState(false)
+  const steamLastActivityRef = useRef(0)
   const [clearingInstall, setClearingInstall] = useState(false)
   const [confirmClearInstall, setConfirmClearInstall] = useState(false)
   const [steamcmdPath, setSteamcmdPath] = useState('')
@@ -658,17 +660,22 @@ export default function Servers() {
     if (!socket) return
 
     const handleSteamStart = (data: { type: string; message: string; progressCode?: string; params?: Record<string, string | number> }) => {
+      steamLastActivityRef.current = Date.now()
       setSteamRunning(true)
+      setSteamStalled(false)
       setSteamLogs([getInstallProgressMessage(data, data.message)])
     }
 
     const handleSteamLog = (data: { type: string; text: string; progressCode?: string; params?: Record<string, string | number> }) => {
+      steamLastActivityRef.current = Date.now()
+      setSteamStalled(false)
       setSteamLogs(prev => [...prev.slice(-200), getInstallProgressMessage(data, data.text)])
     }
 
     const handleSteamComplete = (data: { success: boolean; message: string; progressCode?: string; params?: Record<string, string | number> }) => {
       const displayMessage = getInstallProgressMessage(data, data.message)
       setSteamRunning(false)
+      setSteamStalled(false)
       setSteamCompleted(data.success ? 'success' : 'error')
       setSteamLogs(prev => [...prev, '', data.success ? '✓ ' + displayMessage : '✗ ' + displayMessage])
       toast({
@@ -688,6 +695,16 @@ export default function Servers() {
       socket.off('steam:complete', handleSteamComplete)
     }
   }, [socket, toast, t])
+
+  useEffect(() => {
+    if (!steamRunning) return
+    const interval = setInterval(() => {
+      if (Date.now() - steamLastActivityRef.current >= 3 * 60 * 1000) {
+        setSteamStalled(true)
+      }
+    }, 15_000)
+    return () => clearInterval(interval)
+  }, [steamRunning])
 
   const handleDetectServer = async () => {
     if (!canServersDiscover) return
@@ -1172,6 +1189,8 @@ export default function Servers() {
 
     setSteamLogs([])
     setSteamRunning(true)
+    setSteamStalled(false)
+    steamLastActivityRef.current = Date.now()
     setSteamCompleted(null)
 
     try {
@@ -1182,6 +1201,7 @@ export default function Servers() {
       }
     } catch (error) {
       setSteamRunning(false)
+      setSteamStalled(false)
       toast({
         title: t('toasts.error'),
         description: getUserErrorMessage(error, t('toasts.startOperationFailed')),
@@ -1233,6 +1253,7 @@ export default function Servers() {
     setSteamOperation({ server, type, branch: initialBranch })
     setSteamLogs([])
     setSteamRunning(false)
+    setSteamStalled(false)
     setSteamCompleted(null)
 
     if (!steamcmdPath) {
@@ -2779,7 +2800,7 @@ export default function Servers() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={!!steamOperation} onOpenChange={(open) => !open && !steamRunning && setSteamOperation(null)}>
+      <Dialog open={!!steamOperation} onOpenChange={(open) => !open && (!steamRunning || steamStalled) && setSteamOperation(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2898,15 +2919,21 @@ export default function Servers() {
                 </div>
               </div>
             )}
+            {steamStalled && (
+              <Alert variant="destructive">
+                <AlertTitle>{t('steamDialog.stalledTitle')}</AlertTitle>
+                <AlertDescription>{t('steamDialog.stalledMessage')}</AlertDescription>
+              </Alert>
+            )}
           </div>
 
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setSteamOperation(null)}
-              disabled={steamRunning}
+              disabled={steamRunning && !steamStalled}
             >
-              {steamRunning ? t('steamDialog.running') : steamCompleted ? t('steamDialog.close') : t('steamDialog.cancel')}
+              {steamStalled ? t('steamDialog.closeAnyway') : steamRunning ? t('steamDialog.running') : steamCompleted ? t('steamDialog.close') : t('steamDialog.cancel')}
             </Button>
             {!steamCompleted && (
               <DisabledReason reason={!canServerInstall ? t('steamDialog.noPermission') : null}>

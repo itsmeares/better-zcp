@@ -8,7 +8,10 @@ import { permissionsPolicy } from "./middleware/permissionsPolicy.ts";
 import { logSetupTokenIfNeeded } from "./utils/setupToken.ts";
 import { computeInlineScriptCspHashes } from "./utils/cspScriptHash.ts";
 import { parseTrustProxySetting } from "./utils/trustProxy.ts";
-import { isUncompressedBinaryProxyPath } from "./utils/compressionFilter.ts";
+import {
+  isEventStreamResponse,
+  isUncompressedBinaryProxyPath,
+} from "./utils/compressionFilter.ts";
 import { createServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import { Server } from "socket.io";
@@ -104,7 +107,10 @@ import {
 } from "./services/updateBundle.ts";
 import { LogTailer } from "./services/logTailer.ts";
 import { DiskMonitor } from "./services/diskMonitor.ts";
-import authService from "./services/auth.ts";
+import authService, {
+  onSessionRevoked,
+  type SessionRevocationEvent,
+} from "./services/auth.ts";
 import { getRoleByName } from "./services/permissions.ts";
 import { requireRole } from "./services/auth.ts";
 import { registerApiRoutes } from "./http/registerApiRoutes.ts";
@@ -293,6 +299,28 @@ const httpServer = createServer(app);
 let activePanelPort: number | null = null;
 
 let httpsServer: HttpsServer | null = null;
+
+export function resolvePanelPort(
+  rawValue: unknown,
+  { onInvalid }: { onInvalid?: (value: unknown) => void } = {},
+): number {
+  const configuredPort = Number(rawValue);
+  if (
+    Number.isInteger(configuredPort) &&
+    configuredPort >= 1 &&
+    configuredPort <= 65535
+  ) {
+    return configuredPort;
+  }
+  if (
+    rawValue !== undefined &&
+    rawValue !== null &&
+    String(rawValue).trim() !== ""
+  ) {
+    onInvalid?.(rawValue);
+  }
+  return 3001;
+}
 
 export function isHttpsServerActive() {
   return httpsServer !== null;
@@ -651,6 +679,7 @@ app.use(
     threshold: 1024,
     filter: (req, res) => {
       if (isUncompressedBinaryProxyPath(req)) return false;
+      if (isEventStreamResponse(res)) return false;
       return compression.filter(req, res);
     },
   }),
@@ -890,7 +919,15 @@ async function tryStartPanelBridge(trigger: string = "unknown"): Promise<boolean
         bridgePath: settings.panelBridgeSftpBridgePath,
         pollIntervalSeconds: settings.panelBridgeSftpPollIntervalSeconds,
       };
-      await panelBridge.configureSftp(sftpConfig, getSftpCachePath(sftpConfig));
+      await panelBridge.configureSftp(
+        sftpConfig,
+        getSftpCachePath(
+          sftpConfig.host,
+          sftpConfig.port,
+          sftpConfig.username,
+          sftpConfig.bridgePath,
+        ),
+      );
       log.info(`Started SFTP transport (trigger: ${trigger})`);
       return true;
     } catch (error: any) {
@@ -1049,6 +1086,7 @@ app.set("rconService", rconService);
 app.set("serverManager", serverManager);
 app.set("dockerClient", dockerClient);
 app.set("modChecker", modChecker);
+app.set("logTailer", logTailer);
 app.set("refreshWorkshopChecker", refreshWorkshopChecker);
 app.set("autoInstallBridgeIfNeeded", autoInstallBridgeIfNeeded);
 app.set("scheduler", scheduler);
@@ -1149,11 +1187,12 @@ app.get("/api/health", (req, res) => {
 
 app.get("/api/panel-info", async (req, res) => {
   const savedPort = await getSetting("panelPort");
-  const PORT = activePanelPort || process.env.PORT || savedPort || 3001;
+  const PORT =
+    activePanelPort ?? resolvePanelPort(process.env.PORT || savedPort || 3001);
   const localIp = await serverManager.getLocalIp();
   res.json({
     localIp,
-    port: parseInt(PORT, 10),
+    port: PORT,
     url: `http://${localIp}:${PORT}`,
   });
 });
@@ -1341,14 +1380,24 @@ app.get("/api/panel/update-check", async (req, res) => {
   }
 });
 
-app.get("/api/panel/update-status", (req, res) => {
-  const checker = req.app.get("panelUpdateChecker");
-  if (!checker)
-    return res
-      .status(500)
-      .json({ error: "Panel update checker not available" });
-  res.json(checker.getStatus());
-});
+export async function handlePanelUpdateStatus(
+  req: Request,
+  res: Response,
+): Promise<Response | void> {
+  try {
+    const checker = req.app.get("panelUpdateChecker");
+    if (!checker)
+      return res
+        .status(500)
+        .json({ error: "Panel update checker not available" });
+    res.json(checker.getStatus());
+  } catch (error: any) {
+    log.error(`Panel update status failed: ${error.message}`);
+    res.status(500).json({ error: sanitizeError(error.message) });
+  }
+}
+
+app.get("/api/panel/update-status", handlePanelUpdateStatus);
 
 app.get("/api/panel/update-preflight", async (req, res) => {
   try {
@@ -1563,6 +1612,10 @@ io.on("connection", (socket: AuthenticatedSocket) => {
     `Client connected: ${socket.id}${socket.user ? ` (${socket.user.username})` : ""}`,
   );
 
+  if (socket.user?.userId) {
+    socket.join(`user:${socket.user.userId}`);
+  }
+
   socket.on("disconnect", () => {
     log.debug(`Client disconnected: ${socket.id}`);
   });
@@ -1594,6 +1647,16 @@ io.on("connection", (socket: AuthenticatedSocket) => {
     socket.join("rcon-live");
   });
 });
+
+export function evictRevokedSockets(event: SessionRevocationEvent): void {
+  if (event.scope === "all") {
+    io.disconnectSockets(true);
+  } else if (event.scope === "user" && event.userId) {
+    io.in(`user:${event.userId}`).disconnectSockets(true);
+  }
+}
+
+onSessionRevoked(evictRevokedSockets);
 
 onLog((logEntry) => {
   addLogToBuffer(logEntry.level, logEntry.message, logEntry.source);
@@ -2470,10 +2533,12 @@ async function start(): Promise<void> {
     diskMonitor.start();
 
     const savedPort = await getSetting("panelPort");
-    const configuredPort = Number(process.env.PORT || savedPort || 3001);
-    const PORT = Number.isInteger(configuredPort) && configuredPort >= 1 && configuredPort <= 65535
-      ? configuredPort
-      : 3001;
+    const PORT = resolvePanelPort(process.env.PORT || savedPort || 3001, {
+      onInvalid: (value) =>
+        log.warn(
+          `Configured panel port "${value}" is not valid (must be a number 1-65535) -- using 3001 instead.`,
+        ),
+    });
     let listenPort = PORT;
 
     const httpsEnabled = await getSetting("httpsEnabled");

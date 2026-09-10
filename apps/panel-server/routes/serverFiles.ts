@@ -8,7 +8,7 @@ import path from "path";
 import os from "os";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Files");
-import { getActiveServer, getAllSettings, getRoleByName } from "../database/init.ts";
+import { getAllSettings, getRoleByName } from "../database/init.ts";
 import {
   sanitizeError,
   sanitizeErrorParams,
@@ -39,10 +39,12 @@ import {
 } from "../services/configMutationGuard.ts";
 import {
   escapeLuaString,
+  getActiveServerContext,
   getServerConfigPath,
   getServerName,
   modifySandboxValue,
   resolveRemoteConfigTransport,
+  type ActiveServerContext,
   RemoteConfigNotConfiguredError,
   ServerNotConfiguredError,
 } from "../services/sandboxPersistence.ts";
@@ -83,6 +85,7 @@ type SandboxRepairResult =
 type ServerFilesRequest = Request & {
   user?: { role?: string } | null;
   configEditRestartWarning?: boolean;
+  activeServerContext?: ActiveServerContext;
 };
 
 declare global {
@@ -90,6 +93,7 @@ declare global {
     interface Request {
       user?: { role?: string } | null;
       configEditRestartWarning?: boolean;
+      activeServerContext?: ActiveServerContext;
     }
   }
 }
@@ -110,9 +114,36 @@ const INI_KEY_CAPABILITY: Record<string, string> = {
 
 const LOCAL_ONLY_PATHS = new Set(["/browse-files", "/image-preview"]);
 
+async function getRequestServerContext(
+  req: ServerFilesRequest,
+): Promise<ActiveServerContext> {
+  if (!req.activeServerContext) {
+    req.activeServerContext = await getActiveServerContext();
+  }
+  return req.activeServerContext;
+}
+
+async function getRequestServerConfigPath(
+  req: ServerFilesRequest,
+): Promise<string> {
+  const context = await getRequestServerContext(req);
+  if (context.serverConfigPath) return context.serverConfigPath;
+  throw context.configurationError ?? new ServerNotConfiguredError();
+}
+
+async function getRequestServerValues(req: ServerFilesRequest) {
+  const context = await getRequestServerContext(req);
+  const serverName =
+    context.serverName ?? (await getServerName(context.activeServer));
+  context.serverName = serverName;
+  return { configPath: await getRequestServerConfigPath(req), serverName };
+}
+
 router.use(async (req: ServerFilesRequest, res: Response, next: NextFunction) => {
   try {
-    await getServerConfigPath();
+    const context = await getActiveServerContext();
+    if (context.configurationError) throw context.configurationError;
+    req.activeServerContext = context;
   } catch (err: unknown) {
     if (err instanceof ServerNotConfiguredError) {
       return res.status(404).json({ error: errorMessage(err), code: err.code });
@@ -126,9 +157,9 @@ router.use(async (req: ServerFilesRequest, res: Response, next: NextFunction) =>
 });
 
 router.use(async (req: ServerFilesRequest, res: Response, next: NextFunction) => {
-  let activeServer;
+  let activeServer: ActiveServerContext["activeServer"];
   try {
-    activeServer = await getActiveServer();
+    ({ activeServer } = await getRequestServerContext(req));
   } catch (err: unknown) {
     return next(err);
   }
@@ -156,7 +187,7 @@ router.use(async (req: ServerFilesRequest, res: Response, next: NextFunction) =>
     });
   }
 
-  const serverName = await getServerName();
+  const { serverName } = await getRequestServerValues(req);
   const release = await acquireMirrorLock();
   let session;
   try {
@@ -836,8 +867,7 @@ function toSpawnRegions(regions: SpawnRegion[], serverName: string): string {
 router.get("/paths", async (req, res) => {
   try {
     log.info("GET /paths");
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
 
     const files = {
       ini: path.join(configPath, `${serverName}.ini`),
@@ -862,8 +892,7 @@ router.get("/paths", async (req, res) => {
 
 router.get("/ini", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}.ini`);
 
     if (!fs.existsSync(filePath)) {
@@ -892,8 +921,7 @@ router.get("/ini", async (req, res) => {
 
 router.put("/ini", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const body = req.body && typeof req.body === "object" && !Array.isArray(req.body)
       ? req.body
       : {};
@@ -1012,8 +1040,7 @@ router.put("/ini", async (req, res) => {
 
 router.get("/sandbox", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}_SandboxVars.lua`);
 
     if (!fs.existsSync(filePath)) {
@@ -1036,8 +1063,7 @@ router.get("/sandbox", async (req, res) => {
 router.put("/sandbox", async (req, res) => {
   try {
     log.info("PUT /sandbox");
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}_SandboxVars.lua`);
     const { sandbox } = req.body || {};
 
@@ -1150,8 +1176,7 @@ router.put("/sandbox-option", async (req, res) => {
     const block = parts.length === 2 ? parts[0] : null;
     const key = parts.length === 2 ? parts[1] : parts[0];
 
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}_SandboxVars.lua`);
 
     if (!fs.existsSync(filePath)) {
@@ -1189,8 +1214,7 @@ router.put("/sandbox-option", async (req, res) => {
 
 router.get("/sandbox/validate", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}_SandboxVars.lua`);
 
     if (!fs.existsSync(filePath)) {
@@ -1212,8 +1236,7 @@ router.get("/sandbox/validate", async (req, res) => {
 router.post("/sandbox/repair", async (req, res) => {
   try {
     log.info("POST /sandbox/repair");
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}_SandboxVars.lua`);
 
     if (!fs.existsSync(filePath)) {
@@ -1293,8 +1316,7 @@ router.post("/sandbox/repair", async (req, res) => {
 
 router.get("/spawnpoints", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}_spawnpoints.lua`);
 
     if (!fs.existsSync(filePath)) {
@@ -1318,8 +1340,7 @@ router.get("/spawnpoints", async (req, res) => {
 router.put("/spawnpoints", async (req, res) => {
   try {
     log.info("PUT /spawnpoints");
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}_spawnpoints.lua`);
     const { spawnpoints } = req.body || {};
 
@@ -1357,8 +1378,7 @@ router.put("/spawnpoints", async (req, res) => {
 
 router.get("/spawnregions", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}_spawnregions.lua`);
 
     if (!fs.existsSync(filePath)) {
@@ -1381,8 +1401,7 @@ router.get("/spawnregions", async (req, res) => {
 
 router.put("/spawnregions", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const filePath = path.join(configPath, `${serverName}_spawnregions.lua`);
     const { spawnregions } = req.body || {};
 
@@ -1421,8 +1440,7 @@ router.put("/spawnregions", async (req, res) => {
 router.get("/raw/:type", async (req, res) => {
   log.info(`GET /raw/${req.params.type}`);
   try {
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const type = req.params.type;
 
     const fileMap: Record<string, string> = {
@@ -1461,8 +1479,7 @@ router.get("/raw/:type", async (req, res) => {
 
 router.put("/raw/:type", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
     const type = req.params.type;
     const { content } = req.body || {};
     log.info(`PUT /raw/${type}: contentLength=${content?.length || 0}`);
@@ -1551,7 +1568,7 @@ router.put("/raw/:type", async (req, res) => {
 
 router.get("/backups", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
+    const configPath = await getRequestServerConfigPath(req);
     const backupDir = await getBackupPath(configPath);
 
     if (!fs.existsSync(backupDir)) {
@@ -1600,7 +1617,7 @@ router.get("/backups", async (req, res) => {
 
 router.post("/restore/:filename", async (req, res) => {
   try {
-    const configPath = await getServerConfigPath();
+    const configPath = await getRequestServerConfigPath(req);
     const backupDir = await getBackupPath(configPath);
 
     const filename = path.basename(req.params.filename);
@@ -1699,13 +1716,13 @@ router.post("/save-and-reload", async (req, res) => {
 });
 
 
-async function getTemplatesPath() {
-  const configPath = await getServerConfigPath();
+async function getTemplatesPath(req: ServerFilesRequest) {
+  const configPath = await getRequestServerConfigPath(req);
   return path.join(configPath, "templates");
 }
 
-async function ensureTemplatesDir() {
-  const templatesPath = await getTemplatesPath();
+async function ensureTemplatesDir(req: ServerFilesRequest) {
+  const templatesPath = await getTemplatesPath(req);
   if (!fs.existsSync(templatesPath)) {
     fs.mkdirSync(templatesPath, { recursive: true });
   }
@@ -1714,7 +1731,7 @@ async function ensureTemplatesDir() {
 
 router.get("/templates", async (req, res) => {
   try {
-    const templatesPath = await ensureTemplatesDir();
+    const templatesPath = await ensureTemplatesDir(req);
 
     const files: any[] = fs
       .readdirSync(templatesPath)
@@ -1759,7 +1776,7 @@ router.get("/templates/:id", async (req, res) => {
       });
     }
 
-    const templatesPath = await getTemplatesPath();
+    const templatesPath = await getTemplatesPath(req);
     const templateFile = path.join(templatesPath, `${safeId}.json`);
 
     if (!fs.existsSync(templateFile)) {
@@ -1794,9 +1811,8 @@ router.post("/templates", async (req, res) => {
       });
     }
 
-    const templatesPath = await ensureTemplatesDir();
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const templatesPath = await ensureTemplatesDir(req);
+    const { configPath, serverName } = await getRequestServerValues(req);
 
     const baseId = name
       .toLowerCase()
@@ -1872,7 +1888,7 @@ router.post("/templates/:id/apply", async (req, res) => {
 
     const { applyIni = true, applySandbox = true } = req.body || {};
 
-    const templatesPath = await getTemplatesPath();
+    const templatesPath = await getTemplatesPath(req);
     const templateFile = path.join(templatesPath, `${safeId}.json`);
 
     if (!fs.existsSync(templateFile)) {
@@ -1883,8 +1899,7 @@ router.post("/templates/:id/apply", async (req, res) => {
     }
 
     const template = JSON.parse(fs.readFileSync(templateFile, "utf-8"));
-    const configPath = await getServerConfigPath();
-    const serverName = await getServerName();
+    const { configPath, serverName } = await getRequestServerValues(req);
 
     const backupWarnings: string[] = [];
 
@@ -1955,7 +1970,7 @@ router.put("/templates/:id", async (req, res) => {
 
     const { name, description } = req.body || {};
 
-    const templatesPath = await getTemplatesPath();
+    const templatesPath = await getTemplatesPath(req);
     const templateFile = path.join(templatesPath, `${safeId}.json`);
 
     if (!fs.existsSync(templateFile)) {
@@ -1991,7 +2006,7 @@ router.delete("/templates/:id", async (req, res) => {
       });
     }
 
-    const templatesPath = await getTemplatesPath();
+    const templatesPath = await getTemplatesPath(req);
     const templateFile = path.join(templatesPath, `${safeId}.json`);
 
     if (!fs.existsSync(templateFile)) {
@@ -2021,9 +2036,9 @@ const IMAGE_EXTENSIONS = new Set([
   ".webp",
 ]);
 
-async function getAllowedBrowseRoots() {
+async function getAllowedBrowseRoots(req: ServerFilesRequest) {
   const roots = [];
-  const activeServer = await getActiveServer();
+  const { activeServer } = await getRequestServerContext(req);
   if (activeServer?.serverConfigPath)
     roots.push(path.resolve(activeServer.serverConfigPath));
   if (activeServer?.zomboidDataPath)
@@ -2049,7 +2064,7 @@ router.get("/browse-files", async (req, res) => {
           .map((e) => e.toLowerCase().trim())
       : null;
 
-    const allowedRoots = await getAllowedBrowseRoots();
+    const allowedRoots = await getAllowedBrowseRoots(req);
     let targetPath;
     if (browsePath) {
       targetPath = confineToRoots(browsePath, allowedRoots);
@@ -2060,7 +2075,7 @@ router.get("/browse-files", async (req, res) => {
         });
       }
     } else {
-      const configPath = await getServerConfigPath();
+      const configPath = await getRequestServerConfigPath(req);
       targetPath = configPath || "";
     }
 
@@ -2145,7 +2160,7 @@ router.get("/image-preview", async (req, res) => {
       });
     }
 
-    const allowedRoots = await getAllowedBrowseRoots();
+    const allowedRoots = await getAllowedBrowseRoots(req);
     const resolved = confineToRoots(filePath, allowedRoots);
     if (!resolved) {
       return res.status(403).json({

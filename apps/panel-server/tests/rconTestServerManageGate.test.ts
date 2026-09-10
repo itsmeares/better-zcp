@@ -77,4 +77,18 @@ describe('POST /api/rcon/connect only permits explicit host/port overrides for s
     expect(res.statusCode).toBe(403);
     expect(connect).not.toHaveBeenCalled();
   });
+
+  it('also refuses a password-only override, which could redirect the shared credential', async () => {
+    const updateConfig = vi.fn();
+    const connect = vi.fn();
+    const res = await runConnectRoute({
+      user: { role: 'rcon_only' },
+      body: { password: 'attacker-chosen-password' },
+      app: { get: () => ({ updateConfig, connect }) },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateConfig).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+  });
 });

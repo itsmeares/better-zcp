@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "node:url";
 import initSqlJs from "sql.js";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
+import { acquireLifecycleLock } from "../services/lifecycleCoordinator.ts";
 
 
 vi.mock("../database/init.ts", () => ({
@@ -106,7 +107,13 @@ async function runRoute(routePath, method, req) {
 function postAs(routePath, body) {
   return runRoute(routePath, "post", {
     user: { role: "technician" },
-    body: { force: true, createBackup: false, deleteVehicles: false, ...body },
+    body: {
+      force: true,
+      createBackup: false,
+      deleteVehicles: false,
+      expectedServerId: "server-1",
+      ...body,
+    },
   });
 }
 
@@ -407,7 +414,13 @@ function postAsWithServerManager(routePath, body, serverManager) {
   return runRoute(routePath, "post", {
     user: { role: "technician" },
     app: { get: (key) => (key === "serverManager" ? serverManager : null) },
-    body: { force: false, createBackup: false, deleteVehicles: false, ...body },
+    body: {
+      force: false,
+      createBackup: false,
+      deleteVehicles: false,
+      expectedServerId: "server-1",
+      ...body,
+    },
   });
 }
 
@@ -565,6 +578,60 @@ describe("delete-chunks/delete-region: an undetermined server state must refuse,
   });
 });
 
+describe("delete-chunks/delete-region: stale scans and lifecycle races are refused", () => {
+  it("refuses a stale server scan before touching the chunk", async () => {
+    const chunk = path.join(savePath, "map", "0", "0.bin");
+    writeFileDeep(chunk, "a");
+    getActiveServer.mockResolvedValue({
+      id: "server-2",
+      zomboidDataPath: dataRoot,
+      isRemote: false,
+    });
+
+    const res = await postAs("/delete-chunks", {
+      saveName: SAVE_NAME,
+      chunks: [{ file: "0/0.bin", x: 0, y: 0 }],
+      expectedServerId: "server-1",
+    });
+
+    expect(res.getStatusCode()).toBe(409);
+    expect(res.getBody()).toMatchObject({ code: "CHUNKS_STALE_SERVER_SCAN" });
+    expect(fs.existsSync(chunk)).toBe(true);
+  });
+
+  it("refuses both delete routes while another lifecycle operation holds the lock", async () => {
+    const chunk = path.join(savePath, "map", "0", "0.bin");
+    writeFileDeep(chunk, "a");
+    const lock = acquireLifecycleLock("start", SAVE_NAME);
+
+    try {
+      const deleteChunks = await postAs("/delete-chunks", {
+        saveName: SAVE_NAME,
+        chunks: [{ file: "0/0.bin", x: 0, y: 0 }],
+      });
+      const deleteRegion = await postAs("/delete-region", {
+        saveName: SAVE_NAME,
+        minX: 0,
+        maxX: 1,
+        minY: 0,
+        maxY: 1,
+      });
+
+      expect(deleteChunks.getStatusCode()).toBe(409);
+      expect(deleteChunks.getBody()).toMatchObject({
+        code: "SERVER_LIFECYCLE_IN_PROGRESS",
+      });
+      expect(deleteRegion.getStatusCode()).toBe(409);
+      expect(deleteRegion.getBody()).toMatchObject({
+        code: "SERVER_LIFECYCLE_IN_PROGRESS",
+      });
+      expect(fs.existsSync(chunk)).toBe(true);
+    } finally {
+      lock?.release();
+    }
+  });
+});
+
 describe("customPath must resolve to a location the panel already recognizes", () => {
   it("refuses delete-chunks when customPath matches no configured server and no OS-standard candidate", async () => {
     const chunk = path.join(savePath, "map", "0", "0.bin");
@@ -630,6 +697,39 @@ describe("customPath must resolve to a location the panel already recognizes", (
     expect(res.getStatusCode()).toBe(200);
     expect(res.getBody()).toEqual(expect.objectContaining({ success: true, deleted: 1 }));
     expect(fs.existsSync(chunk)).toBe(false);
+  });
+});
+
+describe("chunk recovery directory names stay unique under concurrent timestamps", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("uses distinct directories for same-millisecond chunk and region backups", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    const chunkA = path.join(savePath, "map", "0", "0.bin");
+    const chunkB = path.join(savePath, "map", "1", "1.bin");
+    writeFileDeep(chunkA, "a");
+    writeFileDeep(chunkB, "b");
+
+    const first = await postAs("/delete-chunks", {
+      saveName: SAVE_NAME,
+      chunks: [{ file: "0/0.bin", x: 0, y: 0 }],
+      createBackup: true,
+    });
+    const second = await postAs("/delete-region", {
+      saveName: SAVE_NAME,
+      minX: 1,
+      maxX: 1,
+      minY: 1,
+      maxY: 1,
+      createBackup: true,
+    });
+
+    expect(first.getStatusCode()).toBe(200);
+    expect(second.getStatusCode()).toBe(200);
+    const backupNames = fs.readdirSync(path.join(dataRoot, "backups"));
+    expect(backupNames.filter((name) => name.startsWith(`${SAVE_NAME}_chunks_`))).toHaveLength(1);
+    expect(backupNames.filter((name) => name.startsWith(`${SAVE_NAME}_region_`))).toHaveLength(1);
+    expect(backupNames.every((name) => name.includes("-"))).toBe(true);
   });
 });
 

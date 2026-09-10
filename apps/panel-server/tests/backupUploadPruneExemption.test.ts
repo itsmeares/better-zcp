@@ -113,6 +113,17 @@ describe("backup pruning: uploaded archives are exempt from automatic prune, not
     expect(result.deleted).toBe(0);
     expect(names(backupsPath)).toHaveLength(2);
   });
+
+  it("getStatus hydrates lastBackup from disk after a panel restart", async () => {
+    writeBackup(backupsPath, "world_backup_after-restart.zip");
+
+    const status = await service.getStatus();
+
+    expect(status.lastBackup).toEqual(
+      expect.objectContaining({ name: "world_backup_after-restart.zip" }),
+    );
+    expect(status.backupCount).toBe(1);
+  });
 });
 
 describe("ENOTEMPTY class regression: the module-load-time seed directory never receives real logger writes", () => {

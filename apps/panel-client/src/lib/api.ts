@@ -1539,7 +1539,7 @@ export const chunksApi = {
     if (customPath) params.set("customPath", customPath);
     if (scanId) params.set("scanId", scanId);
     const qs = params.toString();
-    return apiGet(
+    return apiGet<Record<string, any> & { resolvedServerId?: string | number | null }>(
       `/chunks/chunks/${encodeURIComponent(saveName)}${qs ? `?${qs}` : ""}`,
       { timeout: 600000 },
     );
@@ -1563,6 +1563,7 @@ export const chunksApi = {
     customPath?: string,
     deleteVehicles: boolean = false,
     force: boolean = false,
+    expectedServerId: string | number | null = null,
   ) =>
     apiPost("/chunks/delete-chunks", {
       saveName,
@@ -1571,6 +1572,7 @@ export const chunksApi = {
       customPath,
       deleteVehicles,
       force,
+      expectedServerId,
     }),
   deleteRegion: (
     saveName: string,
@@ -1583,6 +1585,7 @@ export const chunksApi = {
     customPath?: string,
     deleteVehicles: boolean = false,
     force: boolean = false,
+    expectedServerId: string | number | null = null,
   ) =>
     apiPost("/chunks/delete-region", {
       saveName,
@@ -1595,6 +1598,7 @@ export const chunksApi = {
       customPath,
       deleteVehicles,
       force,
+      expectedServerId,
     }),
   browse: (browsePath?: string) =>
     apiGet(
@@ -2350,7 +2354,6 @@ export const panelBridgeApi = {
       transport?: {
         type: "local" | "sftp";
         running: boolean;
-        cachePath?: string | null;
         lastSyncAt?: number | null;
         lastLatencyMs?: number | null;
         lastError?: string | null;
@@ -3284,6 +3287,7 @@ export const backupApi = {
     size: number;
     message: string;
   }> => {
+    const stallTimeoutMs = 3 * 60 * 1000;
     const sendOnce = (
       token: string | null,
     ): Promise<{ status: number; payload: any }> =>
@@ -3293,13 +3297,22 @@ export const backupApi = {
         if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
         xhr.setRequestHeader("Content-Type", "application/zip");
         xhr.setRequestHeader("X-Backup-Filename", file.name);
-        if (onProgress) {
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable)
-              onProgress(Math.round((e.loaded / e.total) * 100));
-          };
-        }
+        let lastActivity = Date.now();
+        let stalled = false;
+        const stallCheck = setInterval(() => {
+          if (Date.now() - lastActivity >= stallTimeoutMs) {
+            stalled = true;
+            xhr.abort();
+          }
+        }, 15_000);
+        xhr.upload.onprogress = (e) => {
+          lastActivity = Date.now();
+          if (onProgress && e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
         xhr.onload = () => {
+          clearInterval(stallCheck);
           let payload: any = null;
           try {
             payload = JSON.parse(xhr.responseText);
@@ -3308,8 +3321,20 @@ export const backupApi = {
           }
           resolve({ status: xhr.status, payload });
         };
-        xhr.onerror = () => reject(new Error("Network error during upload"));
-        xhr.onabort = () => reject(new Error("Upload aborted"));
+        xhr.onerror = () => {
+          clearInterval(stallCheck);
+          reject(new Error("Network error during upload"));
+        };
+        xhr.onabort = () => {
+          clearInterval(stallCheck);
+          reject(
+            new Error(
+              stalled
+                ? "The upload stalled with no response from the server and was cancelled. Check your connection and try again."
+                : "Upload aborted",
+            ),
+          );
+        };
         xhr.send(file);
       });
 
@@ -3699,7 +3724,8 @@ export const usersApi = {
   create: (data: {
     username: string;
     password: string;
-    role: "admin" | "technician" | "moderator";
+    role?: "admin" | "technician" | "moderator";
+    roleId?: string;
   }): Promise<{ success: boolean; user: ManagedUserAccount }> =>
     serverCall(() => createManagedUser({ data })),
 

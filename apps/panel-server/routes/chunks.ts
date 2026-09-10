@@ -1,4 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from "express";
+import { randomUUID } from "node:crypto";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";
@@ -12,6 +13,10 @@ import {
 } from "../database/init.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { requirePermission, getRoleByName } from "../services/permissions.ts";
+import {
+  acquireLifecycleLock,
+  lifecycleInProgressResponse,
+} from "../services/lifecycleCoordinator.ts";
 import { deleteVehiclesInBoxes } from "../utils/vehiclesDb.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
 import {
@@ -223,6 +228,11 @@ async function getZomboidDataPath(): Promise<string | null> {
   return normalizeUserPath(legacyPath as string | null) || null;
 }
 
+async function getActiveServerId(): Promise<string | number | null> {
+  const activeServer = await getActiveServer();
+  return activeServer?.id ?? null;
+}
+
 function resolveSavesPath(zomboidDataPath: string): string {
   let savesPath = path.join(zomboidDataPath, "Saves", "Multiplayer");
 
@@ -250,29 +260,29 @@ function resolveCustomOrDefaultDataPath(customPath: string): string | null {
   const normalized = path.resolve(cleaned);
   if (!fs.existsSync(normalized)) {
     const error = new Error(
-      `Custom path does not exist: ${normalized}. ` +
+      `Custom path does not exist: ${customPath}. ` +
         `Check for typos and verify the panel has read access to this folder.`,
     );
     error.statusCode = 400;
-    error.details = { reason: "not-found", tried: normalized };
+    error.details = { reason: "not-found", tried: String(customPath) };
     throw error;
   }
   try {
     if (!fs.statSync(normalized).isDirectory()) {
-      const error = new Error(`Custom path is not a directory: ${normalized}`);
+      const error = new Error(`Custom path is not a directory: ${customPath}`);
       error.statusCode = 400;
-      error.details = { reason: "not-a-directory", tried: normalized };
+      error.details = { reason: "not-a-directory", tried: String(customPath) };
       throw error;
     }
   } catch (e: any) {
     if (e.statusCode) throw e;
     const error = new Error(
-      `Could not read custom path (${e.code || "error"}): ${normalized}`,
+      `Could not read custom path (${e.code || "error"}): ${customPath}`,
     );
     error.statusCode = 400;
     error.details = {
       reason: "stat-failed",
-      tried: normalized,
+      tried: String(customPath),
       errorCode: e.code,
     };
     throw error;
@@ -756,6 +766,8 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
       });
     }
 
+    const resolvedServerId = customPath ? null : await getActiveServerId();
+
     let savesPath = resolveSavesPath(zomboidDataPath);
 
     const savePath = path.join(savesPath, sanitizedSaveName);
@@ -767,7 +779,7 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
 
     if (!fs.existsSync(savePath)) {
       log.warn(`[ChunkCleaner] Save directory not found: ${savePath}`);
-      return res.json({ chunks: [], bounds: null });
+      return res.json({ chunks: [], bounds: null, resolvedServerId });
     }
 
     const chunks: AnyRecord[] = [];
@@ -1000,6 +1012,7 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
       limitReached: false,
       maxChunks: null,
       isB42,
+      resolvedServerId,
     });
   } catch (error: any) {
     const isUserError = error.statusCode && error.statusCode < 500;
@@ -1013,6 +1026,13 @@ router.get("/chunks/:saveName", requirePermission("chunks.manage"), async (req, 
 });
 
 router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, res) => {
+  const lifecycleLock = acquireLifecycleLock(
+    "delete-chunks",
+    typeof req.body?.saveName === "string" ? req.body.saveName : null,
+  );
+  if (!lifecycleLock) {
+    return res.status(409).json(lifecycleInProgressResponse());
+  }
   try {
     const {
       saveName,
@@ -1021,10 +1041,22 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
       customPath = null,
       deleteVehicles = false,
       force = false,
+      expectedServerId = undefined,
     } = req.body;
     log.info(
       `POST /delete-chunks: saveName=${saveName}, chunkCount=${chunks?.length || 0}, createBackup=${createBackup}, deleteVehicles=${!!deleteVehicles}, force=${!!force}`,
     );
+
+    if (!customPath) {
+      const currentServerId = await getActiveServerId();
+      if (expectedServerId === undefined || expectedServerId !== currentServerId) {
+        return res.status(409).json({
+          error:
+            "The active server changed since these chunks were scanned. Refresh the save list and re-select chunks before deleting.",
+          code: ErrorCode.CHUNKS_STALE_SERVER_SCAN,
+        });
+      }
+    }
 
     if (!force) {
       const serverManager = req.app.get("serverManager");
@@ -1166,7 +1198,7 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
       backupPath = path.join(
         zomboidDataPath,
         "backups",
-        `${sanitizedSaveName}_chunks_${Date.now()}`,
+        `${sanitizedSaveName}_chunks_${Date.now()}-${randomUUID()}`,
       );
       await fs.promises.mkdir(backupPath, { recursive: true });
 
@@ -1370,10 +1402,19 @@ router.post("/delete-chunks", requirePermission("chunks.manage"), async (req, re
     res
       .status(error.statusCode || 500)
       .json({ error: sanitizeError(error.message) });
+  } finally {
+    lifecycleLock.release();
   }
 });
 
 router.post("/delete-region", requirePermission("chunks.manage"), async (req, res) => {
+  const lifecycleLock = acquireLifecycleLock(
+    "delete-region",
+    typeof req.body?.saveName === "string" ? req.body.saveName : null,
+  );
+  if (!lifecycleLock) {
+    return res.status(409).json(lifecycleInProgressResponse());
+  }
   try {
     const {
       saveName,
@@ -1386,7 +1427,19 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
       customPath = null,
       deleteVehicles = false,
       force = false,
+      expectedServerId = undefined,
     } = req.body;
+
+    if (!customPath) {
+      const currentServerId = await getActiveServerId();
+      if (expectedServerId === undefined || expectedServerId !== currentServerId) {
+        return res.status(409).json({
+          error:
+            "The active server changed since these chunks were scanned. Refresh the save list and re-select chunks before deleting.",
+          code: ErrorCode.CHUNKS_STALE_SERVER_SCAN,
+        });
+      }
+    }
 
     if (!force) {
       const serverManager = req.app.get("serverManager");
@@ -1648,7 +1701,7 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
       backupPath = path.join(
         zomboidDataPath,
         "backups",
-        `${sanitizedSaveName}_region_${Date.now()}`,
+        `${sanitizedSaveName}_region_${Date.now()}-${randomUUID()}`,
       );
       await fs.promises.mkdir(backupPath, { recursive: true });
 
@@ -1818,6 +1871,8 @@ router.post("/delete-region", requirePermission("chunks.manage"), async (req, re
     res
       .status(error.statusCode || 500)
       .json({ error: sanitizeError(error.message) });
+  } finally {
+    lifecycleLock.release();
   }
 });
 

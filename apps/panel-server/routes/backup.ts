@@ -1,16 +1,23 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 import path from "path";
 import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.ts";
-import { requirePermission } from "../services/permissions.ts";
+import { requireAnyPermission, requirePermission } from "../services/permissions.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
 import {
   acquireLifecycleLock,
   lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
+import { hasActiveSteamOperation } from "../services/activeSteamOperations.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
+import {
+  streamUploadToFile,
+  UPLOAD_BAD_SIGNATURE_CODE,
+  UPLOAD_TOO_LARGE_CODE,
+} from "../utils/uploadStream.ts";
 import {
   isCronTooFrequent,
   isSupportedFiveFieldCron,
@@ -19,6 +26,11 @@ import { parseClampedInteger } from "../utils/queryNumbers.ts";
 const log = createLogger("API:Backup");
 
 const router = express.Router();
+const requireAnyBackupCapability = requireAnyPermission(
+  "backups.manage",
+  "backups.download",
+  "backups.restore",
+);
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -43,7 +55,7 @@ function parseBackupMaxCount(value: unknown): number | undefined {
     : undefined;
 }
 
-router.get("/status", async (req, res) => {
+router.get("/status", requireAnyBackupCapability, async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
     const status = await backupService.getStatus();
@@ -65,7 +77,7 @@ router.get("/info", async (req, res) => {
   }
 });
 
-router.get("/list", async (req, res) => {
+router.get("/list", requireAnyBackupCapability, async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
     const backups = await backupService.listBackups();
@@ -76,7 +88,7 @@ router.get("/list", async (req, res) => {
   }
 });
 
-router.get("/history", async (req, res) => {
+router.get("/history", requireAnyBackupCapability, async (req, res) => {
   try {
     const limit =
       req.query.limit === undefined
@@ -292,6 +304,19 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
       return res.status(400).json({ error: "Invalid backup file", code: ErrorCode.BACKUP_INVALID_FILE });
     }
 
+    if (activeServer?.installPath) {
+      const normalizedRestoreTargetPath = path
+        .normalize(activeServer.installPath)
+        .toLowerCase();
+      if (hasActiveSteamOperation(normalizedRestoreTargetPath)) {
+        return res.status(409).json({
+          error:
+            "A Steam operation is already in progress for this path. Please wait for it to complete.",
+          code: ErrorCode.STEAM_OPERATION_IN_PROGRESS_PATH,
+        });
+      }
+    }
+
     const processDetails = await serverManager.getServerProcessDetails();
     if (processDetails.scanFailed) {
       return res.status(503).json({
@@ -363,8 +388,8 @@ const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024;
 router.post(
   "/upload",
   requirePermission("backups.manage"),
-  express.raw({ type: "application/zip", limit: MAX_UPLOAD_BYTES }),
   async (req, res) => {
+    let tmpPath: string | null = null;
     try {
       const activeServer = await getActiveServer();
       if (activeServer?.isRemote) {
@@ -376,7 +401,11 @@ router.post(
           });
       }
 
-      if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+      const contentType = String(req.headers["content-type"] || "")
+        .split(";", 1)[0]
+        .trim()
+        .toLowerCase();
+      if (contentType !== "application/zip") {
         return res
           .status(400)
           .json({
@@ -384,12 +413,6 @@ router.post(
               "No file uploaded. Send the zip body with Content-Type: application/zip.",
             code: ErrorCode.BACKUP_UPLOAD_NO_FILE,
           });
-      }
-
-      if (req.body.length < 4 || req.body[0] !== 0x50 || req.body[1] !== 0x4b) {
-        return res
-          .status(400)
-          .json({ error: "File does not look like a valid .zip archive.", code: ErrorCode.BACKUP_UPLOAD_INVALID_ZIP_SIGNATURE });
       }
 
       const rawName = String(
@@ -434,20 +457,70 @@ router.post(
           });
       }
 
-      const tmpPath = `${targetPath}.tmp`;
-      fs.writeFileSync(tmpPath, req.body);
-      fs.renameSync(tmpPath, targetPath);
+      tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`;
+      const totalBytes = await streamUploadToFile(req, tmpPath, MAX_UPLOAD_BYTES);
 
-      log.info(`POST /upload — stored ${finalName} (${req.body.length} bytes)`);
+      if (totalBytes === 0) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "No file uploaded. Send the zip body with Content-Type: application/zip.",
+            code: ErrorCode.BACKUP_UPLOAD_NO_FILE,
+          });
+      }
+
+      try {
+        fs.linkSync(tmpPath, targetPath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+          return res
+            .status(409)
+            .json({
+              error: `A backup named "${finalName}" already exists. Delete it first or rename the upload.`,
+              code: ErrorCode.BACKUP_UPLOAD_NAME_CONFLICT,
+              params: sanitizeErrorParams({ name: finalName }),
+            });
+        }
+        throw error;
+      }
+      fs.unlinkSync(tmpPath);
+      tmpPath = null;
+
+      log.info(`POST /upload — stored ${finalName} (${totalBytes} bytes)`);
       res.json({
         success: true,
         name: finalName,
-        size: req.body.length,
+        size: totalBytes,
         message: `Uploaded backup saved as ${finalName}. Use Restore to apply it.`,
       });
     } catch (error) {
+      const errorCode =
+        typeof error === "object" && error !== null && "code" in error
+          ? error.code
+          : undefined;
+      if (errorCode === UPLOAD_BAD_SIGNATURE_CODE) {
+        return res.status(400).json({
+          error: "File does not look like a valid .zip archive.",
+          code: ErrorCode.BACKUP_UPLOAD_INVALID_ZIP_SIGNATURE,
+        });
+      }
+      if (errorCode === UPLOAD_TOO_LARGE_CODE) {
+        return res.status(413).json({
+          error: "Upload exceeds the configured size limit.",
+          code: ErrorCode.BACKUP_UPLOAD_TOO_LARGE,
+        });
+      }
       log.error(`Failed to upload backup: ${errorMessage(error)}`);
-      res.status(500).json({ error: sanitizeError(errorMessage(error)) });
+      return res.status(500).json({ error: sanitizeError(errorMessage(error)) });
+    } finally {
+      if (tmpPath) {
+        try {
+          fs.unlinkSync(tmpPath);
+        } catch {
+          // The temporary file may already have been removed by the stream.
+        }
+      }
     }
   },
 );

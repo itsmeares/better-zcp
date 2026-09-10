@@ -387,6 +387,53 @@ export function requirePermission(capability: string): RequestHandler {
   };
 }
 
+export function requireAnyPermission(...capabilities: string[]): RequestHandler {
+  if (capabilities.length === 0 || capabilities.some((capability) => !isKnownCapability(capability))) {
+    log.error(
+      "requireAnyPermission() called with an unregistered or empty capability set -- refusing every request until fixed.",
+    );
+    return (_req: Request, res: Response) => {
+      res.status(403).json({
+        error: "Insufficient permissions",
+        code: ErrorCode.PERMISSION_DENIED,
+      });
+    };
+  }
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as PermissionRequest).user;
+    if (!user) {
+      return res.status(401).json({
+        error: "Authentication required",
+        code: ErrorCode.AUTH_REQUIRED,
+      });
+    }
+
+    try {
+      const role = await getRoleByName(user.role);
+      if (!role || !Array.isArray(role.capabilities)) {
+        return res.status(403).json({
+          error: "Insufficient permissions",
+          code: ErrorCode.PERMISSION_DENIED,
+        });
+      }
+      if (!capabilities.some((capability) => role.capabilities.includes(capability))) {
+        return res.status(403).json({
+          error: "Insufficient permissions",
+          code: ErrorCode.PERMISSION_DENIED,
+        });
+      }
+      return next();
+    } catch (error: unknown) {
+      log.error(`requireAnyPermission() failed: ${error instanceof Error ? error.message : String(error)}`);
+      return res.status(403).json({
+        error: "Insufficient permissions",
+        code: ErrorCode.PERMISSION_DENIED,
+      });
+    }
+  };
+}
+
 async function getCapabilitiesForRole(roleName: string): Promise<string[] | null> {
   try {
     const role = await getRoleByName(roleName);
@@ -478,10 +525,33 @@ export async function listRolesWithMemberCounts(): Promise<Array<Role & { member
   return withCounts;
 }
 
+async function assertNoRoleEditEscalation(
+  actingUser: ActingUser,
+  existingCapabilities: string[],
+  nextCapabilities: string[],
+): Promise<void> {
+  if (!actingUser) return;
+  const actingCapabilities = (await getCapabilitiesForRole(actingUser.role || "")) || [];
+  const existing = new Set(existingCapabilities);
+  const added = nextCapabilities.filter((capability) => !existing.has(capability));
+  const missing = added.filter((capability) => !actingCapabilities.includes(capability));
+  if (missing.length === 0) return;
+
+  const detail = missing.join(", ");
+  throw makeError(
+    ErrorCode.ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES,
+    `Cannot add ${detail} to a role without already holding ${
+      missing.length === 1 ? "it" : "them"
+    } yourself.`,
+    403,
+    { detail, missing },
+  );
+}
+
 export async function createRole({ name, capabilities }: {
   name: unknown;
   capabilities: unknown;
-}): Promise<Role> {
+}, { actingUser }: RoleUpdateOptions = {}): Promise<Role> {
   if (typeof name !== "string" || !name.trim()) {
     throw makeError(null, "name is required", 400);
   }
@@ -496,6 +566,9 @@ export async function createRole({ name, capabilities }: {
     );
   }
 
+  const nextCapabilities = [...new Set(capabilities as string[])];
+  await assertNoRoleEditEscalation(actingUser, [], nextCapabilities);
+
   const existingRoles = await getRoles() as Role[];
   if (existingRoles.some((r) => r.name === trimmedName)) {
     throw makeError(
@@ -509,7 +582,7 @@ export async function createRole({ name, capabilities }: {
   const role: Role = {
     id: `role-${randomToken()}`,
     name: trimmedName,
-    capabilities: [...new Set(capabilities as string[])],
+    capabilities: nextCapabilities,
     isSeeded: false,
     createdAt: new Date().toISOString(),
   };
@@ -603,6 +676,8 @@ export async function updateRole(
       );
     }
     nextCapabilities = [...new Set(capabilities as string[])];
+
+    await assertNoRoleEditEscalation(actingUser, existing.capabilities, nextCapabilities);
 
     await checkLockoutRulesForCapabilityChange({
       roleId: id,

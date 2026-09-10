@@ -701,6 +701,8 @@
     "modOrderSavedDesc": "Порядок завантаження модів оновлено в INI сервера.",
     "saveOrderFailedTitle": "Порядок не збережено",
     "saveOrderFailedFallback": "Не вдалося зберегти порядок модів",
+    "serverChangedSinceLoadTitle": "Active server changed",
+    "serverChangedSinceLoadDesc": "The active server changed while the mod order was being edited. Reset the order before saving.",
     "cannotReorderTitle": "Не можна змінити порядок",
     "cannotReorderDesc": "Одного з цих модів немає в активному порядку завантаження.",
     "loadOrderUpdatedTitle": "Порядок завантаження оновлено",

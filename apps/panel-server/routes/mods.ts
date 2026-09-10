@@ -7586,6 +7586,12 @@ router.post("/batch-delete-disk-mods", async (req, res) => {
           code: ErrorCode.MODS_WORKSHOP_IDS_ARRAY_REQUIRED,
         });
     }
+    if (workshopIds.length > 500) {
+      return res.status(400).json({
+        error: "Maximum 500 mods per batch",
+        code: ErrorCode.MODS_BATCH_REMOVE_TOO_MANY,
+      });
+    }
     const cleaned = workshopIds
       .map(String)
       .filter((id) => /^\d{1,15}$/.test(id));
@@ -7718,6 +7724,12 @@ router.post("/resolve-orphan-workshop", async (req, res) => {
           error: "workshopIds must be a non-empty array",
           code: ErrorCode.MODS_WORKSHOP_IDS_ARRAY_REQUIRED,
         });
+    }
+    if (workshopIds.length > 500) {
+      return res.status(400).json({
+        error: "Maximum 500 mods per batch",
+        code: ErrorCode.MODS_BATCH_REMOVE_TOO_MANY,
+      });
     }
     const cleaned = workshopIds
       .map(String)

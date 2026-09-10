@@ -26,6 +26,15 @@ describe('getLoginErrorMessage', () => {
     expect(getLoginErrorMessage(error)).toBe(LOGIN_FAILED_MESSAGE)
   })
 
+  it('surfaces the registered rate-limit message for a 429', () => {
+    const error = new ApiError('Too many login attempts. Please try again later.', {
+      status: 429,
+      code: 'RATE_LIMIT_LOGIN',
+    })
+    expect(getLoginErrorMessage(error)).toContain('Too many login attempts')
+    expect(getLoginErrorMessage(error)).not.toBe(LOGIN_FAILED_MESSAGE)
+  })
+
   it('does NOT collapse a genuine 500 into the generic auth-failed text -- this is the actual fix', () => {
     const error = new ApiError('Database connection failed', { status: 500 })
     const message = getLoginErrorMessage(error)

@@ -13,6 +13,7 @@ vi.mock("../database/init.ts", () => ({
 }));
 
 let capturedBackupCallback = null;
+let capturedMissedHandler = null;
 
 vi.mock("node-cron", () => ({
   default: {
@@ -20,6 +21,9 @@ vi.mock("node-cron", () => ({
       capturedBackupCallback = callback;
       return {
         stop: vi.fn(),
+        on: vi.fn((event, handler) => {
+          if (event === "execution:missed") capturedMissedHandler = handler;
+        }),
         getNextRun: () => null,
       };
     }),
@@ -35,6 +39,7 @@ describe("Scheduler: scheduled backup defers to an in-progress restart", () => {
 
   beforeEach(() => {
     capturedBackupCallback = null;
+    capturedMissedHandler = null;
     logScheduleExecution.mockClear();
     scheduler = new Scheduler({}, {});
     createBackup = vi.fn().mockResolvedValue({
@@ -88,6 +93,20 @@ describe("Scheduler: scheduled backup defers to an in-progress restart", () => {
       true,
       expect.stringContaining("test-backup.zip"),
       expect.any(Number),
+    );
+  });
+
+  it("records a visible history entry when node-cron reports a missed backup", async () => {
+    await scheduler.setupBackupSchedule();
+    capturedMissedHandler({ dateLocalIso: "2026-09-05T02:00:00.000Z" });
+
+    expect(logScheduleExecution).toHaveBeenCalledWith(
+      null,
+      "Scheduled Backup",
+      "backup",
+      false,
+      expect.stringContaining("Missed scheduled run at 2026-09-05T02:00:00.000Z"),
+      0,
     );
   });
 });

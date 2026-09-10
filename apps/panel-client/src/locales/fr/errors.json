@@ -81,6 +81,7 @@
   "INVALID_CAPABILITY": "Capacité inconnue : {{capability}}",
   "ROLE_LOCKOUT_LAST_MANAGER": "Ce changement ne laisserait plus aucun utilisateur capable de {{action}}",
   "ROLE_SELF_CAPABILITY_LOSS_CONFIRM": "Cela vous retirerait votre propre capacité à {{action}}",
+  "ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES": "Vous ne pouvez pas accorder des capacités que votre propre rôle ne possède pas",
   "ROLE_HAS_MEMBERS": "Ce rôle est encore détenu par {{count}} utilisateur(s). Indiquez reassignTo pour les réattribuer à un autre rôle d'abord.",
   "ROLE_IS_SEEDED": "Les rôles intégrés ne peuvent pas être supprimés.",
   "SERVER_RUNNING_LEGACY": "Arrêtez le serveur avant de supprimer des chunks. Les serveurs en cours d'exécution gardent les fichiers de sauvegarde ouverts et écraseront vos modifications à l'arrêt.",
@@ -117,10 +118,12 @@
   "BACKUP_UPLOAD_REMOTE_NOT_AVAILABLE": "L'import de sauvegarde n'est pas disponible pour les serveurs distants.",
   "BACKUP_UPLOAD_NO_FILE": "Aucun fichier envoyé. Envoyez le contenu du zip avec Content-Type: application/zip.",
   "BACKUP_UPLOAD_INVALID_ZIP_SIGNATURE": "Le fichier ne ressemble pas à une archive .zip valide.",
+  "BACKUP_UPLOAD_TOO_LARGE": "The backup upload is too large.",
   "BACKUP_UPLOAD_INVALID_EXTENSION": "Seules les sauvegardes .zip sont acceptées.",
   "BACKUP_UPLOAD_NAME_CONFLICT": "Une sauvegarde nommée « {{name}} » existe déjà. Supprimez-la d'abord ou renommez l'import.",
   "BACKUPS_FOLDER_UNAVAILABLE": "Dossier de sauvegardes indisponible. Configurez d'abord le serveur.",
   "USER_SELF_DELETE_REFUSED": "Vous ne pouvez pas supprimer votre propre compte. Demandez à un autre administrateur de le faire.",
+  "USER_SELF_ROLE_CHANGE_REFUSED": "Vous ne pouvez pas modifier votre propre rôle. Demandez à un autre administrateur de le faire.",
   "SERVER_START_REMOTE_REFUSED": "Impossible de démarrer un serveur distant. Les serveurs distants sont gérés en externe — utilisez RCON pour interagir.",
   "SERVER_FORCE_STOP_REMOTE_REFUSED": "Impossible de forcer l'arrêt d'un serveur distant. Le processus n'est pas géré par ce panneau.",
   "SERVER_RESTART_REMOTE_REFUSED": "Impossible de redémarrer un serveur distant. Le processus n'est pas géré par ce panneau.",
@@ -203,6 +206,7 @@
   "DELETE_CHUNKS_INVALID_X": "Coordonnée x du chunk invalide — doit être un entier",
   "DELETE_CHUNKS_INVALID_Y": "Coordonnée y du chunk invalide — doit être un entier",
   "CHUNKS_SAVE_NOT_FOUND": "Sauvegarde introuvable",
+  "CHUNKS_STALE_SERVER_SCAN": "The active server changed since these chunks were scanned. Refresh the save list and re-select before deleting.",
   "DELETE_REGION_FIELDS_REQUIRED": "Le nom de sauvegarde et les limites de la région sont requis",
   "DELETE_REGION_BOUNDS_NOT_FINITE": "Les limites de la région doivent être des nombres finis",
   "DELETE_REGION_BOUNDS_INVERTED": "Limites de région inversées (minX > maxX ou minY > maxY)",
@@ -488,5 +492,7 @@
   "WRITABILITY_TARGET_UNSUPPORTED": "Cible inconnue ou non prise en charge",
   "WRITABILITY_TARGET_MISSING": "Le fichier n'existe pas",
   "WRITABILITY_CHMOD_FAILED": "Impossible de modifier les permissions du fichier",
-  "WRITABILITY_STILL_BLOCKED": "Le fichier n'est toujours pas accessible en écriture après avoir effacé l'attribut lecture seule -- cela ressemble à un problème de propriété ou de permissions"
+  "WRITABILITY_STILL_BLOCKED": "Le fichier n'est toujours pas accessible en écriture après avoir effacé l'attribut lecture seule -- cela ressemble à un problème de propriété ou de permissions",
+  "WRITABLE_PATH_INSTALL_WINDOWS": "Installation path is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator.",
+  "WRITABLE_PATH_DATA_WINDOWS": "Zomboid data folder is not writable: {{path}}. Grant the Windows account write access, choose a writable folder, or run Start.bat as Administrator."
 }

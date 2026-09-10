@@ -6,12 +6,14 @@ import path from "path";
 
 const getSettingMock = vi.fn(async () => null);
 const setSettingMock = vi.fn(async () => {});
+const getServersMock = vi.fn(async () => []);
 
 vi.mock("../database/init.ts", () => ({
   logServerEvent: vi.fn(async () => {}),
   setSetting: (...args) => setSettingMock(...args),
   getSetting: (...args) => getSettingMock(...args),
   getActiveServer: vi.fn(async () => null),
+  getServers: (...args) => getServersMock(...args),
 }));
 
 const { default: router } = await import("../routes/server.ts");
@@ -47,6 +49,8 @@ beforeEach(() => {
 
   getSettingMock.mockReset();
   setSettingMock.mockReset();
+  getServersMock.mockReset();
+  getServersMock.mockResolvedValue([]);
   setSettingMock.mockResolvedValue(undefined);
 });
 
@@ -105,5 +109,50 @@ describe("POST /api/server/steam-update concurrency guard", () => {
     );
 
     await new Promise((resolve) => setTimeout(resolve, 200));
+  });
+
+  it("checks the requested installPath, not a different server returned by the manager's cached state", async () => {
+    const targetDataPath = path.join(root, "target-data");
+    getServersMock.mockResolvedValue([
+      {
+        id: "target",
+        installPath,
+        serverName: "TargetServer",
+        zomboidDataPath: targetDataPath,
+      },
+    ]);
+    const serverManager = {
+      _scanDedicatedServerProcesses: async () => ({
+        running: true,
+        scanFailed: false,
+        matched: [
+          {
+            cmd: `java -servername TargetServer -cachedir "${targetDataPath}" ${installPath}/start-server.sh`,
+          },
+        ],
+      }),
+    };
+    const response = createResponse();
+    const handler = getSteamUpdateHandler();
+
+    await handler(
+      {
+        app: {
+          get: (key) =>
+            key === "serverManager"
+              ? serverManager
+              : key === "io"
+                ? { emit: vi.fn() }
+                : undefined,
+        },
+        body: { steamcmdPath, installPath, branch: "stable" },
+      },
+      response,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "STEAM_UPDATE_SERVER_RUNNING" }),
+    );
   });
 });

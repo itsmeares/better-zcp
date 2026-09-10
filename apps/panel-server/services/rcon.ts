@@ -84,6 +84,11 @@ export function normalizeRconHost(host: unknown) {
   return host.trim() || "127.0.0.1";
 }
 
+export function resolveEnvRconHost(): string {
+  const envHost = String(process.env.RCON_HOST || "").trim();
+  return envHost && envHost !== "CHANGE_ME" ? envHost : "127.0.0.1";
+}
+
 function parseConfiguredRconPort(value: unknown) {
   if (
     value === undefined ||
@@ -280,7 +285,7 @@ export class RconService extends EventEmitter {
     this.connectPromise = null;
     this.passwordFromSecretFile = Boolean(process.env.RCON_PASSWORD_FILE);
     this.config = {
-      host: process.env.RCON_HOST || "127.0.0.1",
+      host: resolveEnvRconHost(),
       port: parseInt(process.env.RCON_PORT ?? "", 10) || 27015,
       password: readSecret("RCON_PASSWORD") || "",
     };

@@ -18,6 +18,7 @@ vi.mock("../routes/chunks.ts", () => ({
 }));
 
 const { default: router } = await import("../routes/server.ts");
+const { getActiveServer } = await import("../database/init.ts");
 
 const SERVER_NAME = "servertest";
 
@@ -45,6 +46,12 @@ beforeEach(() => {
   saveDir = path.join(savePath, "Saves", "Multiplayer", SERVER_NAME);
   fs.mkdirSync(path.join(saveDir, "map"), { recursive: true });
   fs.writeFileSync(path.join(saveDir, "map", "0_0.bin"), "chunk");
+  getActiveServer.mockResolvedValue({
+    name: SERVER_NAME,
+    serverName: SERVER_NAME,
+    installPath: root,
+    zomboidDataPath: savePath,
+  });
   invalidateMapFolderScanMock.mockClear();
 });
 
@@ -56,6 +63,7 @@ describe("POST /api/server/wipe invalidates chunks.ts's cached map/ folder scan"
   it("invalidates the map/ scan cache after wiping the map target", async () => {
     const serverManager = {
       loadConfig: async () => {},
+      reloadConfig: async () => {},
       getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
       savePath,
       serverName: SERVER_NAME,
@@ -82,6 +90,7 @@ describe("POST /api/server/wipe invalidates chunks.ts's cached map/ folder scan"
   it("does not invalidate the map/ scan cache when only non-map targets are wiped", async () => {
     const serverManager = {
       loadConfig: async () => {},
+      reloadConfig: async () => {},
       getServerProcessDetails: async () => ({ running: false, scanFailed: false }),
       savePath,
       serverName: SERVER_NAME,

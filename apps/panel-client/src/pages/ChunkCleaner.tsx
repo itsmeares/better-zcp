@@ -286,6 +286,7 @@ export default function ChunkCleaner() {
   const [chunks, setChunks] = useState<ChunkInfo[]>([]);
   const [bounds, setBounds] = useState<ChunkBounds | null>(null);
   const [stats, setStats] = useState<SaveStats | null>(null);
+  const [scanServerId, setScanServerId] = useState<string | number | null>(null);
   const [loading, setLoading] = useState(false);
   const [scanProgress, setScanProgress] = useState<{
     scanned: number;
@@ -602,6 +603,7 @@ export default function ChunkCleaner() {
     setSelectedChunks(new Set());
     setChunkVehicles([]);
     setChunkSafehouses([]);
+    setScanServerId(null);
 
     const scanId = `${thisLoadId}-${Date.now().toString(36)}`;
     const handleProgress = (p: {
@@ -642,6 +644,7 @@ export default function ChunkCleaner() {
       setChunks(rawChunks);
       setBounds(chunksResult.bounds ?? null);
       setStats(statsResult);
+      setScanServerId(chunksResult.resolvedServerId ?? null);
     } catch (error) {
       if (thisLoadId !== loadIdRef.current) return;
       toast({
@@ -657,6 +660,35 @@ export default function ChunkCleaner() {
       }
     }
   }, [selectedSave, customPath, toast, socket, t]);
+
+  const invalidateStaleScan = useCallback(() => {
+    loadIdRef.current += 1;
+    setChunks([]);
+    setBounds(null);
+    setStats(null);
+    setSelectedChunks(new Set());
+    setChunkVehicles([]);
+    setChunkSafehouses([]);
+    setScanServerId(null);
+    setSelectedSave("");
+    setSaves([]);
+    setDeleteDialogOpen(false);
+    toast({
+      title: t("toasts.activeServerChangedTitle"),
+      description: t("toasts.activeServerChangedDesc"),
+      variant: "destructive",
+    });
+    void fetchSaves();
+  }, [fetchSaves, t, toast]);
+
+  useEffect(() => {
+    if (!socket || customPath) return;
+    const handleActiveServerChanged = () => invalidateStaleScan();
+    socket.on("activeServerChanged", handleActiveServerChanged);
+    return () => {
+      socket.off("activeServerChanged", handleActiveServerChanged);
+    };
+  }, [socket, customPath, invalidateStaleScan]);
 
   const fetchOverlayData = useCallback(async () => {
     const thisLoadId = loadIdRef.current;
@@ -1840,6 +1872,7 @@ export default function ChunkCleaner() {
           customPath || undefined,
           deleteVehicles,
           force,
+          scanServerId,
         );
 
       let result: Awaited<ReturnType<typeof tryDelete>>;
@@ -1898,11 +1931,15 @@ export default function ChunkCleaner() {
       await loadChunks();
       await fetchOverlayData();
     } catch (error) {
-      toast({
-        title: t("toasts.errorTitle"),
-        description: getUserErrorMessage(error, t("toasts.deleteChunksFailedFallback")),
-        variant: "destructive",
-      });
+      if (error instanceof ApiError && error.code === "CHUNKS_STALE_SERVER_SCAN") {
+        invalidateStaleScan();
+      } else {
+        toast({
+          title: t("toasts.errorTitle"),
+          description: getUserErrorMessage(error, t("toasts.deleteChunksFailedFallback")),
+          variant: "destructive",
+        });
+      }
     } finally {
       setDeleting(false);
     }

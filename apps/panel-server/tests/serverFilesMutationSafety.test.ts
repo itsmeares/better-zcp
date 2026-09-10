@@ -40,6 +40,7 @@ function createRequest(method, path, running = false) {
     app: {
       get: () => ({
         checkServerRunning: vi.fn(async () => running),
+        reloadConfig: vi.fn(async () => {}),
         getServerProcessDetails: vi.fn(async () => ({ running, scanFailed: false })),
       }),
     },
@@ -124,6 +125,7 @@ describe("local config mutation safety", () => {
         app: {
           get: () => ({
             checkServerRunning: vi.fn(async () => false),
+            reloadConfig: vi.fn(async () => {}),
             getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: true })),
           }),
         },
@@ -220,6 +222,7 @@ describe("local config mutation safety", () => {
         path: "/ini",
         app: {
           get: () => ({
+            reloadConfig: vi.fn(async () => {}),
             getServerProcessDetails: vi.fn(async () => {
               throw new Error("boom");
             }),
@@ -242,6 +245,7 @@ describe("local config mutation safety", () => {
         app: {
           get: () => ({
             checkServerRunning: vi.fn(async () => false),
+            reloadConfig: vi.fn(async () => {}),
             getServerProcessDetails: vi.fn(async () => ({
               running: false,
               scanFailed: true,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isUncompressedBinaryProxyPath, UNCOMPRESSED_BINARY_PROXY_PREFIXES } from "../utils/compressionFilter.ts";
+import {
+  isEventStreamResponse,
+  isUncompressedBinaryProxyPath,
+  UNCOMPRESSED_BINARY_PROXY_PREFIXES,
+} from "../utils/compressionFilter.ts";
 
 
 describe("isUncompressedBinaryProxyPath", () => {
@@ -28,5 +32,16 @@ describe("isUncompressedBinaryProxyPath", () => {
       "/api/map/b41tiles/",
       "/api/mods/thumbnail/",
     ]);
+  });
+});
+
+describe("isEventStreamResponse", () => {
+  it("recognizes an SSE content type with optional parameters", () => {
+    expect(isEventStreamResponse({ getHeader: () => "text/event-stream; charset=utf-8" })).toBe(true);
+  });
+
+  it("does not disable compression for ordinary text or missing headers", () => {
+    expect(isEventStreamResponse({ getHeader: () => "text/plain" })).toBe(false);
+    expect(isEventStreamResponse({ getHeader: () => undefined })).toBe(false);
   });
 });

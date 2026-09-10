@@ -16,6 +16,7 @@ vi.mock("../database/init.ts", () => ({
   setSetting: vi.fn(async () => {}),
   logServerEvent: vi.fn(async () => {}),
   getActiveServer: vi.fn(async () => null),
+  getServers: vi.fn(async () => []),
 }));
 
 const { writeFileAtomicMock, realHolder } = vi.hoisted(() => ({
@@ -68,6 +69,15 @@ function fakeIoCapturingComplete() {
     }),
   };
   return { io, completePromise, emitted };
+}
+
+function fakeApp(io) {
+  const serverManager = {
+    getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })),
+  };
+  return {
+    get: (key) => (key === "io" ? io : key === "serverManager" ? serverManager : undefined),
+  };
 }
 
 describe("POST /api/server/install -- warnings array (finding #6) and watchdog message (finding #1)", () => {
@@ -130,7 +140,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: { get: (k) => (k === "io" ? io : undefined) } },
+      { body: baseBody(), app: fakeApp(io) },
       res,
     );
 
@@ -155,7 +165,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: { get: (k) => (k === "io" ? io : undefined) } },
+      { body: baseBody(), app: fakeApp(io) },
       res,
     );
 
@@ -185,7 +195,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: { get: (k) => (k === "io" ? io : undefined) } },
+      { body: baseBody(), app: fakeApp(io) },
       res,
     );
 
@@ -215,7 +225,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: { get: (k) => (k === "io" ? io : undefined) } },
+      { body: baseBody(), app: fakeApp(io) },
       res,
     );
 
@@ -247,7 +257,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: { get: (k) => (k === "io" ? io : undefined) } },
+      { body: baseBody(), app: fakeApp(io) },
       res,
     );
 
@@ -275,7 +285,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: { get: (k) => (k === "io" ? io : undefined) } },
+      { body: baseBody(), app: fakeApp(io) },
       res,
     );
 
@@ -303,7 +313,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: { get: (k) => (k === "io" ? io : undefined) } },
+      { body: baseBody(), app: fakeApp(io) },
       res,
     );
 
@@ -326,7 +336,7 @@ describe("POST /api/server/install -- warnings array (finding #6) and watchdog m
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     const handlerDone = getRouteHandler(router, "/install", "post")(
-      { body: baseBody(), app: { get: (k) => (k === "io" ? io : undefined) } },
+      { body: baseBody(), app: fakeApp(io) },
       res,
     );
 
@@ -402,7 +412,7 @@ describe("POST /api/server/install -- UPnP reaches the server's own .ini, not ju
     const { io, completePromise } = fakeIoCapturingComplete();
     const res = createResponse();
     await getRouteHandler(router, "/install", "post")(
-      { body: baseBody({ useUpnp: false }), app: { get: (k) => (k === "io" ? io : undefined) } },
+      { body: baseBody({ useUpnp: false }), app: fakeApp(io) },
       res,
     );
 
@@ -428,7 +438,7 @@ describe("POST /api/server/install -- UPnP reaches the server's own .ini, not ju
     await getRouteHandler(router, "/install", "post")(
       {
         body: baseBody({ useUpnp: true, rconPassword: "rconpw123", rconPort: 27015 }),
-        app: { get: (k) => (k === "io" ? io : undefined) },
+        app: fakeApp(io),
       },
       res,
     );
