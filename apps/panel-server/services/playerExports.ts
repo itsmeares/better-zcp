@@ -83,15 +83,19 @@ export function listPlayerExports(
   const root = exportsRoot();
   if (!fs.existsSync(root)) return [];
 
-  const players = username
-    ? [username.replace(/[^a-zA-Z0-9_-]/g, "_")]
-    : fs.readdirSync(root).filter((entry) => {
-        try {
-          return fs.statSync(path.join(root, entry)).isDirectory();
-        } catch {
-          return false;
-        }
-      });
+  const requestedUsername =
+    typeof username === "string"
+      ? username.replace(/[^a-zA-Z0-9_-]/g, "_")
+      : undefined;
+  const players = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        USERNAME_PATTERN.test(entry.name) &&
+        (!requestedUsername || entry.name === requestedUsername),
+    )
+    .map((entry) => entry.name);
   const results: Array<Record<string, unknown>> = [];
   for (const playerDir of players) {
     if (!USERNAME_PATTERN.test(playerDir)) continue;
