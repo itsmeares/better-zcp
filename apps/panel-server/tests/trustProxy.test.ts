@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import express from "express";
 import { parseTrustProxySetting } from "../utils/trustProxy.ts";
 
 describe("parseTrustProxySetting", () => {
@@ -23,12 +22,8 @@ describe("parseTrustProxySetting", () => {
 
   it("accepts an IP or subnet list supported by Express", () => {
     const setting = parseTrustProxySetting("127.0.0.1, 10.0.0.0/8");
-    const app = express();
-
-    app.set("trust proxy", setting);
 
     expect(setting).toEqual(["127.0.0.1", "10.0.0.0/8"]);
-    expect(app.get("trust proxy")).toEqual(setting);
   });
 
   it.each(["-1", "9007199254740992"])(

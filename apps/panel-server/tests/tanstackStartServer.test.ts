@@ -1,8 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type {
-  Request as ExpressRequest,
-  Response as ExpressResponse,
-} from "express";
 import {
   sendTanStackStartResponse,
   toTanStackStartRequest,
@@ -20,7 +16,7 @@ describe("TanStack Start Express adapter", () => {
       get(name: string) {
         return name.toLowerCase() === "host" ? "panel.example" : undefined;
       },
-    } as unknown as ExpressRequest);
+    } as any);
 
     expect(request.url).toBe("https://panel.example/settings?tab=roles");
     expect(request.headers.get("cookie")).toBe("session=abc");
@@ -44,7 +40,7 @@ describe("TanStack Start Express adapter", () => {
       get(name: string) {
         return name.toLowerCase() === "host" ? "panel.example" : undefined;
       },
-    } as unknown as ExpressRequest);
+    } as any);
 
     expect(request.headers.get("x-panel-remote-address")).toBe("127.0.0.1");
     expect(request.headers.get("x-panel-client-ip")).toBe("10.0.0.4");
@@ -66,7 +62,7 @@ describe("TanStack Start Express adapter", () => {
       get(name: string) {
         return name.toLowerCase() === "host" ? "panel.example" : undefined;
       },
-    } as unknown as ExpressRequest);
+    } as any);
 
     expect(await request.json()).toEqual({ action: "ping" });
     expect(request.headers.get("content-length")).toBeNull();
@@ -95,7 +91,7 @@ describe("TanStack Start Express adapter", () => {
         status: 201,
         headers: { "content-type": "text/html" },
       }),
-      sent as unknown as ExpressResponse,
+      sent as any,
     );
 
     expect(sent.statusCode).toBe(201);
@@ -122,7 +118,7 @@ describe("TanStack Start Express adapter", () => {
 
     await sendTanStackStartResponse(
       response,
-      sent as unknown as ExpressResponse,
+      sent as any,
     );
 
     expect(sent.headers["set-cookie"]).toEqual([

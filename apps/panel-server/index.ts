@@ -1,22 +1,17 @@
 import "./utils/firstRunOwnershipCheck.ts";
-import express from "express";
-import compression from "compression";
-import cors from "cors";
-import helmet from "helmet";
-import rateLimit from "express-rate-limit";
-import { permissionsPolicy } from "./middleware/permissionsPolicy.ts";
 import { logSetupTokenIfNeeded } from "./utils/setupToken.ts";
 import { computeInlineScriptCspHashes } from "./utils/cspScriptHash.ts";
 import { parseTrustProxySetting } from "./utils/trustProxy.ts";
-import {
-  isEventStreamResponse,
-  isUncompressedBinaryProxyPath,
-} from "./utils/compressionFilter.ts";
 import { createServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import { Server } from "socket.io";
 import type { Socket } from "socket.io";
-import type { NextFunction, Request, Response } from "express";
+import {
+  Router,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "./http/legacyRouter.ts";
 import type { Server as HttpsServer } from "https";
 import dotenv from "dotenv";
 import path from "path";
@@ -26,7 +21,6 @@ import readline from "readline";
 import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
 import { exec, execSync, spawn } from "child_process";
-import cookieParser from "cookie-parser";
 
 import {
   onLog,
@@ -113,13 +107,10 @@ import authService, {
 } from "./services/auth.ts";
 import { getRoleByName } from "./services/permissions.ts";
 import { requireRole } from "./services/auth.ts";
-import { registerApiRoutes } from "./http/registerApiRoutes.ts";
 import {
-  apiErrorHandler as handleApiError,
-  registerTanStackStartApiRoute,
-  registerPanelWebRoutes,
-  sendClientIndex,
+  createPanelRequestHandler,
 } from "./http/panelWeb.ts";
+import { registerLegacyApiModule } from "./http/legacyApi.ts";
 import { loadOrCreateCerts } from "./utils/certs.ts";
 import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";
 import { ErrorCode } from "./utils/errorCodes.ts";
@@ -282,17 +273,16 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
 const trustProxyEnv = process.env.TRUST_PROXY || "";
 let trustProxySetting = parseTrustProxySetting(trustProxyEnv);
 try {
-  app.set("trust proxy", trustProxySetting);
+  // Validate once at startup; the native host consumes the parsed value.
+  if (trustProxySetting === undefined) throw new Error("invalid setting");
 } catch (error: any) {
   log.warn(
     `Invalid TRUST_PROXY value (${trustProxyEnv}), proxy trust disabled: ${error.message}`,
   );
   trustProxySetting = false;
-  app.set("trust proxy", false);
 }
 if (trustProxySetting) {
   const configuredProxy = Array.isArray(trustProxySetting)
@@ -302,7 +292,22 @@ if (trustProxySetting) {
     `trust proxy enabled (${configuredProxy}) via TRUST_PROXY env var`,
   );
 }
-const httpServer = createServer(app);
+let panelRequestHandler: ReturnType<typeof createPanelRequestHandler> =
+  async (_request, response) => {
+    response.statusCode = 503;
+    response.end("Panel is still starting");
+  };
+const httpServer = createServer((request, response) => {
+  void panelRequestHandler(request, response).catch((error: unknown) => {
+    log.error("Panel request failed:", error);
+    if (!response.headersSent) {
+      response.statusCode = 500;
+      response.end("Internal server error");
+    } else {
+      response.destroy();
+    }
+  });
+});
 let activePanelPort: number | null = null;
 
 let httpsServer: HttpsServer | null = null;
@@ -546,7 +551,17 @@ export function setupHttpsServer({
   }
 
   try {
-    httpsServer = createHttpsServer(certs, app);
+    httpsServer = createHttpsServer(certs, (request, response) => {
+      void panelRequestHandler(request, response).catch((error: unknown) => {
+        log.error("HTTPS panel request failed:", error);
+        if (!response.headersSent) {
+          response.statusCode = 500;
+          response.end("Internal server error");
+        } else {
+          response.destroy();
+        }
+      });
+    });
   } catch (error: any) {
     log.error(
       `HTTPS certificate/key content is invalid: ${error.message} — running HTTP only`,
@@ -617,151 +632,6 @@ function refreshInlineScriptCspHash() {
   inlineScriptCspSources = computeInlineScriptCspHashes(cspClientDistPath, log);
   return inlineScriptCspSources.join(" ");
 }
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", () => inlineScriptCspSources.join(" ")],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "blob:", "https:"],
-        connectSrc: ["'self'", "ws:", "wss:"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        objectSrc: ["'none'"],
-        frameAncestors: ["'none'"],
-        upgradeInsecureRequests: httpsDetected ? [] : null,
-      },
-    },
-    hsts: httpsDetected
-      ? { maxAge: 31536000, includeSubDomains: false }
-      : false,
-    crossOriginEmbedderPolicy: false, // Allow loading resources
-  }),
-);
-app.use(permissionsPolicy());
-
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (isAllowedOrigin(origin)) {
-        callback(null, true);
-      } else {
-        recordCorsBlock(origin, "http");
-        log.warn(`CORS blocked request from origin: ${origin}`);
-        callback(new Error(CORS_DENY_MESSAGE));
-      }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true,
-  }),
-);
-
-app.use("/api/debug/client-errors", express.json({ limit: "16kb" }));
-
-app.use(express.json({ limit: "1mb" }));
-app.use(cookieParser());
-
-app.use(
-  compression({
-    threshold: 1024,
-    filter: (req, res) => {
-      if (isUncompressedBinaryProxyPath(req)) return false;
-      if (isEventStreamResponse(res)) return false;
-      return compression.filter(req, res);
-    },
-  }),
-);
-
-const apiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 300, // 300 requests per minute per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later." },
-});
-app.use("/api/", apiLimiter);
-
-app.use("/api/", (req, res, next) => {
-  if (req.query.token && !req.headers.authorization) {
-    req.headers.authorization = `Bearer ${req.query.token}`;
-  }
-  next();
-});
-app.use(authService.middleware());
-
-const strictLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 10, // 10 per minute
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Rate limit exceeded for this operation." },
-});
-app.use("/api/server/install", strictLimiter);
-app.use("/api/server/delete-files", strictLimiter);
-app.use("/api/server/wipe", strictLimiter);
-app.use("/api/server/steam-update", strictLimiter);
-app.use("/api/server/steamcmd/download", strictLimiter);
-app.use("/api/server/start", strictLimiter);
-app.use("/api/server/stop", strictLimiter);
-app.use("/api/server/force-stop", strictLimiter);
-app.use("/api/server/restart", strictLimiter);
-app.use("/api/docker/containers", strictLimiter);
-app.use("/api/backup/restore", strictLimiter);
-app.use("/api/backup/delete-older-than", strictLimiter);
-app.use("/api/backup/upload", strictLimiter);
-app.delete("/api/backup/:name", strictLimiter);
-app.use("/api/chunks/delete-chunks", strictLimiter);
-app.use("/api/chunks/delete-region", strictLimiter);
-app.use("/api/server-files/raw", strictLimiter);
-app.use("/api/server-files/restore", strictLimiter);
-app.use("/api/server-files/save-and-reload", strictLimiter);
-app.use("/api/panel-bridge/install-mod", strictLimiter);
-app.use("/api/panel-bridge/install-local", strictLimiter);
-app.use("/api/panel-bridge/character/export", strictLimiter);
-app.use("/api/panel-bridge/character/import", strictLimiter);
-app.use("/api/panel/update-check", strictLimiter);
-app.use("/api/panel/update-download", strictLimiter);
-app.use("/api/panel/update-preflight", strictLimiter);
-app.use("/api/panel/restart", strictLimiter);
-app.use("/api/templates/:id/apply", strictLimiter);
-app.use("/api/mods/collection/extract-cookies", strictLimiter);
-
-const collectionMutationLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many collection changes. Please wait a minute and try again." },
-});
-app.use("/api/mods/collection/items", collectionMutationLimiter);
-
-const rconLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 60, // 60 commands per minute per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many RCON commands, please slow down." },
-});
-app.use("/api/rcon/execute", rconLimiter);
-
-const panelBridgeCommandLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 60, // 60 commands per minute per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many PanelBridge commands, please slow down." },
-});
-app.use("/api/panel-bridge/command", panelBridgeCommandLimiter);
-
-const clientErrorLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 10, // 10 reports per minute per IP — a real crash storm from one tab
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many error reports, please slow down." },
-});
-app.use("/api/debug/client-errors", clientErrorLimiter);
-
 const rconService = new RconService();
 const serverManager = new ServerManager();
 const dockerClient = new DockerClient();
@@ -1069,31 +939,13 @@ panelBridge.on("playerDisconnect", (playerName) => {
     );
 });
 
-app.set("rconService", rconService);
-app.set("serverManager", serverManager);
-app.set("dockerClient", dockerClient);
-app.set("modChecker", modChecker);
-app.set("logTailer", logTailer);
-app.set("refreshWorkshopChecker", refreshWorkshopChecker);
-app.set("autoInstallBridgeIfNeeded", autoInstallBridgeIfNeeded);
-app.set("scheduler", scheduler);
-app.set("discordBot", discordBot);
 backupService.setServerManager(serverManager);
-app.set("backupService", backupService);
-app.set("io", io);
-app.set("refreshCorsConfig", refreshCorsConfig);
-app.set("getCorsDebugSnapshot", getCorsDebugSnapshot);
-app.set("clearCorsBlockedOrigins", clearCorsBlockedOrigins);
-app.set("checkServerStatusNow", checkServerStatusNow);
 
 const updateChecker = new UpdateChecker(io, { rconService, serverManager });
-app.set("updateChecker", updateChecker);
 
 const panelUpdateChecker = new PanelUpdateChecker(io);
-app.set("panelUpdateChecker", panelUpdateChecker);
 
 const diskMonitor = new DiskMonitor(io);
-app.set("diskMonitor", diskMonitor);
 setPanelRuntime({
   authService,
   rconService,
@@ -1109,6 +961,8 @@ setPanelRuntime({
   io,
   checkServerStatusNow,
   updateChecker,
+  logTailer,
+  panelUpdateChecker,
   refreshCorsConfig,
   getCorsDebugSnapshot,
   clearCorsBlockedOrigins,
@@ -1154,7 +1008,10 @@ const panelWebOptions = {
   embeddedClientDistPath,
   buildMetadata: _buildMetadata,
   logger: log,
+  httpsDetected,
+  inlineScriptCspSources: () => inlineScriptCspSources.join(" "),
 };
+const panelRouter = Router();
 
 function updateBundleJournalPath() {
   return path.join(path.dirname(panelUpdateChecker.getExeBasePath()), "update-bundle.json");
@@ -1173,28 +1030,18 @@ function inspectPendingPanelUpdate() {
     runningMetadata: _buildMetadata,
   });
 }
-registerTanStackStartApiRoute(app, panelWebOptions, "/api/health");
-app.get("/api/health", (_req, res) => {
+panelRouter.get("/health", (_req, res) => {
   res.json(buildPanelHealthPayload(_buildMetadata));
 });
 
-registerTanStackStartApiRoute(app, panelWebOptions, "/api/panel-info");
-app.get("/api/panel-info", async (req, res) => {
+panelRouter.get("/panel-info", async (_req, res) => {
   const savedPort = await getSetting("panelPort");
   const PORT = activePanelPort ?? resolvePanelInfoPort(savedPort);
   const localIp = await serverManager.getLocalIp();
   res.json(buildPanelInfo(localIp, PORT));
 });
 
-registerTanStackStartApiRoute(app, panelWebOptions, "/api/system/runtime");
-registerTanStackStartApiRoute(app, panelWebOptions, "/api/system/disk-space");
-// Start owns the migrated JSON APIs; unmatched paths fall through to the
-// remaining Express routes (OIDC redirects, streams, uploads, and binaries).
-registerTanStackStartApiRoute(app, panelWebOptions, "/api", "ALL");
-
-registerApiRoutes(app);
-
-app.post("/api/panel/restart", requireRole("admin"), async (req, res) => {
+panelRouter.post("/panel/restart", requireRole("admin"), async (req, res) => {
   log.info("Panel restart requested via API");
 
   const checker = req.app.get("panelUpdateChecker");
@@ -1362,7 +1209,7 @@ app.post("/api/panel/restart", requireRole("admin"), async (req, res) => {
   }, 1000);
 });
 
-app.get("/api/panel/update-check", async (req, res) => {
+panelRouter.get("/panel/update-check", async (req, res) => {
   try {
     const checker = req.app.get("panelUpdateChecker");
     if (!checker)
@@ -1394,9 +1241,9 @@ export async function handlePanelUpdateStatus(
   }
 }
 
-app.get("/api/panel/update-status", handlePanelUpdateStatus);
+panelRouter.get("/panel/update-status", handlePanelUpdateStatus);
 
-app.get("/api/panel/update-preflight", async (req, res) => {
+panelRouter.get("/panel/update-preflight", async (req, res) => {
   try {
     const checker = req.app.get("panelUpdateChecker");
     if (!checker)
@@ -1411,7 +1258,7 @@ app.get("/api/panel/update-preflight", async (req, res) => {
   }
 });
 
-app.get("/api/panel/update-apply-log", (req, res) => {
+panelRouter.get("/panel/update-apply-log", (req, res) => {
   try {
     const checker = req.app.get("panelUpdateChecker");
     if (!checker)
@@ -1527,25 +1374,19 @@ export function classifyStartupProcessState(
   return { running: processState.running, unknown: false };
 }
 
-app.post(
-  "/api/panel/update-download",
+panelRouter.post(
+  "/panel/update-download",
   requireRole("admin"),
   handlePanelUpdateDownload,
 );
 
-export function apiErrorHandler(
-  err: AnyRecord,
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
-  handleApiError(log, err, req, res, next);
-}
+registerLegacyApiModule("/api", async () => panelRouter);
 
-app.use("/api", apiErrorHandler);
-registerPanelWebRoutes(app, panelWebOptions);
-
-export { sendClientIndex };
+panelRequestHandler = createPanelRequestHandler(panelWebOptions, {
+  isAllowedOrigin,
+  recordCorsBlock,
+  trustProxy: trustProxySetting,
+});
 
 io.use(async (socket: AuthenticatedSocket, next) => {
   try {

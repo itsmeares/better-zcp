@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from "../http/legacyRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
@@ -22,7 +22,7 @@ import {
 } from "../services/templateService.ts";
 
 const log = createLogger("API:Templates");
-const router = express.Router();
+const router = Router();
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

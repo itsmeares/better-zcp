@@ -1,8 +1,8 @@
 import { pathToFileURL } from "node:url";
-import type {
-  Request as ExpressRequest,
-  Response as ExpressResponse,
-} from "express";
+import { createRequire } from "node:module";
+import type { ServerResponse } from "node:http";
+import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
 
 export type TanStackStartHandler = {
   fetch(request: Request): Response | Promise<Response>;
@@ -11,30 +11,45 @@ export type TanStackStartHandler = {
 export async function loadTanStackStartHandler(
   filePath: string,
 ): Promise<TanStackStartHandler> {
-  const module = (await import(pathToFileURL(filePath).href)) as {
+  const module = (typeof process.pkg !== "undefined"
+    ? createRequire(import.meta.url)(filePath)
+    : await import(pathToFileURL(filePath).href)) as {
     default?: unknown;
   };
   const handler = module.default as Partial<TanStackStartHandler> | undefined;
   if (!handler || typeof handler.fetch !== "function") {
     throw new Error(
-      `TanStack Start server bundle has no fetch handler: ${filePath}`,
+      "TanStack Start server bundle has no fetch handler: " + filePath,
     );
   }
   return handler as TanStackStartHandler;
 }
 
-export function toTanStackStartRequest(req: ExpressRequest): Request {
+type RequestLike = {
+  method?: string;
+  headers: Record<string, string | string[] | undefined>;
+  originalUrl?: string;
+  url?: string;
+  body?: unknown;
+  socket?: { remoteAddress?: string; encrypted?: boolean };
+  ip?: string;
+  protocol?: string;
+  secure?: boolean;
+  app?: { get?: (name: string) => unknown };
+  get?: (name: string) => string | undefined;
+  on?: (...args: any[]) => unknown;
+};
+
+export function toTanStackStartRequest(req: RequestLike): Request {
+  const method = req.method || "GET";
   const headers = new Headers();
   for (const [name, value] of Object.entries(req.headers)) {
     if (value === undefined) continue;
     for (const item of Array.isArray(value) ? value : [value]) {
-      headers.append(name, item);
+      headers.append(name, String(item));
     }
   }
 
-  // These headers are written by the trusted Express adapter, never accepted
-  // from the incoming request. Start uses them for the few policies that need
-  // connection metadata which the Fetch Request API does not expose.
   headers.delete("x-panel-remote-address");
   headers.delete("x-panel-client-ip");
   headers.delete("x-panel-trust-proxy");
@@ -46,17 +61,25 @@ export function toTanStackStartRequest(req: ExpressRequest): Request {
     headers.set("x-panel-trust-proxy", "1");
   }
 
-  const protocol = req.protocol || "http";
-  const host = req.get("host") || "localhost";
-  const url = new URL(req.originalUrl || req.url, `${protocol}://${host}`);
-  const body =
-    req.method === "GET" || req.method === "HEAD" || req.body === undefined
-      ? undefined
-      : Buffer.isBuffer(req.body)
+  const protocol = req.protocol || (req.socket?.encrypted ? "https" : "http");
+  const host = req.get?.("host") || req.headers.host || "localhost";
+  const url = new URL(
+    req.originalUrl || req.url || "/",
+    protocol + "://" + host,
+  );
+  const isBodyless = method === "GET" || method === "HEAD";
+  const hasParsedBody = Object.prototype.hasOwnProperty.call(req, "body");
+  const body = isBodyless || (hasParsedBody && req.body === undefined)
+    ? undefined
+    : hasParsedBody
+      ? Buffer.isBuffer(req.body)
         ? req.body.toString("utf8")
         : typeof req.body === "string"
           ? req.body
-          : JSON.stringify(req.body);
+          : JSON.stringify(req.body)
+      : req.on
+        ? Readable.toWeb(req as unknown as Readable) as unknown as BodyInit
+        : undefined;
 
   if (body !== undefined) {
     headers.delete("content-length");
@@ -64,15 +87,23 @@ export function toTanStackStartRequest(req: ExpressRequest): Request {
   }
 
   return new Request(url, {
-    method: req.method,
+    method,
     headers,
-    ...(body === undefined ? {} : { body }),
+    ...(body === undefined ? {} : { body, duplex: "half" as const }),
   });
 }
 
+type ResponseLike = {
+  setHeader(name: string, value: unknown): void;
+  statusCode?: number;
+  status?: (code: number) => any;
+  send?: (body?: unknown) => any;
+  end?: (body?: unknown) => any;
+};
+
 export async function sendTanStackStartResponse(
   response: Response,
-  res: ExpressResponse,
+  res: ResponseLike | ServerResponse,
 ): Promise<void> {
   const setCookies = (
     response.headers as Headers & { getSetCookie?: () => string[] }
@@ -84,5 +115,17 @@ export async function sendTanStackStartResponse(
   });
   if (setCookies?.length) res.setHeader("set-cookie", setCookies);
 
-  res.status(response.status).send(Buffer.from(await response.arrayBuffer()));
+  if ("status" in res && typeof res.status === "function" && "send" in res && typeof res.send === "function") {
+    res.status(response.status).send(Buffer.from(await response.arrayBuffer()));
+    return;
+  }
+  res.statusCode = response.status;
+  if (!response.body) {
+    res.end?.();
+    return;
+  }
+  await pipeline(
+    Readable.fromWeb(response.body as any),
+    res as unknown as NodeJS.WritableStream,
+  );
 }

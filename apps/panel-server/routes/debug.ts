@@ -1,5 +1,5 @@
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
-import express from "express";
+import { Router } from "../http/legacyRouter.ts";
 import os from "os";
 import v8 from "v8";
 import fs from "fs";
@@ -77,7 +77,7 @@ import { Transform } from "stream";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const router = express.Router();
+const router = Router();
 
 type AnyRecord = Record<string, any>;
 

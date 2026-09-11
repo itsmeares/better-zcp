@@ -7,9 +7,8 @@ import {
 import { parseClampedInteger } from '../../../panel-server/utils/queryNumbers.ts'
 
 // Preserve the legacy HTTP contract for integrations while the panel UI uses
-// typed Server Functions. Streaming and binary APIs intentionally stay in Express.
-// The compatibility route calls the shared server-only implementations directly;
-// the compiler-generated RPC executor is reserved for the client transport.
+// typed Server Functions. The remaining legacy handlers run through the
+// native Node adapter after the Express host is removed.
 type AnyRecord = Record<string, any>
 
 type AuthenticatedUser = {

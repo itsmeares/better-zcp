@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from "../http/legacyRouter.ts";
 import { randomUUID } from "node:crypto";
 import path from "path";
 import fs from "fs";
@@ -25,7 +25,7 @@ import {
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 const log = createLogger("API:Backup");
 
-const router = express.Router();
+const router = Router();
 const requireAnyBackupCapability = requireAnyPermission(
   "backups.manage",
   "backups.download",

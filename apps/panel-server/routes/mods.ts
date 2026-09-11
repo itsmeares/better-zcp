@@ -1,4 +1,4 @@
-import express, { type Request, type Response } from "express";
+import { Router, type Request, type Response } from "../http/legacyRouter.ts";
 import path from "path";
 import fs from "fs";
 import { promises as fsp } from "fs";
@@ -57,7 +57,7 @@ import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.ts";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 
-const router = express.Router();
+const router = Router();
 type AnyRecord = Record<string, any>;
 
 const requireModsManage = requirePermission("mods.manage");

@@ -1,4 +1,4 @@
-import express, { type NextFunction, type Request, type Response } from "express";
+import { Router, type NextFunction, type Request, type Response } from "../http/legacyRouter.ts";
 import { randomUUID } from "node:crypto";
 import fs from "fs";
 import path from "path";
@@ -29,7 +29,7 @@ import { ErrorCode } from "../utils/errorCodes.ts";
 
 export { normalizeUserPath, getCandidateZomboidPaths, invalidateMapFolderScan };
 
-const router = express.Router();
+const router = Router();
 
 type AnyRecord = Record<string, any>;
 type Chunk = AnyRecord;
@@ -47,11 +47,6 @@ declare global {
     code?: string | null;
   }
 
-  namespace Express {
-    interface Request {
-      user?: { role?: string } | null;
-    }
-  }
 }
 
 function errorMessage(error: unknown): string {

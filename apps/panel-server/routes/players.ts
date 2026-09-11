@@ -1,5 +1,5 @@
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
-import express, { type Request } from "express";
+import { Router, type Request } from "../http/legacyRouter.ts";
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Players');
 import {
@@ -28,7 +28,7 @@ import {
   listPlayerExports,
 } from '../services/playerExports.ts';
 
-const router = express.Router();
+const router = Router();
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
