@@ -214,6 +214,48 @@ const mocks = vi.hoisted(() => {
       "deleteServerConfigTemplate",
     ].map((name) => [name, serverFunction(name)]),
   );
+  const bridge = Object.fromEntries(
+    ["sendPanelBridgeCommand", "getPanelBridgeCommands"].map((name) => [
+      name,
+      serverFunction(name),
+    ]),
+  );
+  const bridgeSetup = Object.fromEntries(
+    [
+      "getPanelBridgeStatus",
+      "pingPanelBridge",
+      "sendPanelBridgeSetupCommand",
+    ].map((name) => [name, serverFunction(name)]),
+  );
+  const bridgeWorld = Object.fromEntries(
+    [
+      "sendPanelBridgeWorldCommand",
+      "getPanelBridgeServerInfo",
+      "savePanelBridgeWorld",
+    ].map((name) => [name, serverFunction(name)]),
+  );
+  const bridgeEffects = {
+    sendPanelBridgeEndangerCommand: serverFunction(
+      "sendPanelBridgeEndangerCommand",
+    ),
+    getPanelBridgeCatalog: serverFunction("getPanelBridgeCatalog"),
+    scanPanelBridgeCatalog: serverFunction("scanPanelBridgeCatalog"),
+  };
+  const bridgePlayer = Object.fromEntries(
+    [
+      "sendPanelBridgePlayerCommand",
+      "sendPanelBridgeServerMessage",
+      "getPanelBridgeChatInfo",
+      "sendPanelBridgeAdminChat",
+      "sendPanelBridgeGeneralChat",
+      "sendPanelBridgeChatAlert",
+    ].map((name) => [name, serverFunction(name)]),
+  );
+  const bridgeDiagnostics = {
+    sendPanelBridgeDiagnosticsCommand: serverFunction(
+      "sendPanelBridgeDiagnosticsCommand",
+    ),
+  };
 
   return {
     authenticate: vi.fn(),
@@ -226,6 +268,12 @@ const mocks = vi.hoisted(() => {
     mods,
     system,
     fileReads,
+    bridge,
+    bridgeSetup,
+    bridgeWorld,
+    bridgeEffects,
+    bridgePlayer,
+    bridgeDiagnostics,
   };
 });
 
@@ -249,6 +297,27 @@ vi.mock(
 vi.mock("../../panel-client/src/lib/serverMods.ts", () => mocks.mods);
 vi.mock("../../panel-client/src/lib/serverSystem.ts", () => mocks.system);
 vi.mock("../../panel-client/src/lib/serverFileReads.ts", () => mocks.fileReads);
+vi.mock("../../panel-client/src/lib/serverPanelBridge.ts", () => mocks.bridge);
+vi.mock(
+  "../../panel-client/src/lib/serverPanelBridgeSetup.ts",
+  () => mocks.bridgeSetup,
+);
+vi.mock(
+  "../../panel-client/src/lib/serverPanelBridgeWorld.ts",
+  () => mocks.bridgeWorld,
+);
+vi.mock(
+  "../../panel-client/src/lib/serverPanelBridgeEffects.ts",
+  () => mocks.bridgeEffects,
+);
+vi.mock(
+  "../../panel-client/src/lib/serverPanelBridgePlayerChat.ts",
+  () => mocks.bridgePlayer,
+);
+vi.mock(
+  "../../panel-client/src/lib/serverPanelBridgeDiagnostics.ts",
+  () => mocks.bridgeDiagnostics,
+);
 
 const { handleStartApiCompatibilityRequest } =
   await import("../../panel-client/src/lib/startApiCompatibility.ts");
@@ -444,6 +513,98 @@ const CREATED_ROUTES = [
   ["POST", "/api/servers", "createManagedServer"],
 ];
 
+const PANEL_BRIDGE_ROUTES = [
+  ["GET", "/api/panel-bridge/status", "getPanelBridgeStatus"],
+  ["POST", "/api/panel-bridge/auto-configure", "sendPanelBridgeSetupCommand"],
+  ["GET", "/api/panel-bridge/scan-server/server-1", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/auto-detect", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/configure", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/configure-direct", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/sftp/test", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/sftp/configure", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/sftp/logs/list", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/sftp/logs/tail", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/sftp/config/list", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/start", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/stop", "sendPanelBridgeSetupCommand"],
+  ["GET", "/api/panel-bridge/scan-paths", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/refresh", "sendPanelBridgeSetupCommand"],
+  ["GET", "/api/panel-bridge/ping", "pingPanelBridge"],
+  ["POST", "/api/panel-bridge/command", "sendPanelBridgeCommand"],
+  ["GET", "/api/panel-bridge/weather", "sendPanelBridgeWorldCommand"],
+  ["GET", "/api/panel-bridge/server-info", "getPanelBridgeServerInfo"],
+  ["POST", "/api/panel-bridge/weather/blizzard", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/weather/tropical-storm", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/weather/storm", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/weather/stop", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/weather/generate", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/weather/snow", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/weather/rain/start", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/weather/rain/stop", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/weather/lightning", "sendPanelBridgeWorldCommand"],
+  ["GET", "/api/panel-bridge/climate/floats", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/climate/float", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/climate/reset", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/climate/temperature", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/climate/wind", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/climate/fog", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/climate/clouds", "sendPanelBridgeWorldCommand"],
+  ["GET", "/api/panel-bridge/time", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/time", "sendPanelBridgeWorldCommand"],
+  ["GET", "/api/panel-bridge/world/stats", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/world/save", "savePanelBridgeWorld"],
+  ["GET", "/api/panel-bridge/players", "sendPanelBridgePlayerCommand"],
+  ["GET", "/api/panel-bridge/players/Alice", "sendPanelBridgePlayerCommand"],
+  ["POST", "/api/panel-bridge/players/Alice/teleport", "sendPanelBridgePlayerCommand"],
+  ["POST", "/api/panel-bridge/message", "sendPanelBridgeServerMessage"],
+  ["GET", "/api/panel-bridge/sandbox", "sendPanelBridgeWorldCommand"],
+  ["GET", "/api/panel-bridge/commands", "getPanelBridgeCommands"],
+  ["GET", "/api/panel-bridge/mod-path", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/install-local", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/install-mod-auto", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/install-mod", "sendPanelBridgeSetupCommand"],
+  ["POST", "/api/panel-bridge/sound/world", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/sound/near-player", "sendPanelBridgeEndangerCommand"],
+  ["POST", "/api/panel-bridge/sound/gunshot", "sendPanelBridgeEndangerCommand"],
+  ["POST", "/api/panel-bridge/sound/alarm", "sendPanelBridgeEndangerCommand"],
+  ["POST", "/api/panel-bridge/sound/noise", "sendPanelBridgeEndangerCommand"],
+  ["GET", "/api/panel-bridge/utilities/status", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/utilities/restore", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/utilities/shutoff", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/character/export", "sendPanelBridgePlayerCommand"],
+  ["POST", "/api/panel-bridge/character/import", "sendPanelBridgePlayerCommand"],
+  ["POST", "/api/panel-bridge/players/Alice/give-item", "sendPanelBridgePlayerCommand"],
+  ["POST", "/api/panel-bridge/players/Alice/heal", "sendPanelBridgePlayerCommand"],
+  ["POST", "/api/panel-bridge/players/Alice/kill", "sendPanelBridgePlayerCommand"],
+  ["POST", "/api/panel-bridge/players/Alice/godmode", "sendPanelBridgePlayerCommand"],
+  ["POST", "/api/panel-bridge/players/Alice/invisible", "sendPanelBridgePlayerCommand"],
+  ["GET", "/api/panel-bridge/zombies/count", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/zombies/clear-near-player", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/zombies/clear-all", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/zombies/spawn-near", "sendPanelBridgeEndangerCommand"],
+  ["POST", "/api/panel-bridge/zombies/spawn-behind", "sendPanelBridgeEndangerCommand"],
+  ["POST", "/api/panel-bridge/visual/view-distance", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/visual/daylight", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/visual/night-strength", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/visual/desaturation", "sendPanelBridgeWorldCommand"],
+  ["POST", "/api/panel-bridge/visual/ambient", "sendPanelBridgeWorldCommand"],
+  ["GET", "/api/panel-bridge/chat/info", "getPanelBridgeChatInfo"],
+  ["POST", "/api/panel-bridge/chat/admin", "sendPanelBridgeAdminChat"],
+  ["POST", "/api/panel-bridge/chat/general", "sendPanelBridgeGeneralChat"],
+  ["POST", "/api/panel-bridge/chat/alert", "sendPanelBridgeChatAlert"],
+  ["GET", "/api/panel-bridge/debug/log", "sendPanelBridgeDiagnosticsCommand"],
+  ["GET", "/api/panel-bridge/debug/stats", "sendPanelBridgeDiagnosticsCommand"],
+  ["POST", "/api/panel-bridge/debug/mode", "sendPanelBridgeDiagnosticsCommand"],
+  ["GET", "/api/panel-bridge/debug/api", "sendPanelBridgeDiagnosticsCommand"],
+  ["GET", "/api/panel-bridge/debug/handlers", "sendPanelBridgeDiagnosticsCommand"],
+  ["POST", "/api/panel-bridge/debug/clear-errors", "sendPanelBridgeDiagnosticsCommand"],
+  ["GET", "/api/panel-bridge/catalog/items", "getPanelBridgeCatalog"],
+  ["GET", "/api/panel-bridge/catalog/vehicles", "getPanelBridgeCatalog"],
+  ["POST", "/api/panel-bridge/catalog/scan-items", "scanPanelBridgeCatalog"],
+  ["POST", "/api/panel-bridge/catalog/scan-vehicles", "scanPanelBridgeCatalog"],
+  ["POST", "/api/panel-bridge/catalog/debug-item-script", "sendPanelBridgeDiagnosticsCommand"],
+];
+
 beforeEach(() => {
   mocks.authenticate.mockReset().mockResolvedValue({
     ok: true,
@@ -469,8 +630,10 @@ beforeEach(() => {
       "players.view",
       "players.moderate",
       "players.gm_tools",
-      "players.endanger_or_impersonate",
-    ]);
+    "players.endanger_or_impersonate",
+    "bridge.setup",
+    "bridge.diagnostics",
+  ]);
   for (const fn of [
     ...Object.values(mocks.control),
     ...Object.values(mocks.resources),
@@ -480,6 +643,12 @@ beforeEach(() => {
     ...Object.values(mocks.mods),
     ...Object.values(mocks.system),
     ...Object.values(mocks.fileReads),
+    ...Object.values(mocks.bridge),
+    ...Object.values(mocks.bridgeSetup),
+    ...Object.values(mocks.bridgeWorld),
+    ...Object.values(mocks.bridgeEffects),
+    ...Object.values(mocks.bridgePlayer),
+    ...Object.values(mocks.bridgeDiagnostics),
   ]) {
     fn.mockClear();
   }
@@ -606,6 +775,60 @@ describe("Start compatibility server and player routes", () => {
       });
     },
   );
+
+  it.each(PANEL_BRIDGE_ROUTES)(
+    "dispatches PanelBridge %s %s to %s",
+    async (method, path, functionName) => {
+      const response = await handleStartApiCompatibilityRequest(
+        makeRequest(method, path),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await responseBody(response)).toEqual({
+        handledBy: functionName,
+        data: expect.anything(),
+      });
+    },
+  );
+
+  it("keeps PanelBridge command and action payloads separate", async () => {
+    const command = await handleStartApiCompatibilityRequest(
+      makeRequest("POST", "/api/panel-bridge/command", {
+        action: "getStats",
+        args: { limit: 10 },
+      }),
+    );
+    expect(await responseBody(command)).toEqual({
+      handledBy: "sendPanelBridgeCommand",
+      data: { action: "getStats", args: { limit: 10 } },
+    });
+
+    const world = await handleStartApiCompatibilityRequest(
+      makeRequest("POST", "/api/panel-bridge/weather/storm", {
+        duration: 2,
+      }),
+    );
+    expect(await responseBody(world)).toEqual({
+      handledBy: "sendPanelBridgeWorldCommand",
+      data: { action: "triggerStorm", args: { duration: 2 } },
+    });
+  });
+
+  it("keeps the legacy PanelBridge ping and command catalog outside the capability matrix", async () => {
+    mocks.getCapabilities.mockResolvedValue([]);
+
+    const ping = await handleStartApiCompatibilityRequest(
+      makeRequest("GET", "/api/panel-bridge/ping"),
+    );
+    const commands = await handleStartApiCompatibilityRequest(
+      makeRequest("GET", "/api/panel-bridge/commands"),
+    );
+
+    expect(ping.status).toBe(200);
+    expect(commands.status).toBe(200);
+    expect(mocks.authenticate).toHaveBeenCalledTimes(2);
+    expect(mocks.getCapabilities).not.toHaveBeenCalled();
+  });
 
   it("preserves query and JSON body data for legacy callers", async () => {
     const activity = await handleStartApiCompatibilityRequest(

@@ -978,6 +978,208 @@ async function scanBridgePaths(): Promise<AnyRecord> {
   }
 }
 
+async function getModPathBridge(): Promise<AnyRecord> {
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const { resolveSourcePath } =
+    await import('../../../panel-server/services/panelBridgeInstaller.ts')
+  const sourcePath = resolveSourcePath()
+  const candidates: string[] = []
+  if (sourcePath) {
+    candidates.push(
+      path.join(path.dirname(sourcePath), '..', '..', '..'),
+    )
+  }
+  candidates.push(
+    path.join(process.cwd(), 'integrations', 'panelbridge', 'PanelBridge'),
+    path.join(path.dirname(process.execPath), 'pz-mod', 'PanelBridge'),
+    path.join(process.cwd(), 'pz-mod', 'PanelBridge'),
+  )
+  let modPath = candidates[0]
+  let exists = false
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) continue
+    modPath = candidate
+    exists = true
+    break
+  }
+  let suggestedInstallPath: string | null = null
+  try {
+    const { getActiveServer } =
+      await import('../../../panel-server/database/init.ts')
+    const activeServer = await getActiveServer()
+    if (activeServer?.installPath) {
+      suggestedInstallPath = path.join(
+        activeServer.installPath,
+        'media',
+        'lua',
+        'server',
+      )
+    }
+  } catch {
+    // Optional metadata should not make the source lookup fail.
+  }
+  return {
+    modPath,
+    exists,
+    files: exists ? fs.readdirSync(modPath) : [],
+    suggestedInstallPath,
+  }
+}
+
+async function installLocalBridge(errorCodes: AnyRecord): Promise<AnyRecord> {
+  try {
+    const { getActiveServer } =
+      await import('../../../panel-server/database/init.ts')
+    const { canAutoInstall, installBridge } =
+      await import('../../../panel-server/services/panelBridgeInstaller.ts')
+    const server = await getActiveServer()
+    if (!server) {
+      throwSetupError(
+        Object.assign(new Error('No active server configured.'), {
+          status: 400,
+          code: errorCodes.PANELBRIDGE_NO_ACTIVE_SERVER,
+          success: false,
+        }),
+        400,
+      )
+    }
+    if (!canAutoInstall(server)) {
+      throwSetupError(
+        Object.assign(
+          new Error(
+            'Auto-install is not available for this server. It must be a local (non-remote) server with a writable install path and the PanelBridge source present.',
+          ),
+          {
+            status: 400,
+            code: errorCodes.PANELBRIDGE_AUTO_INSTALL_NOT_AVAILABLE,
+            success: false,
+          },
+        ),
+        400,
+      )
+    }
+    const result = installBridge(server)
+    if (!result.success) {
+      throwSetupError(Object.assign(new Error(result.error), { status: 500 }), 500)
+    }
+    return {
+      ...result,
+      message: `PanelBridge installed to ${result.targetPath}`,
+      serverName: server.serverName || server.name,
+    }
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      typeof (error as { status?: unknown }).status === 'number'
+    ) {
+      throw error
+    }
+    return throwSanitized(error, 500)
+  }
+}
+
+async function installModBridge(
+  args: AnyRecord,
+  errorCodes: AnyRecord,
+): Promise<AnyRecord> {
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const targetPath = args.serverLuaPath || args.serverModsPath
+  if (!targetPath) {
+    invalid(
+      'serverLuaPath is required (path to media/lua/server/)',
+      errorCodes.PANELBRIDGE_SERVER_LUA_PATH_REQUIRED,
+    )
+  }
+  if (typeof targetPath !== 'string' || targetPath.length > 500) {
+    invalid(
+      'Invalid path format',
+      errorCodes.PANELBRIDGE_SERVER_LUA_PATH_FORMAT_INVALID,
+    )
+  }
+  if (!path.isAbsolute(targetPath)) {
+    invalid(
+      'Must be an absolute path',
+      errorCodes.PANELBRIDGE_SERVER_LUA_PATH_NOT_ABSOLUTE,
+    )
+  }
+
+  const resolvedTarget = path.resolve(targetPath)
+  const normalizedTarget = resolvedTarget.replace(/\\/g, '/')
+  if (!normalizedTarget.toLowerCase().endsWith('/media/lua/server')) {
+    invalid(
+      'Path must point to a media/lua/server/ directory',
+      errorCodes.PANELBRIDGE_SERVER_LUA_PATH_WRONG_DIRECTORY,
+    )
+  }
+
+  let allowedTarget: string | null = null
+  try {
+    const [{ getServers }, { resolveInstallDir }] = await Promise.all([
+      import('../../../panel-server/database/init.ts'),
+      import('../../../panel-server/services/panelBridgeInstaller.ts'),
+    ])
+    const normalise = (value: string) => {
+      const resolved = path.resolve(value)
+      return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+    }
+    for (const server of await getServers()) {
+      if (server?.isRemote) continue
+      const installDir = resolveInstallDir(server)
+      if (!installDir || !path.isAbsolute(installDir)) continue
+      let canonicalInstallDir: string
+      try {
+        canonicalInstallDir = fs.realpathSync(installDir)
+      } catch {
+        continue
+      }
+      const candidate = path.join(canonicalInstallDir, 'media', 'lua', 'server')
+      if (normalise(candidate) === normalise(resolvedTarget)) {
+        allowedTarget = candidate
+        break
+      }
+    }
+  } catch {
+    // A path is never accepted when the configured-server allowlist cannot be read.
+  }
+  if (!allowedTarget) {
+    invalid(
+      'Path must match the media/lua/server directory of a configured local server',
+      errorCodes.PANELBRIDGE_SERVER_LUA_PATH_NOT_CONFIGURED,
+    )
+  }
+
+  const [{ getEmbeddedPanelBridgeLua, writeLuaAtomic }, { resolveSourcePath }] =
+    await Promise.all([
+      import('../../../panel-server/utils/embeddedLua.ts'),
+      import('../../../panel-server/services/panelBridgeInstaller.ts'),
+    ])
+  let sourceContent = getEmbeddedPanelBridgeLua()
+  if (!sourceContent) {
+    const sourcePath = resolveSourcePath()
+    if (sourcePath) sourceContent = fs.readFileSync(sourcePath, 'utf8')
+  }
+  if (!sourceContent) {
+    throwSetupError(
+      Object.assign(
+        new Error('Source mod not found (no embedded Lua and no on-disk pz-mod).'),
+        { status: 404, code: errorCodes.PANELBRIDGE_SOURCE_MOD_NOT_FOUND },
+      ),
+      404,
+    )
+  }
+  fs.mkdirSync(allowedTarget, { recursive: true, mode: 0o755 })
+  const destination = path.join(allowedTarget, 'PanelBridge.lua')
+  writeLuaAtomic(destination, sourceContent)
+  return {
+    success: true,
+    message: 'PanelBridge.lua installed successfully',
+    path: destination,
+  }
+}
+
 async function installModAutomatically(
   args: AnyRecord,
   errorCodes: AnyRecord,
@@ -1121,6 +1323,12 @@ async function executeSetupAction(data: AnyRecord): Promise<unknown> {
     }
     case 'scanPaths':
       return scanBridgePaths()
+    case 'getModPath':
+      return getModPathBridge()
+    case 'installLocal':
+      return installLocalBridge(ErrorCode)
+    case 'installMod':
+      return installModBridge(args, ErrorCode)
     case 'installModAuto':
       return installModAutomatically(args, ErrorCode)
     default:
@@ -1156,3 +1364,9 @@ export const sendPanelBridgeSetupCommand = createServerFn({ method: 'POST' })
   .middleware(setupMiddleware())
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeSetupAction(data)) as any)
+
+;(getPanelBridgeStatus as any).__executeImplementation = getStatus
+;(pingPanelBridge as any).__executeImplementation = ping
+;(sendPanelBridgeSetupCommand as any).__executeImplementation = (
+  data: unknown,
+) => executeSetupAction(record(data))

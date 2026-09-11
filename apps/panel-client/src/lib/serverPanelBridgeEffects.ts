@@ -344,3 +344,11 @@ export const scanPanelBridgeCatalog = createServerFn({ method: 'POST' })
   .middleware(capabilityMiddleware('bridge.diagnostics'))
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeCatalogScan(data)) as any)
+
+;(sendPanelBridgeEndangerCommand as any).__executeImplementation = (
+  data: unknown,
+) => executeEndangerAction(record(data))
+;(getPanelBridgeCatalog as any).__executeImplementation = (data: unknown) =>
+  executeCatalogRead(record(data))
+;(scanPanelBridgeCatalog as any).__executeImplementation = (data: unknown) =>
+  executeCatalogScan(record(data))

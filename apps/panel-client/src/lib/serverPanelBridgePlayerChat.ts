@@ -67,12 +67,16 @@ async function panelRuntime(): Promise<AnyRecord> {
 
 async function withBridge<T>(
   operation: (bridge: AnyRecord) => Promise<T>,
+  notRunningCode?: string,
 ): Promise<T> {
   try {
     const bridge = (await panelRuntime()).panelBridge as AnyRecord
     if (!bridge.isRunning) {
       const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
-      invalid('Bridge not running. Start it first.', ErrorCode.BRIDGE_NOT_RUNNING)
+      invalid(
+        'Bridge not running. Start it first.',
+        notRunningCode ?? ErrorCode.BRIDGE_NOT_RUNNING,
+      )
     }
     return await operation(bridge)
   } catch (error) {
@@ -196,7 +200,140 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
       const player = username()
       return withBridge((bridge) =>
         bridge.sendCommand('killPlayer', { username: player }),
+        ErrorCode.BRIDGE_NOT_RUNNING_BARE,
       )
+    }
+    case 'healPlayer': {
+      const player = username()
+      return withBridge(
+        (bridge) => bridge.sendCommand('healPlayer', { username: player }),
+        ErrorCode.BRIDGE_NOT_RUNNING_BARE,
+      )
+    }
+    case 'giveItem': {
+      const player = username()
+      const { itemType, count = 1 } = args
+      if (
+        typeof itemType !== 'string' ||
+        !/^[a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z][a-zA-Z0-9_]*$/.test(itemType)
+      ) {
+        invalid(
+          'itemType must be in Module.ItemName format (e.g., "Base.Axe")',
+        )
+      }
+      if (typeof count !== 'number' || !Number.isFinite(count) || count < 1 || count > 100) {
+        invalid(
+          'count must be 1-100',
+          ErrorCode.PANELBRIDGE_HORDE_COUNT_INVALID,
+        )
+      }
+      return withBridge(
+        (bridge) => bridge.sendCommand('giveItem', { username: player, itemType, count }),
+        ErrorCode.BRIDGE_NOT_RUNNING_BARE,
+      )
+    }
+    case 'setGodMode':
+    case 'setInvisible': {
+      const player = username()
+      if (typeof args.enabled !== 'boolean') invalid('enabled must be a boolean')
+      return withBridge(
+        (bridge) => bridge.sendCommand(action, {
+          username: player,
+          enabled: args.enabled === true,
+        }),
+        ErrorCode.BRIDGE_NOT_RUNNING_BARE,
+      )
+    }
+    case 'exportPlayerData': {
+      const player = username()
+      return withBridge(
+        (bridge) => bridge.sendCommand('exportPlayerData', { username: player }),
+        ErrorCode.BRIDGE_NOT_RUNNING,
+      )
+    }
+    case 'importPlayerData': {
+      const player = username()
+      const characterData = args.data
+      if (!characterData) {
+        invalid(
+          'Character data is required',
+          ErrorCode.PANELBRIDGE_CHARACTER_DATA_REQUIRED,
+        )
+      }
+      if (
+        typeof characterData !== 'object' ||
+        Array.isArray(characterData)
+      ) {
+        invalid(
+          'Character data must be an object',
+          ErrorCode.PANELBRIDGE_CHARACTER_DATA_NOT_OBJECT,
+        )
+      }
+      const validSections = [
+        'perks',
+        'xp',
+        'skills',
+        'traits',
+        'recipes',
+        'stats',
+        'inventory',
+        'wornItems',
+      ]
+      if (!validSections.some((section) => characterData[section] !== undefined)) {
+        invalid(
+          `Character data must contain at least one of: ${validSections.join(', ')}`,
+          ErrorCode.PANELBRIDGE_CHARACTER_DATA_NO_VALID_SECTION,
+          { sections: validSections.join(', ') },
+        )
+      }
+
+      const snapshot = (await withBridge(
+        (bridge) => bridge.sendCommand('exportPlayerData', { username: player }),
+      ).catch((error) => {
+        throwBridgeError(
+          Object.assign(
+            new Error(
+              `Could not snapshot ${player}'s current data before import — refusing to overwrite without a recovery copy: ${errorMessage(error)}`,
+            ),
+            { status: 502 },
+          ),
+          502,
+        )
+      })) as AnyRecord
+      const fs = await import('node:fs')
+      const path = await import('node:path')
+      const { getDataPaths } = await import('../../../panel-server/utils/paths.ts')
+      const safeUsername = path.basename(player.replace(/[^a-zA-Z0-9_-]/g, '_'))
+      const exportDir = path.join(getDataPaths().dataDir, 'exports', safeUsername)
+      fs.mkdirSync(exportDir, { recursive: true })
+      const snapshotBaseName = `${safeUsername}_pre-import_${new Date()
+        .toISOString()
+        .replace(/[:.]/g, '-')}`
+      const snapshotContents = JSON.stringify(snapshot.data ?? snapshot, null, 2)
+      let snapshotFile = ''
+      for (let collision = 1; ; collision += 1) {
+        const suffix = collision === 1 ? '' : `-${collision}`
+        snapshotFile = `${snapshotBaseName}${suffix}.json`
+        try {
+          const descriptor = fs.openSync(path.join(exportDir, snapshotFile), 'wx')
+          try {
+            fs.writeFileSync(descriptor, snapshotContents)
+          } finally {
+            fs.closeSync(descriptor)
+          }
+          break
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        }
+      }
+      const result = await withBridge(
+        (bridge) => bridge.sendCommand('importPlayerData', {
+          username: player,
+          data: characterData,
+          options: args.options,
+        }),
+      )
+      return { ...record(result), snapshotFile }
     }
     default:
       invalid('Unknown or invalid action', ErrorCode.PANELBRIDGE_UNKNOWN_ACTION)
@@ -393,6 +530,17 @@ async function executeChatAlert(data: AnyRecord): Promise<unknown> {
   )
 }
 
+async function sendServerMessageImplementation(data: AnyRecord): Promise<unknown> {
+  const message = requiredMessage(data)
+  return withBridge((bridge) =>
+    bridge.sendCommand('sendToServerChat', { message, isAlert: true }),
+  )
+}
+
+async function getChatInfoImplementation(): Promise<unknown> {
+  return withBridge((bridge) => bridge.sendCommand('getChatInfo', {}))
+}
+
 export const sendPanelBridgePlayerCommand = createServerFn({ method: 'POST' })
   .middleware(capabilityMiddleware('players.gm_tools'))
   .validator((data: unknown) => record(data))
@@ -401,19 +549,12 @@ export const sendPanelBridgePlayerCommand = createServerFn({ method: 'POST' })
 export const sendPanelBridgeServerMessage = createServerFn({ method: 'POST' })
   .middleware(capabilityMiddleware('server.world_events'))
   .validator((data: unknown) => record(data))
-  .handler(async ({ data }) => {
-    const message = requiredMessage(data)
-    return (await withBridge((bridge) =>
-      bridge.sendCommand('sendToServerChat', { message, isAlert: true }),
-    )) as any
-  })
+  .handler(async ({ data }) => (await sendServerMessageImplementation(data)) as any)
 
 export const getPanelBridgeChatInfo = createServerFn({ method: 'GET' })
   .middleware(capabilityMiddleware('server.world_events'))
   .validator((data: unknown) => record(data))
-  .handler(async () =>
-    (await withBridge((bridge) => bridge.sendCommand('getChatInfo', {}))) as any,
-  )
+  .handler(async () => (await getChatInfoImplementation()) as any)
 
 export const sendPanelBridgeAdminChat = createServerFn({ method: 'POST' })
   .middleware(capabilityMiddleware('players.endanger_or_impersonate'))
@@ -429,3 +570,17 @@ export const sendPanelBridgeChatAlert = createServerFn({ method: 'POST' })
   .middleware(capabilityMiddleware('server.world_events'))
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeChatAlert(data)) as any)
+
+;(sendPanelBridgePlayerCommand as any).__executeImplementation = (data: unknown) =>
+  executePlayerAction(record(data))
+;(sendPanelBridgeServerMessage as any).__executeImplementation = (
+  data: unknown,
+) => sendServerMessageImplementation(record(data))
+;(getPanelBridgeChatInfo as any).__executeImplementation =
+  getChatInfoImplementation
+;(sendPanelBridgeAdminChat as any).__executeImplementation = (data: unknown) =>
+  executeAdminChat(record(data))
+;(sendPanelBridgeGeneralChat as any).__executeImplementation = (data: unknown) =>
+  executeGeneralChat(record(data))
+;(sendPanelBridgeChatAlert as any).__executeImplementation = (data: unknown) =>
+  executeChatAlert(record(data))

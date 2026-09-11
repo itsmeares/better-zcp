@@ -172,6 +172,8 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
       return withBridge(false, (bridge) => bridge.getGameTime())
     case 'getWorldStats':
       return withBridge(false, (bridge) => bridge.getWorldStats())
+    case 'getSandboxOptions':
+      return withBridge(false, (bridge) => bridge.getSandboxOptions())
     case 'getUtilitiesStatus':
       return withBridge(false, (bridge) =>
         bridge.sendCommand('getUtilitiesStatus', {}),
@@ -345,6 +347,50 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
       )
     case 'resetClimateOverrides':
       return withBridge(false, (bridge) => bridge.resetClimateOverrides())
+    case 'setTemperature':
+      if (
+        args.value !== undefined &&
+        !isNumberInRange(args.value, -50, 50)
+      ) {
+        invalid(
+          'value must be a number -50 to 50',
+          ErrorCode.PANELBRIDGE_TEMPERATURE_VALUE_INVALID,
+        )
+      }
+      return withBridge(false, (bridge) =>
+        bridge.setTemperature(args.value ?? 22),
+      )
+    case 'setWind':
+    case 'setFog':
+    case 'setClouds':
+      if (
+        args.value !== undefined &&
+        !isNumberInRange(args.value, 0, 1)
+      ) {
+        invalid(
+          'value must be a number 0-1',
+          ErrorCode.BRIDGE_VALUE_MUST_BE_NUMBER_0_1,
+        )
+      }
+      return withBridge(false, (bridge) =>
+        bridge[action](
+          args.value ?? (action === 'setWind' ? 0.5 : 0),
+        ),
+      )
+    case 'setViewDistance':
+    case 'setDayLight':
+    case 'setNightStrength':
+    case 'setDesaturation':
+    case 'setAmbient':
+      if (typeof args.value !== 'number' || !Number.isFinite(args.value)) {
+        invalid(
+          'value is required (number 0.0-1.0)',
+          ErrorCode.PANELBRIDGE_VALUE_REQUIRED_NUMBER_0_1,
+        )
+      }
+      return withBridge(false, (bridge) =>
+        bridge.sendCommand(action, { value: args.value }),
+      )
     case 'setGameTime':
       if (
         args.hour !== undefined &&
@@ -391,24 +437,34 @@ export const sendPanelBridgeWorldCommand = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeWorldAction(data)) as any)
 
+async function getServerInfoImplementation(): Promise<any> {
+  return withBridge(true, async (bridge) => {
+    const result = await bridge.getServerInfo()
+    const players = result?.data?.players
+    if (players && !Array.isArray(players)) {
+      return {
+        ...result,
+        data: { ...result.data, players: Object.values(players) },
+      }
+    }
+    return result
+  })
+}
+
 export const getPanelBridgeServerInfo = createServerFn({ method: 'GET' })
   .middleware(capabilityMiddleware('players.view'))
   .validator((data: unknown) => record(data))
-  .handler(async () =>
-    withBridge(true, async (bridge) => {
-      const result = await bridge.getServerInfo()
-      const players = result?.data?.players
-      if (players && !Array.isArray(players)) {
-        return {
-          ...result,
-          data: { ...result.data, players: Object.values(players) },
-        }
-      }
-      return result
-    }),
-  )
+  .handler(getServerInfoImplementation)
 
 export const savePanelBridgeWorld = createServerFn({ method: 'POST' })
   .middleware(capabilityMiddleware('server.control'))
   .validator((data: unknown) => record(data))
   .handler(async () => (await withBridge(false, (bridge) => bridge.saveWorld())) as any)
+
+;(sendPanelBridgeWorldCommand as any).__executeImplementation = (
+  data: unknown,
+) => executeWorldAction(record(data))
+;(getPanelBridgeServerInfo as any).__executeImplementation =
+  getServerInfoImplementation
+;(savePanelBridgeWorld as any).__executeImplementation = () =>
+  withBridge(false, (bridge) => bridge.saveWorld())

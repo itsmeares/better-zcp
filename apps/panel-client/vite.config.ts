@@ -76,6 +76,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       rollupOptions: {
+        external: ['ssh2-sftp-client', 'ssh2', 'cpu-features'],
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined

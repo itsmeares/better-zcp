@@ -11,6 +11,10 @@ import {
   VALID_ACTIONS,
   VEHICLE_SCRIPT_REGEX,
 } from '../../../panel-server/services/panelBridgePolicy.ts'
+import {
+  PANEL_BRIDGE_COMMANDS,
+  PANEL_BRIDGE_CLIMATE_FLOAT_IDS,
+} from '../../../panel-server/services/panelBridgeCommands.ts'
 
 type AnyRecord = Record<string, any>
 
@@ -344,6 +348,13 @@ async function executePanelBridgeCommand(
   }
 }
 
+async function getPanelBridgeCommandsImplementation(): Promise<AnyRecord> {
+  return {
+    commands: PANEL_BRIDGE_COMMANDS,
+    climateFloatIds: PANEL_BRIDGE_CLIMATE_FLOAT_IDS,
+  }
+}
+
 export const sendPanelBridgeCommand = createServerFn({ method: 'POST' })
   .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
@@ -365,3 +376,13 @@ export const sendPanelBridgeCommand = createServerFn({ method: 'POST' })
       })
     }
   })
+
+export const getPanelBridgeCommands = createServerFn({ method: 'GET' })
+  .middleware(protectedServerFunctionMiddleware)
+  .validator((data: unknown) => record(data))
+  .handler(getPanelBridgeCommandsImplementation)
+
+;(sendPanelBridgeCommand as any).__executeImplementation =
+  executePanelBridgeCommand
+;(getPanelBridgeCommands as any).__executeImplementation =
+  getPanelBridgeCommandsImplementation

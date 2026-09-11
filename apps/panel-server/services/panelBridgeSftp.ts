@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import SftpClient from 'ssh2-sftp-client';
+import type SftpClient from 'ssh2-sftp-client';
 import { createLogger } from '../utils/logger.ts';
 import { getDataPaths } from '../utils/paths.ts';
 import { ErrorCode } from '../utils/errorCodes.ts';
@@ -35,7 +35,7 @@ type SftpErrorClassifier = {
   test: (message: string, error: unknown) => boolean;
 };
 
-type SftpClientInstance = InstanceType<typeof SftpClient>;
+type SftpClientInstance = SftpClient;
 
 type RecentSftpError = {
   stage: string;
@@ -63,6 +63,11 @@ function isMissingRemotePath(error: unknown): boolean {
 
 function isRemoteFile(entryType: boolean | string): boolean {
   return entryType === true || entryType === '-';
+}
+
+async function createSftpClient(name: string): Promise<SftpClientInstance> {
+  const { default: SftpClientConstructor } = await import('ssh2-sftp-client');
+  return new SftpClientConstructor(name);
 }
 
 const SFTP_ERROR_CLASSIFIERS: SftpErrorClassifier[] = [
@@ -199,7 +204,7 @@ async function withLogClient<T>(
   config: SftpLogConfig,
   handler: (client: SftpClientInstance) => Promise<T>,
 ): Promise<T> {
-  const client = new SftpClient('PanelBridgeSftpLogs');
+  const client = await createSftpClient('PanelBridgeSftpLogs');
   try {
     await client.connect({
       host: config.host,
@@ -358,7 +363,7 @@ export class PanelBridgeSftpTransport {
     const config = this.config;
     if (!config) throw new Error('SFTP transport is not configured');
     this.connectionAttempts += 1;
-    const client = new SftpClient('PanelBridgeSftp');
+    const client = await createSftpClient('PanelBridgeSftp');
     await client.connect({
       host: config.host,
       port: config.port,
@@ -619,7 +624,7 @@ export async function testSftpBridge(config: SftpConfigInput): Promise<{
   nextStep: string;
 }> {
   const validated = validateSftpBridgeConfig(config);
-  const client = new SftpClient('PanelBridgeSftpTest');
+  const client = await createSftpClient('PanelBridgeSftpTest');
   const startedAt = Date.now();
   try {
     await client.connect({ host: validated.host, port: validated.port, username: validated.username, password: validated.password, readyTimeout: 10000 });
