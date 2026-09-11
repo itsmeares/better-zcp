@@ -521,7 +521,7 @@ async function getTemplatesPath(configPath: string): Promise<string> {
 
 export const getConfigTemplates = createFileRead(async () =>
   withServerFiles(async (configPath) => {
-    const { mkdir, readdir, readFile, stat } = await import('node:fs/promises')
+    const { mkdir, open, readdir } = await import('node:fs/promises')
     const templatesPath = await getTemplatesPath(configPath)
     await mkdir(templatesPath, { recursive: true })
     const files = (
@@ -534,20 +534,25 @@ export const getConfigTemplates = createFileRead(async () =>
                 templatesPath,
                 filename,
               )
-              const [details, content] = await Promise.all([
-                stat(filePath),
-                readFile(filePath, 'utf8'),
-              ])
-              const template = JSON.parse(content)
-              return {
-                id: filename.slice(0, -5),
-                name: template.name || filename.slice(0, -5),
-                description: template.description || '',
-                type: template.type || 'both',
-                created: template.created || details.birthtime.toISOString(),
-                modified: details.mtime.toISOString(),
-                hasIni: Boolean(template.ini),
-                hasSandbox: Boolean(template.sandbox),
+              const handle = await open(filePath, 'r')
+              try {
+                const [details, content] = await Promise.all([
+                  handle.stat(),
+                  handle.readFile({ encoding: 'utf8' }),
+                ])
+                const template = JSON.parse(content)
+                return {
+                  id: filename.slice(0, -5),
+                  name: template.name || filename.slice(0, -5),
+                  description: template.description || '',
+                  type: template.type || 'both',
+                  created: template.created || details.birthtime.toISOString(),
+                  modified: details.mtime.toISOString(),
+                  hasIni: Boolean(template.ini),
+                  hasSandbox: Boolean(template.sandbox),
+                }
+              } finally {
+                await handle.close()
               }
             } catch {
               return null
