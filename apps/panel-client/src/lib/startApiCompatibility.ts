@@ -40,6 +40,7 @@ type RouteSource =
   | 'finder'
   | 'mods'
   | 'system'
+  | 'fileReads'
 
 type RouteStatus = number | ((result: any) => number)
 
@@ -67,6 +68,8 @@ type ParsedBody = {
   isObject: boolean
 }
 
+const START_HANDLED_HEADER = 'x-tanstack-start-handled'
+
 const implementations: Record<
   RouteSource,
   () => Promise<Record<string, unknown>>
@@ -81,10 +84,12 @@ const implementations: Record<
   finder: () => import('./serverFinder'),
   mods: () => import('./serverMods'),
   system: () => import('./serverSystem'),
+  fileReads: () => import('./serverFileReads'),
 }
 
 const sourceCapabilities: Partial<Record<RouteSource, string>> = {
   mods: 'mods.manage',
+  fileReads: 'serverfiles.manage',
 }
 
 function mergeBody(
@@ -237,6 +242,12 @@ const routes: RouteSpec[] = [
     pattern: '/api/servers/rcon-status',
     source: 'control',
     functionName: 'getManagedServersRconStatus',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/servers/active/status',
+    source: 'control',
+    functionName: 'getActiveComposedStatus',
   },
   {
     method: 'GET',
@@ -1376,6 +1387,76 @@ const routes: RouteSpec[] = [
 
   {
     method: 'GET',
+    pattern: '/api/server-files/paths',
+    source: 'fileReads',
+    functionName: 'getServerFilePaths',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/ini',
+    source: 'fileReads',
+    functionName: 'getServerIni',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/sandbox',
+    source: 'fileReads',
+    functionName: 'getServerSandbox',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/sandbox/validate',
+    source: 'fileReads',
+    functionName: 'validateServerSandbox',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/spawnpoints',
+    source: 'fileReads',
+    functionName: 'getServerSpawnPoints',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/spawnregions',
+    source: 'fileReads',
+    functionName: 'getServerSpawnRegions',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/raw/:type',
+    source: 'fileReads',
+    functionName: 'getServerRawFile',
+    data: mergeBody,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/backups',
+    source: 'fileReads',
+    functionName: 'getServerConfigBackups',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/templates',
+    source: 'fileReads',
+    functionName: 'getConfigTemplates',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/templates/:id',
+    source: 'fileReads',
+    functionName: 'getConfigTemplate',
+    data: mergeBody,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/browse-files',
+    source: 'fileReads',
+    functionName: 'browseServerFiles',
+    data: queryData('path', 'extensions'),
+  },
+
+  {
+    method: 'GET',
     pattern: '/api/debug/ram',
     source: 'admin',
     functionName: 'getDebugRam',
@@ -1628,6 +1709,11 @@ function errorResponse(error: unknown): Response {
   return Response.json(body, { status })
 }
 
+function markStartHandled(response: Response): Response {
+  response.headers.set(START_HANDLED_HEADER, '1')
+  return response
+}
+
 async function authenticate(
   request: Request,
 ): Promise<AuthenticatedUser | Response> {
@@ -1712,11 +1798,14 @@ export async function handleStartApiCompatibilityRequest(
 
   try {
     const authenticated = spec.public ? null : await authenticate(request)
-    if (authenticated instanceof Response) return authenticated
+    if (authenticated instanceof Response)
+      return markStartHandled(authenticated)
     if (authenticated && spec.role && authenticated.role !== spec.role) {
-      return Response.json(
-        { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
-        { status: 403 },
+      return markStartHandled(
+        Response.json(
+          { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+          { status: 403 },
+        ),
       )
     }
     if (
@@ -1727,15 +1816,17 @@ export async function handleStartApiCompatibilityRequest(
         spec.anyCapability,
       ))
     ) {
-      return Response.json(
-        { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
-        { status: 403 },
+      return markStartHandled(
+        Response.json(
+          { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
+          { status: 403 },
+        ),
       )
     }
 
     const parsedBody = await readBody(request)
     if (spec.bodyError && !parsedBody.isObject) {
-      return Response.json(spec.bodyError, { status: 400 })
+      return markStartHandled(Response.json(spec.bodyError, { status: 400 }))
     }
     const body = parsedBody.value
     const params = matchPattern(spec.pattern, pathname) || {}
@@ -1749,10 +1840,10 @@ export async function handleStartApiCompatibilityRequest(
         : spec.status || 200
     const headers = spec.headers?.(params)
     if (result === undefined) {
-      return new Response(null, { status, headers })
+      return markStartHandled(new Response(null, { status, headers }))
     }
-    return Response.json(result, { status, headers })
+    return markStartHandled(Response.json(result, { status, headers }))
   } catch (error) {
-    return errorResponse(error)
+    return markStartHandled(errorResponse(error))
   }
 }

@@ -126,7 +126,7 @@ describe("SPA fallback", () => {
     fs.writeFileSync(path.join(temporaryRoot, "package.json"), '{"type":"module"}');
     fs.writeFileSync(
       path.join(startDistPath, "server.js"),
-      "export default { fetch: async (request) => new URL(request.url).pathname === '/api/health' ? Response.json({ source: 'start' }) : new Response('<html>not found</html>', { headers: { 'content-type': 'text/html' } }) }",
+      "export default { fetch: async (request) => { const path = new URL(request.url).pathname; if (path === '/api/health') return Response.json({ source: 'start' }); if (path === '/api/known-error') return Response.json({ source: 'start', error: true }, { status: 404, headers: { 'x-tanstack-start-handled': '1' } }); return new Response('<html>not found</html>', { headers: { 'content-type': 'text/html' } }); } }",
     );
 
     const app = express();
@@ -144,10 +144,14 @@ describe("SPA fallback", () => {
         },
         logger: { debug() {}, warn() {}, error() {} },
       },
-      "/api/health",
+      "/api",
+      "ALL",
     );
     app.get("/api/health", (_req, res) => {
       res.json({ source: "express" });
+    });
+    app.get("/api/known-error", (_req, res) => {
+      res.status(500).json({ source: "express" });
     });
     server = await new Promise((resolve) => {
       const listener = app.listen(0, () => resolve(listener));
@@ -159,6 +163,18 @@ describe("SPA fallback", () => {
     );
     expect(startResponse.status).toBe(200);
     expect(await startResponse.json()).toEqual({ source: "start" });
+
+    const handledErrorResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/known-error`,
+    );
+    expect(handledErrorResponse.status).toBe(404);
+    expect(await handledErrorResponse.json()).toEqual({
+      source: "start",
+      error: true,
+    });
+    expect(
+      handledErrorResponse.headers.get("x-tanstack-start-handled"),
+    ).toBeNull();
   });
 
   it("can bridge non-GET API methods to Start and still fall through on misses", async () => {

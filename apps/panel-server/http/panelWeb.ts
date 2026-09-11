@@ -170,10 +170,16 @@ export function registerTanStackStartApiRoute(
 
       const response = await handler.fetch(toTanStackStartRequest(req));
       const contentType = response.headers.get("content-type") || "";
-      if (response.status === 404 || contentType.includes("text/html")) {
+      const startHandled =
+        response.headers.get("x-tanstack-start-handled") === "1";
+      if (
+        (!startHandled && response.status === 404) ||
+        contentType.includes("text/html")
+      ) {
         return next();
       }
 
+      response.headers.delete("x-tanstack-start-handled");
       await sendTanStackStartResponse(response, res);
     })().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);

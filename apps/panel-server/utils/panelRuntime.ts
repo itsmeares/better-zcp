@@ -17,3 +17,12 @@ export function getPanelRuntime(): PanelRuntime {
   if (!runtime) throw new Error("Panel runtime is not initialized");
   return runtime;
 }
+
+export function setPanelDatabase(database: unknown): void {
+  const runtime = runtimeGlobal[PANEL_RUNTIME_KEY];
+  if (runtime) runtime.database = database;
+}
+
+export function getPanelDatabase<T>(): T | undefined {
+  return runtimeGlobal[PANEL_RUNTIME_KEY]?.database as T | undefined;
+}

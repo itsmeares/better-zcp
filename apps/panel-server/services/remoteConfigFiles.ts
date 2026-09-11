@@ -3,7 +3,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import SftpClient from "ssh2-sftp-client";
+import type SftpClient from "ssh2-sftp-client";
 import { createLogger } from "../utils/logger.ts";
 import { getDataPaths } from "../utils/paths.ts";
 
@@ -129,6 +129,7 @@ async function withClient<T>(
   config: RemoteConfig,
   handler: (client: SftpClient) => Promise<T>,
 ): Promise<T> {
+  const { default: SftpClient } = await import("ssh2-sftp-client");
   const client = new SftpClient("RemoteConfigFiles");
   try {
     await client.connect({
