@@ -7,6 +7,8 @@ const LUA_PATH = path.resolve('integrations/panelbridge/PanelBridge/media/lua/se
 
 const STUBS = `
 FILES = {}
+NOW = 0
+getTimestampMs = function() return NOW end
 function getServerName() return "TestServer" end
 function getFileReader(path)
   local value = FILES[path]
@@ -110,5 +112,23 @@ getWorld = function() return FakeWorld end
     expect(byId.write.success).toBe(true);
     expect(byId.vread2.success).toBe(true);
     expect(byId.vread2.data.count).toBe(5);
+  });
+
+  it('refetches a read-only value after the wall clock moves backward', () => {
+    const bridge = loadPanelBridge(LUA_PATH, STUBS);
+
+    bridge.run('NOW = 1000');
+    enqueue(bridge, [{ id: 'read1', action: 'getAllSandboxOptions' }], 1);
+    bridge.run('PanelBridgeModule.processCommands()');
+
+    bridge.run('FakeOption.value = 8; NOW = 0');
+    enqueue(bridge, [{ id: 'read2', action: 'getAllSandboxOptions' }], 2);
+    bridge.run('PanelBridgeModule.processCommands()');
+
+    const results = bridge.getGlobal('PanelBridgeModule').pendingResults;
+    const byId = Object.fromEntries(results.map((r) => [r.id, r]));
+
+    expect(byId.read1.data.options.Vanilla[0].value).toBe(4);
+    expect(byId.read2.data.options.Vanilla[0].value).toBe(8);
   });
 });
