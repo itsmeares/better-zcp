@@ -52,7 +52,11 @@ type RouteSpec = {
   role?: string
   capability?: string | string[]
   anyCapability?: string[]
-  data?: (query: URLSearchParams, body: AnyRecord, params: AnyRecord) => AnyRecord
+  data?: (
+    query: URLSearchParams,
+    body: AnyRecord,
+    params: AnyRecord,
+  ) => AnyRecord
   status?: RouteStatus
   headers?: (params: AnyRecord) => Record<string, string>
   bodyError?: AnyRecord
@@ -224,6 +228,18 @@ const routes: RouteSpec[] = [
   },
   {
     method: 'GET',
+    pattern: '/api/servers/status',
+    source: 'control',
+    functionName: 'getManagedServersStatus',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/servers/rcon-status',
+    source: 'control',
+    functionName: 'getManagedServersRconStatus',
+  },
+  {
+    method: 'GET',
     pattern: '/api/servers/:id/lifecycle-template',
     source: 'control',
     functionName: 'getLifecycleTemplate',
@@ -242,6 +258,12 @@ const routes: RouteSpec[] = [
     source: 'control',
     functionName: 'getDiscoveredMounts',
     capability: 'servers.discover',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/servers/:id',
+    source: 'control',
+    functionName: 'getManagedServer',
   },
   {
     method: 'POST',
@@ -374,6 +396,48 @@ const routes: RouteSpec[] = [
     source: 'control',
     functionName: 'triggerGunshot',
     capability: 'server.world_events',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/events/lightning',
+    source: 'control',
+    functionName: 'triggerLightning',
+    capability: 'players.endanger_or_impersonate',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/events/thunder',
+    source: 'control',
+    functionName: 'triggerThunder',
+    capability: 'players.endanger_or_impersonate',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/events/horde',
+    source: 'control',
+    functionName: 'createHorde',
+    capability: 'players.endanger_or_impersonate',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/reloadlua',
+    source: 'control',
+    functionName: 'reloadLua',
+    capability: 'server.configure',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/log',
+    source: 'control',
+    functionName: 'setLogLevel',
+    capability: 'server.configure',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/stats',
+    source: 'control',
+    functionName: 'setServerStats',
+    capability: 'server.configure',
   },
   {
     method: 'POST',
@@ -525,6 +589,13 @@ const routes: RouteSpec[] = [
     capability: 'players.view',
   },
   {
+    method: 'POST',
+    pattern: '/api/players/access-level',
+    source: 'control',
+    functionName: 'setAccessLevel',
+    capability: 'players.moderate',
+  },
+  {
     method: 'GET',
     pattern: '/api/players/steamid-bans',
     source: 'control',
@@ -600,6 +671,45 @@ const routes: RouteSpec[] = [
     source: 'resources',
     functionName: 'getPlayerNote',
     capability: 'players.view',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/players/notes',
+    source: 'resourceActions',
+    functionName: 'upsertPlayerNote',
+    capability: 'players.moderate',
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/players/notes/:playerName',
+    source: 'resourceActions',
+    functionName: 'deletePlayerNote',
+    capability: 'players.moderate',
+    data: mergeBody,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/players/exports',
+    source: 'resources',
+    functionName: 'getPlayerExports',
+    capability: 'players.gm_tools',
+    data: queryData('username'),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/players/exports/:username/:filename',
+    source: 'resources',
+    functionName: 'getPlayerExport',
+    capability: 'players.gm_tools',
+    data: mergeBody,
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/players/exports/:username/:filename',
+    source: 'resourceActions',
+    functionName: 'deletePlayerExport',
+    capability: 'players.gm_tools',
     data: mergeBody,
   },
   {
@@ -869,7 +979,9 @@ const routes: RouteSpec[] = [
     data: (query, body, params) => ({
       ...body,
       ...params,
-      ...(query.has('reassignTo') ? { reassignTo: query.get('reassignTo') } : {}),
+      ...(query.has('reassignTo')
+        ? { reassignTo: query.get('reassignTo') }
+        : {}),
     }),
   },
 
@@ -886,8 +998,10 @@ const routes: RouteSpec[] = [
     source: 'resources',
     functionName: 'exportTemplate',
     headers: (params) => ({
-      'Content-Disposition': `attachment; filename="${String(params.id)
-        .replace(/["\\\r\n]/g, '_')}.json"`,
+      'Content-Disposition': `attachment; filename="${String(params.id).replace(
+        /["\\\r\n]/g,
+        '_',
+      )}.json"`,
     }),
   },
   {
@@ -1284,6 +1398,63 @@ const routes: RouteSpec[] = [
     public: true,
   },
   {
+    method: 'POST',
+    pattern: '/api/auth/setup',
+    source: 'auth',
+    functionName: 'setup',
+    public: true,
+    status: 201,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/login',
+    source: 'auth',
+    functionName: 'login',
+    public: true,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/refresh',
+    source: 'auth',
+    functionName: 'refresh',
+    public: true,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/logout',
+    source: 'auth',
+    functionName: 'logout',
+    public: true,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/auth/reset-status',
+    source: 'auth',
+    functionName: 'resetStatus',
+    public: true,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/reset-token/local',
+    source: 'auth',
+    functionName: 'createLocalResetToken',
+    public: true,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/reset-password',
+    source: 'auth',
+    functionName: 'resetPassword',
+    public: true,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/auth/recover-with-code',
+    source: 'auth',
+    functionName: 'recoverWithCode',
+    public: true,
+  },
+  {
     method: 'GET',
     pattern: '/api/auth/me',
     source: 'auth',
@@ -1460,8 +1631,15 @@ function errorResponse(error: unknown): Response {
 async function authenticate(
   request: Request,
 ): Promise<AuthenticatedUser | Response> {
-  const { default: authService } =
-    await import('../../../panel-server/services/auth.ts')
+  let authService: any
+  try {
+    const { getPanelRuntime } =
+      await import('../../../panel-server/utils/panelRuntime.ts')
+    authService = getPanelRuntime().authService
+  } catch {
+    // Isolated compatibility tests do not boot the panel runtime.
+  }
+  authService ??= (await import('../../../panel-server/services/auth.ts')).default
   const token = new URL(request.url).searchParams.get('token')
   const result = await authService.authenticateApiRequest(
     request.headers.get('authorization') ?? (token ? `Bearer ${token}` : null),
@@ -1498,9 +1676,8 @@ async function execute(
   user: AuthenticatedUser | null,
 ): Promise<unknown> {
   const implementation = await implementations[spec.source]()
-  const serverFunction = implementation[
-    spec.functionName
-  ] as unknown as ServerFunction | undefined
+  const serverFunction = implementation[spec.functionName] as unknown as
+    ServerFunction | undefined
   if (serverFunction?.__executeImplementation) {
     return serverFunction.__executeImplementation(data, {
       authenticatedUser: user,
@@ -1521,13 +1698,17 @@ export async function handleStartApiCompatibilityRequest(
   request: Request,
 ): Promise<Response> {
   const url = new URL(request.url)
-  const method = request.method.toUpperCase() === 'HEAD' ? 'GET' : request.method.toUpperCase()
+  const method =
+    request.method.toUpperCase() === 'HEAD'
+      ? 'GET'
+      : request.method.toUpperCase()
   const pathname = url.pathname.replace(/\/+$/, '') || '/'
   const spec = routes.find(
     (candidate) =>
       candidate.method === method && matchPattern(candidate.pattern, pathname),
   )
-  if (!spec) return Response.json({ error: 'API endpoint not found' }, { status: 404 })
+  if (!spec)
+    return Response.json({ error: 'API endpoint not found' }, { status: 404 })
 
   try {
     const authenticated = spec.public ? null : await authenticate(request)
@@ -1567,7 +1748,9 @@ export async function handleStartApiCompatibilityRequest(
         ? spec.status(result)
         : spec.status || 200
     const headers = spec.headers?.(params)
-    if (result === undefined) return new Response(null, { status, headers })
+    if (result === undefined) {
+      return new Response(null, { status, headers })
+    }
     return Response.json(result, { status, headers })
   } catch (error) {
     return errorResponse(error)

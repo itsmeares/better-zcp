@@ -110,14 +110,11 @@ export const getPlayerActivity = createResourceRead(
   },
 )
 
-export const getPlayerNotes = createResourceRead(
-  'players.view',
-  async () => {
-    const { getPlayerNotes } =
-      await import('../../../panel-server/database/init.ts')
-    return { success: true, notes: await getPlayerNotes() }
-  },
-)
+export const getPlayerNotes = createResourceRead('players.view', async () => {
+  const { getPlayerNotes } =
+    await import('../../../panel-server/database/init.ts')
+  return { success: true, notes: await getPlayerNotes() }
+})
 
 export const getPlayerNote = createResourceRead(
   'players.view',
@@ -128,14 +125,34 @@ export const getPlayerNote = createResourceRead(
   },
 )
 
-export const getPlayerStats = createResourceRead(
-  'players.view',
-  async () => {
-    const { getPlayerStats } =
-      await import('../../../panel-server/database/init.ts')
-    return { success: true, stats: await getPlayerStats() }
+export const getPlayerExports = createResourceRead(
+  'players.gm_tools',
+  async (data) => {
+    const { listPlayerExports } =
+      await import('../../../panel-server/services/playerExports.ts')
+    const username =
+      typeof data.username === 'string' ? data.username : undefined
+    return { exports: listPlayerExports(username) }
   },
 )
+
+export const getPlayerExport = createResourceRead(
+  'players.gm_tools',
+  async (data) => {
+    const { getPlayerExport: readPlayerExport } =
+      await import('../../../panel-server/services/playerExports.ts')
+    return readPlayerExport(
+      String(data.username ?? ''),
+      String(data.filename ?? ''),
+    )
+  },
+)
+
+export const getPlayerStats = createResourceRead('players.view', async () => {
+  const { getPlayerStats } =
+    await import('../../../panel-server/database/init.ts')
+  return { success: true, stats: await getPlayerStats() }
+})
 
 export const getPlayerStat = createResourceRead(
   'players.view',
@@ -146,22 +163,17 @@ export const getPlayerStat = createResourceRead(
   },
 )
 
-export const getBackupStatus = createResourceRead(
-  undefined,
-  async () => (await panelRuntime()).backupService.getStatus(),
+export const getBackupStatus = createResourceRead(undefined, async () =>
+  (await panelRuntime()).backupService.getStatus(),
 )
 
-export const getBackupInfo = createResourceRead(
-  undefined,
-  async () => (await panelRuntime()).backupService.getBackupContentsInfo(),
+export const getBackupInfo = createResourceRead(undefined, async () =>
+  (await panelRuntime()).backupService.getBackupContentsInfo(),
 )
 
-export const getBackups = createResourceRead(
-  undefined,
-  async () => ({
-    backups: await (await panelRuntime()).backupService.listBackups(),
-  }),
-)
+export const getBackups = createResourceRead(undefined, async () => ({
+  backups: await (await panelRuntime()).backupService.listBackups(),
+}))
 
 export const getBackupSnapshot = createResourceRead(
   'backups.manage',
@@ -179,65 +191,53 @@ export const getBackupSnapshot = createResourceRead(
   },
 )
 
-export const getBackupHistory = createResourceRead(
-  undefined,
-  async (data) => {
-    const { parseClampedInteger } =
-      await import('../../../panel-server/utils/queryNumbers.ts')
-    const { listBackupRecords } =
-      await import('../../../panel-server/services/backupRecords.ts')
-    let limit: number | undefined
-    if (data.limit !== undefined) {
-      const parsed = parseClampedInteger(data.limit, null, 1, 500)
-      if (parsed === null) invalid('Invalid history limit')
-      limit = parsed
-    }
-    const serverId =
-      typeof data.serverId === 'string' || typeof data.serverId === 'number'
-        ? data.serverId
-        : undefined
-    return { records: await listBackupRecords({ serverId, limit }) }
-  },
-)
+export const getBackupHistory = createResourceRead(undefined, async (data) => {
+  const { parseClampedInteger } =
+    await import('../../../panel-server/utils/queryNumbers.ts')
+  const { listBackupRecords } =
+    await import('../../../panel-server/services/backupRecords.ts')
+  let limit: number | undefined
+  if (data.limit !== undefined) {
+    const parsed = parseClampedInteger(data.limit, null, 1, 500)
+    if (parsed === null) invalid('Invalid history limit')
+    limit = parsed
+  }
+  const serverId =
+    typeof data.serverId === 'string' || typeof data.serverId === 'number'
+      ? data.serverId
+      : undefined
+  return { records: await listBackupRecords({ serverId, limit }) }
+})
 
-export const getTemplates = createResourceRead(
-  undefined,
-  async () => {
-    const { listTemplates } =
-      await import('../../../panel-server/services/templateService.ts')
-    return { templates: await listTemplates() }
-  },
-)
+export const getTemplates = createResourceRead(undefined, async () => {
+  const { listTemplates } =
+    await import('../../../panel-server/services/templateService.ts')
+  return { templates: await listTemplates() }
+})
 
-export const getTemplate = createResourceRead(
-  undefined,
-  async (data) => {
-    const id = String(data.id ?? '')
-    const { getTemplate } =
-      await import('../../../panel-server/services/templateService.ts')
-    const template = await getTemplate(id)
-    if (!template) {
-      throwResourceError(
-        Object.assign(new Error('Template not found'), {
-          code: 'SIM_TEMPLATE_NOT_FOUND',
-        }),
-        404,
-      )
-    }
-    return { template }
-  },
-)
+export const getTemplate = createResourceRead(undefined, async (data) => {
+  const id = String(data.id ?? '')
+  const { getTemplate } =
+    await import('../../../panel-server/services/templateService.ts')
+  const template = await getTemplate(id)
+  if (!template) {
+    throwResourceError(
+      Object.assign(new Error('Template not found'), {
+        code: 'SIM_TEMPLATE_NOT_FOUND',
+      }),
+      404,
+    )
+  }
+  return { template }
+})
 
-export const exportTemplate = createResourceRead(
-  undefined,
-  async (data) => {
-    const { exportTemplate } =
-      await import('../../../panel-server/services/templateService.ts')
-    const result = await exportTemplate(String(data.id ?? ''))
-    if (!result.success) throwResourceError(result, 404)
-    return result.template
-  },
-)
+export const exportTemplate = createResourceRead(undefined, async (data) => {
+  const { exportTemplate } =
+    await import('../../../panel-server/services/templateService.ts')
+  const result = await exportTemplate(String(data.id ?? ''))
+  if (!result.success) throwResourceError(result, 404)
+  return result.template
+})
 
 export const getHiddenTemplates = createResourceRead(
   'templates.manage',
