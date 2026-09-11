@@ -593,10 +593,10 @@ async function readTailText(
 ) {
   let handle: fs.promises.FileHandle | null = null;
   try {
-    const stats = await fs.promises.stat(filePath);
+    handle = await fs.promises.open(filePath, "r");
+    const stats = await handle.stat();
     if (!stats.isFile()) return null;
     const length = Math.min(stats.size, maxBytes);
-    handle = await fs.promises.open(filePath, "r");
     const buffer = Buffer.alloc(length);
     const { bytesRead } = await handle.read(
       buffer,
