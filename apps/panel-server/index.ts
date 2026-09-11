@@ -1095,6 +1095,7 @@ app.set("panelUpdateChecker", panelUpdateChecker);
 const diskMonitor = new DiskMonitor(io);
 app.set("diskMonitor", diskMonitor);
 setPanelRuntime({
+  authService,
   rconService,
   serverManager,
   dockerClient,
@@ -1187,7 +1188,7 @@ app.get("/api/panel-info", async (req, res) => {
 registerTanStackStartApiRoute(app, panelWebOptions, "/api/system/runtime");
 registerTanStackStartApiRoute(app, panelWebOptions, "/api/system/disk-space");
 // Start owns the migrated JSON APIs; unmatched paths fall through to the
-// remaining Express routes (streams, uploads, binaries, and auth flows).
+// remaining Express routes (OIDC redirects, streams, uploads, and binaries).
 registerTanStackStartApiRoute(app, panelWebOptions, "/api", "ALL");
 
 registerApiRoutes(app);

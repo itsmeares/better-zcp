@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => {
     "getNetworkInterfaces",
     "getManagedServers",
     "getActiveManagedServer",
+    "getManagedServersStatus",
+    "getManagedServersRconStatus",
+    "getManagedServer",
     "getLifecycleTemplate",
     "getDiscoveredMounts",
     "createServerFromDiscovery",
@@ -26,8 +29,14 @@ const mocks = vi.hoisted(() => {
     "stopWeather",
     "triggerChopper",
     "triggerGunshot",
+    "triggerLightning",
+    "triggerThunder",
+    "createHorde",
     "alarm",
     "removeZombies",
+    "reloadLua",
+    "setLogLevel",
+    "setServerStats",
     "releaseSafehouse",
     "getPlayers",
     "kickPlayer",
@@ -46,6 +55,7 @@ const mocks = vi.hoisted(() => {
     "getPlayerVehicles",
     "getPlayerPerks",
     "getPlayerAccessLevels",
+    "setAccessLevel",
     "getSteamIdBans",
     "banSteamId",
     "unbanSteamId",
@@ -80,6 +90,8 @@ const mocks = vi.hoisted(() => {
     getPlayerActivity: resource("getPlayerActivity"),
     getPlayerNotes: resource("getPlayerNotes"),
     getPlayerNote: resource("getPlayerNote"),
+    getPlayerExports: resource("getPlayerExports"),
+    getPlayerExport: resource("getPlayerExport"),
     getPlayerStats: resource("getPlayerStats"),
     getPlayerStat: resource("getPlayerStat"),
     getBackupStatus: resource("getBackupStatus"),
@@ -87,6 +99,11 @@ const mocks = vi.hoisted(() => {
     getBackups: resource("getBackups"),
     getBackupHistory: resource("getBackupHistory"),
     getBackupSnapshot: resource("getBackupSnapshot"),
+  };
+  const resourceActions = {
+    upsertPlayerNote: resource("upsertPlayerNote"),
+    deletePlayerNote: resource("deletePlayerNote"),
+    deletePlayerExport: resource("deletePlayerExport"),
   };
 
   const serverFunction = (name: string) => {
@@ -122,9 +139,20 @@ const mocks = vi.hoisted(() => {
     ].map((name) => [name, serverFunction(name)]),
   );
   const auth = Object.fromEntries(
-    ["getAuthStatus", "getCurrentUser", "getRecoveryStatus", "getOidcStatus"].map(
-      (name) => [name, serverFunction(name)],
-    ),
+    [
+      "getAuthStatus",
+      "setup",
+      "login",
+      "refresh",
+      "logout",
+      "resetStatus",
+      "createLocalResetToken",
+      "resetPassword",
+      "recoverWithCode",
+      "getCurrentUser",
+      "getRecoveryStatus",
+      "getOidcStatus",
+    ].map((name) => [name, serverFunction(name)]),
   );
   const mods = Object.fromEntries(
     [
@@ -165,6 +193,7 @@ const mocks = vi.hoisted(() => {
     resources,
     admin,
     auth,
+    resourceActions,
     mods,
     system,
   };
@@ -177,26 +206,39 @@ vi.mock("../services/permissions.ts", () => ({
   getCapabilitiesForRole: mocks.getCapabilities,
 }));
 vi.mock("../../panel-client/src/lib/serverGameControl.ts", () => mocks.control);
-vi.mock("../../panel-client/src/lib/serverResourceReads.ts", () => mocks.resources);
+vi.mock(
+  "../../panel-client/src/lib/serverResourceReads.ts",
+  () => mocks.resources,
+);
 vi.mock("../../panel-client/src/lib/serverAdmin.ts", () => mocks.admin);
 vi.mock("../../panel-client/src/lib/serverAuth.ts", () => mocks.auth);
+vi.mock(
+  "../../panel-client/src/lib/serverResourceActions.ts",
+  () => mocks.resourceActions,
+);
 vi.mock("../../panel-client/src/lib/serverMods.ts", () => mocks.mods);
 vi.mock("../../panel-client/src/lib/serverSystem.ts", () => mocks.system);
 
-const { handleStartApiCompatibilityRequest } = await import(
-  "../../panel-client/src/lib/startApiCompatibility.ts"
-);
+const { handleStartApiCompatibilityRequest } =
+  await import("../../panel-client/src/lib/startApiCompatibility.ts");
 
 const CONTROL_ROUTES = [
   ["GET", "/api/server/status", "getGameServerStatus"],
   ["GET", "/api/server/network-interfaces", "getNetworkInterfaces"],
   ["GET", "/api/servers", "getManagedServers"],
   ["GET", "/api/servers/active", "getActiveManagedServer"],
+  ["GET", "/api/servers/status", "getManagedServersStatus"],
+  ["GET", "/api/servers/rcon-status", "getManagedServersRconStatus"],
+  ["GET", "/api/servers/server-1", "getManagedServer"],
   ["GET", "/api/servers/discover-mounts", "getDiscoveredMounts"],
   ["PUT", "/api/servers/server-1", "updateManagedServer"],
   ["DELETE", "/api/servers/server-1", "deleteManagedServer"],
   ["POST", "/api/servers/server-1/activate", "activateManagedServer"],
-  ["POST", "/api/servers/server-1/lifecycle-provider", "activateManagedLifecycleProvider"],
+  [
+    "POST",
+    "/api/servers/server-1/lifecycle-provider",
+    "activateManagedLifecycleProvider",
+  ],
   ["GET", "/api/servers/server-1/lifecycle-template", "getLifecycleTemplate"],
   ["POST", "/api/server/start", "startServer"],
   ["POST", "/api/server/stop", "stopServer"],
@@ -210,6 +252,12 @@ const CONTROL_ROUTES = [
   ["POST", "/api/server/weather/stop", "stopWeather"],
   ["POST", "/api/server/events/chopper", "triggerChopper"],
   ["POST", "/api/server/events/gunshot", "triggerGunshot"],
+  ["POST", "/api/server/events/lightning", "triggerLightning"],
+  ["POST", "/api/server/events/thunder", "triggerThunder"],
+  ["POST", "/api/server/events/horde", "createHorde"],
+  ["POST", "/api/server/reloadlua", "reloadLua"],
+  ["POST", "/api/server/log", "setLogLevel"],
+  ["POST", "/api/server/stats", "setServerStats"],
   ["POST", "/api/server/alarm", "alarm"],
   ["POST", "/api/server/removezombies", "removeZombies"],
   ["POST", "/api/server/releasesafehouse", "releaseSafehouse"],
@@ -230,6 +278,7 @@ const CONTROL_ROUTES = [
   ["GET", "/api/players/vehicles", "getPlayerVehicles"],
   ["GET", "/api/players/perks", "getPlayerPerks"],
   ["GET", "/api/players/access-levels", "getPlayerAccessLevels"],
+  ["POST", "/api/players/access-level", "setAccessLevel"],
   ["GET", "/api/players/steamid-bans", "getSteamIdBans"],
   ["POST", "/api/players/banid", "banSteamId"],
   ["POST", "/api/players/unbanid", "unbanSteamId"],
@@ -245,8 +294,24 @@ const RESOURCE_ROUTES = [
   ["GET", "/api/players/activity", "getPlayerActivity"],
   ["GET", "/api/players/notes", "getPlayerNotes"],
   ["GET", "/api/players/notes/Alice", "getPlayerNote"],
+  ["POST", "/api/players/notes", "upsertPlayerNote"],
+  ["DELETE", "/api/players/notes/Alice", "deletePlayerNote"],
+  ["GET", "/api/players/exports", "getPlayerExports"],
+  ["GET", "/api/players/exports/Alice/save.json", "getPlayerExport"],
+  ["DELETE", "/api/players/exports/Alice/save.json", "deletePlayerExport"],
   ["GET", "/api/players/stats", "getPlayerStats"],
   ["GET", "/api/players/stats/Alice", "getPlayerStat"],
+];
+
+const PUBLIC_AUTH_ROUTES = [
+  ["POST", "/api/auth/setup", "setup", { setupToken: "setup-token" }, 201],
+  ["POST", "/api/auth/login", "login", { username: "Alice", password: "pw" }, 200],
+  ["POST", "/api/auth/refresh", "refresh", undefined, 200],
+  ["POST", "/api/auth/logout", "logout", undefined, 200],
+  ["GET", "/api/auth/reset-status", "resetStatus", undefined, 200],
+  ["POST", "/api/auth/reset-token/local", "createLocalResetToken", undefined, 200],
+  ["POST", "/api/auth/reset-password", "resetPassword", { token: "token", newPassword: "password" }, 200],
+  ["POST", "/api/auth/recover-with-code", "recoverWithCode", { code: "code", newPassword: "password" }, 200],
 ];
 
 const CREATED_ROUTES = [
@@ -264,23 +329,26 @@ beforeEach(() => {
       tokenGen: 0,
     },
   });
-  mocks.getCapabilities.mockReset().mockResolvedValue([
-    "server.control",
-    "server.world_events",
-    "server.configure",
-    "servers.manage",
-    "servers.discover",
-    "panel.settings",
-    "diagnostics.manage",
-    "mods.manage",
-    "players.view",
-    "players.moderate",
-    "players.gm_tools",
-    "players.endanger_or_impersonate",
-  ]);
+  mocks.getCapabilities
+    .mockReset()
+    .mockResolvedValue([
+      "server.control",
+      "server.world_events",
+      "server.configure",
+      "servers.manage",
+      "servers.discover",
+      "panel.settings",
+      "diagnostics.manage",
+      "mods.manage",
+      "players.view",
+      "players.moderate",
+      "players.gm_tools",
+      "players.endanger_or_impersonate",
+    ]);
   for (const fn of [
     ...Object.values(mocks.control),
     ...Object.values(mocks.resources),
+    ...Object.values(mocks.resourceActions),
     ...Object.values(mocks.admin),
     ...Object.values(mocks.auth),
     ...Object.values(mocks.mods),
@@ -290,11 +358,7 @@ beforeEach(() => {
   }
 });
 
-function makeRequest(
-  method: string,
-  path: string,
-  body?: unknown,
-): Request {
+function makeRequest(method: string, path: string, body?: unknown): Request {
   const headers = new Headers({ authorization: "Bearer test-token" });
   const init: RequestInit = { method, headers };
   if (body !== undefined) {
@@ -346,7 +410,9 @@ describe("Start compatibility server and player routes", () => {
         handledBy: functionName,
         data: path.endsWith("Alice")
           ? { playerName: "Alice" }
-          : {},
+          : path.includes("/exports/")
+            ? { username: "Alice", filename: "save.json" }
+            : {},
       });
     },
   );
@@ -433,6 +499,28 @@ describe("Start compatibility server and player routes", () => {
     expect(mocks.authenticate).not.toHaveBeenCalled();
   });
 
+  it.each(PUBLIC_AUTH_ROUTES)(
+    "dispatches public auth route %s %s to %s",
+    async (method, path, functionName, body, expectedStatus) => {
+      mocks.authenticate.mockRejectedValue(new Error("must not authenticate"));
+
+      const response = await handleStartApiCompatibilityRequest(
+        makeRequest(method, path, body),
+      );
+
+      expect(response.status).toBe(expectedStatus);
+      expect(await responseBody(response)).toEqual({
+        handledBy: functionName,
+        data: body || {},
+      });
+      expect(mocks.auth[functionName]).toHaveBeenCalledWith(
+        body || {},
+        expect.objectContaining({ authenticatedUser: null }),
+      );
+      expect(mocks.authenticate).not.toHaveBeenCalled();
+    },
+  );
+
   it("accepts any permitted backup capability", async () => {
     mocks.getCapabilities.mockResolvedValue(["backups.download"]);
 
@@ -493,12 +581,21 @@ describe("Start compatibility server and player routes", () => {
     ["GET", "/api/mods/status", "mods", "getModsStatus"],
     ["DELETE", "/api/mods/track/123", "mods", "untrackMod"],
     ["GET", "/api/auth/me", "auth", "getCurrentUser"],
-    ["GET", "/api/debug/performance-history?limit=12", "admin", "getPerformanceHistory"],
+    [
+      "GET",
+      "/api/debug/performance-history?limit=12",
+      "admin",
+      "getPerformanceHistory",
+    ],
   ])(
     "dispatches the migrated %s %s endpoint to %s.%s",
     async (method, path, source, functionName) => {
       const response = await handleStartApiCompatibilityRequest(
-        makeRequest(method, path, method === "PUT" ? { settings: { darkMode: true } } : undefined),
+        makeRequest(
+          method,
+          path,
+          method === "PUT" ? { settings: { darkMode: true } } : undefined,
+        ),
       );
 
       expect(response.status).toBe(200);
@@ -513,7 +610,11 @@ describe("Start compatibility server and player routes", () => {
                 ? { limit: 12 }
                 : {},
       });
-      expect((mocks[source] as Record<string, ReturnType<typeof vi.fn>>)[functionName]).toHaveBeenCalled();
+      expect(
+        (mocks[source] as Record<string, ReturnType<typeof vi.fn>>)[
+          functionName
+        ],
+      ).toHaveBeenCalled();
     },
   );
 
@@ -536,15 +637,4 @@ describe("Start compatibility server and player routes", () => {
       data: { limit: 60 },
     });
   });
-
-  it.each(["/api/servers/status", "/api/servers/rcon-status"])(
-    "leaves the still-Express %s endpoint unmatched for fallback",
-    async (path) => {
-      const response = await handleStartApiCompatibilityRequest(
-        makeRequest("GET", path),
-      );
-
-      expect(response.status).toBe(404);
-    },
-  );
 });

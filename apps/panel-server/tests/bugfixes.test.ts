@@ -228,22 +228,27 @@ describe("logout and export trust boundaries", () => {
   });
 
   it("rejects oversized or non-object export payloads before parsing JSON", () => {
-    const largeTempPath = path.join(os.tmpdir(), "zcp-export-too-large.json");
-    fs.writeFileSync(largeTempPath, JSON.stringify({ payload: "x".repeat(6 * 1024 * 1024) }));
+    const temporaryDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "zcp-export-"),
+    );
 
     try {
+      const largeTempPath = path.join(temporaryDirectory, "too-large.json");
+      fs.writeFileSync(
+        largeTempPath,
+        JSON.stringify({ payload: "x".repeat(6 * 1024 * 1024) }),
+      );
+
       expect(() => parsePlayerExportFile(largeTempPath)).toThrow(/too large/i);
-    } finally {
-      fs.unlinkSync(largeTempPath);
-    }
 
-    const invalidTempPath = path.join(os.tmpdir(), "zcp-export-invalid.json");
-    fs.writeFileSync(invalidTempPath, "not-json");
+      const invalidTempPath = path.join(temporaryDirectory, "invalid.json");
+      fs.writeFileSync(invalidTempPath, "not-json");
 
-    try {
-      expect(() => parsePlayerExportFile(invalidTempPath)).toThrow(/invalid json/i);
+      expect(() => parsePlayerExportFile(invalidTempPath)).toThrow(
+        /invalid json/i,
+      );
     } finally {
-      fs.unlinkSync(invalidTempPath);
+      fs.rmSync(temporaryDirectory, { recursive: true, force: true });
     }
   });
 });

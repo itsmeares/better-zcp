@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
+import type {
+  Request as ExpressRequest,
+  Response as ExpressResponse,
+} from "express";
 import {
   sendTanStackStartResponse,
   toTanStackStartRequest,
@@ -22,6 +25,30 @@ describe("TanStack Start Express adapter", () => {
     expect(request.url).toBe("https://panel.example/settings?tab=roles");
     expect(request.headers.get("cookie")).toBe("session=abc");
     expect(request.headers.get("x-panel")).toBe("test");
+  });
+
+  it("replaces spoofable connection metadata with Express values", () => {
+    const request = toTanStackStartRequest({
+      method: "GET",
+      originalUrl: "/api/auth/reset-status",
+      url: "/api/auth/reset-status",
+      protocol: "http",
+      headers: {
+        "x-panel-remote-address": "attacker",
+        "x-panel-client-ip": "attacker",
+        "x-panel-trust-proxy": "0",
+      },
+      socket: { remoteAddress: "127.0.0.1" },
+      ip: "10.0.0.4",
+      app: { get: () => true },
+      get(name: string) {
+        return name.toLowerCase() === "host" ? "panel.example" : undefined;
+      },
+    } as unknown as ExpressRequest);
+
+    expect(request.headers.get("x-panel-remote-address")).toBe("127.0.0.1");
+    expect(request.headers.get("x-panel-client-ip")).toBe("10.0.0.4");
+    expect(request.headers.get("x-panel-trust-proxy")).toBe("1");
   });
 
   it("forwards parsed JSON bodies for server-function requests", async () => {
@@ -74,5 +101,33 @@ describe("TanStack Start Express adapter", () => {
     expect(sent.statusCode).toBe(201);
     expect(sent.headers["content-type"]).toBe("text/html");
     expect(sent.body?.toString()).toBe("<html>ok</html>");
+  });
+
+  it("preserves multiple Set-Cookie headers", async () => {
+    const sent = {
+      headers: {} as Record<string, string | string[]>,
+      setHeader(name: string, value: string | string[]) {
+        this.headers[name.toLowerCase()] = value;
+      },
+      status(code: number) {
+        return this;
+      },
+      send() {
+        return this;
+      },
+    };
+    const response = new Response(null);
+    response.headers.append("set-cookie", "access=one; Path=/");
+    response.headers.append("set-cookie", "refresh=two; Path=/");
+
+    await sendTanStackStartResponse(
+      response,
+      sent as unknown as ExpressResponse,
+    );
+
+    expect(sent.headers["set-cookie"]).toEqual([
+      "access=one; Path=/",
+      "refresh=two; Path=/",
+    ]);
   });
 });

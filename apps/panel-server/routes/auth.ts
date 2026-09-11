@@ -1,19 +1,25 @@
-
 import { Router, type Request } from "express";
 import rateLimit from "express-rate-limit";
-import path from "path";
-import fs from "fs";
-import crypto from "crypto";
-import os from "os";
 import authService, { USER_ROLES, requireRole } from "../services/auth.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
-import { getDataPaths } from "../utils/paths.ts";
 import { setSetting } from "../database/init.ts";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
 import { getRefreshCookieOptions } from "../utils/refreshCookie.ts";
-import { requirePermission, getCapabilitiesForRole } from "../services/permissions.ts";
+import {
+  requirePermission,
+  getCapabilitiesForRole,
+} from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
+import {
+  checkResetToken,
+  createLocalResetResponse,
+  createLocalResetToken,
+  getResetTokenState,
+  isLocalPanelRequest,
+  isPanelBehindTrustProxy,
+  removeResetToken,
+} from "../services/passwordRecovery.ts";
 import { z } from "zod";
 
 const log = createLogger("Auth");
@@ -60,127 +66,11 @@ const setupBodySchema = loginBodySchema
   })
   .strict();
 
-const RESET_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const RESET_TOKEN_MAX_BYTES = 1024;
-const LOOPBACK_REMOTE_ADDRESSES = new Set([
-  "127.0.0.1",
-  "::1",
-  "::ffff:127.0.0.1",
-]);
-
-function normalizeIpAddress(address: unknown): string {
-  if (typeof address !== "string") return "";
-  const trimmed = address
-    .trim()
-    .toLowerCase()
-    .replace(/^\[|\]$/g, "");
-  if (!trimmed) return "";
-  const withoutZone = trimmed.split("%")[0];
-  return withoutZone.startsWith("::ffff:") ? withoutZone.slice(7) : withoutZone;
-}
-
-function isDockerBridgeAddress(address: string): boolean {
-  const match = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(address);
-  if (!match) return false;
-  const first = Number(match[1]);
-  const second = Number(match[2]);
-  return first === 172 && second >= 16 && second <= 31;
-}
-
-function getLocalPanelAddresses() {
-  const addresses = new Set(
-    [...LOOPBACK_REMOTE_ADDRESSES]
-      .map((address) => normalizeIpAddress(address))
-      .filter(Boolean),
-  );
-
-  const interfaces = os.networkInterfaces();
-  for (const entries of Object.values(interfaces)) {
-    for (const entry of entries || []) {
-      const normalized = normalizeIpAddress(entry.address);
-      if (normalized && !isDockerBridgeAddress(normalized)) {
-        addresses.add(normalized);
-      }
-    }
-  }
-
-  return addresses;
-}
-
-function getResetTokenPath() {
-  const { dataDir } = getDataPaths();
-  return path.join(dataDir, "reset-token.txt");
-}
-
-export function isPanelBehindTrustProxy(req: Request): boolean {
-  return Boolean(req.app?.get?.("trust proxy"));
-}
-
-export function isLocalPanelRequest(req: Request): boolean {
-  if (isPanelBehindTrustProxy(req)) {
-    return false;
-  }
-
-  const candidateAddresses = [
-    req.socket?.remoteAddress,
-    req.connection?.remoteAddress,
-  ]
-    .map((address) => normalizeIpAddress(address))
-    .filter(Boolean);
-
-  const localAddresses = getLocalPanelAddresses();
-  return candidateAddresses.some((address) => localAddresses.has(address));
-}
-
-export function createLocalResetResponse(message: string) {
-  return {
-    success: true,
-    resetAvailable: true,
-    message,
-  };
-}
-
-function getResetTokenState() {
-  const tokenPath = getResetTokenPath();
-  if (!fs.existsSync(tokenPath)) {
-    return { tokenPath, available: false, reason: "missing", token: null };
-  }
-
-  const stat = fs.statSync(tokenPath);
-  if (stat.size > RESET_TOKEN_MAX_BYTES) {
-    return {
-      tokenPath,
-      available: false,
-      reason: "too-large",
-      token: null,
-      stat,
-    };
-  }
-
-  const ageMs = Date.now() - stat.mtimeMs;
-  if (ageMs > RESET_TOKEN_MAX_AGE_MS) {
-    return {
-      tokenPath,
-      available: false,
-      reason: "expired",
-      token: null,
-      stat,
-    };
-  }
-
-  const token = fs.readFileSync(tokenPath, "utf-8").trim();
-  if (!token || token.length < 8) {
-    return {
-      tokenPath,
-      available: false,
-      reason: "too-short",
-      token: null,
-      stat,
-    };
-  }
-
-  return { tokenPath, available: true, reason: "ok", token, stat, ageMs };
-}
+export {
+  createLocalResetResponse,
+  isLocalPanelRequest,
+  isPanelBehindTrustProxy,
+} from "../services/passwordRecovery.ts";
 
 async function getAuthenticatedUser(req: Request) {
   const authHeader = req.headers.authorization;
@@ -259,7 +149,12 @@ router.post("/setup", setupLimiter, async (req, res) => {
           : ErrorCode.AUTH_REQUEST_INVALID,
       });
     }
-    const { username, password, rememberMe, panelPort: normalizedPanelPort } = parsedBody.data;
+    const {
+      username,
+      password,
+      rememberMe,
+      panelPort: normalizedPanelPort,
+    } = parsedBody.data;
     await setSetting("panelPort", normalizedPanelPort);
     await authService.createUser(username, password);
     await clearSetupToken();
@@ -337,12 +232,10 @@ router.post("/refresh", async (req, res) => {
     const result = await authService.refreshAccessToken(refreshToken);
     if (!result) {
       res.clearCookie("refreshToken", getRefreshCookieOptions(req, false));
-      return res
-        .status(401)
-        .json({
-          error: "Invalid refresh token",
-          code: "INVALID_REFRESH_TOKEN",
-        });
+      return res.status(401).json({
+        error: "Invalid refresh token",
+        code: "INVALID_REFRESH_TOKEN",
+      });
     }
 
     if (result.refreshToken) {
@@ -391,7 +284,12 @@ router.get("/me", async (req, res) => {
     const capabilities = await getCapabilitiesForRole(user.role);
 
     res.json({
-      user: { id: user.userId, username: user.username, role: user.role, capabilities },
+      user: {
+        id: user.userId,
+        username: user.username,
+        role: user.role,
+        capabilities,
+      },
     });
   } catch (error: unknown) {
     res.status(401).json({
@@ -449,40 +347,44 @@ router.get("/users", requirePermission("users.manage"), async (req, res) => {
   }
 });
 
-router.post("/users", requirePermission("users.manage"), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { username, password, role, roleId } = req.body || {};
-    if (!isNonEmptyString(username) || !isNonEmptyString(password)) {
-      return res.status(400).json({
-        error: "Username and password are required",
-        code: ErrorCode.AUTH_USERNAME_PASSWORD_REQUIRED,
+router.post(
+  "/users",
+  requirePermission("users.manage"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const { username, password, role, roleId } = req.body || {};
+      if (!isNonEmptyString(username) || !isNonEmptyString(password)) {
+        return res.status(400).json({
+          error: "Username and password are required",
+          code: ErrorCode.AUTH_USERNAME_PASSWORD_REQUIRED,
+        });
+      }
+      const normalizedRoleId =
+        typeof roleId === "string" && roleId.trim() ? roleId.trim() : undefined;
+      if (!normalizedRoleId && !USER_ROLES.includes(role)) {
+        return res.status(400).json({
+          error: `role must be one of: ${USER_ROLES.join(", ")}`,
+          code: ErrorCode.AUTH_INVALID_ROLE,
+        });
+      }
+      const user = await authService.createUser(username, password, role, {
+        actingUserId: req.user?.userId,
+        roleId: normalizedRoleId,
       });
+      log.info(`User created by admin: ${username} (role: ${user.role})`);
+      res.status(201).json({ success: true, user });
+    } catch (error: unknown) {
+      log.warn(`User creation failed: ${errorMessage(error)}`);
+      const details = routeError(error);
+      const body: Record<string, unknown> = {
+        error: sanitizeError(errorMessage(error)),
+      };
+      if (details.code) body.code = details.code;
+      if (details.params) body.params = sanitizeErrorParams(details.params);
+      res.status(details.status || 400).json(body);
     }
-    const normalizedRoleId =
-      typeof roleId === "string" && roleId.trim() ? roleId.trim() : undefined;
-    if (!normalizedRoleId && !USER_ROLES.includes(role)) {
-      return res.status(400).json({
-        error: `role must be one of: ${USER_ROLES.join(", ")}`,
-        code: ErrorCode.AUTH_INVALID_ROLE,
-      });
-    }
-    const user = await authService.createUser(username, password, role, {
-      actingUserId: req.user?.userId,
-      roleId: normalizedRoleId,
-    });
-    log.info(`User created by admin: ${username} (role: ${user.role})`);
-    res.status(201).json({ success: true, user });
-  } catch (error: unknown) {
-    log.warn(`User creation failed: ${errorMessage(error)}`);
-    const details = routeError(error);
-    const body: Record<string, unknown> = {
-      error: sanitizeError(errorMessage(error)),
-    };
-    if (details.code) body.code = details.code;
-    if (details.params) body.params = sanitizeErrorParams(details.params);
-    res.status(details.status || 400).json(body);
-  }
-});
+  },
+);
 
 router.patch(
   "/users/:id/role",
@@ -527,22 +429,22 @@ router.delete(
   "/users/:id",
   requirePermission("users.manage"),
   async (req: AuthenticatedRequest, res) => {
-  try {
-    const user = await authService.deleteUser(String(req.params.id), {
-      actingUserId: req.user?.userId,
-    });
-    log.info(`User deleted by admin: ${user.username}`);
-    res.json({ success: true, user });
-  } catch (error: unknown) {
-    const details = routeError(error);
-    log.warn(`User deletion failed: ${errorMessage(error)}`);
-    const body: Record<string, unknown> = {
-      error: sanitizeError(errorMessage(error)),
-    };
-    if (details.code) body.code = details.code;
-    if (details.params) body.params = sanitizeErrorParams(details.params);
-    res.status(details.status || 400).json(body);
-  }
+    try {
+      const user = await authService.deleteUser(String(req.params.id), {
+        actingUserId: req.user?.userId,
+      });
+      log.info(`User deleted by admin: ${user.username}`);
+      res.json({ success: true, user });
+    } catch (error: unknown) {
+      const details = routeError(error);
+      log.warn(`User deletion failed: ${errorMessage(error)}`);
+      const body: Record<string, unknown> = {
+        error: sanitizeError(errorMessage(error)),
+      };
+      if (details.code) body.code = details.code;
+      if (details.params) body.params = sanitizeErrorParams(details.params);
+      res.status(details.status || 400).json(body);
+    }
   },
 );
 
@@ -689,25 +591,14 @@ router.post("/reset-token/local", localResetTokenLimiter, async (req, res) => {
       );
     }
 
-    if (
-      tokenState.reason === "expired" ||
-      tokenState.reason === "too-large" ||
-      tokenState.reason === "too-short"
-    ) {
-      try {
-        fs.unlinkSync(tokenState.tokenPath);
-      } catch (error: unknown) {
-        log.warn(
-          `Could not remove ${tokenState.reason} reset token file: ${errorMessage(error)}`,
-        );
-      }
+    const result = createLocalResetToken();
+    if (result.alreadyAvailable) {
+      return res.json(
+        createLocalResetResponse(
+          "A recovery token is already available at data/reset-token.txt. Paste it below to continue.",
+        ),
+      );
     }
-
-    const token = crypto.randomBytes(24).toString("hex");
-    fs.writeFileSync(tokenState.tokenPath, `${token}\n`, {
-      encoding: "utf-8",
-      mode: 0o600,
-    });
 
     log.info(
       "Local recovery token created from a request originating on the server",
@@ -748,71 +639,18 @@ router.post("/reset-password", resetLimiter, async (req, res) => {
       });
     }
 
-    const tokenPath = getResetTokenPath();
-
-    if (!fs.existsSync(tokenPath)) {
-      log.warn("Password reset attempted but no reset-token.txt exists");
-      return res.status(403).json({
-        error:
-          "No reset token found. Create data/reset-token.txt on the server first.",
-        code: ErrorCode.RESET_TOKEN_NOT_FOUND,
-      });
-    }
-
-    const stat = fs.statSync(tokenPath);
-    if (stat.size > RESET_TOKEN_MAX_BYTES) {
-      log.warn("Password reset token file is too large");
-      return res.status(403).json({
-        error: "Reset token file is invalid (too large). Max 1KB.",
-        code: ErrorCode.RESET_TOKEN_TOO_LARGE,
-      });
-    }
-
-    const ageMs = Date.now() - stat.mtimeMs;
-    if (ageMs > RESET_TOKEN_MAX_AGE_MS) {
-      log.warn("Password reset attempted with expired token file (>24h old)");
-      try {
-        fs.unlinkSync(tokenPath);
-      } catch (error: unknown) {
-        log.warn(`Could not remove expired reset token file: ${errorMessage(error)}`);
-      }
-      return res.status(403).json({
-        error:
-          "Reset token file is older than 24 hours. Recreate it on the server.",
-        code: ErrorCode.RESET_TOKEN_EXPIRED,
-      });
-    }
-
-    const storedToken = fs.readFileSync(tokenPath, "utf-8").trim();
-    if (!storedToken || storedToken.length < 8) {
-      log.warn("Password reset attempted with invalid token file (too short)");
-      return res.status(403).json({
-        error:
-          "Reset token file is invalid. It must contain at least 8 characters.",
-        code: ErrorCode.RESET_TOKEN_TOO_SHORT,
-      });
-    }
-
-    const candidateDigest = crypto
-      .createHash("sha256")
-      .update(token.trim(), "utf8")
-      .digest();
-    const storedDigest = crypto
-      .createHash("sha256")
-      .update(storedToken, "utf8")
-      .digest();
-    if (!crypto.timingSafeEqual(candidateDigest, storedDigest)) {
-      log.warn("Password reset attempted with incorrect token");
-      return res.status(403).json({
-        error: "Invalid reset token",
-        code: ErrorCode.RESET_TOKEN_INVALID,
-      });
+    const tokenCheck = checkResetToken(token);
+    if (!tokenCheck.ok) {
+      log.warn(`Password reset rejected: ${tokenCheck.code}`);
+      return res
+        .status(403)
+        .json({ error: tokenCheck.error, code: tokenCheck.code });
     }
 
     const result = await authService.resetPassword(newPassword);
 
     try {
-      fs.unlinkSync(tokenPath);
+      removeResetToken(tokenCheck.tokenPath);
     } catch (unlinkErr: unknown) {
       log.warn(`Could not delete reset-token.txt: ${errorMessage(unlinkErr)}`);
     }

@@ -1,5 +1,8 @@
 import { pathToFileURL } from "node:url";
-import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
+import type {
+  Request as ExpressRequest,
+  Response as ExpressResponse,
+} from "express";
 
 export type TanStackStartHandler = {
   fetch(request: Request): Response | Promise<Response>;
@@ -13,7 +16,9 @@ export async function loadTanStackStartHandler(
   };
   const handler = module.default as Partial<TanStackStartHandler> | undefined;
   if (!handler || typeof handler.fetch !== "function") {
-    throw new Error(`TanStack Start server bundle has no fetch handler: ${filePath}`);
+    throw new Error(
+      `TanStack Start server bundle has no fetch handler: ${filePath}`,
+    );
   }
   return handler as TanStackStartHandler;
 }
@@ -25,6 +30,20 @@ export function toTanStackStartRequest(req: ExpressRequest): Request {
     for (const item of Array.isArray(value) ? value : [value]) {
       headers.append(name, item);
     }
+  }
+
+  // These headers are written by the trusted Express adapter, never accepted
+  // from the incoming request. Start uses them for the few policies that need
+  // connection metadata which the Fetch Request API does not expose.
+  headers.delete("x-panel-remote-address");
+  headers.delete("x-panel-client-ip");
+  headers.delete("x-panel-trust-proxy");
+  if (req.socket?.remoteAddress) {
+    headers.set("x-panel-remote-address", req.socket.remoteAddress);
+  }
+  if (req.ip) headers.set("x-panel-client-ip", req.ip);
+  if (req.app?.get?.("trust proxy")) {
+    headers.set("x-panel-trust-proxy", "1");
   }
 
   const protocol = req.protocol || "http";

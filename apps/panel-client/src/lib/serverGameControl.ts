@@ -129,6 +129,26 @@ function validNumber(value: unknown, min = -Infinity, max = Infinity): boolean {
   return Number.isFinite(number) && number >= min && number <= max
 }
 
+function optionalEventUsername(data: AnyRecord): string | undefined {
+  const username = data.username
+  if (username && (typeof username !== 'string' || username.length > 64)) {
+    invalid('Invalid username', 'EVENTS_INVALID_USERNAME')
+  }
+  return username || undefined
+}
+
+function legacyIntegerOrDefault(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number | null,
+): number | null {
+  const parsed = Number.parseInt(String(value ?? ''), 10)
+  return Number.isNaN(parsed) || parsed < min || parsed > max
+    ? fallback
+    : parsed
+}
+
 async function assertCapability(
   context: AnyRecord,
   capability: string,
@@ -164,8 +184,8 @@ function createControlRead<T>(
   }
   return Object.assign(
     secured
-    .validator((data: unknown) => record(data))
-    .handler(({ data }) => implementation(data) as any),
+      .validator((data: unknown) => record(data))
+      .handler(({ data }) => implementation(data) as any),
     { __executeImplementation: implementation },
   )
 }
@@ -275,17 +295,168 @@ export const getActiveManagedServer = createControlRead(null, async () => {
 
 export const getManagedServer = createControlRead(null, async (data) => {
   const id = requiredString(data, 'id', 'Invalid server ID')
-  if (!/^[A-Za-z0-9_-]+$/.test(id)) invalid('Invalid server ID')
-  const { getServer } = await import('../../../panel-server/database/init.ts')
+  const [{ getServer }, { parseServerId }] = await Promise.all([
+    import('../../../panel-server/database/init.ts'),
+    import('../../../panel-server/services/serverProfiles.ts'),
+  ])
+  const serverId = parseServerId(id)
+  if (serverId === null) invalid('Invalid server ID')
   const { sanitizeServerResponse } =
     await import('../../../panel-server/utils/sanitize.ts')
-  const server = await getServer(/^\d+$/.test(id) ? Number(id) : id)
+  const server = await getServer(serverId)
   if (!server)
     throwControlError(
       Object.assign(new Error('Server not found'), { status: 404 }),
       404,
     )
   return { server: sanitizeServerResponse(server) }
+})
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T) => Promise<R> | R,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let nextIndex = 0
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex++
+        results[index] = await mapper(items[index])
+      }
+    },
+  )
+  await Promise.all(workers)
+  return results
+}
+
+export const getManagedServersStatus = createControlRead(null, async () => {
+  const [
+    { getServers, getActiveServer },
+    { createLinuxServiceLifecycle, isManagedLifecycleProvider },
+    { sanitizeError },
+  ] = await Promise.all([
+    import('../../../panel-server/database/init.ts'),
+    import('../../../panel-server/services/linuxServiceLifecycle.ts'),
+    import('../../../panel-server/utils/sanitize.ts'),
+  ])
+  const runtime = await panelRuntime()
+  const servers = (await getServers()) as AnyRecord[]
+  const activeServer = await getActiveServer()
+  const activeId = activeServer?.id ?? null
+  let matched: AnyRecord[] = []
+  let detectionError: string | null = null
+
+  if (runtime.serverManager?.getServerProcessDetails) {
+    try {
+      const result = await runtime.serverManager.getServerProcessDetails()
+      matched = Array.isArray(result?.matched) ? result.matched : []
+      if (result?.scanFailed)
+        detectionError = result.error || 'Process detection failed'
+    } catch (error) {
+      detectionError = errorMessage(error)
+    }
+  }
+
+  const normalizePath = (value: unknown) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/\\/g, '/')
+      .trim()
+  const statuses = await Promise.all(
+    servers.map(async (server) => {
+      if (isManagedLifecycleProvider(server.lifecycleProvider)) {
+        try {
+          const status = await createLinuxServiceLifecycle(
+            server as Parameters<typeof createLinuxServiceLifecycle>[0],
+            server.lifecycleProvider,
+          ).status()
+          return {
+            id: server.id,
+            name: server.name,
+            running: status.running,
+            pid: null,
+            isActive: server.id === activeId,
+            provider: server.lifecycleProvider,
+            stateUnknown: Boolean(status.scanFailed),
+          }
+        } catch (error) {
+          return {
+            id: server.id,
+            name: server.name,
+            running: false,
+            pid: null,
+            isActive: server.id === activeId,
+            provider: server.lifecycleProvider,
+            stateUnknown: true,
+            error: sanitizeError(errorMessage(error)),
+          }
+        }
+      }
+
+      const installPath = normalizePath(server.installPath)
+      const process = installPath
+        ? matched.find((entry) =>
+            normalizePath(entry.cmd).includes(installPath),
+          )
+        : undefined
+      const running =
+        Boolean(process) ||
+        (server.id === activeId && runtime.serverManager?.isRunning)
+      return {
+        id: server.id,
+        name: server.name,
+        running,
+        pid: process?.pid || null,
+        isActive: server.id === activeId,
+        provider: 'direct',
+        stateUnknown: Boolean(detectionError),
+      }
+    }),
+  )
+
+  return {
+    servers: statuses,
+    detectedProcesses: matched.length,
+    detectionError,
+  }
+})
+
+export const getManagedServersRconStatus = createControlRead(null, async () => {
+  const [{ getServers }, { testRconConnection }, { parseBoundedInteger }] =
+    await Promise.all([
+      import('../../../panel-server/database/init.ts'),
+      import('../../../panel-server/services/rcon.ts'),
+      import('../../../panel-server/utils/queryNumbers.ts'),
+    ])
+  const servers = (await getServers()) as AnyRecord[]
+  const statuses = await mapWithConcurrency(servers, 3, async (server) => {
+    const host =
+      typeof server.rconHost === 'string' ? server.rconHost.trim() : ''
+    const port = parseBoundedInteger(server.rconPort, null, 1, 65535)
+    if (
+      !host ||
+      server.rconPort === undefined ||
+      server.rconPort === null ||
+      server.rconPort === ''
+    ) {
+      return { id: server.id, status: 'unconfigured' }
+    }
+    if (port === null) return { id: server.id, status: 'unavailable' }
+    const result = await testRconConnection({
+      host,
+      port,
+      password: server.rconPassword || '',
+      timeoutMs: 3000,
+    })
+    return {
+      id: server.id,
+      status: result.success ? 'connected' : result.error || 'unavailable',
+    }
+  })
+  return { servers: statuses }
 })
 
 export const createManagedServer = createControlAction(
@@ -483,15 +654,21 @@ export const triggerGunshot = createControlAction(
 )
 export const triggerLightning = createControlAction(
   'players.endanger_or_impersonate',
-  (runtime, data) => runtime.rconService.triggerLightning(data.username),
+  (runtime, data) =>
+    runtime.rconService.triggerLightning(optionalEventUsername(data)),
 )
 export const triggerThunder = createControlAction(
   'players.endanger_or_impersonate',
-  (runtime, data) => runtime.rconService.triggerThunder(data.username),
+  (runtime, data) =>
+    runtime.rconService.triggerThunder(optionalEventUsername(data)),
 )
 export const createHorde = createControlAction(
   'players.endanger_or_impersonate',
-  (runtime, data) => runtime.rconService.createHorde(data.count, data.username),
+  (runtime, data) =>
+    runtime.rconService.createHorde(
+      legacyIntegerOrDefault(data.count, 1, 500, 50),
+      optionalEventUsername(data),
+    ),
 )
 export const alarm = createControlAction('server.world_events', (runtime) =>
   runtime.rconService.alarm(),
@@ -502,26 +679,106 @@ export const removeZombies = createControlAction(
 )
 export const reloadLua = createControlAction(
   'server.configure',
-  (runtime, data) =>
-    runtime.rconService.reloadLua(
-      requiredString(data, 'filename', 'Filename is required'),
-    ),
+  (runtime, data) => {
+    const filename = requiredString(
+      data,
+      'filename',
+      'Filename is required',
+      'RELOAD_LUA_FILENAME_REQUIRED',
+    )
+    if (!/^[a-zA-Z0-9_/.\-]+\.lua$/.test(filename) || filename.includes('..')) {
+      invalid('Invalid filename format', 'RELOAD_LUA_INVALID_FILENAME')
+    }
+    return runtime.rconService.reloadLua(filename)
+  },
 )
 export const setLogLevel = createControlAction(
   'server.configure',
-  (runtime, data) =>
-    runtime.rconService.setLogLevel(
-      requiredString(data, 'type', 'Log type is required'),
-      requiredString(data, 'level', 'Log level is required'),
-    ),
+  (runtime, data) => {
+    const type = requiredString(
+      data,
+      'type',
+      'Type and level are required',
+      'LOG_TYPE_LEVEL_REQUIRED',
+    )
+    const level = requiredString(
+      data,
+      'level',
+      'Type and level are required',
+      'LOG_TYPE_LEVEL_REQUIRED',
+    )
+    const validTypes = [
+      'General',
+      'Network',
+      'Multiplayer',
+      'Voice',
+      'Packet',
+      'NetworkFileDebug',
+      'Lua',
+      'Mod',
+      'Sound',
+      'Zombie',
+      'Combat',
+      'Objects',
+      'Fireplace',
+      'Radio',
+      'MapLoading',
+      'Clothing',
+      'Animation',
+      'Asset',
+      'Script',
+      'Shader',
+      'Input',
+      'Recipe',
+      'ActionSystem',
+      'IsoRegion',
+      'UniTests',
+      'FileIO',
+      'Ownership',
+      'Death',
+      'Damage',
+      'Statistic',
+      'Vehicle',
+      'Checksum',
+    ]
+    const validLevels = ['Trace', 'Debug', 'General', 'Warning', 'Error']
+    if (!validTypes.includes(type)) {
+      invalid(
+        `Invalid log type. Valid: ${validTypes.join(', ')}`,
+        'LOG_INVALID_TYPE',
+      )
+    }
+    if (!validLevels.includes(level)) {
+      invalid(
+        `Invalid log level. Valid: ${validLevels.join(', ')}`,
+        'LOG_INVALID_LEVEL',
+      )
+    }
+    return runtime.rconService.setLogLevel(type, level)
+  },
 )
 export const setServerStats = createControlAction(
   'server.configure',
-  (runtime, data) =>
-    runtime.rconService.setStats(
-      requiredString(data, 'mode', 'Stats mode is required'),
-      data.period,
-    ),
+  (runtime, data) => {
+    const mode = requiredString(
+      data,
+      'mode',
+      'Mode is required',
+      'STATS_MODE_REQUIRED',
+    )
+    const validModes = ['none', 'file', 'console', 'all']
+    const normalizedMode = mode.toLowerCase()
+    if (!validModes.includes(normalizedMode)) {
+      invalid(
+        `Invalid mode. Valid: ${validModes.join(', ')}`,
+        'STATS_INVALID_MODE',
+      )
+    }
+    const period = data.period
+      ? legacyIntegerOrDefault(data.period, 1, 3600, null)
+      : null
+    return runtime.rconService.setStats(normalizedMode, period)
+  },
 )
 export const releaseSafehouse = createControlAction(
   'server.world_events',
@@ -658,6 +915,30 @@ export const setAccessLevel = createControlAction(
     )
     if (!validUsername(username))
       invalid('Invalid username format', 'PLAYERS_INVALID_USERNAME')
+    const { ACCESS_LEVELS } =
+      await import('../../../panel-server/utils/commands.ts')
+    const { getActiveServer } =
+      await import('../../../panel-server/database/init.ts')
+    const { listServerRoleNames } =
+      await import('../../../panel-server/utils/whitelistDb.ts')
+    const activeServer = await getActiveServer()
+    let validLevels = ACCESS_LEVELS
+    if (activeServer && !activeServer.isRemote) {
+      const roleResult = await listServerRoleNames(
+        activeServer.zomboidDataPath,
+        activeServer.serverName,
+      )
+      if (roleResult.available) {
+        validLevels = [...roleResult.roleNames, 'none']
+      }
+    }
+    if (!validLevels.includes(level.toLowerCase())) {
+      invalid(
+        `Invalid access level. Valid: ${validLevels.join(', ')}`,
+        'PLAYERS_INVALID_ACCESS_LEVEL',
+        { validLevels: validLevels.join(', ') },
+      )
+    }
     const result = await runtime.rconService.setAccessLevel(username, level)
     if (result?.success) await logPlayerAction(username, 'access_level', level)
     return result
@@ -1301,7 +1582,9 @@ export const getRconCommands = createControlRead(null, async (data) => {
   if (!category) return { commands: PZ_COMMANDS }
 
   const commands = Object.fromEntries(
-    Object.entries(PZ_COMMANDS).filter(([, command]) => command.category === category),
+    Object.entries(PZ_COMMANDS).filter(
+      ([, command]) => command.category === category,
+    ),
   )
   return { commands }
 })
@@ -1354,10 +1637,7 @@ export const testRconConnection = createControlAction(
       return (await test({ host, port, password })) as {
         success: boolean
         error?:
-          | 'unreachable'
-          | 'auth_failed'
-          | 'invalid_input'
-          | 'internal_error'
+          'unreachable' | 'auth_failed' | 'invalid_input' | 'internal_error'
         detail: string
       }
     } catch (error) {
@@ -1380,9 +1660,7 @@ function taskId(value: unknown): number | null {
   return Number.isSafeInteger(number) && number > 0 ? number : null
 }
 
-type CronCheck =
-  | { valid: true }
-  | { valid: false; error: string; code: string }
+type CronCheck = { valid: true } | { valid: false; error: string; code: string }
 
 async function checkCronExpression(expression: string): Promise<CronCheck> {
   const {
@@ -1466,18 +1744,12 @@ export const createScheduledTaskAction = createControlAction(
         'SCHEDULER_INVALID_TASK_NAME',
       )
     if (typeof data.command !== 'string' || data.command.length > 2000)
-      invalid(
-        'Invalid command (max 2000 chars)',
-        'SCHEDULER_INVALID_COMMAND',
-      )
+      invalid('Invalid command (max 2000 chars)', 'SCHEDULER_INVALID_COMMAND')
     if (
       typeof data.cronExpression !== 'string' ||
       data.cronExpression.length > 100
     )
-      invalid(
-        'Invalid cron expression format',
-        'SCHEDULER_INVALID_CRON_FORMAT',
-      )
+      invalid('Invalid cron expression format', 'SCHEDULER_INVALID_CRON_FORMAT')
 
     const { requiredCapabilityForScheduledCommand } =
       await import('../../../panel-server/utils/schedulerPermissions.ts')
@@ -1487,8 +1759,12 @@ export const createScheduledTaskAction = createControlAction(
     )
     assertCronCheck(await checkCronExpression(data.cronExpression))
 
-    const { createScheduledTask, deleteScheduledTask, getActiveServer, getServer } =
-      await import('../../../panel-server/database/init.ts')
+    const {
+      createScheduledTask,
+      deleteScheduledTask,
+      getActiveServer,
+      getServer,
+    } = await import('../../../panel-server/database/init.ts')
     let serverId = data.serverId ?? null
     if (serverId) {
       if (!(await getServer(serverId)))
@@ -1515,7 +1791,8 @@ export const createScheduledTaskAction = createControlAction(
 
     try {
       const scheduleResult = runtime.scheduler.scheduleTask(task)
-      if (scheduleResult === false) throw new Error('Scheduler rejected the task')
+      if (scheduleResult === false)
+        throw new Error('Scheduler rejected the task')
       return {
         success: true,
         task,
@@ -1594,11 +1871,11 @@ export const updateScheduledTaskAction = createControlAction(
     }
     const tasksBeforeUpdate = await getScheduledTasks()
     const previousTaskRecord = Array.isArray(tasksBeforeUpdate)
-      ? tasksBeforeUpdate.find((task: AnyRecord) => String(task.id) === String(id))
+      ? tasksBeforeUpdate.find(
+          (task: AnyRecord) => String(task.id) === String(id),
+        )
       : null
-    const previousTask = previousTaskRecord
-      ? { ...previousTaskRecord }
-      : null
+    const previousTask = previousTaskRecord ? { ...previousTaskRecord } : null
     const updated = await updateScheduledTask(
       id,
       data.name,
@@ -1641,7 +1918,8 @@ export const updateScheduledTaskAction = createControlAction(
               previousTask.enabled,
               previousTask.server_id,
             )
-            if (previousTask.enabled) runtime.scheduler.scheduleTask(previousTask)
+            if (previousTask.enabled)
+              runtime.scheduler.scheduleTask(previousTask)
             else runtime.scheduler.cancelTask(id)
           } catch (rollbackError) {
             void rollbackError
@@ -1696,7 +1974,8 @@ export const runScheduledTask = createControlAction(
           taskName: task.name,
           success: !!result?.success,
           message:
-            result?.message || (result?.success ? 'Task completed' : 'Task failed'),
+            result?.message ||
+            (result?.success ? 'Task completed' : 'Task failed'),
         }),
       )
       .catch((error: unknown) =>
@@ -1751,12 +2030,7 @@ export const restartScheduledServer = createControlAction(
     const { parseBoundedInteger } =
       await import('../../../panel-server/utils/queryNumbers.ts')
     const warningMinutes = Math.min(
-      parseBoundedInteger(
-        data.warningMinutes,
-        5,
-        0,
-        Number.MAX_SAFE_INTEGER,
-      ),
+      parseBoundedInteger(data.warningMinutes, 5, 0, Number.MAX_SAFE_INTEGER),
       60,
     )
     void runtime.scheduler
@@ -1784,10 +2058,12 @@ export const restartScheduledServer = createControlAction(
 export const getSchedulerHistory = createControlRead(
   'automation.manage',
   async (data) => {
-    const [{ getScheduleHistory }, { parseClampedInteger }] = await Promise.all([
-      import('../../../panel-server/database/init.ts'),
-      import('../../../panel-server/utils/queryNumbers.ts'),
-    ])
+    const [{ getScheduleHistory }, { parseClampedInteger }] = await Promise.all(
+      [
+        import('../../../panel-server/database/init.ts'),
+        import('../../../panel-server/utils/queryNumbers.ts'),
+      ],
+    )
     const limit = parseClampedInteger(data.limit, 100, 1, 500)
     const taskIdValue = data.taskId === undefined ? null : taskId(data.taskId)
     if (data.taskId !== undefined && taskIdValue === null)

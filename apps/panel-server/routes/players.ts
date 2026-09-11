@@ -1,7 +1,5 @@
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
 import express, { type Request } from "express";
-import fs from "fs";
-import path from "path";
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Players');
 import {
@@ -24,6 +22,11 @@ import bridge from '../services/panelBridge.ts';
 import { listWhitelistAccounts, listServerRoleNames } from '../utils/whitelistDb.ts';
 import { requirePermission } from '../services/permissions.ts';
 import { ErrorCode } from '../utils/errorCodes.ts';
+import {
+  deletePlayerExport,
+  getPlayerExport,
+  listPlayerExports,
+} from '../services/playerExports.ts';
 
 const router = express.Router();
 
@@ -65,40 +68,7 @@ function recordSteamIdBan(
   ) => Promise<unknown>)(steamId, reason);
 }
 
-const MAX_EXPORT_FILE_BYTES = 5 * 1024 * 1024;
-
-export function parsePlayerExportFile(filePath: string): Record<string, unknown> {
-  let stat;
-  try {
-    stat = fs.statSync(filePath);
-  } catch {
-    throw new Error('Export not found');
-  }
-
-  if (stat.size > MAX_EXPORT_FILE_BYTES) {
-    throw new Error('Export file is too large');
-  }
-
-  let raw;
-  try {
-    raw = fs.readFileSync(filePath, 'utf8');
-  } catch {
-    throw new Error('Could not read export file');
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error('Invalid JSON export file');
-  }
-
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Invalid export structure');
-  }
-
-  return parsed;
-}
+export { parsePlayerExportFile } from '../services/playerExports.ts';
 
 const USERNAME_REGEX = /^[^\x00-\x1F\x7F"\\]{1,64}$/;
 const SAFE_TEXT_REGEX = /^[a-zA-Z0-9\s.,!?'":;()@#&+=%_\-\u00C0-\u024F]{0,256}$/;
@@ -970,44 +940,10 @@ router.get('/stats/:playerName', requirePermission("players.view"), async (req, 
   }
 });
 
-import { getDataPaths } from '../utils/paths.ts';
-
 router.get('/exports', requirePermission("players.gm_tools"), async (req, res) => {
   try {
-    const { username } = req.query;
-    const { dataDir } = getDataPaths();
-    const exportsRoot = path.join(dataDir, 'exports');
-
-    if (!fs.existsSync(exportsRoot)) {
-      return res.json({ exports: [] });
-    }
-
-    const results = [];
-
-    const requestedUsername = typeof username === "string" ? username : null;
-    const players = requestedUsername
-      ? [requestedUsername.replace(/[^a-zA-Z0-9_-]/g, '_')]
-      : fs.readdirSync(exportsRoot).filter(f => {
-          try { return fs.statSync(path.join(exportsRoot, f)).isDirectory(); } catch { return false; }
-        });
-
-    for (const playerDir of players) {
-      const dirPath = path.join(exportsRoot, playerDir);
-      if (!fs.existsSync(dirPath)) continue;
-      const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.json')).sort().reverse();
-      for (const file of files) {
-        const stat = fs.statSync(path.join(dirPath, file));
-        results.push({
-          username: playerDir,
-          filename: file,
-          size: stat.size,
-          timestamp: stat.mtime.toISOString(),
-        });
-      }
-    }
-
-    results.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-    res.json({ exports: results });
+    const username = typeof req.query.username === 'string' ? req.query.username : undefined;
+    res.json({ exports: listPlayerExports(username) });
   } catch (error: unknown) {
     log.error(`Failed to list exports: ${errorMessage(error)}`);
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });
@@ -1016,47 +952,28 @@ router.get('/exports', requirePermission("players.gm_tools"), async (req, res) =
 
 router.get('/exports/:username/:filename', requirePermission("players.gm_tools"), async (req, res) => {
   try {
-    const username = String(req.params.username);
-    const filename = String(req.params.filename);
-    if (!/^[a-zA-Z0-9_-]+$/.test(username) || !/^[a-zA-Z0-9_.-]+\.json$/.test(filename)) {
-      return res.status(400).json({ error: 'Invalid parameters', code: ErrorCode.PLAYERS_EXPORT_INVALID_PARAMETERS });
-    }
-
-    const { dataDir } = getDataPaths();
-    const filePath = path.join(dataDir, 'exports', username, filename);
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'Export not found', code: ErrorCode.PLAYERS_EXPORT_NOT_FOUND });
-    }
-
-    const data = parsePlayerExportFile(filePath);
-    res.json(data);
+    res.json(getPlayerExport(String(req.params.username), String(req.params.filename)));
   } catch (error: unknown) {
     log.error(`Failed to get export: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
+    const details = error as { code?: unknown; status?: unknown };
+    res.status(typeof details.status === 'number' ? details.status : 500).json({
+      error: sanitizeError(errorMessage(error)),
+      ...(typeof details.code === 'string' ? { code: details.code } : {}),
+    });
   }
 });
 
 router.delete('/exports/:username/:filename', requirePermission("players.gm_tools"), async (req, res) => {
   try {
-    const username = String(req.params.username);
-    const filename = String(req.params.filename);
-    if (!/^[a-zA-Z0-9_-]+$/.test(username) || !/^[a-zA-Z0-9_.-]+\.json$/.test(filename)) {
-      return res.status(400).json({ error: 'Invalid parameters', code: ErrorCode.PLAYERS_EXPORT_INVALID_PARAMETERS });
-    }
-
-    const { dataDir } = getDataPaths();
-    const filePath = path.join(dataDir, 'exports', username, filename);
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'Export not found', code: ErrorCode.PLAYERS_EXPORT_NOT_FOUND });
-    }
-
-    fs.unlinkSync(filePath);
+    deletePlayerExport(String(req.params.username), String(req.params.filename));
     res.json({ success: true });
   } catch (error: unknown) {
     log.error(`Failed to delete export: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
+    const details = error as { code?: unknown; status?: unknown };
+    res.status(typeof details.status === 'number' ? details.status : 500).json({
+      error: sanitizeError(errorMessage(error)),
+      ...(typeof details.code === 'string' ? { code: details.code } : {}),
+    });
   }
 });
 

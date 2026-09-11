@@ -91,6 +91,82 @@ async function panelRuntime(): Promise<AnyRecord> {
   return getPanelRuntime()
 }
 
+function validPlayerName(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value.trim().length <= 64 &&
+    // eslint-disable-next-line no-control-regex
+    /^[^\x00-\x1F\x7F"\\]+$/.test(value.trim())
+  )
+}
+
+export const upsertPlayerNote = createResourceAction(
+  'players.moderate',
+  async (data) => {
+    const playerName = data.playerName
+    if (!playerName) {
+      invalid('Player name is required', 'PLAYERS_NOTE_PLAYER_NAME_REQUIRED')
+    }
+    if (!validPlayerName(playerName)) {
+      invalid('Invalid player name format', 'PLAYERS_INVALID_NOTE_PLAYER_NAME')
+    }
+    const note = data.note
+    if (note !== undefined && note !== null && typeof note !== 'string') {
+      invalid('Note must be text', 'PLAYERS_NOTE_MUST_BE_TEXT')
+    }
+    if (typeof note === 'string' && note.length > 10000) {
+      invalid('Note too long (max 10000 characters)', 'PLAYERS_NOTE_TOO_LONG')
+    }
+    const tags = data.tags || []
+    if (!Array.isArray(tags)) {
+      invalid('Tags must be an array', 'PLAYERS_NOTE_TAGS_MUST_BE_ARRAY')
+    }
+    if (tags.some((tag) => typeof tag !== 'string' || tag.length > 50)) {
+      invalid(
+        'Tags must be strings (max 50 chars each)',
+        'PLAYERS_NOTE_INVALID_TAGS',
+      )
+    }
+    const { upsertPlayerNote } =
+      await import('../../../panel-server/database/init.ts')
+    return {
+      success: true,
+      note: await upsertPlayerNote(String(playerName), note, tags),
+    }
+  },
+)
+
+export const deletePlayerNote = createResourceAction(
+  'players.moderate',
+  async (data) => {
+    const { deletePlayerNote } =
+      await import('../../../panel-server/database/init.ts')
+    const success = await deletePlayerNote(String(data.playerName ?? ''))
+    if (!success) {
+      throwResourceError(
+        Object.assign(new Error('Player note not found'), {
+          success: false,
+          code: 'PLAYERS_NOTE_NOT_FOUND',
+          status: 404,
+        }),
+        404,
+      )
+    }
+    return { success }
+  },
+)
+
+export const deletePlayerExport = createResourceAction(
+  'players.gm_tools',
+  async (data) => {
+    const { deletePlayerExport: removePlayerExport } =
+      await import('../../../panel-server/services/playerExports.ts')
+    removePlayerExport(String(data.username ?? ''), String(data.filename ?? ''))
+    return { success: true }
+  },
+)
+
 export const createTemplate = createResourceAction(
   'templates.manage',
   async (data) => {
