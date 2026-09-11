@@ -199,6 +199,19 @@ const mocks = vi.hoisted(() => {
       "getConfigTemplates",
       "getConfigTemplate",
       "browseServerFiles",
+      "saveServerIni",
+      "saveServerSandbox",
+      "saveSandboxOption",
+      "repairServerSandbox",
+      "saveServerSpawnPoints",
+      "saveServerSpawnRegions",
+      "saveServerRawFile",
+      "restoreServerConfigBackup",
+      "saveServerAndReload",
+      "createServerConfigTemplate",
+      "applyServerConfigTemplate",
+      "updateServerConfigTemplate",
+      "deleteServerConfigTemplate",
     ].map((name) => [name, serverFunction(name)]),
   );
 
@@ -337,6 +350,57 @@ const SERVER_FILE_ROUTES = [
     "GET",
     "/api/server-files/browse-files?path=%2Ftmp&extensions=.png",
     "browseServerFiles",
+  ],
+];
+
+const SERVER_FILE_WRITE_ROUTES = [
+  ["PUT", "/api/server-files/ini", "saveServerIni", { settings: {} }],
+  ["PUT", "/api/server-files/sandbox", "saveServerSandbox", { sandbox: {} }],
+  [
+    "PUT",
+    "/api/server-files/sandbox-option",
+    "saveSandboxOption",
+    { name: "DayLength", value: 1 },
+  ],
+  ["POST", "/api/server-files/sandbox/repair", "repairServerSandbox", {}],
+  ["PUT", "/api/server-files/spawnpoints", "saveServerSpawnPoints", { spawnpoints: {} }],
+  ["PUT", "/api/server-files/spawnregions", "saveServerSpawnRegions", { spawnregions: [] }],
+  [
+    "PUT",
+    "/api/server-files/raw/ini",
+    "saveServerRawFile",
+    { content: "Key=Value" },
+  ],
+  [
+    "POST",
+    "/api/server-files/restore/demo.ini.2026.bak",
+    "restoreServerConfigBackup",
+    {},
+  ],
+  ["POST", "/api/server-files/save-and-reload", "saveServerAndReload", {}],
+  [
+    "POST",
+    "/api/server-files/templates",
+    "createServerConfigTemplate",
+    { name: "Demo" },
+  ],
+  [
+    "POST",
+    "/api/server-files/templates/demo/apply",
+    "applyServerConfigTemplate",
+    { applyIni: true },
+  ],
+  [
+    "PUT",
+    "/api/server-files/templates/demo",
+    "updateServerConfigTemplate",
+    { name: "Updated" },
+  ],
+  [
+    "DELETE",
+    "/api/server-files/templates/demo",
+    "deleteServerConfigTemplate",
+    {},
   ],
 ];
 
@@ -499,6 +563,32 @@ describe("Start compatibility server and player routes", () => {
         handledBy: functionName,
         data: expectedData,
       });
+    },
+  );
+
+  it.each(SERVER_FILE_WRITE_ROUTES)(
+    "dispatches %s %s to %s",
+    async (method, path, functionName, body) => {
+      const response = await handleStartApiCompatibilityRequest(
+        makeRequest(method, path, body),
+      );
+
+      expect(response.status).toBe(200);
+      const params = path.includes("/restore/")
+        ? { filename: "demo.ini.2026.bak" }
+        : path.includes("/raw/")
+          ? { ...body, type: "ini" }
+        : path.includes("/templates/")
+          ? { id: "demo", ...body }
+          : body;
+      expect(await responseBody(response)).toEqual({
+        handledBy: functionName,
+        data: params,
+      });
+      expect(mocks.fileReads[functionName]).toHaveBeenCalledWith(
+        params,
+        expect.objectContaining({ authenticatedUser: expect.any(Object) }),
+      );
     },
   );
 
