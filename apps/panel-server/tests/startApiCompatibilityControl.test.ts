@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
     "getActiveManagedServer",
     "getManagedServersStatus",
     "getManagedServersRconStatus",
+    "getActiveComposedStatus",
     "getManagedServer",
     "getLifecycleTemplate",
     "getDiscoveredMounts",
@@ -185,6 +186,21 @@ const mocks = vi.hoisted(() => {
   const system = {
     getStorageHealth: serverFunction("getStorageHealth"),
   };
+  const fileReads = Object.fromEntries(
+    [
+      "getServerFilePaths",
+      "getServerIni",
+      "getServerSandbox",
+      "validateServerSandbox",
+      "getServerSpawnPoints",
+      "getServerSpawnRegions",
+      "getServerRawFile",
+      "getServerConfigBackups",
+      "getConfigTemplates",
+      "getConfigTemplate",
+      "browseServerFiles",
+    ].map((name) => [name, serverFunction(name)]),
+  );
 
   return {
     authenticate: vi.fn(),
@@ -196,6 +212,7 @@ const mocks = vi.hoisted(() => {
     resourceActions,
     mods,
     system,
+    fileReads,
   };
 });
 
@@ -218,6 +235,7 @@ vi.mock(
 );
 vi.mock("../../panel-client/src/lib/serverMods.ts", () => mocks.mods);
 vi.mock("../../panel-client/src/lib/serverSystem.ts", () => mocks.system);
+vi.mock("../../panel-client/src/lib/serverFileReads.ts", () => mocks.fileReads);
 
 const { handleStartApiCompatibilityRequest } =
   await import("../../panel-client/src/lib/startApiCompatibility.ts");
@@ -229,6 +247,7 @@ const CONTROL_ROUTES = [
   ["GET", "/api/servers/active", "getActiveManagedServer"],
   ["GET", "/api/servers/status", "getManagedServersStatus"],
   ["GET", "/api/servers/rcon-status", "getManagedServersRconStatus"],
+  ["GET", "/api/servers/active/status", "getActiveComposedStatus"],
   ["GET", "/api/servers/server-1", "getManagedServer"],
   ["GET", "/api/servers/discover-mounts", "getDiscoveredMounts"],
   ["PUT", "/api/servers/server-1", "updateManagedServer"],
@@ -303,15 +322,57 @@ const RESOURCE_ROUTES = [
   ["GET", "/api/players/stats/Alice", "getPlayerStat"],
 ];
 
+const SERVER_FILE_ROUTES = [
+  ["GET", "/api/server-files/paths", "getServerFilePaths"],
+  ["GET", "/api/server-files/ini", "getServerIni"],
+  ["GET", "/api/server-files/sandbox", "getServerSandbox"],
+  ["GET", "/api/server-files/sandbox/validate", "validateServerSandbox"],
+  ["GET", "/api/server-files/spawnpoints", "getServerSpawnPoints"],
+  ["GET", "/api/server-files/spawnregions", "getServerSpawnRegions"],
+  ["GET", "/api/server-files/raw/ini", "getServerRawFile"],
+  ["GET", "/api/server-files/backups", "getServerConfigBackups"],
+  ["GET", "/api/server-files/templates", "getConfigTemplates"],
+  ["GET", "/api/server-files/templates/demo", "getConfigTemplate"],
+  [
+    "GET",
+    "/api/server-files/browse-files?path=%2Ftmp&extensions=.png",
+    "browseServerFiles",
+  ],
+];
+
 const PUBLIC_AUTH_ROUTES = [
   ["POST", "/api/auth/setup", "setup", { setupToken: "setup-token" }, 201],
-  ["POST", "/api/auth/login", "login", { username: "Alice", password: "pw" }, 200],
+  [
+    "POST",
+    "/api/auth/login",
+    "login",
+    { username: "Alice", password: "pw" },
+    200,
+  ],
   ["POST", "/api/auth/refresh", "refresh", undefined, 200],
   ["POST", "/api/auth/logout", "logout", undefined, 200],
   ["GET", "/api/auth/reset-status", "resetStatus", undefined, 200],
-  ["POST", "/api/auth/reset-token/local", "createLocalResetToken", undefined, 200],
-  ["POST", "/api/auth/reset-password", "resetPassword", { token: "token", newPassword: "password" }, 200],
-  ["POST", "/api/auth/recover-with-code", "recoverWithCode", { code: "code", newPassword: "password" }, 200],
+  [
+    "POST",
+    "/api/auth/reset-token/local",
+    "createLocalResetToken",
+    undefined,
+    200,
+  ],
+  [
+    "POST",
+    "/api/auth/reset-password",
+    "resetPassword",
+    { token: "token", newPassword: "password" },
+    200,
+  ],
+  [
+    "POST",
+    "/api/auth/recover-with-code",
+    "recoverWithCode",
+    { code: "code", newPassword: "password" },
+    200,
+  ],
 ];
 
 const CREATED_ROUTES = [
@@ -340,6 +401,7 @@ beforeEach(() => {
       "panel.settings",
       "diagnostics.manage",
       "mods.manage",
+      "serverfiles.manage",
       "players.view",
       "players.moderate",
       "players.gm_tools",
@@ -353,6 +415,7 @@ beforeEach(() => {
     ...Object.values(mocks.auth),
     ...Object.values(mocks.mods),
     ...Object.values(mocks.system),
+    ...Object.values(mocks.fileReads),
   ]) {
     fn.mockClear();
   }
@@ -413,6 +476,28 @@ describe("Start compatibility server and player routes", () => {
           : path.includes("/exports/")
             ? { username: "Alice", filename: "save.json" }
             : {},
+      });
+    },
+  );
+
+  it.each(SERVER_FILE_ROUTES)(
+    "dispatches %s %s to %s",
+    async (method, path, functionName) => {
+      const response = await handleStartApiCompatibilityRequest(
+        makeRequest(method, path),
+      );
+
+      expect(response.status).toBe(200);
+      const expectedData = path.includes("raw/ini")
+        ? { type: "ini" }
+        : path.includes("templates/demo")
+          ? { id: "demo" }
+          : path.includes("browse-files")
+            ? { path: "/tmp", extensions: ".png" }
+            : {};
+      expect(await responseBody(response)).toEqual({
+        handledBy: functionName,
+        data: expectedData,
       });
     },
   );

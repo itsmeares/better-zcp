@@ -14,6 +14,7 @@ import {
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import { isPidAlive } from "../utils/pidLiveness.ts";
+import { getPanelDatabase, setPanelDatabase } from "../utils/panelRuntime.ts";
 const log = createLogger("DB");
 
 type AnyRecord = Record<string, any>;
@@ -781,6 +782,14 @@ function compactData(data: DatabaseData): DatabaseData {
 
 export async function getDb(): Promise<Database> {
   if (!db) {
+    const sharedDatabase = getPanelDatabase<Database>();
+    if (sharedDatabase) {
+      db = sharedDatabase;
+      return db;
+    }
+  }
+
+  if (!db) {
     if (
       useSqliteDatabase &&
       !fs.existsSync(dbPath) &&
@@ -818,6 +827,7 @@ export async function getDb(): Promise<Database> {
       ? await createSqliteAdapter()
       : createJsonAdapter(dbPath);
     db = createDatabase(adapter);
+    setPanelDatabase(db);
 
     let loadedCleanly = false;
     try {

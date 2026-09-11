@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 const initUrl = new URL("../database/init.ts", import.meta.url).href;
+const runtimeUrl = new URL("../utils/panelRuntime.ts", import.meta.url).href;
 const tempRoots = [];
 
 function createSandbox() {
@@ -24,6 +25,7 @@ function runChild(configPath, markerPath, source, databaseDriver = "sqlite") {
     ...process.env,
     PANEL_PATHS_CONFIG_PATH: configPath,
     ZCP_INIT_URL: initUrl,
+    ZCP_RUNTIME_URL: runtimeUrl,
     ZCP_MARKER: markerPath,
   };
   if (databaseDriver) env.PANEL_DATABASE_DRIVER = databaseDriver;
@@ -100,6 +102,46 @@ process.exit(0);`,
     expect(reader.status, reader.stderr).toBe(0);
     expect(fs.readFileSync(markerForReader, "utf8")).toBe("ok");
     expect(fs.statSync(path.join(dataDir, "db.sqlite")).mode & 0o777).toBe(0o600);
+  });
+
+  it("shares the database between the native host and its Start SSR bundle", () => {
+    const { configPath, dataDir, root } = createSandbox();
+    const markerPath = path.join(root, "bundle.marker");
+    const writer = runChild(
+      configPath,
+      markerPath,
+      `import fs from "node:fs";
+const { setPanelRuntime } = await import(process.env.ZCP_RUNTIME_URL);
+setPanelRuntime({});
+const host = await import(process.env.ZCP_INIT_URL + "?host");
+const start = await import(process.env.ZCP_INIT_URL + "?start");
+const hostDb = await host.getDb();
+await host.setSetting("hostPendingWrite", "keep");
+const startDb = await start.getDb();
+startDb.data.servers.push({ id: "start-bundle-server" });
+await start.commitNow();
+await host.flushForShutdown();
+fs.writeFileSync(process.env.ZCP_MARKER, String(hostDb === startDb));
+process.exit(0);`,
+    );
+    expect(writer.status, writer.stderr).toBe(0);
+    expect(fs.readFileSync(markerPath, "utf8")).toBe("true");
+
+    const markerForReader = path.join(root, "bundle-reader.marker");
+    const reader = runChild(
+      configPath,
+      markerForReader,
+      `import fs from "node:fs";
+const { getDb } = await import(process.env.ZCP_INIT_URL);
+const db = await getDb();
+fs.writeFileSync(process.env.ZCP_MARKER, db.data.servers[0]?.id || "missing");
+process.exit(0);`,
+    );
+    expect(reader.status, reader.stderr).toBe(0);
+    expect(fs.readFileSync(markerForReader, "utf8")).toBe(
+      "start-bundle-server",
+    );
+    expect(fs.existsSync(path.join(dataDir, "db.sqlite"))).toBe(true);
   });
 
   it("refuses to silently replace a legacy database before import", () => {

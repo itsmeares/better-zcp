@@ -459,6 +459,69 @@ export const getManagedServersRconStatus = createControlRead(null, async () => {
   return { servers: statuses }
 })
 
+export const getActiveComposedStatus = createControlRead(null, async () => {
+  const [
+    { getActiveServer },
+    { composeServerStatus, resolveProvider },
+    { resolveDockerHostSignal },
+    { getActiveLifecycleOperation },
+  ] = await Promise.all([
+    import('../../../panel-server/database/init.ts'),
+    import('../../../panel-server/utils/serverStatusModel.ts'),
+    import('../../../panel-server/services/managedContainer.ts'),
+    import('../../../panel-server/services/lifecycleCoordinator.ts'),
+  ])
+  const runtime = await panelRuntime()
+  const server = await getActiveServer()
+  if (!server) {
+    throwControlError(
+      Object.assign(new Error('No active server configured'), { status: 404 }),
+      404,
+    )
+  }
+
+  const provider = resolveProvider(server)
+  const isContainerProvider =
+    provider === 'docker-local' || provider === 'docker-managed'
+  let processDetails: AnyRecord
+  let dockerContainer: AnyRecord | null = null
+  if (isContainerProvider) {
+    const dockerSignal = await resolveDockerHostSignal(
+      server,
+      runtime.dockerClient,
+    )
+    processDetails = dockerSignal
+    dockerContainer = dockerSignal.scanFailed
+      ? { handled: true, error: 'Docker container status unavailable' }
+      : { handled: true, running: dockerSignal.running }
+  } else {
+    processDetails =
+      typeof runtime.serverManager?.getServerProcessDetails === 'function'
+        ? await runtime.serverManager.getServerProcessDetails()
+        : { running: !!runtime.serverManager?.isRunning, scanFailed: false }
+  }
+
+  const rconService = runtime.rconService
+  const rconConfig = rconService?.getConfig ? rconService.getConfig() : {}
+  const bridge = runtime.panelBridge
+  return composeServerStatus({
+    server,
+    isRunning: !!processDetails.running,
+    scanFailed: !!processDetails.scanFailed,
+    dockerContainer,
+    rcon: {
+      ...rconConfig,
+      connecting: !!(rconService?.connecting || rconService?.reconnecting),
+    },
+    bridge: {
+      configured: !!bridge?.bridgePath,
+      running: !!bridge?.isRunning,
+      modConnected: bridge?.isModConnected ? bridge.isModConnected() : false,
+    },
+    lifecycleOperation: getActiveLifecycleOperation(),
+  })
+})
+
 export const createManagedServer = createControlAction(
   'servers.manage',
   async (_runtime, data, context) => {
