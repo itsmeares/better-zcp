@@ -1,4 +1,4 @@
-import { Router } from "../http/legacyRouter.ts";
+import { Router } from "../http/startApiRouter.ts";
 import { requirePermission } from "../services/permissions.ts";
 import {
   QUERY_FAILURE_MESSAGES,

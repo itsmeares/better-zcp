@@ -1302,8 +1302,10 @@ export class ModChecker extends EventEmitter {
 
       this.lastCheck = new Date();
 
+      let configuredWorkshopIds: Set<string> | null = null;
       try {
         const iniWorkshopIds = await this.getConfiguredWorkshopIds();
+        configuredWorkshopIds = iniWorkshopIds;
         if (iniWorkshopIds && iniWorkshopIds.size > 0) {
           const before = updatedMods.length;
           const filtered = updatedMods.filter((m) =>
@@ -1389,6 +1391,17 @@ export class ModChecker extends EventEmitter {
           return true;
         });
 
+        const restartEligibleUpdates = configuredWorkshopIds === null
+          ? newUpdates
+          : newUpdates.filter((mod) =>
+              configuredWorkshopIds!.has(String(mod.workshopId)),
+            );
+        if (newUpdates.length > 0 && restartEligibleUpdates.length === 0) {
+          log.info(
+            "All pending mod updates belong to deactivated mods — skipping auto-restart",
+          );
+        }
+
         if (newUpdates.length === 0 && updatedMods.length > 0) {
           log.info(
             `All ${updatedMods.length} update(s) already processed — skipping callback`,
@@ -1398,28 +1411,30 @@ export class ModChecker extends EventEmitter {
         const startedAt = this.startedAt;
         const inGracePeriod =
           startedAt !== null && Date.now() - startedAt < this.startupGraceMs;
-        if (inGracePeriod && newUpdates.length > 0) {
+        if (inGracePeriod && restartEligibleUpdates.length > 0) {
           const remaining = Math.round(
             (this.startupGraceMs - (Date.now() - startedAt!)) / 1000,
           );
           log.info(
-            `Startup grace period active (${remaining}s remaining) — skipping auto-restart for ${newUpdates.length} update(s)`,
+            `Startup grace period active (${remaining}s remaining) — skipping auto-restart for ${restartEligibleUpdates.length} update(s)`,
           );
-          newUpdates.length = 0;
+          restartEligibleUpdates.length = 0;
         }
 
         if (
           this.onUpdateCallback &&
           !this.pendingRestart &&
-          newUpdates.length > 0
+          restartEligibleUpdates.length > 0
         ) {
           try {
             log.info(
-              `Triggering auto-restart callback for ${newUpdates.length} new update(s)`,
+              `Triggering auto-restart callback for ${restartEligibleUpdates.length} new update(s)`,
             );
-            const callbackResult = await this.onUpdateCallback(newUpdates);
+            const callbackResult = await this.onUpdateCallback(
+              restartEligibleUpdates,
+            );
             if (this.pendingRestart || callbackResult?.markProcessed === true) {
-              for (const m of newUpdates) {
+              for (const m of restartEligibleUpdates) {
                 const steamTs = m.latestTimestamp?.getTime?.() || 0;
                 if (steamTs) {
                   this.processedUpdates.set(m.workshopId, steamTs);

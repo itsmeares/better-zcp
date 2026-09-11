@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from '../http/legacyRouter.ts';
+import { Router, type Request, type Response } from '../http/startApiRouter.ts';
 import cron from 'node-cron';
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Scheduler');

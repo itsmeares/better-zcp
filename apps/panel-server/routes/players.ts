@@ -1,5 +1,5 @@
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
-import { Router, type Request } from "../http/legacyRouter.ts";
+import { Router, type Request } from "../http/startApiRouter.ts";
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Players');
 import {

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { handleLegacyApiRequest } from "../http/legacyApi.ts";
+import { handleStartApiRequest } from "../http/startApiDispatcher.ts";
 
 const settings = new Map();
 const db = { data: { users: [{ id: "u1", username: "admin", role: "admin" }] } };
@@ -30,7 +30,7 @@ describe("native legacy API authentication carve-outs, no Authorization header",
   });
 
   it("GET /api/mods/thumbnail/:workshopId is NOT 401 with no auth header -- the carve-out actually works end-to-end", async () => {
-    const res = await handleLegacyApiRequest(
+    const res = await handleStartApiRequest(
       new Request("http://panel.test/api/mods/thumbnail/not-a-real-id"),
     );
     expect(res?.status).not.toBe(401);
@@ -38,7 +38,7 @@ describe("native legacy API authentication carve-outs, no Authorization header",
   });
 
   it("GET /api/mods/status (an ordinary gated route) IS still 401 with no auth header -- the carve-out is narrow, not a blanket bypass of the router", async () => {
-    const res = await handleLegacyApiRequest(
+    const res = await handleStartApiRequest(
       new Request("http://panel.test/api/mods/status"),
     );
     expect(res?.status).toBe(401);
@@ -47,7 +47,7 @@ describe("native legacy API authentication carve-outs, no Authorization header",
   });
 
   it("GET /api/map/tiles/:level/:tile (the sibling exemption that already worked) stays not-401 with no auth header", async () => {
-    const res = await handleLegacyApiRequest(
+    const res = await handleStartApiRequest(
       new Request("http://panel.test/api/map/tiles/999/0_0.jpg"),
     );
     expect(res?.status).not.toBe(401);

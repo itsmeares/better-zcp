@@ -6,12 +6,6 @@ import { createServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import { Server } from "socket.io";
 import type { Socket } from "socket.io";
-import {
-  Router,
-  type NextFunction,
-  type Request,
-  type Response,
-} from "./http/legacyRouter.ts";
 import type { Server as HttpsServer } from "https";
 import dotenv from "dotenv";
 import path from "path";
@@ -89,15 +83,12 @@ import { BackupService } from "./services/backupService.ts";
 import { UpdateChecker } from "./services/updateChecker.ts";
 import {
   PanelUpdateChecker,
-  createUpdateDataBackup,
   restorePreUpdateDataBackup,
 } from "./services/panelUpdateChecker.ts";
 import {
   acknowledgeUpdateBundle,
-  applyUpdateBundle,
   inspectPendingUpdateBundle,
   PANEL_API_CONTRACT_VERSION as DEFAULT_API_CONTRACT_VERSION,
-  recoverInterruptedUpdateBundle,
 } from "./services/updateBundle.ts";
 import { LogTailer } from "./services/logTailer.ts";
 import { DiskMonitor } from "./services/diskMonitor.ts";
@@ -106,17 +97,15 @@ import authService, {
   type SessionRevocationEvent,
 } from "./services/auth.ts";
 import { getRoleByName } from "./services/permissions.ts";
-import { requireRole } from "./services/auth.ts";
 import {
   createPanelRequestHandler,
 } from "./http/panelWeb.ts";
-import { registerLegacyApiModule } from "./http/legacyApi.ts";
+export {
+  handlePanelUpdateDownload,
+  handlePanelUpdateStatus,
+} from "./http/panelUpdateHandlers.ts";
 import { loadOrCreateCerts } from "./utils/certs.ts";
-import { sanitizeError, sanitizeErrorParams } from "./utils/sanitize.ts";
-import { ErrorCode } from "./utils/errorCodes.ts";
 import {
-  buildPanelInfo,
-  resolvePanelInfoPort,
   resolvePanelPort,
 } from "./utils/panelInfo.ts";
 import { getSftpCachePath } from "./services/panelBridgeSftp.ts";
@@ -263,7 +252,7 @@ async function gracefulShutdown(signal: string) {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-import { addLogToBuffer } from "./routes/debug.ts";
+import { addLogToBuffer } from "./utils/logBuffer.ts";
 import { getDiskFree } from "./utils/diskSpace.ts";
 import { getSwapInfo } from "./utils/swapInfo.ts";
 import panelBridge from "./services/panelBridge.ts";
@@ -1011,10 +1000,12 @@ const panelWebOptions = {
   httpsDetected,
   inlineScriptCspSources: () => inlineScriptCspSources.join(" "),
 };
-const panelRouter = Router();
 
-function updateBundleJournalPath() {
-  return path.join(path.dirname(panelUpdateChecker.getExeBasePath()), "update-bundle.json");
+function updateBundleJournalPath(): string {
+  return path.join(
+    path.dirname(panelUpdateChecker.getExeBasePath()),
+    "update-bundle.json",
+  );
 }
 
 let _pendingUpdateInspection: PendingUpdateInspection = {
@@ -1022,348 +1013,23 @@ let _pendingUpdateInspection: PendingUpdateInspection = {
   awaitingStartupAck: false,
 };
 
-function inspectPendingPanelUpdate() {
+function inspectPendingPanelUpdate(): PendingUpdateInspection {
   const journalPath = updateBundleJournalPath();
   return inspectPendingUpdateBundle({
     journalPath,
-    applyingMarkerPath: path.join(path.dirname(journalPath), ".update-applying"),
+    applyingMarkerPath: path.join(
+      path.dirname(journalPath),
+      ".update-applying",
+    ),
     runningMetadata: _buildMetadata,
   });
-}
-panelRouter.get("/health", (_req, res) => {
-  res.json(buildPanelHealthPayload(_buildMetadata));
-});
-
-panelRouter.get("/panel-info", async (_req, res) => {
-  const savedPort = await getSetting("panelPort");
-  const PORT = activePanelPort ?? resolvePanelInfoPort(savedPort);
-  const localIp = await serverManager.getLocalIp();
-  res.json(buildPanelInfo(localIp, PORT));
-});
-
-panelRouter.post("/panel/restart", requireRole("admin"), async (req, res) => {
-  log.info("Panel restart requested via API");
-
-  const checker = req.app.get("panelUpdateChecker");
-  const isPackaged = typeof process.pkg !== "undefined";
-  const isWindows = process.platform === "win32";
-  const staged =
-    checker && typeof checker.getStagedUpdate === "function"
-      ? checker.getStagedUpdate()
-      : null;
-
-  if (isPackaged && staged) {
-    try {
-      const dataBackupPath = createUpdateDataBackup(
-        { ...getDataPaths(), dbPath: getDatabaseFilePath() },
-        staged.version,
-      );
-      if (dataBackupPath) {
-        log.info(`Backed up panel database before update: ${dataBackupPath}`);
-        await setSetting("preUpdateDataBackupPath", dataBackupPath);
-        await flushWrites();
-      }
-    } catch (backupErr: any) {
-      log.warn(`Could not back up panel database before update: ${backupErr.message}`);
-    }
-  }
-
-  if (isPackaged && isWindows && staged) {
-    if (
-      typeof checker.isSupervisorAvailable === "function" &&
-      checker.isSupervisorAvailable()
-    ) {
-      try {
-        if (checker.isApplying) {
-          log.warn(
-            "Supervisor restart-and-apply request rejected: another apply is in progress",
-          );
-          return res.status(409).json({
-            error: "An update apply is already in progress.",
-            code: "apply_in_progress",
-          });
-        }
-        checker.isApplying = true;
-        if (staged.version) {
-          await setSetting("pendingPanelUpdate", staged.version);
-          await flushWrites();
-        }
-        const markerPath = checker.writeSupervisorMarker(staged);
-        log.info(
-          `Staged update will be applied by supervisor (Start.bat v2). Marker: ${markerPath}`,
-        );
-        res.json({
-          success: true,
-          message: "Stopping panel for supervisor to apply update...",
-          applyingUpdate: true,
-          supervisor: true,
-        });
-        setTimeout(() => process.exit(75), 500);
-        return;
-      } catch (err: any) {
-        log.error(`Could not write supervisor marker: ${err.message}`);
-        return res.status(500).json({ error: sanitizeError(err.message) });
-      }
-    }
-
-    checker.isApplying = false;
-    return res.status(409).json({
-      error:
-        "This update requires the packaged Start.bat supervisor. Stop the panel and launch Start.bat, then apply again.",
-    });
-  }
-
-  let linuxRespawnPath = null;
-  if (isPackaged && !isWindows && staged) {
-    if (checker.isApplying) {
-      log.warn(
-        "Linux restart-and-apply request rejected: another apply is in progress",
-      );
-      return res.status(409).json({
-        error: "An update apply is already in progress.",
-        code: "apply_in_progress",
-      });
-    }
-    checker.isApplying = true;
-    try {
-      if (staged.version) {
-        await setSetting("pendingPanelUpdate", staged.version);
-        await flushWrites();
-      }
-      const appliedBundle = applyUpdateBundle(staged.journalPath);
-      refreshInlineScriptCspHash();
-      const targetPath = appliedBundle.paths.binary;
-      try {
-        await fs.promises.chmod(targetPath, 0o755);
-      } catch (chmodErr: any) {
-        log.warn(`Could not chmod new binary: ${chmodErr.message}`);
-      }
-      try {
-        await fs.promises.access(targetPath, fs.constants.X_OK);
-      } catch (accessErr: any) {
-        recoverInterruptedUpdateBundle(
-          staged.journalPath,
-          "binary_not_executable",
-        );
-        refreshInlineScriptCspHash();
-        checker.isApplying = false;
-        log.error(
-          `New binary at ${targetPath} is not executable: ${accessErr.message}`,
-        );
-        return res.status(500).json({
-          error: sanitizeError(
-            `Applied update is not executable: ${accessErr.message}`,
-          ),
-        });
-      }
-      linuxRespawnPath = targetPath;
-      log.info(
-        `Linux update bundle applied to ${targetPath}; awaiting startup acknowledgement after restart`,
-      );
-    } catch (err: any) {
-      refreshInlineScriptCspHash();
-      checker.isApplying = false;
-      log.error(`Failed to apply Linux staged update: ${err.message}`);
-      return res.status(500).json({ error: sanitizeError(err.message) });
-    }
-  }
-
-  res.json({ success: true, message: "Panel is restarting..." });
-
-  setTimeout(async () => {
-    try {
-      await flushWrites();
-    } catch {
-      /* best effort */
-    }
-    let orchestrated = false;
-    const linuxSupervisor = isLinuxPanelSupervisor();
-    if (isPackaged) {
-      try {
-        if (process.env.INVOCATION_ID || process.env.NOTIFY_SOCKET)
-          orchestrated = true;
-        if (
-          fs.existsSync("/.dockerenv") ||
-          fs.existsSync("/run/.containerenv")
-        ) {
-          orchestrated = true;
-        }
-      } catch {
-        /* best effort */
-      }
-
-      if (!orchestrated && !linuxSupervisor) {
-        const respawnTarget = linuxRespawnPath || process.execPath;
-        spawn(respawnTarget, [], { detached: true, stdio: "ignore" }).unref();
-      } else if (orchestrated) {
-        log.info(
-          "Running under orchestrator (systemd/Docker) — exiting for external restart",
-        );
-      } else {
-        log.info(
-          "Running under the Linux supervisor — exiting for start.sh to relaunch",
-        );
-      }
-    }
-    process.exit(linuxSupervisor ? 75 : orchestrated ? 1 : 0);
-  }, 1000);
-});
-
-panelRouter.get("/panel/update-check", async (req, res) => {
-  try {
-    const checker = req.app.get("panelUpdateChecker");
-    if (!checker)
-      return res
-        .status(500)
-        .json({ error: "Panel update checker not available" });
-    const status = await checker.checkForUpdate();
-    res.json(status);
-  } catch (error: any) {
-    log.error(`Panel update check failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-export async function handlePanelUpdateStatus(
-  req: Request,
-  res: Response,
-): Promise<Response | void> {
-  try {
-    const checker = req.app.get("panelUpdateChecker");
-    if (!checker)
-      return res
-        .status(500)
-        .json({ error: "Panel update checker not available" });
-    res.json(checker.getStatus());
-  } catch (error: any) {
-    log.error(`Panel update status failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-}
-
-panelRouter.get("/panel/update-status", handlePanelUpdateStatus);
-
-panelRouter.get("/panel/update-preflight", async (req, res) => {
-  try {
-    const checker = req.app.get("panelUpdateChecker");
-    if (!checker)
-      return res
-        .status(500)
-        .json({ error: "Panel update checker not available" });
-    const result = await checker.preflight();
-    res.json(result);
-  } catch (error: any) {
-    log.error(`Panel update preflight failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-panelRouter.get("/panel/update-apply-log", (req, res) => {
-  try {
-    const checker = req.app.get("panelUpdateChecker");
-    if (!checker)
-      return res
-        .status(500)
-        .json({ error: "Panel update checker not available" });
-    const log = checker.readMostRecentApplyLog();
-    res.json({
-      log,
-      logPath: path.join(getDataPaths().logsDir, "panel-update-last.log"),
-    });
-  } catch (error: any) {
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-export async function handlePanelUpdateDownload(
-  req: Request,
-  res: Response,
-): Promise<Response | void> {
-    try {
-      const checker = req.app.get("panelUpdateChecker");
-      if (!checker)
-        return res
-          .status(500)
-          .json({ error: "Panel update checker not available" });
-
-      if (checker.dockerUpdateProxy?.enabled) {
-        if (req.body?.confirm !== true) {
-          return res.status(400).json({
-            error:
-              "Confirm the Docker update before recreating the all-in-one container.",
-            code: "confirmation_required",
-          });
-        }
-
-        const processDetails =
-          typeof serverManager.getServerProcessDetails === "function"
-            ? await serverManager.getServerProcessDetails()
-            : null;
-        if (!processDetails || processDetails.scanFailed) {
-          return res.status(503).json({
-            success: false,
-            error:
-              "Can't verify whether the server is stopped because process detection failed. The Docker update was not started.",
-            code: ErrorCode.SERVER_STATE_UNKNOWN,
-          });
-        }
-        const isRunning = Boolean(processDetails.running);
-        if (isRunning) {
-          const rconService = req.app.get("rconService");
-          if (!rconService?.connected) {
-            return res.status(409).json({
-              error:
-                "Stop the Project Zomboid server before applying a Docker update. RCON is not connected, so the panel cannot safely stop it for you.",
-              code: ErrorCode.SERVER_RUNNING_RCON_UNAVAILABLE,
-            });
-          }
-
-          const saved = await rconService.save();
-          if (!saved?.success) {
-            const reason = saved?.error || "unknown error";
-            return res.status(409).json({
-              error: `The world could not be saved (${reason}), so the server was left running. Applying the update now would lose everything since the last save.`,
-              code: "save_failed",
-              params: sanitizeErrorParams({ reason }),
-            });
-          }
-          const quit = await rconService.quit();
-          if (!quit?.success) {
-            const reason = quit?.error || "unknown error";
-            return res.status(502).json({
-              error: `The world was saved, but the server could not be shut down (${reason}). It is still running, so the update was not applied.`,
-              code: "stop_failed",
-              params: sanitizeErrorParams({ reason }),
-            });
-          }
-          await logServerEvent(
-            "server_stop",
-            "Server stopped before Docker panel update",
-          );
-        }
-      }
-
-      const result = await checker.downloadUpdate();
-      if (!result.success) {
-        if (result.code === "already_downloading")
-          return res.status(409).json(result);
-        if (result.code === "no_update") return res.status(400).json(result);
-        return res.status(400).json(result);
-      }
-      res.json(result);
-    } catch (error: any) {
-      log.error(`Panel update download failed: ${error.message}`);
-      res.status(500).json({ error: sanitizeError(error.message) });
-    }
 }
 
 export function classifyStartupProcessState(
   processState: AnyRecord | null | undefined,
-  isRemote: boolean = false,
+  isRemote = false,
 ) {
-  if (isRemote) {
-    return { running: Boolean(processState?.running), unknown: false };
-  }
+  if (isRemote) return { running: Boolean(processState?.running), unknown: false };
   if (
     !processState ||
     processState.scanFailed ||
@@ -1373,14 +1039,6 @@ export function classifyStartupProcessState(
   }
   return { running: processState.running, unknown: false };
 }
-
-panelRouter.post(
-  "/panel/update-download",
-  requireRole("admin"),
-  handlePanelUpdateDownload,
-);
-
-registerLegacyApiModule("/api", async () => panelRouter);
 
 panelRequestHandler = createPanelRequestHandler(panelWebOptions, {
   isAllowedOrigin,

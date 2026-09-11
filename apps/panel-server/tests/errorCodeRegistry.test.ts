@@ -20,6 +20,7 @@ const SCANNED_FILES = [
   ...listServerFiles(path.join(SERVER_DIR, "routes")),
   ...listServerFiles(path.join(SERVER_DIR, "services")),
   ...listServerFiles(path.join(SERVER_DIR, "middleware")),
+  ...listServerFiles(path.join(SERVER_DIR, "http")),
   path.join(SERVER_DIR, "index.ts"),
 ];
 
@@ -71,7 +72,7 @@ const KNOWN_CLIENT_ONLY_LOCALE_KEYS = new Set([
 ]);
 
 describe("server error codes: registry membership (structure, not meaning)", () => {
-  it("every `code:` literal used in apps/panel-server/routes, apps/panel-server/services, apps/panel-server/middleware and apps/panel-server/index.ts is a registered ErrorCode value", () => {
+  it("every `code:` literal used in apps/panel-server/routes, apps/panel-server/services, apps/panel-server/middleware, apps/panel-server/http and apps/panel-server/index.ts is a registered ErrorCode value", () => {
     const registryValues = new Set(Object.values(ErrorCode));
     const literals = findCodeLiterals();
     const unregistered = literals.filter((l) => !registryValues.has(l.value));

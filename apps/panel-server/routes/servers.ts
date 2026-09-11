@@ -1,4 +1,4 @@
-import { Router, type NextFunction, type Request, type Response } from "../http/legacyRouter.ts";
+import { Router, type NextFunction, type Request, type Response } from "../http/startApiRouter.ts";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";

@@ -6,9 +6,9 @@ import {
 } from '../../../panel-server/utils/sanitize.ts'
 import { parseClampedInteger } from '../../../panel-server/utils/queryNumbers.ts'
 
-// Preserve the legacy HTTP contract for integrations while the panel UI uses
-// typed Server Functions. The remaining legacy handlers run through the
-// native Node adapter after the Express host is removed.
+// Keep the existing public /api contract while the panel UI uses typed Server
+// Functions. Start owns the request; the dispatcher below only supplies the
+// long tail of endpoints that still need their public HTTP response shape.
 type AnyRecord = Record<string, any>
 
 type AuthenticatedUser = {
@@ -17,6 +17,16 @@ type AuthenticatedUser = {
   role: string
   tokenGen: number | null
   authDisabled?: boolean
+}
+
+type DirectServerFunction = ((
+  data: AnyRecord,
+  context: { authenticatedUser: AuthenticatedUser | null; request?: Request },
+) => Promise<unknown>) & {
+  __executeImplementation?: (
+    data: unknown,
+    context?: unknown,
+  ) => Promise<unknown>
 }
 
 type ServerFunction = {
@@ -28,7 +38,7 @@ type ServerFunction = {
     data?: unknown
     context?: unknown
   }) => Promise<{ result?: unknown; error?: unknown }>
-}
+} | DirectServerFunction
 
 type RouteSource =
   | 'control'
@@ -49,7 +59,9 @@ type RouteSource =
   | 'bridgeEffects'
   | 'bridgePlayer'
   | 'bridgeDiagnostics'
-  | 'legacyServer'
+  | 'serverServer'
+  | 'panel'
+  | 'http'
 
 type RouteStatus = number | ((result: any) => number)
 
@@ -101,7 +113,9 @@ const implementations: Record<
   bridgeEffects: () => import('./serverPanelBridgeEffects'),
   bridgePlayer: () => import('./serverPanelBridgePlayerChat'),
   bridgeDiagnostics: () => import('./serverPanelBridgeDiagnostics'),
-  legacyServer: () => import('./serverLegacyApi'),
+  serverServer: () => import('./serverServerApi'),
+  panel: () => import('./serverPanelUpdate'),
+  http: () => import('./serverHttpApi'),
 }
 
 const sourceCapabilities: Partial<Record<RouteSource, string>> = {
@@ -1226,7 +1240,7 @@ const routes: RouteSpec[] = [
   {
     method: 'GET',
     pattern: '/api/server/steamcmd/check',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'checkSteamCmd',
     capability: 'server.install',
     data: queryData('path'),
@@ -1234,7 +1248,7 @@ const routes: RouteSpec[] = [
   {
     method: 'POST',
     pattern: '/api/server/configure-rcon',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'configureRcon',
     capability: 'server.configure',
     data: mergeBody,
@@ -1242,7 +1256,7 @@ const routes: RouteSpec[] = [
   {
     method: 'POST',
     pattern: '/api/server/configure-network',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'configureNetwork',
     capability: 'server.configure',
     data: mergeBody,
@@ -1250,7 +1264,7 @@ const routes: RouteSpec[] = [
   {
     method: 'GET',
     pattern: '/api/server/console-log',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'getConsoleLog',
     capability: 'server.world_events',
     data: queryData('lines', 'filter'),
@@ -1258,14 +1272,14 @@ const routes: RouteSpec[] = [
   {
     method: 'GET',
     pattern: '/api/server/console-log/error-count',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'getConsoleErrorCount',
     capability: 'server.world_events',
   },
   {
     method: 'GET',
     pattern: '/api/server/console-log/stream',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'getConsoleLogStream',
     capability: 'server.world_events',
     data: queryData('lastSize', 'filter'),
@@ -1273,7 +1287,7 @@ const routes: RouteSpec[] = [
   {
     method: 'POST',
     pattern: '/api/server/console-log/clear',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'clearConsoleLog',
     capability: 'server.configure',
     data: mergeBody,
@@ -1281,7 +1295,7 @@ const routes: RouteSpec[] = [
   {
     method: 'GET',
     pattern: '/api/server/update-check',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'getServerUpdate',
     capability: 'server.world_events',
     data: queryData('force'),
@@ -1289,14 +1303,14 @@ const routes: RouteSpec[] = [
   {
     method: 'GET',
     pattern: '/api/server/update-check/status',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'getServerUpdateStatus',
     capability: 'server.world_events',
   },
   {
     method: 'POST',
     pattern: '/api/server/update-check/auto-update-result/dismiss',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'dismissServerAutoUpdateResult',
     capability: 'server.world_events',
     data: mergeBody,
@@ -1304,7 +1318,7 @@ const routes: RouteSpec[] = [
   {
     method: 'POST',
     pattern: '/api/server/update-check/interval',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'setServerUpdateInterval',
     capability: 'server.configure',
     data: mergeBody,
@@ -1312,8 +1326,47 @@ const routes: RouteSpec[] = [
   {
     method: 'GET',
     pattern: '/api/map/vehicles',
-    source: 'legacyServer',
+    source: 'serverServer',
     functionName: 'getMapVehicles',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/panel/restart',
+    source: 'panel',
+    functionName: 'restartPanel',
+    role: 'admin',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/panel/update-check',
+    source: 'panel',
+    functionName: 'checkPanelUpdate',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/panel/update-status',
+    source: 'panel',
+    functionName: 'getPanelUpdateStatus',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/panel/update-preflight',
+    source: 'panel',
+    functionName: 'getPanelUpdatePreflight',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/panel/update-apply-log',
+    source: 'panel',
+    functionName: 'getPanelUpdateApplyLog',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/panel/update-download',
+    source: 'panel',
+    functionName: 'downloadPanelUpdate',
+    role: 'admin',
+    data: mergeBody,
   },
 
   {
@@ -2037,6 +2090,21 @@ const routes: RouteSpec[] = [
     data: mergeBody,
   },
   {
+    method: 'GET',
+    pattern: '/api/backup/download/:name',
+    source: 'http',
+    functionName: 'downloadBackup',
+    capability: 'backups.download',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/backup/upload',
+    source: 'http',
+    functionName: 'uploadBackup',
+    capability: 'backups.manage',
+  },
+  {
     method: 'POST',
     pattern: '/api/backup/settings',
     source: 'resourceActions',
@@ -2234,6 +2302,14 @@ const routes: RouteSpec[] = [
     pattern: '/api/server-files/paths',
     source: 'fileReads',
     functionName: 'getServerFilePaths',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server-files/image-preview',
+    source: 'http',
+    functionName: 'previewServerImage',
+    capability: 'serverfiles.manage',
+    data: queryData('path'),
   },
   {
     method: 'GET',
@@ -2546,6 +2622,20 @@ const routes: RouteSpec[] = [
   },
   {
     method: 'GET',
+    pattern: '/api/auth/oidc/login',
+    source: 'http',
+    functionName: 'oidcLogin',
+    public: true,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/auth/oidc/callback',
+    source: 'http',
+    functionName: 'oidcCallback',
+    public: true,
+  },
+  {
+    method: 'GET',
     pattern: '/api/auth/oidc/settings',
     source: 'admin',
     functionName: 'getOidcSettings',
@@ -2690,10 +2780,18 @@ async function execute(
   spec: RouteSpec,
   data: AnyRecord,
   user: AuthenticatedUser | null,
+  request: Request,
 ): Promise<unknown> {
   const implementation = await implementations[spec.source]()
   const serverFunction = implementation[spec.functionName] as unknown as
     ServerFunction | undefined
+  if (typeof serverFunction === 'function') {
+    return serverFunction.__executeImplementation
+      ? serverFunction.__executeImplementation(data, {
+          authenticatedUser: user,
+        })
+      : serverFunction(data, { authenticatedUser: user, request })
+  }
   if (serverFunction?.__executeImplementation) {
     return serverFunction.__executeImplementation(data, {
       authenticatedUser: user,
@@ -2723,8 +2821,14 @@ export async function handleStartApiCompatibilityRequest(
     (candidate) =>
       candidate.method === method && matchPattern(candidate.pattern, pathname),
   )
-  if (!spec)
-    return Response.json({ error: 'API endpoint not found' }, { status: 404 })
+  if (!spec) {
+    const { handleStartApiRequest } =
+      await import('../../../panel-server/http/startApiDispatcher.ts')
+    const response = await handleStartApiRequest(request)
+    return markStartHandled(
+      response || Response.json({ error: 'API endpoint not found' }, { status: 404 }),
+    )
+  }
 
   try {
     const authenticated = spec.public ? null : await authenticate(request)
@@ -2763,7 +2867,8 @@ export async function handleStartApiCompatibilityRequest(
     const data = spec.data
       ? spec.data(url.searchParams, body, params)
       : mergeBody(url.searchParams, body, params)
-    const result = await execute(spec, data, authenticated)
+    const result = await execute(spec, data, authenticated, request)
+    if (result instanceof Response) return markStartHandled(result)
     const status =
       typeof spec.status === 'function'
         ? spec.status(result)

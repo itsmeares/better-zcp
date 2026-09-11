@@ -111,4 +111,30 @@ describe("ModChecker Steam API health tracking", () => {
     expect(status.steamApiHealthy).toBe(true);
     expect(status.lastSteamApiFailureAt).toBeNull();
   });
+
+  it("does not restart for a mod that is absent from the active server INI", async () => {
+    const acfPath = path.join(tempRoot, "appworkshop_108600.acf");
+    writeAcfFixture(acfPath, {
+      workshopId: "3333333333",
+      timeupdated: 1000,
+      latestTimeupdated: 1000,
+    });
+
+    const checker = new ModChecker();
+    checker.workshopAcfPath = acfPath;
+    checker.serverManager = {
+      getServerConfig: vi.fn(async () => ({ WorkshopItems: "4444444444" })),
+    };
+    checker.fetchSteamTimestamps = vi.fn(async () =>
+      new Map([["3333333333", { time_updated: 2000, title: "Inactive Mod" }]]),
+    );
+    const callback = vi.fn(async () => ({ markProcessed: true }));
+    await checker.setUpdateCallback(callback);
+
+    const result = await checker.checkForUpdates();
+
+    expect(result.updated).toBe(false);
+    expect(result.mods).toEqual([]);
+    expect(callback).not.toHaveBeenCalled();
+  });
 });

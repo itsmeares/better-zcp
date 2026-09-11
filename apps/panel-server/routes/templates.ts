@@ -1,4 +1,4 @@
-import { Router } from "../http/legacyRouter.ts";
+import { Router } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";

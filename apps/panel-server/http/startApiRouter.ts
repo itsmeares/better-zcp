@@ -52,15 +52,15 @@ export type RouterLayer = {
   name?: string;
 };
 
-export type LegacyRouter = RequestHandler & {
+export type StartApiRouter = RequestHandler & {
   stack: RouterLayer[];
-  get(path: string, ...handlers: RequestHandler[]): LegacyRouter;
-  post(path: string, ...handlers: RequestHandler[]): LegacyRouter;
-  put(path: string, ...handlers: RequestHandler[]): LegacyRouter;
-  patch(path: string, ...handlers: RequestHandler[]): LegacyRouter;
-  delete(path: string, ...handlers: RequestHandler[]): LegacyRouter;
-  all(path: string, ...handlers: RequestHandler[]): LegacyRouter;
-  use(...args: Array<string | RequestHandler>): LegacyRouter;
+  get(path: string, ...handlers: RequestHandler[]): StartApiRouter;
+  post(path: string, ...handlers: RequestHandler[]): StartApiRouter;
+  put(path: string, ...handlers: RequestHandler[]): StartApiRouter;
+  patch(path: string, ...handlers: RequestHandler[]): StartApiRouter;
+  delete(path: string, ...handlers: RequestHandler[]): StartApiRouter;
+  all(path: string, ...handlers: RequestHandler[]): StartApiRouter;
+  use(...args: Array<string | RequestHandler>): StartApiRouter;
 };
 
 function requestPath(request: Request): string {
@@ -132,7 +132,7 @@ async function runHandlers(
   await dispatch();
 }
 
-function createRouter(): LegacyRouter {
+function createRouter(): StartApiRouter {
   const stack: RouterLayer[] = [];
   const router = (async (
     request: Request,
@@ -191,13 +191,13 @@ function createRouter(): LegacyRouter {
     } catch (dispatchError) {
       await outerNext(dispatchError);
     }
-  }) as unknown as LegacyRouter;
+  }) as unknown as StartApiRouter;
 
   const addRoute = (
     method: string,
     path: string,
     handlers: RequestHandler[],
-  ): LegacyRouter => {
+  ): StartApiRouter => {
     stack.push({
       handle: handlers[0] || (async (_request, _response, next) => next()),
       route: {
@@ -213,7 +213,7 @@ function createRouter(): LegacyRouter {
 
   for (const method of ["get", "post", "put", "patch", "delete", "all"] as const) {
     router[method] = ((path: string, ...handlers: RequestHandler[]) =>
-      addRoute(method, path, handlers)) as LegacyRouter[typeof method];
+      addRoute(method, path, handlers)) as StartApiRouter[typeof method];
   }
 
   router.use = ((...args: Array<string | RequestHandler>) => {
@@ -225,7 +225,7 @@ function createRouter(): LegacyRouter {
       stack.push(layer);
     }
     return router;
-  }) as LegacyRouter["use"];
+  }) as StartApiRouter["use"];
 
   router.stack = stack;
   return router;

@@ -36,7 +36,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function throwLegacyError(error: unknown, fallbackStatus = 500): never {
+function throwServerError(error: unknown, fallbackStatus = 500): never {
   const details =
     error && typeof error === 'object' ? (error as ServiceError) : {}
   const status =
@@ -49,11 +49,11 @@ function throwLegacyError(error: unknown, fallbackStatus = 500): never {
 }
 
 function invalid(message: string, code?: string): never {
-  throwLegacyError(Object.assign(new Error(message), code ? { code } : {}), 400)
+  throwServerError(Object.assign(new Error(message), code ? { code } : {}), 400)
 }
 
 function updateCheckerUnavailable(): never {
-  throwLegacyError(
+  throwServerError(
     Object.assign(new Error('Update checker not available'), {
       code: ErrorCode.UPDATE_CHECKER_NOT_AVAILABLE,
       status: 503,
@@ -69,7 +69,7 @@ function capabilityMiddleware(capability: string) {
   ] as const
 }
 
-function createLegacyRead<T>(
+function createServerRead<T>(
   capability: string | null,
   handler: (data: AnyRecord) => Promise<T> | T,
 ) {
@@ -81,7 +81,7 @@ function createLegacyRead<T>(
     try {
       return await handler(data)
     } catch (error) {
-      throwLegacyError(error)
+      throwServerError(error)
     }
   }
   return Object.assign(
@@ -92,7 +92,7 @@ function createLegacyRead<T>(
   )
 }
 
-function createLegacyAction<T>(
+function createServerAction<T>(
   capability: string,
   handler: (data: AnyRecord) => Promise<T> | T,
 ) {
@@ -100,7 +100,7 @@ function createLegacyAction<T>(
     try {
       return await handler(data)
     } catch (error) {
-      throwLegacyError(error)
+      throwServerError(error)
     }
   }
   return Object.assign(
@@ -248,7 +248,7 @@ function filterConsoleLogLines(
   })
 }
 
-export const getConsoleLog = createLegacyRead(
+export const getConsoleLog = createServerRead(
   'server.world_events',
   async (data) => {
     const filePath = await consoleLogPath()
@@ -291,7 +291,7 @@ let errorCountCache: { at: number; value: AnyRecord | null } = {
   value: null,
 }
 
-export const getConsoleErrorCount = createLegacyRead(
+export const getConsoleErrorCount = createServerRead(
   'server.world_events',
   async () => {
     const now = Date.now()
@@ -340,7 +340,7 @@ export const getConsoleErrorCount = createLegacyRead(
   },
 )
 
-export const getConsoleLogStream = createLegacyRead(
+export const getConsoleLogStream = createServerRead(
   'server.world_events',
   async (data) => {
     const filePath = await consoleLogPath()
@@ -404,7 +404,7 @@ export const getConsoleLogStream = createLegacyRead(
   },
 )
 
-export const clearConsoleLog = createLegacyAction(
+export const clearConsoleLog = createServerAction(
   'server.configure',
   async () => {
     const filePath = await consoleLogPath()
@@ -450,7 +450,7 @@ function steamCmdExecutable(steamcmdPath: string): string {
   return primary
 }
 
-export const checkSteamCmd = createLegacyRead(
+export const checkSteamCmd = createServerRead(
   'server.install',
   async (data) => {
     const checkPath = typeof data.path === 'string' ? data.path : null
@@ -525,7 +525,7 @@ async function requireIniPath(): Promise<string> {
   return iniPath
 }
 
-export const configureRcon = createLegacyAction(
+export const configureRcon = createServerAction(
   'server.configure',
   async (data) => {
     const password = data.rconPassword
@@ -570,7 +570,7 @@ export const configureRcon = createLegacyAction(
   },
 )
 
-export const configureNetwork = createLegacyAction(
+export const configureNetwork = createServerAction(
   'server.configure',
   async (data) => {
     const portCheck = requireIntInRange(
@@ -610,7 +610,7 @@ export const configureNetwork = createLegacyAction(
   },
 )
 
-export const getServerUpdate = createLegacyRead(
+export const getServerUpdate = createServerRead(
   'server.world_events',
   async (data) => {
     const updateChecker = (await panelRuntime()).updateChecker
@@ -627,7 +627,7 @@ export const getServerUpdate = createLegacyRead(
   },
 )
 
-export const getServerUpdateStatus = createLegacyRead(
+export const getServerUpdateStatus = createServerRead(
   'server.world_events',
   async () => {
     const updateChecker = (await panelRuntime()).updateChecker
@@ -636,7 +636,7 @@ export const getServerUpdateStatus = createLegacyRead(
   },
 )
 
-export const dismissServerAutoUpdateResult = createLegacyAction(
+export const dismissServerAutoUpdateResult = createServerAction(
   'server.world_events',
   async () => {
     const updateChecker = (await panelRuntime()).updateChecker
@@ -646,7 +646,7 @@ export const dismissServerAutoUpdateResult = createLegacyAction(
   },
 )
 
-export const setServerUpdateInterval = createLegacyAction(
+export const setServerUpdateInterval = createServerAction(
   'server.configure',
   async (data) => {
     const updateChecker = (await panelRuntime()).updateChecker
@@ -669,7 +669,7 @@ let persistedVehicleCache: {
   vehicles: Array<{ id: number; x: number; y: number }>
 } = { key: null, expiresAt: 0, vehicles: [] }
 
-export const getMapVehicles = createLegacyRead(null, async () => {
+export const getMapVehicles = createServerRead(null, async () => {
   try {
     const { getActiveServer } = await database()
     const activeServer = await getActiveServer()

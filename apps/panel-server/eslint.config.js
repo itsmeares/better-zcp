@@ -67,7 +67,7 @@ export default [
       "no-self-compare": "error",
       "no-template-curly-in-string": "warn",
       "no-unmodified-loop-condition": "error",
-      // Express handlers and service interfaces intentionally remain async,
+      // HTTP handlers and service interfaces intentionally remain async,
       // including paths that do not await on every code path.
       "require-await": "off",
     },

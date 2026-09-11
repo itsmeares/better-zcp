@@ -12,7 +12,7 @@ import {
   getUsersForRoleAccounting,
   reassignRoleMembers,
 } from "../database/init.ts";
-import type { NextFunction, Request, RequestHandler, Response } from "../http/legacyRouter.ts";
+import type { NextFunction, Request, RequestHandler, Response } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 

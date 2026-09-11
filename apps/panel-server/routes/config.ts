@@ -1,4 +1,4 @@
-import { Router, type Request } from "../http/legacyRouter.ts";
+import { Router, type Request } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Config");
 import { getAllSettings } from "../database/init.ts";

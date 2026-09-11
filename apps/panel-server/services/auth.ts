@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import crypto from "crypto";
-import type { NextFunction, Request, RequestHandler, Response } from "../http/legacyRouter.ts";
+import type { NextFunction, Request, RequestHandler, Response } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getSetting, setSetting, getDb, commitNow } from "../database/init.ts";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";

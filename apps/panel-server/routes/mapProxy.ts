@@ -1,10 +1,10 @@
-import { Router } from "../http/legacyRouter.ts";
+import { Router } from "../http/startApiRouter.ts";
 import { randomUUID } from "node:crypto";
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import type { Request, Response as LegacyResponse } from "../http/legacyRouter.ts";
+import type { Request, Response as NativeResponse } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { getActiveServer } from "../database/init.ts";
@@ -522,7 +522,7 @@ function requestIsVersioned(req: Request): boolean {
 
 async function serveTile(
   req: Request,
-  res: LegacyResponse,
+  res: NativeResponse,
   url: string,
   contentType: string,
   relPath: string,

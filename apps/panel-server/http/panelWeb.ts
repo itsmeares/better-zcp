@@ -18,9 +18,9 @@ import {
   clientDistMatchesMetadata,
   readClientDistMetadata,
 } from "../utils/embeddedClient.ts";
+import { ErrorCode } from "../utils/errorCodes.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import type { TrustProxySetting } from "../utils/trustProxy.ts";
-import { handleLegacyApiRequest, isRegisteredErrorCode } from "./legacyApi.ts";
 
 type AnyRecord = Record<string, any>;
 
@@ -45,6 +45,12 @@ type ErrorResponse = {
   status(code: number): ErrorResponse;
   json(body: unknown): ErrorResponse;
 };
+
+const REGISTERED_ERROR_CODES = new Set<string>(Object.values(ErrorCode));
+
+function isRegisteredErrorCode(value: unknown): value is string {
+  return typeof value === "string" && REGISTERED_ERROR_CODES.has(value);
+}
 
 export type PanelWebOptions = {
   isPackaged: boolean;
@@ -571,59 +577,32 @@ export function createPanelRequestHandler(
 
     const handler = await getHandler();
     if (pathname.startsWith("/_serverFn/") || isApiRequest || (request.method === "GET" || request.method === "HEAD")) {
-      let legacyRequest: globalThis.Request | undefined;
-      let legacyAttempted = false;
-      if (handler) {
-        const startRequest = toTanStackStartRequest(nativeRequest);
-        legacyRequest = startRequest.clone();
+      if (!handler) {
+        if (pathname.startsWith("/_serverFn/") || isApiRequest) {
+          sendNativeJson(response, 503, {
+            error: "TanStack Start server bundle unavailable",
+          });
+          return;
+        }
+      } else {
         try {
-          let startResponse = await handler.fetch(startRequest);
-          const startHandled = startResponse.headers.get("x-tanstack-start-handled") === "1";
+          let startResponse = await handler.fetch(toTanStackStartRequest(nativeRequest));
           const startIsHtml = responseHasHtml(startResponse);
-          const startOwnsApiRequest = !startIsHtml &&
-            (startHandled || startResponse.status !== 404);
           if (!isApiRequest && startIsHtml) {
             startResponse = await addHtmlCsp(startResponse, options);
-            startResponse.headers.delete("x-tanstack-start-handled");
-            await sendNativeResponse(startResponse, request, response);
-            return;
           }
-          if (!isApiRequest || startOwnsApiRequest) {
-            startResponse.headers.delete("x-tanstack-start-handled");
+          startResponse.headers.delete("x-tanstack-start-handled");
+          if (isApiRequest || pathname.startsWith("/_serverFn/") || startResponse.status !== 404 || startIsHtml) {
             await sendNativeResponse(startResponse, request, response);
-            return;
-          }
-          legacyAttempted = true;
-          const legacyResponse = await handleLegacyApiRequest(legacyRequest, request);
-          if (legacyResponse) {
-            await sendNativeResponse(legacyResponse, request, response);
             return;
           }
         } catch (error) {
           options.logger.warn("TanStack Start request failed: " + (error instanceof Error ? error.message : String(error)));
-          if (pathname.startsWith("/_serverFn/")) {
-            sendNativeJson(response, 503, { error: "TanStack Start server functions unavailable" });
+          if (pathname.startsWith("/_serverFn/") || isApiRequest) {
+            sendNativeJson(response, 503, { error: "TanStack Start request unavailable" });
             return;
           }
         }
-      } else if (pathname.startsWith("/_serverFn/")) {
-        sendNativeJson(response, 503, { error: "TanStack Start server functions unavailable" });
-        return;
-      }
-      if (isApiRequest) {
-        if (!legacyAttempted) {
-          legacyAttempted = true;
-          const legacyResponse = await handleLegacyApiRequest(
-            legacyRequest || toTanStackStartRequest(nativeRequest),
-            request,
-          );
-          if (legacyResponse) {
-            await sendNativeResponse(legacyResponse, request, response);
-            return;
-          }
-        }
-        sendNativeJson(response, 404, { error: "API endpoint not found" });
-        return;
       }
     }
 

@@ -1,4 +1,4 @@
-import { Router, type NextFunction, type Request, type Response } from "../http/legacyRouter.ts";
+import { Router, type NextFunction, type Request, type Response } from "../http/startApiRouter.ts";
 import { randomUUID } from "node:crypto";
 import fs from "fs";
 import path from "path";
@@ -26,6 +26,12 @@ import {
   inspectZomboidPath,
 } from "../utils/zomboidPaths.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
+import {
+  invalidateMapFolderScan,
+  MAP_SCAN_TTL_MS,
+  mapScanCache,
+  mapScanInflight,
+} from "../utils/mapFolderScan.ts";
 
 export { normalizeUserPath, getCandidateZomboidPaths, invalidateMapFolderScan };
 
@@ -2115,34 +2121,26 @@ async function getDirStats(dirPath: string): Promise<{ count: number; size: numb
   return { count, size };
 }
 
-const MAP_SCAN_TTL_MS = 3000;
-const _mapScanCache = new Map();
-const _mapScanInflight = new Map();
-
 async function getMapFolderScan(
   mapPath: string,
   emitProgress?: ProgressEmitter,
 ): Promise<AnyRecord> {
-  const cached = _mapScanCache.get(mapPath);
+  const cached = mapScanCache.get(mapPath);
   if (cached && Date.now() - cached.at < MAP_SCAN_TTL_MS) {
     return cached.result;
   }
-  const inflight = _mapScanInflight.get(mapPath);
+  const inflight = mapScanInflight.get(mapPath);
   if (inflight) return inflight;
   const promise = scanMapFolder(mapPath, emitProgress)
     .then((result) => {
-      _mapScanCache.set(mapPath, { result, at: Date.now() });
+      mapScanCache.set(mapPath, { result, at: Date.now() });
       return result;
     })
     .finally(() => {
-      _mapScanInflight.delete(mapPath);
+      mapScanInflight.delete(mapPath);
     });
-  _mapScanInflight.set(mapPath, promise);
+  mapScanInflight.set(mapPath, promise);
   return promise;
-}
-
-function invalidateMapFolderScan(mapPath: string): void {
-  _mapScanCache.delete(mapPath);
 }
 
 async function scanMapFolder(

@@ -93,17 +93,10 @@ export function toTanStackStartRequest(req: RequestLike): Request {
   });
 }
 
-type ResponseLike = {
-  setHeader(name: string, value: unknown): void;
-  statusCode?: number;
-  status?: (code: number) => any;
-  send?: (body?: unknown) => any;
-  end?: (body?: unknown) => any;
-};
-
+type ResponseLike = Pick<ServerResponse, "setHeader" | "statusCode" | "end">;
 export async function sendTanStackStartResponse(
   response: Response,
-  res: ResponseLike | ServerResponse,
+  res: ResponseLike,
 ): Promise<void> {
   const setCookies = (
     response.headers as Headers & { getSetCookie?: () => string[] }
@@ -115,13 +108,9 @@ export async function sendTanStackStartResponse(
   });
   if (setCookies?.length) res.setHeader("set-cookie", setCookies);
 
-  if ("status" in res && typeof res.status === "function" && "send" in res && typeof res.send === "function") {
-    res.status(response.status).send(Buffer.from(await response.arrayBuffer()));
-    return;
-  }
   res.statusCode = response.status;
   if (!response.body) {
-    res.end?.();
+    res.end();
     return;
   }
   await pipeline(

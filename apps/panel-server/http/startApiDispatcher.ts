@@ -7,7 +7,7 @@ import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import authService from "../services/auth.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
-import type { LegacyRouter, Request, Response } from "./legacyRouter.ts";
+import type { StartApiRouter, Request, Response } from "./startApiRouter.ts";
 
 const REGISTERED_ERROR_CODES = new Set<string>(Object.values(ErrorCode));
 
@@ -17,38 +17,56 @@ export function isRegisteredErrorCode(value: unknown): value is string {
 
 type RouteModule = {
   base: string;
-  load: () => Promise<LegacyRouter>;
+  load: () => Promise<StartApiRouter>;
 };
 
+type RouteModuleLoader = () => Promise<unknown>;
+
+const routeFiles = (
+  import.meta as ImportMeta & {
+    glob: (pattern: string) => Record<string, RouteModuleLoader>;
+  }
+).glob("../routes/*.ts");
+
+function loadRouteModule(path: string): () => Promise<StartApiRouter> {
+  const load = routeFiles[path];
+  return async () => {
+    const module = await load?.();
+    const router = (module as { default?: StartApiRouter } | undefined)?.default;
+    if (!router) throw new Error(`Start API route module is unavailable: ${path}`);
+    return router;
+  };
+}
+
 const routeModules: RouteModule[] = [
-  { base: "/api/auth/oidc", load: () => import("../routes/oidc.ts").then((module) => module.default) },
-  { base: "/api/auth", load: () => import("../routes/auth.ts").then((module) => module.default) },
-  { base: "/api/rcon", load: () => import("../routes/rcon.ts").then((module) => module.default) },
-  { base: "/api/server", load: () => import("../routes/server.ts").then((module) => module.default) },
-  { base: "/api/servers", load: () => import("../routes/servers.ts").then((module) => module.default) },
-  { base: "/api/players", load: () => import("../routes/players.ts").then((module) => module.default) },
-  { base: "/api/mods", load: () => import("../routes/mods.ts").then((module) => module.default) },
-  { base: "/api/server-files", load: () => import("../routes/serverFiles.ts").then((module) => module.default) },
-  { base: "/api/chunks", load: () => import("../routes/chunks.ts").then((module) => module.default) },
-  { base: "/api/debug", load: () => import("../routes/debug.ts").then((module) => module.default) },
-  { base: "/api/backup", load: () => import("../routes/backup.ts").then((module) => module.default) },
-  { base: "/api/map", load: () => import("../routes/mapProxy.ts").then((module) => module.default) },
-  { base: "/api/config", load: () => import("../routes/config.ts").then((module) => module.default) },
-  { base: "/api/docker", load: () => import("../routes/docker.ts").then((module) => module.default) },
-  { base: "/api/discovery", load: () => import("../routes/discovery.ts").then((module) => module.default) },
-  { base: "/api/server-finder", load: () => import("../routes/serverFinder.ts").then((module) => module.default) },
-  { base: "/api/permissions", load: () => import("../routes/permissions.ts").then((module) => module.default) },
-  { base: "/api/scheduler", load: () => import("../routes/scheduler.ts").then((module) => module.default) },
-  { base: "/api/system", load: () => import("../routes/system.ts").then((module) => module.default) },
-  { base: "/api/templates", load: () => import("../routes/templates.ts").then((module) => module.default) },
-  { base: "/api/discord", load: () => import("../routes/discord.ts").then((module) => module.default) },
-  { base: "/api/panel-bridge", load: () => import("../routes/panelBridge.ts").then((module) => module.default) },
-  { base: "/api/server-status", load: () => import("../routes/serverStatus.ts").then((module) => module.default) },
+  { base: "/api/auth/oidc", load: loadRouteModule("../routes/oidc.ts") },
+  { base: "/api/auth", load: loadRouteModule("../routes/auth.ts") },
+  { base: "/api/rcon", load: loadRouteModule("../routes/rcon.ts") },
+  { base: "/api/server", load: loadRouteModule("../routes/server.ts") },
+  { base: "/api/servers", load: loadRouteModule("../routes/servers.ts") },
+  { base: "/api/players", load: loadRouteModule("../routes/players.ts") },
+  { base: "/api/mods", load: loadRouteModule("../routes/mods.ts") },
+  { base: "/api/server-files", load: loadRouteModule("../routes/serverFiles.ts") },
+  { base: "/api/chunks", load: loadRouteModule("../routes/chunks.ts") },
+  { base: "/api/debug", load: loadRouteModule("../routes/debug.ts") },
+  { base: "/api/backup", load: loadRouteModule("../routes/backup.ts") },
+  { base: "/api/map", load: loadRouteModule("../routes/mapProxy.ts") },
+  { base: "/api/config", load: loadRouteModule("../routes/config.ts") },
+  { base: "/api/docker", load: loadRouteModule("../routes/docker.ts") },
+  { base: "/api/discovery", load: loadRouteModule("../routes/discovery.ts") },
+  { base: "/api/server-finder", load: loadRouteModule("../routes/serverFinder.ts") },
+  { base: "/api/permissions", load: loadRouteModule("../routes/permissions.ts") },
+  { base: "/api/scheduler", load: loadRouteModule("../routes/scheduler.ts") },
+  { base: "/api/system", load: loadRouteModule("../routes/system.ts") },
+  { base: "/api/templates", load: loadRouteModule("../routes/templates.ts") },
+  { base: "/api/discord", load: loadRouteModule("../routes/discord.ts") },
+  { base: "/api/panel-bridge", load: loadRouteModule("../routes/panelBridge.ts") },
+  { base: "/api/server-status", load: loadRouteModule("../routes/serverStatus.ts") },
 ];
 
-export function registerLegacyApiModule(
+export function registerStartApiModule(
   base: string,
-  load: () => Promise<LegacyRouter>,
+  load: () => Promise<StartApiRouter>,
 ): void {
   routeModules.push({ base, load });
 }
@@ -330,7 +348,7 @@ function queryObject(url: URL): Record<string, string | string[]> {
   return result;
 }
 
-async function createLegacyRequest(
+async function createStartRequest(
   request: globalThis.Request,
   url: URL,
   base: string,
@@ -358,8 +376,8 @@ async function createLegacyRequest(
       return {};
     }
   })();
-  const legacyRequest = source as unknown as Request;
-  Object.assign(legacyRequest, {
+  const startRequest = source as unknown as Request;
+  Object.assign(startRequest, {
     method: request.method.toUpperCase(),
     url: pathname + url.search,
     originalUrl: url.pathname + url.search,
@@ -384,12 +402,12 @@ async function createLegacyRequest(
     },
   });
   if (incomingRequest?.on) {
-    (legacyRequest as any).on = incomingRequest.on.bind(incomingRequest);
+    (startRequest as any).on = incomingRequest.on.bind(incomingRequest);
   }
-  return legacyRequest;
+  return startRequest;
 }
 
-async function authenticateLegacyRequest(
+async function authenticateStartRequest(
   request: globalThis.Request,
   pathname: string,
 ): Promise<{ user: any } | globalThis.Response | null> {
@@ -457,7 +475,7 @@ async function readBodyWithLimit(
   }
 }
 
-export async function handleLegacyApiRequest(
+export async function handleStartApiRequest(
   request: globalThis.Request,
   incomingRequest?: IncomingMessage,
 ): Promise<globalThis.Response | null> {
@@ -466,7 +484,7 @@ export async function handleLegacyApiRequest(
   const module = routeModules.find(({ base }) => pathname === base || pathname.startsWith(base + "/"));
   if (!module) return null;
 
-  const authentication = await authenticateLegacyRequest(request, pathname);
+  const authentication = await authenticateStartRequest(request, pathname);
   if (authentication instanceof globalThis.Response) return authentication;
 
   const responseAdapter = createResponseAdapter();
@@ -487,7 +505,7 @@ export async function handleLegacyApiRequest(
       }
       bodyText = limitedBody;
     }
-    const legacyRequest = await createLegacyRequest(
+    const startRequest = await createStartRequest(
       request,
       url,
       module.base,
@@ -495,14 +513,14 @@ export async function handleLegacyApiRequest(
     );
     if (bodyText !== undefined) {
       try {
-        legacyRequest.body = bodyText.trim() ? JSON.parse(bodyText) : undefined;
+        startRequest.body = bodyText.trim() ? JSON.parse(bodyText) : undefined;
       } catch {
         return globalThis.Response.json({ error: "Invalid JSON body" }, { status: 400 });
       }
     }
-    if (authentication && "user" in authentication) legacyRequest.user = authentication.user;
+    if (authentication && "user" in authentication) startRequest.user = authentication.user;
     const router = await module.load();
-    void Promise.resolve(router(legacyRequest, responseAdapter.response, (error) => {
+    void Promise.resolve(router(startRequest, responseAdapter.response, (error) => {
       if (error) responseAdapter.fail(error);
       else if (!responseAdapter.isCommitted()) {
         responseAdapter.response.status(404).json({ error: "API endpoint not found" });

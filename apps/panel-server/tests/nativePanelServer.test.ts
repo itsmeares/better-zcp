@@ -3,8 +3,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { Router } from "../http/legacyRouter.ts";
-import { registerLegacyApiModule } from "../http/legacyApi.ts";
 import { createPanelRequestHandler } from "../http/panelWeb.ts";
 import type { TrustProxySetting } from "../utils/trustProxy.ts";
 
@@ -35,13 +33,6 @@ function writeStartBundle(clientDistPath: string, source: string): void {
 }
 
 async function startServer(clientDistPath: string, trustProxy?: TrustProxySetting) {
-  const api = Router();
-  api.post("/health", (req, res) => {
-    res.cookie("native", "yes", { httpOnly: true, sameSite: "lax", path: "/" });
-    res.json({ body: req.body, ip: req.ip, query: req.query });
-  });
-  registerLegacyApiModule("/api", async () => api);
-
   const handler = createPanelRequestHandler(makeOptions(clientDistPath), {
     isAllowedOrigin: (origin) => origin === "http://allowed.test",
     trustProxy,
@@ -62,7 +53,7 @@ describe("native panel HTTP host", () => {
     }
   });
 
-  it("serves legacy JSON through the native adapter and keeps security headers", async () => {
+  it("does not serve API traffic when the Start bundle is unavailable", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-native-http-"));
     temporaryRoots.push(root);
     fs.writeFileSync(
@@ -81,13 +72,10 @@ describe("native panel HTTP host", () => {
         body: JSON.stringify({ ready: true }),
       });
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(503);
       expect(await response.json()).toEqual({
-        body: { ready: true },
-        ip: "127.0.0.1",
-        query: { probe: "1" },
+        error: "TanStack Start server bundle unavailable",
       });
-      expect(response.headers.get("set-cookie")).toContain("native=yes");
       expect(response.headers.get("x-content-type-options")).toBe("nosniff");
       expect(response.headers.get("x-frame-options")).toBe("DENY");
       expect(response.headers.get("access-control-allow-origin")).toBe(
@@ -98,7 +86,7 @@ describe("native panel HTTP host", () => {
     }
   });
 
-  it("uses forwarded client data only when the peer matches TRUST_PROXY", async () => {
+  it("keeps security headers when the Start bundle is unavailable", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-native-proxy-"));
     temporaryRoots.push(root);
     const { server, baseUrl } = await startServer(root, "127.0.0.1");
@@ -113,14 +101,14 @@ describe("native panel HTTP host", () => {
         body: JSON.stringify({}),
       });
 
-      expect(response.status).toBe(200);
-      expect((await response.json()).ip).toBe("203.0.113.9");
+      expect(response.status).toBe(503);
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
   });
 
-  it("keeps Start pages/functions first while falling back on unhandled API responses", async () => {
+  it("keeps Start pages/functions first without an API fallback", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-native-start-"));
     temporaryRoots.push(root);
     const clientDistPath = path.join(root, "client", "dist");
@@ -174,15 +162,15 @@ describe("native panel HTTP host", () => {
 
       const missingApi = await fetch(`${baseUrl}/api/health`);
       expect(missingApi.status).toBe(404);
-      expect(await missingApi.json()).toEqual({ error: "API endpoint not found" });
+      expect(await missingApi.text()).toBe("");
 
       const fallback = await fetch(`${baseUrl}/api/health`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ fallback: true }),
       });
-      expect(fallback.status).toBe(200);
-      expect(await fallback.json()).toMatchObject({ body: { fallback: true } });
+      expect(fallback.status).toBe(503);
+      expect(await fallback.json()).toEqual({ error: "TanStack Start request unavailable" });
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }

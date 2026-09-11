@@ -1,4 +1,4 @@
-import { Router, type Request, createRateLimiter as rateLimit } from "../http/legacyRouter.ts";
+import { Router, type Request, createRateLimiter as rateLimit } from "../http/startApiRouter.ts";
 import authService, { USER_ROLES, requireRole } from "../services/auth.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";

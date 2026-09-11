@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from "../http/legacyRouter.ts";
+import { Router, type Request, type Response } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import {
