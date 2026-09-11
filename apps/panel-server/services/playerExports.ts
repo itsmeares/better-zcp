@@ -20,32 +20,46 @@ function exportError(
 export function parsePlayerExportFile(
   filePath: string,
 ): Record<string, unknown> {
-  let stat: fs.Stats;
+  let fileDescriptor: number;
   try {
-    stat = fs.statSync(filePath);
+    fileDescriptor = fs.openSync(filePath, "r");
   } catch {
     throw new Error("Export not found");
   }
-  if (stat.size > MAX_EXPORT_FILE_BYTES)
-    throw new Error("Export file is too large");
-
-  let raw: string;
   try {
-    raw = fs.readFileSync(filePath, "utf8");
-  } catch {
-    throw new Error("Could not read export file");
-  }
+    let stat: fs.Stats;
+    try {
+      stat = fs.fstatSync(fileDescriptor);
+    } catch {
+      throw new Error("Could not read export file");
+    }
+    if (stat.size > MAX_EXPORT_FILE_BYTES) {
+      throw new Error("Export file is too large");
+    }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("Invalid JSON export file");
+    let raw: string;
+    try {
+      raw = fs.readFileSync(fileDescriptor, "utf8");
+    } catch {
+      throw new Error("Could not read export file");
+    }
+    if (Buffer.byteLength(raw, "utf8") > MAX_EXPORT_FILE_BYTES) {
+      throw new Error("Export file is too large");
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error("Invalid JSON export file");
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Invalid export structure");
+    }
+    return parsed as Record<string, unknown>;
+  } finally {
+    fs.closeSync(fileDescriptor);
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Invalid export structure");
-  }
-  return parsed as Record<string, unknown>;
 }
 
 function exportsRoot(): string {
@@ -80,11 +94,12 @@ export function listPlayerExports(
       });
   const results: Array<Record<string, unknown>> = [];
   for (const playerDir of players) {
+    if (!USERNAME_PATTERN.test(playerDir)) continue;
     const dirPath = path.join(root, playerDir);
     if (!fs.existsSync(dirPath)) continue;
     for (const filename of fs
       .readdirSync(dirPath)
-      .filter((entry) => entry.endsWith(".json"))
+      .filter((entry) => FILENAME_PATTERN.test(entry))
       .sort()
       .reverse()) {
       const stat = fs.statSync(path.join(dirPath, filename));

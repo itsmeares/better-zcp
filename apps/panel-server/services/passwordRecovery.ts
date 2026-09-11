@@ -98,6 +98,37 @@ export function createLocalResetResponse(message: string) {
   return { success: true, resetAvailable: true, message };
 }
 
+type ResetTokenFile = {
+  tokenPath: string;
+  stat: fs.Stats;
+  content: Buffer;
+};
+
+function readResetTokenFile(): ResetTokenFile | null {
+  const tokenPath = getResetTokenPath();
+  let fileDescriptor: number | undefined;
+  try {
+    fileDescriptor = fs.openSync(tokenPath, "r");
+    const stat = fs.fstatSync(fileDescriptor);
+    const content =
+      stat.size > RESET_TOKEN_MAX_BYTES
+        ? Buffer.alloc(0)
+        : fs.readFileSync(fileDescriptor);
+    return { tokenPath, stat, content };
+  } catch (error: unknown) {
+    if (
+      error &&
+      typeof error === "object" &&
+      (error as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      return null;
+    }
+    throw error;
+  } finally {
+    if (fileDescriptor !== undefined) fs.closeSync(fileDescriptor);
+  }
+}
+
 export type ResetTokenState = {
   tokenPath: string;
   available: boolean;
@@ -108,13 +139,21 @@ export type ResetTokenState = {
 };
 
 export function getResetTokenState(): ResetTokenState {
-  const tokenPath = getResetTokenPath();
-  if (!fs.existsSync(tokenPath)) {
-    return { tokenPath, available: false, reason: "missing", token: null };
+  const tokenFile = readResetTokenFile();
+  if (!tokenFile) {
+    return {
+      tokenPath: getResetTokenPath(),
+      available: false,
+      reason: "missing",
+      token: null,
+    };
   }
 
-  const stat = fs.statSync(tokenPath);
-  if (stat.size > RESET_TOKEN_MAX_BYTES) {
+  const { tokenPath, stat, content } = tokenFile;
+  if (
+    stat.size > RESET_TOKEN_MAX_BYTES ||
+    content.byteLength > RESET_TOKEN_MAX_BYTES
+  ) {
     return {
       tokenPath,
       available: false,
@@ -135,7 +174,7 @@ export function getResetTokenState(): ResetTokenState {
     };
   }
 
-  const token = fs.readFileSync(tokenPath, "utf-8").trim();
+  const token = content.toString("utf-8").trim();
   if (!token || token.length < 8) {
     return {
       tokenPath,
@@ -183,8 +222,8 @@ export type ResetTokenCheck =
   { ok: true; tokenPath: string } | { ok: false; error: string; code: string };
 
 export function checkResetToken(candidate: string): ResetTokenCheck {
-  const tokenPath = getResetTokenPath();
-  if (!fs.existsSync(tokenPath)) {
+  const tokenFile = readResetTokenFile();
+  if (!tokenFile) {
     return {
       ok: false,
       error:
@@ -193,8 +232,11 @@ export function checkResetToken(candidate: string): ResetTokenCheck {
     };
   }
 
-  const stat = fs.statSync(tokenPath);
-  if (stat.size > RESET_TOKEN_MAX_BYTES) {
+  const { tokenPath, stat, content } = tokenFile;
+  if (
+    stat.size > RESET_TOKEN_MAX_BYTES ||
+    content.byteLength > RESET_TOKEN_MAX_BYTES
+  ) {
     return {
       ok: false,
       error: "Reset token file is invalid (too large). Max 1KB.",
@@ -216,7 +258,7 @@ export function checkResetToken(candidate: string): ResetTokenCheck {
     };
   }
 
-  const storedToken = fs.readFileSync(tokenPath, "utf-8").trim();
+  const storedToken = content.toString("utf-8").trim();
   if (!storedToken || storedToken.length < 8) {
     return {
       ok: false,
