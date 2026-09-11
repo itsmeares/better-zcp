@@ -214,6 +214,22 @@ const mocks = vi.hoisted(() => {
       "deleteServerConfigTemplate",
     ].map((name) => [name, serverFunction(name)]),
   );
+  const legacyServer = Object.fromEntries(
+    [
+      "checkSteamCmd",
+      "configureRcon",
+      "configureNetwork",
+      "getConsoleLog",
+      "getConsoleErrorCount",
+      "getConsoleLogStream",
+      "clearConsoleLog",
+      "getServerUpdate",
+      "getServerUpdateStatus",
+      "dismissServerAutoUpdateResult",
+      "setServerUpdateInterval",
+      "getMapVehicles",
+    ].map((name) => [name, serverFunction(name)]),
+  );
   const bridge = Object.fromEntries(
     ["sendPanelBridgeCommand", "getPanelBridgeCommands"].map((name) => [
       name,
@@ -268,6 +284,7 @@ const mocks = vi.hoisted(() => {
     mods,
     system,
     fileReads,
+    legacyServer,
     bridge,
     bridgeSetup,
     bridgeWorld,
@@ -297,6 +314,10 @@ vi.mock(
 vi.mock("../../panel-client/src/lib/serverMods.ts", () => mocks.mods);
 vi.mock("../../panel-client/src/lib/serverSystem.ts", () => mocks.system);
 vi.mock("../../panel-client/src/lib/serverFileReads.ts", () => mocks.fileReads);
+vi.mock(
+  "../../panel-client/src/lib/serverLegacyApi.ts",
+  () => mocks.legacyServer,
+);
 vi.mock("../../panel-client/src/lib/serverPanelBridge.ts", () => mocks.bridge);
 vi.mock(
   "../../panel-client/src/lib/serverPanelBridgeSetup.ts",
@@ -473,6 +494,87 @@ const SERVER_FILE_WRITE_ROUTES = [
   ],
 ];
 
+const LEGACY_SERVER_ROUTES = [
+  [
+    "GET",
+    "/api/server/steamcmd/check?path=%2Ftmp",
+    "checkSteamCmd",
+    undefined,
+    { path: "/tmp" },
+  ],
+  [
+    "POST",
+    "/api/server/configure-rcon",
+    "configureRcon",
+    { rconPassword: "secret" },
+    { rconPassword: "secret" },
+  ],
+  [
+    "POST",
+    "/api/server/configure-network",
+    "configureNetwork",
+    { serverPort: 16261, useUpnp: false },
+    { serverPort: 16261, useUpnp: false },
+  ],
+  [
+    "GET",
+    "/api/server/console-log?lines=25&filter=all",
+    "getConsoleLog",
+    undefined,
+    { lines: "25", filter: "all" },
+  ],
+  [
+    "GET",
+    "/api/server/console-log/error-count",
+    "getConsoleErrorCount",
+    undefined,
+    {},
+  ],
+  [
+    "GET",
+    "/api/server/console-log/stream?lastSize=10&filter=important",
+    "getConsoleLogStream",
+    undefined,
+    { lastSize: "10", filter: "important" },
+  ],
+  [
+    "POST",
+    "/api/server/console-log/clear",
+    "clearConsoleLog",
+    {},
+    {},
+  ],
+  [
+    "GET",
+    "/api/server/update-check?force=true",
+    "getServerUpdate",
+    undefined,
+    { force: "true" },
+  ],
+  [
+    "GET",
+    "/api/server/update-check/status",
+    "getServerUpdateStatus",
+    undefined,
+    {},
+  ],
+  [
+    "POST",
+    "/api/server/update-check/auto-update-result/dismiss",
+    "dismissServerAutoUpdateResult",
+    {},
+    {},
+  ],
+  [
+    "POST",
+    "/api/server/update-check/interval",
+    "setServerUpdateInterval",
+    { minutes: 30 },
+    { minutes: 30 },
+  ],
+  ["GET", "/api/map/vehicles", "getMapVehicles", undefined, {}],
+];
+
 const PUBLIC_AUTH_ROUTES = [
   ["POST", "/api/auth/setup", "setup", { setupToken: "setup-token" }, 201],
   [
@@ -621,6 +723,7 @@ beforeEach(() => {
       "server.control",
       "server.world_events",
       "server.configure",
+      "server.install",
       "servers.manage",
       "servers.discover",
       "panel.settings",
@@ -643,6 +746,7 @@ beforeEach(() => {
     ...Object.values(mocks.mods),
     ...Object.values(mocks.system),
     ...Object.values(mocks.fileReads),
+    ...Object.values(mocks.legacyServer),
     ...Object.values(mocks.bridge),
     ...Object.values(mocks.bridgeSetup),
     ...Object.values(mocks.bridgeWorld),
@@ -756,6 +860,25 @@ describe("Start compatibility server and player routes", () => {
       });
       expect(mocks.fileReads[functionName]).toHaveBeenCalledWith(
         params,
+        expect.objectContaining({ authenticatedUser: expect.any(Object) }),
+      );
+    },
+  );
+
+  it.each(LEGACY_SERVER_ROUTES)(
+    "dispatches legacy JSON %s %s to %s",
+    async (method, path, functionName, body, expectedData) => {
+      const response = await handleStartApiCompatibilityRequest(
+        makeRequest(method, path, body),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await responseBody(response)).toEqual({
+        handledBy: functionName,
+        data: expectedData,
+      });
+      expect(mocks.legacyServer[functionName]).toHaveBeenCalledWith(
+        expectedData,
         expect.objectContaining({ authenticatedUser: expect.any(Object) }),
       );
     },

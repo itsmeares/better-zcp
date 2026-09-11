@@ -1108,6 +1108,7 @@ setPanelRuntime({
   panelBridge,
   io,
   checkServerStatusNow,
+  updateChecker,
   refreshCorsConfig,
   getCorsDebugSnapshot,
   clearCorsBlockedOrigins,
