@@ -147,3 +147,7 @@ export const sendPanelBridgeDiagnosticsCommand = createServerFn({ method: 'POST'
   .middleware(capabilityMiddleware('bridge.diagnostics'))
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeDiagnosticsAction(data)) as any)
+
+;(sendPanelBridgeDiagnosticsCommand as any).__executeImplementation = (
+  data: unknown,
+) => executeDiagnosticsAction(record(data))
