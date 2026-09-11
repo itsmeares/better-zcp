@@ -41,6 +41,7 @@ type RouteSource =
   | 'mods'
   | 'system'
   | 'fileReads'
+  | 'fileWrites'
 
 type RouteStatus = number | ((result: any) => number)
 
@@ -85,11 +86,13 @@ const implementations: Record<
   mods: () => import('./serverMods'),
   system: () => import('./serverSystem'),
   fileReads: () => import('./serverFileReads'),
+  fileWrites: () => import('./serverFileReads'),
 }
 
 const sourceCapabilities: Partial<Record<RouteSource, string>> = {
   mods: 'mods.manage',
   fileReads: 'serverfiles.manage',
+  fileWrites: 'serverfiles.manage',
 }
 
 function mergeBody(
@@ -1454,6 +1457,89 @@ const routes: RouteSpec[] = [
     functionName: 'browseServerFiles',
     data: queryData('path', 'extensions'),
   },
+  {
+    method: 'PUT',
+    pattern: '/api/server-files/ini',
+    source: 'fileWrites',
+    functionName: 'saveServerIni',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/server-files/sandbox',
+    source: 'fileWrites',
+    functionName: 'saveServerSandbox',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/server-files/sandbox-option',
+    source: 'fileWrites',
+    functionName: 'saveSandboxOption',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server-files/sandbox/repair',
+    source: 'fileWrites',
+    functionName: 'repairServerSandbox',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/server-files/spawnpoints',
+    source: 'fileWrites',
+    functionName: 'saveServerSpawnPoints',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/server-files/spawnregions',
+    source: 'fileWrites',
+    functionName: 'saveServerSpawnRegions',
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/server-files/raw/:type',
+    source: 'fileWrites',
+    functionName: 'saveServerRawFile',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server-files/restore/:filename',
+    source: 'fileWrites',
+    functionName: 'restoreServerConfigBackup',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server-files/save-and-reload',
+    source: 'fileWrites',
+    functionName: 'saveServerAndReload',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server-files/templates',
+    source: 'fileWrites',
+    functionName: 'createServerConfigTemplate',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server-files/templates/:id/apply',
+    source: 'fileWrites',
+    functionName: 'applyServerConfigTemplate',
+    data: mergeBody,
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/server-files/templates/:id',
+    source: 'fileWrites',
+    functionName: 'updateServerConfigTemplate',
+    data: mergeBody,
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/server-files/templates/:id',
+    source: 'fileWrites',
+    functionName: 'deleteServerConfigTemplate',
+    data: mergeBody,
+  },
 
   {
     method: 'GET',
@@ -1706,6 +1792,9 @@ function errorResponse(error: unknown): Response {
     body.params = sanitizeErrorParams(details.params)
   }
   if (Array.isArray(details.missing)) body.missing = details.missing
+  if (Array.isArray(details.partiallyApplied)) {
+    body.partiallyApplied = details.partiallyApplied
+  }
   return Response.json(body, { status })
 }
 
