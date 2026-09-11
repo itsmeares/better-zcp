@@ -28,5 +28,10 @@ process.env.PANEL_DATABASE_DRIVER = "json";
 afterAll(() => {
   delete process.env.PANEL_PATHS_CONFIG_PATH;
   delete process.env.PANEL_DATABASE_DRIVER;
-  fs.rmSync(tempRoot, { recursive: true, force: true });
+  fs.rmSync(tempRoot, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 100,
+  });
 });
