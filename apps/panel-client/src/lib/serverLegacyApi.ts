@@ -139,10 +139,41 @@ async function consoleLogPath(): Promise<string> {
   return path.join(dataPath, 'server-console.txt')
 }
 
-function readTail(filePath: string, size: number, maxBytes: number): string {
-  if (size <= maxBytes) return fs.readFileSync(filePath, 'utf-8')
+function isMissingFile(error: unknown): boolean {
+  return (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'ENOENT'
+  )
+}
 
-  const fd = fs.openSync(filePath, 'r')
+function withOpenReadFile<T>(
+  filePath: string,
+  handler: (fd: number, stats: fs.Stats) => T,
+): T | null {
+  let fd: number
+  try {
+    fd = fs.openSync(filePath, 'r')
+  } catch (error) {
+    if (isMissingFile(error)) return null
+    throw error
+  }
+
+  try {
+    return handler(fd, fs.fstatSync(fd))
+  } finally {
+    try {
+      fs.closeSync(fd)
+    } catch {
+      // Best effort: the original endpoint ignored close failures too.
+    }
+  }
+}
+
+function readTail(fd: number, size: number, maxBytes: number): string {
+  if (size <= maxBytes) return fs.readFileSync(fd, 'utf-8')
+
   const buffer = Buffer.alloc(maxBytes)
   try {
     fs.readSync(fd, buffer, 0, maxBytes, size - maxBytes)
@@ -221,7 +252,28 @@ export const getConsoleLog = createLegacyRead(
   'server.world_events',
   async (data) => {
     const filePath = await consoleLogPath()
-    if (!fs.existsSync(filePath)) {
+    const result = withOpenReadFile(filePath, (fd, stats) => {
+      const filterLevel =
+        typeof data.filter === 'string' ? data.filter : 'filtered'
+      const maxLines = parseBoundedInteger(data.lines, 500, 1, 2000)
+      const allLines = readTail(fd, stats.size, 5 * 1024 * 1024).split('\n')
+      const filteredLines = filterConsoleLogLines(allLines, filterLevel)
+      const lines = filteredLines.slice(-maxLines)
+
+      return {
+        success: true,
+        content: lines.join('\n'),
+        lines,
+        totalLines: allLines.length,
+        filteredCount: filteredLines.length,
+        filterLevel,
+        exists: true,
+        path: filePath,
+        lastModified: stats.mtime.toISOString(),
+        size: stats.size,
+      }
+    })
+    if (result === null) {
       return {
         success: true,
         content: '',
@@ -230,27 +282,7 @@ export const getConsoleLog = createLegacyRead(
         path: filePath,
       }
     }
-
-    const filterLevel =
-      typeof data.filter === 'string' ? data.filter : 'filtered'
-    const maxLines = parseBoundedInteger(data.lines, 500, 1, 2000)
-    const stats = fs.statSync(filePath)
-    const allLines = readTail(filePath, stats.size, 5 * 1024 * 1024).split('\n')
-    const filteredLines = filterConsoleLogLines(allLines, filterLevel)
-    const lines = filteredLines.slice(-maxLines)
-
-    return {
-      success: true,
-      content: lines.join('\n'),
-      lines,
-      totalLines: allLines.length,
-      filteredCount: filteredLines.length,
-      filterLevel,
-      exists: true,
-      path: filePath,
-      lastModified: stats.mtime.toISOString(),
-      size: stats.size,
-    }
+    return result
   },
 )
 
@@ -277,31 +309,32 @@ export const getConsoleErrorCount = createLegacyRead(
       }
       throw error
     }
-    if (!fs.existsSync(filePath)) {
+    const result = withOpenReadFile(filePath, (fd, stats) => {
+      const truncated = stats.size > 2 * 1024 * 1024
+      const lines = readTail(fd, stats.size, 2 * 1024 * 1024).split('\n')
+      let startIndex = -1
+      for (let index = lines.length - 1; index >= 0; index -= 1) {
+        if (/SERVER STARTED/.test(lines[index])) {
+          startIndex = index
+          break
+        }
+      }
+      const scanned = startIndex >= 0 ? lines.slice(startIndex) : lines
+      const count = scanned.filter((line) =>
+        CONSOLE_LOG_ERROR_PATTERNS.some((pattern) => pattern.test(line)),
+      ).length
+      return {
+        exists: true,
+        count,
+        sinceStart: startIndex >= 0,
+        truncated,
+        lastModified: stats.mtime.toISOString(),
+      }
+    })
+    if (result === null) {
       return { exists: false, count: 0, sinceStart: false }
     }
-
-    const stats = fs.statSync(filePath)
-    const truncated = stats.size > 2 * 1024 * 1024
-    const lines = readTail(filePath, stats.size, 2 * 1024 * 1024).split('\n')
-    let startIndex = -1
-    for (let index = lines.length - 1; index >= 0; index -= 1) {
-      if (/SERVER STARTED/.test(lines[index])) {
-        startIndex = index
-        break
-      }
-    }
-    const scanned = startIndex >= 0 ? lines.slice(startIndex) : lines
-    const count = scanned.filter((line) =>
-      CONSOLE_LOG_ERROR_PATTERNS.some((pattern) => pattern.test(line)),
-    ).length
-    const payload = {
-      exists: true,
-      count,
-      sinceStart: startIndex >= 0,
-      truncated,
-      lastModified: stats.mtime.toISOString(),
-    }
+    const payload = result
     errorCountCache = { at: now, value: payload }
     return payload
   },
@@ -311,74 +344,63 @@ export const getConsoleLogStream = createLegacyRead(
   'server.world_events',
   async (data) => {
     const filePath = await consoleLogPath()
-    if (!fs.existsSync(filePath)) {
-      return { success: true, newLines: [], exists: false }
-    }
+    const result = withOpenReadFile(filePath, (fd, stats) => {
+      const filterLevel =
+        typeof data.filter === 'string' ? data.filter : 'filtered'
+      const lastSize = parseBoundedInteger(
+        data.lastSize,
+        0,
+        0,
+        Number.MAX_SAFE_INTEGER,
+      )
 
-    const filterLevel =
-      typeof data.filter === 'string' ? data.filter : 'filtered'
-    const lastSize = parseBoundedInteger(
-      data.lastSize,
-      0,
-      0,
-      Number.MAX_SAFE_INTEGER,
-    )
-    const stats = fs.statSync(filePath)
+      if (stats.size < lastSize) {
+        const lines = fs
+          .readFileSync(fd, 'utf-8')
+          .split('\n')
+          .filter((line) => line.trim())
+        return {
+          success: true,
+          newLines: filterConsoleLogLines(lines, filterLevel),
+          currentSize: stats.size,
+          rotated: true,
+          filterLevel,
+          lastModified: stats.mtime.toISOString(),
+        }
+      }
 
-    if (stats.size < lastSize) {
-      const lines = filterConsoleLogLines(
-        fs
-          .readFileSync(filePath, 'utf-8')
+      if (stats.size === lastSize) {
+        return {
+          success: true,
+          newLines: [],
+          currentSize: stats.size,
+          filterLevel,
+          lastModified: stats.mtime.toISOString(),
+        }
+      }
+
+      const newBytes = stats.size - lastSize
+      const buffer = Buffer.alloc(newBytes)
+      fs.readSync(fd, buffer, 0, newBytes, lastSize)
+      const newLines = filterConsoleLogLines(
+        buffer
+          .toString('utf-8')
           .split('\n')
           .filter((line) => line.trim()),
         filterLevel,
       )
       return {
         success: true,
-        newLines: lines,
-        currentSize: stats.size,
-        rotated: true,
-        filterLevel,
-        lastModified: stats.mtime.toISOString(),
-      }
-    }
-
-    if (stats.size === lastSize) {
-      return {
-        success: true,
-        newLines: [],
+        newLines,
         currentSize: stats.size,
         filterLevel,
         lastModified: stats.mtime.toISOString(),
       }
+    })
+    if (result === null) {
+      return { success: true, newLines: [], exists: false }
     }
-
-    const newBytes = stats.size - lastSize
-    const fd = fs.openSync(filePath, 'r')
-    const buffer = Buffer.alloc(newBytes)
-    try {
-      fs.readSync(fd, buffer, 0, newBytes, lastSize)
-    } finally {
-      try {
-        fs.closeSync(fd)
-      } catch {
-        // Best effort: the original endpoint ignored close failures too.
-      }
-    }
-    const newLines = filterConsoleLogLines(
-      buffer
-        .toString('utf-8')
-        .split('\n')
-        .filter((line) => line.trim()),
-      filterLevel,
-    )
-    return {
-      success: true,
-      newLines,
-      currentSize: stats.size,
-      filterLevel,
-      lastModified: stats.mtime.toISOString(),
-    }
+    return result
   },
 )
 
@@ -386,7 +408,16 @@ export const clearConsoleLog = createLegacyAction(
   'server.configure',
   async () => {
     const filePath = await consoleLogPath()
-    if (fs.existsSync(filePath)) fs.writeFileSync(filePath, '')
+    try {
+      const fd = fs.openSync(filePath, 'r+')
+      try {
+        fs.ftruncateSync(fd, 0)
+      } finally {
+        fs.closeSync(fd)
+      }
+    } catch (error) {
+      if (!isMissingFile(error)) throw error
+    }
     return { success: true }
   },
 )

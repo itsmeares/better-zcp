@@ -100,8 +100,9 @@ describe("Start legacy JSON implementations", () => {
       expect.objectContaining({ count: 1, sinceStart: true }),
     );
 
-    const lastSize = fs.statSync(logPath).size;
-    fs.appendFileSync(logPath, "\nRCON: connected");
+    const appended = "\nRCON: connected";
+    fs.appendFileSync(logPath, appended);
+    const lastSize = fs.statSync(logPath).size - Buffer.byteLength(appended);
     await expect(
       execute(getConsoleLogStream, {
         lastSize: String(lastSize),
