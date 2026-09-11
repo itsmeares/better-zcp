@@ -1,5 +1,5 @@
 
-import express from "express";
+import { Router } from "../http/startApiRouter.ts";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -74,7 +74,7 @@ const log = createLogger("API:PanelBridge");
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const router = express.Router();
+const router = Router();
 type AnyRecord = Record<string, any>;
 type BridgePath = {
   path: string;

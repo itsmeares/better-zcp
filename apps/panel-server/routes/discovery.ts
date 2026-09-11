@@ -1,4 +1,4 @@
-import express from "express";
+import { Router, type Response } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeServerResponse } from "../utils/sanitize.ts";
 import { requirePermission } from "../services/permissions.ts";
@@ -9,13 +9,13 @@ import {
 } from "../services/serverProfiles.ts";
 
 const log = createLogger("API:Discovery");
-const router = express.Router();
+const router = Router();
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function sendProfileError(error: unknown, res: express.Response): boolean {
+function sendProfileError(error: unknown, res: Response): boolean {
   if (!(error instanceof ServerProfileError)) return false;
   res.status(error.status).json({
     error: sanitizeError(error.message),

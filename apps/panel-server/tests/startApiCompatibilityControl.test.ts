@@ -214,7 +214,7 @@ const mocks = vi.hoisted(() => {
       "deleteServerConfigTemplate",
     ].map((name) => [name, serverFunction(name)]),
   );
-  const legacyServer = Object.fromEntries(
+  const serverServer = Object.fromEntries(
     [
       "checkSteamCmd",
       "configureRcon",
@@ -284,7 +284,7 @@ const mocks = vi.hoisted(() => {
     mods,
     system,
     fileReads,
-    legacyServer,
+    serverServer,
     bridge,
     bridgeSetup,
     bridgeWorld,
@@ -315,8 +315,8 @@ vi.mock("../../panel-client/src/lib/serverMods.ts", () => mocks.mods);
 vi.mock("../../panel-client/src/lib/serverSystem.ts", () => mocks.system);
 vi.mock("../../panel-client/src/lib/serverFileReads.ts", () => mocks.fileReads);
 vi.mock(
-  "../../panel-client/src/lib/serverLegacyApi.ts",
-  () => mocks.legacyServer,
+  "../../panel-client/src/lib/serverServerApi.ts",
+  () => mocks.serverServer,
 );
 vi.mock("../../panel-client/src/lib/serverPanelBridge.ts", () => mocks.bridge);
 vi.mock(
@@ -746,7 +746,7 @@ beforeEach(() => {
     ...Object.values(mocks.mods),
     ...Object.values(mocks.system),
     ...Object.values(mocks.fileReads),
-    ...Object.values(mocks.legacyServer),
+    ...Object.values(mocks.serverServer),
     ...Object.values(mocks.bridge),
     ...Object.values(mocks.bridgeSetup),
     ...Object.values(mocks.bridgeWorld),
@@ -877,7 +877,7 @@ describe("Start compatibility server and player routes", () => {
         handledBy: functionName,
         data: expectedData,
       });
-      expect(mocks.legacyServer[functionName]).toHaveBeenCalledWith(
+      expect(mocks.serverServer[functionName]).toHaveBeenCalledWith(
         expectedData,
         expect.objectContaining({ authenticatedUser: expect.any(Object) }),
       );

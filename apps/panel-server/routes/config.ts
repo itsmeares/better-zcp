@@ -1,4 +1,4 @@
-import express, { type Request } from "express";
+import { Router, type Request } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Config");
 import { getAllSettings } from "../database/init.ts";
@@ -16,7 +16,7 @@ import {
   saveAppSettings,
 } from "../services/appSettings.ts";
 
-const router = express.Router();
+const router = Router();
 
 type ConfigRequest = Request & {
   user?: { role?: string } | null;

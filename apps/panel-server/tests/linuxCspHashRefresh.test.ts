@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { contentSecurityPolicy } from "helmet";
 import { computeInlineScriptCspHash } from "../utils/cspScriptHash.ts";
 import { applyUpdateBundle, stageUpdateBundle } from "../services/updateBundle.ts";
 
@@ -14,20 +13,6 @@ function writeFile(filePath, contents) {
 
 function htmlWithScript(scriptBody) {
   return `<!DOCTYPE html>\n<html><head><script>${scriptBody}</script></head><body></body></html>\n`;
-}
-
-function fakeRes() {
-  const headers = {};
-  return {
-    headers,
-    setHeader: (name, value) => {
-      headers[name] = value;
-    },
-    getHeader: (name) => headers[name],
-    getHeaders: () => headers,
-    removeHeader: () => {},
-    statusCode: 200,
-  };
 }
 
 describe("computeInlineScriptCspHash() re-read after a real applyUpdateBundle() client swap", () => {
@@ -77,54 +62,5 @@ describe("computeInlineScriptCspHash() re-read after a real applyUpdateBundle() 
 
     expect(hashBeforeApply).not.toBe(hashAfterApply);
     expect(hashAfterApply).toBe(computeInlineScriptCspHash(liveClientPath));
-  });
-});
-
-describe("helmet's scriptSrc directive: function element vs. frozen array element", () => {
-  it("a function element picks up a reassigned outer variable on the very next request -- the shape apps/panel-server/index.ts now uses", () => {
-    let currentHash = "'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='";
-    const middleware = contentSecurityPolicy({
-      useDefaults: false,
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", () => currentHash],
-      },
-    });
-
-    const res1 = fakeRes();
-    middleware({}, res1, () => {});
-    expect(res1.headers["Content-Security-Policy"]).toContain(
-      "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    );
-
-    currentHash = "'sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB='";
-
-    const res2 = fakeRes();
-    middleware({}, res2, () => {});
-    expect(res2.headers["Content-Security-Policy"]).toContain(
-      "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
-    );
-    expect(res2.headers["Content-Security-Policy"]).not.toContain(
-      "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    );
-  });
-
-  it("contrast case: a plain string element (the pre-fix shape) stays frozen at whatever it was when app.use() ran, even after the same reassignment", () => {
-    let currentHash = "'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='";
-    const middleware = contentSecurityPolicy({
-      useDefaults: false,
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: currentHash ? ["'self'", currentHash] : ["'self'"],
-      },
-    });
-
-    currentHash = "'sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB='";
-
-    const res = fakeRes();
-    middleware({}, res, () => {});
-    expect(res.headers["Content-Security-Policy"]).toContain(
-      "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    );
   });
 });

@@ -17,7 +17,7 @@ vi.mock("../database/init.ts", () => ({
 const { invalidateMapFolderScanMock } = vi.hoisted(() => ({
   invalidateMapFolderScanMock: vi.fn(),
 }));
-vi.mock("../routes/chunks.ts", () => ({
+vi.mock("../utils/mapFolderScan.ts", () => ({
   invalidateMapFolderScan: invalidateMapFolderScanMock,
 }));
 

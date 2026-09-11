@@ -1,4 +1,4 @@
-import express, { type NextFunction, type Request, type Response } from "express";
+import { Router, type NextFunction, type Request, type Response } from "../http/startApiRouter.ts";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";
@@ -39,7 +39,7 @@ import {
   updateServerProfile,
 } from "../services/serverProfiles.ts";
 
-const router = express.Router();
+const router = Router();
 
 type JsonRecord = Record<string, any>;
 type ScanResults = {

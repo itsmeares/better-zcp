@@ -1,8 +1,8 @@
-import express, {
+import { Router,
   type NextFunction,
   type Request,
   type Response,
-} from "express";
+} from "../http/startApiRouter.ts";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -59,7 +59,7 @@ export {
   ServerNotConfiguredError,
 } from "../services/sandboxPersistence.ts";
 
-const router = express.Router();
+const router = Router();
 
 type JsonRecord = Record<string, any>;
 type SandboxChangeSet = JsonRecord;
@@ -87,16 +87,6 @@ type ServerFilesRequest = Request & {
   configEditRestartWarning?: boolean;
   activeServerContext?: ActiveServerContext;
 };
-
-declare global {
-  namespace Express {
-    interface Request {
-      user?: { role?: string } | null;
-      configEditRestartWarning?: boolean;
-      activeServerContext?: ActiveServerContext;
-    }
-  }
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

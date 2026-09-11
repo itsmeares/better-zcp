@@ -331,15 +331,17 @@ export class PanelUpdateChecker {
             if (body.length > 4096) body = body.slice(0, 4096);
           });
           res.on("end", () => {
-            const err = new Error(
-              statusCode === 403
-                ? "GitHub API rate limited"
-                : `GitHub API returned ${statusCode}`,
+            const err = Object.assign(
+              new Error(
+                statusCode === 403
+                  ? "GitHub API rate limited"
+                  : `GitHub API returned ${statusCode}`,
+              ),
+              {
+                statusCode,
+                ...(body.includes("rate limit") ? { rateLimited: true } : {}),
+              },
             );
-            err.statusCode = statusCode;
-            if (body.includes("rate limit")) {
-              err.rateLimited = true;
-            }
             reject(err);
           });
           return;
@@ -364,8 +366,9 @@ export class PanelUpdateChecker {
 
       req.on("error", reject);
       req.setTimeout(GITHUB_API_TIMEOUT_MS, () => {
-        const timeoutError = new Error("GitHub API timeout");
-        timeoutError.code = "ETIMEDOUT";
+        const timeoutError = Object.assign(new Error("GitHub API timeout"), {
+          ["code"]: "ETIMEDOUT",
+        });
         req.destroy(timeoutError);
       });
     });
@@ -1105,8 +1108,9 @@ export class PanelUpdateChecker {
 
         req.on("error", fail);
         req.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
-          const timeoutError = new Error("Download timed out");
-          timeoutError.code = "ETIMEDOUT";
+          const timeoutError = Object.assign(new Error("Download timed out"), {
+            ["code"]: "ETIMEDOUT",
+          });
           req.destroy(timeoutError);
         });
       };
@@ -1578,8 +1582,9 @@ export class PanelUpdateChecker {
         );
         req.on("error", reject);
         req.setTimeout(GITHUB_API_TIMEOUT_MS, () => {
-          const timeoutError = new Error("Timed out");
-          timeoutError.code = "ETIMEDOUT";
+          const timeoutError = Object.assign(new Error("Timed out"), {
+            ["code"]: "ETIMEDOUT",
+          });
           req.destroy(timeoutError);
         });
       };

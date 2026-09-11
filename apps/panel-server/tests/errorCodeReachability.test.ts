@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  apiErrorHandler,
-  handlePanelUpdateDownload,
-  handlePanelUpdateStatus,
-} from "../index.ts";
+import { handlePanelUpdateDownload, handlePanelUpdateStatus } from "../index.ts";
+import { apiErrorHandler } from "../http/panelWeb.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 
@@ -13,6 +10,8 @@ function createResponse() {
   return response;
 }
 
+const logger = { error() {} };
+
 describe("apiErrorHandler: registry is an allowlist, not a passthrough", () => {
   it("forwards err.code when it is a registered ErrorCode value (uses APPLY_IN_PROGRESS_LEGACY -- the one code whose only other protection was a hand-written per-catch-site check)", () => {
     const res = createResponse();
@@ -20,7 +19,7 @@ describe("apiErrorHandler: registry is an allowlist, not a passthrough", () => {
     err.code = ErrorCode.APPLY_IN_PROGRESS_LEGACY;
     err.status = 409;
 
-    apiErrorHandler(err, { method: "POST", path: "/api/panel/update-apply" }, res, vi.fn());
+    apiErrorHandler(logger, err, { method: "POST", path: "/api/panel/update-apply" }, res, vi.fn());
 
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith(
@@ -33,7 +32,7 @@ describe("apiErrorHandler: registry is an allowlist, not a passthrough", () => {
     const err = new Error("ENOENT: no such file or directory, open '/some/path'");
     err.code = "ENOENT";
 
-    apiErrorHandler(err, { method: "GET", path: "/api/some-route" }, res, vi.fn());
+    apiErrorHandler(logger, err, { method: "GET", path: "/api/some-route" }, res, vi.fn());
 
     expect(res.status).toHaveBeenCalledWith(500);
     const body = res.json.mock.calls[0][0];
@@ -46,7 +45,7 @@ describe("apiErrorHandler: registry is an allowlist, not a passthrough", () => {
     const err = new Error("boom");
     err.code = 500;
 
-    apiErrorHandler(err, { method: "GET", path: "/api/some-route" }, res, vi.fn());
+    apiErrorHandler(logger, err, { method: "GET", path: "/api/some-route" }, res, vi.fn());
 
     expect(res.json.mock.calls[0][0]).not.toHaveProperty("code");
   });

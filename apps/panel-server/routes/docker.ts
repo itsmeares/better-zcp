@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from "../http/startApiRouter.ts";
 import { requirePermission } from "../services/permissions.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getServer } from "../database/init.ts";
@@ -9,7 +9,7 @@ import {
   lifecycleInProgressResponse,
 } from "../services/lifecycleCoordinator.ts";
 
-const router = express.Router();
+const router = Router();
 
 interface ManagedDockerContainer {
   Id: string;

@@ -1,5 +1,4 @@
-import express from "express";
-import type { Request } from "express";
+import { Router, type Request } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import {
@@ -11,7 +10,7 @@ import { requirePermission, getRoleByName } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 const log = createLogger("API:Discord");
 
-const router = express.Router();
+const router = Router();
 
 type AuthenticatedRequest = Request & {
   user?: { role?: string } | null;

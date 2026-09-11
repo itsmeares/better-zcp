@@ -1,4 +1,4 @@
-import express from 'express';
+import { Router } from '../http/startApiRouter.ts';
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:RCON');
 import { getCommandHistory } from '../database/init.ts';
@@ -19,7 +19,7 @@ import {
 import { requirePermission } from '../services/permissions.ts';
 import { ErrorCode } from '../utils/errorCodes.ts';
 
-const router = express.Router();
+const router = Router();
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

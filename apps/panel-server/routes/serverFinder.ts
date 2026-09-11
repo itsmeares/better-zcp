@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from "../http/startApiRouter.ts";
 import { requirePermission } from "../services/permissions.ts";
 import {
   QUERY_FAILURE_MESSAGES,
@@ -11,7 +11,7 @@ import {
 } from "../services/serverFinder.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 
-const router = express.Router();
+const router = Router();
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

@@ -1,4 +1,4 @@
-import express, { type Request, type Response } from "express";
+import { Router, type Request, type Response } from "../http/startApiRouter.ts";
 import path from "path";
 import fs from "fs";
 import { promises as fsp } from "fs";
@@ -57,7 +57,7 @@ import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.ts";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 
-const router = express.Router();
+const router = Router();
 type AnyRecord = Record<string, any>;
 
 const requireModsManage = requirePermission("mods.manage");
@@ -2360,6 +2360,31 @@ router.post("/add-to-ini", async (req, res) => {
   }
 });
 
+export function extractWorkshopModId(
+  description: unknown,
+  title: unknown,
+): string | null {
+  const patterns = [
+    /Mod\s*ID\s*[:=]\s*([^\n\r\[\]<>]+)/i,
+    /\bid\s*=\s*([^\n\r\[\]<>]+)/i,
+    /\bMod\s*:\s*([^\n\r\[\]<>]+)/i,
+    /\[code\][\s\S]*?id\s*=\s*([^\s\n\r\[\]]+)[\s\S]*?\[\/code\]/i,
+    /IDs\s*[:=]\s*([^\n\r\[\]<>]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = String(description || "").match(pattern);
+    if (!match) continue;
+    const candidate = match[1].trim();
+    if (/^[A-Za-z0-9_-]+$/.test(candidate) && candidate.length > 0) {
+      return candidate;
+    }
+  }
+
+  const potentialId = String(title || "").trim();
+  return /^[A-Za-z0-9_-]{4,29}$/.test(potentialId) ? potentialId : null;
+}
+
 async function fetchModIdFromWorkshop(workshopId: string): Promise<string | null> {
   try {
     const fetchAbort = new AbortController();
@@ -2400,47 +2425,10 @@ async function fetchModIdFromWorkshop(workshopId: string): Promise<string | null
     const description = modInfo.description || "";
     const title = modInfo.title || "";
 
-    let match = description.match(/Mod\s*ID\s*[:=]\s*([^\s\n\r\[\]<>]+)/i);
-    if (match) {
-      log.info(`Found Mod ID from "Mod ID:" pattern: ${match[1]}`);
-      return match[1].trim();
-    }
-
-    match = description.match(/\bid\s*=\s*([^\s\n\r\[\]<>]+)/i);
-    if (match) {
-      log.info(`Found Mod ID from "id=" pattern: ${match[1]}`);
-      return match[1].trim();
-    }
-
-    match = description.match(/\bMod\s*:\s*([A-Za-z0-9_-]+)/i);
-    if (match && match[1].length > 3) {
-      log.info(`Found Mod ID from "Mod:" pattern: ${match[1]}`);
-      return match[1].trim();
-    }
-
-    match = description.match(
-      /\[code\][\s\S]*?id\s*=\s*([^\s\n\r\[\]]+)[\s\S]*?\[\/code\]/i,
-    );
-    if (match) {
-      log.info(`Found Mod ID from [code] block: ${match[1]}`);
-      return match[1].trim();
-    }
-
-    match = description.match(/IDs\s*[:=]\s*([^\s\n\r\[\]<>]+)/i);
-    if (match) {
-      log.info(`Found Mod ID from "IDs:" pattern: ${match[1]}`);
-      return match[1].trim();
-    }
-
-
-    const potentialId = title.replace(/[^a-zA-Z0-9_-]/g, "");
-    if (
-      potentialId === title &&
-      potentialId.length > 3 &&
-      potentialId.length < 30
-    ) {
-      log.info(`Using title as Mod ID (exact match): ${potentialId}`);
-      return potentialId;
+    const detectedId = extractWorkshopModId(description, title);
+    if (detectedId) {
+      log.info(`Found Mod ID from Steam Workshop metadata: ${detectedId}`);
+      return detectedId;
     }
 
     log.warn(

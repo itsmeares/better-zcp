@@ -10,6 +10,7 @@ import {
 import {
   compareDefinitionSets,
   createConflictScanSnapshots,
+  extractWorkshopModId,
   filterOwnedClientModIds,
   getModDetailsFromWorkshop,
   groupIntoPairs,
@@ -30,6 +31,28 @@ import authService from "../services/auth.ts";
 import { parsePlayerExportFile } from "../routes/players.ts";
 import { requireStoppedForLocalConfigMutation } from "../services/configMutationGuard.ts";
 
+describe("extractWorkshopModId", () => {
+  it("rejects a spaced description value instead of truncating it", () => {
+    expect(
+      extractWorkshopModId(
+        "Workshop ID: 3785483068\nMod ID: Kentucky Cellar",
+        "Kentucky Cellar",
+      ),
+    ).toBeNull();
+  });
+
+  it("accepts a clean Mod ID from the description", () => {
+    expect(
+      extractWorkshopModId("Mod ID: KentuckyCellar", "Kentucky Cellar"),
+    ).toBe("KentuckyCellar");
+  });
+
+  it("accepts a clean title as the final fallback", () => {
+    expect(extractWorkshopModId("No mod ID listed", "KentuckyCellar")).toBe(
+      "KentuckyCellar",
+    );
+  });
+});
 
 describe("Restart timeout pattern", () => {
   it("should not leave dangling rejections when operation wins the race", async () => {

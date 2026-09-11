@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.ts";
@@ -8,7 +8,7 @@ import { resolveDockerHostSignal } from "../services/managedContainer.ts";
 import { getActiveLifecycleOperation } from "../services/lifecycleCoordinator.ts";
 
 const log = createLogger("API:ServerStatus");
-const router = express.Router();
+const router = Router();
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

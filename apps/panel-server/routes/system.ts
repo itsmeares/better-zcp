@@ -1,4 +1,4 @@
-import express from "express";
+import { Router, type Request } from "../http/startApiRouter.ts";
 import { getCircuitBreakerStatus } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
@@ -6,7 +6,7 @@ import { buildRuntimeInfo } from "../utils/runtimeInfo.ts";
 import { buildDiskSpace as buildSystemDiskSpace } from "../utils/systemInfo.ts";
 
 const log = createLogger("API:System");
-const router = express.Router();
+const router = Router();
 
 export { buildRuntimeInfo };
 
@@ -14,7 +14,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function buildDiskSpace(req: express.Request) {
+async function buildDiskSpace(req: Request) {
   return buildSystemDiskSpace(req.app.get("diskMonitor"));
 }
 

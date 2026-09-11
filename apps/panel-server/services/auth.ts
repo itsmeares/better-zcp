@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import crypto from "crypto";
-import type { NextFunction, Request, RequestHandler, Response } from "express";
+import type { NextFunction, Request, RequestHandler, Response } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getSetting, setSetting, getDb, commitNow } from "../database/init.ts";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
@@ -1289,7 +1289,11 @@ class AuthService {
   }
 }
 
-const authService = new AuthService();
+const AUTH_SERVICE_KEY = "__better_zcp_auth_service__";
+const authRuntime = globalThis as typeof globalThis & {
+  [AUTH_SERVICE_KEY]?: AuthService;
+};
+const authService = authRuntime[AUTH_SERVICE_KEY] ??= new AuthService();
 export default authService;
 
 export function requireRole(...roles: string[]): RequestHandler {

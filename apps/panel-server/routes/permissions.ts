@@ -1,4 +1,4 @@
-import express from "express";
+import { Router, type Request, type Response } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import {
@@ -11,16 +11,16 @@ import {
 } from "../services/permissions.ts";
 
 const log = createLogger("API:Permissions");
-const router = express.Router();
+const router = Router();
 
-interface AuthenticatedRequest extends express.Request {
+interface AuthenticatedRequest extends Request {
   user?: { role?: string } | null;
 }
 
 router.use(requirePermission("roles.manage"));
 
 function respondWithServiceError(
-  res: express.Response,
+  res: Response,
   error: unknown,
   fallbackMessage: string,
 ): void {

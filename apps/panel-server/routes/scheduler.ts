@@ -1,4 +1,4 @@
-import express, { type Request, type Response } from 'express';
+import { Router, type Request, type Response } from '../http/startApiRouter.ts';
 import cron from 'node-cron';
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Scheduler');
@@ -51,7 +51,7 @@ export function emitActionResult(
   if (typeof io?.emit === 'function') io.emit('scheduler:action_result', payload);
 }
 
-const router = express.Router();
+const router = Router();
 
 router.use(requirePermission('automation.manage'));
 

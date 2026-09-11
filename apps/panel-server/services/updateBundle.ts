@@ -117,7 +117,10 @@ function updateError(
   message: string,
   cause?: unknown,
 ): UpdateBundleError {
-  const error = new Error(message, cause ? { cause } : undefined) as UpdateBundleError;
+  const error = Object.assign(
+    new Error(message),
+    cause ? { cause } : {},
+  ) as UpdateBundleError;
   error.code = code;
   return error;
 }

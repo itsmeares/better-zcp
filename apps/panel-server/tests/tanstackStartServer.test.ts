@@ -1,14 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type {
-  Request as ExpressRequest,
-  Response as ExpressResponse,
-} from "express";
+import { PassThrough } from "node:stream";
 import {
   sendTanStackStartResponse,
   toTanStackStartRequest,
 } from "../utils/tanstackStartServer.ts";
 
-describe("TanStack Start Express adapter", () => {
+describe("TanStack Start native HTTP adapter", () => {
   it("keeps the original URL and request headers", () => {
     const request = toTanStackStartRequest({
       method: "GET",
@@ -20,7 +17,7 @@ describe("TanStack Start Express adapter", () => {
       get(name: string) {
         return name.toLowerCase() === "host" ? "panel.example" : undefined;
       },
-    } as unknown as ExpressRequest);
+    } as any);
 
     expect(request.url).toBe("https://panel.example/settings?tab=roles");
     expect(request.headers.get("cookie")).toBe("session=abc");
@@ -44,7 +41,7 @@ describe("TanStack Start Express adapter", () => {
       get(name: string) {
         return name.toLowerCase() === "host" ? "panel.example" : undefined;
       },
-    } as unknown as ExpressRequest);
+    } as any);
 
     expect(request.headers.get("x-panel-remote-address")).toBe("127.0.0.1");
     expect(request.headers.get("x-panel-client-ip")).toBe("10.0.0.4");
@@ -66,68 +63,60 @@ describe("TanStack Start Express adapter", () => {
       get(name: string) {
         return name.toLowerCase() === "host" ? "panel.example" : undefined;
       },
-    } as unknown as ExpressRequest);
+    } as any);
 
     expect(await request.json()).toEqual({ action: "ping" });
     expect(request.headers.get("content-length")).toBeNull();
   });
 
-  it("copies the Start response status, headers, and body to Express", async () => {
-    const sent = {
-      body: undefined as Buffer | undefined,
+  it("copies the Start response status, headers, and body to Node HTTP", async () => {
+    const output = new PassThrough();
+    const chunks: Buffer[] = [];
+    output.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    const sent = Object.assign(output, {
       headers: {} as Record<string, string | string[]>,
       statusCode: 0,
       setHeader(name: string, value: string | string[]) {
         this.headers[name.toLowerCase()] = value;
       },
-      status(code: number) {
-        this.statusCode = code;
-        return this;
-      },
-      send(body: Buffer) {
-        this.body = body;
-        return this;
-      },
-    };
+    });
+    const ended = new Promise<void>((resolve) => output.once("end", resolve));
 
     await sendTanStackStartResponse(
       new Response("<html>ok</html>", {
         status: 201,
         headers: { "content-type": "text/html" },
       }),
-      sent as unknown as ExpressResponse,
+      sent as any,
     );
 
     expect(sent.statusCode).toBe(201);
     expect(sent.headers["content-type"]).toBe("text/html");
-    expect(sent.body?.toString()).toBe("<html>ok</html>");
+    await ended;
+    expect(Buffer.concat(chunks).toString()).toBe("<html>ok</html>");
   });
 
   it("preserves multiple Set-Cookie headers", async () => {
-    const sent = {
+    const sent = Object.assign(new PassThrough(), {
       headers: {} as Record<string, string | string[]>,
+      statusCode: 0,
       setHeader(name: string, value: string | string[]) {
         this.headers[name.toLowerCase()] = value;
       },
-      status(code: number) {
-        return this;
-      },
-      send() {
-        return this;
-      },
-    };
+    });
     const response = new Response(null);
     response.headers.append("set-cookie", "access=one; Path=/");
     response.headers.append("set-cookie", "refresh=two; Path=/");
 
     await sendTanStackStartResponse(
       response,
-      sent as unknown as ExpressResponse,
+      sent as any,
     );
 
     expect(sent.headers["set-cookie"]).toEqual([
       "access=one; Path=/",
       "refresh=two; Path=/",
     ]);
+    expect(sent.writableEnded).toBe(true);
   });
 });

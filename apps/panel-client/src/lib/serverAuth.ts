@@ -199,7 +199,7 @@ const refreshCookieOptions = createServerOnlyFn(
       includeMaxAge,
     )
     if (options.maxAge === undefined) return options
-    // Express receives milliseconds; cookie-es (used by Start) expects seconds.
+    // HTTP adapters receive milliseconds; cookie-es (used by Start) expects seconds.
     return { ...options, maxAge: Math.floor(options.maxAge / 1000) }
   },
 )

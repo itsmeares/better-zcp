@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from "../http/startApiRouter.ts";
 import { spawn, exec } from "child_process";
 import { promisify } from "util";
 import https from "https";
@@ -85,7 +85,7 @@ export {
   waitForRconAfterStart,
 };
 
-const router = express.Router();
+const router = Router();
 
 const isWindows = process.platform === "win32";
 const execAsync = promisify(exec);

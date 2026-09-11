@@ -19,7 +19,7 @@ import {
 import { sanitizeError } from "../utils/sanitize.ts";
 import { captureBackupSnapshot } from "../utils/backupSnapshot.ts";
 import { addBackupRecord, removeBackupRecord } from "./backupRecords.ts";
-import { invalidateMapFolderScan } from "../routes/chunks.ts";
+import { invalidateMapFolderScan } from "../utils/mapFolderScan.ts";
 import {
   isCronTooFrequent,
   isSupportedFiveFieldCron,

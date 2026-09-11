@@ -1,10 +1,10 @@
-import express from "express";
+import { Router } from "../http/startApiRouter.ts";
 import { randomUUID } from "node:crypto";
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import type { Request, Response as ExpressResponse } from "express";
+import type { Request, Response as NativeResponse } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { getActiveServer } from "../database/init.ts";
@@ -13,7 +13,7 @@ import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 const log = createLogger("API:MapProxy");
 const execFileAsync = promisify(execFile);
 
-const router = express.Router();
+const router = Router();
 
 type TileCacheEntry = { buffer: Buffer; contentType: string };
 type MapProjection = { x0: number; y0: number; sqr: number; scale: number };
@@ -522,7 +522,7 @@ function requestIsVersioned(req: Request): boolean {
 
 async function serveTile(
   req: Request,
-  res: ExpressResponse,
+  res: NativeResponse,
   url: string,
   contentType: string,
   relPath: string,
