@@ -50,6 +50,7 @@ type RouteSource =
   | 'bridgeEffects'
   | 'bridgePlayer'
   | 'bridgeDiagnostics'
+  | 'legacyServer'
 
 type RouteStatus = number | ((result: any) => number)
 
@@ -101,6 +102,7 @@ const implementations: Record<
   bridgeEffects: () => import('./serverPanelBridgeEffects'),
   bridgePlayer: () => import('./serverPanelBridgePlayerChat'),
   bridgeDiagnostics: () => import('./serverPanelBridgeDiagnostics'),
+  legacyServer: () => import('./serverLegacyApi'),
 }
 
 const sourceCapabilities: Partial<Record<RouteSource, string>> = {
@@ -1221,6 +1223,98 @@ const routes: RouteSpec[] = [
     source: 'control',
     functionName: 'releaseSafehouse',
     capability: 'server.world_events',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server/steamcmd/check',
+    source: 'legacyServer',
+    functionName: 'checkSteamCmd',
+    capability: 'server.install',
+    data: queryData('path'),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/configure-rcon',
+    source: 'legacyServer',
+    functionName: 'configureRcon',
+    capability: 'server.configure',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/configure-network',
+    source: 'legacyServer',
+    functionName: 'configureNetwork',
+    capability: 'server.configure',
+    data: mergeBody,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server/console-log',
+    source: 'legacyServer',
+    functionName: 'getConsoleLog',
+    capability: 'server.world_events',
+    data: queryData('lines', 'filter'),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server/console-log/error-count',
+    source: 'legacyServer',
+    functionName: 'getConsoleErrorCount',
+    capability: 'server.world_events',
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server/console-log/stream',
+    source: 'legacyServer',
+    functionName: 'getConsoleLogStream',
+    capability: 'server.world_events',
+    data: queryData('lastSize', 'filter'),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/console-log/clear',
+    source: 'legacyServer',
+    functionName: 'clearConsoleLog',
+    capability: 'server.configure',
+    data: mergeBody,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server/update-check',
+    source: 'legacyServer',
+    functionName: 'getServerUpdate',
+    capability: 'server.world_events',
+    data: queryData('force'),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/server/update-check/status',
+    source: 'legacyServer',
+    functionName: 'getServerUpdateStatus',
+    capability: 'server.world_events',
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/update-check/auto-update-result/dismiss',
+    source: 'legacyServer',
+    functionName: 'dismissServerAutoUpdateResult',
+    capability: 'server.world_events',
+    data: mergeBody,
+  },
+  {
+    method: 'POST',
+    pattern: '/api/server/update-check/interval',
+    source: 'legacyServer',
+    functionName: 'setServerUpdateInterval',
+    capability: 'server.configure',
+    data: mergeBody,
+  },
+  {
+    method: 'GET',
+    pattern: '/api/map/vehicles',
+    source: 'legacyServer',
+    functionName: 'getMapVehicles',
   },
 
   {
