@@ -77,15 +77,13 @@ describe("Start legacy JSON implementations", () => {
   it("preserves console filtering, incremental reads, error counts, and clearing", async () => {
     getActiveServer.mockResolvedValue({ zomboidDataPath: root });
     const logPath = path.join(root, "server-console.txt");
-    fs.writeFileSync(
-      logPath,
-      [
-        "SERVER STARTED",
-        "ordinary line",
-        "IsoSpriteManager.AddSprite > duplicate texture",
-        "ERROR[server] broken",
-      ].join("\n"),
-    );
+    const initialLog = [
+      "SERVER STARTED",
+      "ordinary line",
+      "IsoSpriteManager.AddSprite > duplicate texture",
+      "ERROR[server] broken",
+    ].join("\n");
+    fs.writeFileSync(logPath, initialLog);
 
     await expect(
       execute(getConsoleLog, { lines: "10", filter: "filtered" }),
@@ -102,7 +100,7 @@ describe("Start legacy JSON implementations", () => {
 
     const appended = "\nRCON: connected";
     fs.appendFileSync(logPath, appended);
-    const lastSize = fs.statSync(logPath).size - Buffer.byteLength(appended);
+    const lastSize = Buffer.byteLength(initialLog);
     await expect(
       execute(getConsoleLogStream, {
         lastSize: String(lastSize),
