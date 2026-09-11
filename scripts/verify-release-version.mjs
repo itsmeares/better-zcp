@@ -51,7 +51,7 @@ function verify() {
   const rootPackage = readJson("package.json");
   const clientPackage = readJson("apps/panel-client/package.json");
   const serverPackage = readJson("apps/panel-server/package.json");
-  const workspaceLock = readText("pnpm-lock.yaml");
+  const workspaceLock = readText("pnpm-lock.yaml").replace(/\r\n/g, "\n");
   assert(workspaceLock.includes("lockfileVersion:"), "pnpm-lock.yaml is not a valid pnpm lockfile");
   assert(workspaceLock.includes("\n  .:\n") && workspaceLock.includes("\n  apps/panel-client:\n"),
     "pnpm-lock.yaml is missing the root or panel-client workspace importer");
