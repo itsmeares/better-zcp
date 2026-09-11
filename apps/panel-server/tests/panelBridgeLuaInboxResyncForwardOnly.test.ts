@@ -65,4 +65,21 @@ describe("PanelBridge.lua inbox resync -- forward-only guard", () => {
     const state = bridge.getGlobal("PanelBridgeModule");
     expect(state.queueState.lastCommandSeq).toBe(50);
   });
+
+  it("does not let a backward wall-clock jump postpone inbox recovery", () => {
+    const bridge = loadPanelBridge(LUA_PATH, FILE_STUBS);
+    bridge.run(`PanelBridgeModule.queueState.lastCommandSeq = 5`);
+
+    bridge.run(`PanelBridgeModule.processCommands()`);
+
+    bridge.run(`
+      NOW = -1
+      FILES["panelbridge/TestServer/.queue-state-node.json"] =
+        '{"nextCommandSeq":11}'
+      PanelBridgeModule.processCommands()
+    `);
+
+    const state = bridge.getGlobal("PanelBridgeModule");
+    expect(state.queueState.lastCommandSeq).toBe(10);
+  });
 });

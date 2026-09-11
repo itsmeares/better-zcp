@@ -284,8 +284,9 @@ needs internet).
 - docker-compose.install.yml - Docker Compose installer (published panel image)
 - docs/install/            - Install guides for every platform (see Where To Go Next, above)
 - client/dist/             - Web interface copy for manual upgrades and legacy installs
-- data/db.json             - Configuration database (created on first run; NEVER overwrite when upgrading — see data/README.txt)
-- data/db.example.json     - Reference db structure (safe to delete)
+- data/db.sqlite           - Default SQLite database (created on first run)
+- data/db.json             - Legacy JSON database, used only with PANEL_DATABASE_DRIVER=json
+- data/db.example.json     - Legacy JSON reference structure (safe to delete)
 - data/README.txt          - Upgrade-safety notes for the data/ folder
 - logs/                    - Application logs
 - pz-mod/                  - PanelBridge server-side Lua (drop into Install/media/lua/server)
@@ -307,13 +308,20 @@ server-side drop-in, NOT a Workshop mod — there is no client component.
 
 ## Upgrading
 - The panel auto-update feature handles upgrades safely — prefer it.
-- For MANUAL upgrades, do NOT extract the archive over data/. Your db.json
-  (admin account + all configs) lives there and the archive must not clobber
-  it. Modern releases ship only data/db.example.json inside the archive, so
-  a plain extract is safe; back up data/ first if you are unsure. See
-  data/README.txt for tar/zip flags.
-- If you ever lose db.json, check data/backups/ — the panel keeps the last
-  5 auto-snapshots and will restore from the newest on next startup.
+- For MANUAL upgrades, stop the panel before extracting. The archive ships
+  only data/db.example.json, but keep data/db.sqlite, data/db.json, and
+  data/backups/ untouched. See data/README.txt for safe extraction flags.
+- Existing upstream or pre-2.0 installs can start in place with
+  PANEL_DATABASE_DRIVER=json (Linux: PANEL_DATABASE_DRIVER=json ./start.sh;
+  Windows Command Prompt: set PANEL_DATABASE_DRIVER=json, then Start.bat) to
+  keep using data/db.json, or can be migrated to the default SQLite database
+  from a source checkout with:
+  pnpm --filter @better-zcp/panel-server db:import -- --source /path/to/data/db.json --target /path/to/data/db.sqlite
+  Run the command once without --apply, review the report, then repeat with
+  --apply. Keep the JSON file and backups until the new panel is verified.
+- Database backups use the active driver: data/backups/db-*.sqlite for SQLite
+  or data/backups/db-*.json for JSON compatibility mode. The panel keeps the
+  newest five and attempts recovery from them if the active database is bad.
 `;
 
   fs.writeFileSync("./release/README.txt", readme);
@@ -1072,30 +1080,36 @@ async function main() {
 
 This folder holds the panel's runtime state:
 
-  db.json          Created automatically on first run. Contains your admin
-                   account, server configurations, scheduled tasks, mod
-                   tracking data, scheduled task history, and all settings.
-                   DO NOT delete or overwrite this file — you will lose all
-                   your configuration.
+  db.sqlite        Created automatically on first run (the default driver).
+                   Contains your admin account, server configurations,
+                   scheduled tasks, mod tracking data, and all settings.
 
-  backups/         Auto-rotating snapshots of db.json (every 6h, last 5 kept).
-                   The panel will try to restore from the most recent backup
-                   if db.json becomes corrupt.
+  db.json          Legacy JSON database. It is used only when the panel is
+                   started with PANEL_DATABASE_DRIVER=json. SQLite startup
+                   never overwrites or silently imports this file.
 
-  db.example.json  Reference structure only. Safe to delete.
+  backups/         Auto-rotating snapshots of the active database (every 6h,
+                   last 5 kept). SQLite uses db-*.sqlite; JSON compatibility
+                   mode uses db-*.json. The panel attempts recovery from a
+                   recent backup if the active database becomes corrupt.
+
+  db.example.json  Legacy JSON reference structure only. Safe to delete.
 
 UPGRADING THE PANEL
 -------------------
-When upgrading by extracting a release archive over your existing install,
-make sure your archive tool does NOT overwrite \`data/db.json\` (or the
-\`data/backups/\` folder). Modern releases ship only \`data/db.example.json\`
-inside the archive precisely so a plain extract is safe — but if you are
-restoring from an older release that contained a real \`db.json\`, exclude
-the data/ folder from extraction.
+Stop the panel before upgrading. The release archive contains only the example
+JSON file, but never overwrite your existing \`data/db.sqlite\`,
+\`data/db.json\`, or \`data/backups/\` folder.
+
+For an upstream or pre-2.0 install, either start with
+\`PANEL_DATABASE_DRIVER=json\` to keep the existing JSON database, or migrate
+it to SQLite from a source checkout with the \`db:import\` command in the
+main README. Keep the original JSON file and backups until the migration has
+been verified.
 
 Recommended safe-upgrade commands:
 
-  Linux:   tar xzf release.tar.gz --exclude='data/db.json' --exclude='data/backups'
+  Linux:   tar xzf release.tar.gz --exclude='data/db.sqlite' --exclude='data/db.json' --exclude='data/backups'
   Windows: extract everything EXCEPT the data/ folder, or back up data/ first.
 `;
   fs.writeFileSync("./release/data/README.txt", dataReadme);

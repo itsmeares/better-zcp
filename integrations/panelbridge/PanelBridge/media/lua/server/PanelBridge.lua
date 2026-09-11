@@ -3,7 +3,7 @@
 local json
 
 local PanelBridge = {
-    VERSION = "1.7.51",
+    VERSION = "1.7.57",
     PROTOCOL_VERSION = "queue-v1",
     CHECK_INTERVAL = 250,
     lastCheck = 0,
@@ -672,7 +672,15 @@ function PanelBridge.readJSON(filename)
     if not content or content == "" then
         return nil
     end
-    return json.decode(content)
+    local decodeOk, decoded = pcall(json.decode, content)
+    if not decodeOk then
+        PanelBridge.warn("Failed to decode JSON file, treating as absent", {
+            file = filename,
+            parseError = tostring(decoded)
+        })
+        return nil
+    end
+    return decoded
 end
 
 function PanelBridge.writeJSON(filename, data)
@@ -895,7 +903,8 @@ local function processSingleCommand(cmd)
         local cacheTtl = cacheConfig and cacheConfig.ttl
         if cacheTtl then
             local cached = readOnlyCache[cmd.action]
-            if cached and (getTimestampMs() - cached.at) < cacheTtl then
+            local age = cached and (getTimestampMs() - cached.at)
+            if cached and age >= 0 and age < cacheTtl then
                 PanelBridge.stats.commandsSucceeded = PanelBridge.stats.commandsSucceeded + 1
                 PanelBridge.debug("Command served from cache: " .. tostring(cmd.action), { id = cmd.id })
                 PanelBridge.sendResult(cmd.id, cached.ok, cached.data, cached.err)
@@ -977,6 +986,10 @@ local function tryResyncInboxCursor(nextSeq)
         stuck.since = now
         stuck.nextCheckAt = now + INBOX_RESYNC_STUCK_MS
         return false
+    end
+    if now < stuck.since then
+        stuck.since = now
+        stuck.nextCheckAt = now
     end
     if now < stuck.nextCheckAt then
         return false

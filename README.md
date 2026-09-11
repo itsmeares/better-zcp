@@ -266,7 +266,8 @@ automatically and uses SQLite through Drizzle.
 
 An older `data/db.json` is never changed or silently replaced. To move one to
 the new format, first preview the import, then run it with `--apply` only after
-checking the report:
+checking the report. Stop the panel before importing so it cannot write the
+legacy file while the importer is reading it:
 
 ```bash
 pnpm --filter @better-zcp/panel-server db:import -- \
@@ -280,6 +281,14 @@ pnpm --filter @better-zcp/panel-server db:import -- \
 
 The source file stays untouched. Passwords and tokens are moved to the
 panel's separate secret files during an applied import.
+
+If you are upgrading an existing upstream or pre-2.0 installation, you can
+keep using its JSON database temporarily by starting the panel with
+`PANEL_DATABASE_DRIVER=json` (`PANEL_DATABASE_DRIVER=json ./start.sh` on Linux,
+or `set PANEL_DATABASE_DRIVER=json` before `Start.bat` in Windows Command
+Prompt). Otherwise, migrate it to SQLite before the first start with the
+default driver. Keep `data/db.json` and `data/backups/` until you have opened
+the new panel and verified the server configuration.
 
 ### PanelBridge (Optional)
 
