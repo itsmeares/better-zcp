@@ -1,7 +1,8 @@
 import esbuild from "esbuild";
 import archiver from "archiver";
-import { execSync } from "child_process";
+import { execFileSync, execSync } from "child_process";
 import fs from "fs";
+import { createRequire } from "module";
 import path from "path";
 import crypto from "crypto";
 import { gzipSync } from "zlib";
@@ -11,6 +12,10 @@ const distDir = "./dist-exe";
 const releaseDir = "./release";
 const linuxArchiveStagingPath = "./ZomboidControlPanel-linux.tar.gz";
 const linuxArchivePath = "./release/ZomboidControlPanel-linux.tar.gz";
+const pkgCliPath = path.join(
+  path.dirname(createRequire(import.meta.url).resolve("@yao-pkg/pkg")),
+  "bin.js",
+);
 
 const LINUX_ARCHIVE_EXECUTABLE_NAMES = new Set([
   "ZomboidControlPanel",
@@ -885,6 +890,9 @@ async function main() {
       },
     });
     console.log("Client built successfully");
+    execFileSync(process.execPath, ["scripts/check-client-boundary.mjs"], {
+      stdio: "inherit",
+    });
   } catch (error) {
     console.error("Client build failed:", error.message);
     process.exit(1);
@@ -963,11 +971,12 @@ async function main() {
   const pkgConfig = {
     name: "zomboid-control-panel",
     version: panelVersion,
+    main: "server.cjs",
     bin: "server.cjs",
     pkg: {
       scripts: "server.cjs",
       targets: targets.map((target) => `node22-${target}-x64`),
-      outputPath: ".",
+      outputPath: path.resolve(distDir),
     },
   };
 
@@ -978,10 +987,29 @@ async function main() {
 
   console.log(`Creating executables for: ${targets.join(", ")}`);
   try {
-    execSync('pnpm exec pkg . --compress GZip --public --public-packages "*"', {
-      cwd: distDir,
-      stdio: "inherit",
-    });
+    execFileSync(
+      process.execPath,
+      [
+        pkgCliPath,
+        "--config",
+        "package.json",
+        "--compress",
+        "GZip",
+        "--public",
+        "--public-packages",
+        "*",
+        "server.cjs",
+      ],
+      {
+        cwd: distDir,
+        stdio: "inherit",
+        env: Object.fromEntries(
+          Object.entries(process.env).filter(
+            ([name]) => !name.startsWith("npm_package_"),
+          ),
+        ),
+      },
+    );
   } catch (error) {
     console.error("Failed to create executable(s):", error.message);
     process.exit(1);

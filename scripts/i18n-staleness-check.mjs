@@ -12,7 +12,12 @@ const CO_CHANGE_WINDOW_MS = 30 * 60 * 1000;
 
 function git(args) {
   try {
-    return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    return execFileSync("git", args, {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
   } catch {
     return null;
   }
@@ -104,7 +109,9 @@ function getValue(data, dottedKey) {
 }
 
 function wasRealEdit(enHash, enPath, dottedKey, currentValue) {
-  const parentData = jsonAtCommit(`${enHash}^`, enPath);
+  const parent = `${enHash}^`;
+  if (git(["cat-file", "-e", `${parent}:${enPath}`]) === null) return false;
+  const parentData = jsonAtCommit(parent, enPath);
   if (parentData === null) return false;
   const parentValue = getValue(parentData, dottedKey);
   if (parentValue === null) return false;

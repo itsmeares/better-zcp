@@ -1,20 +1,11 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth'
-
+import * as serverImplementation from './serverPanelBridgeEffects.server'
+import { invokeServerFunction } from './serverFunctionRpc'
 type AnyRecord = Record<string, any>
 
 type ExecuteOptions = {
   data?: unknown
   context?: unknown
-}
-
-type ImplementationFunction = {
-  __executeServer?: (
-    options: ExecuteOptions,
-  ) => Promise<{ result?: unknown; error?: unknown }>
 }
 
 function record(data: unknown): AnyRecord {
@@ -23,47 +14,40 @@ function record(data: unknown): AnyRecord {
     : {}
 }
 
-function capabilityMiddleware(capability: string) {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware(capability),
-  ] as const
+function invoke(
+  serverFunction: unknown,
+  name: string,
+  options: ExecuteOptions,
+): Promise<any> {
+  return invokeServerFunction(serverFunction, name, options)
 }
 
-async function invoke(name: string, options: ExecuteOptions): Promise<any> {
-  const implementation = await import('./serverPanelBridgeEffects')
-  const serverFunction = implementation[
-    name as keyof typeof implementation
-  ] as unknown as ImplementationFunction | undefined
-  const executeServer = serverFunction?.__executeServer
-  if (!executeServer)
-    throw new Error(`Server function ${name} is not available`)
-  const outcome = await executeServer(options)
-  if (outcome.error) throw outcome.error
-  return outcome.result
-}
+export const sendPanelBridgeEndangerCommand = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.sendPanelBridgeEndangerCommand,
+      'sendPanelBridgeEndangerCommand',
+      { data, context },
+    ),
+  )
 
-function createRpc(name: string, method: 'GET' | 'POST', capability: string) {
-  return createServerFn({ method })
-    .middleware(capabilityMiddleware(capability))
-    .validator((data: unknown) => record(data))
-    .handler(({ data, context }) => invoke(name, { data, context }))
-}
+export const getPanelBridgeCatalog = createServerFn({ method: 'GET' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.getPanelBridgeCatalog,
+      'getPanelBridgeCatalog',
+      { data, context },
+    ),
+  )
 
-export const sendPanelBridgeEndangerCommand = createRpc(
-  'sendPanelBridgeEndangerCommand',
-  'POST',
-  'players.endanger_or_impersonate',
-)
-
-export const getPanelBridgeCatalog = createRpc(
-  'getPanelBridgeCatalog',
-  'GET',
-  'players.gm_tools',
-)
-
-export const scanPanelBridgeCatalog = createRpc(
-  'scanPanelBridgeCatalog',
-  'POST',
-  'bridge.diagnostics',
-)
+export const scanPanelBridgeCatalog = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.scanPanelBridgeCatalog,
+      'scanPanelBridgeCatalog',
+      { data, context },
+    ),
+  )

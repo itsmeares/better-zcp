@@ -1,33 +1,36 @@
 import { createServerFn } from '@tanstack/react-start'
-import { rolesReadMiddleware } from './serverAuth'
+import * as serverImplementation from './serverPermissions.server'
+import type { CapabilityGroup, RoleInfo } from './api'
+import {
+  invokeServerFunction,
+  type ServerFunctionOptions,
+} from './serverFunctionRpc'
 
-async function getCapabilitiesImplementation() {
-  const { listCapabilitiesGrouped } = await import('../../../panel-server/services/permissions.ts')
-  return { groups: listCapabilitiesGrouped() }
+function invoke<T>(
+  serverFunction: unknown,
+  name: string,
+  options: ServerFunctionOptions,
+): Promise<T> {
+  return invokeServerFunction<T>(serverFunction, name, options)
 }
 
-export const getCapabilities = createServerFn({ method: 'GET' })
-    .middleware(rolesReadMiddleware)
-    .handler(() => getCapabilitiesImplementation())
-;(getCapabilities as any).__executeImplementation = getCapabilitiesImplementation
+export const getCapabilities = createServerFn({
+  method: 'GET',
+  strict: { output: false },
+}).handler(({ data, context }) =>
+  invoke<{ groups: CapabilityGroup[] }>(
+    serverImplementation.getCapabilities,
+    'getCapabilities',
+    { data, context },
+  ),
+)
 
-async function getRolesImplementation() {
-  const { listRolesWithMemberCounts } = await import('../../../panel-server/services/permissions.ts')
-  const roles = await listRolesWithMemberCounts()
-  return {
-    roles: roles.map((role) => ({
-      id: String(role.id),
-      name: role.name,
-      capabilities: role.capabilities,
-      isSeeded: role.isSeeded === true,
-      createdAt: typeof role.createdAt === 'string' ? role.createdAt : '',
-      ...(typeof role.updatedAt === 'string' ? { updatedAt: role.updatedAt } : {}),
-      memberCount: role.memberCount,
-    })),
-  }
-}
-
-export const getRoles = createServerFn({ method: 'GET' })
-    .middleware(rolesReadMiddleware)
-    .handler(() => getRolesImplementation())
-;(getRoles as any).__executeImplementation = getRolesImplementation
+export const getRoles = createServerFn({
+  method: 'GET',
+  strict: { output: false },
+}).handler(({ data, context }) =>
+  invoke<{ roles: RoleInfo[] }>(serverImplementation.getRoles, 'getRoles', {
+    data,
+    context,
+  }),
+)

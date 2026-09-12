@@ -7,14 +7,14 @@ import { execFileSync } from 'child_process'
 
 /// <reference types="vitest" />
 
-const rootPkg = JSON.parse(readFileSync(path.resolve(__dirname, '../../package.json'), 'utf-8'))
+const rootPkg = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../package.json'), 'utf-8'))
 
 function resolveBuildSha() {
   const configured = process.env.PANEL_BUILD_SHA?.trim()
   if (configured) return configured
   try {
     return execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: path.resolve(__dirname, '../..'),
+      cwd: path.resolve(import.meta.dirname, '../..'),
       encoding: 'utf8',
     }).trim()
   } catch {
@@ -71,9 +71,6 @@ export default defineConfig(({ mode }) => {
         build: { outDir: 'dist-start-server' },
       },
     },
-    esbuild: {
-      drop: ['console', 'debugger'],
-    },
     build: {
       rollupOptions: {
         external: ['ssh2-sftp-client', 'ssh2', 'cpu-features'],
@@ -99,7 +96,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       dedupe: ['react', 'react-dom'],
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        '@': path.resolve(import.meta.dirname, './src'),
       },
     },
     server: {

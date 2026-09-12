@@ -1,3 +1,5 @@
+import { spawnSync } from "child_process";
+import { fileURLToPath } from "url";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("child_process", async () => {
@@ -29,5 +31,19 @@ describe("i18n-staleness-check: a transient git-blame failure for one language m
 
   it("is narrow -- a language whose blame call succeeds is unaffected", () => {
     expect(() => analyzeNamespace("roles.json", ["fr", "de", "es", "zh-CN"])).not.toThrow();
+  });
+
+  it("does not print git errors when a locale file was added with no parent file", () => {
+    const script = fileURLToPath(
+      new URL("../../../scripts/i18n-staleness-check.mjs", import.meta.url),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [script, "--ns=console", "--lang=fr"],
+      { encoding: "utf8" },
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain("fatal: path");
   });
 });

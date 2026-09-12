@@ -3,7 +3,7 @@ import {
   anyPermissionMiddleware,
   permissionMiddleware,
   protectedServerFunctionMiddleware,
-} from './serverAuth'
+} from './serverAuth.server'
 import type { SftpBridgeConfig } from '../../../panel-server/services/panelBridgeSftp.ts'
 
 type AnyRecord = Record<string, any>

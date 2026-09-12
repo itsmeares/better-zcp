@@ -53,6 +53,10 @@ jobs:
       - name: Build
         run: node scripts/release/build.mjs ${{ matrix.build_arg }}
 
+      - name: Smoke-test Linux release
+        if: runner.os == 'Linux'
+        run: node scripts/smoke-release.mjs
+
       - name: Verify release version parity
         run: node scripts/verify-release-version.mjs "${{ github.ref_name }}"
 
@@ -144,11 +148,21 @@ jobs:
           release_tag="${GITHUB_REF_NAME}"
           if gh release view "$release_tag" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "Release $release_tag already exists; uploading assets."
+            if [[ "$release_tag" == *-* ]]; then
+              gh release edit "$release_tag" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --prerelease
+            fi
           else
-            gh release create "$release_tag" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --title "Release $release_tag" \
+            release_args=(
+              --repo "${GITHUB_REPOSITORY}"
+              --title "Release $release_tag"
               --generate-notes
+            )
+            if [[ "$release_tag" == *-* ]]; then
+              release_args+=(--prerelease)
+            fi
+            gh release create "$release_tag" "${release_args[@]}"
           fi
 
       - name: Upload release assets

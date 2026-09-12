@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import {
   type AuthContextUser,
   protectedServerFunctionMiddleware,
-} from './serverAuth'
+} from './serverAuth.server'
 import {
   BRIDGE_ACTION_CAPABILITY,
   ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS,

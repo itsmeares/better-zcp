@@ -8,8 +8,18 @@ import {
   resolveApiContractVersion,
   resolveBuildSha,
 } from "../../../scripts/release/build.mjs";
+import { isValidReleaseVersion } from "../../../scripts/release/version.mjs";
 
 describe("standalone build metadata", () => {
+  it("accepts stable and prerelease release versions only", () => {
+    expect(isValidReleaseVersion("2.0.0")).toBe(true);
+    expect(isValidReleaseVersion("2.0.0-rc1")).toBe(true);
+    expect(isValidReleaseVersion("2.0.0-rc.1")).toBe(true);
+    expect(isValidReleaseVersion("v2.0.0")).toBe(false);
+    expect(isValidReleaseVersion("2.0")).toBe(false);
+    expect(isValidReleaseVersion("2.0.0-")).toBe(false);
+  });
+
   it("uses the supplied build SHA so client and executable builds share provenance", () => {
     expect(resolveBuildSha({ PANEL_BUILD_SHA: "  release-sha  " })).toBe(
       "release-sha",

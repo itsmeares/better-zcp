@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import {
   adminRoleMiddleware,
   protectedServerFunctionMiddleware,
-} from './serverAuth'
+} from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 

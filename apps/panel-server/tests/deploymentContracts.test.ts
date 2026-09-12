@@ -59,6 +59,38 @@ describe("Deployment contracts", () => {
     expect(verifier).toContain("release-manifest.json client file inventory differs");
   });
 
+  it("publishes prerelease tags as prereleases", () => {
+    const workflow = readRepoFile(".github/workflows/release-artifacts.yml");
+
+    expect(workflow).toContain('if [[ "$release_tag" == *-* ]]');
+    expect(workflow).toContain("--prerelease");
+  });
+
+  it("smoke-tests the Linux executable before release publication", () => {
+    const workflow = readRepoFile(".github/workflows/release-artifacts.yml");
+
+    expect(workflow).toContain("node scripts/smoke-release.mjs");
+  });
+
+  it("smoke-tests the packaged Windows executable in Windows CI", () => {
+    const workflow = readRepoFile(".github/workflows/ci.yml");
+
+    expect(workflow).toContain("Build packaged Windows executable");
+    expect(workflow).toContain("Smoke-test packaged Windows release");
+    expect(workflow).toContain("run: node scripts/smoke-release.mjs");
+  });
+
+  it("checks the production browser bundle for server-only markers", () => {
+    const workflow = readRepoFile(".github/workflows/ci.yml");
+    const packageJson = readRepoFile("package.json");
+    const releaseBuild = readRepoFile("scripts/release/build.mjs");
+
+    expect(packageJson).toContain('"check:client-boundary"');
+    expect(workflow).toContain("Check browser/server dependency boundary");
+    expect(workflow).toContain("run: pnpm run check:client-boundary");
+    expect(releaseBuild).toContain('"scripts/check-client-boundary.mjs"');
+  });
+
   it("keeps the generic installer free of PZ game ports", () => {
     const compose = readRepoFile("docker-compose.install.yml");
 

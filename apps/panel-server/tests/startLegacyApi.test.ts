@@ -30,7 +30,7 @@ const {
   getConsoleLogStream,
   clearConsoleLog,
   getServerUpdateStatus,
-} = await import("../../panel-client/src/lib/serverServerApi.ts");
+} = await import("../../panel-client/src/lib/serverServerApi.server.ts");
 
 type ServerFunction = {
   __executeImplementation: (data: Record<string, unknown>) => Promise<any>;

@@ -1,136 +1,161 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth'
-
+import * as serverImplementation from './serverIntegrations.server'
+import { invokeServerFunction } from './serverFunctionRpc'
 type AnyRecord = Record<string, any>
 type ExecuteOptions = {
   data?: unknown
   context?: unknown
 }
-type ImplementationFunction = {
-  __executeImplementation?: (
-    data: unknown,
-    context?: unknown,
-  ) => Promise<unknown>
-  __executeServer?: (
-    options: ExecuteOptions,
-  ) => Promise<{ result?: unknown; error?: unknown }>
-}
-
 function record(data: unknown): AnyRecord {
   return data && typeof data === 'object' && !Array.isArray(data)
     ? (data as AnyRecord)
     : {}
 }
 
-function middleware(capability: string) {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware(capability),
-  ] as const
-}
-
-async function invoke(name: string, options: ExecuteOptions): Promise<any> {
-  const implementation = await import('./serverIntegrations')
-  const serverFunction = implementation[
-    name as keyof typeof implementation
-  ] as unknown as ImplementationFunction | undefined
-  if (serverFunction?.__executeImplementation) {
-    return serverFunction.__executeImplementation(options.data ?? {}, options.context)
-  }
-  const executeServer = serverFunction?.__executeServer
-  if (!executeServer)
-    throw new Error('Server function ' + name + ' is not available')
-  const outcome = await executeServer(options)
-  if (outcome.error) throw outcome.error
-  return outcome.result
-}
-
-function createIntegrationRpc(
+function invoke(
+  serverFunction: unknown,
   name: string,
-  method: 'GET' | 'POST',
-  capability: string,
-) {
-  return createServerFn({ method })
-    .middleware(middleware(capability))
-    .validator((data: unknown) => record(data))
-    .handler(({ data, context }) => invoke(name, { data, context }))
+  options: ExecuteOptions,
+): Promise<any> {
+  return invokeServerFunction(serverFunction, name, options)
 }
 
-export const getDiscordStatus = createIntegrationRpc(
-  'getDiscordStatus',
-  'GET',
-  'integrations.manage',
-)
-export const getDiscordConfig = createIntegrationRpc(
-  'getDiscordConfig',
-  'GET',
-  'integrations.manage',
-)
-export const updateDiscordConfig = createIntegrationRpc(
-  'updateDiscordConfig',
-  'POST',
-  'integrations.manage',
-)
-export const startDiscordBot = createIntegrationRpc(
-  'startDiscordBot',
-  'POST',
-  'integrations.manage',
-)
-export const stopDiscordBot = createIntegrationRpc(
-  'stopDiscordBot',
-  'POST',
-  'integrations.manage',
-)
-export const resetDiscordConfig = createIntegrationRpc(
-  'resetDiscordConfig',
-  'POST',
-  'integrations.manage',
-)
-export const testDiscordToken = createIntegrationRpc(
-  'testDiscordToken',
-  'POST',
-  'integrations.manage',
-)
-export const sendDiscordTestMessage = createIntegrationRpc(
-  'sendDiscordTestMessage',
-  'POST',
-  'integrations.manage',
-)
-export const getDiscordWebhookEvents = createIntegrationRpc(
-  'getDiscordWebhookEvents',
-  'GET',
-  'integrations.manage',
-)
-export const updateDiscordWebhookEvents = createIntegrationRpc(
-  'updateDiscordWebhookEvents',
-  'POST',
-  'integrations.manage',
-)
-export const getDiscordPermissions = createIntegrationRpc(
-  'getDiscordPermissions',
-  'GET',
-  'integrations.manage',
-)
-export const updateDiscordPermissions = createIntegrationRpc(
-  'updateDiscordPermissions',
-  'POST',
-  'integrations.manage',
-)
-export const getDockerStatus = createIntegrationRpc(
-  'getDockerStatus',
-  'GET',
-  'docker.manage',
-)
-export const getDockerStats = createIntegrationRpc(
-  'getDockerStats',
-  'GET',
-  'docker.manage',
-)
-export const runDockerAction = createIntegrationRpc(
-  'runDockerAction',
-  'POST',
-  'docker.manage',
-)
+export const getDiscordStatus = createServerFn({ method: 'GET' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getDiscordStatus, 'getDiscordStatus', {
+      data,
+      context,
+    }),
+  )
+
+export const getDiscordConfig = createServerFn({ method: 'GET' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getDiscordConfig, 'getDiscordConfig', {
+      data,
+      context,
+    }),
+  )
+
+export const updateDiscordConfig = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.updateDiscordConfig, 'updateDiscordConfig', {
+      data,
+      context,
+    }),
+  )
+
+export const startDiscordBot = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.startDiscordBot, 'startDiscordBot', {
+      data,
+      context,
+    }),
+  )
+
+export const stopDiscordBot = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.stopDiscordBot, 'stopDiscordBot', {
+      data,
+      context,
+    }),
+  )
+
+export const resetDiscordConfig = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.resetDiscordConfig, 'resetDiscordConfig', {
+      data,
+      context,
+    }),
+  )
+
+export const testDiscordToken = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.testDiscordToken, 'testDiscordToken', {
+      data,
+      context,
+    }),
+  )
+
+export const sendDiscordTestMessage = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.sendDiscordTestMessage,
+      'sendDiscordTestMessage',
+      { data, context },
+    ),
+  )
+
+export const getDiscordWebhookEvents = createServerFn({ method: 'GET' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.getDiscordWebhookEvents,
+      'getDiscordWebhookEvents',
+      { data, context },
+    ),
+  )
+
+export const updateDiscordWebhookEvents = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.updateDiscordWebhookEvents,
+      'updateDiscordWebhookEvents',
+      { data, context },
+    ),
+  )
+
+export const getDiscordPermissions = createServerFn({ method: 'GET' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.getDiscordPermissions,
+      'getDiscordPermissions',
+      { data, context },
+    ),
+  )
+
+export const updateDiscordPermissions = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.updateDiscordPermissions,
+      'updateDiscordPermissions',
+      { data, context },
+    ),
+  )
+
+export const getDockerStatus = createServerFn({ method: 'GET' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getDockerStatus, 'getDockerStatus', {
+      data,
+      context,
+    }),
+  )
+
+export const getDockerStats = createServerFn({ method: 'GET' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getDockerStats, 'getDockerStats', {
+      data,
+      context,
+    }),
+  )
+
+export const runDockerAction = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.runDockerAction, 'runDockerAction', {
+      data,
+      context,
+    }),
+  )

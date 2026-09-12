@@ -663,7 +663,7 @@ export default function Mods() {
     } finally {
       setDeletingId(null)
     }
-  }, [deletingId, toast, fetchData, fetchDisabled, t, canManageMods])
+  }, [deletingId, toast, fetchData, fetchDisabled, t, canManageMods, confirm])
 
   const handleDeleteAllDisabled = useCallback(async () => {
     if (deletingId || disabledMods.length === 0 || !canManageMods) return
@@ -695,7 +695,7 @@ export default function Mods() {
     } finally {
       setDeletingId(null)
     }
-  }, [deletingId, disabledMods, toast, fetchData, fetchDisabled, t, canManageMods])
+  }, [deletingId, disabledMods, toast, fetchData, fetchDisabled, t, canManageMods, confirm])
 
   const handleDeleteAllIgnoredFromDisk = useCallback(async () => {
     if (deletingId || ignoredMods.length === 0 || !canManageMods) return
@@ -727,7 +727,7 @@ export default function Mods() {
     } finally {
       setDeletingId(null)
     }
-  }, [deletingId, ignoredMods, toast, fetchData, fetchDisabled, t, canManageMods])
+  }, [deletingId, ignoredMods, toast, fetchData, fetchDisabled, t, canManageMods, confirm])
 
   const fetchCollectionStatusRef = useRef<() => Promise<void>>(async () => {})
   const collectionEverConfiguredRef = useRef(true)
