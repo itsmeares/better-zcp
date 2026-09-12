@@ -66,10 +66,11 @@ describe("Deployment contracts", () => {
     expect(workflow).toContain("--prerelease");
   });
 
-  it("smoke-tests the Linux executable before release publication", () => {
+  it("smoke-tests each packaged executable before release publication", () => {
     const workflow = readRepoFile(".github/workflows/release-artifacts.yml");
 
-    expect(workflow).toContain("node scripts/smoke-release.mjs");
+    expect(workflow).toContain("name: Smoke-test packaged release");
+    expect(workflow).toContain("run: node scripts/smoke-release.mjs");
   });
 
   it("smoke-tests the packaged Windows executable in Windows CI", () => {
