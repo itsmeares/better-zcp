@@ -298,7 +298,7 @@ function setSecurityHeaders(
   response.setHeader("Content-Security-Policy", buildCspHeader(options));
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
-  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=(), midi=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), interest-cohort=()");
   if (options.httpsDetected) {
     response.setHeader("Strict-Transport-Security", "max-age=31536000");

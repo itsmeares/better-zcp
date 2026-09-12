@@ -10,7 +10,7 @@ import { Label } from '../components/ui/label'
 import { Checkbox } from '../components/ui/checkbox'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { panelHealthQueryOptions } from '../lib/panelHealth'
-import { getOidcStatus, getRecoveryStatus } from '../lib/serverAuth'
+import { getOidcStatusWithFallback, getRecoveryStatusWithFallback } from '../lib/serverAuth'
 import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound } from 'lucide-react'
 
 type PanelStatus = 'checking' | 'online' | 'unreachable'
@@ -69,7 +69,7 @@ export default function Login() {
 
   useEffect(() => {
     const controller = new AbortController()
-    getOidcStatus()
+    getOidcStatusWithFallback(controller.signal)
       .then((d) =>
         setOidcStatus({
           configured: d?.configured === true,
@@ -113,7 +113,7 @@ export default function Login() {
         setResetAvailable(false)
         setLocalResetSupported(false)
       })
-    getRecoveryStatus()
+    getRecoveryStatusWithFallback(controller.signal)
       .then((d) => setRecoveryCodesAvailable(d?.recoveryCodesAvailable === true))
       .catch(() => setRecoveryCodesAvailable(false))
     return () => controller.abort()

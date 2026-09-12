@@ -1,7 +1,24 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import { createElement } from 'react'
 import i18n from '@/i18n'
 import { ApiError } from '@/lib/api'
-import { getLoginErrorMessage, LOGIN_FAILED_MESSAGE } from '../AuthContext'
+import { getAuthStatusWithFallback } from '../../lib/serverAuth'
+import { AuthProvider, getLoginErrorMessage, LOGIN_FAILED_MESSAGE, useAuth } from '../AuthContext'
+
+vi.mock('../../lib/serverAuth', () => ({
+  getAuthStatusWithFallback: vi.fn(),
+  getCurrentUser: vi.fn(),
+}))
+
+function AuthStateProbe() {
+  const { authEnabled, isAuthenticated, isLoading } = useAuth()
+  return createElement(
+    'output',
+    { 'data-testid': 'auth-state' },
+    JSON.stringify({ authEnabled, isAuthenticated, isLoading }),
+  )
+}
 
 describe('getLoginErrorMessage', () => {
   afterEach(() => {
@@ -54,5 +71,17 @@ describe('getLoginErrorMessage', () => {
 
   it('falls back to the generic text for a non-error value', () => {
     expect(getLoginErrorMessage('a plain string')).toBe(LOGIN_FAILED_MESSAGE)
+  })
+})
+
+describe('AuthProvider bootstrap', () => {
+  it('keeps authentication enabled when the status request fails', async () => {
+    vi.mocked(getAuthStatusWithFallback).mockRejectedValueOnce(new Error('Forbidden'))
+
+    render(createElement(AuthProvider, null, createElement(AuthStateProbe)))
+
+    await waitFor(() => expect(screen.getByTestId('auth-state')).toHaveTextContent('"isLoading":false'))
+    expect(screen.getByTestId('auth-state')).toHaveTextContent('"authEnabled":true')
+    expect(screen.getByTestId('auth-state')).toHaveTextContent('"isAuthenticated":false')
   })
 })
