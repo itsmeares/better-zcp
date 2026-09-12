@@ -11,7 +11,7 @@ import {
   setResponseHeader,
   setResponseStatus,
 } from '@tanstack/react-start/server'
-import { getAccessToken } from './authToken'
+import { authClientMiddleware } from './authToken'
 
 export type AuthStatus = {
   needsSetup: boolean
@@ -214,15 +214,6 @@ const setRefreshCookie = createServerOnlyFn(
 const clearRefreshCookieForRequest = createServerOnlyFn(
   async (): Promise<void> => {
     deleteCookie('refreshToken', await refreshCookieOptions(false))
-  },
-)
-
-const authClientMiddleware = createMiddleware({ type: 'function' }).client(
-  ({ next }) => {
-    const token = getAccessToken()
-    return next(
-      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-    )
   },
 )
 

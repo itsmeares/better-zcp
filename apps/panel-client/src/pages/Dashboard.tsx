@@ -435,15 +435,15 @@ export default function Dashboard() {
       serverApi.getConsoleErrorCount(),
     ])
     setMaintenance(prev => ({
-      lastBackup: backupRes.status === 'fulfilled' ? backupRes.value.lastBackup : prev.lastBackup,
-      backupCount: backupRes.status === 'fulfilled' ? (backupRes.value.backupCount ?? 0) : prev.backupCount,
-      modUpdatesAvailable: modsRes.status === 'fulfilled' ? ((modsRes.value as { updatesAvailable?: number }).updatesAvailable ?? 0) : prev.modUpdatesAvailable,
-      modsTracked: modsRes.status === 'fulfilled' ? ((modsRes.value as { totalModsTracked?: number }).totalModsTracked ?? 0) : prev.modsTracked,
+      lastBackup: backupRes.status === 'fulfilled' ? backupRes.value?.lastBackup : prev.lastBackup,
+      backupCount: backupRes.status === 'fulfilled' ? (backupRes.value?.backupCount ?? 0) : prev.backupCount,
+      modUpdatesAvailable: modsRes.status === 'fulfilled' ? ((modsRes.value as { updatesAvailable?: number } | undefined)?.updatesAvailable ?? 0) : prev.modUpdatesAvailable,
+      modsTracked: modsRes.status === 'fulfilled' ? ((modsRes.value as { totalModsTracked?: number } | undefined)?.totalModsTracked ?? 0) : prev.modsTracked,
       scheduledTasksCount: tasksRes.status === 'fulfilled'
-        ? (tasksRes.value.tasks ?? []).filter(t => t.enabled === 1 || t.enabled === true).length
+        ? (tasksRes.value?.tasks ?? []).filter(t => t.enabled === 1 || t.enabled === true).length
         : prev.scheduledTasksCount,
-      nextRun: schedRes.status === 'fulfilled' ? (schedRes.value.nextRun ?? null) : prev.nextRun,
-      errorCount: errorRes.status === 'fulfilled' && errorRes.value.exists
+      nextRun: schedRes.status === 'fulfilled' ? (schedRes.value?.nextRun ?? null) : prev.nextRun,
+      errorCount: errorRes.status === 'fulfilled' && errorRes.value?.exists
         ? errorRes.value.count
         : errorRes.status === 'fulfilled' ? null : prev.errorCount,
       schedulerLoaded: true,

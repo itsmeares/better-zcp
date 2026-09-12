@@ -19,16 +19,6 @@ type AuthenticatedUser = {
   authDisabled?: boolean
 }
 
-type DirectServerFunction = ((
-  data: AnyRecord,
-  context: { authenticatedUser: AuthenticatedUser | null; request?: Request },
-) => Promise<unknown>) & {
-  __executeImplementation?: (
-    data: unknown,
-    context?: unknown,
-  ) => Promise<unknown>
-}
-
 type ServerFunction = {
   __executeImplementation?: (
     data: unknown,
@@ -38,7 +28,7 @@ type ServerFunction = {
     data?: unknown
     context?: unknown
   }) => Promise<{ result?: unknown; error?: unknown }>
-} | DirectServerFunction
+}
 
 type RouteSource =
   | 'control'
@@ -2780,18 +2770,10 @@ async function execute(
   spec: RouteSpec,
   data: AnyRecord,
   user: AuthenticatedUser | null,
-  request: Request,
 ): Promise<unknown> {
   const implementation = await implementations[spec.source]()
   const serverFunction = implementation[spec.functionName] as unknown as
     ServerFunction | undefined
-  if (typeof serverFunction === 'function') {
-    return serverFunction.__executeImplementation
-      ? serverFunction.__executeImplementation(data, {
-          authenticatedUser: user,
-        })
-      : serverFunction(data, { authenticatedUser: user, request })
-  }
   if (serverFunction?.__executeImplementation) {
     return serverFunction.__executeImplementation(data, {
       authenticatedUser: user,
@@ -2867,7 +2849,7 @@ export async function handleStartApiCompatibilityRequest(
     const data = spec.data
       ? spec.data(url.searchParams, body, params)
       : mergeBody(url.searchParams, body, params)
-    const result = await execute(spec, data, authenticated, request)
+    const result = await execute(spec, data, authenticated)
     if (result instanceof Response) return markStartHandled(result)
     const status =
       typeof spec.status === 'function'

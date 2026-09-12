@@ -127,6 +127,26 @@ describe('Dashboard.tsx: quiet update-check-error indicator', () => {
     expect(screen.queryByText(INDICATOR_TEXT)).not.toBeInTheDocument()
   })
 
+  it('keeps rendering when maintenance calls fulfill without payloads', async () => {
+    await setUpCommon()
+    getBackupStatus.mockResolvedValue(undefined as never)
+    getModsStatus.mockResolvedValue(undefined as never)
+    getSchedulerTasks.mockResolvedValue(undefined as never)
+    getSchedulerStatus.mockResolvedValue(undefined as never)
+    getConsoleErrorCount.mockResolvedValue(undefined as never)
+    getPanelUpdateStatus.mockResolvedValue({
+      currentVersion: '1.2.6', updateAvailable: false, latestVersion: null, releaseUrl: null,
+      releaseNotes: null, publishedAt: null, isChecking: false, isDownloading: false,
+      downloadProgress: 0, lastCheck: null, lastError: null,
+      stagedUpdate: null, lastApplyResult: null,
+    })
+
+    renderDashboard()
+
+    await screen.findAllByRole('button', { name: 'Start' })
+    expect(screen.queryByText('Dashboard Error')).not.toBeInTheDocument()
+  })
+
   it('does not appear when an update IS available, even though the server never sets lastError in that case', async () => {
     await setUpCommon()
     getPanelUpdateStatus.mockResolvedValue({
