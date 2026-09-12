@@ -121,6 +121,13 @@ jobs:
         working-directory: apps/panel-client
         run: pnpm run typecheck
 
+      - name: Production build
+        working-directory: apps/panel-client
+        run: pnpm run build
+
+      - name: Check browser/server dependency boundary
+        run: pnpm run check:client-boundary
+
       - name: Tests
         working-directory: apps/panel-client
         run: pnpm run test
@@ -190,6 +197,9 @@ jobs:
         env:
           PKG_CACHE_PATH: ${{ runner.temp }}\pkg-cache
         run: node scripts/release/build.mjs --windows
+
+      - name: Smoke-test packaged Windows release
+        run: node scripts/smoke-release.mjs
 
       - name: Verify packaged updater artifacts
         shell: pwsh

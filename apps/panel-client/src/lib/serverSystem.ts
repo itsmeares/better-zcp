@@ -1,45 +1,46 @@
 import { createServerFn } from '@tanstack/react-start'
+import * as serverImplementation from './serverSystem.server'
 import type { DiskSpaceReport, RuntimeInfo, StorageHealth } from './api'
-import { protectedServerFunctionMiddleware } from './serverAuth'
+import {
+  invokeServerFunction,
+  type ServerFunctionOptions,
+} from './serverFunctionRpc'
 
-export const getRuntimeInfo = createServerFn({ method: 'GET' })
-  .middleware(protectedServerFunctionMiddleware)
-  .handler(async () => {
-    const { buildRuntimeInfo } =
-      await import('../../../panel-server/utils/runtimeInfo.ts')
-    return buildRuntimeInfo() as RuntimeInfo
-  })
-
-async function getDiskSpaceReport(): Promise<DiskSpaceReport> {
-  const { getPanelRuntime } =
-    await import('../../../panel-server/utils/panelRuntime.ts')
-  const { buildDiskSpace } =
-    await import('../../../panel-server/utils/systemInfo.ts')
-  return buildDiskSpace(getPanelRuntime().diskMonitor)
+function invoke<T>(
+  serverFunction: unknown,
+  name: string,
+  options: ServerFunctionOptions,
+): Promise<T> {
+  return invokeServerFunction<T>(serverFunction, name, options)
 }
 
-export const getDiskSpace = createServerFn({ method: 'GET' })
-  .middleware(protectedServerFunctionMiddleware)
-  .handler(async () => getDiskSpaceReport())
+export const getRuntimeInfo = createServerFn({
+  method: 'GET',
+  strict: { output: false },
+}).handler(({ data, context }) =>
+  invoke<RuntimeInfo>(serverImplementation.getRuntimeInfo, 'getRuntimeInfo', {
+    data,
+    context,
+  }),
+)
 
-async function getStorageHealthImplementation(): Promise<StorageHealth> {
-  const { getCircuitBreakerStatus } =
-    await import('../../../panel-server/database/init.ts')
-  const { sanitizeError } =
-    await import('../../../panel-server/utils/sanitize.ts')
-  const circuitBreaker = getCircuitBreakerStatus()
-  return {
-    diskSpace: await getDiskSpaceReport(),
-    circuitBreaker: {
-      ...circuitBreaker,
-      lastError: circuitBreaker.lastError
-        ? sanitizeError(circuitBreaker.lastError)
-        : null,
-    },
-  }
-}
+export const getDiskSpace = createServerFn({
+  method: 'GET',
+  strict: { output: false },
+}).handler(({ data, context }) =>
+  invoke<DiskSpaceReport>(serverImplementation.getDiskSpace, 'getDiskSpace', {
+    data,
+    context,
+  }),
+)
 
-export const getStorageHealth = createServerFn({ method: 'GET' })
-  .middleware(protectedServerFunctionMiddleware)
-  .handler(getStorageHealthImplementation)
-;(getStorageHealth as any).__executeImplementation = getStorageHealthImplementation
+export const getStorageHealth = createServerFn({
+  method: 'GET',
+  strict: { output: false },
+}).handler(({ data, context }) =>
+  invoke<StorageHealth>(
+    serverImplementation.getStorageHealth,
+    'getStorageHealth',
+    { data, context },
+  ),
+)

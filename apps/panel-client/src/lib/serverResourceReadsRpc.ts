@@ -1,24 +1,11 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth'
-
+import * as serverImplementation from './serverResourceReads.server'
+import { invokeServerFunction } from './serverFunctionRpc'
 type AnyRecord = Record<string, any>
 
 type ExecuteOptions = {
   data?: unknown
   context?: unknown
-}
-
-type ImplementationFunction = {
-  __executeImplementation?: (
-    data: unknown,
-    context?: unknown,
-  ) => Promise<unknown>
-  __executeServer?: (
-    options: ExecuteOptions,
-  ) => Promise<{ result?: unknown; error?: unknown }>
 }
 
 function record(data: unknown): AnyRecord {
@@ -27,98 +14,130 @@ function record(data: unknown): AnyRecord {
     : {}
 }
 
-function capabilityMiddleware(capability: string) {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware(capability),
-  ] as const
-}
-
-async function invoke(name: string, options: ExecuteOptions): Promise<any> {
-  const implementation = await import('./serverResourceReads')
-  const serverFunction = implementation[
-    name as keyof typeof implementation
-  ] as unknown as ImplementationFunction | undefined
-  if (serverFunction?.__executeImplementation) {
-    return serverFunction.__executeImplementation(options.data ?? {}, options.context)
-  }
-  const executeServer = serverFunction?.__executeServer
-  if (!executeServer)
-    throw new Error(`Server function ${name} is not available`)
-  const outcome = await executeServer(options)
-  if (outcome.error) throw outcome.error
-  return outcome.result
+function invoke(
+  serverFunction: unknown,
+  name: string,
+  options: ExecuteOptions,
+): Promise<any> {
+  return invokeServerFunction(serverFunction, name, options)
 }
 
 export const getPlayerActivity = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('players.view'))
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
-    invoke('getPlayerActivity', { data, context }),
+    invoke(serverImplementation.getPlayerActivity, 'getPlayerActivity', {
+      data,
+      context,
+    }),
   )
 
 export const getPlayerNotes = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('players.view'))
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke('getPlayerNotes', { data, context }))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getPlayerNotes, 'getPlayerNotes', {
+      data,
+      context,
+    }),
+  )
 
 export const getPlayerNote = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('players.view'))
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke('getPlayerNote', { data, context }))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getPlayerNote, 'getPlayerNote', {
+      data,
+      context,
+    }),
+  )
 
 export const getPlayerStats = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('players.view'))
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke('getPlayerStats', { data, context }))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getPlayerStats, 'getPlayerStats', {
+      data,
+      context,
+    }),
+  )
 
 export const getPlayerStat = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('players.view'))
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke('getPlayerStat', { data, context }))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getPlayerStat, 'getPlayerStat', {
+      data,
+      context,
+    }),
+  )
 
 export const getBackupStatus = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke('getBackupStatus', { data, context }))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getBackupStatus, 'getBackupStatus', {
+      data,
+      context,
+    }),
+  )
 
 export const getBackupInfo = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke('getBackupInfo', { data, context }))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getBackupInfo, 'getBackupInfo', {
+      data,
+      context,
+    }),
+  )
 
 export const getBackups = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke('getBackups', { data, context }))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getBackups, 'getBackups', { data, context }),
+  )
 
 export const getBackupSnapshot = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('backups.manage'))
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
-    invoke('getBackupSnapshot', { data, context }),
+    invoke(serverImplementation.getBackupSnapshot, 'getBackupSnapshot', {
+      data,
+      context,
+    }),
   )
 
 export const getBackupHistory = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
-    invoke('getBackupHistory', { data, context }),
+    invoke(serverImplementation.getBackupHistory, 'getBackupHistory', {
+      data,
+      context,
+    }),
   )
 
 export const getTemplates = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke('getTemplates', { data, context }))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getTemplates, 'getTemplates', {
+      data,
+      context,
+    }),
+  )
 
 export const getTemplate = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke('getTemplate', { data, context }))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.getTemplate, 'getTemplate', { data, context }),
+  )
 
 export const exportTemplate = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
-    invoke('exportTemplate', { data, context }),
+    invoke(serverImplementation.exportTemplate, 'exportTemplate', {
+      data,
+      context,
+    }),
   )
 
 export const getHiddenTemplates = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('templates.manage'))
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
-    invoke('getHiddenTemplates', { data, context }),
+    invoke(serverImplementation.getHiddenTemplates, 'getHiddenTemplates', {
+      data,
+      context,
+    }),
   )

@@ -958,15 +958,19 @@ setPanelRuntime({
   diskMonitor,
 });
 
+function resolveSourcePanelVersion(): string {
+  return JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), "package.json"), "utf-8"),
+  ).version;
+}
+
 let _pkgVersion: string;
 let _buildSha: string;
 try {
   _pkgVersion =
     typeof PANEL_VERSION !== "undefined"
       ? PANEL_VERSION
-      : JSON.parse(
-          fs.readFileSync(path.join(__dirname, "../../package.json"), "utf-8"),
-        ).version;
+      : resolveSourcePanelVersion();
 } catch {
   _pkgVersion = "0.0.0";
 }
@@ -1627,18 +1631,7 @@ export async function logExposureWarningIfNeeded({
 
 async function start(): Promise<void> {
   try {
-    let panelVersion;
-    try {
-      panelVersion =
-        typeof PANEL_VERSION !== "undefined"
-          ? PANEL_VERSION
-          : JSON.parse(
-              fs.readFileSync(path.join(__dirname, "../../package.json"), "utf-8"),
-            ).version;
-    } catch {
-      panelVersion = "0.0.0";
-    }
-    logBanner(panelVersion);
+    logBanner(_buildMetadata.panelVersion);
 
     if (typeof process.pkg !== "undefined") {
       try {

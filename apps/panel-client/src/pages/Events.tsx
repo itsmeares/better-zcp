@@ -1291,7 +1291,7 @@ export default function Events() {
         setUtilitiesStatus(null)
       }
     }
-  }, [])
+  }, [t])
 
   const refetchWeather = useCallback(async () => {
     try {
@@ -1465,7 +1465,7 @@ export default function Events() {
       active = false
       clearInterval(interval)
     }
-  }, [activeSection, bridgeConnected, bridgeOptionsRefreshTick, i18n.language])
+  }, [activeSection, bridgeConnected, bridgeOptionsRefreshTick, i18n.language, t])
 
   const pushActivity = useCallback((label: string, ok: boolean) => {
     setActivity((prev) => [

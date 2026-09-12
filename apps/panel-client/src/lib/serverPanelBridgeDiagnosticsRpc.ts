@@ -1,20 +1,11 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth'
-
+import * as serverImplementation from './serverPanelBridgeDiagnostics.server'
+import { invokeServerFunction } from './serverFunctionRpc'
 type AnyRecord = Record<string, any>
 
 type ExecuteOptions = {
   data?: unknown
   context?: unknown
-}
-
-type ImplementationFunction = {
-  __executeServer?: (
-    options: ExecuteOptions,
-  ) => Promise<{ result?: unknown; error?: unknown }>
 }
 
 function record(data: unknown): AnyRecord {
@@ -23,25 +14,22 @@ function record(data: unknown): AnyRecord {
     : {}
 }
 
-async function invoke(options: ExecuteOptions): Promise<any> {
-  const implementation = await import('./serverPanelBridgeDiagnostics')
-  const serverFunction =
-    implementation.sendPanelBridgeDiagnosticsCommand as unknown as ImplementationFunction
-  const executeServer = serverFunction.__executeServer
-  if (!executeServer) {
-    throw new Error(
-      'Server function sendPanelBridgeDiagnosticsCommand is not available',
-    )
-  }
-  const outcome = await executeServer(options)
-  if (outcome.error) throw outcome.error
-  return outcome.result
+function invoke(
+  serverFunction: unknown,
+  name: string,
+  options: ExecuteOptions,
+): Promise<any> {
+  return invokeServerFunction(serverFunction, name, options)
 }
 
-export const sendPanelBridgeDiagnosticsCommand = createServerFn({ method: 'POST' })
-  .middleware([
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware('bridge.diagnostics'),
-  ] as const)
+export const sendPanelBridgeDiagnosticsCommand = createServerFn({
+  method: 'POST',
+})
   .validator((data: unknown) => record(data))
-  .handler(({ data, context }) => invoke({ data, context }))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.sendPanelBridgeDiagnosticsCommand,
+      'sendPanelBridgeDiagnosticsCommand',
+      { data, context },
+    ),
+  )

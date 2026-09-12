@@ -1,73 +1,118 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth'
-
+import * as serverImplementation from './serverResourceActions.server'
+import { invokeServerFunction } from './serverFunctionRpc'
 type AnyRecord = Record<string, any>
 type ExecuteOptions = { data?: unknown; context?: unknown }
-type ImplementationFunction = {
-  __executeImplementation?: (
-    data: unknown,
-    context?: unknown,
-  ) => Promise<unknown>
-  __executeServer?: (
-    options: ExecuteOptions,
-  ) => Promise<{ result?: unknown; error?: unknown }>
-}
-
 function record(data: unknown): AnyRecord {
   return data && typeof data === 'object' && !Array.isArray(data)
     ? (data as AnyRecord)
     : {}
 }
 
-function middleware(capability?: string) {
-  return capability
-    ? ([
-        ...protectedServerFunctionMiddleware,
-        permissionMiddleware(capability),
-      ] as const)
-    : protectedServerFunctionMiddleware
+function invoke(
+  serverFunction: unknown,
+  name: string,
+  options: ExecuteOptions,
+): Promise<any> {
+  return invokeServerFunction(serverFunction, name, options)
 }
 
-async function invoke(name: string, options: ExecuteOptions): Promise<any> {
-  const implementation = await import('./serverResourceActions')
-  const serverFunction = implementation[
-    name as keyof typeof implementation
-  ] as unknown as ImplementationFunction | undefined
-  if (serverFunction?.__executeImplementation) {
-    return serverFunction.__executeImplementation(options.data ?? {}, options.context)
-  }
-  const executeServer = serverFunction?.__executeServer
-  if (!executeServer)
-    throw new Error(`Server function ${name} is not available`)
-  const outcome = await executeServer(options)
-  if (outcome.error) throw outcome.error
-  return outcome.result
-}
+export const createTemplate = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.createTemplate, 'createTemplate', {
+      data,
+      context,
+    }),
+  )
 
-function createAction(name: string, capability?: string) {
-  return createServerFn({ method: 'POST' })
-    .middleware(middleware(capability))
-    .validator((data: unknown) => record(data))
-    .handler(({ data, context }) => invoke(name, { data, context }))
-}
+export const importTemplate = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.importTemplate, 'importTemplate', {
+      data,
+      context,
+    }),
+  )
 
-export const createTemplate = createAction('createTemplate', 'templates.manage')
-export const importTemplate = createAction('importTemplate', 'templates.manage')
-export const previewTemplate = createAction('previewTemplate')
-export const applyTemplate = createAction('applyTemplate', 'templates.manage')
-export const deleteTemplate = createAction('deleteTemplate', 'templates.manage')
-export const unhideTemplate = createAction('unhideTemplate', 'templates.manage')
-export const updateBackupSettings = createAction(
-  'updateBackupSettings',
-  'backups.manage',
-)
-export const deleteBackup = createAction('deleteBackup', 'backups.manage')
-export const deleteBackupsOlderThan = createAction(
-  'deleteBackupsOlderThan',
-  'backups.manage',
-)
-export const createBackup = createAction('createBackup', 'backups.manage')
-export const restoreBackup = createAction('restoreBackup', 'backups.restore')
+export const previewTemplate = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.previewTemplate, 'previewTemplate', {
+      data,
+      context,
+    }),
+  )
+
+export const applyTemplate = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.applyTemplate, 'applyTemplate', {
+      data,
+      context,
+    }),
+  )
+
+export const deleteTemplate = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.deleteTemplate, 'deleteTemplate', {
+      data,
+      context,
+    }),
+  )
+
+export const unhideTemplate = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.unhideTemplate, 'unhideTemplate', {
+      data,
+      context,
+    }),
+  )
+
+export const updateBackupSettings = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.updateBackupSettings, 'updateBackupSettings', {
+      data,
+      context,
+    }),
+  )
+
+export const deleteBackup = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.deleteBackup, 'deleteBackup', {
+      data,
+      context,
+    }),
+  )
+
+export const deleteBackupsOlderThan = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(
+      serverImplementation.deleteBackupsOlderThan,
+      'deleteBackupsOlderThan',
+      { data, context },
+    ),
+  )
+
+export const createBackup = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.createBackup, 'createBackup', {
+      data,
+      context,
+    }),
+  )
+
+export const restoreBackup = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => record(data))
+  .handler(({ data, context }) =>
+    invoke(serverImplementation.restoreBackup, 'restoreBackup', {
+      data,
+      context,
+    }),
+  )

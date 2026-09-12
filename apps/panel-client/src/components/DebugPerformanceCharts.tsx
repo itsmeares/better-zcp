@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Activity, TrendingUp, Server, HardDrive } from 'lucide-react'
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts'
@@ -20,24 +20,22 @@ interface DebugPerformanceChartsProps {
 }
 
 function useChartColors() {
-  const { theme } = useTheme()
-  return useMemo(() => {
-    const root = document.documentElement
-    const style = getComputedStyle(root)
-    const hsl = (v: string) => `hsl(${style.getPropertyValue(v).trim()})`
-    return {
-      grid: hsl('--border'),
-      axis: hsl('--muted-foreground'),
-      memory: hsl('--chart-1'),
-      cpu: hsl('--chart-2'),
-      pz: hsl('--chart-3'),
-      players: hsl('--chart-4'),
-      bg: hsl('--popover'),
-      fg: hsl('--popover-foreground'),
-      warn: hsl('--warning'),
-      danger: hsl('--destructive'),
-    }
-  }, [theme])
+  useTheme()
+  const root = document.documentElement
+  const style = getComputedStyle(root)
+  const hsl = (v: string) => `hsl(${style.getPropertyValue(v).trim()})`
+  return {
+    grid: hsl('--border'),
+    axis: hsl('--muted-foreground'),
+    memory: hsl('--chart-1'),
+    cpu: hsl('--chart-2'),
+    pz: hsl('--chart-3'),
+    players: hsl('--chart-4'),
+    bg: hsl('--popover'),
+    fg: hsl('--popover-foreground'),
+    warn: hsl('--warning'),
+    danger: hsl('--destructive'),
+  }
 }
 
 function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsProps) {

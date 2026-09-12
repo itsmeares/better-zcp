@@ -176,6 +176,51 @@ describe("native panel HTTP host", () => {
     }
   });
 
+  it("serves browser assets before the Start document handler", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-native-assets-"));
+    temporaryRoots.push(root);
+    const clientDistPath = path.join(root, "client", "dist");
+    fs.mkdirSync(path.join(clientDistPath, "assets"), { recursive: true });
+    writeStartBundle(clientDistPath, `
+      export default { fetch: async (request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === "/assets/app.js") {
+          return Response.json({ error: "document handler received an asset" }, { status: 500 });
+        }
+        return new Response("<html>start page</html>", { headers: { "content-type": "text/html" } });
+      }};
+    `);
+    fs.writeFileSync(path.join(clientDistPath, "index.html"), "static shell");
+    fs.writeFileSync(path.join(clientDistPath, "assets", "app.js"), "console.log('asset');");
+    fs.writeFileSync(path.join(clientDistPath, "assets", "app.css"), "body { color: red; }");
+    const { server, baseUrl } = await startServer(clientDistPath);
+
+    try {
+      const script = await fetch(`${baseUrl}/assets/app.js`, {
+        headers: { accept: "text/javascript" },
+      });
+      expect(script.status).toBe(200);
+      expect(script.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+      expect(await script.text()).toBe("console.log('asset');");
+
+      const stylesheet = await fetch(`${baseUrl}/assets/app.css`);
+      expect(stylesheet.status).toBe(200);
+      expect(stylesheet.headers.get("content-type")).toBe("text/css; charset=utf-8");
+      expect(await stylesheet.text()).toBe("body { color: red; }");
+
+      const head = await fetch(`${baseUrl}/assets/app.js`, { method: "HEAD" });
+      expect(head.status).toBe(200);
+      expect(head.headers.get("content-length")).toBe(String(Buffer.byteLength("console.log('asset');")));
+      expect(await head.text()).toBe("");
+
+      const page = await fetch(`${baseUrl}/players`);
+      expect(page.status).toBe(200);
+      expect(await page.text()).toContain("start page");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
   it("serves the static shell with an inline-script hash and handles CORS preflight", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-native-shell-"));
     temporaryRoots.push(root);

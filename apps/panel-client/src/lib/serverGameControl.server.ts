@@ -8,7 +8,7 @@ import type { ScheduleHistoryEntry, SchedulerStatus } from './api'
 import {
   permissionMiddleware,
   protectedServerFunctionMiddleware,
-} from './serverAuth'
+} from './serverAuth.server'
 
 type ServiceError = {
   error?: unknown

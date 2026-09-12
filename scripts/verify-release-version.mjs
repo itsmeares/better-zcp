@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { isValidReleaseVersion } from "./release/version.mjs";
 
 const repoDir = process.cwd();
 const expectedVersion = String(process.argv[2] || process.env.GITHUB_REF_NAME || "")
@@ -46,7 +47,7 @@ function collectFiles(absoluteDirectory, relativeDirectory = "") {
 }
 
 function verify() {
-  assert(/^\d+\.\d+\.\d+$/.test(expectedVersion), `Invalid release version: ${expectedVersion}`);
+  assert(isValidReleaseVersion(expectedVersion), `Invalid release version: ${expectedVersion}`);
 
   const rootPackage = readJson("package.json");
   const clientPackage = readJson("apps/panel-client/package.json");

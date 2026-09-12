@@ -429,6 +429,10 @@ function mimeType(filePath: string): string {
   } as Record<string, string>)[extension] || "application/octet-stream";
 }
 
+function isStaticAssetPath(pathname: string): boolean {
+  return pathname.startsWith("/assets/") || path.extname(pathname) !== "";
+}
+
 async function sendStaticFile(
   request: IncomingMessage,
   response: ServerResponse,
@@ -572,6 +576,16 @@ export function createPanelRequestHandler(
       response.statusCode = 503;
       response.setHeader("Content-Type", "text/html; charset=utf-8");
       response.end(buildLegacyClientRecoveryPage(options, legacyClientMetadata));
+      return;
+    }
+
+    if (
+      !isApiRequest &&
+      !pathname.startsWith("/_serverFn/") &&
+      (request.method === "GET" || request.method === "HEAD") &&
+      isStaticAssetPath(pathname) &&
+      await sendStaticFile(request, response, options.clientDistPath, pathname, options)
+    ) {
       return;
     }
 

@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { permissionMiddleware, protectedServerFunctionMiddleware } from './serverAuth'
+import { permissionMiddleware, protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 

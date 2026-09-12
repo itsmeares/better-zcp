@@ -259,7 +259,7 @@ export default function Chat() {
         variant: 'destructive',
       })
     }
-  }, [toast, canManagePresets])
+  }, [toast, canManagePresets, t])
 
   const handleAddPreset = useCallback(() => {
     const trimmed = newPresetDraft.trim()

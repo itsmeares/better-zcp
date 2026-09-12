@@ -25,7 +25,7 @@ vi.mock("../utils/panelRuntime.ts", () => ({ getPanelRuntime }));
 
 const { maskSecretValue } = await import("../utils/sanitize.ts");
 const { saveServerIni } = await import(
-  "../../panel-client/src/lib/serverFileReads.ts"
+  "../../panel-client/src/lib/serverFileReads.server.ts"
 );
 
 const execute = (saveServerIni as any).__executeImplementation as (

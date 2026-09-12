@@ -667,7 +667,7 @@ export default function Settings() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchSettings();

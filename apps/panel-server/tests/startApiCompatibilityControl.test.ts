@@ -300,43 +300,43 @@ vi.mock("../services/auth.ts", () => ({
 vi.mock("../services/permissions.ts", () => ({
   getCapabilitiesForRole: mocks.getCapabilities,
 }));
-vi.mock("../../panel-client/src/lib/serverGameControl.ts", () => mocks.control);
+vi.mock("../../panel-client/src/lib/serverGameControl.server.ts", () => mocks.control);
 vi.mock(
-  "../../panel-client/src/lib/serverResourceReads.ts",
+  "../../panel-client/src/lib/serverResourceReads.server.ts",
   () => mocks.resources,
 );
-vi.mock("../../panel-client/src/lib/serverAdmin.ts", () => mocks.admin);
-vi.mock("../../panel-client/src/lib/serverAuth.ts", () => mocks.auth);
+vi.mock("../../panel-client/src/lib/serverAdmin.server.ts", () => mocks.admin);
+vi.mock("../../panel-client/src/lib/serverAuth.server.ts", () => mocks.auth);
 vi.mock(
-  "../../panel-client/src/lib/serverResourceActions.ts",
+  "../../panel-client/src/lib/serverResourceActions.server.ts",
   () => mocks.resourceActions,
 );
-vi.mock("../../panel-client/src/lib/serverMods.ts", () => mocks.mods);
-vi.mock("../../panel-client/src/lib/serverSystem.ts", () => mocks.system);
-vi.mock("../../panel-client/src/lib/serverFileReads.ts", () => mocks.fileReads);
+vi.mock("../../panel-client/src/lib/serverMods.server.ts", () => mocks.mods);
+vi.mock("../../panel-client/src/lib/serverSystem.server.ts", () => mocks.system);
+vi.mock("../../panel-client/src/lib/serverFileReads.server.ts", () => mocks.fileReads);
 vi.mock(
-  "../../panel-client/src/lib/serverServerApi.ts",
+  "../../panel-client/src/lib/serverServerApi.server.ts",
   () => mocks.serverServer,
 );
-vi.mock("../../panel-client/src/lib/serverPanelBridge.ts", () => mocks.bridge);
+vi.mock("../../panel-client/src/lib/serverPanelBridge.server.ts", () => mocks.bridge);
 vi.mock(
-  "../../panel-client/src/lib/serverPanelBridgeSetup.ts",
+  "../../panel-client/src/lib/serverPanelBridgeSetup.server.ts",
   () => mocks.bridgeSetup,
 );
 vi.mock(
-  "../../panel-client/src/lib/serverPanelBridgeWorld.ts",
+  "../../panel-client/src/lib/serverPanelBridgeWorld.server.ts",
   () => mocks.bridgeWorld,
 );
 vi.mock(
-  "../../panel-client/src/lib/serverPanelBridgeEffects.ts",
+  "../../panel-client/src/lib/serverPanelBridgeEffects.server.ts",
   () => mocks.bridgeEffects,
 );
 vi.mock(
-  "../../panel-client/src/lib/serverPanelBridgePlayerChat.ts",
+  "../../panel-client/src/lib/serverPanelBridgePlayerChat.server.ts",
   () => mocks.bridgePlayer,
 );
 vi.mock(
-  "../../panel-client/src/lib/serverPanelBridgeDiagnostics.ts",
+  "../../panel-client/src/lib/serverPanelBridgeDiagnostics.server.ts",
   () => mocks.bridgeDiagnostics,
 );
 

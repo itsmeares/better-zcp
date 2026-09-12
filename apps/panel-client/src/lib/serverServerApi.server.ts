@@ -15,7 +15,7 @@ import { applyUpnpToIni } from '../../../panel-server/utils/upnpConfig.ts'
 import {
   permissionMiddleware,
   protectedServerFunctionMiddleware,
-} from './serverAuth'
+} from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 
