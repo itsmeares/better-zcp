@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
@@ -6,7 +7,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { isIP } from "node:net";
 import path from "node:path";
 import {
+  addInlineScriptCspNonce,
   appendCspScriptHashes,
+  appendCspScriptNonce,
   computeInlineScriptCspHashesFromHtml,
 } from "../utils/cspScriptHash.ts";
 import {
@@ -51,7 +54,6 @@ const REGISTERED_ERROR_CODES = new Set<string>(Object.values(ErrorCode));
 function isRegisteredErrorCode(value: unknown): value is string {
   return typeof value === "string" && REGISTERED_ERROR_CODES.has(value);
 }
-
 export type PanelWebOptions = {
   isPackaged: boolean;
   clientDistPath: string;
@@ -361,10 +363,18 @@ async function addHtmlCsp(
   const html = await response.text();
   const headers = new Headers(response.headers);
   const hashes = computeInlineScriptCspHashesFromHtml(html);
-  const csp = headers.get("content-security-policy") || buildCspHeader(options);
-  headers.set("content-security-policy", appendCspScriptHashes(csp, hashes));
-  headers.set("content-length", String(Buffer.byteLength(html)));
-  return new globalThis.Response(html, {
+  const nonce =
+    hashes.length > 0 ? crypto.randomBytes(16).toString("base64") : null;
+  const responseHtml = nonce ? addInlineScriptCspNonce(html, nonce) : html;
+  const baseCsp =
+    headers.get("content-security-policy") || buildCspHeader(options);
+  const cspWithHashes = appendCspScriptHashes(baseCsp, hashes);
+  const csp = nonce
+    ? appendCspScriptNonce(cspWithHashes, nonce)
+    : cspWithHashes;
+  headers.set("content-security-policy", csp);
+  headers.set("content-length", String(Buffer.byteLength(responseHtml)));
+  return new globalThis.Response(responseHtml, {
     status: response.status,
     statusText: response.statusText,
     headers,

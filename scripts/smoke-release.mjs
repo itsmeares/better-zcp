@@ -44,6 +44,26 @@ function findFirstJavaScriptFile(directory) {
   return null;
 }
 
+function assertHtmlBootstrap(response, html) {
+  const scripts = [
+    ...html.matchAll(
+      /<script(?![^>]*\bsrc\s*=)(?:\s[^>]*)?>[\s\S]*?<\/script>/gi,
+    ),
+  ];
+  if (scripts.length === 0)
+    throw new Error('Packaged HTML contains no inline bootstrap script');
+
+  const csp = response.headers.get('content-security-policy') || '';
+  for (const [index, script] of scripts.entries()) {
+    const openingTag = /^<script\b([^>]*)>/i.exec(script[0])?.[1] || '';
+    const nonce = /\bnonce\s*=\s*(["'])(.*?)\1/i.exec(openingTag)?.[2];
+    if (!nonce)
+      throw new Error(`Packaged inline script ${index + 1} has no CSP nonce`);
+    if (!csp.includes(`'nonce-${nonce}'`))
+      throw new Error(`Packaged CSP does not authorize inline script ${index + 1}`);
+  }
+}
+
 function waitForExit(child) {
   return new Promise((resolve) => child.once('exit', resolve));
 }
@@ -160,6 +180,15 @@ async function main() {
         `Packaged health metadata does not match the release manifest: ${JSON.stringify(health)}`,
       );
     }
+
+    const pageResponse = await fetch(`${baseUrl}/`);
+    const pageHtml = await pageResponse.text();
+    if (!pageResponse.ok || !pageResponse.headers.get('content-type')?.includes('text/html')) {
+      throw new Error(
+        `Packaged HTML failed: status=${pageResponse.status}, content-type=${pageResponse.headers.get('content-type')}`,
+      );
+    }
+    assertHtmlBootstrap(pageResponse, pageHtml);
 
     const assetPath = `/${path.relative(sourceClient, sourceAsset).split(path.sep).join('/')}`;
     const assetResponse = await fetch(`${baseUrl}${assetPath}`, {

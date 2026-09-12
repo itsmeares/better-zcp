@@ -2,7 +2,9 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const INLINE_SCRIPT_RE = /<script(?![^>]*\bsrc\s*=)(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi;
+const INLINE_SCRIPT_RE =
+  /<script(?![^>]*\bsrc\s*=)(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi;
+const INLINE_SCRIPT_OPEN_TAG_RE = /<script(?![^>]*\bsrc\s*=)(?:\s[^>]*)?>/gi;
 
 interface CspLogger {
   warn(message: string): void;
@@ -57,6 +59,13 @@ export function computeInlineScriptCspHashesFromHtml(html: string): string[] {
   });
 }
 
+export function addInlineScriptCspNonce(html: string, nonce: string): string {
+  return html.replace(INLINE_SCRIPT_OPEN_TAG_RE, (tag) => {
+    if (/\bnonce\s*=/i.test(tag)) return tag;
+    return tag.replace(/^<script\b/i, `<script nonce="${nonce}"`);
+  });
+}
+
 export function appendCspScriptHashes(
   cspHeader: string,
   hashes: readonly string[],
@@ -76,6 +85,10 @@ export function appendCspScriptHashes(
 
   directives[scriptSrcIndex] = `${directive} ${additions.join(" ")}`;
   return directives.join("; ");
+}
+
+export function appendCspScriptNonce(cspHeader: string, nonce: string): string {
+  return appendCspScriptHashes(cspHeader, [`'nonce-${nonce}'`]);
 }
 
 export function computeInlineScriptCspHash(

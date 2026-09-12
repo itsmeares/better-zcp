@@ -6,7 +6,9 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 
 const {
+  addInlineScriptCspNonce,
   appendCspScriptHashes,
+  appendCspScriptNonce,
   computeInlineScriptCspHash,
   computeInlineScriptCspHashes,
   computeInlineScriptCspHashesFromHtml,
@@ -21,7 +23,6 @@ let tmpDir;
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-cspscripthash-"));
 });
-
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
@@ -149,5 +150,23 @@ describe("SSR CSP helpers", () => {
     expect(appendCspScriptHashes(existing, ["'sha256-new'"])).not.toContain(
       "unsafe-inline",
     );
+  });
+  it("adds a nonce to every inline script and not external scripts", () => {
+    const html =
+      '<script>const first = 1;</script><script id="stream">const second = 2;</script><script src="/app.js"></script>';
+
+    expect(addInlineScriptCspNonce(html, "nonce-value")).toBe(
+      '<script nonce="nonce-value">const first = 1;</script><script nonce="nonce-value" id="stream">const second = 2;</script><script src="/app.js"></script>',
+    );
+  });
+
+  it("adds a nonce source to script-src without enabling unsafe-inline", () => {
+    const csp = appendCspScriptNonce(
+      "default-src 'self'; script-src 'self'",
+      "nonce-value",
+    );
+
+    expect(csp).toContain("'nonce-nonce-value'");
+    expect(csp).not.toContain("unsafe-inline");
   });
 });

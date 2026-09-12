@@ -1,6 +1,6 @@
 {
   "name": "better-zcp",
-  "version": "2.0.0-rc1",
+  "version": "2.0.0-rc2",
   "description": "Project Zomboid Server Manager - Web-based admin panel",
   "private": true,
   "license": "AGPL-3.0-only",

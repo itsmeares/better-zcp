@@ -131,7 +131,7 @@ describe("native panel HTTP host", () => {
           });
         }
         if (pathname === "/api/health") return new Response(null, { status: 404 });
-        return new Response("<html>start page</html>", { headers: { "content-type": "text/html" } });
+        return new Response('<html>start page<script id="stream">window.$_TSR = {};</script></html>', { headers: { "content-type": "text/html" } });
       }};
     `);
     fs.writeFileSync(path.join(clientDistPath, "index.html"), "static shell");
@@ -140,7 +140,13 @@ describe("native panel HTTP host", () => {
     try {
       const page = await fetch(`${baseUrl}/players`);
       expect(page.status).toBe(200);
-      expect(await page.text()).toContain("start page");
+      const pageHtml = await page.text();
+      const pageNonce = pageHtml.match(/<script nonce="([^"]+)" id="stream">/)?.[1];
+      expect(pageHtml).toContain("start page");
+      expect(pageNonce).toBeTruthy();
+      expect(page.headers.get("content-security-policy")).toContain(
+        `'nonce-${pageNonce}'`,
+      );
 
       const serverFunction = await fetch(`${baseUrl}/_serverFn/test-command`, {
         method: "POST",
@@ -221,7 +227,7 @@ describe("native panel HTTP host", () => {
     }
   });
 
-  it("serves the static shell with an inline-script hash and handles CORS preflight", async () => {
+  it("serves the static shell with inline-script authorization and handles CORS preflight", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-native-shell-"));
     temporaryRoots.push(root);
     fs.writeFileSync(
@@ -233,12 +239,16 @@ describe("native panel HTTP host", () => {
     try {
       const page = await fetch(`${baseUrl}/players`);
       expect(page.status).toBe(200);
-      expect(await page.text()).toContain("window.native = true");
+      const html = await page.text();
+      const nonce = html.match(/<script nonce="([^"]+)">/)?.[1];
+      expect(html).toContain("window.native = true");
+      expect(nonce).toBeTruthy();
+      expect(page.headers.get("content-security-policy")).toContain("sha256-");
       expect(page.headers.get("content-security-policy")).toContain(
-        "sha256-",
+        `'nonce-${nonce}'`,
       );
       expect(page.headers.get("content-length")).toBe(
-        String(Buffer.byteLength("<!doctype html><script>window.native = true</script>")),
+        String(Buffer.byteLength(html)),
       );
 
       const preflight = await fetch(`${baseUrl}/api/health`, {
