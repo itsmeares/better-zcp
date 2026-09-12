@@ -1,4 +1,15 @@
+import { createMiddleware } from '@tanstack/react-start'
+
 let accessToken: string | null = null
+
+export const authClientMiddleware = createMiddleware({ type: 'function' }).client(
+  ({ next }) => {
+    const token = getAccessToken()
+    return next(
+      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+    )
+  },
+)
 
 export function getAccessToken(): string | null {
   return accessToken

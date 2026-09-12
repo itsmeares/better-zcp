@@ -272,6 +272,17 @@ const mocks = vi.hoisted(() => {
       "sendPanelBridgeDiagnosticsCommand",
     ),
   };
+  const panelUpdateStatus = vi.fn(async () => ({
+    result: { handledBy: "getPanelUpdateStatus", data: {} },
+  }));
+  const panel = {
+    getPanelUpdateStatus: Object.assign(
+      vi.fn(async () => {
+        throw new Error("server function called as a regular function");
+      }),
+      { __executeServer: panelUpdateStatus },
+    ),
+  };
 
   return {
     authenticate: vi.fn(),
@@ -291,6 +302,8 @@ const mocks = vi.hoisted(() => {
     bridgeEffects,
     bridgePlayer,
     bridgeDiagnostics,
+    panel,
+    panelUpdateStatus,
   };
 });
 
@@ -339,6 +352,7 @@ vi.mock(
   "../../panel-client/src/lib/serverPanelBridgeDiagnostics.server.ts",
   () => mocks.bridgeDiagnostics,
 );
+vi.mock("../../panel-client/src/lib/serverPanelUpdate.server.ts", () => mocks.panel);
 
 const { handleStartApiCompatibilityRequest } =
   await import("../../panel-client/src/lib/startApiCompatibility.ts");
@@ -753,6 +767,8 @@ beforeEach(() => {
     ...Object.values(mocks.bridgeEffects),
     ...Object.values(mocks.bridgePlayer),
     ...Object.values(mocks.bridgeDiagnostics),
+    mocks.panel.getPanelUpdateStatus,
+    mocks.panelUpdateStatus,
   ]) {
     fn.mockClear();
   }
@@ -773,6 +789,22 @@ async function responseBody(response: Response): Promise<unknown> {
 }
 
 describe("Start compatibility server and player routes", () => {
+  it("executes callable TanStack server functions through __executeServer", async () => {
+    const response = await handleStartApiCompatibilityRequest(
+      makeRequest("GET", "/api/panel/update-status"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await responseBody(response)).toEqual({
+      handledBy: "getPanelUpdateStatus",
+      data: {},
+    });
+    expect(mocks.panelUpdateStatus).toHaveBeenCalledWith({
+      data: {},
+      context: { authenticatedUser: expect.any(Object) },
+    });
+  });
+
   it.each(CONTROL_ROUTES)(
     "dispatches %s %s to %s",
     async (method, path, functionName) => {
