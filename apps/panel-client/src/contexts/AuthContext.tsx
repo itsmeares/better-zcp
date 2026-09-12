@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo, t
 import { clearAccessToken, getAccessToken, setAccessToken } from '../lib/authToken'
 import { ApiError } from '../lib/api'
 import { getUserErrorMessage } from '../lib/errorMessage'
-import { getAuthStatus, getCurrentUser } from '../lib/serverAuth'
+import { getAuthStatusWithFallback, getCurrentUser } from '../lib/serverAuth'
 
 interface User {
   id: string
@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = useCallback(async () => {
     try {
-      const status = await getAuthStatus()
+      const status = await getAuthStatusWithFallback()
 
       if (status.needsSetup) {
         setState(prev => ({
@@ -133,7 +133,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authEnabled: true,
       }))
     } catch {
-      setState(prev => ({ ...prev, isLoading: false, authEnabled: false }))
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        isAuthenticated: false,
+        needsSetup: false,
+        authEnabled: true,
+      }))
     }
   }, [getToken])
 

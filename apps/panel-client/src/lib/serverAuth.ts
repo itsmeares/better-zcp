@@ -76,3 +76,33 @@ export const getCurrentUser = createServerFn({
     context,
   }),
 )
+
+export async function getAuthStatusWithFallback(): Promise<AuthStatus> {
+  try {
+    return await getAuthStatus()
+  } catch {
+    const response = await fetch('/api/auth/status')
+    if (!response.ok) throw new Error(`Auth status returned ${response.status}`)
+    return await response.json() as AuthStatus
+  }
+}
+
+export async function getOidcStatusWithFallback(signal?: AbortSignal): Promise<OidcStatus> {
+  try {
+    return await getOidcStatus()
+  } catch {
+    const response = await fetch('/api/auth/oidc/status', signal ? { signal } : undefined)
+    if (!response.ok) throw new Error(`OIDC status returned ${response.status}`)
+    return await response.json() as OidcStatus
+  }
+}
+
+export async function getRecoveryStatusWithFallback(signal?: AbortSignal): Promise<RecoveryStatus> {
+  try {
+    return await getRecoveryStatus()
+  } catch {
+    const response = await fetch('/api/auth/recovery-status', signal ? { signal } : undefined)
+    if (!response.ok) throw new Error(`Recovery status returned ${response.status}`)
+    return await response.json() as RecoveryStatus
+  }
+}
