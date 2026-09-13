@@ -1,6 +1,22 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Trans, useTranslation } from 'react-i18next'
-import { Search, RefreshCw, Loader2, X, ChevronDown, AlertCircle, SearchX, Car, Users, Truck, Bus, Shield, Zap, Mountain, Package, type LucideIcon } from 'lucide-react'
+import {
+  Search,
+  RefreshCw,
+  Loader2,
+  X,
+  ChevronDown,
+  AlertCircle,
+  SearchX,
+  Car,
+  Users,
+  Truck,
+  Bus,
+  Shield,
+  Zap,
+  Mountain,
+  Package,
+  type LucideIcon,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -27,20 +43,41 @@ export function getVehicleType(v: CatalogVehicle): string {
   const id = v.id.toLowerCase().replace(/^base\./, '')
 
   if (/trailer|\bcart\b/.test(raw)) return 'Trailers'
-  if (v.seats === 0 && typeof v.mass === 'number' && v.mass > 0) return 'Trailers'
+  if (v.seats === 0 && typeof v.mass === 'number' && v.mass > 0)
+    return 'Trailers'
 
-  if (/police|\bcop\b|sheriff|firetruck|fire.?engine|military|army|m10[0-9]{2}|humvee|hmm?wv|cucv|armou?red|swat|ambulance|\bems\b/.test(raw))
+  if (
+    /police|\bcop\b|sheriff|firetruck|fire.?engine|military|army|m10[0-9]{2}|humvee|hmm?wv|cucv|armou?red|swat|ambulance|\bems\b/.test(
+      raw,
+    )
+  )
     return 'Emergency & Military'
   if (/(?:pd|ksp|mp|trooper|patrol)$/i.test(id)) return 'Emergency & Military'
   if (/lightsbar|lightbar|siren/.test(raw)) return 'Emergency & Military'
 
-  if (/\bvan\b|\bbus\b|minivan|stepvan|minibus|schoolbus/.test(raw)) return 'Vans & Buses'
+  if (/\bvan\b|\bbus\b|minivan|stepvan|minibus|schoolbus/.test(raw))
+    return 'Vans & Buses'
 
-  if (/truck|pickup|pick.?up|\bsemi\b|\btow\b|flatnose|\bdump\b|plow|hauler|flat.?bed/.test(raw)) return 'Trucks'
+  if (
+    /truck|pickup|pick.?up|\bsemi\b|\btow\b|flatnose|\bdump\b|plow|hauler|flat.?bed/.test(
+      raw,
+    )
+  )
+    return 'Trucks'
 
-  if (/sport|muscle|\brace\b|\bfast\b|corvette|camaro|mustang|\bgto\b|charger|firebird|trans.?am/.test(raw)) return 'Performance'
+  if (
+    /sport|muscle|\brace\b|\bfast\b|corvette|camaro|mustang|\bgto\b|charger|firebird|trans.?am/.test(
+      raw,
+    )
+  )
+    return 'Performance'
 
-  if (/\bsuv\b|offroad|off.?road|4x4|\bjeep\b|blazer|\bk5|wrangler|bronco|scout/.test(raw)) return 'SUVs & Off-road'
+  if (
+    /\bsuv\b|offroad|off.?road|4x4|\bjeep\b|blazer|\bk5|wrangler|bronco|scout/.test(
+      raw,
+    )
+  )
+    return 'SUVs & Off-road'
 
   if (typeof v.mass === 'number' && v.mass > 5000) return 'Trucks'
   if (typeof v.seats === 'number' && v.seats >= 7) return 'Vans & Buses'
@@ -54,20 +91,34 @@ export function formatVehicleName(v: CatalogVehicle): string {
 }
 
 export const TYPE_ORDER: Record<string, number> = {
-  'Sedans': 0, 'Performance': 1, 'SUVs & Off-road': 2,
-  'Trucks': 3, 'Vans & Buses': 4, 'Emergency & Military': 5, 'Trailers': 6,
+  Sedans: 0,
+  Performance: 1,
+  'SUVs & Off-road': 2,
+  Trucks: 3,
+  'Vans & Buses': 4,
+  'Emergency & Military': 5,
+  Trailers: 6,
 }
 
 export const TYPE_ICON: Record<string, LucideIcon> = {
-  'Sedans': Car, 'Performance': Zap, 'SUVs & Off-road': Mountain,
-  'Trucks': Truck, 'Vans & Buses': Bus, 'Emergency & Military': Shield, 'Trailers': Package,
+  Sedans: Car,
+  Performance: Zap,
+  'SUVs & Off-road': Mountain,
+  Trucks: Truck,
+  'Vans & Buses': Bus,
+  'Emergency & Military': Shield,
+  Trailers: Package,
 }
 
 const MAX_VISIBLE = 100
 
-export function VehiclePicker({ value, onChange, disabled, placeholder }: VehiclePickerProps) {
-  const { t, i18n } = useTranslation('vehiclePicker')
-  const resolvedPlaceholder = placeholder ?? t('searchVehiclesPlaceholder')
+export function VehiclePicker({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+}: VehiclePickerProps) {
+  const resolvedPlaceholder = placeholder ?? 'Search vehicles...'
   const [vehicles, setVehicles] = useState<CatalogVehicle[]>([])
   const [initialLoad, setInitialLoad] = useState(true)
   const [scanning, setScanning] = useState(false)
@@ -103,13 +154,19 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      )
+        setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  useEffect(() => { setHighlightIndex(-1) }, [search])
+  useEffect(() => {
+    setHighlightIndex(-1)
+  }, [search])
 
   useEffect(() => {
     if (!open || !containerRef.current) return
@@ -125,51 +182,67 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
       const data = await panelBridgeApi.scanCatalogVehicles()
       setVehicles(data.vehicles || [])
       setScannedAt(data.scannedAt)
-      toast({ title: t('toastCatalogUpdatedTitle'), description: t('toastCatalogUpdatedDesc', { count: data.count || 0 }) })
+      toast({
+        title: 'Vehicle catalog updated',
+        description: 'Found ' + String(data.count || 0) + ' vehicles',
+      })
     } catch (err: unknown) {
-      const msg = getUserErrorMessage(err, t('scanFailed'))
+      const msg = getUserErrorMessage(err, 'Scan failed')
       setScanError(msg)
       toast({
-        title: t('toastScanFailedTitle'),
+        title: 'Vehicle scan failed',
         description: msg.includes('Bridge not running')
-          ? t('bridgeNotRunning')
+          ? 'Server must be online with PanelBridge mod active'
           : msg,
         variant: 'destructive',
       })
     } finally {
       setScanning(false)
     }
-  }, [scanning, toast, t])
+  }, [scanning, toast])
 
-  const { visibleVehicles, totalFiltered, capped, groupedVehicles } = useMemo(() => {
-    const q = search.toLowerCase().trim()
-    let filtered = vehicles
+  const { visibleVehicles, totalFiltered, capped, groupedVehicles } =
+    useMemo(() => {
+      const q = search.toLowerCase().trim()
+      let filtered = vehicles
 
-    if (q) {
-      filtered = filtered.filter(
-        v => v.id.toLowerCase().includes(q) || v.name.toLowerCase().includes(q)
+      if (q) {
+        filtered = filtered.filter(
+          (v) =>
+            v.id.toLowerCase().includes(q) || v.name.toLowerCase().includes(q),
+        )
+      }
+
+      filtered = [...filtered].sort((a, b) =>
+        (a.name || a.id).localeCompare(b.name || b.id),
       )
-    }
 
-    filtered = [...filtered].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
+      const total = filtered.length
+      const isCapped = total > MAX_VISIBLE
+      const visible = isCapped ? filtered.slice(0, MAX_VISIBLE) : filtered
 
-    const total = filtered.length
-    const isCapped = total > MAX_VISIBLE
-    const visible = isCapped ? filtered.slice(0, MAX_VISIBLE) : filtered
+      const groups = new Map<string, CatalogVehicle[]>()
+      for (const v of visible) {
+        const type = getVehicleType(v)
+        if (!groups.has(type)) groups.set(type, [])
+        groups.get(type)!.push(v)
+      }
+      const sorted = Array.from(groups.entries()).sort(
+        ([a], [b]) => (TYPE_ORDER[a] ?? 99) - (TYPE_ORDER[b] ?? 99),
+      )
 
-    const groups = new Map<string, CatalogVehicle[]>()
-    for (const v of visible) {
-      const type = getVehicleType(v)
-      if (!groups.has(type)) groups.set(type, [])
-      groups.get(type)!.push(v)
-    }
-    const sorted = Array.from(groups.entries())
-      .sort(([a], [b]) => (TYPE_ORDER[a] ?? 99) - (TYPE_ORDER[b] ?? 99))
+      return {
+        visibleVehicles: visible,
+        totalFiltered: total,
+        capped: isCapped,
+        groupedVehicles: sorted,
+      }
+    }, [vehicles, search])
 
-    return { visibleVehicles: visible, totalFiltered: total, capped: isCapped, groupedVehicles: sorted }
-  }, [vehicles, search])
-
-  const selectedVehicle = useMemo(() => vehicles.find(v => v.id === value), [vehicles, value])
+  const selectedVehicle = useMemo(
+    () => vehicles.find((v) => v.id === value),
+    [vehicles, value],
+  )
 
   const handleSelect = (id: string) => {
     onChange(id)
@@ -195,11 +268,13 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault()
-        setHighlightIndex(prev => Math.min(prev + 1, visibleVehicles.length - 1))
+        setHighlightIndex((prev) =>
+          Math.min(prev + 1, visibleVehicles.length - 1),
+        )
         break
       case 'ArrowUp':
         e.preventDefault()
-        setHighlightIndex(prev => Math.max(prev - 1, 0))
+        setHighlightIndex((prev) => Math.max(prev - 1, 0))
         break
       case 'Enter':
         e.preventDefault()
@@ -220,7 +295,9 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
 
   useEffect(() => {
     if (highlightIndex < 0 || !listRef.current) return
-    const el = listRef.current.querySelector(`[data-veh-index="${highlightIndex}"]`)
+    const el = listRef.current.querySelector(
+      `[data-veh-index="${highlightIndex}"]`,
+    )
     el?.scrollIntoView({ block: 'nearest' })
   }, [highlightIndex])
 
@@ -228,7 +305,9 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
     return (
       <div className="flex items-center gap-2 h-11 sm:h-9 rounded-md border border-input bg-background px-3 text-sm">
         <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground shrink-0" />
-        <span className="text-muted-foreground truncate">{t('loadingVehicles')}</span>
+        <span className="text-muted-foreground truncate">
+          {'Loading vehicles...'}
+        </span>
       </div>
     )
   }
@@ -239,8 +318,8 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
         <div className="flex gap-2">
           <Input
             value={value}
-            onChange={e => onChange(e.target.value)}
-            placeholder={t('manualIdPlaceholder')}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={'e.g., Base.CarNormal'}
             disabled={disabled || scanning}
             className="flex-1 min-w-0"
           />
@@ -250,11 +329,17 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
             onClick={handleScan}
             disabled={scanning || disabled}
             // eslint-disable-next-line local/no-dead-disabled-title -- pure hint describing what Scan needs to succeed, unconditional regardless of disabled state; `disabled` here is a generic pass-through prop no current caller sets, and `scanning` is a self-evident transient busy state (the spinner). Not a disabled-reason. Triaged 2026-08-27, same shape as ItemPicker.tsx.
-            title={t('scanTitle')}
+            title={
+              'Scan server for vehicles (requires running server with PanelBridge)'
+            }
             className="shrink-0"
           >
-            {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            <span className="ms-1.5 hidden sm:inline">{t('scan')}</span>
+            {scanning ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            <span className="ms-1.5 hidden sm:inline">{'Scan'}</span>
           </Button>
         </div>
         {scanError ? (
@@ -264,7 +349,9 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
           </p>
         ) : (
           <p className="text-[11px] text-muted-foreground">
-            {scanning ? t('scanningVehicles') : t('enterManuallyOrScan')}
+            {scanning
+              ? 'Scanning server vehicles…'
+              : 'Enter vehicle ID manually, or scan while the server is running'}
           </p>
         )}
       </div>
@@ -279,39 +366,49 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-controls={open ? 'vehpicker-listbox' : undefined}
-        aria-label={t('selectVehicleAria')}
+        aria-label={'Select vehicle'}
         tabIndex={disabled ? -1 : 0}
         className={cn(
           'flex items-center gap-2 h-11 sm:h-9 rounded-md border border-input bg-background px-3 text-sm cursor-pointer',
           'motion-safe:transition-colors duration-150',
           'hover:border-primary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
           open && 'border-primary/60 ring-1 ring-primary/20',
-          disabled && 'opacity-50 cursor-not-allowed pointer-events-none'
+          disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
         )}
         onClick={() => !disabled && setOpen(!open)}
       >
         <Car className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
         {selectedVehicle ? (
           <span className="flex-1 min-w-0 truncate">
-            <span className="font-medium">{selectedVehicle.name || selectedVehicle.id}</span>
-            {typeof selectedVehicle.seats === 'number' && selectedVehicle.seats > 0 && (
-              <span className="inline-flex items-center gap-0.5 text-muted-foreground ms-2 text-xs">
-                <Users className="w-3 h-3" />
-                {selectedVehicle.seats}
-              </span>
-            )}
+            <span className="font-medium">
+              {selectedVehicle.name || selectedVehicle.id}
+            </span>
+            {typeof selectedVehicle.seats === 'number' &&
+              selectedVehicle.seats > 0 && (
+                <span className="inline-flex items-center gap-0.5 text-muted-foreground ms-2 text-xs">
+                  <Users className="w-3 h-3" />
+                  {selectedVehicle.seats}
+                </span>
+              )}
           </span>
         ) : value ? (
-          <span className="flex-1 min-w-0 truncate text-foreground">{value.replace('Base.', '')}</span>
+          <span className="flex-1 min-w-0 truncate text-foreground">
+            {value.replace('Base.', '')}
+          </span>
         ) : (
-          <span className="flex-1 min-w-0 truncate text-muted-foreground">{resolvedPlaceholder}</span>
+          <span className="flex-1 min-w-0 truncate text-muted-foreground">
+            {resolvedPlaceholder}
+          </span>
         )}
         {value && !disabled && (
           <button
             type="button"
-            onClick={e => { e.stopPropagation(); handleClear() }}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleClear()
+            }}
             className="-me-1 flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0 motion-safe:transition-colors"
-            aria-label={t('clearSelectionAria')}
+            aria-label={'Clear selection'}
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -319,7 +416,7 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
         <ChevronDown
           className={cn(
             'w-3.5 h-3.5 text-muted-foreground shrink-0 motion-safe:transition-transform duration-200',
-            open && 'rotate-180'
+            open && 'rotate-180',
           )}
         />
       </div>
@@ -329,7 +426,9 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
           className={cn(
             'absolute z-50 rounded-lg border border-border bg-popover shadow-lg',
             'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-[0.98] motion-safe:duration-150',
-            dropUp ? 'bottom-full mb-1 motion-safe:slide-in-from-bottom-1' : 'top-full mt-1 motion-safe:slide-in-from-top-1'
+            dropUp
+              ? 'bottom-full mb-1 motion-safe:slide-in-from-bottom-1'
+              : 'top-full mt-1 motion-safe:slide-in-from-top-1',
           )}
           style={{ width: 'max(100%, 400px)' }}
         >
@@ -338,17 +437,17 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
             <input
               ref={inputRef}
               value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={t('searchNVehiclesPlaceholder', { count: vehicles.length })}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={'Search ' + String(vehicles.length) + ' vehicles...'}
               className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              aria-label={t('filterVehiclesAria')}
+              aria-label={'Filter vehicles'}
               autoFocus
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                aria-label={t('clearSearchAria')}
+                aria-label={'Clear search'}
                 className="flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground shrink-0"
               >
                 <X className="w-3 h-3" />
@@ -357,39 +456,67 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
             <Button
               variant="ghost"
               size="sm"
-              onClick={e => { e.stopPropagation(); handleScan() }}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleScan()
+              }}
               disabled={scanning}
               className="h-7 w-7 p-0 shrink-0"
               // eslint-disable-next-line local/no-dead-disabled-title -- pure hint, same text as the aria-label; disables only while a scan is already in flight (the spinner is the self-evident why). Triaged 2026-08-27.
-              title={t('rescanTitle')}
-              aria-label={t('rescanTitle')}
+              title={'Re-scan server vehicles'}
+              aria-label={'Re-scan server vehicles'}
             >
-              {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              {scanning ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
             </Button>
           </div>
 
-          <div className="max-h-[320px] overflow-y-auto overscroll-contain" role="listbox" id="vehpicker-listbox" aria-label={t('vehicleListAria')}>
+          <div
+            className="max-h-[320px] overflow-y-auto overscroll-contain"
+            role="listbox"
+            id="vehpicker-listbox"
+            aria-label={'Vehicle list'}
+          >
             {totalFiltered === 0 ? (
               <div className="py-10 text-center text-muted-foreground">
                 <SearchX className="w-6 h-6 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">
-                  {search ? t('noVehiclesMatch', { search }) : t('noVehiclesFound')}
+                  {search
+                    ? 'No vehicles match “' + String(search) + '”'
+                    : 'No vehicles found'}
                 </p>
               </div>
             ) : (
               <div ref={listRef} className="py-0.5">
                 {groupedVehicles.map(([type, vehs]) => (
                   <div key={type}>
-                    {!search && groupedVehicles.length > 1 && (() => {
-                      const Icon = TYPE_ICON[type] || Car
-                      return (
-                        <div className="sticky top-0 z-10 flex items-center gap-2 px-3 h-7 bg-muted/50 backdrop-blur-sm text-[11px] text-muted-foreground font-medium border-b border-border/20">
-                          <Icon className="w-3 h-3 opacity-50" />
-                          {t(`types.${type}`)}
-                          <span className="opacity-40 tabular-nums">({vehs.length})</span>
-                        </div>
-                      )
-                    })()}
+                    {!search &&
+                      groupedVehicles.length > 1 &&
+                      (() => {
+                        const Icon = TYPE_ICON[type] || Car
+                        return (
+                          <div className="sticky top-0 z-10 flex items-center gap-2 px-3 h-7 bg-muted/50 backdrop-blur-sm text-[11px] text-muted-foreground font-medium border-b border-border/20">
+                            <Icon className="w-3 h-3 opacity-50" />
+                            {(
+                              {
+                                Sedans: 'Sedans',
+                                Performance: 'Performance',
+                                'SUVs & Off-road': 'SUVs & Off-road',
+                                Trucks: 'Trucks',
+                                'Vans & Buses': 'Vans & Buses',
+                                'Emergency & Military': 'Emergency & Military',
+                                Trailers: 'Trailers',
+                              } as Record<string, string>
+                            )[String(type)] ?? String(type)}
+                            <span className="opacity-40 tabular-nums">
+                              ({vehs.length})
+                            </span>
+                          </div>
+                        )
+                      })()}
                     {vehs.map((veh) => {
                       const globalIdx = visibleVehicles.indexOf(veh)
                       return (
@@ -405,22 +532,37 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
                             'motion-safe:transition-colors duration-75',
                             'hover:bg-accent/10',
                             veh.id === value && 'bg-primary/10 text-primary',
-                            globalIdx === highlightIndex && 'bg-accent/15 outline-none'
+                            globalIdx === highlightIndex &&
+                              'bg-accent/15 outline-none',
                           )}
                         >
-                          <span className="flex-1 min-w-0 truncate font-medium">{formatVehicleName(veh)}</span>
+                          <span className="flex-1 min-w-0 truncate font-medium">
+                            {formatVehicleName(veh)}
+                          </span>
                           {typeof veh.seats === 'number' && veh.seats > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/60 shrink-0 tabular-nums" title={t('seatsTitle', { count: veh.seats })}>
+                            <span
+                              className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/60 shrink-0 tabular-nums"
+                              title={
+                                Number(veh.seats) === 1
+                                  ? String(veh.seats) + ' seat'
+                                  : String(veh.seats) + ' seats'
+                              }
+                            >
                               <Users className="w-2.5 h-2.5" />
                               {veh.seats}
                             </span>
                           )}
                           {typeof veh.mass === 'number' && veh.mass > 0 && (
-                            <span className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums" title={`${veh.mass}kg`}>
+                            <span
+                              className="text-[10px] text-muted-foreground/40 shrink-0 tabular-nums"
+                              title={`${veh.mass}kg`}
+                            >
                               {(veh.mass / 1000).toFixed(1)}t
                             </span>
                           )}
-                          <span className="text-[10px] text-muted-foreground/40 shrink-0 max-w-[30%] truncate font-mono">{veh.id.replace('Base.', '')}</span>
+                          <span className="text-[10px] text-muted-foreground/40 shrink-0 max-w-[30%] truncate font-mono">
+                            {veh.id.replace('Base.', '')}
+                          </span>
                         </button>
                       )
                     })}
@@ -432,25 +574,27 @@ export function VehiclePicker({ value, onChange, disabled, placeholder }: Vehicl
 
           <div className="border-t border-border/40 px-3 h-8 flex items-center justify-between gap-3 text-[11px] text-muted-foreground bg-card/30">
             <span className="shrink-0 tabular-nums">
-              {capped
-                ? (
-                  <Trans
-                    i18nKey="cappedFooter"
-                    t={t}
-                    values={{ max: MAX_VISIBLE, total: totalFiltered }}
-                    components={{ 1: <span className="text-warning" /> }}
-                  />
-                )
-                : t('vehiclesCount', { count: totalFiltered })}
+              {capped ? (
+                <>
+                  <span className="text-warning">{MAX_VISIBLE}</span>
+                  {' of '}
+                  {totalFiltered}
+                  {' — type to filter'}
+                </>
+              ) : Number(totalFiltered) === 1 ? (
+                String(totalFiltered) + ' vehicle'
+              ) : (
+                String(totalFiltered) + ' vehicles'
+              )}
             </span>
             <div className="flex items-center gap-3 text-[10px] opacity-60">
-              <span>{t('navigateHint')}</span>
-              <span>{t('selectHint')}</span>
-              <span>{t('closeHint')}</span>
+              <span>{'↑↓ navigate'}</span>
+              <span>{'↵ select'}</span>
+              <span>{'esc close'}</span>
             </div>
             {scannedAt && (
               <span className="truncate text-end opacity-50">
-                {new Date(scannedAt).toLocaleDateString(i18n.language)}
+                {new Date(scannedAt).toLocaleDateString('en')}
               </span>
             )}
           </div>

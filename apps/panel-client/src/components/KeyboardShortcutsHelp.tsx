@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogContent,
@@ -14,8 +13,11 @@ interface KeyboardShortcutsHelpProps {
   shortcuts: ShortcutDef[]
 }
 
-export function KeyboardShortcutsHelp({ open, onClose, shortcuts }: KeyboardShortcutsHelpProps) {
-  const { t } = useTranslation('keyboardShortcuts')
+export function KeyboardShortcutsHelp({
+  open,
+  onClose,
+  shortcuts,
+}: KeyboardShortcutsHelpProps) {
   const groups = shortcuts.reduce<Record<string, ShortcutDef[]>>((acc, s) => {
     if (!acc[s.group]) acc[s.group] = []
     acc[s.group].push(s)
@@ -23,19 +25,35 @@ export function KeyboardShortcutsHelp({ open, onClose, shortcuts }: KeyboardShor
   }, {})
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
-      <DialogContent className="max-w-sm p-5" aria-label={t('dialogTitle')}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose()
+      }}
+    >
+      <DialogContent className="max-w-sm p-5" aria-label={'Keyboard Shortcuts'}>
         <DialogHeader>
-          <DialogTitle className="text-base font-semibold text-foreground">{t('dialogTitle')}</DialogTitle>
-          <DialogDescription className="sr-only">{t('dialogDescription')}</DialogDescription>
+          <DialogTitle className="text-base font-semibold text-foreground">
+            {'Keyboard Shortcuts'}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {
+              'Available keyboard shortcuts for navigating and controlling the panel.'
+            }
+          </DialogDescription>
         </DialogHeader>
 
         {Object.entries(groups).map(([group, items]) => (
           <div key={group} className="mb-3 last:mb-0">
-            <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">{group}</h3>
+            <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {group}
+            </h3>
             <div className="space-y-1">
-              {items.map(s => (
-                <div key={s.key} className="flex items-center justify-between py-0.5">
+              {items.map((s) => (
+                <div
+                  key={s.key}
+                  className="flex items-center justify-between py-0.5"
+                >
                   <span className="text-sm text-foreground/80">{s.label}</span>
                   <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                     {s.key}
@@ -47,7 +65,7 @@ export function KeyboardShortcutsHelp({ open, onClose, shortcuts }: KeyboardShor
         ))}
 
         <p className="mt-3 text-xs text-muted-foreground">
-          {t('disabledInInput')}
+          {'Shortcuts are disabled when typing in an input field.'}
         </p>
       </DialogContent>
     </Dialog>

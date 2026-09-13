@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next'
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -35,23 +34,38 @@ export function TemplateApplyPanel({
   onApply,
   onClose,
 }: TemplateApplyPanelProps) {
-  const { t } = useTranslation('templateApplyPanel')
   if (!canManage) return null
 
   if (applyResult) {
     return (
       <Alert variant="success">
         <CheckCircle2 className="h-4 w-4" />
-        <AlertTitle>{t('appliedTitle')}</AlertTitle>
+        <AlertTitle>{'Template Applied'}</AlertTitle>
         <AlertDescription className="space-y-1">
           <p>
-            {applyResult.ini ? t('iniKeysUpdated', { count: applyResult.ini.appliedKeys.length }) : ''}
-            {applyResult.sandbox && 'applied' in applyResult.sandbox
-              ? t('sandboxSettingsUpdated', { count: applyResult.sandbox.applied.length })
+            {applyResult.ini
+              ? Number(applyResult.ini.appliedKeys.length) === 1
+                ? String(applyResult.ini.appliedKeys.length) +
+                  ' INI key updated. '
+                : String(applyResult.ini.appliedKeys.length) +
+                  ' INI keys updated. '
               : ''}
-            {applyResult.backups.length > 0 && t('backupFilesCreated', { count: applyResult.backups.length })}
+            {applyResult.sandbox && 'applied' in applyResult.sandbox
+              ? Number(applyResult.sandbox.applied.length) === 1
+                ? String(applyResult.sandbox.applied.length) +
+                  ' sandbox setting updated. '
+                : String(applyResult.sandbox.applied.length) +
+                  ' sandbox settings updated. '
+              : ''}
+            {applyResult.backups.length > 0 &&
+              (Number(applyResult.backups.length) === 1
+                ? String(applyResult.backups.length) + ' backup file created. '
+                : String(applyResult.backups.length) +
+                  ' backup files created. ')}
           </p>
-          <p className="font-medium">{t('effectNextRestart')}</p>
+          <p className="font-medium">
+            {'Changes will take effect the next time the server restarts.'}
+          </p>
         </AlertDescription>
       </Alert>
     )
@@ -62,41 +76,63 @@ export function TemplateApplyPanel({
       {running !== false && (
         <Alert variant="warning">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>{running ? t('serverRunning') : t('serverStateUnavailable')}</AlertTitle>
+          <AlertTitle>
+            {running ? 'Server is running' : 'Server state unavailable'}
+          </AlertTitle>
           <AlertDescription>
             {running
-              ? t('stopBeforeApplying')
-              : t('confirmStoppedRetry')}
+              ? 'Stop the server before applying this template.'
+              : 'Confirm the server is stopped, then retry.'}
           </AlertDescription>
         </Alert>
       )}
 
       <div className="flex flex-wrap items-center gap-5">
         <div className="flex items-center gap-2">
-          <Checkbox id="scope-sandbox" checked={scopeSandbox} onCheckedChange={(v) => onScopeSandboxChange(v === true)} />
-          <Label htmlFor="scope-sandbox" className="text-sm font-normal">{t('applySandboxChanges')}</Label>
+          <Checkbox
+            id="scope-sandbox"
+            checked={scopeSandbox}
+            onCheckedChange={(v) => onScopeSandboxChange(v === true)}
+          />
+          <Label htmlFor="scope-sandbox" className="text-sm font-normal">
+            {'Apply sandbox changes'}
+          </Label>
         </div>
         <div className="flex items-center gap-2">
-          <Checkbox id="scope-ini" checked={scopeIni} onCheckedChange={(v) => onScopeIniChange(v === true)} />
-          <Label htmlFor="scope-ini" className="text-sm font-normal">{t('applyIniChanges')}</Label>
+          <Checkbox
+            id="scope-ini"
+            checked={scopeIni}
+            onCheckedChange={(v) => onScopeIniChange(v === true)}
+          />
+          <Label htmlFor="scope-ini" className="text-sm font-normal">
+            {'Apply server.ini changes'}
+          </Label>
         </div>
       </div>
 
       {applyError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>{t('applyFailedTitle')}</AlertTitle>
+          <AlertTitle>{'Apply Failed'}</AlertTitle>
           <AlertDescription>{applyError}</AlertDescription>
         </Alert>
       )}
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onClose} disabled={applying}>
-          {t('cancel')}
+          {'Cancel'}
         </Button>
-        <Button onClick={onApply} disabled={applying || running !== false || !canApply || (!scopeIni && !scopeSandbox)}>
+        <Button
+          onClick={onApply}
+          disabled={
+            applying ||
+            running !== false ||
+            !canApply ||
+            (!scopeIni && !scopeSandbox)
+          }
+        >
           {applying && <Loader2 className="h-4 w-4 animate-spin" />}
-          {t('applyTemplate')}
+          {'Apply Template'}
         </Button>
       </div>
     </div>

@@ -10,9 +10,12 @@ import { routeTree } from './routeTree.gen'
 function createPanelRouter() {
   return createRouter({
     routeTree,
-    history: typeof window === 'undefined'
-      ? createMemoryHistory({ initialEntries: ['/'] })
-      : isDemoMode() ? createHashHistory() : createBrowserHistory(),
+    history:
+      typeof window === 'undefined'
+        ? createMemoryHistory({ initialEntries: ['/'] })
+        : isDemoMode()
+          ? createHashHistory()
+          : createBrowserHistory(),
     defaultPendingMs: 100,
     scrollRestoration: true,
   })

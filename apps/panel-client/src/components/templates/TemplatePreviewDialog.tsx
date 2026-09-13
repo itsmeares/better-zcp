@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Loader2, AlertTriangle } from 'lucide-react'
 import {
   Dialog,
@@ -31,8 +30,12 @@ interface TemplatePreviewDialogProps {
   onApplied: () => void
 }
 
-export function TemplatePreviewDialog({ template, canManage, onClose, onApplied }: TemplatePreviewDialogProps) {
-  const { t } = useTranslation('templatePreviewDialog')
+export function TemplatePreviewDialog({
+  template,
+  canManage,
+  onClose,
+  onApplied,
+}: TemplatePreviewDialogProps) {
   const { toast } = useToast()
   const confirm = useConfirm()
   const [server, setServer] = useState<ServerInstance | null>(null)
@@ -44,7 +47,9 @@ export function TemplatePreviewDialog({ template, canManage, onClose, onApplied 
   const [scopeSandbox, setScopeSandbox] = useState(true)
   const [applying, setApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
-  const [applyResult, setApplyResult] = useState<SimTemplateApplyResult | null>(null)
+  const [applyResult, setApplyResult] = useState<SimTemplateApplyResult | null>(
+    null,
+  )
 
   const loadIdRef = useRef(0)
 
@@ -59,11 +64,14 @@ export function TemplatePreviewDialog({ template, canManage, onClose, onApplied 
     setScopeSandbox(true)
     setRunning(null)
 
-    const { server: active } = await serversApi.getResolvedActive().catch(() => ({ server: null }))
+    const { server: active } = await serversApi
+      .getResolvedActive()
+      .catch(() => ({ server: null }))
     if (loadIdRef.current !== loadId) return
     setServer(active)
     if (active && !active.isRemote) {
-      serverApi.getStatus()
+      serverApi
+        .getStatus()
         .then((status) => {
           if (loadIdRef.current !== loadId) return
           setRunning(!!(status as { running?: boolean })?.running)
@@ -78,14 +86,14 @@ export function TemplatePreviewDialog({ template, canManage, onClose, onApplied 
         const result = await templatesApi.preview(tpl.meta.id, active.id)
         if (loadIdRef.current !== loadId) return
         if (result.success && result.diff) setDiff(result.diff)
-        else setDiffError(result.error || t('failedToPreview'))
+        else setDiffError(result.error || 'Failed to preview template')
       } catch (error) {
         if (loadIdRef.current !== loadId) return
-        setDiffError(getUserErrorMessage(error, t('failedToPreview')))
+        setDiffError(getUserErrorMessage(error, 'Failed to preview template'))
       }
     }
     if (loadIdRef.current === loadId) setServerLoading(false)
-  }, [t])
+  }, [])
 
   useEffect(() => {
     if (template) load(template)
@@ -94,9 +102,12 @@ export function TemplatePreviewDialog({ template, canManage, onClose, onApplied 
   const handleApply = async () => {
     if (!template || !server) return
     const ok = await confirm({
-      title: t('applyConfirmTitle', { name: template.meta.name }),
-      description: t('applyConfirmDescription', { count: diff?.summary.totalChanges ?? 0 }),
-      confirmLabel: t('applyConfirmButton'),
+      title: 'Apply "' + String(template.meta.name) + '"?',
+      description:
+        "This overwrites the server's current config with this template's " +
+        String(diff?.summary.totalChanges ?? 0) +
+        " change(s). Players won't see the difference until the server restarts, and you can undo it by applying a different template.",
+      confirmLabel: 'Apply Template',
       variant: 'warning',
     })
     if (!ok) return
@@ -107,12 +118,17 @@ export function TemplatePreviewDialog({ template, canManage, onClose, onApplied 
         applyIni: scopeIni,
         applySandbox: scopeSandbox,
       })
-      if (!result.success) throw new Error(result.error || t('failedToApply'))
+      if (!result.success)
+        throw new Error(result.error || 'Failed to apply template')
       setApplyResult(result)
-      toast({ title: t('toastAppliedTitle'), description: t('toastAppliedDesc', { name: template.meta.name }), variant: 'success' as const })
+      toast({
+        title: 'Template Applied',
+        description: '"' + String(template.meta.name) + '" was applied.',
+        variant: 'success' as const,
+      })
       onApplied()
     } catch (error) {
-      setApplyError(getUserErrorMessage(error, t('failedToApply')))
+      setApplyError(getUserErrorMessage(error, 'Failed to apply template'))
     } finally {
       setApplying(false)
     }
@@ -133,19 +149,23 @@ export function TemplatePreviewDialog({ template, canManage, onClose, onApplied 
         ) : !server ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>{t('noActiveServerTitle')}</AlertTitle>
-            <AlertDescription>{t('noActiveServerDesc')}</AlertDescription>
+            <AlertTitle>{'No Active Server'}</AlertTitle>
+            <AlertDescription>
+              {'Set up a server before previewing or applying templates.'}
+            </AlertDescription>
           </Alert>
         ) : server.isRemote ? (
           <Alert variant="warning">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>{t('remoteServerTitle')}</AlertTitle>
-            <AlertDescription>{t('remoteServerDesc')}</AlertDescription>
+            <AlertTitle>{'Remote Server'}</AlertTitle>
+            <AlertDescription>
+              {"Applying templates to remote servers isn't supported yet."}
+            </AlertDescription>
           </Alert>
         ) : diffError ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>{t('previewFailedTitle')}</AlertTitle>
+            <AlertTitle>{'Preview Failed'}</AlertTitle>
             <AlertDescription>{diffError}</AlertDescription>
           </Alert>
         ) : diff && template ? (

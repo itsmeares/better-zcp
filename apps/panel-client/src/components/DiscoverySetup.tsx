@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { Loader2, AlertCircle } from 'lucide-react'
 import {
@@ -22,7 +21,11 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { HelpTip } from '@/components/HelpTip'
-import { serversApi, type DiscoveredMount, type ServerInstance } from '@/lib/api'
+import {
+  serversApi,
+  type DiscoveredMount,
+  type ServerInstance,
+} from '@/lib/api'
 
 interface DiscoverySetupProps {
   open: boolean
@@ -31,8 +34,12 @@ interface DiscoverySetupProps {
   onCreated?: (server: ServerInstance) => void
 }
 
-export function DiscoverySetup({ open, onOpenChange, mount, onCreated }: DiscoverySetupProps) {
-  const { t } = useTranslation('discoverySetup')
+export function DiscoverySetup({
+  open,
+  onOpenChange,
+  mount,
+  onCreated,
+}: DiscoverySetupProps) {
   const [selectedName, setSelectedName] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -66,10 +73,10 @@ export function DiscoverySetup({ open, onOpenChange, mount, onCreated }: Discove
       const server = result.server
       await serversApi.activate(server.id)
       onCreated?.(server)
-      toast({ title: t('toastServerAdded') })
+      toast({ title: 'Server added' })
       onOpenChange(false)
     } catch (error) {
-      setCreateError(getUserErrorMessage(error, t('failedToCreate')))
+      setCreateError(getUserErrorMessage(error, 'Failed to create server'))
     } finally {
       setCreating(false)
     }
@@ -81,19 +88,25 @@ export function DiscoverySetup({ open, onOpenChange, mount, onCreated }: Discove
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t('title')}</DialogTitle>
-          <DialogDescription className="sr-only">{t('description')}</DialogDescription>
+          <DialogTitle>{'Add discovered server'}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {'Create a server profile from a discovered mount.'}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <dl className="grid gap-2 text-xs">
             <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-2">
-              <dt className="text-muted-foreground">{t('install')}</dt>
-              <dd className="truncate font-mono" title={mount.installPath}>{mount.installPath}</dd>
+              <dt className="text-muted-foreground">{'Install'}</dt>
+              <dd className="truncate font-mono" title={mount.installPath}>
+                {mount.installPath}
+              </dd>
             </div>
             {mount.dataPath && (
               <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-2">
-                <dt className="text-muted-foreground">{t('data')}</dt>
-                <dd className="truncate font-mono" title={mount.dataPath}>{mount.dataPath}</dd>
+                <dt className="text-muted-foreground">{'Data'}</dt>
+                <dd className="truncate font-mono" title={mount.dataPath}>
+                  {mount.dataPath}
+                </dd>
               </div>
             )}
           </dl>
@@ -101,14 +114,22 @@ export function DiscoverySetup({ open, onOpenChange, mount, onCreated }: Discove
           {mount.serverNames.length > 1 && (
             <div className="space-y-2">
               <div className="flex items-center gap-1.5">
-                <Label>{t('configuration')}</Label>
-                <HelpTip label={t('configuration')}>{t('configurationHelp')}</HelpTip>
+                <Label>{'Configuration'}</Label>
+                <HelpTip label={'Configuration'}>
+                  {
+                    'This install folder has more than one server config (.ini) file. Pick the one whose settings — name, RCON port, mods — you want the panel to use. You can add the others later from Server Setup.'
+                  }
+                </HelpTip>
               </div>
               <Select value={selectedName} onValueChange={selectServer}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {mount.serverNames.map((name) => (
-                    <SelectItem key={name} value={name}>{name}.ini</SelectItem>
+                    <SelectItem key={name} value={name}>
+                      {name}.ini
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -117,14 +138,25 @@ export function DiscoverySetup({ open, onOpenChange, mount, onCreated }: Discove
 
           <div className="space-y-2">
             <div className="flex items-center gap-1.5">
-              <Label>{t('displayName')}</Label>
-              <HelpTip label={t('displayName')}>{t('displayNameHelp')}</HelpTip>
+              <Label>{'Display name'}</Label>
+              <HelpTip label={'Display name'}>
+                {
+                  "Just a label shown in this panel's server list. It does not rename any files or change the server's actual name in-game."
+                }
+              </HelpTip>
             </div>
-            <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={100} />
+            <Input
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              maxLength={100}
+            />
           </div>
 
           {createError && (
-            <div role="alert" className="flex items-center gap-2 text-sm text-destructive">
+            <div
+              role="alert"
+              className="flex items-center gap-2 text-sm text-destructive"
+            >
               <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{createError}</span>
             </div>
@@ -132,10 +164,17 @@ export function DiscoverySetup({ open, onOpenChange, mount, onCreated }: Discove
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('cancel')}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {'Cancel'}
+          </Button>
           <Button onClick={handleCreate} disabled={creating || !selectedName}>
-            {creating && <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-            {t('addServer')}
+            {creating && (
+              <Loader2
+                className="me-2 h-4 w-4 animate-spin"
+                aria-hidden="true"
+              />
+            )}
+            {'Add server'}
           </Button>
         </DialogFooter>
       </DialogContent>

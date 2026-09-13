@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Trans, useTranslation } from 'react-i18next'
-import { getCurrentLanguage, isRTL } from '@/i18n'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useSocket } from '@/contexts/SocketContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -74,17 +72,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { panelBridgeApi, updateApi, serversApi, mapApi, playersApi } from '@/lib/api'
+import {
+  panelBridgeApi,
+  updateApi,
+  serversApi,
+  mapApi,
+  playersApi,
+} from '@/lib/api'
 import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { useToast } from '@/components/ui/use-toast'
 import { cn, copyText } from '@/lib/utils'
 import { createInFlightGate } from '@/lib/inFlightGate'
-import { resolveFallbackTile, conservativeRenderedMaxLevel } from './worldMapTileFallback'
+import {
+  resolveFallbackTile,
+  conservativeRenderedMaxLevel,
+} from './worldMapTileFallback'
 import { buildTileQuery } from './worldMapTileUrl'
 import { mapConfigsEqual } from './worldMapConfigEqual'
 import { bridgeSupportsPlayerStatus } from './worldMapBridgeVersion'
-import { diagnoseTileFailure, tileFailureCopyKeys, type TileFailureDiagnosis } from './worldMapTileFailureDiagnosis'
+import {
+  diagnoseTileFailure,
+  tileFailureCopy,
+  type TileFailureDiagnosis,
+} from './worldMapTileFailureDiagnosis'
 
 const TILE_RETRY_MS = [2_000, 10_000, 60_000] as const
 
@@ -168,14 +179,13 @@ interface MapSafehouse {
 }
 
 const AIRDROP_PRESETS = [
-  { id: 'military',  icon: Swords },
-  { id: 'medical',   icon: Pill },
-  { id: 'food',      icon: UtensilsCrossed },
-  { id: 'building',  icon: Hammer },
-  { id: 'weapons',   icon: Target },
-  { id: 'tools',     icon: Wrench },
+  { id: 'military', icon: Swords },
+  { id: 'medical', icon: Pill },
+  { id: 'food', icon: UtensilsCrossed },
+  { id: 'building', icon: Hammer },
+  { id: 'weapons', icon: Target },
+  { id: 'tools', icon: Wrench },
 ] as const
-
 
 export interface MapConfig {
   tileUrl: string
@@ -192,7 +202,6 @@ export interface MapConfig {
   defaultScale: number
   label: string
 }
-
 
 const MAP_B42: MapConfig = {
   tileUrl: '/api/map/tiles',
@@ -259,7 +268,8 @@ function b42ConfigFor(info: {
     fullWidth: info.width,
     fullHeight: info.height,
     maxLevel: info.maxLevel,
-    renderedMaxLevel: info.renderedMaxLevel ?? conservativeRenderedMaxLevel(info.maxLevel),
+    renderedMaxLevel:
+      info.renderedMaxLevel ?? conservativeRenderedMaxLevel(info.maxLevel),
     isoX0,
     isoY0,
     isoHalfSqr,
@@ -282,9 +292,9 @@ const MAP_B41: MapConfig = {
   fullHeight: 990400,
   maxLevel: 22, // ceil(log2(2285184)) = 22
   renderedMaxLevel: conservativeRenderedMaxLevel(22),
-  isoX0: 1017856,  // (5577 + 10327) * 64
-  isoY0: -152000,  // (5577 - 10327) * 32
-  isoHalfSqr: 64,  // 32 * multiply(2)
+  isoX0: 1017856, // (5577 + 10327) * 64
+  isoY0: -152000, // (5577 - 10327) * 32
+  isoHalfSqr: 64, // 32 * multiply(2)
   isoQuarterSqr: 32, // 16 * multiply(2)
   defaultCenter: { x: 1100000, y: 400000 },
   defaultScale: 0.001,
@@ -324,8 +334,10 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
   const k = size / 24
   c.scale(k, k)
 
-  const bodyX = 6, bodyY = 2.5
-  const bodyW = 12, bodyH = 19
+  const bodyX = 6,
+    bodyY = 2.5
+  const bodyW = 12,
+    bodyH = 19
   const radius = 3.2
 
   const grad = c.createLinearGradient(0, bodyY, 0, bodyY + bodyH)
@@ -389,7 +401,14 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
   if (selected) {
     c.strokeStyle = 'rgba(255,255,255,0.85)'
     c.lineWidth = 1.2
-    roundRectPath(c, bodyX - 1.8, bodyY - 1.2, bodyW + 3.6, bodyH + 2.4, radius + 1.8)
+    roundRectPath(
+      c,
+      bodyX - 1.8,
+      bodyY - 1.2,
+      bodyW + 3.6,
+      bodyH + 2.4,
+      radius + 1.8,
+    )
     c.stroke()
   }
 
@@ -415,7 +434,14 @@ function getCarIcon(opts: CarIconOpts): HTMLCanvasElement | null {
   return cv
 }
 
-function roundRectPath(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function roundRectPath(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   const rr = Math.min(r, w / 2, h / 2)
   c.beginPath()
   c.moveTo(x + rr, y)
@@ -430,10 +456,12 @@ function roundRectPath(c: CanvasRenderingContext2D, x: number, y: number, w: num
   c.closePath()
 }
 
-
 function hslToken(prop: string, alpha?: number): string {
-  const raw = getComputedStyle(document.documentElement).getPropertyValue(prop).trim()
-  if (!raw) return alpha !== undefined ? `rgba(128,128,128,${alpha})` : '#808080'
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue(prop)
+    .trim()
+  if (!raw)
+    return alpha !== undefined ? `rgba(128,128,128,${alpha})` : '#808080'
   return alpha !== undefined ? `hsl(${raw} / ${alpha})` : `hsl(${raw})`
 }
 
@@ -489,22 +517,21 @@ function resolveCanvasColors() {
 type CanvasColors = ReturnType<typeof resolveCanvasColors>
 
 const PZ_LANDMARKS = [
-  { name: 'Muldraugh',      gx: 10630, gy:  9800 },
-  { name: 'West Point',     gx: 11900, gy:  6900 },
-  { name: 'Rosewood',       gx:  8090, gy: 11500 },
-  { name: 'Riverside',      gx:  6100, gy:  5400 },
-  { name: 'Louisville',     gx: 12700, gy:  1700 },
-  { name: 'March Ridge',    gx: 10100, gy: 12700 },
-  { name: 'Valley Station', gx: 13200, gy:  5300 },
-  { name: 'Fallas Lake',    gx:  7460, gy:  9050 },
-  { name: 'Ekron',          gx:   550, gy:  9750 },
-  { name: 'Brandenburg',    gx:  2100, gy:  6080 },
-  { name: 'Irvington',      gx:  2500, gy: 14250 },
-  { name: 'Echo Creek',     gx:  3520, gy: 10930 },
+  { name: 'Muldraugh', gx: 10630, gy: 9800 },
+  { name: 'West Point', gx: 11900, gy: 6900 },
+  { name: 'Rosewood', gx: 8090, gy: 11500 },
+  { name: 'Riverside', gx: 6100, gy: 5400 },
+  { name: 'Louisville', gx: 12700, gy: 1700 },
+  { name: 'March Ridge', gx: 10100, gy: 12700 },
+  { name: 'Valley Station', gx: 13200, gy: 5300 },
+  { name: 'Fallas Lake', gx: 7460, gy: 9050 },
+  { name: 'Ekron', gx: 550, gy: 9750 },
+  { name: 'Brandenburg', gx: 2100, gy: 6080 },
+  { name: 'Irvington', gx: 2500, gy: 14250 },
+  { name: 'Echo Creek', gx: 3520, gy: 10930 },
 ]
 
 export default function WorldMap() {
-  const { t } = useTranslation('worldMap')
   const { theme } = useTheme()
   const socket = useSocket()
   const { can } = useAuth()
@@ -544,13 +571,18 @@ export default function WorldMap() {
   const [bridgeLoading, setBridgeLoading] = useState(false)
   const [bridgeVersion, setBridgeVersion] = useState<string | null>(null)
   const bridgeVersionRef = useRef<string | null>(null)
-  useEffect(() => { bridgeVersionRef.current = bridgeVersion }, [bridgeVersion])
+  useEffect(() => {
+    bridgeVersionRef.current = bridgeVersion
+  }, [bridgeVersion])
   const [hasActiveServer, setHasActiveServer] = useState(false)
   const [loading, setLoading] = useState(true)
   const [hoveredPlayer, setHoveredPlayer] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, offX: 0, offY: 0 })
-  const [cursorWorldPos, setCursorWorldPos] = useState<{ x: number; y: number } | null>(null)
+  const [cursorWorldPos, setCursorWorldPos] = useState<{
+    x: number
+    y: number
+  } | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const actionLoadingRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
@@ -563,12 +595,20 @@ export default function WorldMap() {
   const [hoveredVehicle, setHoveredVehicle] = useState<number | null>(null)
   const vehiclesRef = useRef<MapVehicle[]>([])
   const safehousesRef = useRef<MapSafehouse[]>([])
-  const [spawnDialog, setSpawnDialog] = useState<{ x: number; y: number; z: number } | null>(null)
+  const [spawnDialog, setSpawnDialog] = useState<{
+    x: number
+    y: number
+    z: number
+  } | null>(null)
   const [spawnVehicleId, setSpawnVehicleId] = useState('')
-  const [dropDialog, setDropDialog] = useState<{ x: number; y: number; z: number } | null>(null)
-  const [dropItems, setDropItems] = useState<Array<{ itemType: string; count: number }>>([
-    { itemType: '', count: 1 },
-  ])
+  const [dropDialog, setDropDialog] = useState<{
+    x: number
+    y: number
+    z: number
+  } | null>(null)
+  const [dropItems, setDropItems] = useState<
+    Array<{ itemType: string; count: number }>
+  >([{ itemType: '', count: 1 }])
   const [dropAnnounce, setDropAnnounce] = useState(true)
   const [dropAttractZombies, setDropAttractZombies] = useState(true)
   const [dropSoundRadius, setDropSoundRadius] = useState(150)
@@ -593,7 +633,7 @@ export default function WorldMap() {
           t &&
           typeof t.id === 'string' &&
           typeof t.name === 'string' &&
-          Array.isArray(t.items)
+          Array.isArray(t.items),
       )
     } catch {
       return []
@@ -601,7 +641,12 @@ export default function WorldMap() {
   })
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null)
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null)
-  const [removeVehicleTarget, setRemoveVehicleTarget] = useState<{ id: number; label: string; x: number; y: number } | null>(null)
+  const [removeVehicleTarget, setRemoveVehicleTarget] = useState<{
+    id: number
+    label: string
+    x: number
+    y: number
+  } | null>(null)
   const [templateNameInput, setTemplateNameInput] = useState('')
   const [savingTemplate, setSavingTemplate] = useState(false)
   const persistDropTemplates = useCallback((next: DropTemplate[]) => {
@@ -617,10 +662,40 @@ export default function WorldMap() {
   const { toast } = useToast()
 
   const floorLabel = (f: number) =>
-    f === 0 ? t('floor.ground') : f > 0 ? t('floor.floorN', { n: f }) : t('floor.basementN', { n: Math.abs(f) })
+    f === 0
+      ? 'Ground'
+      : f > 0
+        ? 'Floor ' + String(f)
+        : 'B' + String(Math.abs(f))
 
-  const presetLabel = useCallback((id: string) => t(`airdropPresets.${id}.label`), [t])
-  const presetDesc = useCallback((id: string) => t(`airdropPresets.${id}.desc`), [t])
+  const presetLabel = useCallback(
+    (id: string) =>
+      (
+        ({
+          military: 'Military',
+          medical: 'Medical',
+          food: 'Food',
+          building: 'Building',
+          weapons: 'Weapons',
+          tools: 'Tools',
+        }) as Record<string, string>
+      )[String(id)] ?? String(id),
+    [],
+  )
+  const presetDesc = useCallback(
+    (id: string) =>
+      (
+        ({
+          military: 'Rifles, ammo, armor, comms',
+          medical: 'Bandages, antibiotics, first aid',
+          food: 'Canned food, water, MREs',
+          building: 'Planks, nails, tools, rope',
+          weapons: 'Shotguns, melee weapons, holsters',
+          tools: 'Axes, wrenches, blowtorch, tape',
+        }) as Record<string, string>
+      )[String(id)] ?? String(id),
+    [],
+  )
 
   const changeFloor = useCallback((newFloor: number) => {
     const clamped = Math.max(-1, Math.min(7, newFloor))
@@ -633,64 +708,73 @@ export default function WorldMap() {
     tileFailureCountRef.current = 0
     setTileLoadFailing(false)
     if (drawRequestRef.current === 0) {
-      drawRequestRef.current = requestAnimationFrame(() => { drawRequestRef.current = 0 })
+      drawRequestRef.current = requestAnimationFrame(() => {
+        drawRequestRef.current = 0
+      })
     }
   }, [])
 
-  const detectServerVersion = useCallback(async (cancelledRef: { current: boolean }) => {
-    try {
-      const [statusRes, serverRes] = await Promise.allSettled([
-        updateApi.getStatus(),
-        serversApi.getResolvedActive(),
-      ])
-      if (cancelledRef.current) return
+  const detectServerVersion = useCallback(
+    async (cancelledRef: { current: boolean }) => {
+      try {
+        const [statusRes, serverRes] = await Promise.allSettled([
+          updateApi.getStatus(),
+          serversApi.getResolvedActive(),
+        ])
+        if (cancelledRef.current) return
 
-      let isB41 = false
-      if (serverRes.status === 'fulfilled') {
-        setHasActiveServer(!!serverRes.value.server)
-      } else {
-        setHasActiveServer(false)
-      }
-      if (statusRes.status === 'fulfilled' && statusRes.value.gameVersion) {
-        isB41 = statusRes.value.gameVersion.startsWith('41.')
-      }
-      if (!isB41 && serverRes.status === 'fulfilled') {
-        const branch = serverRes.value.server?.branch
-        if (branch && /b41/i.test(branch)) isB41 = true
-      }
+        let isB41 = false
+        if (serverRes.status === 'fulfilled') {
+          setHasActiveServer(!!serverRes.value.server)
+        } else {
+          setHasActiveServer(false)
+        }
+        if (statusRes.status === 'fulfilled' && statusRes.value.gameVersion) {
+          isB41 = statusRes.value.gameVersion.startsWith('41.')
+        }
+        if (!isB41 && serverRes.status === 'fulfilled') {
+          const branch = serverRes.value.server?.branch
+          if (branch && /b41/i.test(branch)) isB41 = true
+        }
 
-      const targetCfg = isB41 ? MAP_B41 : b42ConfigFor(await mapApi.resolve())
-      if (cancelledRef.current) return
-      const cur = mapCfgRef.current
-      if (mapConfigsEqual(cur, targetCfg)) return
+        const targetCfg = isB41 ? MAP_B41 : b42ConfigFor(await mapApi.resolve())
+        if (cancelledRef.current) return
+        const cur = mapCfgRef.current
+        if (mapConfigsEqual(cur, targetCfg)) return
 
-      setMapCfg(targetCfg)
-      mapCfgRef.current = targetCfg
-      if (isB41) {
-        setFloor(0)
-        floorRef.current = 0
+        setMapCfg(targetCfg)
+        mapCfgRef.current = targetCfg
+        if (isB41) {
+          setFloor(0)
+          floorRef.current = 0
+        }
+        tileCacheRef.current = {}
+        tileFailRef.current = {}
+        tileFailureCountRef.current = 0
+        setTileLoadFailing(false)
+        const el = containerRef.current
+        if (el) {
+          const s = targetCfg.defaultScale
+          const c = targetCfg.defaultCenter
+          setScale(s)
+          setOffset({
+            x: el.clientWidth / 2 - c.x * s,
+            y: el.clientHeight / 2 - c.y * s,
+          })
+        }
+      } catch {
+        /* best-effort */
       }
-      tileCacheRef.current = {}
-      tileFailRef.current = {}
-      tileFailureCountRef.current = 0
-      setTileLoadFailing(false)
-      const el = containerRef.current
-      if (el) {
-        const s = targetCfg.defaultScale
-        const c = targetCfg.defaultCenter
-        setScale(s)
-        setOffset({
-          x: el.clientWidth / 2 - c.x * s,
-          y: el.clientHeight / 2 - c.y * s,
-        })
-      }
-    } catch { /* best-effort */ }
-  }, [])
+    },
+    [],
+  )
 
   useEffect(() => {
     const cancelledRef = { current: false }
     detectServerVersion(cancelledRef)
-    return () => { cancelledRef.current = true }
+    return () => {
+      cancelledRef.current = true
+    }
   }, [detectServerVersion])
 
   useEffect(() => {
@@ -724,14 +808,18 @@ export default function WorldMap() {
 
   useEffect(() => {
     mountedRef.current = true
-    return () => { mountedRef.current = false }
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
 
   const prefersReducedMotion = useRef(false)
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
     prefersReducedMotion.current = mq.matches
-    const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches }
+    const handler = (e: MediaQueryListEvent) => {
+      prefersReducedMotion.current = e.matches
+    }
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
@@ -742,212 +830,298 @@ export default function WorldMap() {
   offsetRef.current = offset
   const airdropMarkersRef = useRef(airdropMarkers)
   airdropMarkersRef.current = airdropMarkers
-  useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
-  useEffect(() => { safehousesRef.current = safehouses }, [safehouses])
+  useEffect(() => {
+    vehiclesRef.current = vehicles
+  }, [vehicles])
+  useEffect(() => {
+    safehousesRef.current = safehouses
+  }, [safehouses])
 
-  const tileCacheRef = useRef<Record<string, HTMLImageElement | null | 'empty'>>({})
+  const tileCacheRef = useRef<
+    Record<string, HTMLImageElement | null | 'empty'>
+  >({})
 
-  const mapSourceRef = useRef<{ root: string; b42Dir: string; b41Path: string } | null>(null)
+  const mapSourceRef = useRef<{
+    root: string
+    b42Dir: string
+    b41Path: string
+  } | null>(null)
   useEffect(() => {
     let cancelled = false
-    mapApi.resolve()
-      .then((info) => { if (!cancelled) mapSourceRef.current = info })
-      .catch(() => { /* direct loading just won't be attempted; proxy fallback still works */ })
-    return () => { cancelled = true }
+    mapApi
+      .resolve()
+      .then((info) => {
+        if (!cancelled) mapSourceRef.current = info
+      })
+      .catch(() => {
+        /* direct loading just won't be attempted; proxy fallback still works */
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  const buildDirectTileUrl = useCallback((level: number, col: number, row: number, floor: number, ext: string) => {
-    const src = mapSourceRef.current
-    if (!src) return null
-    if (mapCfgRef.current === MAP_B41) {
-      return `${src.root}/${src.b41Path}/${level}/${col}_${row}.${ext}`
-    }
-    return `${src.root}/${src.b42Dir}/base/layer${floor}_files/${level}/${col}_${row}.${ext}`
-  }, [])
+  const buildDirectTileUrl = useCallback(
+    (level: number, col: number, row: number, floor: number, ext: string) => {
+      const src = mapSourceRef.current
+      if (!src) return null
+      if (mapCfgRef.current === MAP_B41) {
+        return `${src.root}/${src.b41Path}/${level}/${col}_${row}.${ext}`
+      }
+      return `${src.root}/${src.b42Dir}/base/layer${floor}_files/${level}/${col}_${row}.${ext}`
+    },
+    [],
+  )
 
   const pendingTileLoadsRef = useRef(0)
   const MAX_CONCURRENT_TILES = 8
 
-  const tileFailRef = useRef<Record<string, { count: number; nextAt: number }>>({})
+  const tileFailRef = useRef<Record<string, { count: number; nextAt: number }>>(
+    {},
+  )
   const tileFailureCountRef = useRef(0)
   const [tileLoadFailing, setTileLoadFailing] = useState(false)
-  const [tileFailureKind, setTileFailureKind] = useState<'network' | 'coverage'>('network')
+  const [tileFailureKind, setTileFailureKind] = useState<
+    'network' | 'coverage'
+  >('network')
   const tileCoverageFailRef = useRef(0)
-  const [tileByteDiagnosis, setTileByteDiagnosis] = useState<TileFailureDiagnosis | null>(null)
-  const [tileFailureDetail, setTileFailureDetail] = useState<string | null>(null)
+  const [tileByteDiagnosis, setTileByteDiagnosis] =
+    useState<TileFailureDiagnosis | null>(null)
+  const [tileFailureDetail, setTileFailureDetail] = useState<string | null>(
+    null,
+  )
 
-  const loadDziTile = useCallback((level: number, col: number, row: number) => {
-    const f = floorRef.current
-    const key = `${f}/${level}/${col}_${row}`
-    if (key in tileCacheRef.current) return
-    if (pendingTileLoadsRef.current >= MAX_CONCURRENT_TILES) return
-    const fail = tileFailRef.current[key]
-    if (fail && Date.now() < fail.nextAt) return
-    tileCacheRef.current[key] = null
-    pendingTileLoadsRef.current++
+  const loadDziTile = useCallback(
+    (level: number, col: number, row: number) => {
+      const f = floorRef.current
+      const key = `${f}/${level}/${col}_${row}`
+      if (key in tileCacheRef.current) return
+      if (pendingTileLoadsRef.current >= MAX_CONCURRENT_TILES) return
+      const fail = tileFailRef.current[key]
+      if (fail && Date.now() < fail.nextAt) return
+      tileCacheRef.current[key] = null
+      pendingTileLoadsRef.current++
 
-    const markFailed = (
-      reason: 'network' | 'coverage' = 'network',
-      detail: string = 'no-header',
-      diagnosis: TileFailureDiagnosis | null = null,
-    ) => {
-      if (floorRef.current !== f) return
-      delete tileCacheRef.current[key]
-      const prev = tileFailRef.current[key]
-      const count = (prev?.count ?? 0) + 1
-      const delay = TILE_RETRY_MS[Math.min(count - 1, TILE_RETRY_MS.length - 1)]
-      tileFailRef.current[key] = { count, nextAt: Date.now() + delay }
-      if (count === 1) {
-        setTileFailureDetail(detail)
-        setTileByteDiagnosis(diagnosis)
-        tileFailureCountRef.current++
-        if (reason === 'coverage') tileCoverageFailRef.current++
-        if (tileFailureCountRef.current >= 6) {
-          setTileFailureKind(
-            tileCoverageFailRef.current * 2 >= tileFailureCountRef.current
-              ? 'coverage'
-              : 'network',
-          )
-          setTileLoadFailing(true)
-        }
-      }
-    }
-
-    const markRecovered = () => {
-      if (tileFailRef.current[key]) {
-        delete tileFailRef.current[key]
-        if (tileFailureCountRef.current > 0) {
-          tileFailureCountRef.current = Math.max(0, tileFailureCountRef.current - 1)
-          if (tileFailureCountRef.current === 0) {
-            tileCoverageFailRef.current = 0
-            setTileLoadFailing(false)
-            setTileFailureDetail(null)
-            setTileByteDiagnosis(null)
+      const markFailed = (
+        reason: 'network' | 'coverage' = 'network',
+        detail: string = 'no-header',
+        diagnosis: TileFailureDiagnosis | null = null,
+      ) => {
+        if (floorRef.current !== f) return
+        delete tileCacheRef.current[key]
+        const prev = tileFailRef.current[key]
+        const count = (prev?.count ?? 0) + 1
+        const delay =
+          TILE_RETRY_MS[Math.min(count - 1, TILE_RETRY_MS.length - 1)]
+        tileFailRef.current[key] = { count, nextAt: Date.now() + delay }
+        if (count === 1) {
+          setTileFailureDetail(detail)
+          setTileByteDiagnosis(diagnosis)
+          tileFailureCountRef.current++
+          if (reason === 'coverage') tileCoverageFailRef.current++
+          if (tileFailureCountRef.current >= 6) {
+            setTileFailureKind(
+              tileCoverageFailRef.current * 2 >= tileFailureCountRef.current
+                ? 'coverage'
+                : 'network',
+            )
+            setTileLoadFailing(true)
           }
         }
       }
-    }
 
-    const ext = 'jpg'
-    const isB41 = mapCfgRef.current === MAP_B41
-    const versionDir = !isB41 ? (mapSourceRef.current?.b42Dir ?? null) : null
-    const proxyUrl = `${mapCfgRef.current.tileUrl}/${level}/${col}_${row}.${ext}${buildTileQuery(f, versionDir)}`
-
-    const loadViaProxy = () => {
-      let upstreamParticipated = false
-      let cacheTierRaw: string | null = null
-      let contentLengthHeader: string | null = null
-      fetch(proxyUrl)
-        .then((res) => {
-          cacheTierRaw = res.headers.get('X-Tile-Cache')
-          contentLengthHeader = res.headers.get('Content-Length')
-          upstreamParticipated = cacheTierRaw === 'miss'
-          if (floorRef.current !== f) { pendingTileLoadsRef.current--; return null }
-          if (res.status === 404) {
-            pendingTileLoadsRef.current--
-            tileCacheRef.current[key] = 'empty'
-            markRecovered()
-            return null
-          }
-          if (!res.ok) {
-            const err = new Error(`HTTP ${res.status}`) as Error & { status?: number }
-            err.status = res.status
-            throw err
-          }
-          return res.blob()
-        })
-        .then((blob) => {
-          if (!blob) return
-          if (floorRef.current !== f) { pendingTileLoadsRef.current--; return }
-          const objectUrl = URL.createObjectURL(blob)
-          const img = new window.Image()
-          img.onload = () => {
-            URL.revokeObjectURL(objectUrl)
-            pendingTileLoadsRef.current--
-            if (floorRef.current !== f) return
-            tileCacheRef.current[key] = img
-            markRecovered()
-            if (drawRequestRef.current === 0) {
-              drawRequestRef.current = requestAnimationFrame(() => { drawRequestRef.current = 0 })
+      const markRecovered = () => {
+        if (tileFailRef.current[key]) {
+          delete tileFailRef.current[key]
+          if (tileFailureCountRef.current > 0) {
+            tileFailureCountRef.current = Math.max(
+              0,
+              tileFailureCountRef.current - 1,
+            )
+            if (tileFailureCountRef.current === 0) {
+              tileCoverageFailRef.current = 0
+              setTileLoadFailing(false)
+              setTileFailureDetail(null)
+              setTileByteDiagnosis(null)
             }
           }
-          img.onerror = () => {
-            URL.revokeObjectURL(objectUrl)
-            pendingTileLoadsRef.current--
-            blob.slice(0, 4).arrayBuffer()
-              .then((buf) => {
-                const diagnosis = diagnoseTileFailure(new Uint8Array(buf), blob.size, contentLengthHeader)
-                markFailed(upstreamParticipated ? 'coverage' : 'network', cacheTierRaw ?? 'no-header', diagnosis)
-              })
-              .catch(() => {
-                markFailed(upstreamParticipated ? 'coverage' : 'network', cacheTierRaw ?? 'no-header')
-              })
-          }
-          img.src = objectUrl
-        })
-        .catch((err) => {
-          pendingTileLoadsRef.current--
-          const status = (err as { status?: number } | undefined)?.status
-          markFailed(
-            upstreamParticipated && status && status >= 400 && status < 500 ? 'coverage' : 'network',
-            cacheTierRaw ?? (status ? `http-${status}` : 'unreachable'),
-          )
-        })
-    }
-
-    const directUrl = buildDirectTileUrl(level, col, row, f, ext)
-    if (!directUrl) {
-      loadViaProxy()
-      return
-    }
-
-    const directImg = new window.Image()
-    directImg.onload = () => {
-      if (floorRef.current !== f) { pendingTileLoadsRef.current--; return }
-      tileCacheRef.current[key] = directImg
-      markRecovered()
-      pendingTileLoadsRef.current--
-      if (drawRequestRef.current === 0) {
-        drawRequestRef.current = requestAnimationFrame(() => { drawRequestRef.current = 0 })
+        }
       }
-    }
-    directImg.onerror = () => {
-      if (floorRef.current !== f) { pendingTileLoadsRef.current--; return }
-      loadViaProxy()
-    }
-    directImg.src = directUrl
-  }, [buildDirectTileUrl])
 
-  const drawTileWithFallback = useCallback((
-    ctx: CanvasRenderingContext2D,
-    floor: number,
-    level: number,
-    col: number,
-    row: number,
-    dx: number,
-    dy: number,
-    dw: number,
-    dh: number,
-  ) => {
-    const fallback = resolveFallbackTile(
-      level,
-      col,
-      row,
-      (l, c, r) => tileCacheRef.current[`${floor}/${l}/${c}_${r}`],
-      (l, c, r) => loadDziTile(l, c, r),
-      MAX_FALLBACK_LEVELS,
-    )
-    if (!fallback) return false
-    ctx.drawImage(fallback.img, fallback.srcX, fallback.srcY, fallback.srcW, fallback.srcH, dx, dy, dw, dh)
-    return true
-  }, [loadDziTile])
+      const ext = 'jpg'
+      const isB41 = mapCfgRef.current === MAP_B41
+      const versionDir = !isB41 ? (mapSourceRef.current?.b42Dir ?? null) : null
+      const proxyUrl = `${mapCfgRef.current.tileUrl}/${level}/${col}_${row}.${ext}${buildTileQuery(f, versionDir)}`
+
+      const loadViaProxy = () => {
+        let upstreamParticipated = false
+        let cacheTierRaw: string | null = null
+        let contentLengthHeader: string | null = null
+        fetch(proxyUrl)
+          .then((res) => {
+            cacheTierRaw = res.headers.get('X-Tile-Cache')
+            contentLengthHeader = res.headers.get('Content-Length')
+            upstreamParticipated = cacheTierRaw === 'miss'
+            if (floorRef.current !== f) {
+              pendingTileLoadsRef.current--
+              return null
+            }
+            if (res.status === 404) {
+              pendingTileLoadsRef.current--
+              tileCacheRef.current[key] = 'empty'
+              markRecovered()
+              return null
+            }
+            if (!res.ok) {
+              const err = new Error(`HTTP ${res.status}`) as Error & {
+                status?: number
+              }
+              err.status = res.status
+              throw err
+            }
+            return res.blob()
+          })
+          .then((blob) => {
+            if (!blob) return
+            if (floorRef.current !== f) {
+              pendingTileLoadsRef.current--
+              return
+            }
+            const objectUrl = URL.createObjectURL(blob)
+            const img = new window.Image()
+            img.onload = () => {
+              URL.revokeObjectURL(objectUrl)
+              pendingTileLoadsRef.current--
+              if (floorRef.current !== f) return
+              tileCacheRef.current[key] = img
+              markRecovered()
+              if (drawRequestRef.current === 0) {
+                drawRequestRef.current = requestAnimationFrame(() => {
+                  drawRequestRef.current = 0
+                })
+              }
+            }
+            img.onerror = () => {
+              URL.revokeObjectURL(objectUrl)
+              pendingTileLoadsRef.current--
+              blob
+                .slice(0, 4)
+                .arrayBuffer()
+                .then((buf) => {
+                  const diagnosis = diagnoseTileFailure(
+                    new Uint8Array(buf),
+                    blob.size,
+                    contentLengthHeader,
+                  )
+                  markFailed(
+                    upstreamParticipated ? 'coverage' : 'network',
+                    cacheTierRaw ?? 'no-header',
+                    diagnosis,
+                  )
+                })
+                .catch(() => {
+                  markFailed(
+                    upstreamParticipated ? 'coverage' : 'network',
+                    cacheTierRaw ?? 'no-header',
+                  )
+                })
+            }
+            img.src = objectUrl
+          })
+          .catch((err) => {
+            pendingTileLoadsRef.current--
+            const status = (err as { status?: number } | undefined)?.status
+            markFailed(
+              upstreamParticipated && status && status >= 400 && status < 500
+                ? 'coverage'
+                : 'network',
+              cacheTierRaw ?? (status ? `http-${status}` : 'unreachable'),
+            )
+          })
+      }
+
+      const directUrl = buildDirectTileUrl(level, col, row, f, ext)
+      if (!directUrl) {
+        loadViaProxy()
+        return
+      }
+
+      const directImg = new window.Image()
+      directImg.onload = () => {
+        if (floorRef.current !== f) {
+          pendingTileLoadsRef.current--
+          return
+        }
+        tileCacheRef.current[key] = directImg
+        markRecovered()
+        pendingTileLoadsRef.current--
+        if (drawRequestRef.current === 0) {
+          drawRequestRef.current = requestAnimationFrame(() => {
+            drawRequestRef.current = 0
+          })
+        }
+      }
+      directImg.onerror = () => {
+        if (floorRef.current !== f) {
+          pendingTileLoadsRef.current--
+          return
+        }
+        loadViaProxy()
+      }
+      directImg.src = directUrl
+    },
+    [buildDirectTileUrl],
+  )
+
+  const drawTileWithFallback = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      floor: number,
+      level: number,
+      col: number,
+      row: number,
+      dx: number,
+      dy: number,
+      dw: number,
+      dh: number,
+    ) => {
+      const fallback = resolveFallbackTile(
+        level,
+        col,
+        row,
+        (l, c, r) => tileCacheRef.current[`${floor}/${l}/${c}_${r}`],
+        (l, c, r) => loadDziTile(l, c, r),
+        MAX_FALLBACK_LEVELS,
+      )
+      if (!fallback) return false
+      ctx.drawImage(
+        fallback.img,
+        fallback.srcX,
+        fallback.srcY,
+        fallback.srcW,
+        fallback.srcH,
+        dx,
+        dy,
+        dw,
+        dh,
+      )
+      return true
+    },
+    [loadDziTile],
+  )
 
   const dziToCanvas = useCallback(
-    (dziX: number, dziY: number, s?: number, off?: { x: number; y: number }) => {
+    (
+      dziX: number,
+      dziY: number,
+      s?: number,
+      off?: { x: number; y: number },
+    ) => {
       const sc = s ?? scaleRef.current
       const o = off ?? offsetRef.current
       return { x: dziX * sc + o.x, y: dziY * sc + o.y }
-    }, []
+    },
+    [],
   )
 
   const canvasToDzi = useCallback(
@@ -955,27 +1129,38 @@ export default function WorldMap() {
       const sc = s ?? scaleRef.current
       const o = off ?? offsetRef.current
       return { x: (cx - o.x) / sc, y: (cy - o.y) / sc }
-    }, []
+    },
+    [],
   )
 
   const playerToScreen = useCallback(
     (gx: number, gy: number, s?: number, off?: { x: number; y: number }) => {
       const dzi = gameTileToDzi(gx, gy, mapCfgRef.current)
       return dziToCanvas(dzi.x, dzi.y, s, off)
-    }, [dziToCanvas]
+    },
+    [dziToCanvas],
   )
 
   const playerRenderPosition = useCallback(
     (player: MapPlayer, s?: number, off?: { x: number; y: number }) => {
       let drawX = player.x
       let drawY = player.y
-      if (!prefersReducedMotion.current && player.animProgress !== undefined && player.animProgress < 1) {
+      if (
+        !prefersReducedMotion.current &&
+        player.animProgress !== undefined &&
+        player.animProgress < 1
+      ) {
         const progress = easeOutCubic(Math.min(1, player.animProgress))
-        drawX = (player.prevX ?? player.x) + (player.x - (player.prevX ?? player.x)) * progress
-        drawY = (player.prevY ?? player.y) + (player.y - (player.prevY ?? player.y)) * progress
+        drawX =
+          (player.prevX ?? player.x) +
+          (player.x - (player.prevX ?? player.x)) * progress
+        drawY =
+          (player.prevY ?? player.y) +
+          (player.y - (player.prevY ?? player.y)) * progress
       }
       return playerToScreen(drawX, drawY, s, off)
-    }, [playerToScreen]
+    },
+    [playerToScreen],
   )
 
   const playerAtScreenPoint = useCallback(
@@ -993,14 +1178,16 @@ export default function WorldMap() {
         }
       }
       return closest
-    }, [playerRenderPosition]
+    },
+    [playerRenderPosition],
   )
 
   const screenToTile = useCallback(
     (cx: number, cy: number, s?: number, off?: { x: number; y: number }) => {
       const dzi = canvasToDzi(cx, cy, s, off)
       return dziToGameTile(dzi.x, dzi.y, mapCfgRef.current)
-    }, [canvasToDzi]
+    },
+    [canvasToDzi],
   )
 
   const fetchPlayerPositions = useCallback(async () => {
@@ -1014,26 +1201,37 @@ export default function WorldMap() {
 
     try {
       const res = await panelBridgeApi.getServerInfo()
-      const rawPlayers = res.success && res.data?.players
-        ? (Array.isArray(res.data.players) ? res.data.players : Object.values(res.data.players))
-        : null
+      const rawPlayers =
+        res.success && res.data?.players
+          ? Array.isArray(res.data.players)
+            ? res.data.players
+            : Object.values(res.data.players)
+          : null
       if (rawPlayers) {
         setBridgeConnected(true)
-        const statusFieldsSupported = bridgeSupportsPlayerStatus(bridgeVersionRef.current)
+        const statusFieldsSupported = bridgeSupportsPlayerStatus(
+          bridgeVersionRef.current,
+        )
         setPlayers((prev) => {
-          const prevMap = new globalThis.Map(prev.map((p) => [p.username || p.displayName, p]))
+          const prevMap = new globalThis.Map(
+            prev.map((p) => [p.username || p.displayName, p]),
+          )
           return rawPlayers.map((p: RawBridgePlayer) => {
             const key = (p.name || p.username) as string
             const old = prevMap.get(key)
             return {
               username: key,
               displayName: p.displayName || key,
-              x: p.x, y: p.y, z: p.z ?? 0,
+              x: p.x,
+              y: p.y,
+              z: p.z ?? 0,
               health: p.health,
               isAlive: statusFieldsSupported ? p.isAlive : undefined,
               isInfected: statusFieldsSupported ? p.isInfected : undefined,
               accessLevel: statusFieldsSupported ? p.accessLevel : undefined,
-              hunger: p.hunger, thirst: p.thirst, fatigue: p.fatigue,
+              hunger: p.hunger,
+              thirst: p.thirst,
+              fatigue: p.fatigue,
               prevX: old ? old.x : p.x,
               prevY: old ? old.y : p.y,
               animProgress: old && (old.x !== p.x || old.y !== p.y) ? 0 : 1,
@@ -1075,7 +1273,9 @@ export default function WorldMap() {
     if (!overlayFetchGateRef.current.enter()) return
     try {
       const [vRes, persistedRes, sRes] = await Promise.allSettled([
-        showVehicles ? panelBridgeApi.sendCommand('getVehiclesDetailed') : Promise.resolve(null),
+        showVehicles
+          ? panelBridgeApi.sendCommand('getVehiclesDetailed')
+          : Promise.resolve(null),
         showVehicles ? mapApi.vehicles() : Promise.resolve(null),
         panelBridgeApi.sendCommand('getSafehouses'),
       ])
@@ -1084,28 +1284,64 @@ export default function WorldMap() {
         const vehicleById = new Map<number, MapVehicle>()
         if (persistedRes.status === 'fulfilled' && persistedRes.value) {
           for (const vehicle of persistedRes.value.vehicles) {
-            if (Number.isFinite(vehicle.id) && Number.isFinite(vehicle.x) && Number.isFinite(vehicle.y)) {
+            if (
+              Number.isFinite(vehicle.id) &&
+              Number.isFinite(vehicle.x) &&
+              Number.isFinite(vehicle.y)
+            ) {
               vehicleById.set(vehicle.id, { ...vehicle, persisted: true })
             }
           }
         }
-        if (vRes.status === 'fulfilled' && vRes.value && vRes.value.success && vRes.value.data) {
+        if (
+          vRes.status === 'fulfilled' &&
+          vRes.value &&
+          vRes.value.success &&
+          vRes.value.data
+        ) {
           const vData = vRes.value.data as Record<string, unknown>
-          const vList = Array.isArray(vData) ? vData : Array.isArray(vData.vehicles) ? vData.vehicles : []
+          const vList = Array.isArray(vData)
+            ? vData
+            : Array.isArray(vData.vehicles)
+              ? vData.vehicles
+              : []
           for (const vehicle of vList as MapVehicle[]) {
-            if (typeof vehicle.id === 'number' && typeof vehicle.x === 'number' && typeof vehicle.y === 'number' && isFinite(vehicle.x) && isFinite(vehicle.y)) {
+            if (
+              typeof vehicle.id === 'number' &&
+              typeof vehicle.x === 'number' &&
+              typeof vehicle.y === 'number' &&
+              isFinite(vehicle.x) &&
+              isFinite(vehicle.y)
+            ) {
               vehicleById.set(vehicle.id, vehicle)
             }
           }
         }
         setVehicles([...vehicleById.values()])
       }
-      if (sRes.status === 'fulfilled' && sRes.value.success && sRes.value.data) {
+      if (
+        sRes.status === 'fulfilled' &&
+        sRes.value.success &&
+        sRes.value.data
+      ) {
         const sData = sRes.value.data as Record<string, unknown>
-        const sList = Array.isArray(sData) ? sData : Array.isArray(sData.safehouses) ? sData.safehouses : []
-        setSafehouses((sList as MapSafehouse[]).filter(s => typeof s.x === 'number' && typeof s.y === 'number' && isFinite(s.x) && isFinite(s.y)))
+        const sList = Array.isArray(sData)
+          ? sData
+          : Array.isArray(sData.safehouses)
+            ? sData.safehouses
+            : []
+        setSafehouses(
+          (sList as MapSafehouse[]).filter(
+            (s) =>
+              typeof s.x === 'number' &&
+              typeof s.y === 'number' &&
+              isFinite(s.x) &&
+              isFinite(s.y),
+          ),
+        )
       }
-    } catch { /* best-effort */
+    } catch {
+      /* best-effort */
     } finally {
       overlayFetchGateRef.current.leave()
     }
@@ -1133,8 +1369,9 @@ export default function WorldMap() {
     return () => clearInterval(interval)
   }, [fetchPlayerPositions, hasActiveServer])
 
-  useEffect(() => { playersRef.current = players }, [players])
-
+  useEffect(() => {
+    playersRef.current = players
+  }, [players])
 
   useEffect(() => {
     canvasColorsRef.current = resolveCanvasColors()
@@ -1166,7 +1403,10 @@ export default function WorldMap() {
     ctx.fillRect(0, 0, W, H)
 
     const mc = mapCfgRef.current
-    const level = Math.max(0, Math.min(mc.renderedMaxLevel, Math.round(mc.maxLevel + Math.log2(s))))
+    const level = Math.max(
+      0,
+      Math.min(mc.renderedMaxLevel, Math.round(mc.maxLevel + Math.log2(s))),
+    )
     const levelScale = Math.pow(2, mc.maxLevel - level)
     const levelW = Math.ceil(mc.fullWidth / levelScale)
     const levelH = Math.ceil(mc.fullHeight / levelScale)
@@ -1178,16 +1418,23 @@ export default function WorldMap() {
 
     const tileSize = mc.tileSize
     const minCol = Math.max(0, Math.floor(visMinDziX / levelScale / tileSize))
-    const maxCol = Math.min(Math.ceil(levelW / tileSize) - 1, Math.floor(visMaxDziX / levelScale / tileSize))
+    const maxCol = Math.min(
+      Math.ceil(levelW / tileSize) - 1,
+      Math.floor(visMaxDziX / levelScale / tileSize),
+    )
     const minRow = Math.max(0, Math.floor(visMinDziY / levelScale / tileSize))
-    const maxRow = Math.min(Math.ceil(levelH / tileSize) - 1, Math.floor(visMaxDziY / levelScale / tileSize))
+    const maxRow = Math.min(
+      Math.ceil(levelH / tileSize) - 1,
+      Math.floor(visMaxDziY / levelScale / tileSize),
+    )
 
     ctx.save()
     ctx.globalAlpha = 0.9
     for (let row = minRow; row <= maxRow; row++) {
       for (let col = minCol; col <= maxCol; col++) {
         loadDziTile(level, col, row)
-        const img = tileCacheRef.current[`${floorRef.current}/${level}/${col}_${row}`]
+        const img =
+          tileCacheRef.current[`${floorRef.current}/${level}/${col}_${row}`]
         const dx = Math.floor(col * tileSize * levelScale * s + off.x)
         const dy = Math.floor(row * tileSize * levelScale * s + off.y)
         if (img && img !== 'empty') {
@@ -1197,7 +1444,17 @@ export default function WorldMap() {
         } else {
           const dw = Math.ceil(tileSize * levelScale * s) + 1
           const dh = Math.ceil(tileSize * levelScale * s) + 1
-          drawTileWithFallback(ctx, floorRef.current, level, col, row, dx, dy, dw, dh)
+          drawTileWithFallback(
+            ctx,
+            floorRef.current,
+            level,
+            col,
+            row,
+            dx,
+            dy,
+            dw,
+            dh,
+          )
         }
       }
     }
@@ -1253,7 +1510,8 @@ export default function WorldMap() {
         const maxPx = Math.max(...allX)
         const minPy = Math.min(...allY)
         const maxPy = Math.max(...allY)
-        if (maxPx < -50 || minPx > W + 50 || maxPy < -50 || minPy > H + 50) continue
+        if (maxPx < -50 || minPx > W + 50 || maxPy < -50 || minPy > H + 50)
+          continue
 
         ctx.beginPath()
         ctx.moveTo(topLeft.x, topLeft.y)
@@ -1263,7 +1521,9 @@ export default function WorldMap() {
         ctx.closePath()
         ctx.fillStyle = C.safehouseFill
         ctx.fill()
-        ctx.strokeStyle = sh.playerConnected ? C.safehouseStrokeActive : C.safehouseStroke
+        ctx.strokeStyle = sh.playerConnected
+          ? C.safehouseStrokeActive
+          : C.safehouseStroke
         ctx.lineWidth = sh.playerConnected ? 2 : 1
         ctx.stroke()
 
@@ -1274,7 +1534,7 @@ export default function WorldMap() {
           ctx.font = `600 ${shFontSize}px ui-sans-serif, system-ui, sans-serif`
           ctx.textAlign = 'center'
           ctx.fillStyle = C.safehouseLabel
-          const displayName = sh.title || sh.owner || t('safehouseFallback')
+          const displayName = sh.title || sh.owner || 'Safehouse'
           ctx.fillText(displayName, centerX, centerY - 2)
           if (sh.owner && sh.owner !== displayName) {
             ctx.font = `400 ${shFontSize * 0.85}px ui-sans-serif, system-ui, sans-serif`
@@ -1297,13 +1557,14 @@ export default function WorldMap() {
         const drawSize = isHovered ? vSize * 1.2 : vSize
         const half = drawSize / 2
 
-        const vColor = vehicle.fuelPct == null
-          ? C.vehicleMarker
-          : vehicle.fuelPct > 30
+        const vColor =
+          vehicle.fuelPct == null
             ? C.vehicleMarker
-            : vehicle.fuelPct > 10
-              ? C.vehicleFuelWarn
-              : C.vehicleFuelCrit
+            : vehicle.fuelPct > 30
+              ? C.vehicleMarker
+              : vehicle.fuelPct > 10
+                ? C.vehicleFuelWarn
+                : C.vehicleFuelCrit
         const color = isHovered ? C.vehicleMarkerHover : vColor
 
         if (isHovered) {
@@ -1316,7 +1577,8 @@ export default function WorldMap() {
         if (vehicle.sirening && !prefersReducedMotion.current) {
           const sirenPhase = (now / 450) % 1
           const sirenR = half + 8 + sirenPhase * 6
-          const sirenColor = sirenPhase < 0.5 ? 'hsl(210 95% 60%)' : 'hsl(0 85% 60%)'
+          const sirenColor =
+            sirenPhase < 0.5 ? 'hsl(210 95% 60%)' : 'hsl(0 85% 60%)'
           ctx.beginPath()
           ctx.arc(vp.x, vp.y, sirenR, 0, Math.PI * 2)
           ctx.strokeStyle = sirenColor
@@ -1362,7 +1624,8 @@ export default function WorldMap() {
           ctx.font = `500 ${vFontSize}px ui-sans-serif, system-ui, sans-serif`
           ctx.textAlign = 'center'
           ctx.fillStyle = C.vehicleLabel
-          const shortName = vehicle.type || vehicle.scriptName?.split('.').pop() || t('vehicleFallback')
+          const shortName =
+            vehicle.type || vehicle.scriptName?.split('.').pop() || 'Vehicle'
           ctx.fillText(shortName, vp.x, vp.y - half - 4)
         }
       }
@@ -1377,7 +1640,11 @@ export default function WorldMap() {
 
       const isHovered = hoveredPlayer === player.username
       const isSelected = selectedPlayer?.username === player.username
-      const isAdmin = player.accessLevel && player.accessLevel !== '' && player.accessLevel !== 'none' && player.accessLevel !== 'user'
+      const isAdmin =
+        player.accessLevel &&
+        player.accessLevel !== '' &&
+        player.accessLevel !== 'none' &&
+        player.accessLevel !== 'user'
       const isDead = player.isAlive === false
       const isInfected = !!player.isInfected && !isDead
       const pinScale = isHovered || isSelected ? 1.2 : 1
@@ -1443,7 +1710,9 @@ export default function WorldMap() {
       }
 
       if (isInfected) {
-        const wobble = prefersReducedMotion.current ? 0 : Math.sin(now / 400) * 0.6
+        const wobble = prefersReducedMotion.current
+          ? 0
+          : Math.sin(now / 400) * 0.6
         ctx.save()
         ctx.setLineDash([2.5, 2.5])
         ctx.beginPath()
@@ -1502,9 +1771,11 @@ export default function WorldMap() {
         ctx.fill()
 
         ctx.fillStyle =
-          healthPct > 0.5 ? C.healthGood :
-          healthPct > 0.25 ? C.healthWarning :
-          C.healthCritical
+          healthPct > 0.5
+            ? C.healthGood
+            : healthPct > 0.25
+              ? C.healthWarning
+              : C.healthCritical
         ctx.beginPath()
         ctx.roundRect(barX, barY, barW * healthPct, barH, 1.5)
         ctx.fill()
@@ -1530,7 +1801,7 @@ export default function WorldMap() {
       const dropSize = Math.max(6, Math.min(16, s * 2000))
 
       if (age < 30_000 && !prefersReducedMotion.current) {
-        const pulse = ((now / 800) % 1)
+        const pulse = (now / 800) % 1
         const ringR = dropSize + 8 + pulse * 14
         ctx.beginPath()
         ctx.arc(ap.x, ap.y, ringR, 0, Math.PI * 2)
@@ -1542,7 +1813,15 @@ export default function WorldMap() {
       ctx.save()
       ctx.globalAlpha = fadeAlpha * 0.25
       ctx.beginPath()
-      ctx.ellipse(ap.x, ap.y + dropSize * 1.1, dropSize * 1.2, dropSize * 0.3, 0, 0, Math.PI * 2)
+      ctx.ellipse(
+        ap.x,
+        ap.y + dropSize * 1.1,
+        dropSize * 1.2,
+        dropSize * 0.3,
+        0,
+        0,
+        Math.PI * 2,
+      )
       ctx.fillStyle = C.shadowOpaque
       ctx.fill()
       ctx.restore()
@@ -1587,14 +1866,24 @@ export default function WorldMap() {
 
       ctx.beginPath()
       ctx.moveTo(ap.x - canopyW, canopyY)
-      ctx.quadraticCurveTo(ap.x, canopyY - dropSize * 1.2, ap.x + canopyW, canopyY)
+      ctx.quadraticCurveTo(
+        ap.x,
+        canopyY - dropSize * 1.2,
+        ap.x + canopyW,
+        canopyY,
+      )
       ctx.strokeStyle = hslToken('--warning', 0.85 * fadeAlpha)
       ctx.lineWidth = 2.5
       ctx.stroke()
 
       ctx.beginPath()
       ctx.moveTo(ap.x - canopyW, canopyY)
-      ctx.quadraticCurveTo(ap.x, canopyY - dropSize * 1.2, ap.x + canopyW, canopyY)
+      ctx.quadraticCurveTo(
+        ap.x,
+        canopyY - dropSize * 1.2,
+        ap.x + canopyW,
+        canopyY,
+      )
       ctx.lineTo(ap.x - canopyW, canopyY)
       ctx.closePath()
       ctx.fillStyle = hslToken('--warning', 0.12 * fadeAlpha)
@@ -1619,25 +1908,20 @@ export default function WorldMap() {
 
     if (currentPlayers.length === 0) {
       const railClearance = 72
-      const rtl = isRTL(getCurrentLanguage())
       ctx.textAlign = 'center'
 
       ctx.fillStyle = C.emptyTitle
       ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif'
-      const title = t('emptyState.title')
+      const title = 'No players on the map'
       const titleHalfWidth = ctx.measureText(title).width / 2
-      const titleX = rtl
-        ? Math.min(W / 2, W - railClearance - titleHalfWidth)
-        : Math.max(W / 2, railClearance + titleHalfWidth)
+      const titleX = Math.max(W / 2, railClearance + titleHalfWidth)
       ctx.fillText(title, titleX, H / 2 - 8)
 
       ctx.font = '400 11px ui-sans-serif, system-ui, sans-serif'
       ctx.fillStyle = C.emptySubtitle
-      const subtitle = t('emptyState.subtitle')
+      const subtitle = 'Player positions appear when PanelBridge is connected'
       const subtitleHalfWidth = ctx.measureText(subtitle).width / 2
-      const subtitleX = rtl
-        ? Math.min(W / 2, W - railClearance - subtitleHalfWidth)
-        : Math.max(W / 2, railClearance + subtitleHalfWidth)
+      const subtitleX = Math.max(W / 2, railClearance + subtitleHalfWidth)
       ctx.fillText(subtitle, subtitleX, H / 2 + 10)
     }
 
@@ -1654,7 +1938,21 @@ export default function WorldMap() {
       ctx.stroke()
       ctx.setLineDash([])
     }
-  }, [canvasSize, loadDziTile, drawTileWithFallback, playerToScreen, playerRenderPosition, hoveredPlayer, selectedPlayer, cursorWorldPos, isDragging, showVehicles, showSafehouses, hoveredVehicle, t, presetLabel])
+  }, [
+    canvasSize,
+    loadDziTile,
+    drawTileWithFallback,
+    playerToScreen,
+    playerRenderPosition,
+    hoveredPlayer,
+    selectedPlayer,
+    cursorWorldPos,
+    isDragging,
+    showVehicles,
+    showSafehouses,
+    hoveredVehicle,
+    presetLabel,
+  ])
 
   useEffect(() => {
     let running = true
@@ -1693,7 +1991,10 @@ export default function WorldMap() {
       for (const entry of entries) {
         const { width, height } = entry.contentRect
         if (width > 0 && height > 0) {
-          setCanvasSize({ width: Math.floor(width), height: Math.floor(height) })
+          setCanvasSize({
+            width: Math.floor(width),
+            height: Math.floor(height),
+          })
         }
       }
     })
@@ -1729,7 +2030,10 @@ export default function WorldMap() {
       return
     }
 
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity
     for (const p of players) {
       const dzi = gameTileToDzi(p.x, p.y, mapCfgRef.current)
       minX = Math.min(minX, dzi.x)
@@ -1739,7 +2043,10 @@ export default function WorldMap() {
     }
 
     const pad = 50000
-    minX -= pad; minY -= pad; maxX += pad; maxY += pad
+    minX -= pad
+    minY -= pad
+    maxX += pad
+    maxY += pad
 
     const rangeX = maxX - minX
     const rangeY = maxY - minY
@@ -1773,7 +2080,10 @@ export default function WorldMap() {
 
       const prevScale = scaleRef.current
       const prevOff = offsetRef.current
-      const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, prevScale * factor))
+      const newScale = Math.max(
+        MIN_SCALE,
+        Math.min(MAX_SCALE, prevScale * factor),
+      )
       const ratio = newScale / prevScale
       const newOffset = {
         x: mx - (mx - prevOff.x) * ratio,
@@ -1795,7 +2105,12 @@ export default function WorldMap() {
     if (e.button === 0) {
       pointerDownRef.current = { x: e.clientX, y: e.clientY }
       setIsDragging(true)
-      setDragStart({ x: e.clientX, y: e.clientY, offX: offsetRef.current.x, offY: offsetRef.current.y })
+      setDragStart({
+        x: e.clientX,
+        y: e.clientY,
+        offX: offsetRef.current.x,
+        offY: offsetRef.current.y,
+      })
       setContextMenu(null)
     }
   }, [])
@@ -1822,7 +2137,10 @@ export default function WorldMap() {
       let found: string | null = null
       for (const player of playersRef.current) {
         const p = playerRenderPosition(player)
-        const hitR = Math.max(MARKER_HIT_RADIUS, Math.max(5, Math.min(16, scaleRef.current * 1400)) + 8)
+        const hitR = Math.max(
+          MARKER_HIT_RADIUS,
+          Math.max(5, Math.min(16, scaleRef.current * 1400)) + 8,
+        )
         if (Math.hypot(mx - p.x, my - p.y) < hitR) {
           found = player.username
           break
@@ -1832,7 +2150,10 @@ export default function WorldMap() {
 
       let foundVehicle: number | null = null
       if (showVehicles && !found) {
-        const vHitRadius = Math.max(MARKER_HIT_RADIUS, Math.max(14, Math.min(36, scaleRef.current * 4200)) * 0.7)
+        const vHitRadius = Math.max(
+          MARKER_HIT_RADIUS,
+          Math.max(14, Math.min(36, scaleRef.current * 4200)) * 0.7,
+        )
         for (const v of vehiclesRef.current) {
           const vp = playerToScreen(v.x, v.y)
           const dist = Math.sqrt((mx - vp.x) ** 2 + (my - vp.y) ** 2)
@@ -1844,7 +2165,14 @@ export default function WorldMap() {
       }
       setHoveredVehicle(foundVehicle)
     },
-    [isDragging, dragStart, screenToTile, playerRenderPosition, playerToScreen, showVehicles]
+    [
+      isDragging,
+      dragStart,
+      screenToTile,
+      playerRenderPosition,
+      playerToScreen,
+      showVehicles,
+    ],
   )
 
   const handleMouseUp = useCallback(
@@ -1861,10 +2189,13 @@ export default function WorldMap() {
       const canvas = canvasRef.current
       if (!canvas) return
       const rect = canvas.getBoundingClientRect()
-      const clickedPlayer = playerAtScreenPoint(e.clientX - rect.left, e.clientY - rect.top)
+      const clickedPlayer = playerAtScreenPoint(
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+      )
       setSelectedPlayer(clickedPlayer)
     },
-    [playerAtScreenPoint]
+    [playerAtScreenPoint],
   )
 
   const handleContextMenu = useCallback(
@@ -1880,7 +2211,10 @@ export default function WorldMap() {
       let clickedPlayer: MapPlayer | undefined
       for (const player of playersRef.current) {
         const p = playerRenderPosition(player)
-        const hitR = Math.max(MARKER_HIT_RADIUS, Math.max(5, Math.min(16, scaleRef.current * 1400)) + 4)
+        const hitR = Math.max(
+          MARKER_HIT_RADIUS,
+          Math.max(5, Math.min(16, scaleRef.current * 1400)) + 4,
+        )
         if (Math.hypot(mx - p.x, my - p.y) < hitR) {
           clickedPlayer = player
           break
@@ -1889,7 +2223,10 @@ export default function WorldMap() {
 
       let clickedVehicle: MapVehicle | undefined
       if (!clickedPlayer && showVehicles) {
-        const vHitRadius = Math.max(MARKER_HIT_RADIUS, Math.max(14, Math.min(36, scaleRef.current * 4200)) * 0.7)
+        const vHitRadius = Math.max(
+          MARKER_HIT_RADIUS,
+          Math.max(14, Math.min(36, scaleRef.current * 4200)) * 0.7,
+        )
         for (const v of vehiclesRef.current) {
           const vp = playerToScreen(v.x, v.y)
           const dist = Math.sqrt((mx - vp.x) ** 2 + (my - vp.y) ** 2)
@@ -1909,7 +2246,7 @@ export default function WorldMap() {
         vehicle: clickedVehicle,
       })
     },
-    [screenToTile, playerRenderPosition, playerToScreen, showVehicles]
+    [screenToTile, playerRenderPosition, playerToScreen, showVehicles],
   )
 
   const handleMouseLeave = useCallback(() => {
@@ -1920,8 +2257,22 @@ export default function WorldMap() {
     setCursorWorldPos(null)
   }, [])
 
-  const touchRef = useRef<{ startX: number; startY: number; offX: number; offY: number; pinchDist: number | null; moved: boolean; hadPinch: boolean }>({
-    startX: 0, startY: 0, offX: 0, offY: 0, pinchDist: null, moved: false, hadPinch: false,
+  const touchRef = useRef<{
+    startX: number
+    startY: number
+    offX: number
+    offY: number
+    pinchDist: number | null
+    moved: boolean
+    hadPinch: boolean
+  }>({
+    startX: 0,
+    startY: 0,
+    offX: 0,
+    offY: 0,
+    pinchDist: null,
+    moved: false,
+    hadPinch: false,
   })
 
   const getTouchDist = (touches: React.TouchList) => {
@@ -1933,7 +2284,15 @@ export default function WorldMap() {
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       const t = e.touches[0]
-      touchRef.current = { startX: t.clientX, startY: t.clientY, offX: offsetRef.current.x, offY: offsetRef.current.y, pinchDist: null, moved: false, hadPinch: false }
+      touchRef.current = {
+        startX: t.clientX,
+        startY: t.clientY,
+        offX: offsetRef.current.x,
+        offY: offsetRef.current.y,
+        pinchDist: null,
+        moved: false,
+        hadPinch: false,
+      }
       setIsDragging(true)
     } else if (e.touches.length === 2) {
       touchRef.current.pinchDist = getTouchDist(e.touches)
@@ -1953,9 +2312,15 @@ export default function WorldMap() {
       const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left
       const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top
       const prevScale = scaleRef.current
-      const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, prevScale * factor))
+      const newScale = Math.max(
+        MIN_SCALE,
+        Math.min(MAX_SCALE, prevScale * factor),
+      )
       const ratio = newScale / prevScale
-      const newOffset = { x: cx - (cx - offsetRef.current.x) * ratio, y: cy - (cy - offsetRef.current.y) * ratio }
+      const newOffset = {
+        x: cx - (cx - offsetRef.current.x) * ratio,
+        y: cy - (cy - offsetRef.current.y) * ratio,
+      }
       scaleRef.current = newScale
       offsetRef.current = newOffset
       setScale(newScale)
@@ -1964,24 +2329,36 @@ export default function WorldMap() {
     } else if (e.touches.length === 1) {
       const t = e.touches[0]
       const tr = touchRef.current
-      if (Math.hypot(t.clientX - tr.startX, t.clientY - tr.startY) >= 3) tr.moved = true
-      setOffset({ x: tr.offX + (t.clientX - tr.startX), y: tr.offY + (t.clientY - tr.startY) })
+      if (Math.hypot(t.clientX - tr.startX, t.clientY - tr.startY) >= 3)
+        tr.moved = true
+      setOffset({
+        x: tr.offX + (t.clientX - tr.startX),
+        y: tr.offY + (t.clientY - tr.startY),
+      })
     }
   }, [])
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    const tr = touchRef.current
-    const touch = e.changedTouches[0]
-    if (!tr.moved && !tr.hadPinch && touch) {
-      const canvas = canvasRef.current
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect()
-        setSelectedPlayer(playerAtScreenPoint(touch.clientX - rect.left, touch.clientY - rect.top))
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const tr = touchRef.current
+      const touch = e.changedTouches[0]
+      if (!tr.moved && !tr.hadPinch && touch) {
+        const canvas = canvasRef.current
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect()
+          setSelectedPlayer(
+            playerAtScreenPoint(
+              touch.clientX - rect.left,
+              touch.clientY - rect.top,
+            ),
+          )
+        }
       }
-    }
-    setIsDragging(false)
-    touchRef.current.pinchDist = null
-  }, [playerAtScreenPoint])
+      setIsDragging(false)
+      touchRef.current.pinchDist = null
+    },
+    [playerAtScreenPoint],
+  )
 
   const zoomIn = useCallback(() => {
     const cx = canvasSize.width / 2
@@ -2045,7 +2422,7 @@ export default function WorldMap() {
           break
       }
     },
-    [zoomIn, zoomOut]
+    [zoomIn, zoomOut],
   )
 
   useEffect(() => {
@@ -2076,18 +2453,31 @@ export default function WorldMap() {
       if (!canWorldEvents) return
       setActionLoading('lightning')
       try {
-        const res = await panelBridgeApi.triggerLightning(x, y, true, true, true)
+        const res = await panelBridgeApi.triggerLightning(
+          x,
+          y,
+          true,
+          true,
+          true,
+        )
         if (res.success) {
-          toast({ title: t('toasts.lightningStrikeTitle'), description: t('toasts.lightningStrikeDesc', { x, y }) })
+          toast({
+            title: 'Lightning strike',
+            description: 'Struck at ' + String(x) + ', ' + String(y),
+          })
         }
       } catch {
-        toast({ title: t('errorTitle'), description: t('toasts.lightningFailed'), variant: 'destructive' })
+        toast({
+          title: 'Error',
+          description: 'Failed to trigger lightning',
+          variant: 'destructive',
+        })
       } finally {
         setActionLoading(null)
         setContextMenu(null)
       }
     },
-    [toast, canWorldEvents, t]
+    [toast, canWorldEvents],
   )
 
   const createNoiseAt = useCallback(
@@ -2097,48 +2487,78 @@ export default function WorldMap() {
       try {
         const res = await panelBridgeApi.playWorldSound(x, y, 0, 200, 100)
         if (res.success) {
-          toast({ title: t('toasts.noiseCreatedTitle'), description: t('toasts.noiseCreatedDesc', { x, y }) })
+          toast({
+            title: 'Noise Created',
+            description:
+              'Sound at ' +
+              String(x) +
+              ', ' +
+              String(y) +
+              ' — attracting zombies',
+          })
         }
       } catch {
-        toast({ title: t('errorTitle'), description: t('toasts.noiseFailed'), variant: 'destructive' })
+        toast({
+          title: 'Error',
+          description: 'Failed to create noise',
+          variant: 'destructive',
+        })
       } finally {
         setActionLoading(null)
         setContextMenu(null)
       }
     },
-    [toast, canWorldEvents, t]
+    [toast, canWorldEvents],
   )
 
   const callAirdrop = useCallback(
-    async (x: number, y: number, preset: typeof AIRDROP_PRESETS[number]['id']) => {
+    async (
+      x: number,
+      y: number,
+      preset: (typeof AIRDROP_PRESETS)[number]['id'],
+    ) => {
       if (actionLoadingRef.current) return
       if (!canRunBridgeCommand) return
       actionLoadingRef.current = 'airdrop'
       setActionLoading('airdrop')
       try {
-        const res = await panelBridgeApi.triggerAirdrop({ x, y, preset, announce: true, attractZombies: true })
+        const res = await panelBridgeApi.triggerAirdrop({
+          x,
+          y,
+          preset,
+          announce: true,
+          attractZombies: true,
+        })
         if (!mountedRef.current) return
         const presetDef = AIRDROP_PRESETS.find((p) => p.id === preset)
         const label = presetDef ? presetLabel(presetDef.id) : preset
         const data = res.data as Record<string, unknown> | undefined
-        const itemCount = typeof data?.itemCount === 'number' ? data.itemCount : undefined
+        const itemCount =
+          typeof data?.itemCount === 'number' ? data.itemCount : undefined
         const failed = typeof data?.failed === 'number' ? data.failed : 0
         const coords = `${Math.round(x)}, ${Math.round(y)}`
         let desc = itemCount
-          ? t('toasts.itemsDropped', { count: itemCount, coords })
-          : t('toasts.supplyDrop', { coords })
+          ? String(itemCount) + ' items dropped at ' + String(coords)
+          : 'Supply drop at ' + String(coords)
         if (failed > 0) {
-          desc += t('toasts.failedSuffix', { count: failed })
+          desc += ' (' + String(failed) + ' failed)'
         }
-        toast({ title: t('toasts.airdropDeployedTitle', { label }), description: desc })
+        toast({ title: String(label) + ' airdrop deployed', description: desc })
         setAirdropMarkers((prev) => {
           const next = [...prev, { x, y, preset, time: Date.now() }]
           return next.length > 50 ? next.slice(-50) : next
         })
       } catch (err) {
         if (!mountedRef.current) return
-        const msg = getUserErrorMessage(err, t('toasts.areaNotLoaded'))
-        toast({ title: t('toasts.airdropFailedTitle'), description: msg, variant: 'destructive' })
+        const msg = getUserErrorMessage(
+          err,
+          'Area may not be loaded — a player must be nearby',
+        )
+        toast({
+          title: 'Airdrop failed',
+          description: msg,
+          variant: 'destructive',
+        })
       } finally {
         actionLoadingRef.current = null
         if (mountedRef.current) {
@@ -2147,7 +2567,7 @@ export default function WorldMap() {
         }
       }
     },
-    [toast, t, presetLabel, canRunBridgeCommand]
+    [toast, presetLabel, canRunBridgeCommand],
   )
 
   useEffect(() => {
@@ -2181,21 +2601,29 @@ export default function WorldMap() {
         }))
         .filter((it) => it.itemType.length > 0)
       if (cleaned.length === 0) {
-        toast({ title: t('toasts.noItemsTitle'), description: t('toasts.noItemsDesc'), variant: 'destructive' })
+        toast({
+          title: 'No items',
+          description: 'Add at least one item to drop',
+          variant: 'destructive',
+        })
         return
       }
       const ID_RE = /^[A-Za-z]\w*\.\w+$/
       const bad = cleaned.find((it) => !ID_RE.test(it.itemType))
       if (bad) {
         toast({
-          title: t('toasts.invalidItemTitle'),
-          description: t('toasts.invalidItemDesc', { item: bad.itemType }),
+          title: 'Invalid item',
+          description: String(bad.itemType) + ' — expected format: Module.Item',
           variant: 'destructive',
         })
         return
       }
       if (cleaned.length > 50) {
-        toast({ title: t('toasts.tooManyItemsTitle'), description: t('toasts.tooManyItemsDesc'), variant: 'destructive' })
+        toast({
+          title: 'Too many items',
+          description: 'Max 50 item entries per drop',
+          variant: 'destructive',
+        })
         return
       }
       actionLoadingRef.current = 'drop'
@@ -2207,38 +2635,60 @@ export default function WorldMap() {
           items: cleaned,
           announce: opts.announce,
           attractZombies: opts.attractZombies,
-          soundRadius: Math.max(10, Math.min(500, Math.floor(opts.soundRadius))),
+          soundRadius: Math.max(
+            10,
+            Math.min(500, Math.floor(opts.soundRadius)),
+          ),
         })
         if (!mountedRef.current) return
         const data = res.data as Record<string, unknown> | undefined
         const failed = typeof data?.failed === 'number' ? data.failed : 0
         const totalQty = cleaned.reduce((sum, it) => sum + it.count, 0)
         const coords = `${Math.round(opts.x)}, ${Math.round(opts.y)}`
-        const title = opts.label ? t('toasts.droppedTitle', { label: opts.label }) : t('toasts.dropDeployed')
+        const title = opts.label
+          ? String(opts.label) + ' dropped'
+          : 'Drop deployed'
         let desc =
           cleaned.length === 1
-            ? t('toasts.singleItemDesc', {
-                item: cleaned[0].itemType.replace(/^[^.]+\./, ''),
-                qtySuffix: cleaned[0].count > 1 ? t('toasts.qtySuffix', { count: cleaned[0].count }) : '',
-                coords,
-              })
-            : t('toasts.multiItemDesc', { count: cleaned.length, total: totalQty, coords })
-        if (failed > 0) desc += t('toasts.failedSuffix', { count: failed })
+            ? String(cleaned[0].itemType.replace(/^[^.]+\./, '')) +
+              String(
+                cleaned[0].count > 1 ? ' × ' + String(cleaned[0].count) : '',
+              ) +
+              ' at ' +
+              String(coords)
+            : String(cleaned.length) +
+              ' items (' +
+              String(totalQty) +
+              ' total) at ' +
+              String(coords)
+        if (failed > 0) desc += ' (' + String(failed) + ' failed)'
         if (!opts.silent) toast({ title, description: desc })
         setAirdropMarkers((prev) => {
-          const next = [...prev, { x: opts.x, y: opts.y, preset: 'custom', time: Date.now() }]
+          const next = [
+            ...prev,
+            { x: opts.x, y: opts.y, preset: 'custom', time: Date.now() },
+          ]
           return next.length > 50 ? next.slice(-50) : next
         })
         setLastDrop({
           items: cleaned,
-          label: opts.label || (cleaned.length === 1
-            ? cleaned[0].itemType.replace(/^[^.]+\./, '')
-            : t('toasts.itemPackageFallback', { count: cleaned.length })),
+          label:
+            opts.label ||
+            (cleaned.length === 1
+              ? cleaned[0].itemType.replace(/^[^.]+\./, '')
+              : String(cleaned.length) + '-item package'),
         })
       } catch (err) {
         if (!mountedRef.current) return
-        const msg = getUserErrorMessage(err, t('toasts.areaNotLoaded'))
-        toast({ title: t('toasts.dropFailedTitle'), description: msg, variant: 'destructive' })
+        const msg = getUserErrorMessage(
+          err,
+          'Area may not be loaded — a player must be nearby',
+        )
+        toast({
+          title: 'Drop failed',
+          description: msg,
+          variant: 'destructive',
+        })
       } finally {
         actionLoadingRef.current = null
         if (mountedRef.current) {
@@ -2246,7 +2696,7 @@ export default function WorldMap() {
         }
       }
     },
-    [toast, t, canRunBridgeCommand]
+    [toast, canRunBridgeCommand],
   )
 
   const teleportPlayerTo = useCallback(
@@ -2261,68 +2711,98 @@ export default function WorldMap() {
           z: Math.round(z),
         })
         if (!mountedRef.current) return
-        const verifyState = getBridgeVerifiedState('teleportPlayer', response?.data)
+        const verifyState = getBridgeVerifiedState(
+          'teleportPlayer',
+          response?.data,
+        )
         toast(
           verifyState === 'unverifiable'
             ? {
-                title: t('toasts.teleportedTitle'),
-                description: t('toasts.bridgeUnverifiedDesc', { action: t('toasts.teleportedTitle') }),
+                title: 'Player teleported',
+                description:
+                  String('Player teleported') +
+                  ' was sent, but the mod could not confirm it took effect.',
                 variant: 'default',
               }
             : verifyState === 'old-bridge'
               ? {
-                  title: t('toasts.teleportedTitle'),
-                  description: t('toasts.bridgeOldBridgeDesc', { action: t('toasts.teleportedTitle') }),
+                  title: 'Player teleported',
+                  description:
+                    String('Player teleported') +
+                    " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
                   variant: 'default',
                 }
               : {
-                  title: t('toasts.teleportedTitle'),
-                  description: t('toasts.teleportedDesc', { username, x: Math.round(x), y: Math.round(y) }),
+                  title: 'Player teleported',
+                  description:
+                    String(username) +
+                    ' → ' +
+                    String(Math.round(x)) +
+                    ', ' +
+                    String(Math.round(y)),
                 },
         )
         fetchPlayerPositions()
       } catch (err) {
         if (!mountedRef.current) return
-        const msg = getUserErrorMessage(err, t('toasts.teleportErrorFallback'))
-        toast({ title: t('toasts.teleportErrorTitle'), description: msg, variant: 'destructive' })
+        const msg = getUserErrorMessage(err, 'Teleport error')
+        toast({
+          title: 'Teleport error',
+          description: msg,
+          variant: 'destructive',
+        })
       } finally {
         if (mountedRef.current) setActionLoading(null)
       }
     },
-    [toast, fetchPlayerPositions, t, canRunBridgeCommand]
+    [toast, fetchPlayerPositions, canRunBridgeCommand],
   )
 
   const copyCoords = useCallback(
     async (x: number, y: number) => {
       const text = `${Math.round(x)}, ${Math.round(y)}`
       const ok = await copyText(text)
-      toast(ok
-        ? { title: t('toasts.copiedTitle'), description: text }
-        : { title: t('toasts.copyFailedTitle'), description: t('toasts.copyFailedDesc'), variant: 'destructive' })
+      toast(
+        ok
+          ? { title: 'Copied', description: text }
+          : {
+              title: 'Copy failed',
+              description: 'Clipboard unavailable',
+              variant: 'destructive',
+            },
+      )
     },
-    [toast, t]
+    [toast],
   )
 
-  const panToPlayer = useCallback((p: MapPlayer) => {
-    const W = canvasSize.width
-    const H = canvasSize.height
-    if (W === 0) return
-    const dzi = gameTileToDzi(p.x, p.y, mapCfgRef.current)
-    const viewScale = Math.max(scale, mapCfgRef.current.defaultScale * 10)
-    setScale(viewScale)
-    setOffset({ x: W / 2 - dzi.x * viewScale, y: H / 2 - dzi.y * viewScale })
-    setSelectedPlayer(p)
-  }, [canvasSize, scale])
+  const panToPlayer = useCallback(
+    (p: MapPlayer) => {
+      const W = canvasSize.width
+      const H = canvasSize.height
+      if (W === 0) return
+      const dzi = gameTileToDzi(p.x, p.y, mapCfgRef.current)
+      const viewScale = Math.max(scale, mapCfgRef.current.defaultScale * 10)
+      setScale(viewScale)
+      setOffset({ x: W / 2 - dzi.x * viewScale, y: H / 2 - dzi.y * viewScale })
+      setSelectedPlayer(p)
+    },
+    [canvasSize, scale],
+  )
 
   return (
     <div className="space-y-4 page-transition">
       <PageHeader
-        title={t('pageHeader.title')}
-        description={t('pageHeader.description')}
+        title={'World Map'}
+        description={
+          'Live player positions on the Knox County map. Right-click for actions.'
+        }
         icon={<MapIcon className="w-5 h-5" />}
         actions={
           <div className="flex items-center gap-2">
-            <BridgeStatusBadge connected={bridgeConnected} loading={bridgeLoading} />
+            <BridgeStatusBadge
+              connected={bridgeConnected}
+              loading={bridgeLoading}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -2330,45 +2810,60 @@ export default function WorldMap() {
               className="gap-2"
             >
               <RefreshCw className="w-4 h-4" />
-              {t('refresh')}
+              {'Refresh'}
             </Button>
           </div>
         }
       />
 
-      <div ref={mapWrapperRef} className="relative rounded-md border border-border/60 overflow-hidden bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]">
-        <span aria-hidden className="pointer-events-none absolute top-0 start-0 z-30 h-3 w-3 border-s-2 border-t-2 border-primary/50" />
-        <span aria-hidden className="pointer-events-none absolute top-0 end-0 z-30 h-3 w-3 border-e-2 border-t-2 border-primary/50" />
-        <span aria-hidden className="pointer-events-none absolute bottom-0 start-0 z-30 h-3 w-3 border-s-2 border-b-2 border-primary/50" />
-        <span aria-hidden className="pointer-events-none absolute bottom-0 end-0 z-30 h-3 w-3 border-e-2 border-b-2 border-primary/50" />
+      <div
+        ref={mapWrapperRef}
+        className="relative rounded-md border border-border/60 overflow-hidden bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)]"
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-0 start-0 z-30 h-3 w-3 border-s-2 border-t-2 border-primary/50"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-0 end-0 z-30 h-3 w-3 border-e-2 border-t-2 border-primary/50"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 start-0 z-30 h-3 w-3 border-s-2 border-b-2 border-primary/50"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 end-0 z-30 h-3 w-3 border-e-2 border-b-2 border-primary/50"
+        />
 
         <div className="absolute top-3 start-3 z-10 w-12 rounded-md border border-border/55 bg-card/85 backdrop-blur-md shadow-lg overflow-hidden">
           <div className="flex items-center justify-center gap-1 px-1.5 py-1 border-b border-border/40 bg-muted/40 font-mono text-[9px] uppercase tracking-[0.24em] text-primary/70">
             <span className="text-primary/60">//</span>
-            <span>{t('controlRail.ctrlLabel')}</span>
+            <span>{'ctrl'}</span>
           </div>
           <div className="flex flex-col gap-px p-1">
             <button
               onClick={zoomIn}
-              aria-label={t('controlRail.zoomIn')}
+              aria-label={'Zoom in'}
               className="group h-9 w-9 rounded-sm border border-transparent hover:border-border/50 hover:bg-muted/60 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
-              title={t('controlRail.zoomIn')}
+              title={'Zoom in'}
             >
               <ZoomIn className="w-4 h-4" />
             </button>
             <button
               onClick={zoomOut}
-              aria-label={t('controlRail.zoomOut')}
+              aria-label={'Zoom out'}
               className="group h-9 w-9 rounded-sm border border-transparent hover:border-border/50 hover:bg-muted/60 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
-              title={t('controlRail.zoomOut')}
+              title={'Zoom out'}
             >
               <ZoomOut className="w-4 h-4" />
             </button>
             <button
               onClick={fitToPlayers}
-              aria-label={t('controlRail.fitToPlayers')}
+              aria-label={'Fit to players'}
               className="group h-9 w-9 rounded-sm border border-transparent hover:border-border/50 hover:bg-muted/60 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
-              title={t('controlRail.fitToPlayers')}
+              title={'Fit to players'}
             >
               <Maximize2 className="w-4 h-4" />
             </button>
@@ -2377,39 +2872,47 @@ export default function WorldMap() {
           {mapCfg.label === 'B42' && (
             <>
               <div className="flex items-center justify-center gap-1 px-1.5 py-1 border-y border-border/40 bg-muted/30 font-mono text-[9px] uppercase tracking-[0.24em] text-muted-foreground/70">
-                <span>{t('controlRail.floorHeader')}</span>
+                <span>{'floor'}</span>
               </div>
               <div className="flex flex-col items-center p-1 gap-px">
                 <button
                   onClick={() => changeFloor(floor + 1)}
                   disabled={floor >= 29}
-                  aria-label={t('controlRail.floorUp')}
+                  aria-label={'Floor up'}
                   className="h-6 w-9 rounded-sm border border-transparent hover:border-border/50 hover:bg-muted/60 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-transparent"
                   // eslint-disable-next-line local/no-dead-disabled-title -- pure hint (t('controlRail.floorUp') = "Floor up"), same text as the aria-label, unrelated to why the button disables at the floor cap. Triaged 2026-08-27, no disabled-reason text to lose.
-                  title={t('controlRail.floorUp')}
+                  title={'Floor up'}
                 >
                   <ChevronUp className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => changeFloor(0)}
-                  aria-label={t('controlRail.currentFloorAria', { floor: floorLabel(floor) })}
+                  aria-label={'Current floor: ' + String(floorLabel(floor))}
                   className={cn(
                     'h-7 w-9 rounded-sm border flex items-center justify-center transition-colors text-[10px] font-mono font-semibold tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
                     floor !== 0
                       ? 'bg-accent/20 border-accent/40 text-accent shadow-[inset_0_0_0_1px_rgba(0,0,0,0.2)]'
-                      : 'bg-muted/30 border-border/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                      : 'bg-muted/30 border-border/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                   )}
-                  title={t('controlRail.currentFloorTitle', { floor: floorLabel(floor) })}
+                  title={
+                    String(floorLabel(floor)) + ' — click to reset to ground'
+                  }
                 >
-                  {floor === 0 ? <Layers className="w-3.5 h-3.5" /> : (floor > 0 ? `+${floor}` : floor)}
+                  {floor === 0 ? (
+                    <Layers className="w-3.5 h-3.5" />
+                  ) : floor > 0 ? (
+                    `+${floor}`
+                  ) : (
+                    floor
+                  )}
                 </button>
                 <button
                   onClick={() => changeFloor(floor - 1)}
                   disabled={floor <= -1}
-                  aria-label={t('controlRail.floorDown')}
+                  aria-label={'Floor down'}
                   className="h-6 w-9 rounded-sm border border-transparent hover:border-border/50 hover:bg-muted/60 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-transparent"
                   // eslint-disable-next-line local/no-dead-disabled-title -- pure hint (t('controlRail.floorDown') = "Floor down"), same text as the aria-label, unrelated to why the button disables at the floor minimum. Triaged 2026-08-27, no disabled-reason text to lose.
-                  title={t('controlRail.floorDown')}
+                  title={'Floor down'}
                 >
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
@@ -2418,34 +2921,54 @@ export default function WorldMap() {
           )}
 
           <div className="flex items-center justify-center gap-1 px-1.5 py-1 border-y border-border/40 bg-muted/30 font-mono text-[9px] uppercase tracking-[0.24em] text-muted-foreground/70">
-            <span>{t('controlRail.layersHeader')}</span>
+            <span>{'layers'}</span>
           </div>
           <div className="flex flex-col gap-px p-1">
             <button
               onClick={() => setShowVehicles((v) => !v)}
-              aria-label={t(showVehicles ? 'controlRail.vehiclesHideAria' : 'controlRail.vehiclesShowAria', { count: vehicles.length })}
+              aria-label={
+                showVehicles
+                  ? 'Hide vehicles (' + String(vehicles.length) + ' loaded)'
+                  : 'Show vehicles (' + String(vehicles.length) + ' loaded)'
+              }
               aria-pressed={showVehicles}
               className={cn(
                 'h-9 w-9 rounded-sm border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
                 showVehicles
                   ? 'bg-info/20 border-info/40 text-info'
-                  : 'border-transparent text-muted-foreground hover:border-border/50 hover:bg-muted/60 hover:text-foreground'
+                  : 'border-transparent text-muted-foreground hover:border-border/50 hover:bg-muted/60 hover:text-foreground',
               )}
-              title={t(showVehicles ? 'controlRail.vehiclesHideTitle' : 'controlRail.vehiclesShowTitle', { count: vehicles.length })}
+              title={
+                showVehicles
+                  ? 'Hide vehicles (' +
+                    String(vehicles.length) +
+                    ') — only vehicles near players are visible'
+                  : 'Show vehicles (' +
+                    String(vehicles.length) +
+                    ') — only vehicles near players are visible'
+              }
             >
               <Car className="w-4 h-4" />
             </button>
             <button
               onClick={() => setShowSafehouses((v) => !v)}
-              aria-label={t(showSafehouses ? 'controlRail.safehousesHideAria' : 'controlRail.safehousesShowAria', { count: safehouses.length })}
+              aria-label={
+                showSafehouses
+                  ? 'Hide safehouses (' + String(safehouses.length) + ' loaded)'
+                  : 'Show safehouses (' + String(safehouses.length) + ' loaded)'
+              }
               aria-pressed={showSafehouses}
               className={cn(
                 'h-9 w-9 rounded-sm border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
                 showSafehouses
                   ? 'bg-success/20 border-success/40 text-success'
-                  : 'border-transparent text-muted-foreground hover:border-border/50 hover:bg-muted/60 hover:text-foreground'
+                  : 'border-transparent text-muted-foreground hover:border-border/50 hover:bg-muted/60 hover:text-foreground',
               )}
-              title={t(showSafehouses ? 'controlRail.safehousesHideTitle' : 'controlRail.safehousesShowTitle', { count: safehouses.length })}
+              title={
+                showSafehouses
+                  ? 'Hide safehouses (' + String(safehouses.length) + ')'
+                  : 'Show safehouses (' + String(safehouses.length) + ')'
+              }
             >
               <Home className="w-4 h-4" />
             </button>
@@ -2453,52 +2976,70 @@ export default function WorldMap() {
         </div>
 
         {tileLoadFailing && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 max-w-md w-[min(28rem,calc(100%-7rem))]" role="alert">
+          <div
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-20 max-w-md w-[min(28rem,calc(100%-7rem))]"
+            role="alert"
+          >
             <div className="rounded-md border border-warning/60 bg-warning/15 backdrop-blur-md shadow-lg overflow-hidden">
               <div className="flex items-center justify-between gap-2 px-3 py-1 border-b border-warning/30 bg-warning/20 font-mono text-[10px] uppercase tracking-[0.24em] text-warning">
                 <span className="flex items-center gap-1.5">
                   <AlertTriangle className="w-3 h-3" />
-                  <span>{t('tileFailure.signalLost')}</span>
+                  <span>{'signal.lost'}</span>
                 </span>
-                <span className="text-warning/70">{t('tileFailure.tilesOffline')}</span>
+                <span className="text-warning/70">{'tiles offline'}</span>
               </div>
               <div className="px-3 py-2 text-xs leading-snug">
                 {tileByteDiagnosis ? (
                   (() => {
-                    const keys = tileFailureCopyKeys(tileByteDiagnosis)
+                    const copy = tileFailureCopy(tileByteDiagnosis)
                     return (
                       <>
-                        <div className="font-semibold text-foreground">{t(keys.titleKey)}</div>
-                        <div className="text-muted-foreground mt-0.5">{t(keys.descKey, keys.descParams)}</div>
+                        <div className="font-semibold text-foreground">
+                          {copy.title}
+                        </div>
+                        <div className="text-muted-foreground mt-0.5">
+                          {copy.description}
+                        </div>
                       </>
                     )
                   })()
                 ) : tileFailureKind === 'coverage' ? (
                   <>
-                    <div className="font-semibold text-foreground">{t('tileFailure.coverageTitle')}</div>
+                    <div className="font-semibold text-foreground">
+                      {'No map tiles at this zoom'}
+                    </div>
                     <div className="text-muted-foreground mt-0.5">
-                      <Trans
-                        i18nKey="tileFailure.coverageDesc"
-                        t={t}
-                        components={{ 1: <span className="font-mono text-warning/90" /> }}
-                      />
+                      <>
+                        <span className="font-mono text-warning/90">
+                          {'tiles.pzmap.org'}
+                        </span>
+                        {
+                          " is reachable but hasn't rendered this area at this detail level. Zoom out, or try Refresh later."
+                        }
+                      </>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="font-semibold text-foreground">{t('tileFailure.networkTitle')}</div>
+                    <div className="font-semibold text-foreground">
+                      {"Map tiles aren't loading"}
+                    </div>
                     <div className="text-muted-foreground mt-0.5">
-                      <Trans
-                        i18nKey="tileFailure.networkDesc"
-                        t={t}
-                        components={{ 1: <span className="font-mono text-warning/90" /> }}
-                      />
+                      <>
+                        {
+                          "This tile couldn't be loaded from the panel. Check the panel's own network connection and try "
+                        }
+                        <span className="font-mono text-warning/90">
+                          {'Refresh'}
+                        </span>
+                        {'.'}
+                      </>
                     </div>
                   </>
                 )}
                 {tileFailureDetail && !tileByteDiagnosis && (
                   <div className="mt-1 pt-1 border-t border-warning/20 font-mono text-[10px] text-muted-foreground/70">
-                    {t('tileFailure.diagnostic', { detail: tileFailureDetail })}
+                    {'Diagnostic: ' + String(tileFailureDetail)}
                   </div>
                 )}
               </div>
@@ -2506,91 +3047,166 @@ export default function WorldMap() {
           </div>
         )}
 
-        <div className={cn('absolute top-3 end-3 z-10', rosterCollapsed ? 'w-auto' : 'w-56')}>
+        <div
+          className={cn(
+            'absolute top-3 end-3 z-10',
+            rosterCollapsed ? 'w-auto' : 'w-56',
+          )}
+        >
           <div className="rounded-md border border-border/55 bg-card/85 backdrop-blur-md shadow-lg overflow-hidden">
             <button
               type="button"
               onClick={() => setRosterCollapsed((c) => !c)}
               aria-expanded={!rosterCollapsed}
-              aria-label={rosterCollapsed ? t('roster.expandAria') : t('roster.collapseAria')}
+              aria-label={rosterCollapsed ? 'Expand roster' : 'Collapse roster'}
               className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 border-b border-border/40 bg-muted/40 font-mono text-[10px] uppercase tracking-[0.22em] text-primary/70 hover:bg-muted/60 transition-colors"
             >
               <span className="flex items-center gap-1.5">
                 <span className="text-primary/60">//</span>
-                <span>{t('roster.label')}</span>
+                <span>{'roster'}</span>
                 <span className="text-muted-foreground/50">·</span>
-                <span className={cn('flex items-center gap-1', bridgeConnected ? 'text-emerald-400/90' : 'text-muted-foreground/60')}>
-                  <span className={cn('h-1.5 w-1.5 rounded-full', bridgeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground/40')} />
-                  {bridgeConnected ? t('roster.live') : t('roster.offline')}
+                <span
+                  className={cn(
+                    'flex items-center gap-1',
+                    bridgeConnected
+                      ? 'text-emerald-400/90'
+                      : 'text-muted-foreground/60',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full',
+                      bridgeConnected
+                        ? 'bg-emerald-400 animate-pulse'
+                        : 'bg-muted-foreground/40',
+                    )}
+                  />
+                  {bridgeConnected ? 'live' : 'offline'}
                 </span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="text-foreground tabular-nums font-semibold">{players.length}</span>
-                {rosterCollapsed ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronUp className="h-3 w-3 shrink-0" />}
+                <span className="text-foreground tabular-nums font-semibold">
+                  {players.length}
+                </span>
+                {rosterCollapsed ? (
+                  <ChevronDown className="h-3 w-3 shrink-0" />
+                ) : (
+                  <ChevronUp className="h-3 w-3 shrink-0" />
+                )}
               </span>
             </button>
-            {!rosterCollapsed && (players.length > 0 ? (
-              <div className="max-h-60 overflow-y-auto">
-                {players.map((p) => (
-                  <button
-                    key={p.username}
-                    onClick={() => panToPlayer(p)}
-                    aria-label={
-                      p.health !== undefined
-                        ? t('roster.panToAriaWithHealth', { name: p.displayName || p.username, health: Math.round(p.health) })
-                        : t('roster.panToAria', { name: p.displayName || p.username })
-                    }
-                    className={cn(
-                      'w-full px-2.5 py-1.5 flex items-center gap-2 text-start text-xs transition-colors border-s-2 border-transparent hover:bg-muted/50',
-                      selectedPlayer?.username === p.username && 'bg-muted/50 border-primary/60'
-                    )}
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full flex-none ring-1 ring-black/30"
-                      style={{ backgroundColor: getPlayerColor(p, 0.9) }}
-                    />
-                    <span className="truncate flex-1">{p.displayName || p.username}</span>
-                    {p.health !== undefined && (
-                      <span className={cn(
-                        'text-[10px] font-mono tabular-nums',
-                        p.health > 50 ? 'text-emerald-400' : p.health > 25 ? 'text-amber-400' : 'text-destructive'
-                      )}>
-                        {Math.round(p.health)}%
+            {!rosterCollapsed &&
+              (players.length > 0 ? (
+                <div className="max-h-60 overflow-y-auto">
+                  {players.map((p) => (
+                    <button
+                      key={p.username}
+                      onClick={() => panToPlayer(p)}
+                      aria-label={
+                        p.health !== undefined
+                          ? 'Pan to ' +
+                            String(p.displayName || p.username) +
+                            ', health ' +
+                            String(Math.round(p.health)) +
+                            '%'
+                          : 'Pan to ' + String(p.displayName || p.username)
+                      }
+                      className={cn(
+                        'w-full px-2.5 py-1.5 flex items-center gap-2 text-start text-xs transition-colors border-s-2 border-transparent hover:bg-muted/50',
+                        selectedPlayer?.username === p.username &&
+                          'bg-muted/50 border-primary/60',
+                      )}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full flex-none ring-1 ring-black/30"
+                        style={{ backgroundColor: getPlayerColor(p, 0.9) }}
+                      />
+                      <span className="truncate flex-1">
+                        {p.displayName || p.username}
                       </span>
+                      {p.health !== undefined && (
+                        <span
+                          className={cn(
+                            'text-[10px] font-mono tabular-nums',
+                            p.health > 50
+                              ? 'text-emerald-400'
+                              : p.health > 25
+                                ? 'text-amber-400'
+                                : 'text-destructive',
+                          )}
+                        >
+                          {Math.round(p.health)}%
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="px-3 py-3 flex items-center gap-2 text-[11px] font-mono text-muted-foreground/70">
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full',
+                      bridgeConnected
+                        ? 'bg-muted-foreground/40'
+                        : 'bg-destructive/70',
                     )}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="px-3 py-3 flex items-center gap-2 text-[11px] font-mono text-muted-foreground/70">
-                <span className={cn('h-1.5 w-1.5 rounded-full', bridgeConnected ? 'bg-muted-foreground/40' : 'bg-destructive/70')} />
-                <span>
-                  {loading ? t('roster.loading') : bridgeConnected ? t('roster.noPlayersOnline') : t('roster.bridgeOffline')}
-                </span>
-              </div>
-            ))}
+                  />
+                  <span>
+                    {loading
+                      ? 'loading…'
+                      : bridgeConnected
+                        ? 'no players online'
+                        : 'bridge offline'}
+                  </span>
+                </div>
+              ))}
           </div>
         </div>
 
         <div className="absolute bottom-3 start-3 z-10">
           <div className="flex items-stretch rounded-md border border-border/55 bg-card/85 backdrop-blur-md shadow-lg font-mono text-[11px] tabular-nums overflow-hidden">
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-e border-border/40">
-              <Crosshair className={cn('w-3 h-3', cursorWorldPos ? 'text-primary/80' : 'text-muted-foreground/40')} />
+              <Crosshair
+                className={cn(
+                  'w-3 h-3',
+                  cursorWorldPos
+                    ? 'text-primary/80'
+                    : 'text-muted-foreground/40',
+                )}
+              />
               {cursorWorldPos ? (
                 <span className="text-foreground">
-                  <span className="text-muted-foreground/60">x</span>{cursorWorldPos.x.toString().padStart(5, ' ')}<span className="mx-1 text-muted-foreground/40">·</span><span className="text-muted-foreground/60">y</span>{cursorWorldPos.y.toString().padStart(5, ' ')}
+                  <span className="text-muted-foreground/60">x</span>
+                  {cursorWorldPos.x.toString().padStart(5, ' ')}
+                  <span className="mx-1 text-muted-foreground/40">·</span>
+                  <span className="text-muted-foreground/60">y</span>
+                  {cursorWorldPos.y.toString().padStart(5, ' ')}
                 </span>
               ) : (
-                <span className="text-muted-foreground/50">{t('hud.hoverForCoords')}</span>
+                <span className="text-muted-foreground/50">
+                  {'hover for coords'}
+                </span>
               )}
             </div>
             <div className="flex items-center gap-1 px-2.5 py-1.5 border-e border-border/40">
-              <span className="text-muted-foreground/50 text-[9px] uppercase tracking-[0.22em]">z</span>
-              <span className={cn(floor !== 0 ? 'text-accent' : 'text-muted-foreground/70')}>{floorLabel(floor)}</span>
+              <span className="text-muted-foreground/50 text-[9px] uppercase tracking-[0.22em]">
+                z
+              </span>
+              <span
+                className={cn(
+                  floor !== 0 ? 'text-accent' : 'text-muted-foreground/70',
+                )}
+              >
+                {floorLabel(floor)}
+              </span>
             </div>
             <div className="flex items-center gap-1 px-2.5 py-1.5">
-              <span className="text-muted-foreground/50 text-[9px] uppercase tracking-[0.22em]">zm</span>
-              <span className="text-muted-foreground/80">{(scale / mapCfg.defaultScale * 100).toFixed(0)}%</span>
+              <span className="text-muted-foreground/50 text-[9px] uppercase tracking-[0.22em]">
+                zm
+              </span>
+              <span className="text-muted-foreground/80">
+                {((scale / mapCfg.defaultScale) * 100).toFixed(0)}%
+              </span>
             </div>
           </div>
         </div>
@@ -2598,21 +3214,35 @@ export default function WorldMap() {
         {selectedPlayer && (
           <div className="absolute end-3 z-10 w-60 bottom-14 sm:bottom-3">
             <div className="relative rounded-md border border-border/55 bg-card/90 backdrop-blur-md shadow-lg overflow-hidden">
-              <span aria-hidden className="pointer-events-none absolute top-0 start-0 h-2 w-2 border-s-2 border-t-2 border-primary/50" />
-              <span aria-hidden className="pointer-events-none absolute top-0 end-0 h-2 w-2 border-e-2 border-t-2 border-primary/50" />
-              <span aria-hidden className="pointer-events-none absolute bottom-0 start-0 h-2 w-2 border-s-2 border-b-2 border-primary/50" />
-              <span aria-hidden className="pointer-events-none absolute bottom-0 end-0 h-2 w-2 border-e-2 border-b-2 border-primary/50" />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute top-0 start-0 h-2 w-2 border-s-2 border-t-2 border-primary/50"
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute top-0 end-0 h-2 w-2 border-e-2 border-t-2 border-primary/50"
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute bottom-0 start-0 h-2 w-2 border-s-2 border-b-2 border-primary/50"
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute bottom-0 end-0 h-2 w-2 border-e-2 border-b-2 border-primary/50"
+              />
               <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-border/40 bg-muted/40 font-mono text-[10px] uppercase tracking-[0.22em] text-primary/70">
                 <span className="flex items-center gap-1.5">
                   <span className="text-primary/60">//</span>
-                  <span>{t('dossier.label')}</span>
+                  <span>{'dossier'}</span>
                   <span className="text-muted-foreground/50">·</span>
-                  <span className="text-emerald-400/90">{t('dossier.targetAcquired')}</span>
+                  <span className="text-emerald-400/90">
+                    {'target.acquired'}
+                  </span>
                 </span>
                 <button
                   onClick={() => setSelectedPlayer(null)}
                   className="p-0.5 -m-0.5 rounded text-muted-foreground/70 hover:text-foreground hover:bg-muted/60 transition-colors"
-                  aria-label={t('dossier.closeAria')}
+                  aria-label={'Close dossier'}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -2621,7 +3251,9 @@ export default function WorldMap() {
                 <div className="flex items-center gap-2">
                   <span
                     className="w-2.5 h-2.5 rounded-full ring-1 ring-black/30 flex-none"
-                    style={{ backgroundColor: getPlayerColor(selectedPlayer, 0.9) }}
+                    style={{
+                      backgroundColor: getPlayerColor(selectedPlayer, 0.9),
+                    }}
                   />
                   <span className="text-sm font-semibold truncate">
                     {selectedPlayer.displayName || selectedPlayer.username}
@@ -2630,16 +3262,27 @@ export default function WorldMap() {
               </div>
               <div className="px-3 py-2 text-xs space-y-1.5">
                 <div className="flex justify-between items-baseline">
-                  <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">{t('dossier.pos')}</span>
-                  <span className="font-mono tabular-nums">{Math.round(selectedPlayer.x)}, {Math.round(selectedPlayer.y)}</span>
+                  <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">
+                    {'pos'}
+                  </span>
+                  <span className="font-mono tabular-nums">
+                    {Math.round(selectedPlayer.x)},{' '}
+                    {Math.round(selectedPlayer.y)}
+                  </span>
                 </div>
                 <div className="flex justify-between items-baseline">
-                  <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">{t('dossier.floor')}</span>
-                  <span className="font-mono tabular-nums">{selectedPlayer.z}</span>
+                  <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">
+                    {'floor'}
+                  </span>
+                  <span className="font-mono tabular-nums">
+                    {selectedPlayer.z}
+                  </span>
                 </div>
                 {selectedPlayer.health !== undefined && (
                   <div className="flex justify-between items-center">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">{t('dossier.hp')}</span>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">
+                      {'hp'}
+                    </span>
                     <div className="flex items-center gap-1.5">
                       <div className="w-16 h-1.5 rounded-sm bg-muted/60 overflow-hidden ring-1 ring-black/20">
                         <div
@@ -2647,102 +3290,194 @@ export default function WorldMap() {
                           style={{
                             width: `${Math.max(0, Math.min(100, selectedPlayer.health))}%`,
                             backgroundColor:
-                              selectedPlayer.health > 50 ? 'hsl(var(--success))'
-                              : selectedPlayer.health > 25 ? 'hsl(var(--warning))'
-                              : 'hsl(var(--destructive))',
+                              selectedPlayer.health > 50
+                                ? 'hsl(var(--success))'
+                                : selectedPlayer.health > 25
+                                  ? 'hsl(var(--warning))'
+                                  : 'hsl(var(--destructive))',
                           }}
                         />
                       </div>
-                      <span className="font-mono tabular-nums w-8 text-end">{Math.round(selectedPlayer.health)}%</span>
+                      <span className="font-mono tabular-nums w-8 text-end">
+                        {Math.round(selectedPlayer.health)}%
+                      </span>
                     </div>
                   </div>
                 )}
-                {([
-                  { key: 'hunger', value: selectedPlayer.hunger, label: t('dossier.hunger') },
-                  { key: 'thirst', value: selectedPlayer.thirst, label: t('dossier.thirst') },
-                  { key: 'fatigue', value: selectedPlayer.fatigue, label: t('dossier.fatigue') },
-                ] as const).map(({ key, value, label }) => value === undefined ? null : (
-                  <div key={key} className="flex justify-between items-center">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">{label}</span>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-16 h-1.5 rounded-sm bg-muted/60 overflow-hidden ring-1 ring-black/20">
-                        <div
-                          className="h-full transition-all"
-                          style={{
-                            width: `${Math.max(0, Math.min(100, value * 100))}%`,
-                            backgroundColor:
-                              value < 0.5 ? 'hsl(var(--success))'
-                              : value < 0.75 ? 'hsl(var(--warning))'
-                              : 'hsl(var(--destructive))',
-                          }}
-                        />
+                {(
+                  [
+                    {
+                      key: 'hunger',
+                      value: selectedPlayer.hunger,
+                      label: 'hunger',
+                    },
+                    {
+                      key: 'thirst',
+                      value: selectedPlayer.thirst,
+                      label: 'thirst',
+                    },
+                    {
+                      key: 'fatigue',
+                      value: selectedPlayer.fatigue,
+                      label: 'fatigue',
+                    },
+                  ] as const
+                ).map(({ key, value, label }) =>
+                  value === undefined ? null : (
+                    <div
+                      key={key}
+                      className="flex justify-between items-center"
+                    >
+                      <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">
+                        {label}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-16 h-1.5 rounded-sm bg-muted/60 overflow-hidden ring-1 ring-black/20">
+                          <div
+                            className="h-full transition-all"
+                            style={{
+                              width: `${Math.max(0, Math.min(100, value * 100))}%`,
+                              backgroundColor:
+                                value < 0.5
+                                  ? 'hsl(var(--success))'
+                                  : value < 0.75
+                                    ? 'hsl(var(--warning))'
+                                    : 'hsl(var(--destructive))',
+                            }}
+                          />
+                        </div>
+                        <span className="font-mono tabular-nums w-8 text-end">
+                          {Math.round(value * 100)}%
+                        </span>
                       </div>
-                      <span className="font-mono tabular-nums w-8 text-end">{Math.round(value * 100)}%</span>
                     </div>
-                  </div>
-                ))}
-                {selectedPlayer.accessLevel && selectedPlayer.accessLevel !== 'none' && selectedPlayer.accessLevel !== 'user' && selectedPlayer.accessLevel !== '' && (
-                  <div className="flex justify-between items-baseline">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">{t('dossier.role')}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-400">{selectedPlayer.accessLevel}</span>
-                  </div>
+                  ),
                 )}
+                {selectedPlayer.accessLevel &&
+                  selectedPlayer.accessLevel !== 'none' &&
+                  selectedPlayer.accessLevel !== 'user' &&
+                  selectedPlayer.accessLevel !== '' && (
+                    <div className="flex justify-between items-baseline">
+                      <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">
+                        {'role'}
+                      </span>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-400">
+                        {selectedPlayer.accessLevel}
+                      </span>
+                    </div>
+                  )}
                 {selectedPlayer.isInfected && (
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">{t('dossier.status')}</span>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/70">
+                      {'status'}
+                    </span>
                     <span className="flex items-center gap-1 text-destructive font-mono text-[10px] uppercase tracking-[0.18em]">
                       <Skull className="w-3 h-3" />
-                      <span>{t('dossier.infected')}</span>
+                      <span>{'infected'}</span>
                     </span>
                   </div>
                 )}
               </div>
               <div className="space-y-1 border-t border-border/40 bg-muted/20 px-2 py-1.5">
                 <div className="grid grid-cols-2 gap-1">
-                <DisabledReason reason={!canGmTools ? t('permissions.noGmToolsBridgeAction') : null}>
-                  <Button
-                    size="sm" variant="ghost" className="h-7 min-w-0 w-full px-1.5 text-xs gap-1"
-                    disabled={actionLoading !== null || !canGmTools}
-                    onClick={() => {
-                      if (!canGmTools) return
-                      setActionLoading('heal-card')
-                      panelBridgeApi.sendCommand('healPlayer', { username: selectedPlayer.username })
-                        .then(() => { toast({ title: t('dossier.healedTitle'), description: t('dossier.healedDesc', { username: selectedPlayer.username }) }); fetchPlayerPositions() })
-                        .catch(() => toast({ title: t('errorTitle'), variant: 'destructive' }))
-                        .finally(() => setActionLoading(null))
-                    }}
+                  <DisabledReason
+                    reason={
+                      !canGmTools
+                        ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                        : null
+                    }
                   >
-                    <Heart className="w-3 h-3" /> {t('dossier.heal')}
-                  </Button>
-                </DisabledReason>
-                <div className="flex min-w-0 items-center gap-1">
-                  <DisabledReason reason={!canGmTools ? t('permissions.noGmToolsBridgeAction') : null} className="min-w-0 flex-1">
                     <Button
-                      size="sm" variant="ghost" className="h-7 min-w-0 w-full px-1.5 text-xs gap-1"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 min-w-0 w-full px-1.5 text-xs gap-1"
                       disabled={actionLoading !== null || !canGmTools}
                       onClick={() => {
                         if (!canGmTools) return
-                        setActionLoading('god-card')
-                        panelBridgeApi.sendCommand('setGodMode', { username: selectedPlayer.username, enabled: true })
-                          .then((response) => {
-                            const state = getBridgeVerifiedState('setGodMode', response?.data)
-                            if (state === 'unverifiable') {
-                              toast({ title: t('dossier.godModeEnabled'), description: t('toasts.bridgeUnverifiedDesc', { action: t('dossier.god') }), variant: 'default' })
-                            } else if (state === 'old-bridge') {
-                              toast({ title: t('dossier.godModeEnabled'), description: t('toasts.bridgeOldBridgeDesc', { action: t('dossier.god') }), variant: 'default' })
-                            } else {
-                              toast({ title: t('dossier.godModeEnabled') })
-                            }
+                        setActionLoading('heal-card')
+                        panelBridgeApi
+                          .sendCommand('healPlayer', {
+                            username: selectedPlayer.username,
                           })
-                          .catch(() => toast({ title: t('errorTitle'), variant: 'destructive' }))
+                          .then(() => {
+                            toast({
+                              title: 'Healed',
+                              description:
+                                String(selectedPlayer.username) + ' healed',
+                            })
+                            fetchPlayerPositions()
+                          })
+                          .catch(() =>
+                            toast({ title: 'Error', variant: 'destructive' }),
+                          )
                           .finally(() => setActionLoading(null))
                       }}
                     >
-                      <Shield className="w-3 h-3" /> {t('dossier.god')}
+                      <Heart className="w-3 h-3" /> {'Heal'}
                     </Button>
                   </DisabledReason>
-                  <HelpTip label={t('dossier.god')} className="shrink-0">{t('dossier.godTip')}</HelpTip>
-                </div>
+                  <div className="flex min-w-0 items-center gap-1">
+                    <DisabledReason
+                      reason={
+                        !canGmTools
+                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                          : null
+                      }
+                      className="min-w-0 flex-1"
+                    >
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 min-w-0 w-full px-1.5 text-xs gap-1"
+                        disabled={actionLoading !== null || !canGmTools}
+                        onClick={() => {
+                          if (!canGmTools) return
+                          setActionLoading('god-card')
+                          panelBridgeApi
+                            .sendCommand('setGodMode', {
+                              username: selectedPlayer.username,
+                              enabled: true,
+                            })
+                            .then((response) => {
+                              const state = getBridgeVerifiedState(
+                                'setGodMode',
+                                response?.data,
+                              )
+                              if (state === 'unverifiable') {
+                                toast({
+                                  title: 'God mode enabled',
+                                  description:
+                                    String('God') +
+                                    ' was sent, but the mod could not confirm it took effect.',
+                                  variant: 'default',
+                                })
+                              } else if (state === 'old-bridge') {
+                                toast({
+                                  title: 'God mode enabled',
+                                  description:
+                                    String('God') +
+                                    " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
+                                  variant: 'default',
+                                })
+                              } else {
+                                toast({ title: 'God mode enabled' })
+                              }
+                            })
+                            .catch(() =>
+                              toast({ title: 'Error', variant: 'destructive' }),
+                            )
+                            .finally(() => setActionLoading(null))
+                        }}
+                      >
+                        <Shield className="w-3 h-3" /> {'God'}
+                      </Button>
+                    </DisabledReason>
+                    <HelpTip label={'God'} className="shrink-0">
+                      {
+                        "Always turns God Mode on for this player — it doesn't toggle. Turn it back off from Players instead."
+                      }
+                    </HelpTip>
+                  </div>
                 </div>
                 <Link
                   to="/players"
@@ -2751,7 +3486,7 @@ export default function WorldMap() {
                   className="flex min-h-7 items-center justify-center gap-1.5 rounded-sm border border-border/50 px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
                 >
                   <Users className="h-3 w-3" />
-                  <span>{t('dossier.openPlayerControls')}</span>
+                  <span>{'Open player controls'}</span>
                   <ArrowUpRight className="h-3 w-3" />
                 </Link>
               </div>
@@ -2763,20 +3498,29 @@ export default function WorldMap() {
           <div
             ref={(el) => {
               if (el) {
-                const first = el.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')
+                const first = el.querySelector<HTMLButtonElement>(
+                  'button[role="menuitem"]:not(:disabled)',
+                )
                 first?.focus()
               }
             }}
             role="menu"
-            aria-label={t('contextMenu.ariaLabel')}
+            aria-label={'Map actions'}
             className="absolute z-20 min-w-[220px] sm:min-w-[260px] rounded-md bg-card/95 backdrop-blur-md border border-border/55 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)] ring-1 ring-primary/10 overflow-y-auto overscroll-contain"
             style={{
               left: contextMenu.screenX,
               top: contextMenu.screenY,
-              transform: [
-                contextMenu.screenX > (canvasSize.width || 800) / 2 ? 'translateX(-100%)' : '',
-                contextMenu.screenY > (canvasSize.height || 600) / 2 ? 'translateY(-100%)' : '',
-              ].filter(Boolean).join(' ') || undefined,
+              transform:
+                [
+                  contextMenu.screenX > (canvasSize.width || 800) / 2
+                    ? 'translateX(-100%)'
+                    : '',
+                  contextMenu.screenY > (canvasSize.height || 600) / 2
+                    ? 'translateY(-100%)'
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined,
               maxHeight: Math.max(
                 160,
                 (contextMenu.screenY > (canvasSize.height || 600) / 2
@@ -2786,9 +3530,13 @@ export default function WorldMap() {
               animation: 'popoverEnter 0.15s ease-out',
             }}
             onKeyDown={(e) => {
-              const items = e.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')
+              const items = e.currentTarget.querySelectorAll<HTMLButtonElement>(
+                'button[role="menuitem"]:not(:disabled)',
+              )
               const focused = document.activeElement as HTMLElement
-              const idx = Array.from(items).indexOf(focused as HTMLButtonElement)
+              const idx = Array.from(items).indexOf(
+                focused as HTMLButtonElement,
+              )
               if (e.key === 'ArrowDown') {
                 e.preventDefault()
                 items[(idx + 1) % items.length]?.focus()
@@ -2804,16 +3552,25 @@ export default function WorldMap() {
             <div className="flex items-center justify-between gap-1 px-2 py-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-primary/70 border-b border-border/40 select-none bg-muted/30">
               <span className="flex items-center gap-1.5">
                 <span className="text-primary/60">//</span>
-                <span>{t('contextMenu.actionsLabel')}</span>
-                <span className="text-muted-foreground/40 normal-case tracking-normal">·</span>
-                <span className="text-foreground tabular-nums normal-case tracking-normal">{Math.round(contextMenu.worldX)}, {Math.round(contextMenu.worldY)}</span>
-                <span className="text-muted-foreground/40 normal-case tracking-normal">·</span>
-                <span className="text-muted-foreground/60 normal-case tracking-normal">{floorLabel(floor)}</span>
+                <span>{'actions'}</span>
+                <span className="text-muted-foreground/40 normal-case tracking-normal">
+                  ·
+                </span>
+                <span className="text-foreground tabular-nums normal-case tracking-normal">
+                  {Math.round(contextMenu.worldX)},{' '}
+                  {Math.round(contextMenu.worldY)}
+                </span>
+                <span className="text-muted-foreground/40 normal-case tracking-normal">
+                  ·
+                </span>
+                <span className="text-muted-foreground/60 normal-case tracking-normal">
+                  {floorLabel(floor)}
+                </span>
               </span>
               <button
                 type="button"
-                title={t('contextMenu.copyCoordsTitle')}
-                aria-label={t('contextMenu.copyCoordsTitle')}
+                title={'Copy coordinates'}
+                aria-label={'Copy coordinates'}
                 className="p-1 -m-1 rounded hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
                 onClick={(ev) => {
                   ev.stopPropagation()
@@ -2829,27 +3586,50 @@ export default function WorldMap() {
                 <div className="px-2.5 pt-2 pb-1.5 border-b border-border/30 select-none">
                   <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.24em] text-primary/60 mb-1">
                     <span>›</span>
-                    <span>{t('contextMenu.targetLabel')}</span>
+                    <span>{'target'}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
                       className="w-2 h-2 rounded-full ring-1 ring-black/30 flex-none"
-                      style={{ backgroundColor: getPlayerColor(contextMenu.player, 0.9) }}
+                      style={{
+                        backgroundColor: getPlayerColor(
+                          contextMenu.player,
+                          0.9,
+                        ),
+                      }}
                     />
-                    <strong className="text-foreground text-xs truncate">{contextMenu.player.username}</strong>
+                    <strong className="text-foreground text-xs truncate">
+                      {contextMenu.player.username}
+                    </strong>
                   </div>
                 </div>
                 <ContextMenuItem
                   icon={<Heart className="w-3.5 h-3.5 text-emerald-400" />}
-                  label={t('contextMenu.healPlayer')}
-                  description={!canGmTools ? t('permissions.noGmToolsBridgeAction') : undefined}
+                  label={'Heal player'}
+                  description={
+                    !canGmTools
+                      ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                      : undefined
+                  }
                   tone="success"
                   disabled={!canGmTools}
                   onClick={() => {
                     if (!canGmTools) return
-                    panelBridgeApi.sendCommand('healPlayer', { username: contextMenu.player!.username })
-                      .then(() => { toast({ title: t('dossier.healedTitle'), description: t('dossier.healedDesc', { username: contextMenu.player!.username }) }); fetchPlayerPositions() })
-                      .catch(() => toast({ title: t('errorTitle'), variant: 'destructive' }))
+                    panelBridgeApi
+                      .sendCommand('healPlayer', {
+                        username: contextMenu.player!.username,
+                      })
+                      .then(() => {
+                        toast({
+                          title: 'Healed',
+                          description:
+                            String(contextMenu.player!.username) + ' healed',
+                        })
+                        fetchPlayerPositions()
+                      })
+                      .catch(() =>
+                        toast({ title: 'Error', variant: 'destructive' }),
+                      )
                     setContextMenu(null)
                   }}
                 />
@@ -2862,151 +3642,304 @@ export default function WorldMap() {
                   <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.24em] text-info/70 mb-1.5">
                     <span>›</span>
                     <Car className="w-2.5 h-2.5" />
-                    <span>{t('contextMenu.vehicleLabel')}</span>
+                    <span>{'vehicle'}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs">
-                    <strong className="text-foreground truncate">{contextMenu.vehicle.type || contextMenu.vehicle.scriptName?.split('.').pop() || t('vehicleFallback')}</strong>
+                    <strong className="text-foreground truncate">
+                      {contextMenu.vehicle.type ||
+                        contextMenu.vehicle.scriptName?.split('.').pop() ||
+                        'Vehicle'}
+                    </strong>
                   </div>
                   <div className="mt-1.5 space-y-1">
                     {contextMenu.vehicle.fuelPct != null && (
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/70 w-9">{t('contextMenu.fuel')}</span>
+                        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/70 w-9">
+                          {'fuel'}
+                        </span>
                         <div className="flex-1 h-1.5 rounded-sm bg-muted/60 overflow-hidden ring-1 ring-black/20">
                           <div
-                            className={cn("h-full transition-all", contextMenu.vehicle.fuelPct > 30 ? "bg-info/80" : contextMenu.vehicle.fuelPct > 10 ? "bg-amber-400/80" : "bg-destructive/80")}
-                            style={{ width: `${Math.round(contextMenu.vehicle.fuelPct)}%` }}
+                            className={cn(
+                              'h-full transition-all',
+                              contextMenu.vehicle.fuelPct > 30
+                                ? 'bg-info/80'
+                                : contextMenu.vehicle.fuelPct > 10
+                                  ? 'bg-amber-400/80'
+                                  : 'bg-destructive/80',
+                            )}
+                            style={{
+                              width: `${Math.round(contextMenu.vehicle.fuelPct)}%`,
+                            }}
                           />
                         </div>
-                        <span className="font-mono text-[10px] tabular-nums text-muted-foreground/80 w-8 text-end">{Math.round(contextMenu.vehicle.fuelPct)}%</span>
+                        <span className="font-mono text-[10px] tabular-nums text-muted-foreground/80 w-8 text-end">
+                          {Math.round(contextMenu.vehicle.fuelPct)}%
+                        </span>
                       </div>
                     )}
                     {contextMenu.vehicle.batteryCharge != null && (
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/70 w-9">{t('contextMenu.batt')}</span>
+                        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/70 w-9">
+                          {'batt'}
+                        </span>
                         <div className="flex-1 h-1.5 rounded-sm bg-muted/60 overflow-hidden ring-1 ring-black/20">
                           <div
-                            className={cn("h-full transition-all", contextMenu.vehicle.batteryCharge > 30 ? "bg-info/80" : contextMenu.vehicle.batteryCharge > 10 ? "bg-amber-400/80" : "bg-destructive/80")}
-                            style={{ width: `${Math.round(contextMenu.vehicle.batteryCharge)}%` }}
+                            className={cn(
+                              'h-full transition-all',
+                              contextMenu.vehicle.batteryCharge > 30
+                                ? 'bg-info/80'
+                                : contextMenu.vehicle.batteryCharge > 10
+                                  ? 'bg-amber-400/80'
+                                  : 'bg-destructive/80',
+                            )}
+                            style={{
+                              width: `${Math.round(contextMenu.vehicle.batteryCharge)}%`,
+                            }}
                           />
                         </div>
-                        <span className="font-mono text-[10px] tabular-nums text-muted-foreground/80 w-8 text-end">{Math.round(contextMenu.vehicle.batteryCharge)}%</span>
+                        <span className="font-mono text-[10px] tabular-nums text-muted-foreground/80 w-8 text-end">
+                          {Math.round(contextMenu.vehicle.batteryCharge)}%
+                        </span>
                       </div>
                     )}
-                    {contextMenu.vehicle.fuelPct == null && contextMenu.vehicle.batteryCharge == null && (
-                      <div className="font-mono text-[10px] text-muted-foreground/50 italic">{t('contextMenu.noTelemetry')}</div>
-                    )}
+                    {contextMenu.vehicle.fuelPct == null &&
+                      contextMenu.vehicle.batteryCharge == null && (
+                        <div className="font-mono text-[10px] text-muted-foreground/50 italic">
+                          {'no telemetry'}
+                        </div>
+                      )}
                   </div>
                 </div>
                 {contextMenu.vehicle.persisted ? (
                   <div className="px-2.5 py-2 text-[11px] text-muted-foreground/70 border-t border-border/30">
-                    {t('contextMenu.loadAreaFirst')}
+                    {
+                      "Load this vehicle's area in-game before using vehicle controls."
+                    }
                   </div>
                 ) : (
                   <>
                     <ContextMenuItem
                       icon={<Wrench className="w-3.5 h-3.5 text-info" />}
-                      label={t('contextMenu.repairVehicle')}
-                      description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : undefined}
+                      label={'Repair vehicle'}
+                      description={
+                        !canRunBridgeCommand
+                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                          : undefined
+                      }
                       tone="info"
                       loading={actionLoading === 'vehicle-repair'}
                       disabled={!canRunBridgeCommand}
                       onClick={() => {
-                    if (!canRunBridgeCommand) return
-                    setActionLoading('vehicle-repair')
-                    panelBridgeApi.sendCommand('vehicleRepair', { vehicleId: contextMenu.vehicle!.id })
-                      .then(() => {
-                        toast({ title: t('toasts.vehicleRepaired') })
-                        fetchOverlays()
-                      })
-                      .catch((err) => toast({ title: t('toasts.repairFailed'), description: getUserErrorMessage(err, t('toasts.unknownError')), variant: 'destructive' }))
-                      .finally(() => { setActionLoading(null); setContextMenu(null) })
+                        if (!canRunBridgeCommand) return
+                        setActionLoading('vehicle-repair')
+                        panelBridgeApi
+                          .sendCommand('vehicleRepair', {
+                            vehicleId: contextMenu.vehicle!.id,
+                          })
+                          .then(() => {
+                            toast({ title: 'Vehicle repaired' })
+                            fetchOverlays()
+                          })
+                          .catch((err) =>
+                            toast({
+                              title: 'Repair failed',
+                              description: getUserErrorMessage(
+                                err,
+                                'Unknown error',
+                              ),
+                              variant: 'destructive',
+                            }),
+                          )
+                          .finally(() => {
+                            setActionLoading(null)
+                            setContextMenu(null)
+                          })
                       }}
                     />
                     <ContextMenuItem
-                  icon={<Fuel className="w-3.5 h-3.5 text-info" />}
-                  label={t('contextMenu.fillFuel')}
-                  description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : undefined}
-                  tone="info"
-                  loading={actionLoading === 'vehicle-fuel'}
-                  disabled={!canRunBridgeCommand}
-                  onClick={() => {
-                    if (!canRunBridgeCommand) return
-                    setActionLoading('vehicle-fuel')
-                    panelBridgeApi.sendCommand('vehicleSetFuel', { vehicleId: contextMenu.vehicle!.id, percent: 100 })
-                      .then((response) => {
-                        const state = getBridgeVerifiedState('vehicleSetFuel', response?.data)
-                        if (state === 'unverifiable') {
-                          toast({ title: t('toasts.fuelFilled'), description: t('toasts.bridgeUnverifiedDesc', { action: t('toasts.fuelFilled') }), variant: 'default' })
-                        } else if (state === 'old-bridge') {
-                          toast({ title: t('toasts.fuelFilled'), description: t('toasts.bridgeOldBridgeDesc', { action: t('toasts.fuelFilled') }), variant: 'default' })
-                        } else {
-                          toast({ title: t('toasts.fuelFilled') })
-                        }
-                        fetchOverlays()
-                      })
-                      .catch((err) => toast({ title: t('toasts.fuelFailed'), description: getUserErrorMessage(err, t('toasts.unknownError')), variant: 'destructive' }))
-                      .finally(() => { setActionLoading(null); setContextMenu(null) })
+                      icon={<Fuel className="w-3.5 h-3.5 text-info" />}
+                      label={'Fill fuel'}
+                      description={
+                        !canRunBridgeCommand
+                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                          : undefined
+                      }
+                      tone="info"
+                      loading={actionLoading === 'vehicle-fuel'}
+                      disabled={!canRunBridgeCommand}
+                      onClick={() => {
+                        if (!canRunBridgeCommand) return
+                        setActionLoading('vehicle-fuel')
+                        panelBridgeApi
+                          .sendCommand('vehicleSetFuel', {
+                            vehicleId: contextMenu.vehicle!.id,
+                            percent: 100,
+                          })
+                          .then((response) => {
+                            const state = getBridgeVerifiedState(
+                              'vehicleSetFuel',
+                              response?.data,
+                            )
+                            if (state === 'unverifiable') {
+                              toast({
+                                title: 'Fuel filled to 100%',
+                                description:
+                                  String('Fuel filled to 100%') +
+                                  ' was sent, but the mod could not confirm it took effect.',
+                                variant: 'default',
+                              })
+                            } else if (state === 'old-bridge') {
+                              toast({
+                                title: 'Fuel filled to 100%',
+                                description:
+                                  String('Fuel filled to 100%') +
+                                  " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
+                                variant: 'default',
+                              })
+                            } else {
+                              toast({ title: 'Fuel filled to 100%' })
+                            }
+                            fetchOverlays()
+                          })
+                          .catch((err) =>
+                            toast({
+                              title: 'Fuel failed',
+                              description: getUserErrorMessage(
+                                err,
+                                'Unknown error',
+                              ),
+                              variant: 'destructive',
+                            }),
+                          )
+                          .finally(() => {
+                            setActionLoading(null)
+                            setContextMenu(null)
+                          })
                       }}
                     />
                     <ContextMenuItem
-                  icon={<Battery className="w-3.5 h-3.5 text-info" />}
-                  label={t('contextMenu.chargeBattery')}
-                  description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : undefined}
-                  tone="info"
-                  loading={actionLoading === 'vehicle-battery'}
-                  disabled={!canRunBridgeCommand}
-                  onClick={() => {
-                    if (!canRunBridgeCommand) return
-                    setActionLoading('vehicle-battery')
-                    panelBridgeApi.sendCommand('vehicleSetBattery', { vehicleId: contextMenu.vehicle!.id, charge: 100 })
-                      .then((response) => {
-                        const state = getBridgeVerifiedState('vehicleSetBattery', response?.data)
-                        if (state === 'unverifiable') {
-                          toast({ title: t('toasts.batteryCharged'), description: t('toasts.bridgeUnverifiedDesc', { action: t('toasts.batteryCharged') }), variant: 'default' })
-                        } else if (state === 'old-bridge') {
-                          toast({ title: t('toasts.batteryCharged'), description: t('toasts.bridgeOldBridgeDesc', { action: t('toasts.batteryCharged') }), variant: 'default' })
-                        } else {
-                          toast({ title: t('toasts.batteryCharged') })
-                        }
-                        fetchOverlays()
-                      })
-                      .catch((err) => toast({ title: t('toasts.batteryFailed'), description: getUserErrorMessage(err, t('toasts.unknownError')), variant: 'destructive' }))
-                      .finally(() => { setActionLoading(null); setContextMenu(null) })
+                      icon={<Battery className="w-3.5 h-3.5 text-info" />}
+                      label={'Charge battery'}
+                      description={
+                        !canRunBridgeCommand
+                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                          : undefined
+                      }
+                      tone="info"
+                      loading={actionLoading === 'vehicle-battery'}
+                      disabled={!canRunBridgeCommand}
+                      onClick={() => {
+                        if (!canRunBridgeCommand) return
+                        setActionLoading('vehicle-battery')
+                        panelBridgeApi
+                          .sendCommand('vehicleSetBattery', {
+                            vehicleId: contextMenu.vehicle!.id,
+                            charge: 100,
+                          })
+                          .then((response) => {
+                            const state = getBridgeVerifiedState(
+                              'vehicleSetBattery',
+                              response?.data,
+                            )
+                            if (state === 'unverifiable') {
+                              toast({
+                                title: 'Battery charged to 100%',
+                                description:
+                                  String('Battery charged to 100%') +
+                                  ' was sent, but the mod could not confirm it took effect.',
+                                variant: 'default',
+                              })
+                            } else if (state === 'old-bridge') {
+                              toast({
+                                title: 'Battery charged to 100%',
+                                description:
+                                  String('Battery charged to 100%') +
+                                  " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
+                                variant: 'default',
+                              })
+                            } else {
+                              toast({ title: 'Battery charged to 100%' })
+                            }
+                            fetchOverlays()
+                          })
+                          .catch((err) =>
+                            toast({
+                              title: 'Battery failed',
+                              description: getUserErrorMessage(
+                                err,
+                                'Unknown error',
+                              ),
+                              variant: 'destructive',
+                            }),
+                          )
+                          .finally(() => {
+                            setActionLoading(null)
+                            setContextMenu(null)
+                          })
                       }}
                     />
                     <ContextMenuItem
-                  icon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
-                  label={t('contextMenu.removeVehicle')}
-                  description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : undefined}
-                  tone="danger"
-                  disabled={!canRunBridgeCommand}
-                  onClick={() => {
-                    const v = contextMenu.vehicle!
-                    setRemoveVehicleTarget({
-                      id: v.id,
-                      label: v.type || v.scriptName?.split('.').pop() || t('vehicleFallback'),
-                      x: Math.round(v.x),
-                      y: Math.round(v.y),
-                    })
-                    setContextMenu(null)
+                      icon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
+                      label={'Remove vehicle'}
+                      description={
+                        !canRunBridgeCommand
+                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                          : undefined
+                      }
+                      tone="danger"
+                      disabled={!canRunBridgeCommand}
+                      onClick={() => {
+                        const v = contextMenu.vehicle!
+                        setRemoveVehicleTarget({
+                          id: v.id,
+                          label:
+                            v.type ||
+                            v.scriptName?.split('.').pop() ||
+                            'Vehicle',
+                          x: Math.round(v.x),
+                          y: Math.round(v.y),
+                        })
+                        setContextMenu(null)
                       }}
                     />
                     <ContextMenuItem
-                  icon={<Zap className="w-3.5 h-3.5 text-amber-400" />}
-                  label={t('contextMenu.hotwire')}
-                  description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : undefined}
-                  tone="warning"
-                  loading={actionLoading === 'vehicle-hotwire'}
-                  disabled={!canRunBridgeCommand}
-                  onClick={() => {
-                    if (!canRunBridgeCommand) return
-                    setActionLoading('vehicle-hotwire')
-                    panelBridgeApi.sendCommand('vehicleHotwire', { vehicleId: contextMenu.vehicle!.id })
-                      .then(() => {
-                        toast({ title: t('toasts.vehicleHotwired'), description: t('toasts.engineStarted') })
-                      })
-                      .catch((err) => toast({ title: t('toasts.hotwireFailed'), description: getUserErrorMessage(err, t('toasts.unknownError')), variant: 'destructive' }))
-                      .finally(() => { setActionLoading(null); setContextMenu(null) })
+                      icon={<Zap className="w-3.5 h-3.5 text-amber-400" />}
+                      label={'Hotwire & start engine'}
+                      description={
+                        !canRunBridgeCommand
+                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                          : undefined
+                      }
+                      tone="warning"
+                      loading={actionLoading === 'vehicle-hotwire'}
+                      disabled={!canRunBridgeCommand}
+                      onClick={() => {
+                        if (!canRunBridgeCommand) return
+                        setActionLoading('vehicle-hotwire')
+                        panelBridgeApi
+                          .sendCommand('vehicleHotwire', {
+                            vehicleId: contextMenu.vehicle!.id,
+                          })
+                          .then(() => {
+                            toast({
+                              title: 'Vehicle hotwired',
+                              description: 'Engine started',
+                            })
+                          })
+                          .catch((err) =>
+                            toast({
+                              title: 'Hotwire failed',
+                              description: getUserErrorMessage(
+                                err,
+                                'Unknown error',
+                              ),
+                              variant: 'destructive',
+                            }),
+                          )
+                          .finally(() => {
+                            setActionLoading(null)
+                            setContextMenu(null)
+                          })
                       }}
                     />
                   </>
@@ -3016,11 +3949,18 @@ export default function WorldMap() {
 
             {playersRef.current.length > 0 && (
               <div className="border-t border-border/30">
-                <ContextMenuSection label={t('contextMenu.teleportLabel')} icon={<Locate className="w-2.5 h-2.5" />} tone="primary" />
+                <ContextMenuSection
+                  label={'teleport'}
+                  icon={<Locate className="w-2.5 h-2.5" />}
+                  tone="primary"
+                />
                 {playersRef.current.slice(0, 6).map((pl) => {
                   const pColor = pl.isInfected
                     ? 'text-destructive'
-                    : pl.accessLevel && pl.accessLevel !== '' && pl.accessLevel !== 'none' && pl.accessLevel !== 'user'
+                    : pl.accessLevel &&
+                        pl.accessLevel !== '' &&
+                        pl.accessLevel !== 'none' &&
+                        pl.accessLevel !== 'user'
                       ? 'text-amber-400'
                       : 'text-info'
                   return (
@@ -3028,17 +3968,27 @@ export default function WorldMap() {
                       key={`tp-${pl.username}`}
                       icon={<Users className={cn('w-3.5 h-3.5', pColor)} />}
                       label={pl.displayName || pl.username}
-                      description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : t('contextMenu.teleportDesc', {
-                        fromX: Math.round(pl.x),
-                        fromY: Math.round(pl.y),
-                        toX: Math.round(contextMenu.worldX),
-                        toY: Math.round(contextMenu.worldY),
-                      })}
+                      description={
+                        !canRunBridgeCommand
+                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                          : String(Math.round(pl.x)) +
+                            ', ' +
+                            String(Math.round(pl.y)) +
+                            ' → ' +
+                            String(Math.round(contextMenu.worldX)) +
+                            ', ' +
+                            String(Math.round(contextMenu.worldY))
+                      }
                       tone="primary"
                       loading={actionLoading === 'teleport'}
                       disabled={!bridgeConnected || !canRunBridgeCommand}
                       onClick={() => {
-                        teleportPlayerTo(pl.username, contextMenu.worldX, contextMenu.worldY, floor)
+                        teleportPlayerTo(
+                          pl.username,
+                          contextMenu.worldX,
+                          contextMenu.worldY,
+                          floor,
+                        )
                         setContextMenu(null)
                       }}
                     />
@@ -3046,39 +3996,65 @@ export default function WorldMap() {
                 })}
                 {playersRef.current.length > 6 && (
                   <div className="px-2.5 py-1 font-mono text-[10px] text-muted-foreground/50 italic select-none">
-                    {t('contextMenu.moreOnline', { count: playersRef.current.length - 6 })}
+                    {'+' +
+                      String(playersRef.current.length - 6) +
+                      ' more online'}
                   </div>
                 )}
               </div>
             )}
 
             <div className="border-t border-border/30">
-              <ContextMenuSection label={t('contextMenu.effectsLabel')} icon={<Zap className="w-2.5 h-2.5" />} tone="info" />
+              <ContextMenuSection
+                label={'effects'}
+                icon={<Zap className="w-2.5 h-2.5" />}
+                tone="info"
+              />
               <ContextMenuItem
                 icon={<CloudLightning className="w-3.5 h-3.5 text-info" />}
-                label={t('contextMenu.lightningStrike')}
-                description={!canWorldEvents ? t('permissions.noWorldEvents') : t('contextMenu.lightningDesc')}
+                label={'Lightning strike'}
+                description={
+                  !canWorldEvents
+                    ? "Triggering world events requires the server.world_events permission, which this role doesn't have."
+                    : 'Single bolt + thunder'
+                }
                 tone="info"
                 loading={actionLoading === 'lightning'}
                 disabled={!canWorldEvents}
-                onClick={() => triggerLightningAt(contextMenu.worldX, contextMenu.worldY)}
+                onClick={() =>
+                  triggerLightningAt(contextMenu.worldX, contextMenu.worldY)
+                }
               />
               <ContextMenuItem
                 icon={<Volume2 className="w-3.5 h-3.5 text-amber-400" />}
-                label={t('contextMenu.createNoise')}
-                description={!canWorldEvents ? t('permissions.noWorldEvents') : t('contextMenu.createNoiseDesc')}
+                label={'Create noise'}
+                description={
+                  !canWorldEvents
+                    ? "Triggering world events requires the server.world_events permission, which this role doesn't have."
+                    : 'Pull zombies this way'
+                }
                 tone="warning"
                 loading={actionLoading === 'noise'}
                 disabled={!canWorldEvents}
-                onClick={() => createNoiseAt(contextMenu.worldX, contextMenu.worldY)}
+                onClick={() =>
+                  createNoiseAt(contextMenu.worldX, contextMenu.worldY)
+                }
               />
               <ContextMenuItem
                 icon={<Car className="w-3.5 h-3.5 text-muted-foreground" />}
-                label={t('contextMenu.spawnVehicleHere')}
-                description={!canGmTools ? t('permissions.noGmTools') : t('contextMenu.spawnVehicleDesc')}
+                label={'Spawn vehicle here'}
+                description={
+                  !canGmTools
+                    ? "Spawning a vehicle requires the players.gm_tools permission, which this role doesn't have."
+                    : 'Pick a vehicle to spawn'
+                }
                 disabled={!bridgeConnected || !canGmTools}
                 onClick={() => {
-                  setSpawnDialog({ x: Math.round(contextMenu.worldX), y: Math.round(contextMenu.worldY), z: floor })
+                  setSpawnDialog({
+                    x: Math.round(contextMenu.worldX),
+                    y: Math.round(contextMenu.worldY),
+                    z: floor,
+                  })
                   setSpawnVehicleId('')
                   setContextMenu(null)
                 }}
@@ -3086,15 +4062,27 @@ export default function WorldMap() {
             </div>
 
             <div className="border-t border-border/30">
-              <ContextMenuSection label={t('contextMenu.dropsLabel')} icon={<Package className="w-2.5 h-2.5" />} tone="warning" />
+              <ContextMenuSection
+                label={'drops'}
+                icon={<Package className="w-2.5 h-2.5" />}
+                tone="warning"
+              />
               <ContextMenuItem
                 icon={<Package className="w-3.5 h-3.5 text-amber-400" />}
-                label={t('contextMenu.customDrop')}
-                description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : t('contextMenu.customDropDesc')}
+                label={'Custom drop…'}
+                description={
+                  !canRunBridgeCommand
+                    ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                    : 'Build a package — items, quantities, templates'
+                }
                 tone="warning"
                 disabled={!bridgeConnected || !canRunBridgeCommand}
                 onClick={() => {
-                  setDropDialog({ x: Math.round(contextMenu.worldX), y: Math.round(contextMenu.worldY), z: floor })
+                  setDropDialog({
+                    x: Math.round(contextMenu.worldX),
+                    y: Math.round(contextMenu.worldY),
+                    z: floor,
+                  })
                   if (lastDrop && lastDrop.items.length > 0) {
                     setDropItems(lastDrop.items.map((it) => ({ ...it })))
                   } else {
@@ -3112,8 +4100,12 @@ export default function WorldMap() {
               {lastDrop && (
                 <ContextMenuItem
                   icon={<RefreshCw className="w-3.5 h-3.5 text-amber-400/80" />}
-                  label={t('contextMenu.repeatLastDrop')}
-                  description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : lastDrop.label}
+                  label={'Repeat last drop'}
+                  description={
+                    !canRunBridgeCommand
+                      ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                      : lastDrop.label
+                  }
                   tone="warning"
                   loading={actionLoading === 'drop'}
                   disabled={!bridgeConnected || !canRunBridgeCommand}
@@ -3133,13 +4125,25 @@ export default function WorldMap() {
               )}
               {dropTemplates.length > 0 && (
                 <>
-                  <ContextMenuSection label={t('contextMenu.savedPackages')} icon={<Save className="w-2.5 h-2.5" />} tone="muted" />
+                  <ContextMenuSection
+                    label={'saved packages'}
+                    icon={<Save className="w-2.5 h-2.5" />}
+                    tone="muted"
+                  />
                   {dropTemplates.slice(0, 8).map((tpl) => (
                     <ContextMenuItem
                       key={tpl.id}
-                      icon={<Package className="w-3.5 h-3.5 text-amber-400/70" />}
+                      icon={
+                        <Package className="w-3.5 h-3.5 text-amber-400/70" />
+                      }
                       label={tpl.name}
-                      description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : t('dropDialog.templateItemCount', { count: tpl.items.length })}
+                      description={
+                        !canRunBridgeCommand
+                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                          : Number(tpl.items.length) === 1
+                            ? String(tpl.items.length) + ' item'
+                            : String(tpl.items.length) + ' items'
+                      }
                       tone="warning"
                       loading={actionLoading === 'drop'}
                       disabled={!bridgeConnected || !canRunBridgeCommand}
@@ -3159,23 +4163,39 @@ export default function WorldMap() {
                   ))}
                 </>
               )}
-              <ContextMenuSection label={t('contextMenu.presetCrates')} icon={<Package className="w-2.5 h-2.5" />} tone="muted" />
+              <ContextMenuSection
+                label={'preset crates'}
+                icon={<Package className="w-2.5 h-2.5" />}
+                tone="muted"
+              />
               {AIRDROP_PRESETS.map((preset) => (
                 <ContextMenuItem
                   key={preset.id}
-                  icon={<preset.icon className="w-3.5 h-3.5 text-amber-400/80" />}
+                  icon={
+                    <preset.icon className="w-3.5 h-3.5 text-amber-400/80" />
+                  }
                   label={presetLabel(preset.id)}
-                  description={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : presetDesc(preset.id)}
+                  description={
+                    !canRunBridgeCommand
+                      ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                      : presetDesc(preset.id)
+                  }
                   tone="warning"
                   loading={actionLoading === 'airdrop'}
                   disabled={!bridgeConnected || !canRunBridgeCommand}
-                  onClick={() => callAirdrop(contextMenu.worldX, contextMenu.worldY, preset.id)}
+                  onClick={() =>
+                    callAirdrop(
+                      contextMenu.worldX,
+                      contextMenu.worldY,
+                      preset.id,
+                    )
+                  }
                 />
               ))}
               {!bridgeConnected && (
                 <div className="mt-1 mx-2 mb-1.5 px-2 py-1.5 rounded-sm border border-destructive/30 bg-destructive/10 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-destructive/85">
                   <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
-                  <span>{t('contextMenu.bridgeOfflineDrops')}</span>
+                  <span>{'bridge offline — drops unavailable'}</span>
                 </div>
               )}
             </div>
@@ -3191,7 +4211,9 @@ export default function WorldMap() {
             ref={canvasRef}
             tabIndex={0}
             role="img"
-            aria-label={t('canvasAria')}
+            aria-label={
+              'World map showing Knox County with player positions. Use arrow keys to pan, plus/minus to zoom.'
+            }
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -3201,25 +4223,46 @@ export default function WorldMap() {
             onTouchEnd={handleTouchEnd}
             onContextMenu={handleContextMenu}
             onKeyDown={handleKeyDown}
-            className={cn('block w-full h-full outline-none focus-visible:ring-2 focus-visible:ring-primary/50', isDragging ? 'cursor-grabbing' : (hoveredPlayer || hoveredVehicle) ? 'cursor-pointer' : 'cursor-grab')}
+            className={cn(
+              'block w-full h-full outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+              isDragging
+                ? 'cursor-grabbing'
+                : hoveredPlayer || hoveredVehicle
+                  ? 'cursor-pointer'
+                  : 'cursor-grab',
+            )}
           />
         </div>
       </div>
 
-      <Dialog open={!!spawnDialog} onOpenChange={(open) => { if (!open) setSpawnDialog(null) }}>
+      <Dialog
+        open={!!spawnDialog}
+        onOpenChange={(open) => {
+          if (!open) setSpawnDialog(null)
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Car className="w-5 h-5" />
-              {t('spawnDialog.title')}
+              {'Spawn Vehicle'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-muted-foreground font-mono tabular-nums">
-                {t('spawnDialog.location', { x: spawnDialog?.x, y: spawnDialog?.y, z: spawnDialog?.z ?? 0 })}
+                {'Location: ' +
+                  String(spawnDialog?.x) +
+                  ', ' +
+                  String(spawnDialog?.y) +
+                  ' · Floor ' +
+                  String(spawnDialog?.z ?? 0)}
               </span>
-              <HelpTip label={t('spawnDialog.title')}>{t('spawnDialog.floorTip')}</HelpTip>
+              <HelpTip label={'Spawn Vehicle'}>
+                {
+                  'Vehicles only spawn at ground level or in a basement — this fails on any floor above ground.'
+                }
+              </HelpTip>
             </div>
             <VehiclePicker
               value={spawnVehicleId}
@@ -3227,67 +4270,110 @@ export default function WorldMap() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSpawnDialog(null)}>{t('spawnDialog.cancel')}</Button>
-            <DisabledReason reason={!canGmTools ? t('permissions.noGmTools') : null}>
-            <Button
-              disabled={!spawnVehicleId || actionLoading === 'spawn-vehicle' || !canGmTools}
-              onClick={() => {
-                if (!spawnDialog || !spawnVehicleId) return
-                if (!canGmTools) return
-                setActionLoading('spawn-vehicle')
-                playersApi.addVehicleAt(
-                  spawnVehicleId,
-                  spawnDialog.x,
-                  spawnDialog.y,
-                  spawnDialog.z,
-                )
-                  .then(() => {
-                    toast({ title: t('toasts.vehicleSpawnedTitle'), description: t('toasts.vehicleSpawnedDesc', { vehicle: spawnVehicleId.split('.').pop(), x: spawnDialog.x, y: spawnDialog.y }) })
-                    fetchOverlays()
-                    setSpawnDialog(null)
-                  })
-                  .catch((err) => toast({ title: t('toasts.spawnFailedTitle'), description: getUserErrorMessage(err, t('toasts.unknownError')), variant: 'destructive' }))
-                  .finally(() => setActionLoading(null))
-              }}
-            >
-              {actionLoading === 'spawn-vehicle' ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : <Plus className="w-4 h-4 me-2" />}
-              {t('spawnDialog.spawn')}
+            <Button variant="outline" onClick={() => setSpawnDialog(null)}>
+              {'Cancel'}
             </Button>
+            <DisabledReason
+              reason={
+                !canGmTools
+                  ? "Spawning a vehicle requires the players.gm_tools permission, which this role doesn't have."
+                  : null
+              }
+            >
+              <Button
+                disabled={
+                  !spawnVehicleId ||
+                  actionLoading === 'spawn-vehicle' ||
+                  !canGmTools
+                }
+                onClick={() => {
+                  if (!spawnDialog || !spawnVehicleId) return
+                  if (!canGmTools) return
+                  setActionLoading('spawn-vehicle')
+                  playersApi
+                    .addVehicleAt(
+                      spawnVehicleId,
+                      spawnDialog.x,
+                      spawnDialog.y,
+                      spawnDialog.z,
+                    )
+                    .then(() => {
+                      toast({
+                        title: 'Vehicle spawned',
+                        description:
+                          String(spawnVehicleId.split('.').pop()) +
+                          ' at ' +
+                          String(spawnDialog.x) +
+                          ', ' +
+                          String(spawnDialog.y),
+                      })
+                      fetchOverlays()
+                      setSpawnDialog(null)
+                    })
+                    .catch((err) =>
+                      toast({
+                        title: 'Spawn failed',
+                        description: getUserErrorMessage(err, 'Unknown error'),
+                        variant: 'destructive',
+                      }),
+                    )
+                    .finally(() => setActionLoading(null))
+                }}
+              >
+                {actionLoading === 'spawn-vehicle' ? (
+                  <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4 me-2" />
+                )}
+                {'Spawn'}
+              </Button>
             </DisabledReason>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!dropDialog} onOpenChange={(open) => { if (!open) setDropDialog(null) }}>
+      <Dialog
+        open={!!dropDialog}
+        onOpenChange={(open) => {
+          if (!open) setDropDialog(null)
+        }}
+      >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="w-5 h-5 text-warning" />
-              {t('dropDialog.title')}
-              {activeTemplateId && (() => {
-                const tpl = dropTemplates.find((t) => t.id === activeTemplateId)
-                return tpl ? (
-                  <span className="ms-1 inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-normal text-muted-foreground">
-                    <Save className="w-3 h-3" />
-                    {tpl.name}
-                  </span>
-                ) : null
-              })()}
+              {'Custom item drop'}
+              {activeTemplateId &&
+                (() => {
+                  const tpl = dropTemplates.find(
+                    (t) => t.id === activeTemplateId,
+                  )
+                  return tpl ? (
+                    <span className="ms-1 inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-normal text-muted-foreground">
+                      <Save className="w-3 h-3" />
+                      {tpl.name}
+                    </span>
+                  ) : null
+                })()}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-xs font-mono tabular-nums">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Crosshair className="w-3.5 h-3.5" />
-                <span className="text-foreground">{dropDialog?.x}, {dropDialog?.y}</span>
+                <span className="text-foreground">
+                  {dropDialog?.x}, {dropDialog?.y}
+                </span>
                 <span className="text-muted-foreground/50">·</span>
                 <span>{floorLabel(dropDialog?.z ?? 0)}</span>
               </div>
               <button
                 type="button"
                 className="text-muted-foreground/60 hover:text-foreground"
-                title={t('dropDialog.copyCoordsTitle')}
-                onClick={() => dropDialog && copyCoords(dropDialog.x, dropDialog.y)}
+                title={'Copy coordinates'}
+                onClick={() =>
+                  dropDialog && copyCoords(dropDialog.x, dropDialog.y)
+                }
               >
                 <Copy className="w-3.5 h-3.5" />
               </button>
@@ -3296,7 +4382,7 @@ export default function WorldMap() {
             <div className="flex items-center gap-2 flex-wrap">
               <Label className="text-xs text-muted-foreground flex items-center gap-1.5 me-auto">
                 <Save className="w-3.5 h-3.5" />
-                {t('dropDialog.packageTemplates')}
+                {'Package templates'}
               </Label>
               {dropTemplates.length > 0 ? (
                 <>
@@ -3316,10 +4402,13 @@ export default function WorldMap() {
                     }}
                     className="h-8 rounded-md border border-border/60 bg-background px-2 text-xs min-w-[140px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
-                    <option value="">{t('dropDialog.loadPackagePlaceholder')}</option>
+                    <option value="">{'Load package…'}</option>
                     {dropTemplates.map((tpl) => (
                       <option key={tpl.id} value={tpl.id}>
-                        {t('dropDialog.templateOptionLabel', { name: tpl.name, count: tpl.items.length })}
+                        {String(tpl.name) +
+                          ' (' +
+                          String(tpl.items.length) +
+                          ')'}
                       </option>
                     ))}
                   </select>
@@ -3329,7 +4418,7 @@ export default function WorldMap() {
                       variant="outline"
                       size="sm"
                       className="h-8 px-2 text-destructive hover:text-destructive"
-                      title={t('dropDialog.deletePackageTitle')}
+                      title={'Delete this package'}
                       onClick={() => setDeleteTemplateId(activeTemplateId)}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -3337,44 +4426,58 @@ export default function WorldMap() {
                   )}
                 </>
               ) : (
-                <span className="text-[11px] text-muted-foreground/60 italic">{t('dropDialog.noPackagesYet')}</span>
+                <span className="text-[11px] text-muted-foreground/60 italic">
+                  {'No packages yet — build one and save below'}
+                </span>
               )}
             </div>
 
             <div className="rounded-md border border-border/50 bg-muted/10 divide-y divide-border/30">
               {dropItems.length === 0 && (
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground/60 italic">
-                  {t('dropDialog.noItemsRow')}
+                  {'No items — add at least one below.'}
                 </div>
               )}
               {dropItems.map((item, idx) => (
                 <div key={idx} className="flex items-end gap-2 px-2 py-2">
                   <div className="flex-1 min-w-0">
                     {idx === 0 && (
-                      <Label className="text-[10px] text-muted-foreground/70 mb-1 block">{t('dropDialog.itemLabel')}</Label>
+                      <Label className="text-[10px] text-muted-foreground/70 mb-1 block">
+                        {'Item'}
+                      </Label>
                     )}
                     <ItemPicker
                       value={item.itemType}
                       onChange={(val) => {
-                        setDropItems((prev) => prev.map((it, i) => (i === idx ? { ...it, itemType: val } : it)))
+                        setDropItems((prev) =>
+                          prev.map((it, i) =>
+                            i === idx ? { ...it, itemType: val } : it,
+                          ),
+                        )
                         setActiveTemplateId(null)
                       }}
-                      placeholder={t('dropDialog.itemPlaceholder')}
+                      placeholder={'Search catalog...'}
                     />
                   </div>
                   <div className="w-16 shrink-0">
                     {idx === 0 && (
-                      <Label className="text-[10px] text-muted-foreground/70 mb-1 block">{t('dropDialog.qtyLabel')}</Label>
+                      <Label className="text-[10px] text-muted-foreground/70 mb-1 block">
+                        {'Qty'}
+                      </Label>
                     )}
                     <NumberInput
                       value={item.count}
                       min={1}
                       max={20}
                       className="h-9 text-center tabular-nums"
-                      clamp={n => Math.max(1, Math.min(20, n))}
+                      clamp={(n) => Math.max(1, Math.min(20, n))}
                       onChange={(count) => {
                         if (!Number.isFinite(count)) return
-                        setDropItems((prev) => prev.map((it, i) => (i === idx ? { ...it, count } : it)))
+                        setDropItems((prev) =>
+                          prev.map((it, i) =>
+                            i === idx ? { ...it, count } : it,
+                          ),
+                        )
                         setActiveTemplateId(null)
                       }}
                     />
@@ -3384,9 +4487,13 @@ export default function WorldMap() {
                     variant="ghost"
                     size="sm"
                     className="h-9 w-9 p-0 shrink-0 text-muted-foreground/60 hover:text-destructive"
-                    title={t('dropDialog.removeItemTitle')}
+                    title={'Remove item'}
                     onClick={() => {
-                      setDropItems((prev) => (prev.length <= 1 ? [{ itemType: '', count: 1 }] : prev.filter((_, i) => i !== idx)))
+                      setDropItems((prev) =>
+                        prev.length <= 1
+                          ? [{ itemType: '', count: 1 }]
+                          : prev.filter((_, i) => i !== idx),
+                      )
                       setActiveTemplateId(null)
                     }}
                   >
@@ -3408,10 +4515,13 @@ export default function WorldMap() {
                 }}
               >
                 <Plus className="w-3.5 h-3.5 me-1" />
-                {t('dropDialog.addItem')}
+                {'Add item'}
               </Button>
               <div className="text-[11px] text-muted-foreground/70 tabular-nums">
-                {t('dropDialog.validCount', { valid: dropItems.filter((it) => it.itemType.trim()).length, total: dropItems.length })}
+                {String(dropItems.filter((it) => it.itemType.trim()).length) +
+                  ' / ' +
+                  String(dropItems.length) +
+                  ' valid · max 50'}
               </div>
             </div>
 
@@ -3421,8 +4531,10 @@ export default function WorldMap() {
                 <Input
                   autoFocus
                   value={templateNameInput}
-                  onChange={(e) => setTemplateNameInput(e.target.value.slice(0, 40))}
-                  placeholder={t('dropDialog.savePackagePlaceholder')}
+                  onChange={(e) =>
+                    setTemplateNameInput(e.target.value.slice(0, 40))
+                  }
+                  placeholder={"Package name (e.g. 'Winter starter')"}
                   className="h-8 flex-1"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -3431,16 +4543,23 @@ export default function WorldMap() {
                       if (!name) return
                       const valid = dropItems.filter((it) => it.itemType.trim())
                       if (valid.length === 0) {
-                        toast({ title: t('toasts.cannotSaveEmptyPackage'), variant: 'destructive' })
+                        toast({
+                          title: 'Cannot save empty package',
+                          variant: 'destructive',
+                        })
                         return
                       }
                       const id = `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-                      const tpl: DropTemplate = { id, name, items: valid.map((it) => ({ ...it })) }
+                      const tpl: DropTemplate = {
+                        id,
+                        name,
+                        items: valid.map((it) => ({ ...it })),
+                      }
                       persistDropTemplates([...dropTemplates, tpl].slice(-50))
                       setActiveTemplateId(id)
                       setSavingTemplate(false)
                       setTemplateNameInput('')
-                      toast({ title: t('toasts.packageSavedTitle'), description: name })
+                      toast({ title: 'Package saved', description: name })
                     } else if (e.key === 'Escape') {
                       setSavingTemplate(false)
                       setTemplateNameInput('')
@@ -3457,17 +4576,30 @@ export default function WorldMap() {
                     const valid = dropItems.filter((it) => it.itemType.trim())
                     if (!name || valid.length === 0) return
                     const id = `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-                    const tpl: DropTemplate = { id, name, items: valid.map((it) => ({ ...it })) }
+                    const tpl: DropTemplate = {
+                      id,
+                      name,
+                      items: valid.map((it) => ({ ...it })),
+                    }
                     persistDropTemplates([...dropTemplates, tpl].slice(-50))
                     setActiveTemplateId(id)
                     setSavingTemplate(false)
                     setTemplateNameInput('')
-                    toast({ title: t('toasts.packageSavedTitle'), description: name })
+                    toast({ title: 'Package saved', description: name })
                   }}
                 >
-                  {t('dropDialog.save')}
+                  {'Save'}
                 </Button>
-                <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => { setSavingTemplate(false); setTemplateNameInput('') }}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  onClick={() => {
+                    setSavingTemplate(false)
+                    setTemplateNameInput('')
+                  }}
+                >
                   <X className="w-3.5 h-3.5" />
                 </Button>
               </div>
@@ -3477,11 +4609,16 @@ export default function WorldMap() {
                 variant="outline"
                 size="sm"
                 className="h-8 w-full"
-                disabled={dropItems.filter((it) => it.itemType.trim()).length === 0}
-                onClick={() => { setSavingTemplate(true); setTemplateNameInput('') }}
+                disabled={
+                  dropItems.filter((it) => it.itemType.trim()).length === 0
+                }
+                onClick={() => {
+                  setSavingTemplate(true)
+                  setTemplateNameInput('')
+                }}
               >
                 <Save className="w-3.5 h-3.5 me-2" />
-                {t('dropDialog.saveCurrentAsPackage')}
+                {'Save current items as package…'}
               </Button>
             )}
 
@@ -3490,27 +4627,45 @@ export default function WorldMap() {
                 <div className="flex items-start gap-2.5 min-w-0">
                   <Megaphone className="w-4 h-4 text-muted-foreground/70 mt-0.5 flex-none" />
                   <div className="min-w-0">
-                    <div className="text-sm font-medium">{t('dropDialog.announceToPlayers')}</div>
-                    <div className="text-[11px] text-muted-foreground/70">{t('dropDialog.announceDesc')}</div>
+                    <div className="text-sm font-medium">
+                      {'Announce to players'}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground/70">
+                      {'Broadcast drop location in server chat'}
+                    </div>
                   </div>
                 </div>
-                <Switch checked={dropAnnounce} onCheckedChange={setDropAnnounce} />
+                <Switch
+                  checked={dropAnnounce}
+                  onCheckedChange={setDropAnnounce}
+                />
               </label>
               <label className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/20 transition-colors">
                 <div className="flex items-start gap-2.5 min-w-0">
                   <BellRing className="w-4 h-4 text-muted-foreground/70 mt-0.5 flex-none" />
                   <div className="min-w-0">
-                    <div className="text-sm font-medium">{t('dropDialog.attractZombies')}</div>
-                    <div className="text-[11px] text-muted-foreground/70">{t('dropDialog.attractZombiesDesc')}</div>
+                    <div className="text-sm font-medium">
+                      {'Attract zombies'}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground/70">
+                      {'Creates noise when items land'}
+                    </div>
                   </div>
                 </div>
-                <Switch checked={dropAttractZombies} onCheckedChange={setDropAttractZombies} />
+                <Switch
+                  checked={dropAttractZombies}
+                  onCheckedChange={setDropAttractZombies}
+                />
               </label>
               {dropAttractZombies && (
                 <div className="px-3 py-2.5">
                   <div className="flex items-center justify-between mb-1.5">
-                    <Label className="text-xs text-muted-foreground">{t('dropDialog.noiseRadius')}</Label>
-                    <span className="text-xs font-mono tabular-nums text-muted-foreground/80">{t('dropDialog.noiseRadiusValue', { radius: dropSoundRadius })}</span>
+                    <Label className="text-xs text-muted-foreground">
+                      {'Noise radius'}
+                    </Label>
+                    <span className="text-xs font-mono tabular-nums text-muted-foreground/80">
+                      {String(dropSoundRadius) + ' tiles'}
+                    </span>
                   </div>
                   <Input
                     type="range"
@@ -3518,55 +4673,77 @@ export default function WorldMap() {
                     max={500}
                     step={10}
                     value={dropSoundRadius}
-                    onChange={(e) => setDropSoundRadius(parseInt(e.target.value))}
+                    onChange={(e) =>
+                      setDropSoundRadius(parseInt(e.target.value))
+                    }
                     className="h-1.5 accent-warning"
                   />
                   <div className="flex justify-between text-[9px] text-muted-foreground/50 mt-1">
-                    <span>{t('dropDialog.whisper')}</span>
-                    <span>{t('dropDialog.gunshot')}</span>
-                    <span>{t('dropDialog.explosion')}</span>
+                    <span>{'whisper'}</span>
+                    <span>{'gunshot'}</span>
+                    <span>{'explosion'}</span>
                   </div>
                 </div>
               )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDropDialog(null)}>{t('dropDialog.cancel')}</Button>
-            <DisabledReason reason={!canRunBridgeCommand ? t('permissions.noBridgeCommand') : null}>
-            <Button
-              disabled={dropItems.filter((it) => it.itemType.trim()).length === 0 || actionLoading === 'drop' || !canRunBridgeCommand}
-              onClick={async () => {
-                if (!dropDialog) return
-                const valid = dropItems.filter((it) => it.itemType.trim())
-                if (valid.length === 0) return
-                const label = activeTemplateId
-                  ? dropTemplates.find((tpl) => tpl.id === activeTemplateId)?.name
-                  : valid.length === 1
-                    ? valid[0].itemType.replace(/^[^.]+\./, '')
-                    : t('toasts.itemPackageFallback', { count: valid.length })
-                await callCustomDrop({
-                  x: dropDialog.x,
-                  y: dropDialog.y,
-                  items: valid,
-                  announce: dropAnnounce,
-                  attractZombies: dropAttractZombies,
-                  soundRadius: dropSoundRadius,
-                  label,
-                })
-                if (mountedRef.current) setDropDialog(null)
-              }}
-            >
-              {actionLoading === 'drop'
-                ? <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                : <Flame className="w-4 h-4 me-2" />}
-              {(() => {
-                const validCount = dropItems.filter((it) => it.itemType.trim()).length
-                const totalQty = dropItems.filter((it) => it.itemType.trim()).reduce((s, it) => s + it.count, 0)
-                if (validCount === 0) return t('dropDialog.dropButton')
-                if (validCount === 1) return totalQty > 1 ? t('dropDialog.dropButtonQty', { qty: totalQty }) : t('dropDialog.dropButton')
-                return t('dropDialog.dropButtonMulti', { count: validCount })
-              })()}
+            <Button variant="outline" onClick={() => setDropDialog(null)}>
+              {'Cancel'}
             </Button>
+            <DisabledReason
+              reason={
+                !canRunBridgeCommand
+                  ? "This in-game action requires the bridge.command permission, which this role doesn't have."
+                  : null
+              }
+            >
+              <Button
+                disabled={
+                  dropItems.filter((it) => it.itemType.trim()).length === 0 ||
+                  actionLoading === 'drop' ||
+                  !canRunBridgeCommand
+                }
+                onClick={async () => {
+                  if (!dropDialog) return
+                  const valid = dropItems.filter((it) => it.itemType.trim())
+                  if (valid.length === 0) return
+                  const label = activeTemplateId
+                    ? dropTemplates.find((tpl) => tpl.id === activeTemplateId)
+                        ?.name
+                    : valid.length === 1
+                      ? valid[0].itemType.replace(/^[^.]+\./, '')
+                      : String(valid.length) + '-item package'
+                  await callCustomDrop({
+                    x: dropDialog.x,
+                    y: dropDialog.y,
+                    items: valid,
+                    announce: dropAnnounce,
+                    attractZombies: dropAttractZombies,
+                    soundRadius: dropSoundRadius,
+                    label,
+                  })
+                  if (mountedRef.current) setDropDialog(null)
+                }}
+              >
+                {actionLoading === 'drop' ? (
+                  <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                ) : (
+                  <Flame className="w-4 h-4 me-2" />
+                )}
+                {(() => {
+                  const validCount = dropItems.filter((it) =>
+                    it.itemType.trim(),
+                  ).length
+                  const totalQty = dropItems
+                    .filter((it) => it.itemType.trim())
+                    .reduce((s, it) => s + it.count, 0)
+                  if (validCount === 0) return 'Drop'
+                  if (validCount === 1)
+                    return totalQty > 1 ? 'Drop × ' + String(totalQty) : 'Drop'
+                  return 'Drop ' + String(validCount) + ' items'
+                })()}
+              </Button>
             </DisabledReason>
           </DialogFooter>
         </DialogContent>
@@ -3574,21 +4751,33 @@ export default function WorldMap() {
 
       <AlertDialog
         open={!!deleteTemplateId}
-        onOpenChange={(open) => { if (!open) setDeleteTemplateId(null) }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTemplateId(null)
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('deletePackageDialog.title')}</AlertDialogTitle>
+            <AlertDialogTitle>{'Delete package?'}</AlertDialogTitle>
             <AlertDialogDescription>
               {(() => {
                 const tpl = dropTemplates.find((d) => d.id === deleteTemplateId)
-                if (!tpl) return t('deletePackageDialog.descriptionFallback')
-                return t('deletePackageDialog.description', { name: tpl.name, count: tpl.items.length })
+                if (!tpl) return 'This package will be removed.'
+                return Number(tpl.items.length) === 1
+                  ? '“' +
+                      String(tpl.name) +
+                      '” (' +
+                      String(tpl.items.length) +
+                      ' item) will be removed from your saved packages. This cannot be undone.'
+                  : '“' +
+                      String(tpl.name) +
+                      '” (' +
+                      String(tpl.items.length) +
+                      ' items) will be removed from your saved packages. This cannot be undone.'
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('deletePackageDialog.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel>{'Cancel'}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
@@ -3598,10 +4787,11 @@ export default function WorldMap() {
                 persistDropTemplates(dropTemplates.filter((d) => d.id !== id))
                 if (activeTemplateId === id) setActiveTemplateId(null)
                 setDeleteTemplateId(null)
-                if (tpl) toast({ title: t('toasts.packageDeletedTitle'), description: tpl.name })
+                if (tpl)
+                  toast({ title: 'Package deleted', description: tpl.name })
               }}
             >
-              {t('deletePackageDialog.confirm')}
+              {'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -3609,25 +4799,32 @@ export default function WorldMap() {
 
       <AlertDialog
         open={!!removeVehicleTarget}
-        onOpenChange={(open) => { if (!open) setRemoveVehicleTarget(null) }}
+        onOpenChange={(open) => {
+          if (!open) setRemoveVehicleTarget(null)
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('removeVehicleDialog.title')}</AlertDialogTitle>
+            <AlertDialogTitle>{'Remove vehicle?'}</AlertDialogTitle>
             <AlertDialogDescription>
-              {removeVehicleTarget && t('removeVehicleDialog.description', {
-                vehicle: removeVehicleTarget.label,
-                x: removeVehicleTarget.x,
-                y: removeVehicleTarget.y,
-              })}
+              {removeVehicleTarget &&
+                'The ' +
+                  String(removeVehicleTarget.label) +
+                  ' at ' +
+                  String(removeVehicleTarget.x) +
+                  ', ' +
+                  String(removeVehicleTarget.y) +
+                  ' will be deleted from the world. This cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={actionLoading === 'vehicle-remove'}>
-              {t('removeVehicleDialog.cancel')}
+              {'Cancel'}
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={actionLoading === 'vehicle-remove' || !canRunBridgeCommand}
+              disabled={
+                actionLoading === 'vehicle-remove' || !canRunBridgeCommand
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={(e) => {
                 e.preventDefault()
@@ -3635,19 +4832,31 @@ export default function WorldMap() {
                 const target = removeVehicleTarget
                 if (!target) return
                 setActionLoading('vehicle-remove')
-                panelBridgeApi.sendCommand('removeVehicle', { vehicleId: target.id })
+                panelBridgeApi
+                  .sendCommand('removeVehicle', { vehicleId: target.id })
                   .then(() => {
-                    toast({ title: t('toasts.vehicleRemoved') })
+                    toast({ title: 'Vehicle removed' })
                     fetchOverlays()
                   })
-                  .catch((err) => toast({ title: t('toasts.removeFailed'), description: getUserErrorMessage(err, t('toasts.unknownError')), variant: 'destructive' }))
-                  .finally(() => { setActionLoading(null); setRemoveVehicleTarget(null) })
+                  .catch((err) =>
+                    toast({
+                      title: 'Remove failed',
+                      description: getUserErrorMessage(err, 'Unknown error'),
+                      variant: 'destructive',
+                    }),
+                  )
+                  .finally(() => {
+                    setActionLoading(null)
+                    setRemoveVehicleTarget(null)
+                  })
               }}
             >
-              {actionLoading === 'vehicle-remove'
-                ? <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                : <Trash2 className="w-4 h-4 me-2" />}
-              {t('removeVehicleDialog.confirm')}
+              {actionLoading === 'vehicle-remove' ? (
+                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 me-2" />
+              )}
+              {'Remove vehicle'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -3656,9 +4865,18 @@ export default function WorldMap() {
   )
 }
 
-type ContextMenuTone = 'default' | 'primary' | 'warning' | 'danger' | 'info' | 'success'
+type ContextMenuTone =
+  'default' | 'primary' | 'warning' | 'danger' | 'info' | 'success'
 
-function ContextMenuItem({ icon, label, onClick, loading, description, disabled, tone = 'default' }: {
+function ContextMenuItem({
+  icon,
+  label,
+  onClick,
+  loading,
+  description,
+  disabled,
+  tone = 'default',
+}: {
   icon: React.ReactNode
   label: string
   onClick: () => void
@@ -3668,12 +4886,17 @@ function ContextMenuItem({ icon, label, onClick, loading, description, disabled,
   tone?: ContextMenuTone
 }) {
   const toneAccent: Record<ContextMenuTone, string> = {
-    default: 'group-hover:border-s-primary/60 group-focus-visible:border-s-primary/60',
-    primary: 'group-hover:border-s-primary/70 group-focus-visible:border-s-primary/70',
-    warning: 'group-hover:border-s-amber-400/80 group-focus-visible:border-s-amber-400/80',
-    danger: 'group-hover:border-s-destructive/80 group-focus-visible:border-s-destructive/80',
+    default:
+      'group-hover:border-s-primary/60 group-focus-visible:border-s-primary/60',
+    primary:
+      'group-hover:border-s-primary/70 group-focus-visible:border-s-primary/70',
+    warning:
+      'group-hover:border-s-amber-400/80 group-focus-visible:border-s-amber-400/80',
+    danger:
+      'group-hover:border-s-destructive/80 group-focus-visible:border-s-destructive/80',
     info: 'group-hover:border-s-info/80 group-focus-visible:border-s-info/80',
-    success: 'group-hover:border-s-emerald-400/80 group-focus-visible:border-s-emerald-400/80',
+    success:
+      'group-hover:border-s-emerald-400/80 group-focus-visible:border-s-emerald-400/80',
   }
   return (
     <button
@@ -3688,23 +4911,33 @@ function ContextMenuItem({ icon, label, onClick, loading, description, disabled,
         aria-hidden
         className={cn(
           'w-[2px] -my-px shrink-0 border-s-2 border-transparent transition-colors',
-          toneAccent[tone]
+          toneAccent[tone],
         )}
       />
       <span className="flex-none w-4 flex items-center justify-center ps-1">
-        {loading
-          ? <Loader2 className="w-3.5 h-3.5 animate-spin text-primary/70" />
-          : icon}
+        {loading ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary/70" />
+        ) : (
+          icon
+        )}
       </span>
       <span className="flex flex-col min-w-0 text-start flex-1">
         <span className="truncate text-foreground">{label}</span>
-        {description && <span className="text-[10px] text-muted-foreground/60 truncate leading-tight">{description}</span>}
+        {description && (
+          <span className="text-[10px] text-muted-foreground/60 truncate leading-tight">
+            {description}
+          </span>
+        )}
       </span>
     </button>
   )
 }
 
-function ContextMenuSection({ label, icon, tone = 'muted' }: {
+function ContextMenuSection({
+  label,
+  icon,
+  tone = 'muted',
+}: {
   label: string
   icon?: React.ReactNode
   tone?: 'muted' | 'primary' | 'warning' | 'info' | 'success' | 'danger'
@@ -3719,7 +4952,13 @@ function ContextMenuSection({ label, icon, tone = 'muted' }: {
   }
   return (
     <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1 font-mono text-[9px] uppercase tracking-[0.24em] select-none">
-      {icon && <span className={cn('flex items-center justify-center', toneColor[tone])}>{icon}</span>}
+      {icon && (
+        <span
+          className={cn('flex items-center justify-center', toneColor[tone])}
+        >
+          {icon}
+        </span>
+      )}
       <span className={toneColor[tone]}>{label}</span>
       <span className="flex-1 h-px bg-border/40" />
     </div>
@@ -3729,7 +4968,12 @@ function ContextMenuSection({ label, icon, tone = 'muted' }: {
 function getPlayerColor(player: MapPlayer, alpha: number): string {
   if (player.isAlive === false) return hslToken('--muted-foreground', alpha)
   if (player.isInfected) return hslToken('--destructive', alpha)
-  if (player.accessLevel && player.accessLevel !== '' && player.accessLevel !== 'none' && player.accessLevel !== 'user')
+  if (
+    player.accessLevel &&
+    player.accessLevel !== '' &&
+    player.accessLevel !== 'none' &&
+    player.accessLevel !== 'user'
+  )
     return hslToken('--warning', alpha)
   return hslToken('--info', alpha)
 }

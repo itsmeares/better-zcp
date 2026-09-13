@@ -1,10 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { ReactNode } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { Card, CardContent } from '../components/ui/card'
 import { panelHealthQueryOptions } from '../lib/panelHealth'
-import { LanguageSwitcher } from './LanguageSwitcher'
 
 interface AuthScreenLayoutProps {
   badge?: string
@@ -27,12 +25,15 @@ export function AuthScreenLayout({
   children,
   footer,
 }: AuthScreenLayoutProps) {
-  const { t } = useTranslation('shell')
   const { data, isPending, isError } = useQuery({
     ...panelHealthQueryOptions(),
     refetchInterval: 15000,
   })
-  const status: PanelStatus = isPending ? 'checking' : isError ? 'unreachable' : 'online'
+  const status: PanelStatus = isPending
+    ? 'checking'
+    : isError
+      ? 'unreachable'
+      : 'online'
   const version = data?.version ?? null
 
   return (
@@ -41,10 +42,8 @@ export function AuthScreenLayout({
         href="#auth-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:start-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm"
       >
-        {t('skipToContent')}
+        {'Skip to content'}
       </a>
-
-      <LanguageSwitcher className="absolute end-4 top-4 z-10" />
 
       <div
         aria-hidden="true"
@@ -73,7 +72,10 @@ export function AuthScreenLayout({
         className="absolute bottom-4 inset-x-4 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/55 [contain:layout_style_paint]"
       >
         <span>{version ? `build ${version}` : 'build ----'}</span>
-        <span>sig: {status === 'online' ? 'ack' : status === 'checking' ? '...' : 'lost'}</span>
+        <span>
+          sig:{' '}
+          {status === 'online' ? 'ack' : status === 'checking' ? '...' : 'lost'}
+        </span>
       </div>
 
       <main
@@ -95,7 +97,9 @@ export function AuthScreenLayout({
           <h1 className="font-mono text-2xl font-semibold uppercase tracking-[0.18em] text-foreground sm:text-[1.6rem]">
             {title}
           </h1>
-          <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">{description}</p>
+          <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
+            {description}
+          </p>
         </div>
 
         <Card className="relative overflow-hidden border-border/55 bg-card/85 backdrop-blur-[2px] shadow-[0_28px_90px_-40px_hsl(var(--background)/0.9)]">
@@ -106,10 +110,14 @@ export function AuthScreenLayout({
           {cardTitle || cardDescription ? (
             <div className="border-b border-border/40 px-6 pt-5 pb-4">
               {cardTitle ? (
-                <h2 className="font-mono text-xs uppercase tracking-[0.28em] text-muted-foreground">{cardTitle}</h2>
+                <h2 className="font-mono text-xs uppercase tracking-[0.28em] text-muted-foreground">
+                  {cardTitle}
+                </h2>
               ) : null}
               {cardDescription ? (
-                <p className="mt-1 text-sm leading-6 text-foreground/80">{cardDescription}</p>
+                <p className="mt-1 text-sm leading-6 text-foreground/80">
+                  {cardDescription}
+                </p>
               ) : null}
             </div>
           ) : null}
@@ -119,7 +127,9 @@ export function AuthScreenLayout({
         <PanelStatusPill status={status} className="mx-auto mt-5" />
 
         {footer ? (
-          <p className="mx-auto mt-3 max-w-sm text-center text-xs leading-5 text-muted-foreground">{footer}</p>
+          <p className="mx-auto mt-3 max-w-sm text-center text-xs leading-5 text-muted-foreground">
+            {footer}
+          </p>
         ) : null}
       </main>
     </div>
@@ -152,23 +162,31 @@ function BrandMark({ className = '' }: { className?: string }) {
   )
 }
 
-function PanelStatusPill({ status, className = '' }: { status: PanelStatus; className?: string }) {
-  const { t } = useTranslation('shell')
-  const map: Record<PanelStatus, { labelKey: string; dot: string; text: string; ring: string }> = {
+function PanelStatusPill({
+  status,
+  className = '',
+}: {
+  status: PanelStatus
+  className?: string
+}) {
+  const map: Record<
+    PanelStatus,
+    { label: string; dot: string; text: string; ring: string }
+  > = {
     checking: {
-      labelKey: 'panelStatus.checking',
+      label: 'Checking panel',
       dot: 'bg-muted-foreground/70 animate-pulse',
       text: 'text-muted-foreground',
       ring: 'border-border/55 bg-card/40',
     },
     online: {
-      labelKey: 'panelStatus.online',
+      label: 'Panel online',
       dot: 'bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.55)]',
       text: 'text-foreground/85',
       ring: 'border-primary/30 bg-primary/8',
     },
     unreachable: {
-      labelKey: 'panelStatus.unreachable',
+      label: 'Panel unreachable',
       dot: 'bg-destructive shadow-[0_0_8px_hsl(var(--destructive)/0.6)] animate-pulse',
       text: 'text-destructive',
       ring: 'border-destructive/40 bg-destructive/8',
@@ -183,7 +201,7 @@ function PanelStatusPill({ status, className = '' }: { status: PanelStatus; clas
       className={`inline-flex items-center gap-2 rounded-sm border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.24em] ${s.ring} ${s.text} ${className}`}
     >
       <span className={`inline-flex h-2 w-2 rounded-full ${s.dot}`} />
-      {t(s.labelKey)}
+      {s.label}
     </div>
   )
 }

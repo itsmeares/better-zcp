@@ -1,8 +1,0 @@
-{
-  "copyWorkshopIdAria": "Копіювати ID Workshop {{id}}",
-  "copyWorkshopIdTooltip": "Копіювати ID Workshop",
-  "openWorkshopPageForAria": "Відкрити сторінку Workshop для {{label}}",
-  "openWorkshopPageHint": "Відкрити сторінку Workshop",
-  "openOnSteamAria": "Відкрити {{label}} у Steam Workshop",
-  "openWorkshopPageTitle": "Відкрити сторінку Steam Workshop"
-}

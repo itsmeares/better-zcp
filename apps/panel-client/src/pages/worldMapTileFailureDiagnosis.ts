@@ -43,13 +43,16 @@ export function classifyTileBytes(bytes: Uint8Array): TileByteSignature {
 
   if (b0 === 0x1f && b1 === 0x8b) return { kind: 'gzip' }
   if (b0 === 0xff && b1 === 0xd8 && b2 === 0xff) return { kind: 'jpeg' }
-  if (b0 === 0x89 && b1 === 0x50 && b2 === 0x4e && b3 === 0x47) return { kind: 'png' }
+  if (b0 === 0x89 && b1 === 0x50 && b2 === 0x4e && b3 === 0x47)
+    return { kind: 'png' }
   if (b0 === 0x3c && (b1 === 0x21 || b1 === 0x68)) return { kind: 'html' }
   if (b0 === 0x7b || b0 === 0x5b) return { kind: 'json' }
   return { kind: 'unrecognized', hex: bytesToHex(bytes) }
 }
 
-export function parseContentLength(contentLengthHeader: string | null): number | null {
+export function parseContentLength(
+  contentLengthHeader: string | null,
+): number | null {
   if (contentLengthHeader == null) return null
   if (!/^\d+$/.test(contentLengthHeader)) return null
   return Number(contentLengthHeader)
@@ -69,37 +72,60 @@ export function diagnoseTileFailure(
   }
 }
 
-export interface TileFailureCopyKeys {
-  titleKey: string
-  descKey: string
-  descParams?: Record<string, string | number>
+export interface TileFailureCopy {
+  title: string
+  description: string
 }
 
-export function tileFailureCopyKeys(diagnosis: TileFailureDiagnosis): TileFailureCopyKeys {
+export function tileFailureCopy(
+  diagnosis: TileFailureDiagnosis,
+): TileFailureCopy {
   switch (diagnosis.signature.kind) {
     case 'gzip':
-      return { titleKey: 'tileFailure.gzipTitle', descKey: 'tileFailure.gzipDesc' }
+      return {
+        title: 'Map tile arrived still compressed',
+        description:
+          "This tile's data reached the browser still gzip-compressed instead of being decompressed automatically. This usually means a reverse proxy in front of the panel is stripping or mishandling the Content-Encoding header.",
+      }
     case 'html':
-      return { titleKey: 'tileFailure.htmlTitle', descKey: 'tileFailure.htmlDesc' }
+      return {
+        title: 'An HTML page arrived instead of a map tile',
+        description:
+          'A proxy error, login page, or network sign-in page may have intercepted the request.',
+      }
     case 'json':
-      return { titleKey: 'tileFailure.jsonTitle', descKey: 'tileFailure.jsonDesc' }
+      return {
+        title: 'The panel returned an error instead of a map tile',
+        description:
+          "The response was JSON rather than image data, which points to a problem on the panel's side.",
+      }
     case 'png':
-      return { titleKey: 'tileFailure.pngTitle', descKey: 'tileFailure.pngDesc' }
+      return {
+        title: 'A PNG image arrived where a JPEG was expected',
+        description:
+          'The response is an image, but not in the format the panel expected.',
+      }
     case 'empty':
-      return { titleKey: 'tileFailure.emptyTitle', descKey: 'tileFailure.emptyDesc' }
+      return {
+        title: 'Map tile arrived empty',
+        description:
+          'No data came back for this tile. This usually points to a network or proxy issue.',
+      }
     case 'jpeg':
       return diagnosis.looksLikeTruncated
         ? {
-            titleKey: 'tileFailure.truncatedTitle',
-            descKey: 'tileFailure.truncatedDesc',
-            descParams: { received: diagnosis.receivedBytes, expected: diagnosis.expectedBytes ?? 0 },
+            title: 'Map tile was cut short in transit',
+            description: `Only ${diagnosis.receivedBytes} of ${diagnosis.expectedBytes ?? 0} bytes arrived. The connection was cut short in transit.`,
           }
-        : { titleKey: 'tileFailure.corruptTitle', descKey: 'tileFailure.corruptDesc' }
+        : {
+            title: 'Map tile data is corrupted',
+            description:
+              "The image arrived complete but couldn't be decoded. Try Refresh.",
+          }
     case 'unrecognized':
       return {
-        titleKey: 'tileFailure.unrecognizedTitle',
-        descKey: 'tileFailure.unrecognizedDesc',
-        descParams: { hex: diagnosis.signature.hex },
+        title: 'Map tile arrived as unrecognized data',
+        description: `Raw bytes: ${diagnosis.signature.hex}`,
       }
   }
 }

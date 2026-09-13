@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { useEffect, useRef, useState, useContext } from 'react'
-import { Trans, useTranslation } from 'react-i18next'
 import {
   LayoutDashboard,
   Gauge,
@@ -22,7 +21,6 @@ import {
   LayoutTemplate,
   Menu,
   X,
-  Search,
   Zap,
   MessagesSquare,
   Archive,
@@ -31,12 +29,20 @@ import {
   Github,
   PanelLeftClose,
   PanelLeft,
-  LogOut
+  LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ConnectionStatus } from './ConnectionStatus'
 import { SystemHealthBanner } from './SystemHealthBanner'
-import { serversApi, ServerInstance, updateApi, UpdateStatus, serverApi, modsApi, panelUpdateApi } from '@/lib/api'
+import {
+  serversApi,
+  ServerInstance,
+  updateApi,
+  UpdateStatus,
+  serverApi,
+  modsApi,
+  panelUpdateApi,
+} from '@/lib/api'
 import { resolveClientProvider, toClientRunState } from '@/lib/serverStatus'
 import { SocketContext } from '@/contexts/SocketContext'
 
@@ -48,24 +54,31 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+} from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp'
 import { panelHealthQueryOptions } from '@/lib/panelHealth'
 import { preloadRouteModule } from '@/lib/routePreload'
-import { LanguageSwitcher } from './LanguageSwitcher'
 import { panelQueryKeys } from '@/lib/queryClient'
 
-const dashboardItem = { to: '/', icon: Gauge, label: 'Dashboard', labelKey: 'nav.dashboard' }
+const dashboardItem = {
+  to: '/',
+  icon: Gauge,
+  label: 'Dashboard',
+}
 
 interface NavItem {
   to: string
   icon: typeof LayoutDashboard
   label: string
-  labelKey: string
   requiresLocal?: boolean
   allowRemoteConfigMirror?: boolean
   disabled?: boolean
@@ -75,7 +88,6 @@ interface NavItem {
 interface NavSection {
   id: string
   label: string
-  labelKey: string
   icon: typeof LayoutDashboard
   color: string
   items: NavItem[]
@@ -86,77 +98,141 @@ const navSections: NavSection[] = [
   {
     id: 'active',
     label: 'Live',
-    labelKey: 'nav.sections.live',
     icon: Terminal,
     color: 'emerald',
     requiresServer: true,
     items: [
-      { to: '/console', icon: Terminal, label: 'Server Console', labelKey: 'nav.items.serverConsole' },
-      { to: '/players', icon: Users, label: 'Online Players', labelKey: 'nav.items.onlinePlayers' },
-      { to: '/chat', icon: MessagesSquare, label: 'In-Game Chat', labelKey: 'nav.items.inGameChat' },
-    ]
+      {
+        to: '/console',
+        icon: Terminal,
+        label: 'Server Console',
+      },
+      {
+        to: '/players',
+        icon: Users,
+        label: 'Online Players',
+      },
+      {
+        to: '/chat',
+        icon: MessagesSquare,
+        label: 'In-Game Chat',
+      },
+    ],
   },
   {
     id: 'world',
     label: 'World',
-    labelKey: 'nav.sections.world',
     icon: Zap,
     color: 'amber',
     requiresServer: true,
     items: [
-      { to: '/events', icon: Zap, label: 'Events & Weather', labelKey: 'nav.items.eventsWeather' },
-      { to: '/world-map', icon: Map, label: 'World Map', labelKey: 'nav.items.worldMap' },
-    ]
+      {
+        to: '/events',
+        icon: Zap,
+        label: 'Events & Weather',
+      },
+      {
+        to: '/world-map',
+        icon: Map,
+        label: 'World Map',
+      },
+    ],
   },
   {
     id: 'config',
     label: 'Config',
-    labelKey: 'nav.sections.config',
     icon: FileCog,
     color: 'blue',
     requiresServer: true,
     items: [
-      { to: '/server-config', icon: FileCog, label: 'Server Configuration', labelKey: 'nav.items.serverConfiguration', requiresLocal: true, allowRemoteConfigMirror: true },
-      { to: '/mods', icon: Package, label: 'Mod Manager', labelKey: 'nav.items.modManager', requiresLocal: true },
-      { to: '/templates', icon: LayoutTemplate, label: 'Templates', labelKey: 'nav.items.templates', requiresLocal: true, allowRemoteConfigMirror: true },
-    ]
+      {
+        to: '/server-config',
+        icon: FileCog,
+        label: 'Server Configuration',
+        requiresLocal: true,
+        allowRemoteConfigMirror: true,
+      },
+      {
+        to: '/mods',
+        icon: Package,
+        label: 'Mod Manager',
+        requiresLocal: true,
+      },
+      {
+        to: '/templates',
+        icon: LayoutTemplate,
+        label: 'Templates',
+        requiresLocal: true,
+        allowRemoteConfigMirror: true,
+      },
+    ],
   },
   {
     id: 'maintenance',
     label: 'Maintain',
-    labelKey: 'nav.sections.maintain',
     icon: Clock,
     color: 'purple',
     requiresServer: true,
     items: [
-      { to: '/scheduler', icon: Clock, label: 'Scheduled Tasks', labelKey: 'nav.items.scheduledTasks' },
-      { to: '/backups', icon: Archive, label: 'World Backups', labelKey: 'nav.items.worldBackups', requiresLocal: true },
-      { to: '/chunks', icon: Eraser, label: 'Map Cleanup', labelKey: 'nav.items.mapCleanup', requiresLocal: true },
-    ]
+      {
+        to: '/scheduler',
+        icon: Clock,
+        label: 'Scheduled Tasks',
+      },
+      {
+        to: '/backups',
+        icon: Archive,
+        label: 'World Backups',
+        requiresLocal: true,
+      },
+      {
+        to: '/chunks',
+        icon: Eraser,
+        label: 'Map Cleanup',
+        requiresLocal: true,
+      },
+    ],
   },
   {
     id: 'servers',
     label: 'Servers',
-    labelKey: 'nav.sections.servers',
     icon: Server,
     color: 'cyan',
     items: [
-      { to: '/servers', icon: Layers, label: 'My Servers', labelKey: 'nav.items.myServers' },
-      { to: '/server-setup', icon: Download, label: 'Server Setup', labelKey: 'nav.items.serverSetup' },
-      { to: '/server-finder', icon: Search, label: 'Browse Public', labelKey: 'nav.items.browsePublic' },
-    ]
+      {
+        to: '/servers',
+        icon: Layers,
+        label: 'My Servers',
+      },
+      {
+        to: '/server-setup',
+        icon: Download,
+        label: 'Server Setup',
+      },
+    ],
   },
   {
     id: 'system',
     label: 'Settings & Tools',
-    labelKey: 'nav.sections.settingsAndTools',
     icon: Settings,
     color: 'slate',
     items: [
-      { to: '/discord', icon: MessageSquare, label: 'Discord', labelKey: 'nav.items.discord' },
-      { to: '/settings', icon: Settings, label: 'Panel Settings', labelKey: 'nav.items.panelSettings' },
-      { to: '/debug', icon: Bug, label: 'Debug Logs', labelKey: 'nav.items.debugLogs' },
-    ]
+      {
+        to: '/discord',
+        icon: MessageSquare,
+        label: 'Discord',
+      },
+      {
+        to: '/settings',
+        icon: Settings,
+        label: 'Panel Settings',
+      },
+      {
+        to: '/debug',
+        icon: Bug,
+        label: 'Debug Logs',
+      },
+    ],
   },
 ]
 
@@ -227,20 +303,24 @@ const sectionToneStyles = {
 } as const
 
 function AuthFooter() {
-  const { t } = useTranslation('shell')
   const { user, authEnabled, logout } = useAuth()
 
   if (!authEnabled || !user) return null
 
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 text-xs">
-      <span className="min-w-0 truncate text-foreground/85 font-medium" title={user.username}>{user.username}</span>
+      <span
+        className="min-w-0 truncate text-foreground/85 font-medium"
+        title={user.username}
+      >
+        {user.username}
+      </span>
       <span className="shrink-0 text-muted-foreground/50">·</span>
       <button
         type="button"
         onClick={logout}
         className="shrink-0 text-muted-foreground/70 hover:text-foreground transition-colors"
-        title={t('footer.signOut')}
+        title={'Sign out'}
       >
         <LogOut className="h-3 w-3" />
       </button>
@@ -248,7 +328,11 @@ function AuthFooter() {
   )
 }
 
-function DisabledNavTooltip({ side = 'right', reason, children }: {
+function DisabledNavTooltip({
+  side = 'right',
+  reason,
+  children,
+}: {
   side?: 'top' | 'right' | 'bottom' | 'left'
   reason: React.ReactNode
   children: React.ReactNode
@@ -256,7 +340,13 @@ function DisabledNavTooltip({ side = 'right', reason, children }: {
   const [open, setOpen] = useState(false)
   return (
     <Tooltip open={open} onOpenChange={setOpen}>
-      <TooltipTrigger asChild onClick={(event) => { event.preventDefault(); setOpen(true) }}>
+      <TooltipTrigger
+        asChild
+        onClick={(event) => {
+          event.preventDefault()
+          setOpen(true)
+        }}
+      >
         {children}
       </TooltipTrigger>
       <TooltipContent side={side}>{reason}</TooltipContent>
@@ -265,9 +355,8 @@ function DisabledNavTooltip({ side = 'right', reason, children }: {
 }
 
 function PanelBrand({ compact = false }: { compact?: boolean }) {
-  const { t } = useTranslation('shell')
   return (
-    <div className={cn("flex items-center", compact ? "gap-2" : "gap-2.5")}>
+    <div className={cn('flex items-center', compact ? 'gap-2' : 'gap-2.5')}>
       <img
         src={`${import.meta.env.BASE_URL}spiffo.png`}
         alt="Spiffo"
@@ -275,26 +364,28 @@ function PanelBrand({ compact = false }: { compact?: boolean }) {
         width={compact ? 28 : 34}
         height={compact ? 28 : 34}
         className={cn(
-          compact ? "h-7 w-7" : "h-[34px] w-[34px]",
-          "object-contain drop-shadow-sm saturate-90"
+          compact ? 'h-7 w-7' : 'h-[34px] w-[34px]',
+          'object-contain drop-shadow-sm saturate-90',
         )}
       />
       <div className="min-w-0">
         <p
           className={cn(
-            "shell-brand-title truncate uppercase leading-tight",
-            compact ? "text-[13px] tracking-[0.12em]" : "text-sm tracking-[0.14em]"
+            'shell-brand-title truncate uppercase leading-tight',
+            compact
+              ? 'text-[13px] tracking-[0.12em]'
+              : 'text-sm tracking-[0.14em]',
           )}
         >
-          {t('brand.title')}
+          {'Project Zomboid'}
         </p>
         <p
           className={cn(
-            "shell-brand-subtitle truncate text-muted-foreground leading-tight",
-            "text-[11px] mt-0.5"
+            'shell-brand-subtitle truncate text-muted-foreground leading-tight',
+            'text-[11px] mt-0.5',
           )}
         >
-          // {t('brand.subtitle')}
+          // {'Control Panel'}
         </p>
       </div>
     </div>
@@ -306,8 +397,6 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const { t } = useTranslation('shell')
-  const { t: tScheduler } = useTranslation('scheduler')
   const queryClient = useQueryClient()
   const { data: serversData } = useQuery({
     queryKey: panelQueryKeys.servers,
@@ -324,17 +413,24 @@ export default function Layout({ children }: LayoutProps) {
     !(item.allowRemoteConfigMirror && activeServer.remoteConfigConfigured)
   const provider = resolveClientProvider(activeServer)
   const serversConfirmedEmpty = servers !== null && servers.length === 0
-  const isBlockedByNoServer = (section: NavSection) => !!section.requiresServer && serversConfirmedEmpty
+  const isBlockedByNoServer = (section: NavSection) =>
+    !!section.requiresServer && serversConfirmedEmpty
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
   const mobileMenuAsideRef = useRef<HTMLElement>(null)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('sidebarCollapsed') === 'true')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('sidebarCollapsed') === 'true',
+  )
   const [updateInfo, setUpdateInfo] = useState<UpdateStatus | null>(null)
   const [updateDismissed, setUpdateDismissed] = useState(false)
   const [playerCount, setPlayerCount] = useState<number>(0)
-  const [serverRunState, setServerRunState] = useState<'unknown' | 'running' | 'stopped' | 'transitioning'>('unknown')
+  const [serverRunState, setServerRunState] = useState<
+    'unknown' | 'running' | 'stopped' | 'transitioning'
+  >('unknown')
   const [modUpdatesAvailable, setModUpdatesAvailable] = useState<number>(0)
-  const [panelUpdateAvailable, setPanelUpdateAvailable] = useState<{ version: string | null } | null>(null)
+  const [panelUpdateAvailable, setPanelUpdateAvailable] = useState<{
+    version: string | null
+  } | null>(null)
   const { data: panelHealth } = useQuery({
     ...panelHealthQueryOptions(),
     refetchInterval: 15000,
@@ -378,12 +474,21 @@ export default function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     if (!socket) return
-    const onActionResult = (data?: { kind?: 'restart' | 'task'; taskName?: string; success?: boolean; message?: string }) => {
+    const onActionResult = (data?: {
+      kind?: 'restart' | 'task'
+      taskName?: string
+      success?: boolean
+      message?: string
+    }) => {
       if (!data) return
       const isRestart = data.kind === 'restart'
       const title = data.success
-        ? (isRestart ? tScheduler('toasts.restartSucceededTitle') : tScheduler('toasts.taskSucceededTitle', { name: data.taskName }))
-        : (isRestart ? tScheduler('toasts.restartResultFailedTitle') : tScheduler('toasts.taskResultFailedTitle', { name: data.taskName }))
+        ? isRestart
+          ? 'Restart completed'
+          : '"' + String(data.taskName) + '" completed'
+        : isRestart
+          ? 'Restart failed'
+          : '"' + String(data.taskName) + '" failed'
       toast({
         title,
         description: data.message,
@@ -394,14 +499,14 @@ export default function Layout({ children }: LayoutProps) {
     return () => {
       socket.off('scheduler:action_result', onActionResult)
     }
-  }, [socket, tScheduler, toast])
+  }, [socket, toast])
 
   const navigate = useNavigate()
   const location = useLocation()
   const playerCountLabel = playerCount > 99 ? '99+' : String(playerCount)
 
   const toggleSidebar = () => {
-    setSidebarCollapsed(prev => {
+    setSidebarCollapsed((prev) => {
       const next = !prev
       localStorage.setItem('sidebarCollapsed', String(next))
       return next
@@ -430,27 +535,50 @@ export default function Layout({ children }: LayoutProps) {
       const hostRunning = composedStatus.host.status === 'running'
       const rconConnected = composedStatus.server.status === 'connected'
       const bridgeActive = composedStatus.bridge.status === 'active'
-      const hostUnknown = ['unknown', 'not-applicable'].includes(composedStatus.host.status)
+      const hostUnknown = ['unknown', 'not-applicable'].includes(
+        composedStatus.host.status,
+      )
       setServerRunState(
-        hostRunning || rconConnected || bridgeActive ? 'running' : hostUnknown ? 'unknown' : 'stopped',
+        hostRunning || rconConnected || bridgeActive
+          ? 'running'
+          : hostUnknown
+            ? 'unknown'
+            : 'stopped',
       )
     }
   }, [provider, runtimeStatus, composedStatus])
 
   useEffect(() => {
     if (!socket) return
-    const onStatus = (data?: { running?: boolean; isRunning?: boolean; state?: string }) => {
-      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.serverStatus })
-      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServerStatus })
+    const onStatus = (data?: {
+      running?: boolean
+      isRunning?: boolean
+      state?: string
+    }) => {
+      void queryClient.invalidateQueries({
+        queryKey: panelQueryKeys.serverStatus,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: panelQueryKeys.activeServerStatus,
+      })
       const lifecycleState = toClientRunState(data?.state)
-      if (lifecycleState) { setServerRunState(lifecycleState); return }
+      if (lifecycleState) {
+        setServerRunState(lifecycleState)
+        return
+      }
       if (provider === 'native') {
-        const running = typeof data?.running === 'boolean' ? data.running : data?.isRunning
-        if (typeof running === 'boolean') { setServerRunState(running ? 'running' : 'stopped'); return }
+        const running =
+          typeof data?.running === 'boolean' ? data.running : data?.isRunning
+        if (typeof running === 'boolean') {
+          setServerRunState(running ? 'running' : 'stopped')
+          return
+        }
       }
     }
     const refreshComposedStatus = () => {
-      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServerStatus })
+      void queryClient.invalidateQueries({
+        queryKey: panelQueryKeys.activeServerStatus,
+      })
     }
     socket.on('server:status', onStatus)
     socket.on('panelBridge:status', refreshComposedStatus)
@@ -466,7 +594,8 @@ export default function Layout({ children }: LayoutProps) {
     let cancelled = false
     const refreshModStatus = async () => {
       try {
-        const data = await modsApi.getStatus() as { updatesAvailable?: number } | undefined
+        const data = (await modsApi.getStatus()) as
+          { updatesAvailable?: number } | undefined
         if (!cancelled && typeof data?.updatesAvailable === 'number') {
           setModUpdatesAvailable(data.updatesAvailable)
         }
@@ -475,7 +604,10 @@ export default function Layout({ children }: LayoutProps) {
       }
     }
     refreshModStatus()
-    if (!socket) return () => { cancelled = true }
+    if (!socket)
+      return () => {
+        cancelled = true
+      }
     socket.on('mods:updates_available', refreshModStatus)
     socket.on('mods:update_detected', refreshModStatus)
     return () => {
@@ -487,14 +619,20 @@ export default function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     let cancelled = false
-    panelUpdateApi.getStatus()
-      .then(s => {
+    panelUpdateApi
+      .getStatus()
+      .then((s) => {
         if (cancelled) return
-        if (s?.updateAvailable) setPanelUpdateAvailable({ version: s.latestVersion })
+        if (s?.updateAvailable)
+          setPanelUpdateAvailable({ version: s.latestVersion })
         else setPanelUpdateAvailable(null)
       })
-      .catch(() => { /* ignore */ })
-    return () => { cancelled = true }
+      .catch(() => {
+        /* ignore */
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -517,9 +655,10 @@ export default function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     if (!mobileMenuOpen) return
-    const firstFocusable = mobileMenuAsideRef.current?.querySelector<HTMLElement>(
-      'a[href], button:not([disabled])'
-    )
+    const firstFocusable =
+      mobileMenuAsideRef.current?.querySelector<HTMLElement>(
+        'a[href], button:not([disabled])',
+      )
     firstFocusable?.focus()
   }, [mobileMenuOpen])
 
@@ -540,10 +679,18 @@ export default function Layout({ children }: LayoutProps) {
 
     const handleActiveServerChanged = () => {
       void queryClient.invalidateQueries({ queryKey: panelQueryKeys.servers })
-      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServer })
-      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.serverStatus })
-      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.activeServerStatus })
-      void queryClient.invalidateQueries({ queryKey: panelQueryKeys.rconStatuses })
+      void queryClient.invalidateQueries({
+        queryKey: panelQueryKeys.activeServer,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: panelQueryKeys.serverStatus,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: panelQueryKeys.activeServerStatus,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: panelQueryKeys.rconStatuses,
+      })
     }
 
     socket.on('activeServerChanged', handleActiveServerChanged)
@@ -557,10 +704,13 @@ export default function Layout({ children }: LayoutProps) {
 
     const handleUpdateAvailable = (data: UpdateStatus) => {
       setUpdateInfo(data)
-      const dismissedKey = data?.installed && data?.latest
-        ? `updateBannerDismissed:${data.installed.buildId}->${data.latest.buildId}`
-        : null
-      setUpdateDismissed(!!dismissedKey && localStorage.getItem(dismissedKey) === 'true')
+      const dismissedKey =
+        data?.installed && data?.latest
+          ? `updateBannerDismissed:${data.installed.buildId}->${data.latest.buildId}`
+          : null
+      setUpdateDismissed(
+        !!dismissedKey && localStorage.getItem(dismissedKey) === 'true',
+      )
     }
 
     const handleUpdateCheck = (data: UpdateStatus) => {
@@ -574,11 +724,14 @@ export default function Layout({ children }: LayoutProps) {
     socket.on('server:updateAvailable', handleUpdateAvailable)
     socket.on('server:updateCheck', handleUpdateCheck)
 
-    updateApi.getStatus().then(status => {
-      if (status.updateAvailable?.updateAvailable) {
-        setUpdateInfo(status.updateAvailable)
-      }
-    }).catch(() => {})
+    updateApi
+      .getStatus()
+      .then((status) => {
+        if (status.updateAvailable?.updateAvailable) {
+          setUpdateInfo(status.updateAvailable)
+        }
+      })
+      .catch(() => {})
 
     return () => {
       socket.off('server:updateAvailable', handleUpdateAvailable)
@@ -593,8 +746,9 @@ export default function Layout({ children }: LayoutProps) {
       // Socket event will refresh the list
     } catch {
       toast({
-        title: t('serverListErrors.switchFailedTitle'),
-        description: t('serverListErrors.switchFailedDesc', { name: server.name }),
+        title: 'Switch failed',
+        description:
+          'Could not make ' + String(server.name) + ' the active server.',
         variant: 'destructive',
       })
     }
@@ -602,7 +756,12 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="flex h-screen bg-background">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm">{t('skipToContent')}</a>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm"
+      >
+        {'Skip to content'}
+      </a>
       <div className="fixed top-0 inset-x-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85 lg:hidden">
         <div className="flex items-center justify-between p-3">
           <PanelBrand compact />
@@ -611,10 +770,14 @@ export default function Layout({ children }: LayoutProps) {
             variant="ghost"
             size="icon"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label={mobileMenuOpen ? t('mobileMenu.close') : t('mobileMenu.open')}
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
             className="h-11 w-11 rounded-lg border border-transparent hover:border-border/70 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2"
           >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {mobileMenuOpen ? (
+              <X className="w-6 h-6" />
+            ) : (
+              <Menu className="w-6 h-6" />
+            )}
           </Button>
         </div>
       </div>
@@ -622,351 +785,521 @@ export default function Layout({ children }: LayoutProps) {
       {mobileMenuOpen && (
         <div
           className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[1px] lg:hidden"
-          onClick={() => { setMobileMenuOpen(false); mobileMenuButtonRef.current?.focus() }}
+          onClick={() => {
+            setMobileMenuOpen(false)
+            mobileMenuButtonRef.current?.focus()
+          }}
           aria-hidden="true"
         />
       )}
 
       <aside
         ref={mobileMenuAsideRef}
-        aria-label={t('nav.sidebarAriaLabel')}
+        aria-label={'Sidebar'}
         className={cn(
-        "fixed inset-y-0 left-0 z-40 flex flex-col border-e bg-card transform transition-all duration-300 ease-out will-change-[width,transform] motion-reduce:transition-none lg:relative",
-        sidebarCollapsed ? "lg:w-[60px]" : "lg:w-64",
-        "w-72",
-        "lg:translate-x-0",
-        mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
-        "pt-16 lg:pt-0"
-      )}>
-      <TooltipProvider delayDuration={150}>
-        <div className={cn("brand-strip relative overflow-hidden sidebar-header border-b border-border/50")}>
-          <div className="brand-strip__rule" aria-hidden />
-          <div className="brand-strip__corner" aria-hidden />
-
-          <div className={cn("relative flex items-center", sidebarCollapsed ? "justify-center p-2" : "gap-2.5 px-3 py-2.5")}>
-            <div className={cn("brand-icon-frame shrink-0", sidebarCollapsed && "brand-icon-frame--sm")}
-                 aria-hidden>
-              <img
-                src={`${import.meta.env.BASE_URL}spiffo.png`}
-                alt="Spiffo"
-                loading="lazy"
-                width={sidebarCollapsed ? 24 : 30}
-                height={sidebarCollapsed ? 24 : 30}
-                className={cn(sidebarCollapsed ? "h-6 w-6" : "h-[30px] w-[30px]", "object-contain drop-shadow-sm")}
-              />
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                <div className="flex items-center gap-2">
-                  <span className="shell-brand-title truncate text-[15px] uppercase leading-none tracking-[0.18em]">
-                    {t('brand.shortTitle')}
-                  </span>
-                  <span className="brand-led" aria-hidden title={t('panelStatus.online')} />
-                </div>
-                <div className="flex items-center gap-1.5 text-[9.5px] font-medium uppercase leading-none tracking-[0.28em] text-muted-foreground/80">
-                  <span className="shell-brand-subtitle truncate uppercase">{t('brand.shortSubtitle')}</span>
-                  <span className="brand-strip__version font-mono normal-case tracking-normal text-muted-foreground/55">
-                    v{panelVersion || (typeof __PANEL_VERSION__ !== 'undefined' ? __PANEL_VERSION__ : '0')}
-                  </span>
-                </div>
-              </div>
+          'fixed inset-y-0 left-0 z-40 flex flex-col border-e bg-card transform transition-all duration-300 ease-out will-change-[width,transform] motion-reduce:transition-none lg:relative',
+          sidebarCollapsed ? 'lg:w-[60px]' : 'lg:w-64',
+          'w-72',
+          'lg:translate-x-0',
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
+          'pt-16 lg:pt-0',
+        )}
+      >
+        <TooltipProvider delayDuration={150}>
+          <div
+            className={cn(
+              'brand-strip relative overflow-hidden sidebar-header border-b border-border/50',
             )}
-          </div>
-        </div>
+          >
+            <div className="brand-strip__rule" aria-hidden />
+            <div className="brand-strip__corner" aria-hidden />
 
-        {serversConfirmedEmpty && !sidebarCollapsed && (
-          <div className="border-b border-border/40 bg-warning/[0.04] px-3 py-2.5 shadow-[inset_2px_0_0_hsl(var(--warning))]">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0 text-warning mt-0.5" aria-hidden />
-              <div className="min-w-0">
-                <p className="text-[12.5px] font-semibold leading-tight text-foreground">
-                  {t('nav.noServerBanner.title')}
-                </p>
-                <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                  {t('nav.noServerBanner.description')}
-                </p>
-                <Link
-                  to="/server-setup"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="mt-1.5 inline-flex items-center text-[11px] font-medium text-primary hover:underline"
-                >
-                  {t('nav.noServerBanner.cta')}
-                </Link>
+            <div
+              className={cn(
+                'relative flex items-center',
+                sidebarCollapsed ? 'justify-center p-2' : 'gap-2.5 px-3 py-2.5',
+              )}
+            >
+              <div
+                className={cn(
+                  'brand-icon-frame shrink-0',
+                  sidebarCollapsed && 'brand-icon-frame--sm',
+                )}
+                aria-hidden
+              >
+                <img
+                  src={`${import.meta.env.BASE_URL}spiffo.png`}
+                  alt="Spiffo"
+                  loading="lazy"
+                  width={sidebarCollapsed ? 24 : 30}
+                  height={sidebarCollapsed ? 24 : 30}
+                  className={cn(
+                    sidebarCollapsed ? 'h-6 w-6' : 'h-[30px] w-[30px]',
+                    'object-contain drop-shadow-sm',
+                  )}
+                />
               </div>
+              {!sidebarCollapsed && (
+                <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                  <div className="flex items-center gap-2">
+                    <span className="shell-brand-title truncate text-[15px] uppercase leading-none tracking-[0.18em]">
+                      {'Zomboid'}
+                    </span>
+                    <span
+                      className="brand-led"
+                      aria-hidden
+                      title={'Panel service online'}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[9.5px] font-medium uppercase leading-none tracking-[0.28em] text-muted-foreground/80">
+                    <span className="shell-brand-subtitle truncate uppercase">
+                      {'Control Panel'}
+                    </span>
+                    <span className="brand-strip__version font-mono normal-case tracking-normal text-muted-foreground/55">
+                      v
+                      {panelVersion ||
+                        (typeof __PANEL_VERSION__ !== 'undefined'
+                          ? __PANEL_VERSION__
+                          : '0')}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
 
-        {servers && servers.length > 0 && !sidebarCollapsed && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  "active-server-strip group relative w-full border-b border-border/40 px-3 py-2.5 text-start transition-colors",
-                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/60",
-                  `active-server-strip--${serverRunState}`
-                )}
-              >
-                <span className="active-server-strip__edge" aria-hidden />
+          {serversConfirmedEmpty && !sidebarCollapsed && (
+            <div className="border-b border-border/40 bg-warning/[0.04] px-3 py-2.5 shadow-[inset_2px_0_0_hsl(var(--warning))]">
+              <div className="flex items-start gap-2">
+                <AlertCircle
+                  className="h-3.5 w-3.5 shrink-0 text-warning mt-0.5"
+                  aria-hidden
+                />
+                <div className="min-w-0">
+                  <p className="text-[12.5px] font-semibold leading-tight text-foreground">
+                    {'No server yet'}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                    {'Most of the panel unlocks once you add one.'}
+                  </p>
+                  <Link
+                    to="/server-setup"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="mt-1.5 inline-flex items-center text-[11px] font-medium text-primary hover:underline"
+                  >
+                    {'Set up a server'}
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
 
-                <div className="flex items-center gap-1.5 text-[9.5px] font-medium uppercase leading-none tracking-[0.26em] text-muted-foreground/70">
-                  <span>{t('activeServer.label')}</span>
-                  <span className="ms-1 inline-block h-px flex-1 bg-gradient-to-r rtl:bg-gradient-to-l from-border/40 to-transparent" aria-hidden />
-                  <ChevronDown className="h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                </div>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <span className="active-server-strip__dot relative h-2.5 w-2.5 shrink-0 rounded-full" aria-hidden>
-                    <span className="absolute inset-0 rounded-full" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold leading-tight text-foreground transition-colors group-hover:text-primary">
-                    {activeServer?.name || t('activeServer.none')}
-                  </span>
-                  {serverRunState === 'running' && playerCount > 0 && (
-                    <Badge
-                      variant="success"
-                      className="shrink-0 px-1.5 py-0 text-[10px] leading-none"
-                      title={t('activeServer.playersOnline', { count: playerCount })}
-                    >
-                      {playerCountLabel}
-                    </Badge>
-                  )}
-                  {activeServer?.isRemote && (
-                    <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px] uppercase tracking-wider text-muted-foreground/80" title={t('activeServer.remoteTitle')}>
-                      {t('activeServer.remoteBadge')}
-                    </Badge>
-                  )}
-                  <span className="sr-only">
-                    {serverRunState === 'running' && t('activeServer.statusRunning')}
-                    {serverRunState === 'stopped' && t('activeServer.statusStopped')}
-                    {serverRunState === 'transitioning' && t('activeServer.statusTransitioning')}
-                    {serverRunState === 'unknown' && t('activeServer.statusUnknown')}
-                  </span>
-                </div>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-60 glass border-border/50">
-              {servers.map(server => (
-                <DropdownMenuItem
-                  key={server.id}
-                  onClick={() => handleSwitchServer(server)}
+          {servers && servers.length > 0 && !sidebarCollapsed && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
                   className={cn(
-                    "py-2.5 px-3 cursor-pointer transition-colors",
-                    server.isActive && 'bg-primary/10'
+                    'active-server-strip group relative w-full border-b border-border/40 px-3 py-2.5 text-start transition-colors',
+                    'focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/60',
+                    `active-server-strip--${serverRunState}`,
                   )}
                 >
-                  <div className="flex items-center gap-3 w-full">
-                    <div className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center",
-                      server.isActive ? "bg-primary/18" : "bg-muted/70"
-                    )}>
-                      <Server className={cn("w-4 h-4", server.isActive && "text-primary")} />
-                    </div>
-                    <span className="truncate flex-1 font-medium">{server.name}</span>
-                    {server.isRemote && (
-                      <Badge variant="outline" className="px-1.5 py-0 text-[10px] uppercase tracking-wider text-muted-foreground/80" title={t('activeServer.remoteTitle')}>
-                        {t('activeServer.remoteBadgeFull')}
-                      </Badge>
-                    )}
-                    {server.isActive && (
-                      <Badge variant="secondary" className="px-2 py-0.5 text-xs uppercase tracking-wide">
-                        {t('activeServer.activeBadge')}
-                      </Badge>
-                    )}
-                  </div>
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void navigate({ to: '/servers' })} className="py-2.5 px-3">
-                <Layers className="w-4 h-4 me-2" />
-                {t('activeServer.manageServers')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+                  <span className="active-server-strip__edge" aria-hidden />
 
-        <nav aria-label={t('nav.ariaLabel')} className="flex-1 overflow-y-auto nav-scroll px-2 py-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                to={dashboardItem.to}
-                onPointerEnter={() => preloadRouteModule(dashboardItem.to)}
-                onFocus={() => preloadRouteModule(dashboardItem.to)}
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  'group relative flex min-h-9 items-center rounded-md text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
-                  sidebarCollapsed ? 'justify-center px-2 py-2' : 'gap-3 px-2 py-1.5',
-                  location.pathname === dashboardItem.to
-                    ? 'bg-primary/10 text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground'
-                )}
-              >
-                {location.pathname === dashboardItem.to && (
-                  <span className="absolute start-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-s-full bg-primary" aria-hidden />
-                )}
-                <dashboardItem.icon className={cn('h-[15px] w-[15px] shrink-0', location.pathname === dashboardItem.to ? 'text-primary' : 'text-muted-foreground/80 group-hover:text-foreground')} />
-                {!sidebarCollapsed && <span className="truncate">{t(dashboardItem.labelKey)}</span>}
-              </Link>
-            </TooltipTrigger>
-            {sidebarCollapsed && <TooltipContent side="right">{t(dashboardItem.labelKey)}</TooltipContent>}
-          </Tooltip>
-
-          {navSections.map((section, sectionIdx) => {
-            const tone = sectionToneStyles[section.color as keyof typeof sectionToneStyles] || sectionToneStyles.slate
-            const sectionHasSignal =
-              (section.id === 'config' && modUpdatesAvailable > 0) ||
-              (section.id === 'active' && playerCount > 0) ||
-              (section.id === 'system' && !!panelUpdateAvailable)
-
-            if (sidebarCollapsed) {
-              return (
-                <div key={section.id} className={cn('space-y-0.5', sectionIdx === 0 ? 'mt-2 pt-2 border-t border-border/40' : 'mt-2 pt-2 border-t border-border/40')}>
-                  {section.items.map((item) => {
-                    const isDisabledByRemote = isBlockedByRemote(item)
-                    const isDisabledByNoServer = isBlockedByNoServer(section)
-                    const disabledReason = isDisabledByNoServer
-                      ? t('nav.requiresServer')
-                      : isDisabledByRemote
-                        ? t('nav.notAvailableRemote')
-                        : null
-
-                    if (disabledReason || item.disabled) {
-                      return (
-                        <DisabledNavTooltip key={item.to} reason={disabledReason ?? t(item.labelKey)}>
-                          <div
-                            className="flex min-h-9 items-center justify-center rounded-md px-2 py-2 opacity-45 cursor-not-allowed"
-                            aria-disabled="true"
-                            aria-label={disabledReason ? `${t(item.labelKey)} — ${disabledReason}` : t(item.labelKey)}
-                          >
-                            <item.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground/50" />
-                          </div>
-                        </DisabledNavTooltip>
-                      )
-                    }
-
-                    const isActive = location.pathname === item.to
-                    return (
-                      <Tooltip key={item.to}>
-                        <TooltipTrigger asChild>
-                          <Link
-                            to={item.to}
-                            onPointerEnter={() => preloadRouteModule(item.to)}
-                            onFocus={() => preloadRouteModule(item.to)}
-                            onClick={() => setMobileMenuOpen(false)}
-                            className={cn(
-                              'group relative flex min-h-9 items-center justify-center rounded-md px-2 py-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
-                              isActive
-                                ? cn('font-medium', tone.childActive)
-                                : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground'
-                            )}
-                          >
-                            {isActive && (
-                              <span className={cn('absolute start-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full', tone.childDot)} aria-hidden />
-                            )}
-                            <item.icon className={cn('h-[15px] w-[15px] shrink-0', isActive ? tone.labelActive : 'text-muted-foreground/80 group-hover:text-foreground')} />
-                          </Link>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">{t(item.labelKey)}</TooltipContent>
-                      </Tooltip>
-                    )
-                  })}
-                </div>
-              )
-            }
-
-            return (
-              <div key={section.id} className="mt-3 first:mt-3">
-                <div className="mb-1 flex items-center gap-2 px-2">
-                  <span className={cn('h-px w-3 rounded-full', tone.childDot)} aria-hidden />
-                  <span className={cn('text-[10px] font-semibold uppercase leading-none tracking-[0.18em]', tone.labelActive)}>
-                    {t(section.labelKey)}
-                  </span>
-                  {sectionHasSignal && (
+                  <div className="flex items-center gap-1.5 text-[9.5px] font-medium uppercase leading-none tracking-[0.26em] text-muted-foreground/70">
+                    <span>{'Active Server'}</span>
                     <span
-                      className={cn(
-                        'h-1.5 w-1.5 rounded-full',
-                        section.id === 'active' && 'bg-success',
-                        section.id === 'config' && 'bg-warning motion-safe:animate-pulse',
-                        section.id === 'system' && 'bg-warning motion-safe:animate-pulse'
+                      className="ms-1 inline-block h-px flex-1 bg-gradient-to-r rtl:bg-gradient-to-l from-border/40 to-transparent"
+                      aria-hidden
+                    />
+                    <ChevronDown className="h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span
+                      className="active-server-strip__dot relative h-2.5 w-2.5 shrink-0 rounded-full"
+                      aria-hidden
+                    >
+                      <span className="absolute inset-0 rounded-full" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold leading-tight text-foreground transition-colors group-hover:text-primary">
+                      {activeServer?.name || 'No server selected'}
+                    </span>
+                    {serverRunState === 'running' && playerCount > 0 && (
+                      <Badge
+                        variant="success"
+                        className="shrink-0 px-1.5 py-0 text-[10px] leading-none"
+                        title={
+                          Number(playerCount) === 1
+                            ? String(playerCount) + ' player online'
+                            : String(playerCount) + ' players online'
+                        }
+                      >
+                        {playerCountLabel}
+                      </Badge>
+                    )}
+                    {activeServer?.isRemote && (
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 px-1.5 py-0 text-[10px] uppercase tracking-wider text-muted-foreground/80"
+                        title={'Remote (RCON-only) server'}
+                      >
+                        {'RM'}
+                      </Badge>
+                    )}
+                    <span className="sr-only">
+                      {serverRunState === 'running' && 'Server is running'}
+                      {serverRunState === 'stopped' && 'Server is stopped'}
+                      {serverRunState === 'transitioning' &&
+                        'Server is starting or stopping'}
+                      {serverRunState === 'unknown' && 'Server status unknown'}
+                    </span>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="w-60 glass border-border/50"
+              >
+                {servers.map((server) => (
+                  <DropdownMenuItem
+                    key={server.id}
+                    onClick={() => handleSwitchServer(server)}
+                    className={cn(
+                      'py-2.5 px-3 cursor-pointer transition-colors',
+                      server.isActive && 'bg-primary/10',
+                    )}
+                  >
+                    <div className="flex items-center gap-3 w-full">
+                      <div
+                        className={cn(
+                          'w-8 h-8 rounded-lg flex items-center justify-center',
+                          server.isActive ? 'bg-primary/18' : 'bg-muted/70',
+                        )}
+                      >
+                        <Server
+                          className={cn(
+                            'w-4 h-4',
+                            server.isActive && 'text-primary',
+                          )}
+                        />
+                      </div>
+                      <span className="truncate flex-1 font-medium">
+                        {server.name}
+                      </span>
+                      {server.isRemote && (
+                        <Badge
+                          variant="outline"
+                          className="px-1.5 py-0 text-[10px] uppercase tracking-wider text-muted-foreground/80"
+                          title={'Remote (RCON-only) server'}
+                        >
+                          {'Remote'}
+                        </Badge>
                       )}
+                      {server.isActive && (
+                        <Badge
+                          variant="secondary"
+                          className="px-2 py-0.5 text-xs uppercase tracking-wide"
+                        >
+                          {'Active'}
+                        </Badge>
+                      )}
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => void navigate({ to: '/servers' })}
+                  className="py-2.5 px-3"
+                >
+                  <Layers className="w-4 h-4 me-2" />
+                  {'Manage Servers'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          <nav
+            aria-label={'Main navigation'}
+            className="flex-1 overflow-y-auto nav-scroll px-2 py-2"
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  to={dashboardItem.to}
+                  onPointerEnter={() => preloadRouteModule(dashboardItem.to)}
+                  onFocus={() => preloadRouteModule(dashboardItem.to)}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    'group relative flex min-h-9 items-center rounded-md text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
+                    sidebarCollapsed
+                      ? 'justify-center px-2 py-2'
+                      : 'gap-3 px-2 py-1.5',
+                    location.pathname === dashboardItem.to
+                      ? 'bg-primary/10 text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
+                  )}
+                >
+                  {location.pathname === dashboardItem.to && (
+                    <span
+                      className="absolute start-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-s-full bg-primary"
                       aria-hidden
                     />
                   )}
-                  <span className="h-px flex-1 bg-border/30" aria-hidden />
-                </div>
-                <div className="space-y-0.5">
-                  {section.items.map((item) => {
-                    const isDisabledByRemote = isBlockedByRemote(item)
-                    const isDisabledByNoServer = isBlockedByNoServer(section)
+                  <dashboardItem.icon
+                    className={cn(
+                      'h-[15px] w-[15px] shrink-0',
+                      location.pathname === dashboardItem.to
+                        ? 'text-primary'
+                        : 'text-muted-foreground/80 group-hover:text-foreground',
+                    )}
+                  />
+                  {!sidebarCollapsed && (
+                    <span className="truncate">{dashboardItem.label}</span>
+                  )}
+                </Link>
+              </TooltipTrigger>
+              {sidebarCollapsed && (
+                <TooltipContent side="right">
+                  {dashboardItem.label}
+                </TooltipContent>
+              )}
+            </Tooltip>
 
-                    if (isDisabledByNoServer) {
-                      return (
-                        <DisabledNavTooltip key={item.to} reason={t('nav.requiresServer')}>
-                          <div
-                            className="flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] opacity-50 cursor-not-allowed"
-                            aria-label={`${t(item.labelKey)} — ${t('nav.requiresServer')}`}
-                            aria-disabled="true"
+            {navSections.map((section, sectionIdx) => {
+              const tone =
+                sectionToneStyles[
+                  section.color as keyof typeof sectionToneStyles
+                ] || sectionToneStyles.slate
+              const sectionHasSignal =
+                (section.id === 'config' && modUpdatesAvailable > 0) ||
+                (section.id === 'active' && playerCount > 0) ||
+                (section.id === 'system' && !!panelUpdateAvailable)
+
+              if (sidebarCollapsed) {
+                return (
+                  <div
+                    key={section.id}
+                    className={cn(
+                      'space-y-0.5',
+                      sectionIdx === 0
+                        ? 'mt-2 pt-2 border-t border-border/40'
+                        : 'mt-2 pt-2 border-t border-border/40',
+                    )}
+                  >
+                    {section.items.map((item) => {
+                      const isDisabledByRemote = isBlockedByRemote(item)
+                      const isDisabledByNoServer = isBlockedByNoServer(section)
+                      const disabledReason = isDisabledByNoServer
+                        ? 'Add a server first — this page needs one to work with'
+                        : isDisabledByRemote
+                          ? 'Not available for remote (RCON-only) servers'
+                          : null
+
+                      if (disabledReason || item.disabled) {
+                        return (
+                          <DisabledNavTooltip
+                            key={item.to}
+                            reason={disabledReason ?? item.label}
                           >
-                            <item.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground/50" />
-                            <span className="truncate text-muted-foreground/70">{t(item.labelKey)}</span>
-                          </div>
-                        </DisabledNavTooltip>
-                      )
-                    }
+                            <div
+                              className="flex min-h-9 items-center justify-center rounded-md px-2 py-2 opacity-45 cursor-not-allowed"
+                              aria-disabled="true"
+                              aria-label={
+                                disabledReason
+                                  ? `${item.label} — ${disabledReason}`
+                                  : item.label
+                              }
+                            >
+                              <item.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground/50" />
+                            </div>
+                          </DisabledNavTooltip>
+                        )
+                      }
 
-                    if (item.disabled) {
+                      const isActive = location.pathname === item.to
                       return (
-                        <DisabledNavTooltip key={item.to} reason={t(item.labelKey)}>
-                          <div
-                            className="flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] opacity-50 cursor-not-allowed"
-                            aria-disabled="true"
-                          >
-                            <item.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground/50" />
-                            <span className="truncate text-muted-foreground/70">{t(item.labelKey)}</span>
-                          </div>
-                        </DisabledNavTooltip>
+                        <Tooltip key={item.to}>
+                          <TooltipTrigger asChild>
+                            <Link
+                              to={item.to}
+                              onPointerEnter={() => preloadRouteModule(item.to)}
+                              onFocus={() => preloadRouteModule(item.to)}
+                              onClick={() => setMobileMenuOpen(false)}
+                              className={cn(
+                                'group relative flex min-h-9 items-center justify-center rounded-md px-2 py-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
+                                isActive
+                                  ? cn('font-medium', tone.childActive)
+                                  : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
+                              )}
+                            >
+                              {isActive && (
+                                <span
+                                  className={cn(
+                                    'absolute start-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full',
+                                    tone.childDot,
+                                  )}
+                                  aria-hidden
+                                />
+                              )}
+                              <item.icon
+                                className={cn(
+                                  'h-[15px] w-[15px] shrink-0',
+                                  isActive
+                                    ? tone.labelActive
+                                    : 'text-muted-foreground/80 group-hover:text-foreground',
+                                )}
+                              />
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">
+                            {item.label}
+                          </TooltipContent>
+                        </Tooltip>
                       )
-                    }
+                    })}
+                  </div>
+                )
+              }
 
-                    if (isDisabledByRemote) {
-                      return (
-                        <DisabledNavTooltip key={item.to} reason={t('nav.notAvailableRemote')}>
-                          <div
-                            className="flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] opacity-55"
-                            aria-label={`${t(item.labelKey)} — ${t('nav.notAvailableRemote')}`}
-                            aria-disabled="true"
-                          >
-                            <item.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground/50" />
-                            <span className="truncate text-muted-foreground/70 line-through decoration-muted-foreground/30">{t(item.labelKey)}</span>
-                            <Badge variant="outline" className="ms-auto px-1 py-0 text-[9px] uppercase tracking-wider">
-                              {t('nav.localBadge')}
-                            </Badge>
-                          </div>
-                        </DisabledNavTooltip>
-                      )
-                    }
-
-                    const isActive = location.pathname === item.to
-                    return (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        onPointerEnter={() => preloadRouteModule(item.to)}
-                        onFocus={() => preloadRouteModule(item.to)}
-                        onClick={() => setMobileMenuOpen(false)}
+              return (
+                <div key={section.id} className="mt-3 first:mt-3">
+                  <div className="mb-1 flex items-center gap-2 px-2">
+                    <span
+                      className={cn('h-px w-3 rounded-full', tone.childDot)}
+                      aria-hidden
+                    />
+                    <span
+                      className={cn(
+                        'text-[10px] font-semibold uppercase leading-none tracking-[0.18em]',
+                        tone.labelActive,
+                      )}
+                    >
+                      {section.label}
+                    </span>
+                    {sectionHasSignal && (
+                      <span
                         className={cn(
-                          'group relative flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
-                          isActive
-                            ? cn('font-medium text-foreground', tone.childActive)
-                            : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground'
+                          'h-1.5 w-1.5 rounded-full',
+                          section.id === 'active' && 'bg-success',
+                          section.id === 'config' &&
+                            'bg-warning motion-safe:animate-pulse',
+                          section.id === 'system' &&
+                            'bg-warning motion-safe:animate-pulse',
                         )}
-                      >
-                        <>
+                        aria-hidden
+                      />
+                    )}
+                    <span className="h-px flex-1 bg-border/30" aria-hidden />
+                  </div>
+                  <div className="space-y-0.5">
+                    {section.items.map((item) => {
+                      const isDisabledByRemote = isBlockedByRemote(item)
+                      const isDisabledByNoServer = isBlockedByNoServer(section)
+
+                      if (isDisabledByNoServer) {
+                        return (
+                          <DisabledNavTooltip
+                            key={item.to}
+                            reason={
+                              'Add a server first — this page needs one to work with'
+                            }
+                          >
+                            <div
+                              className="flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] opacity-50 cursor-not-allowed"
+                              aria-label={`${item.label} — ${'Add a server first — this page needs one to work with'}`}
+                              aria-disabled="true"
+                            >
+                              <item.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground/50" />
+                              <span className="truncate text-muted-foreground/70">
+                                {item.label}
+                              </span>
+                            </div>
+                          </DisabledNavTooltip>
+                        )
+                      }
+
+                      if (item.disabled) {
+                        return (
+                          <DisabledNavTooltip key={item.to} reason={item.label}>
+                            <div
+                              className="flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] opacity-50 cursor-not-allowed"
+                              aria-disabled="true"
+                            >
+                              <item.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground/50" />
+                              <span className="truncate text-muted-foreground/70">
+                                {item.label}
+                              </span>
+                            </div>
+                          </DisabledNavTooltip>
+                        )
+                      }
+
+                      if (isDisabledByRemote) {
+                        return (
+                          <DisabledNavTooltip
+                            key={item.to}
+                            reason={
+                              'Not available for remote (RCON-only) servers'
+                            }
+                          >
+                            <div
+                              className="flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] opacity-55"
+                              aria-label={`${item.label} — ${'Not available for remote (RCON-only) servers'}`}
+                              aria-disabled="true"
+                            >
+                              <item.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground/50" />
+                              <span className="truncate text-muted-foreground/70 line-through decoration-muted-foreground/30">
+                                {item.label}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className="ms-auto px-1 py-0 text-[9px] uppercase tracking-wider"
+                              >
+                                {'Local'}
+                              </Badge>
+                            </div>
+                          </DisabledNavTooltip>
+                        )
+                      }
+
+                      const isActive = location.pathname === item.to
+                      return (
+                        <Link
+                          key={item.to}
+                          to={item.to}
+                          onPointerEnter={() => preloadRouteModule(item.to)}
+                          onFocus={() => preloadRouteModule(item.to)}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            'group relative flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
+                            isActive
+                              ? cn(
+                                  'font-medium text-foreground',
+                                  tone.childActive,
+                                )
+                              : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
+                          )}
+                        >
+                          <>
                             {isActive && (
-                              <span className={cn('absolute start-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full', tone.childDot)} aria-hidden />
+                              <span
+                                className={cn(
+                                  'absolute start-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-s-full',
+                                  tone.childDot,
+                                )}
+                                aria-hidden
+                              />
                             )}
-                            <item.icon className={cn('h-[15px] w-[15px] shrink-0 transition-colors', isActive ? tone.labelActive : 'text-muted-foreground/80 group-hover:text-foreground')} />
-                            <span className="truncate">{t(item.labelKey)}</span>
+                            <item.icon
+                              className={cn(
+                                'h-[15px] w-[15px] shrink-0 transition-colors',
+                                isActive
+                                  ? tone.labelActive
+                                  : 'text-muted-foreground/80 group-hover:text-foreground',
+                              )}
+                            />
+                            <span className="truncate">{item.label}</span>
                             {item.badge && (
                               <Badge
                                 variant={isActive ? 'secondary' : 'outline'}
@@ -987,103 +1320,134 @@ export default function Layout({ children }: LayoutProps) {
                               <Badge
                                 variant="warning"
                                 className="ms-auto min-w-[24px] justify-center px-1.5 py-0 text-[10px] leading-tight"
-                                title={t('modBadge.updatesAvailable', { count: modUpdatesAvailable })}
+                                title={
+                                  Number(modUpdatesAvailable) === 1
+                                    ? String(modUpdatesAvailable) +
+                                      ' mod update available'
+                                    : String(modUpdatesAvailable) +
+                                      ' mod updates available'
+                                }
                               >
-                                {modUpdatesAvailable > 99 ? '99+' : modUpdatesAvailable}
+                                {modUpdatesAvailable > 99
+                                  ? '99+'
+                                  : modUpdatesAvailable}
                               </Badge>
                             )}
-                            {item.to === '/settings' && panelUpdateAvailable && (
-                              <span
-                                className="ms-auto h-1.5 w-1.5 rounded-full bg-warning motion-safe:animate-pulse"
-                                title={panelUpdateAvailable.version
-                                  ? t('panelUpdateBadge.titleWithVersion', { version: panelUpdateAvailable.version })
-                                  : t('panelUpdateBadge.titleNoVersion')}
-                                aria-hidden
-                              />
-                            )}
-                        </>
-                      </Link>
-                    )
-                  })}
+                            {item.to === '/settings' &&
+                              panelUpdateAvailable && (
+                                <span
+                                  className="ms-auto h-1.5 w-1.5 rounded-full bg-warning motion-safe:animate-pulse"
+                                  title={
+                                    panelUpdateAvailable.version
+                                      ? 'Panel update available: v' +
+                                        String(panelUpdateAvailable.version)
+                                      : 'Panel update available'
+                                  }
+                                  aria-hidden
+                                />
+                              )}
+                          </>
+                        </Link>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </nav>
+              )
+            })}
+          </nav>
 
-        <div className={cn('border-t border-border/30', sidebarCollapsed ? 'p-2 space-y-1.5' : 'px-3 py-2 space-y-1')}>
-          {!sidebarCollapsed ? (
-            <>
-              <div className="flex items-center gap-2 text-[11px]">
-                <ConnectionStatus />
-                <AuthFooter />
-                <LanguageSwitcher className="ms-auto" />
-              </div>
-              <div className="flex items-center gap-2 text-[11px]">
-                <span className="flex items-center gap-2">
-                  {panelUpdateAvailable && (
-                    <Link
-                      to="/settings"
-                      search={{ tab: 'updates' }}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-1.5 py-0 text-[10px] font-medium uppercase tracking-wider text-warning hover:bg-warning/20 transition-colors"
-                      title={panelUpdateAvailable.version
-                        ? t('panelUpdateBadge.titleWithVersionOpenSettings', { version: panelUpdateAvailable.version })
-                        : t('panelUpdateBadge.titleNoVersionOpenSettings')}
+          <div
+            className={cn(
+              'border-t border-border/30',
+              sidebarCollapsed ? 'p-2 space-y-1.5' : 'px-3 py-2 space-y-1',
+            )}
+          >
+            {!sidebarCollapsed ? (
+              <>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <ConnectionStatus />
+                  <AuthFooter />
+                </div>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className="flex items-center gap-2">
+                    {panelUpdateAvailable && (
+                      <Link
+                        to="/settings"
+                        search={{ tab: 'updates' }}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-1.5 py-0 text-[10px] font-medium uppercase tracking-wider text-warning hover:bg-warning/20 transition-colors"
+                        title={
+                          panelUpdateAvailable.version
+                            ? 'Panel update available: v' +
+                              String(panelUpdateAvailable.version) +
+                              '. Open Panel Settings.'
+                            : 'Panel update available. Open Panel Settings.'
+                        }
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-warning motion-safe:animate-pulse" />
+                        {'Update'}
+                      </Link>
+                    )}
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/55">
+                      v{panelVersion || '—'}
+                    </span>
+                    <span className="h-3 w-px bg-border/40" aria-hidden />
+                    <a
+                      href="https://github.com/itsmeares/better-zcp"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground/70 hover:text-foreground transition-colors"
+                      aria-label={'GitHub repository (opens in new tab)'}
                     >
-                      <span className="h-1.5 w-1.5 rounded-full bg-warning motion-safe:animate-pulse" />
-                      {t('panelUpdateBadge.update')}
-                    </Link>
-                  )}
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/55">
-                    v{panelVersion || '—'}
+                      <Github className="h-3.5 w-3.5" />
+                    </a>
+                    <button
+                      onClick={() => setHelpOpen(true)}
+                      className="text-muted-foreground/70 hover:text-foreground transition-colors"
+                      aria-label={'Keyboard shortcuts'}
+                      title={'Keyboard shortcuts (?)'}
+                    >
+                      <kbd className="inline-flex h-4 w-4 items-center justify-center rounded border border-border/40 text-[10px] font-mono leading-none">
+                        ?
+                      </kbd>
+                    </button>
                   </span>
-                  <span className="h-3 w-px bg-border/40" aria-hidden />
-                  <a
-                    href="https://github.com/itsmeares/better-zcp"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground/70 hover:text-foreground transition-colors"
-                    aria-label={t('footer.githubRepo')}
-                  >
-                    <Github className="h-3.5 w-3.5" />
-                  </a>
-                  <button
-                    onClick={() => setHelpOpen(true)}
-                    className="text-muted-foreground/70 hover:text-foreground transition-colors"
-                    aria-label={t('footer.keyboardShortcuts')}
-                    title={t('footer.keyboardShortcutsTitle')}
-                  >
-                    <kbd className="inline-flex h-4 w-4 items-center justify-center rounded border border-border/40 text-[10px] font-mono leading-none">?</kbd>
-                  </button>
-                </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-1.5">
+                <ConnectionStatus className="justify-center" />
               </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-1.5">
-              <ConnectionStatus className="justify-center" />
-              <LanguageSwitcher />
+            )}
+            <div className="hidden lg:block">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={toggleSidebar}
+                    className={cn(
+                      'flex h-5 w-full items-center justify-center rounded text-muted-foreground/35 hover:text-muted-foreground transition-colors',
+                      sidebarCollapsed && 'mx-auto w-8',
+                    )}
+                    aria-label={
+                      sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
+                    }
+                  >
+                    {sidebarCollapsed ? (
+                      <PanelLeft className="h-3.5 w-3.5" />
+                    ) : (
+                      <PanelLeftClose className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                {sidebarCollapsed && (
+                  <TooltipContent side="right">
+                    {'Expand sidebar'}
+                  </TooltipContent>
+                )}
+              </Tooltip>
             </div>
-          )}
-          <div className="hidden lg:block">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={toggleSidebar}
-                  className={cn(
-                    'flex h-5 w-full items-center justify-center rounded text-muted-foreground/35 hover:text-muted-foreground transition-colors',
-                    sidebarCollapsed && 'mx-auto w-8'
-                  )}
-                  aria-label={sidebarCollapsed ? t('footer.expandSidebar') : t('footer.collapseSidebar')}
-                >
-                  {sidebarCollapsed ? <PanelLeft className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
-                </button>
-              </TooltipTrigger>
-              {sidebarCollapsed && <TooltipContent side="right">{t('footer.expandSidebar')}</TooltipContent>}
-            </Tooltip>
           </div>
-        </div>
-      </TooltipProvider>
+        </TooltipProvider>
       </aside>
 
       <main id="main-content" className="flex-1 overflow-auto pt-16 lg:pt-0">
@@ -1097,21 +1461,27 @@ export default function Layout({ children }: LayoutProps) {
               <AlertCircle className="h-3.5 w-3.5 shrink-0 text-warning" />
               <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
                 <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-warning">
-                  {t('updateBanner.label')}
+                  {'Server update'}
                 </span>
                 <span className="min-w-0 truncate text-xs text-muted-foreground">
-                  <Trans
-                    t={t}
-                    i18nKey="updateBanner.newBuildOn"
-                    values={{ branch: updateInfo.installed.branch }}
-                    components={{ b: <span className="font-medium text-foreground" /> }}
-                  />
+                  <>
+                    {'New build on '}
+                    <span className="font-medium text-foreground">
+                      {updateInfo.installed.branch}
+                    </span>
+                    {' branch'}
+                  </>
                   {updateInfo.latest.description && (
-                    <span className="text-muted-foreground/70"> · {updateInfo.latest.description}</span>
+                    <span className="text-muted-foreground/70">
+                      {' '}
+                      · {updateInfo.latest.description}
+                    </span>
                   )}
                 </span>
                 <span className="font-mono text-[11px] tabular-nums text-foreground/85">
-                  b{updateInfo.installed.buildId} <span className="text-muted-foreground/60">→</span> b{updateInfo.latest.buildId}
+                  b{updateInfo.installed.buildId}{' '}
+                  <span className="text-muted-foreground/60">→</span> b
+                  {updateInfo.latest.buildId}
                 </span>
               </div>
               <div className="ms-auto flex items-center gap-1">
@@ -1121,13 +1491,14 @@ export default function Layout({ children }: LayoutProps) {
                   className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                   onClick={() => {
                     setUpdateDismissed(true)
-                    const key = updateInfo && updateInfo.installed && updateInfo.latest
-                      ? `updateBannerDismissed:${updateInfo.installed.buildId}->${updateInfo.latest.buildId}`
-                      : null
+                    const key =
+                      updateInfo && updateInfo.installed && updateInfo.latest
+                        ? `updateBannerDismissed:${updateInfo.installed.buildId}->${updateInfo.latest.buildId}`
+                        : null
                     if (key) localStorage.setItem(key, 'true')
                   }}
                 >
-                  {t('updateBanner.dismiss')}
+                  {'Dismiss'}
                 </Button>
                 <Button
                   size="sm"
@@ -1136,7 +1507,7 @@ export default function Layout({ children }: LayoutProps) {
                   onClick={() => void navigate({ to: '/servers' })}
                 >
                   <RefreshCw className="h-3 w-3" />
-                  {t('updateBanner.updateServer')}
+                  {'Update server'}
                 </Button>
               </div>
             </div>
@@ -1144,7 +1515,11 @@ export default function Layout({ children }: LayoutProps) {
           {children}
         </div>
       </main>
-      <KeyboardShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} shortcuts={shortcuts} />
+      <KeyboardShortcutsHelp
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        shortcuts={shortcuts}
+      />
     </div>
   )
 }

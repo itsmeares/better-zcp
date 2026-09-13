@@ -1,15 +1,10 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import {
-  createRootRoute,
-  HeadContent,
-  Scripts,
-} from '@tanstack/react-router'
+import { createRootRoute, HeadContent, Scripts } from '@tanstack/react-router'
 import { BuildCompatibilityGate } from '../components/BuildCompatibilityGate'
 import { PageSkeleton } from '../components/PageSkeleton'
 import App, { NotFoundRoute } from '../App'
 import { queryClient } from '../lib/queryClient'
 import '../index.css'
-import '../i18n'
 
 export const Route = createRootRoute({
   component: StartDocument,
@@ -29,7 +24,12 @@ function StartDocument() {
   const baseUrl = import.meta.env.BASE_URL
 
   return (
-    <html lang="en" className="dark theme-survival" suppressHydrationWarning>
+    <html
+      lang="en"
+      dir="ltr"
+      className="dark theme-survival"
+      suppressHydrationWarning
+    >
       <head>
         <meta charSet="UTF-8" />
         <link rel="icon" type="image/svg+xml" href={`${baseUrl}zombie.svg`} />
@@ -46,7 +46,9 @@ function StartDocument() {
           type="font/woff2"
           crossOrigin="anonymous"
         />
-        <script dangerouslySetInnerHTML={{ __html: `
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
           (function () {
             try {
               var stored = localStorage.getItem('pz-panel-theme');
@@ -58,7 +60,9 @@ function StartDocument() {
               else { root.classList.add('dark'); root.style.colorScheme = 'dark'; }
             } catch (e) {}
           })();
-        ` }} />
+        `,
+          }}
+        />
         <title>Zomboid Control Panel</title>
         <HeadContent />
       </head>

@@ -1,8 +1,0 @@
-{
-  "title": "出現問題",
-  "description": "發生意外錯誤，重新整理頁面重試。",
-  "refreshPage": "重新整理頁面",
-  "tryAgain": "重試",
-  "showDetails": "顯示技術詳情",
-  "openRecoveryPage": "開啟可以解決此問題的頁面"
-}

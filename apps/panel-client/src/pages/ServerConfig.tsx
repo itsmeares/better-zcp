@@ -1,5 +1,12 @@
-import { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue, memo } from 'react'
-import { Trans, useTranslation } from 'react-i18next'
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  useDeferredValue,
+  memo,
+} from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { copyText, cn } from '@/lib/utils'
 import {
@@ -61,7 +68,7 @@ import {
   TrendingUp,
   BarChart,
   Layers,
-  type LucideIcon
+  type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -81,7 +88,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -98,11 +105,24 @@ import {
 } from '@/components/ui/tooltip'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { PageHeader } from '@/components/PageHeader'
-import { serverApi, serverFilesApi, serversApi, panelBridgeApi, ApiError, SpawnPointsByProfession, SpawnRegion, SandboxData, ConfigTemplate } from '@/lib/api'
+import {
+  serverApi,
+  serverFilesApi,
+  serversApi,
+  panelBridgeApi,
+  ApiError,
+  SpawnPointsByProfession,
+  SpawnRegion,
+  SandboxData,
+  ConfigTemplate,
+} from '@/lib/api'
 import { resolveServerRunning } from '@/lib/serverStatus'
 import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
 import { getUserErrorMessage } from '@/lib/errorMessage'
-import { formatModSettingDescription, formatModSettingLabel } from '@/lib/modSettingsLabels'
+import {
+  formatModSettingDescription,
+  formatModSettingLabel,
+} from '@/lib/modSettingsLabels'
 import { EmptyState } from '@/components/EmptyState'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSocket } from '@/contexts/SocketContext'
@@ -155,7 +175,9 @@ const UNSUPPORTED_INI_KEYS = new Set([
   'ServerImageIcon',
 ])
 
-function mergeSchemaDefaults(parsed: Record<string, string>): Record<string, string> {
+function mergeSchemaDefaults(
+  parsed: Record<string, string>,
+): Record<string, string> {
   const merged = { ...parsed }
   for (const setting of INI_SCHEMA) {
     if (!(setting.key in merged)) {
@@ -165,11 +187,21 @@ function mergeSchemaDefaults(parsed: Record<string, string>): Record<string, str
     const raw = merged[setting.key]
     if (raw == null || raw === '') continue
     if (setting.type === 'boolean' && raw !== 'true' && raw !== 'false') {
-      console.warn(`[ServerConfig] ${setting.key} expected boolean, got "${raw}"`)
+      console.warn(
+        `[ServerConfig] ${setting.key} expected boolean, got "${raw}"`,
+      )
     } else if (setting.type === 'number' && Number.isNaN(Number(raw))) {
-      console.warn(`[ServerConfig] ${setting.key} expected number, got "${raw}"`)
-    } else if (setting.type === 'select' && setting.options && !setting.options.some(o => o.value === raw)) {
-      console.warn(`[ServerConfig] ${setting.key} expected one of [${setting.options.map(o => o.value).join('|')}], got "${raw}"`)
+      console.warn(
+        `[ServerConfig] ${setting.key} expected number, got "${raw}"`,
+      )
+    } else if (
+      setting.type === 'select' &&
+      setting.options &&
+      !setting.options.some((o) => o.value === raw)
+    ) {
+      console.warn(
+        `[ServerConfig] ${setting.key} expected one of [${setting.options.map((o) => o.value).join('|')}], got "${raw}"`,
+      )
     }
   }
   return merged
@@ -195,7 +227,9 @@ function createSandboxDefaults(): SandboxData {
   return sandbox
 }
 
-export function isWorldSaveFailure(data: { persisted?: unknown } | null | undefined): boolean {
+export function isWorldSaveFailure(
+  data: { persisted?: unknown } | null | undefined,
+): boolean {
   return data?.persisted === false
 }
 
@@ -210,365 +244,514 @@ export function getApplyTemplateBackupWarnings(
   data: { backupWarnings?: unknown } | null | undefined,
 ): string[] | null {
   const warnings = data?.backupWarnings
-  return Array.isArray(warnings) && warnings.length > 0 ? (warnings as string[]) : null
+  return Array.isArray(warnings) && warnings.length > 0
+    ? (warnings as string[])
+    : null
 }
 
-export function getPartiallyAppliedFromApplyTemplateError(error: unknown): string[] | null {
+export function getPartiallyAppliedFromApplyTemplateError(
+  error: unknown,
+): string[] | null {
   if (
     error instanceof ApiError &&
     error.data &&
     typeof error.data === 'object' &&
-    Array.isArray((error.data as { partiallyApplied?: unknown }).partiallyApplied)
+    Array.isArray(
+      (error.data as { partiallyApplied?: unknown }).partiallyApplied,
+    )
   ) {
-    const applied = (error.data as { partiallyApplied: string[] }).partiallyApplied
+    const applied = (error.data as { partiallyApplied: string[] })
+      .partiallyApplied
     return applied.length > 0 ? applied : null
   }
   return null
 }
 
-function AuthImage({ filePath, alt, className }: { filePath: string; alt?: string; className?: string }) {
+function AuthImage({
+  filePath,
+  alt,
+  className,
+}: {
+  filePath: string
+  alt?: string
+  className?: string
+}) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const blobRef = useRef<string | null>(null)
   useEffect(() => {
     if (!filePath) return
     let cancelled = false
-    serverFilesApi.fetchImagePreview(filePath).then(url => {
-      if (cancelled) { URL.revokeObjectURL(url); return }
-      if (blobRef.current) URL.revokeObjectURL(blobRef.current)
-      blobRef.current = url
-      setBlobUrl(url)
-    }).catch(() => {})
+    serverFilesApi
+      .fetchImagePreview(filePath)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url)
+          return
+        }
+        if (blobRef.current) URL.revokeObjectURL(blobRef.current)
+        blobRef.current = url
+        setBlobUrl(url)
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
-      if (blobRef.current) { URL.revokeObjectURL(blobRef.current); blobRef.current = null }
+      if (blobRef.current) {
+        URL.revokeObjectURL(blobRef.current)
+        blobRef.current = null
+      }
     }
   }, [filePath])
   if (!blobUrl) return null
   return <img src={blobUrl} alt={alt || 'Preview'} className={className} />
 }
 
+const IniSettingRow = memo(
+  ({
+    setting,
+    value,
+    originalValue,
+    onChange,
+    onReset,
+    onBrowse,
+  }: {
+    setting: IniSetting
+    value: string
+    originalValue?: string
+    onChange: (key: string, value: string) => void
+    onReset?: (key: string) => void
+    onBrowse?: (key: string, extensions?: string[]) => void
+  }) => {
+    const isModified = originalValue !== undefined && value !== originalValue
+    const isDifferentFromDefault =
+      setting.default !== undefined && String(value) !== String(setting.default)
+    const numberIsInvalid =
+      setting.type === 'number' &&
+      String(value ?? '').trim() !== '' &&
+      parseNumericSettingValue(value, setting) === null
 
-const IniSettingRow = memo(({
-  setting,
-  value,
-  originalValue,
-  onChange,
-  onReset,
-  onBrowse
-}: {
-  setting: IniSetting;
-  value: string;
-  originalValue?: string;
-  onChange: (key: string, value: string) => void;
-  onReset?: (key: string) => void;
-  onBrowse?: (key: string, extensions?: string[]) => void;
-}) => {
-  const { t } = useTranslation('serverconfig')
-  const isModified = originalValue !== undefined && value !== originalValue
-  const isDifferentFromDefault = setting.default !== undefined && String(value) !== String(setting.default)
-  const numberIsInvalid = setting.type === 'number' && String(value ?? '').trim() !== '' && parseNumericSettingValue(value, setting) === null
-
-  if (setting.type === 'multiline') {
-    return (
-      <div className={`perf-content-auto grid gap-2 rounded-md border-b py-3 ps-3 pe-4 transition-colors last:border-0 ${
-        isModified ? 'border-s-2 border-s-warning bg-warning/5' : 'border-s-2 border-s-transparent hover:bg-muted/20'
-      }`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <Label className="text-sm font-medium">{getIniSettingLabel(setting)}</Label>
-            <p className="text-xs text-muted-foreground mt-0.5">{getIniSettingDescription(setting)}</p>
+    if (setting.type === 'multiline') {
+      return (
+        <div
+          className={`perf-content-auto grid gap-2 rounded-md border-b py-3 ps-3 pe-4 transition-colors last:border-0 ${
+            isModified
+              ? 'border-s-2 border-s-warning bg-warning/5'
+              : 'border-s-2 border-s-transparent hover:bg-muted/20'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm font-medium">
+                {getIniSettingLabel(setting)}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {getIniSettingDescription(setting)}
+              </p>
+            </div>
+            {isModified && onReset && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-warning hover:text-warning"
+                onClick={() => onReset(setting.key)}
+              >
+                <Undo2 className="w-3 h-3 me-1" /> {'Reset'}
+              </Button>
+            )}
           </div>
-          {isModified && onReset && (
-            <Button variant="ghost" size="sm" className="h-7 text-xs text-warning hover:text-warning" onClick={() => onReset(setting.key)}>
-              <Undo2 className="w-3 h-3 me-1" /> {t('row.reset')}
-            </Button>
-          )}
+          <Textarea
+            value={value}
+            onChange={(e) => onChange(setting.key, e.target.value)}
+            className={`min-h-[80px] resize-y ${isModified ? 'border-warning/40' : ''}`}
+          />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <code className="bg-muted px-1 rounded">{setting.key}</code>
+            {setting.default !== undefined && (
+              <span className={isDifferentFromDefault ? 'text-warning' : ''}>
+                {'Default: ' + String(formatRawConfigValue(setting.default))}
+              </span>
+            )}
+          </div>
         </div>
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(setting.key, e.target.value)}
-          className={`min-h-[80px] resize-y ${isModified ? 'border-warning/40' : ''}`}
-        />
+      )
+    }
+
+    return (
+      <div
+        className={`perf-content-auto grid gap-2 rounded-md border-b py-3 ps-3 pe-4 transition-colors last:border-0 ${
+          isModified
+            ? 'border-s-2 border-s-warning bg-warning/5'
+            : 'border-s-2 border-s-transparent hover:bg-muted/20'
+        }`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                {getIniSettingLabel(setting)}
+              </Label>
+              {isModified && (
+                <Badge variant="warning" className="h-5 text-xs">
+                  {'modified'}
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              {getIniSettingDescription(setting)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {isModified && onReset && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 text-warning hover:text-warning sm:h-9 sm:w-9"
+                      onClick={() => onReset(setting.key)}
+                      aria-label={
+                        'Reset ' +
+                        String(getIniSettingLabel(setting)) +
+                        ' to loaded value'
+                      }
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{'Reset to loaded value'}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <div
+              className={`w-full ${setting.type === 'filepath' ? 'sm:w-72' : 'sm:w-48'}`}
+            >
+              {setting.type === 'boolean' ? (
+                <div className="flex items-center gap-2 justify-end">
+                  <span className="text-xs text-muted-foreground">
+                    {String(value).toLowerCase() === 'true' ? 'On' : 'Off'}
+                  </span>
+                  <Switch
+                    checked={String(value).toLowerCase() === 'true'}
+                    onCheckedChange={(checked) =>
+                      onChange(setting.key, checked ? 'true' : 'false')
+                    }
+                    aria-label={getIniSettingLabel(setting) || setting.key}
+                  />
+                </div>
+              ) : setting.type === 'select' && setting.options ? (
+                <Select
+                  value={String(value)}
+                  onValueChange={(val) => onChange(setting.key, val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {setting.options.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {getIniSettingOptionLabel(setting, opt.value)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : setting.type === 'number' ? (
+                <div>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={value}
+                    onChange={(e) => {
+                      onChange(
+                        setting.key,
+                        normalizeNumericInput(e.target.value),
+                      )
+                    }}
+                    min={setting.min}
+                    max={setting.max}
+                    aria-invalid={numberIsInvalid}
+                    className={`text-end ${isModified ? 'border-warning/40' : ''} ${numberIsInvalid ? 'border-destructive/70' : ''}`}
+                  />
+                  {(setting.min !== undefined || setting.max !== undefined) && (
+                    <div className="text-xs text-muted-foreground/60 text-end mt-0.5">
+                      {setting.min !== undefined && setting.max !== undefined
+                        ? String(setting.min) + ' – ' + String(setting.max)
+                        : setting.min !== undefined
+                          ? 'min: ' + String(setting.min)
+                          : 'max: ' + String(setting.max)}
+                    </div>
+                  )}
+                </div>
+              ) : setting.type === 'filepath' ? (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={String(value)}
+                      onChange={(e) => onChange(setting.key, e.target.value)}
+                      className={`flex-1 font-mono text-xs ${isModified ? 'border-warning/40' : ''}`}
+                      placeholder={'No image selected'}
+                      maxLength={512}
+                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            onClick={() =>
+                              onBrowse?.(setting.key, setting.fileExtensions)
+                            }
+                            aria-label={'Browse for file'}
+                          >
+                            <FolderOpen className="w-3.5 h-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{'Browse for file'}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    {value && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => onChange(setting.key, '')}
+                              aria-label={'Clear image'}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{'Clear image'}</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                  {value && (
+                    <div className="rounded-md border bg-muted/30 p-1.5 max-w-[200px]">
+                      <AuthImage
+                        filePath={value}
+                        alt={getIniSettingLabel(setting)}
+                        className="rounded max-h-[80px] w-auto object-contain"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Input
+                  value={String(value)}
+                  onChange={(e) => onChange(setting.key, e.target.value)}
+                  className={isModified ? 'border-warning/40' : ''}
+                  maxLength={512}
+                />
+              )}
+            </div>
+          </div>
+        </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <code className="bg-muted px-1 rounded">{setting.key}</code>
           {setting.default !== undefined && (
-            <span className={isDifferentFromDefault ? 'text-warning' : ''}>{t('row.defaultValue', { value: formatRawConfigValue(setting.default) })}</span>
+            <span className={isDifferentFromDefault ? 'text-warning' : ''}>
+              {'Default: ' + String(formatRawConfigValue(setting.default))}
+            </span>
           )}
         </div>
       </div>
     )
-  }
-
-  return (
-    <div className={`perf-content-auto grid gap-2 rounded-md border-b py-3 ps-3 pe-4 transition-colors last:border-0 ${
-      isModified ? 'border-s-2 border-s-warning bg-warning/5' : 'border-s-2 border-s-transparent hover:bg-muted/20'
-    }`}>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{getIniSettingLabel(setting)}</Label>
-            {isModified && (
-              <Badge variant="warning" className="h-5 text-xs">{t('row.modifiedBadge')}</Badge>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1.5">{getIniSettingDescription(setting)}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {isModified && onReset && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-11 w-11 text-warning hover:text-warning sm:h-9 sm:w-9" onClick={() => onReset(setting.key)} aria-label={t('row.resetAria', { label: getIniSettingLabel(setting) })}>
-                    <Undo2 className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('row.resetToLoadedValue')}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <div className={`w-full ${setting.type === 'filepath' ? 'sm:w-72' : 'sm:w-48'}`}>
-            {setting.type === 'boolean' ? (
-              <div className="flex items-center gap-2 justify-end">
-                <span className="text-xs text-muted-foreground">{String(value).toLowerCase() === 'true' ? t('row.on') : t('row.off')}</span>
-                <Switch
-                  checked={String(value).toLowerCase() === 'true'}
-                  onCheckedChange={(checked) => onChange(setting.key, checked ? 'true' : 'false')}
-                  aria-label={getIniSettingLabel(setting) || setting.key}
-                />
-              </div>
-            ) : setting.type === 'select' && setting.options ? (
-              <Select value={String(value)} onValueChange={(val) => onChange(setting.key, val)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {setting.options.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{getIniSettingOptionLabel(setting, opt.value)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : setting.type === 'number' ? (
-              <div>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={value}
-                  onChange={(e) => {
-                    onChange(setting.key, normalizeNumericInput(e.target.value))
-                  }}
-                  min={setting.min}
-                  max={setting.max}
-                  aria-invalid={numberIsInvalid}
-                  className={`text-end ${isModified ? 'border-warning/40' : ''} ${numberIsInvalid ? 'border-destructive/70' : ''}`}
-                />
-                {(setting.min !== undefined || setting.max !== undefined) && (
-                  <div className="text-xs text-muted-foreground/60 text-end mt-0.5">
-                    {setting.min !== undefined && setting.max !== undefined
-                      ? t('row.rangeMinMax', { min: setting.min, max: setting.max })
-                      : setting.min !== undefined
-                      ? t('row.rangeMin', { min: setting.min })
-                      : t('row.rangeMax', { max: setting.max })}
-                  </div>
-                )}
-              </div>
-            ) : setting.type === 'filepath' ? (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    value={String(value)}
-                    onChange={(e) => onChange(setting.key, e.target.value)}
-                    className={`flex-1 font-mono text-xs ${isModified ? 'border-warning/40' : ''}`}
-                    placeholder={t('fileBrowserDialog.noImageSelected')}
-                    maxLength={512}
-                  />
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => onBrowse?.(setting.key, setting.fileExtensions)} aria-label={t('fileBrowserDialog.browseAria')}>
-                          <FolderOpen className="w-3.5 h-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{t('fileBrowserDialog.browseTooltip')}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  {value && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => onChange(setting.key, '')} aria-label={t('fileBrowserDialog.clearImageAria')}>
-                            <X className="w-3.5 h-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t('fileBrowserDialog.clearImageTooltip')}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </div>
-                {value && (
-                  <div className="rounded-md border bg-muted/30 p-1.5 max-w-[200px]">
-                    <AuthImage
-                      filePath={value}
-                      alt={getIniSettingLabel(setting)}
-                      className="rounded max-h-[80px] w-auto object-contain"
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Input
-                value={String(value)}
-                onChange={(e) => onChange(setting.key, e.target.value)}
-                className={isModified ? 'border-warning/40' : ''}
-                maxLength={512}
-              />
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <code className="bg-muted px-1 rounded">{setting.key}</code>
-        {setting.default !== undefined && (
-          <span className={isDifferentFromDefault ? 'text-warning' : ''}>{t('row.defaultValue', { value: formatRawConfigValue(setting.default) })}</span>
-        )}
-      </div>
-    </div>
-  )
-}, (prev, next) => {
-  return prev.value === next.value && prev.setting === next.setting && prev.originalValue === next.originalValue && prev.onBrowse === next.onBrowse
-})
+  },
+  (prev, next) => {
+    return (
+      prev.value === next.value &&
+      prev.setting === next.setting &&
+      prev.originalValue === next.originalValue &&
+      prev.onBrowse === next.onBrowse
+    )
+  },
+)
 IniSettingRow.displayName = 'IniSettingRow'
 
-export const SandboxSettingRow = memo(({
-  setting,
-  value,
-  originalValue,
-  onChange,
-  onReset
-}: {
-  setting: SandboxSetting;
-  value: SandboxScalar;
-  originalValue?: SandboxScalar;
-  onChange: (setting: SandboxSetting, value: SandboxScalar) => void;
-  onReset?: (setting: SandboxSetting) => void;
-}) => {
-  const { t } = useTranslation('serverconfig')
-  const isModified = originalValue !== undefined && JSON.stringify(value) !== JSON.stringify(originalValue)
-  const isDifferentFromDefault = setting.default !== undefined && JSON.stringify(value) !== JSON.stringify(setting.default)
-  const numberIsInvalid = setting.type === 'number' && String(value ?? '').trim() !== '' && parseNumericSettingValue(value, setting) === null
-  const hasUnrecognizedValue =
-    setting.type === 'select' &&
-    !!setting.options &&
-    value !== undefined &&
-    value !== null &&
-    value !== '' &&
-    !setting.options.some((o) => o.value === Number(value))
+export const SandboxSettingRow = memo(
+  ({
+    setting,
+    value,
+    originalValue,
+    onChange,
+    onReset,
+  }: {
+    setting: SandboxSetting
+    value: SandboxScalar
+    originalValue?: SandboxScalar
+    onChange: (setting: SandboxSetting, value: SandboxScalar) => void
+    onReset?: (setting: SandboxSetting) => void
+  }) => {
+    const isModified =
+      originalValue !== undefined &&
+      JSON.stringify(value) !== JSON.stringify(originalValue)
+    const isDifferentFromDefault =
+      setting.default !== undefined &&
+      JSON.stringify(value) !== JSON.stringify(setting.default)
+    const numberIsInvalid =
+      setting.type === 'number' &&
+      String(value ?? '').trim() !== '' &&
+      parseNumericSettingValue(value, setting) === null
+    const hasUnrecognizedValue =
+      setting.type === 'select' &&
+      !!setting.options &&
+      value !== undefined &&
+      value !== null &&
+      value !== '' &&
+      !setting.options.some((o) => o.value === Number(value))
 
-  return (
-    <div className={`perf-content-auto grid gap-2 rounded-md border-b py-3 ps-3 pe-4 transition-colors last:border-0 ${
-      isModified ? 'border-s-2 border-s-warning bg-warning/5' : 'border-s-2 border-s-transparent hover:bg-muted/20'
-    }`}>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <Label className="text-sm font-medium">{getSandboxSettingLabel(setting)}</Label>
-            {isModified && (
-              <Badge variant="warning" className="h-5 text-xs">{t('row.modifiedBadge')}</Badge>
-            )}
+    return (
+      <div
+        className={`perf-content-auto grid gap-2 rounded-md border-b py-3 ps-3 pe-4 transition-colors last:border-0 ${
+          isModified
+            ? 'border-s-2 border-s-warning bg-warning/5'
+            : 'border-s-2 border-s-transparent hover:bg-muted/20'
+        }`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-medium">
+                {getSandboxSettingLabel(setting)}
+              </Label>
+              {isModified && (
+                <Badge variant="warning" className="h-5 text-xs">
+                  {'modified'}
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              {getSandboxSettingDescription(setting)}
+            </p>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+              <code className="bg-muted px-1 rounded">{setting.key}</code>
+              {setting.default !== undefined && (
+                <span className={isDifferentFromDefault ? 'text-warning' : ''}>
+                  {'Default: ' + String(formatRawConfigValue(setting.default))}
+                </span>
+              )}
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-1.5">{getSandboxSettingDescription(setting)}</p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-            <code className="bg-muted px-1 rounded">{setting.key}</code>
-            {setting.default !== undefined && (
-              <span className={isDifferentFromDefault ? 'text-warning' : ''}>{t('row.defaultValue', { value: formatRawConfigValue(setting.default) })}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {isModified && onReset && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 text-warning hover:text-warning sm:h-9 sm:w-9"
+                      onClick={() => onReset(setting)}
+                      aria-label={
+                        'Reset ' +
+                        String(getSandboxSettingLabel(setting)) +
+                        ' to loaded value'
+                      }
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{'Reset to loaded value'}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {isModified && onReset && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-11 w-11 text-warning hover:text-warning sm:h-9 sm:w-9" onClick={() => onReset(setting)} aria-label={t('row.resetAria', { label: getSandboxSettingLabel(setting) })}>
-                    <Undo2 className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('row.resetToLoadedValue')}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <div className="w-full sm:w-48">
-            {setting.type === 'boolean' ? (
-              <div className="flex items-center gap-2 justify-end">
-                <span className="text-xs text-muted-foreground">{Boolean(value) ? t('row.on') : t('row.off')}</span>
-                <Switch
-                  checked={Boolean(value)}
-                  onCheckedChange={(checked) => onChange(setting, checked)}
-                  aria-label={getSandboxSettingLabel(setting) || setting.key}
-                />
-              </div>
-            ) : setting.type === 'select' && setting.options ? (
-              <div>
-                <Select value={String(value || '')} onValueChange={(v) => onChange(setting, Number(v))}>
-                  <SelectTrigger className={hasUnrecognizedValue ? 'border-warning/60' : ''}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {hasUnrecognizedValue && (
-                      <SelectItem value={String(value)} disabled>
-                        {String(value)} (?)
-                      </SelectItem>
-                    )}
-                    {setting.options.map(opt => (
-                      <SelectItem key={opt.value} value={String(opt.value)}>{getSandboxSettingOptionLabel(setting, opt.value)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {hasUnrecognizedValue && (
-                  <div className="flex items-start gap-1.5 mt-1.5 text-xs text-warning">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                    <span>{getUnrecognizedSandboxOptionWarning(String(value))}</span>
-                  </div>
-                )}
-              </div>
-            ) : setting.type === 'string' ? (
-              <Input
-                type="text"
-                value={value !== undefined ? String(value) : ''}
-                onChange={(e) => onChange(setting, e.target.value)}
-                className={isModified ? 'border-warning/40' : ''}
-              />
-            ) : (
-              <div>
+            <div className="w-full sm:w-48">
+              {setting.type === 'boolean' ? (
+                <div className="flex items-center gap-2 justify-end">
+                  <span className="text-xs text-muted-foreground">
+                    {Boolean(value) ? 'On' : 'Off'}
+                  </span>
+                  <Switch
+                    checked={Boolean(value)}
+                    onCheckedChange={(checked) => onChange(setting, checked)}
+                    aria-label={getSandboxSettingLabel(setting) || setting.key}
+                  />
+                </div>
+              ) : setting.type === 'select' && setting.options ? (
+                <div>
+                  <Select
+                    value={String(value || '')}
+                    onValueChange={(v) => onChange(setting, Number(v))}
+                  >
+                    <SelectTrigger
+                      className={
+                        hasUnrecognizedValue ? 'border-warning/60' : ''
+                      }
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hasUnrecognizedValue && (
+                        <SelectItem value={String(value)} disabled>
+                          {String(value)} (?)
+                        </SelectItem>
+                      )}
+                      {setting.options.map((opt) => (
+                        <SelectItem key={opt.value} value={String(opt.value)}>
+                          {getSandboxSettingOptionLabel(setting, opt.value)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {hasUnrecognizedValue && (
+                    <div className="flex items-start gap-1.5 mt-1.5 text-xs text-warning">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        {getUnrecognizedSandboxOptionWarning(String(value))}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : setting.type === 'string' ? (
                 <Input
                   type="text"
-                  inputMode="decimal"
                   value={value !== undefined ? String(value) : ''}
-                  onChange={(e) => onChange(setting, normalizeNumericInput(e.target.value))}
-                  min={setting.min}
-                  max={setting.max}
-                  step={setting.max && setting.max <= 1 ? 0.1 : 1}
-                  aria-invalid={numberIsInvalid}
-                  className={`text-end ${isModified ? 'border-warning/40' : ''} ${numberIsInvalid ? 'border-destructive/70' : ''}`}
+                  onChange={(e) => onChange(setting, e.target.value)}
+                  className={isModified ? 'border-warning/40' : ''}
                 />
-                {(setting.min !== undefined || setting.max !== undefined) && (
-                  <div className="text-xs text-muted-foreground/60 text-end mt-0.5">
-                    {setting.min !== undefined && setting.max !== undefined
-                      ? t('row.rangeMinMax', { min: setting.min, max: setting.max })
-                      : setting.min !== undefined
-                      ? t('row.rangeMin', { min: setting.min })
-                      : t('row.rangeMax', { max: setting.max })}
-                  </div>
-                )}
-              </div>
-            )}
+              ) : (
+                <div>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={value !== undefined ? String(value) : ''}
+                    onChange={(e) =>
+                      onChange(setting, normalizeNumericInput(e.target.value))
+                    }
+                    min={setting.min}
+                    max={setting.max}
+                    step={setting.max && setting.max <= 1 ? 0.1 : 1}
+                    aria-invalid={numberIsInvalid}
+                    className={`text-end ${isModified ? 'border-warning/40' : ''} ${numberIsInvalid ? 'border-destructive/70' : ''}`}
+                  />
+                  {(setting.min !== undefined || setting.max !== undefined) && (
+                    <div className="text-xs text-muted-foreground/60 text-end mt-0.5">
+                      {setting.min !== undefined && setting.max !== undefined
+                        ? String(setting.min) + ' – ' + String(setting.max)
+                        : setting.min !== undefined
+                          ? 'min: ' + String(setting.min)
+                          : 'max: ' + String(setting.max)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  )
-}, (prev, next) => {
-  return prev.value === next.value && prev.setting === next.setting && prev.originalValue === next.originalValue
-})
+    )
+  },
+  (prev, next) => {
+    return (
+      prev.value === next.value &&
+      prev.setting === next.setting &&
+      prev.originalValue === next.originalValue
+    )
+  },
+)
 SandboxSettingRow.displayName = 'SandboxSettingRow'
 
 function StatChip({
@@ -582,20 +765,28 @@ function StatChip({
   label: string
   ok?: boolean
 }) {
-  const { t } = useTranslation('serverconfig')
   const numericValue = typeof value === 'number' ? value : Number(value)
   const isZero = !Number.isNaN(numericValue) && numericValue === 0
   const muted = isZero || ok === false
   return (
     <span
       className={`inline-flex items-center gap-1.5 normal-case tracking-normal ${muted ? 'opacity-55' : ''}`}
-      title={ok === false ? t('activeServerStrip.fileNotFoundTitle', { label }) : undefined}
+      title={ok === false ? String(label) + ': file not found' : undefined}
     >
-      <span className={muted ? 'text-muted-foreground/50' : 'text-primary/70'}>{icon}</span>
-      <span className={`font-mono text-sm font-semibold tabular-nums ${muted ? 'text-muted-foreground' : 'text-foreground'}`}>{value}</span>
+      <span className={muted ? 'text-muted-foreground/50' : 'text-primary/70'}>
+        {icon}
+      </span>
+      <span
+        className={`font-mono text-sm font-semibold tabular-nums ${muted ? 'text-muted-foreground' : 'text-foreground'}`}
+      >
+        {value}
+      </span>
       <span className="text-xs text-muted-foreground">{label}</span>
       {ok === false && (
-        <AlertCircle className="h-3 w-3 text-warning" aria-label={t('activeServerStrip.notFoundAria')} />
+        <AlertCircle
+          className="h-3 w-3 text-warning"
+          aria-label={'Not found'}
+        />
       )}
     </span>
   )
@@ -634,33 +825,58 @@ const CATEGORY_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
   Layers: { icon: Layers, tone: 'text-stone-300/80' },
 }
 
-function CategoryIcon({ name, isActive, className }: { name?: string; isActive?: boolean; className?: string }) {
+function CategoryIcon({
+  name,
+  isActive,
+  className,
+}: {
+  name?: string
+  isActive?: boolean
+  className?: string
+}) {
   const entry = name ? CATEGORY_ICONS[name] : undefined
   const Icon = entry?.icon ?? Settings
-  return <Icon className={`${className ?? 'h-4 w-4'} ${isActive ? 'text-primary' : entry?.tone ?? 'text-muted-foreground/70'}`} />
+  return (
+    <Icon
+      className={`${className ?? 'h-4 w-4'} ${isActive ? 'text-primary' : (entry?.tone ?? 'text-muted-foreground/70')}`}
+    />
+  )
 }
 
-type PanelTone = 'primary' | 'warning' | 'destructive' | 'info' | 'success' | 'muted'
+type PanelTone =
+  'primary' | 'warning' | 'destructive' | 'info' | 'success' | 'muted'
 
 function toneBorder(tone: PanelTone): string {
   switch (tone) {
-    case 'warning': return 'border-amber-400/55'
-    case 'destructive': return 'border-destructive/55'
-    case 'info': return 'border-sky-400/55'
-    case 'success': return 'border-emerald-400/55'
-    case 'muted': return 'border-border/70'
-    default: return 'border-primary/55'
+    case 'warning':
+      return 'border-amber-400/55'
+    case 'destructive':
+      return 'border-destructive/55'
+    case 'info':
+      return 'border-sky-400/55'
+    case 'success':
+      return 'border-emerald-400/55'
+    case 'muted':
+      return 'border-border/70'
+    default:
+      return 'border-primary/55'
   }
 }
 
 function toneText(tone: PanelTone): string {
   switch (tone) {
-    case 'warning': return 'text-amber-400/85'
-    case 'destructive': return 'text-destructive/85'
-    case 'info': return 'text-sky-400/85'
-    case 'success': return 'text-emerald-400/85'
-    case 'muted': return 'text-muted-foreground/85'
-    default: return 'text-primary/75'
+    case 'warning':
+      return 'text-amber-400/85'
+    case 'destructive':
+      return 'text-destructive/85'
+    case 'info':
+      return 'text-sky-400/85'
+    case 'success':
+      return 'text-emerald-400/85'
+    case 'muted':
+      return 'text-muted-foreground/85'
+    default:
+      return 'text-primary/75'
   }
 }
 
@@ -674,11 +890,13 @@ function TacticalPanel({
   className?: string
 }) {
   return (
-    <div className={cn(
-      'overflow-hidden rounded-md border bg-card shadow-sm',
-      toneBorder(tone),
-      className
-    )}>
+    <div
+      className={cn(
+        'overflow-hidden rounded-md border bg-card shadow-sm',
+        toneBorder(tone),
+        className,
+      )}
+    >
       {children}
     </div>
   )
@@ -701,32 +919,56 @@ export function SectionHeader({
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3 select-none">
       <span className="flex min-w-0 items-center gap-2">
         {Icon && <Icon className={cn('h-4 w-4 shrink-0', toneText(tone))} />}
-        <span className="truncate text-sm font-semibold text-foreground">{label}</span>
+        <span className="truncate text-sm font-semibold text-foreground">
+          {label}
+        </span>
         {sublabel && (
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="text-muted-foreground/35">/</span>
-            <span className="truncate text-xs font-normal text-muted-foreground/65">{sublabel}</span>
+            <span className="truncate text-xs font-normal text-muted-foreground/65">
+              {sublabel}
+            </span>
           </span>
         )}
       </span>
-      {action && <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0">{action}</div>}
+      {action && (
+        <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0">
+          {action}
+        </div>
+      )}
     </div>
   )
 }
 
-const SERVER_CONFIG_TABS = new Set(['ini', 'sandbox', 'spawnpoints', 'spawnregions', 'modsettings'])
+const SERVER_CONFIG_TABS = new Set([
+  'ini',
+  'sandbox',
+  'spawnpoints',
+  'spawnregions',
+  'modsettings',
+])
 
-export type UnresolvedModCause = 'typo' | 'stillDownloading' | 'workshopNotOnDisk' | 'absent'
-const UNRESOLVED_MOD_CAUSES = new Set<UnresolvedModCause>(['typo', 'stillDownloading', 'workshopNotOnDisk', 'absent'])
+export type UnresolvedModCause =
+  'typo' | 'stillDownloading' | 'workshopNotOnDisk' | 'absent'
+const UNRESOLVED_MOD_CAUSES = new Set<UnresolvedModCause>([
+  'typo',
+  'stillDownloading',
+  'workshopNotOnDisk',
+  'absent',
+])
 
 export function resolveServerConfigDeepLink(searchParams: URLSearchParams) {
   const requestedTab = searchParams.get('tab')
-  const unresolved = searchParams.getAll('unresolved')
+  const unresolved = searchParams
+    .getAll('unresolved')
     .map((modId) => modId.trim().slice(0, 120))
     .filter(Boolean)
     .slice(0, 20)
   const unresolvedIds = new Set(unresolved)
-  const unresolvedTriage = new globalThis.Map<string, { cause: UnresolvedModCause; suggestion?: string }>()
+  const unresolvedTriage = new globalThis.Map<
+    string,
+    { cause: UnresolvedModCause; suggestion?: string }
+  >()
   for (const raw of searchParams.getAll('unresolvedCause').slice(0, 20)) {
     const [modId, cause, suggestion] = raw.split('|')
     if (!modId || !unresolvedIds.has(modId)) continue
@@ -737,7 +979,10 @@ export function resolveServerConfigDeepLink(searchParams: URLSearchParams) {
     })
   }
   return {
-    tab: requestedTab && SERVER_CONFIG_TABS.has(requestedTab) ? requestedTab : 'ini',
+    tab:
+      requestedTab && SERVER_CONFIG_TABS.has(requestedTab)
+        ? requestedTab
+        : 'ini',
     search: (searchParams.get('search') || '').trim().slice(0, 100),
     unresolved,
     unresolvedTriage,
@@ -745,12 +990,11 @@ export function resolveServerConfigDeepLink(searchParams: URLSearchParams) {
 }
 
 export default function ServerConfig() {
-  const { t, i18n } = useTranslation('serverconfig')
-  const searchLocale = i18n.resolvedLanguage || i18n.language
+  const searchLocale = 'en'
   const { searchStr } = useLocation()
   const searchParams = new URLSearchParams(searchStr)
   const initialDeepLink = resolveServerConfigDeepLink(searchParams)
-  const listSep = i18n.language.startsWith('zh') ? '、' : ', '
+  const listSep = 'en'.startsWith('zh') ? '、' : ', '
   const [activeTab, setActiveTab] = useState(initialDeepLink.tab)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -763,71 +1007,131 @@ export default function ServerConfig() {
     try {
       const stored = localStorage.getItem('serverconfig-filter-mode')
       if (stored === 'nondefault') return 'modified'
-      if (stored === 'modified' || stored === 'nondefault' || stored === 'all') return stored
-    } catch { /* ignore */ }
+      if (stored === 'modified' || stored === 'nondefault' || stored === 'all')
+        return stored
+    } catch {
+      /* ignore */
+    }
     return 'all'
   })
-  useEffect(() => { try { localStorage.setItem('serverconfig-filter-mode', filterMode) } catch { /* ignore */ } }, [filterMode])
+  useEffect(() => {
+    try {
+      localStorage.setItem('serverconfig-filter-mode', filterMode)
+    } catch {
+      /* ignore */
+    }
+  }, [filterMode])
 
   const [pathsInfo, setPathsInfo] = useState<{
     configPath: string
     serverName: string
-    exists: { ini: boolean; sandbox: boolean; spawnpoints: boolean; spawnregions: boolean }
+    exists: {
+      ini: boolean
+      sandbox: boolean
+      spawnpoints: boolean
+      spawnregions: boolean
+    }
   } | null>(null)
 
   const [iniSettings, setIniSettings] = useState<Record<string, string>>({})
   const [sandboxData, setSandboxData] = useState<SandboxData | null>(null)
   const [spawnPoints, setSpawnPoints] = useState<SpawnPointsByProfession>({})
   const [spawnRegions, setSpawnRegions] = useState<SpawnRegion[]>([])
-  const [duplicateKeys, setDuplicateKeys] = useState<Array<{ key: string; count: number }>>([])
+  const [duplicateKeys, setDuplicateKeys] = useState<
+    Array<{ key: string; count: number }>
+  >([])
 
   const [rawContent, setRawContent] = useState('')
 
   const [activeIniCategory, setActiveIniCategory] = useState<string>(() => {
-    try { return localStorage.getItem('serverconfig-ini-cat') || 'general' } catch { return 'general' }
+    try {
+      return localStorage.getItem('serverconfig-ini-cat') || 'general'
+    } catch {
+      return 'general'
+    }
   })
-  const [activeSandboxCategory, setActiveSandboxCategory] = useState<string>(() => {
-    try { return localStorage.getItem('serverconfig-sandbox-cat') || 'time' } catch { return 'time' }
-  })
-  useEffect(() => { try { localStorage.setItem('serverconfig-ini-cat', activeIniCategory) } catch { /* ignore */ } }, [activeIniCategory])
-  useEffect(() => { try { localStorage.setItem('serverconfig-sandbox-cat', activeSandboxCategory) } catch { /* ignore */ } }, [activeSandboxCategory])
+  const [activeSandboxCategory, setActiveSandboxCategory] = useState<string>(
+    () => {
+      try {
+        return localStorage.getItem('serverconfig-sandbox-cat') || 'time'
+      } catch {
+        return 'time'
+      }
+    },
+  )
+  useEffect(() => {
+    try {
+      localStorage.setItem('serverconfig-ini-cat', activeIniCategory)
+    } catch {
+      /* ignore */
+    }
+  }, [activeIniCategory])
+  useEffect(() => {
+    try {
+      localStorage.setItem('serverconfig-sandbox-cat', activeSandboxCategory)
+    } catch {
+      /* ignore */
+    }
+  }, [activeSandboxCategory])
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+  const [collapsedGroups, setCollapsedGroups] = useState<
+    Record<string, boolean>
+  >(() => {
     try {
       const stored = localStorage.getItem('serverconfig-collapsed-groups')
       if (stored) return JSON.parse(stored) as Record<string, boolean>
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return {}
   })
   useEffect(() => {
-    try { localStorage.setItem('serverconfig-collapsed-groups', JSON.stringify(collapsedGroups)) } catch { /* ignore */ }
+    try {
+      localStorage.setItem(
+        'serverconfig-collapsed-groups',
+        JSON.stringify(collapsedGroups),
+      )
+    } catch {
+      /* ignore */
+    }
   }, [collapsedGroups])
   const toggleGroup = useCallback((key: string) => {
-    setCollapsedGroups(prev => ({ ...prev, [key]: !prev[key] }))
+    setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }))
   }, [])
 
-  const setAllGroupsCollapsed = useCallback((prefix: 'ini' | 'sandbox', collapsed: boolean) => {
-    const groups = prefix === 'ini' ? INI_CATEGORY_GROUPS : SANDBOX_CATEGORY_GROUPS
-    setCollapsedGroups(prev => {
-      const next = { ...prev }
-      for (const g of groups) {
-        next[`${prefix}:${g.id}`] = collapsed
-      }
-      return next
-    })
-  }, [])
+  const setAllGroupsCollapsed = useCallback(
+    (prefix: 'ini' | 'sandbox', collapsed: boolean) => {
+      const groups =
+        prefix === 'ini' ? INI_CATEGORY_GROUPS : SANDBOX_CATEGORY_GROUPS
+      setCollapsedGroups((prev) => {
+        const next = { ...prev }
+        for (const g of groups) {
+          next[`${prefix}:${g.id}`] = collapsed
+        }
+        return next
+      })
+    },
+    [],
+  )
   const iniAllCollapsed = useMemo(
-    () => INI_CATEGORY_GROUPS.every(g => !!collapsedGroups[`ini:${g.id}`]),
-    [collapsedGroups]
+    () => INI_CATEGORY_GROUPS.every((g) => !!collapsedGroups[`ini:${g.id}`]),
+    [collapsedGroups],
   )
   const sandboxAllCollapsed = useMemo(
-    () => SANDBOX_CATEGORY_GROUPS.every(g => !!collapsedGroups[`sandbox:${g.id}`]),
-    [collapsedGroups]
+    () =>
+      SANDBOX_CATEGORY_GROUPS.every(
+        (g) => !!collapsedGroups[`sandbox:${g.id}`],
+      ),
+    [collapsedGroups],
   )
 
   const [showBackups, setShowBackups] = useState(false)
-  const [backups, setBackups] = useState<{ filename: string; size: number; created: string }[]>([])
-  const [backupFilter, setBackupFilter] = useState<'all' | 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions'>('all')
+  const [backups, setBackups] = useState<
+    { filename: string; size: number; created: string }[]
+  >([])
+  const [backupFilter, setBackupFilter] = useState<
+    'all' | 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions'
+  >('all')
 
   const [showTemplates, setShowTemplates] = useState(false)
   const [templates, setTemplates] = useState<ConfigTemplate[]>([])
@@ -838,54 +1142,91 @@ export default function ServerConfig() {
   const [saveTemplateIni, setSaveTemplateIni] = useState(true)
   const [saveTemplateSandbox, setSaveTemplateSandbox] = useState(true)
 
-  const [originalIniSettings, setOriginalIniSettings] = useState<Record<string, string>>({})
-  const [originalSandboxData, setOriginalSandboxData] = useState<SandboxData | null>(null)
+  const [originalIniSettings, setOriginalIniSettings] = useState<
+    Record<string, string>
+  >({})
+  const [originalSandboxData, setOriginalSandboxData] =
+    useState<SandboxData | null>(null)
   const [originalRawContent, setOriginalRawContent] = useState('')
 
   const invalidIniSettings = useMemo(
-    () => INI_SCHEMA.filter(setting => {
-      if (setting.type !== 'number') return false
-      const value = iniSettings[setting.key]
-      return String(value ?? '').trim() !== '' && parseNumericSettingValue(value, setting) === null
-    }),
+    () =>
+      INI_SCHEMA.filter((setting) => {
+        if (setting.type !== 'number') return false
+        const value = iniSettings[setting.key]
+        return (
+          String(value ?? '').trim() !== '' &&
+          parseNumericSettingValue(value, setting) === null
+        )
+      }),
     [iniSettings],
   )
 
   const invalidSandboxSettings = useMemo(() => {
     if (!sandboxData) return []
-    return SANDBOX_SCHEMA.filter(setting => {
+    return SANDBOX_SCHEMA.filter((setting) => {
       if (setting.type !== 'number') return false
       const section = (setting.section || 'settings') as keyof SandboxData
-      const value = (sandboxData[section] as SandboxRecord | undefined)?.[setting.key]
-      return value !== undefined && value !== null && String(value).trim() !== '' && parseNumericSettingValue(value, setting) === null
+      const value = (sandboxData[section] as SandboxRecord | undefined)?.[
+        setting.key
+      ]
+      return (
+        value !== undefined &&
+        value !== null &&
+        String(value).trim() !== '' &&
+        parseNumericSettingValue(value, setting) === null
+      )
     })
   }, [sandboxData])
 
-  const [modSettings, setModSettings] = useState<Record<string, Array<{
-    name?: string; shortName?: string; tableName?: string; value?: unknown;
-    type?: string; min?: number; max?: number; default?: unknown;
-    enumValues?: string[]; selectedIndex?: number; translatedName?: string;
-    tooltip?: string; tooltipText?: string; pageName?: string;
-  }>> | null>(null)
-  const [modSettingsGroups, setModSettingsGroups] = useState<Array<{ name: string; count: number }>>([])
+  const [modSettings, setModSettings] = useState<Record<
+    string,
+    Array<{
+      name?: string
+      shortName?: string
+      tableName?: string
+      value?: unknown
+      type?: string
+      min?: number
+      max?: number
+      default?: unknown
+      enumValues?: string[]
+      selectedIndex?: number
+      translatedName?: string
+      tooltip?: string
+      tooltipText?: string
+      pageName?: string
+    }>
+  > | null>(null)
+  const [modSettingsGroups, setModSettingsGroups] = useState<
+    Array<{ name: string; count: number }>
+  >([])
   const [modSettingsLoading, setModSettingsLoading] = useState(false)
   const [modSettingsError, setModSettingsError] = useState<string | null>(null)
   const [modSettingsSearch, setModSettingsSearch] = useState('')
   const [modSettingsModifiedOnly, setModSettingsModifiedOnly] = useState(false)
-  const [expandedModGroups, setExpandedModGroups] = useState<Set<string>>(new Set())
-  const [modSettingsLastLoaded, setModSettingsLastLoaded] = useState<Date | null>(null)
+  const [expandedModGroups, setExpandedModGroups] = useState<Set<string>>(
+    new Set(),
+  )
+  const [modSettingsLastLoaded, setModSettingsLastLoaded] =
+    useState<Date | null>(null)
   const modSettingsLoadIdRef = useRef(0)
   const modSettingsSearchRef = useRef<HTMLInputElement | null>(null)
   const iniSearchRef = useRef<HTMLInputElement | null>(null)
   const sandboxSearchRef = useRef<HTMLInputElement | null>(null)
   const [savingOptions, setSavingOptions] = useState<Set<string>>(new Set())
 
-  const isOptModified = useCallback((opt: { default?: unknown; value?: unknown }) => {
-    if (opt.default === undefined || opt.default === null) return false
-    const d = opt.default, v = opt.value
-    if (typeof d === 'number' && typeof v === 'number') return Math.abs(d - v) >= 0.0001
-    return String(d) !== String(v)
-  }, [])
+  const isOptModified = useCallback(
+    (opt: { default?: unknown; value?: unknown }) => {
+      if (opt.default === undefined || opt.default === null) return false
+      const d = opt.default,
+        v = opt.value
+      if (typeof d === 'number' && typeof v === 'number')
+        return Math.abs(d - v) >= 0.0001
+      return String(d) !== String(v)
+    },
+    [],
+  )
 
   const modifiedModSettingsCount = useMemo(() => {
     if (!modSettings) return 0
@@ -900,27 +1241,41 @@ export default function ServerConfig() {
     if (!modSettings || !modSettingsGroups.length) return []
     const q = modSettingsSearch.toLowerCase().trim()
     return modSettingsGroups
-      .map(group => {
+      .map((group) => {
         let opts = modSettings[group.name] || []
         if (modSettingsModifiedOnly) opts = opts.filter(isOptModified)
         if (q) {
-          const groupMatches = formatModSettingLabel(group.name).toLowerCase().includes(q)
+          const groupMatches = formatModSettingLabel(group.name)
+            .toLowerCase()
+            .includes(q)
           if (!groupMatches) {
-            opts = opts.filter(o =>
-              (o.name || '').toLowerCase().includes(q) ||
-              (o.shortName || '').toLowerCase().includes(q) ||
-              (o.translatedName || '').toLowerCase().includes(q) ||
-              formatModSettingLabel(o.translatedName || o.shortName || o.name, group.name).toLowerCase().includes(q) ||
-              (o.tooltip || '').toLowerCase().includes(q) ||
-              (o.tooltipText || '').toLowerCase().includes(q)
+            opts = opts.filter(
+              (o) =>
+                (o.name || '').toLowerCase().includes(q) ||
+                (o.shortName || '').toLowerCase().includes(q) ||
+                (o.translatedName || '').toLowerCase().includes(q) ||
+                formatModSettingLabel(
+                  o.translatedName || o.shortName || o.name,
+                  group.name,
+                )
+                  .toLowerCase()
+                  .includes(q) ||
+                (o.tooltip || '').toLowerCase().includes(q) ||
+                (o.tooltipText || '').toLowerCase().includes(q),
             )
           }
         }
         return { ...group, filteredOpts: opts }
       })
-      .filter(g => g.filteredOpts.length > 0)
+      .filter((g) => g.filteredOpts.length > 0)
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [modSettings, modSettingsGroups, modSettingsSearch, modSettingsModifiedOnly, isOptModified])
+  }, [
+    modSettings,
+    modSettingsGroups,
+    modSettingsSearch,
+    modSettingsModifiedOnly,
+    isOptModified,
+  ])
 
   const [copied, setCopied] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -934,11 +1289,19 @@ export default function ServerConfig() {
   const [fileBrowserKey, setFileBrowserKey] = useState('')
   const [fileBrowserPath, setFileBrowserPath] = useState('')
   const [fileBrowserDirs, setFileBrowserDirs] = useState<string[]>([])
-  const [fileBrowserFiles, setFileBrowserFiles] = useState<{ name: string; ext: string }[]>([])
-  const [fileBrowserParent, setFileBrowserParent] = useState<string | null>(null)
+  const [fileBrowserFiles, setFileBrowserFiles] = useState<
+    { name: string; ext: string }[]
+  >([])
+  const [fileBrowserParent, setFileBrowserParent] = useState<string | null>(
+    null,
+  )
   const [fileBrowserLoading, setFileBrowserLoading] = useState(false)
-  const [fileBrowserExtensions, setFileBrowserExtensions] = useState<string[]>([])
-  const [fileBrowserSelected, setFileBrowserSelected] = useState<string | null>(null)
+  const [fileBrowserExtensions, setFileBrowserExtensions] = useState<string[]>(
+    [],
+  )
+  const [fileBrowserSelected, setFileBrowserSelected] = useState<string | null>(
+    null,
+  )
 
   const { toast } = useToast()
   const confirm = useConfirm()
@@ -961,10 +1324,14 @@ export default function ServerConfig() {
   const loadData = async () => {
     setLoading(true)
     setServerChangedSinceLoad(false)
-    const active = await serversApi.getResolvedActive().catch(() => ({ server: null }))
+    const active = await serversApi
+      .getResolvedActive()
+      .catch(() => ({ server: null }))
     const isRemote = !!active.server?.isRemote
     setActiveServerRemote(isRemote)
-    setActiveServerName(active.server?.name || active.server?.serverName || null)
+    setActiveServerName(
+      active.server?.name || active.server?.serverName || null,
+    )
     try {
       const paths = await serverFilesApi.getPaths()
       setPathsInfo(paths)
@@ -996,14 +1363,14 @@ export default function ServerConfig() {
     } catch (error) {
       reportClientError('Failed to load config.', error)
       const message = isRemote
-        ? i18n.t('REMOTE_CONFIG_NOT_CONFIGURED', { ns: 'errors' })
-        : getUserErrorMessage(error, t('toasts.loadConfigFailed'))
+        ? 'Remote configuration is not available for this server.'
+        : getUserErrorMessage(error, 'Failed to load server config.')
       setLoadError(message)
       if (!isRemote) {
         toast({
-          title: t('toasts.error'),
+          title: 'Error',
           description: message,
-          variant: 'destructive'
+          variant: 'destructive',
         })
       }
     } finally {
@@ -1014,7 +1381,11 @@ export default function ServerConfig() {
   const refreshServerState = useCallback(async () => {
     try {
       const { server } = await serversApi.getActive()
-      const running = await resolveServerRunning(server, serverApi.getStatus, serversApi.getComposedStatus)
+      const running = await resolveServerRunning(
+        server,
+        serverApi.getStatus,
+        serversApi.getComposedStatus,
+      )
       setServerRunning(running)
     } catch {
       setServerRunning(null)
@@ -1025,13 +1396,17 @@ export default function ServerConfig() {
 
   useEffect(() => {
     void refreshServerState()
-    const interval = setInterval(() => { void refreshServerState() }, 5000)
+    const interval = setInterval(() => {
+      void refreshServerState()
+    }, 5000)
     return () => clearInterval(interval)
   }, [refreshServerState])
 
   const [_loadingRaw, setLoadingRaw] = useState(false)
 
-  const loadRawContent = async (type: 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions') => {
+  const loadRawContent = async (
+    type: 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions',
+  ) => {
     setLoadingRaw(true)
     try {
       const data = await serverFilesApi.getRaw(type)
@@ -1039,9 +1414,9 @@ export default function ServerConfig() {
       setOriginalRawContent(data.content)
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.loadRawFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to load raw content.'),
+        variant: 'destructive',
       })
       setEditorMode('structured')
     } finally {
@@ -1054,14 +1429,28 @@ export default function ServerConfig() {
       return rawContent !== originalRawContent
     }
     return JSON.stringify(iniSettings) !== JSON.stringify(originalIniSettings)
-  }, [editorMode, activeTab, rawContent, originalRawContent, iniSettings, originalIniSettings])
+  }, [
+    editorMode,
+    activeTab,
+    rawContent,
+    originalRawContent,
+    iniSettings,
+    originalIniSettings,
+  ])
 
   const hasSandboxChanges = useMemo(() => {
     if (editorMode === 'raw' && activeTab === 'sandbox') {
       return rawContent !== originalRawContent
     }
     return JSON.stringify(sandboxData) !== JSON.stringify(originalSandboxData)
-  }, [editorMode, activeTab, rawContent, originalRawContent, sandboxData, originalSandboxData])
+  }, [
+    editorMode,
+    activeTab,
+    rawContent,
+    originalRawContent,
+    sandboxData,
+    originalSandboxData,
+  ])
 
   useEffect(() => {
     if (!socket) return
@@ -1079,14 +1468,18 @@ export default function ServerConfig() {
   }, [socket, hasIniChanges, hasSandboxChanges]) // eslint-disable-line react-hooks/exhaustive-deps -- loadData is mount-stable, not a dep
 
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
     if (hasIniChanges || hasSandboxChanges) {
       window.addEventListener('beforeunload', handler)
     }
     return () => window.removeEventListener('beforeunload', handler)
   }, [hasIniChanges, hasSandboxChanges])
 
-  const handleCreateBackup = async (type: 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions') => {
+  const handleCreateBackup = async (
+    type: 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions',
+  ) => {
     try {
       const data = await serverFilesApi.getRaw(type)
       const blob = new Blob([data.content], { type: 'text/plain' })
@@ -1096,12 +1489,15 @@ export default function ServerConfig() {
       a.download = `${data.filename}_${new Date().toISOString().replace(/[:.]/g, '-')}.bak`
       a.click()
       URL.revokeObjectURL(url)
-      toast({ title: t('toasts.downloadedTitle'), description: t('toasts.backupSavedDesc', { filename: data.filename }) })
+      toast({
+        title: 'Downloaded',
+        description: 'Backup saved: ' + String(data.filename),
+      })
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.downloadBackupFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to download backup.'),
+        variant: 'destructive',
       })
     }
   }
@@ -1114,31 +1510,49 @@ export default function ServerConfig() {
         clearTimeout(copiedTimeoutRef.current)
       }
       copiedTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
-      toast({ title: t('toasts.copiedTitle'), description: t('toasts.copiedDesc') })
+      toast({ title: 'Copied', description: 'Content copied to clipboard' })
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.copyFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(
+          error,
+          'Failed to copy content to clipboard.',
+        ),
+        variant: 'destructive',
       })
     }
   }
-
 
   const loadModSettings = useCallback(async () => {
     const loadId = ++modSettingsLoadIdRef.current
     setModSettingsLoading(true)
     setModSettingsError(null)
     try {
-      const response = await panelBridgeApi.sendCommand('getAllSandboxOptions', {}) as {
+      const response = (await panelBridgeApi.sendCommand(
+        'getAllSandboxOptions',
+        {},
+      )) as {
         success?: boolean
         data?: {
-          options: Record<string, Array<{
-            name?: string; shortName?: string; tableName?: string; value?: unknown;
-            type?: string; min?: number; max?: number; default?: unknown;
-            enumValues?: string[]; selectedIndex?: number; translatedName?: string;
-            tooltip?: string; tooltipText?: string; pageName?: string;
-          }>>
+          options: Record<
+            string,
+            Array<{
+              name?: string
+              shortName?: string
+              tableName?: string
+              value?: unknown
+              type?: string
+              min?: number
+              max?: number
+              default?: unknown
+              enumValues?: string[]
+              selectedIndex?: number
+              translatedName?: string
+              tooltip?: string
+              tooltipText?: string
+              pageName?: string
+            }>
+          >
           groups: Array<{ name: string; count: number }>
           totalCount: number
           enumerated: boolean
@@ -1148,29 +1562,52 @@ export default function ServerConfig() {
       if (modSettingsLoadIdRef.current !== loadId) return
       if (response?.success && response.data) {
         const options = Object.fromEntries(
-          Object.entries(response.data.options).filter(([groupName]) => !VANILLA_SANDBOX_GROUPS.has(groupName))
+          Object.entries(response.data.options).filter(
+            ([groupName]) => !VANILLA_SANDBOX_GROUPS.has(groupName),
+          ),
         )
-        const groups = response.data.groups.filter(group => !VANILLA_SANDBOX_GROUPS.has(group.name))
+        const groups = response.data.groups.filter(
+          (group) => !VANILLA_SANDBOX_GROUPS.has(group.name),
+        )
         setModSettings(options)
         setModSettingsGroups(groups)
         setModSettingsLastLoaded(new Date())
         setModSettingsError(null)
       } else {
-        setModSettingsError(response?.error || t('modSettingsTab.loadFailedNotConnected'))
+        setModSettingsError(
+          response?.error ||
+            'Failed to load mod settings. Is PanelBridge connected?',
+        )
       }
     } catch (error) {
       if (modSettingsLoadIdRef.current !== loadId) return
-      setModSettingsError(getUserErrorMessage(error, t('modSettingsTab.loadFailedCheckConnection')))
+      setModSettingsError(
+        getUserErrorMessage(
+          error,
+          'Failed to load mod settings. Check PanelBridge connection.',
+        ),
+      )
     } finally {
       if (modSettingsLoadIdRef.current === loadId) setModSettingsLoading(false)
     }
-  }, [t])
+  }, [])
 
   useEffect(() => {
-    if (activeTab === 'modsettings' && !modSettings && !modSettingsLoading && !modSettingsError) {
+    if (
+      activeTab === 'modsettings' &&
+      !modSettings &&
+      !modSettingsLoading &&
+      !modSettingsError
+    ) {
       loadModSettings()
     }
-  }, [activeTab, modSettings, modSettingsLoading, modSettingsError, loadModSettings])
+  }, [
+    activeTab,
+    modSettings,
+    modSettingsLoading,
+    modSettingsError,
+    loadModSettings,
+  ])
 
   useEffect(() => {
     if (activeTab !== 'modsettings') return
@@ -1178,7 +1615,13 @@ export default function ServerConfig() {
       if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return
       const t = e.target as HTMLElement | null
       const tag = t?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return
+      if (
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        t?.isContentEditable
+      )
+        return
       if (modSettingsSearchRef.current) {
         e.preventDefault()
         modSettingsSearchRef.current.focus()
@@ -1189,137 +1632,210 @@ export default function ServerConfig() {
     return () => window.removeEventListener('keydown', onKey)
   }, [activeTab])
 
-  const handleOptionChange = useCallback(async (optName: string, newValue: unknown, groupName: string) => {
-    setSavingOptions(prev => {
-      if (prev.has(optName)) return prev
-      const next = new Set(prev)
-      next.add(optName)
-      return next
-    })
-    try {
-      const response = await panelBridgeApi.sendCommand('setSandboxOption', { name: optName, value: newValue }) as {
-        success?: boolean
-        data?: { name: string; value: unknown; type: string; verified?: unknown; persisted?: unknown; saveError?: unknown }
-        error?: string
-      }
-      if (response?.success && response.data) {
-        const confirmedVal = response.data.value ?? newValue
-        setModSettings(prev => {
-          if (!prev) return prev
-          const updated = { ...prev }
-          const groupOpts = updated[groupName]
-          if (groupOpts) {
-            updated[groupName] = groupOpts.map(o => {
-              if (o.name !== optName) return o
-              const patched = { ...o, value: confirmedVal }
-              if (o.type === 'enum' && typeof confirmedVal === 'number') {
-                patched.selectedIndex = confirmedVal
-              }
-              return patched
-            })
+  const handleOptionChange = useCallback(
+    async (optName: string, newValue: unknown, groupName: string) => {
+      setSavingOptions((prev) => {
+        if (prev.has(optName)) return prev
+        const next = new Set(prev)
+        next.add(optName)
+        return next
+      })
+      try {
+        const response = (await panelBridgeApi.sendCommand('setSandboxOption', {
+          name: optName,
+          value: newValue,
+        })) as {
+          success?: boolean
+          data?: {
+            name: string
+            value: unknown
+            type: string
+            verified?: unknown
+            persisted?: unknown
+            saveError?: unknown
           }
-          return updated
-        })
-        const verifyState = getBridgeVerifiedState('setSandboxOption', response.data)
-        toast(
-          verifyState === 'unverifiable'
-            ? { title: t('toasts.optionUpdatedTitle'), description: t('toasts.bridgeUnverifiedDesc', { action: optName }), variant: 'default' }
-            : verifyState === 'old-bridge'
-              ? { title: t('toasts.optionUpdatedTitle'), description: t('toasts.bridgeOldBridgeDesc', { action: optName }), variant: 'default' }
-              : { title: t('toasts.optionUpdatedTitle'), description: t('toasts.optionUpdatedDesc', { option: optName }) },
-        )
-
-        if (isWorldSaveFailure(response.data)) {
-          toast({
-            title: t('toasts.appliedNotSavedTitle'),
-            description: t('toasts.worldSaveFailedDesc', {
-              option: optName,
-              reason: typeof response.data.saveError === 'string' ? response.data.saveError : t('toasts.unknownError'),
-            }),
-            variant: 'destructive',
-          })
+          error?: string
         }
-
-        try {
-          const saved = await serverFilesApi.saveSandboxOption(
-            optName,
-            confirmedVal as string | number | boolean,
+        if (response?.success && response.data) {
+          const confirmedVal = response.data.value ?? newValue
+          setModSettings((prev) => {
+            if (!prev) return prev
+            const updated = { ...prev }
+            const groupOpts = updated[groupName]
+            if (groupOpts) {
+              updated[groupName] = groupOpts.map((o) => {
+                if (o.name !== optName) return o
+                const patched = { ...o, value: confirmedVal }
+                if (o.type === 'enum' && typeof confirmedVal === 'number') {
+                  patched.selectedIndex = confirmedVal
+                }
+                return patched
+              })
+            }
+            return updated
+          })
+          const verifyState = getBridgeVerifiedState(
+            'setSandboxOption',
+            response.data,
           )
-          if (!saved.persisted) {
+          toast(
+            verifyState === 'unverifiable'
+              ? {
+                  title: 'Option Updated',
+                  description:
+                    String(optName) +
+                    ' was sent, but the mod could not confirm it took effect.',
+                  variant: 'default',
+                }
+              : verifyState === 'old-bridge'
+                ? {
+                    title: 'Option Updated',
+                    description:
+                      String(optName) +
+                      " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
+                    variant: 'default',
+                  }
+                : {
+                    title: 'Option Updated',
+                    description: String(optName) + ' set successfully',
+                  },
+          )
+
+          if (isWorldSaveFailure(response.data)) {
             toast({
-              title: t('toasts.appliedNotSavedTitle'),
-              description: t('toasts.notPersistedDesc', { option: optName }),
+              title: 'Applied, but not saved',
+              description:
+                String(optName) +
+                " was applied, but the server's world save failed (" +
+                String(
+                  typeof response.data.saveError === 'string'
+                    ? response.data.saveError
+                    : 'Unknown error',
+                ) +
+                '), so it may not survive the next restart.',
               variant: 'destructive',
             })
           }
-        } catch (error) {
-          const isServerRunningRefusal = error instanceof ApiError && error.code === 'SERVER_RUNNING'
+
+          try {
+            const saved = await serverFilesApi.saveSandboxOption(
+              optName,
+              confirmedVal as string | number | boolean,
+            )
+            if (!saved.persisted) {
+              toast({
+                title: 'Applied, but not saved',
+                description:
+                  String(optName) +
+                  ' is not in SandboxVars.lua, so it will reset when the server restarts.',
+                variant: 'destructive',
+              })
+            }
+          } catch (error) {
+            const isServerRunningRefusal =
+              error instanceof ApiError && error.code === 'SERVER_RUNNING'
+            toast({
+              title: 'Applied, but not saved',
+              description: isServerRunningRefusal
+                ? String(optName) + ' will reset when the server restarts.'
+                : getUserErrorMessage(
+                    error,
+                    String(optName) + ' will reset when the server restarts.',
+                  ),
+              variant: 'destructive',
+            })
+          }
+        } else {
           toast({
-            title: t('toasts.appliedNotSavedTitle'),
-            description: isServerRunningRefusal
-              ? t('toasts.willResetFallback', { option: optName })
-              : getUserErrorMessage(error, t('toasts.willResetFallback', { option: optName })),
+            title: 'Failed to Update',
+            description: response?.error || 'Unknown error',
             variant: 'destructive',
           })
         }
-      } else {
-        toast({ title: t('toasts.failedToUpdateTitle'), description: response?.error || t('toasts.unknownError'), variant: 'destructive' })
+      } catch (error) {
+        toast({
+          title: 'Error',
+          description: getUserErrorMessage(error, 'Failed to set option'),
+          variant: 'destructive',
+        })
+      } finally {
+        setSavingOptions((prev) => {
+          const next = new Set(prev)
+          next.delete(optName)
+          return next
+        })
       }
-    } catch (error) {
-      toast({ title: t('toasts.error'), description: getUserErrorMessage(error, t('toasts.setOptionFailed')), variant: 'destructive' })
-    } finally {
-      setSavingOptions(prev => {
-        const next = new Set(prev)
-        next.delete(optName)
-        return next
-      })
-    }
-  }, [toast, t])
+    },
+    [toast],
+  )
 
-  const openFileBrowser = useCallback(async (key: string, extensions?: string[]) => {
-    setFileBrowserKey(key)
-    setFileBrowserExtensions(extensions || ['.png', '.jpg', '.jpeg'])
-    setFileBrowserSelected(null)
-    setFileBrowserOpen(true)
-    setFileBrowserLoading(true)
-    try {
-      const currentValue = iniSettings[key]
-      let startPath: string | undefined
-      if (currentValue) {
-        const lastSlash = Math.max(currentValue.lastIndexOf('/'), currentValue.lastIndexOf('\\'))
-        if (lastSlash > 0) startPath = currentValue.substring(0, lastSlash)
+  const openFileBrowser = useCallback(
+    async (key: string, extensions?: string[]) => {
+      setFileBrowserKey(key)
+      setFileBrowserExtensions(extensions || ['.png', '.jpg', '.jpeg'])
+      setFileBrowserSelected(null)
+      setFileBrowserOpen(true)
+      setFileBrowserLoading(true)
+      try {
+        const currentValue = iniSettings[key]
+        let startPath: string | undefined
+        if (currentValue) {
+          const lastSlash = Math.max(
+            currentValue.lastIndexOf('/'),
+            currentValue.lastIndexOf('\\'),
+          )
+          if (lastSlash > 0) startPath = currentValue.substring(0, lastSlash)
+        }
+        const data = await serverFilesApi.browseFiles(startPath, extensions)
+        setFileBrowserPath(data.currentPath)
+        setFileBrowserDirs(data.directories)
+        setFileBrowserFiles(data.files)
+        setFileBrowserParent(data.parent)
+      } catch {
+        toast({
+          title: 'Error',
+          description: 'Failed to browse files',
+          variant: 'destructive',
+        })
+      } finally {
+        setFileBrowserLoading(false)
       }
-      const data = await serverFilesApi.browseFiles(startPath, extensions)
-      setFileBrowserPath(data.currentPath)
-      setFileBrowserDirs(data.directories)
-      setFileBrowserFiles(data.files)
-      setFileBrowserParent(data.parent)
-    } catch {
-      toast({ title: t('toasts.error'), description: t('toasts.browseFilesFailed'), variant: 'destructive' })
-    } finally {
-      setFileBrowserLoading(false)
-    }
-  }, [iniSettings, toast, t])
+    },
+    [iniSettings, toast],
+  )
 
-  const browseTo = useCallback(async (dirPath: string) => {
-    setFileBrowserLoading(true)
-    setFileBrowserSelected(null)
-    try {
-      const data = await serverFilesApi.browseFiles(dirPath, fileBrowserExtensions)
-      setFileBrowserPath(data.currentPath)
-      setFileBrowserDirs(data.directories)
-      setFileBrowserFiles(data.files)
-      setFileBrowserParent(data.parent)
-    } catch {
-      toast({ title: t('toasts.error'), description: t('toasts.navigateFailed'), variant: 'destructive' })
-    } finally {
-      setFileBrowserLoading(false)
-    }
-  }, [fileBrowserExtensions, toast, t])
+  const browseTo = useCallback(
+    async (dirPath: string) => {
+      setFileBrowserLoading(true)
+      setFileBrowserSelected(null)
+      try {
+        const data = await serverFilesApi.browseFiles(
+          dirPath,
+          fileBrowserExtensions,
+        )
+        setFileBrowserPath(data.currentPath)
+        setFileBrowserDirs(data.directories)
+        setFileBrowserFiles(data.files)
+        setFileBrowserParent(data.parent)
+      } catch {
+        toast({
+          title: 'Error',
+          description: 'Failed to navigate',
+          variant: 'destructive',
+        })
+      } finally {
+        setFileBrowserLoading(false)
+      }
+    },
+    [fileBrowserExtensions, toast],
+  )
 
   const confirmFileBrowserSelection = useCallback(() => {
     if (fileBrowserSelected && fileBrowserKey) {
-      setIniSettings(prev => ({ ...prev, [fileBrowserKey]: fileBrowserSelected }))
+      setIniSettings((prev) => ({
+        ...prev,
+        [fileBrowserKey]: fileBrowserSelected,
+      }))
       setFileBrowserOpen(false)
     }
   }, [fileBrowserSelected, fileBrowserKey])
@@ -1327,8 +1843,9 @@ export default function ServerConfig() {
   const handleSaveIni = async () => {
     if (serverChangedSinceLoad) {
       toast({
-        title: t('toasts.error'),
-        description: t('toasts.serverChangedSinceLoad'),
+        title: 'Error',
+        description:
+          'The active server changed since this page loaded. Reload before saving to avoid overwriting the wrong server.',
         variant: 'destructive',
       })
       return
@@ -1337,8 +1854,10 @@ export default function ServerConfig() {
     try {
       if (invalidIniSettings.length > 0) {
         toast({
-          title: t('toasts.invalidIniTitle'),
-          description: t('toasts.fixSettings', { settings: invalidIniSettings.map(getIniSettingLabel).join(listSep) }),
+          title: 'Invalid server settings',
+          description:
+            'Fix: ' +
+            String(invalidIniSettings.map(getIniSettingLabel).join(listSep)),
           variant: 'destructive',
         })
         return
@@ -1353,9 +1872,15 @@ export default function ServerConfig() {
 
       try {
         await serverFilesApi.saveAndReload()
-        toast({ title: t('toasts.savedAndReloadedTitle'), description: t('toasts.savedIniReloadedDesc') })
+        toast({
+          title: 'Saved & Reloaded',
+          description: 'Server settings saved and reloaded.',
+        })
       } catch {
-        toast({ title: t('toasts.savedTitle'), description: t('toasts.savedRestartToApply') })
+        toast({
+          title: 'Saved',
+          description: 'Settings saved. Restart server to apply changes.',
+        })
       }
 
       try {
@@ -1367,12 +1892,14 @@ export default function ServerConfig() {
           setIniSettings(merged)
           setOriginalIniSettings(merged)
         }
-      } catch { /* silent refresh — local state is still valid */ }
+      } catch {
+        /* silent refresh — local state is still valid */
+      }
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.saveSettingsFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to save settings.'),
+        variant: 'destructive',
       })
     } finally {
       setSaving(false)
@@ -1382,8 +1909,9 @@ export default function ServerConfig() {
   const handleSaveSandbox = async () => {
     if (serverChangedSinceLoad) {
       toast({
-        title: t('toasts.error'),
-        description: t('toasts.serverChangedSinceLoad'),
+        title: 'Error',
+        description:
+          'The active server changed since this page loaded. Reload before saving to avoid overwriting the wrong server.',
         variant: 'destructive',
       })
       return
@@ -1392,8 +1920,12 @@ export default function ServerConfig() {
     try {
       if (editorMode === 'structured' && invalidSandboxSettings.length > 0) {
         toast({
-          title: t('toasts.invalidSandboxTitle'),
-          description: t('toasts.fixSettings', { settings: invalidSandboxSettings.map(getSandboxSettingLabel).join(listSep) }),
+          title: 'Invalid Sandbox values',
+          description:
+            'Fix: ' +
+            String(
+              invalidSandboxSettings.map(getSandboxSettingLabel).join(listSep),
+            ),
           variant: 'destructive',
         })
         return
@@ -1404,15 +1936,22 @@ export default function ServerConfig() {
       } else if (sandboxData) {
         const cleanData = JSON.parse(JSON.stringify(sandboxData)) as SandboxData
 
-        SANDBOX_SCHEMA.forEach(setting => {
+        SANDBOX_SCHEMA.forEach((setting) => {
           if (setting.type === 'number') {
             const section = (setting.section || 'settings') as keyof SandboxData
             if (cleanData[section]) {
               const sectionData = cleanData[section] as SandboxRecord
               const raw = sectionData[setting.key]
-              if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
+              if (
+                raw !== undefined &&
+                raw !== null &&
+                String(raw).trim() !== ''
+              ) {
                 const parsed = parseNumericSettingValue(raw, setting)
-                if (parsed === null) throw new Error(t('toasts.settingInvalid', { label: getSandboxSettingLabel(setting) }))
+                if (parsed === null)
+                  throw new Error(
+                    String(getSandboxSettingLabel(setting)) + ' is invalid',
+                  )
                 sectionData[setting.key] = parsed
               }
             }
@@ -1426,16 +1965,19 @@ export default function ServerConfig() {
         const unpersistedKeys = getUnpersistedSandboxKeys(sandboxSaveResult)
         if (unpersistedKeys) {
           toast({
-            title: t('toasts.someSandboxKeysNotSavedTitle'),
-            description: t('toasts.someSandboxKeysNotSavedDesc', {
-              keys: unpersistedKeys.join(', '),
-            }),
+            title: 'Some settings not saved',
+            description:
+              'The rest was saved, but these could not be written and will reset when the server restarts: ' +
+              String(unpersistedKeys.join(', ')),
             variant: 'destructive',
           })
         }
       }
 
-      toast({ title: t('toasts.savedTitle'), description: t('toasts.savedRestartToApply') })
+      toast({
+        title: 'Saved',
+        description: 'Settings saved. Restart server to apply changes.',
+      })
 
       try {
         if (editorMode === 'raw') {
@@ -1445,12 +1987,14 @@ export default function ServerConfig() {
           setSandboxData(sandboxRes.sandbox)
           setOriginalSandboxData(sandboxRes.sandbox)
         }
-      } catch { /* silent refresh — local state is still valid */ }
+      } catch {
+        /* silent refresh — local state is still valid */
+      }
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.saveSettingsFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to save settings.'),
+        variant: 'destructive',
       })
     } finally {
       setSaving(false)
@@ -1460,21 +2004,24 @@ export default function ServerConfig() {
   const handleSaveSpawnPoints = async () => {
     setSaving(true)
     try {
-      const result = editorMode === 'raw'
-        ? await serverFilesApi.saveRaw('spawnpoints', rawContent)
-        : await serverFilesApi.saveSpawnPoints(spawnPoints)
+      const result =
+        editorMode === 'raw'
+          ? await serverFilesApi.saveRaw('spawnpoints', rawContent)
+          : await serverFilesApi.saveSpawnPoints(spawnPoints)
       toast({
-        title: t('toasts.savedTitle'),
-        description: result?.restartRequired ? t('toasts.savedRestartToApply') : t('toasts.spawnPointsSavedDesc'),
+        title: 'Saved',
+        description: result?.restartRequired
+          ? 'Settings saved. Restart server to apply changes.'
+          : 'Spawn points saved',
       })
       if (editorMode === 'raw') {
         loadData()
       }
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.saveSpawnPointsFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to save spawn points.'),
+        variant: 'destructive',
       })
     } finally {
       setSaving(false)
@@ -1484,101 +2031,148 @@ export default function ServerConfig() {
   const handleSaveSpawnRegions = async () => {
     setSaving(true)
     try {
-      const result = editorMode === 'raw'
-        ? await serverFilesApi.saveRaw('spawnregions', rawContent)
-        : await serverFilesApi.saveSpawnRegions(spawnRegions)
+      const result =
+        editorMode === 'raw'
+          ? await serverFilesApi.saveRaw('spawnregions', rawContent)
+          : await serverFilesApi.saveSpawnRegions(spawnRegions)
       toast({
-        title: t('toasts.savedTitle'),
-        description: result?.restartRequired ? t('toasts.savedRestartToApply') : t('toasts.spawnRegionsSavedDesc'),
+        title: 'Saved',
+        description: result?.restartRequired
+          ? 'Settings saved. Restart server to apply changes.'
+          : 'Spawn regions saved',
       })
       if (editorMode === 'raw') {
         loadData()
       }
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.saveSpawnRegionsFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(
+          error,
+          'Failed to save spawn regions.',
+        ),
+        variant: 'destructive',
       })
     } finally {
       setSaving(false)
     }
   }
 
+  const isIniModified = useCallback(
+    (s: IniSetting) => {
+      const curr = iniSettings[s.key]
+      const orig = originalIniSettings[s.key]
+      return curr !== orig && orig !== undefined
+    },
+    [iniSettings, originalIniSettings],
+  )
 
-  const isIniModified = useCallback((s: IniSetting) => {
-    const curr = iniSettings[s.key]
-    const orig = originalIniSettings[s.key]
-    return curr !== orig && orig !== undefined
-  }, [iniSettings, originalIniSettings])
+  const isIniNonDefault = useCallback(
+    (s: IniSetting) => {
+      if (s.defaultComparable === false) return false
+      const curr = iniSettings[s.key]
+      if (curr === undefined) return false
+      return String(curr) !== String(s.default ?? '')
+    },
+    [iniSettings],
+  )
 
-  const isIniNonDefault = useCallback((s: IniSetting) => {
-    if (s.defaultComparable === false) return false
-    const curr = iniSettings[s.key]
-    if (curr === undefined) return false
-    return String(curr) !== String(s.default ?? '')
-  }, [iniSettings])
+  const isSandboxModified = useCallback(
+    (s: SandboxSetting) => {
+      if (!sandboxData || !originalSandboxData) return false
+      const section = (s.section || 'settings') as keyof SandboxData
+      const curr = (sandboxData[section] as SandboxRecord)?.[s.key]
+      const orig = (originalSandboxData[section] as SandboxRecord)?.[s.key]
+      return JSON.stringify(curr) !== JSON.stringify(orig)
+    },
+    [sandboxData, originalSandboxData],
+  )
 
-  const isSandboxModified = useCallback((s: SandboxSetting) => {
-    if (!sandboxData || !originalSandboxData) return false
-    const section = (s.section || 'settings') as keyof SandboxData
-    const curr = (sandboxData[section] as SandboxRecord)?.[s.key]
-    const orig = (originalSandboxData[section] as SandboxRecord)?.[s.key]
-    return JSON.stringify(curr) !== JSON.stringify(orig)
-  }, [sandboxData, originalSandboxData])
-
-  const isSandboxNonDefault = useCallback((s: SandboxSetting) => {
-    if (!sandboxData) return false
-    const section = (s.section || 'settings') as keyof SandboxData
-    const curr = (sandboxData[section] as SandboxRecord)?.[s.key]
-    if (curr === undefined || curr === null) return false
-    return String(curr) !== String(s.default ?? '')
-  }, [sandboxData])
+  const isSandboxNonDefault = useCallback(
+    (s: SandboxSetting) => {
+      if (!sandboxData) return false
+      const section = (s.section || 'settings') as keyof SandboxData
+      const curr = (sandboxData[section] as SandboxRecord)?.[s.key]
+      if (curr === undefined || curr === null) return false
+      return String(curr) !== String(s.default ?? '')
+    },
+    [sandboxData],
+  )
 
   const filteredIniSettings = useMemo(() => {
     const lower = deferredSearchQuery.toLocaleLowerCase(searchLocale)
-    const filtered = INI_SCHEMA.filter(s => {
-      if (deferredSearchQuery && !getIniSettingSearchText(s).toLocaleLowerCase(searchLocale).includes(lower)) return false
+    const filtered = INI_SCHEMA.filter((s) => {
+      if (
+        deferredSearchQuery &&
+        !getIniSettingSearchText(s)
+          .toLocaleLowerCase(searchLocale)
+          .includes(lower)
+      )
+        return false
       if (filterMode === 'modified' && !isIniNonDefault(s)) return false
       if (filterMode === 'nondefault' && !isIniModified(s)) return false
       return true
     })
     return groupByCategory(filtered)
-  }, [deferredSearchQuery, filterMode, isIniModified, isIniNonDefault, searchLocale])
+  }, [
+    deferredSearchQuery,
+    filterMode,
+    isIniModified,
+    isIniNonDefault,
+    searchLocale,
+  ])
 
   const filteredSandboxSettings = useMemo(() => {
     const lower = deferredSearchQuery.toLocaleLowerCase(searchLocale)
-    const filtered = SANDBOX_SCHEMA.filter(s => {
-      if (deferredSearchQuery && !getSandboxSettingSearchText(s).toLocaleLowerCase(searchLocale).includes(lower)) return false
+    const filtered = SANDBOX_SCHEMA.filter((s) => {
+      if (
+        deferredSearchQuery &&
+        !getSandboxSettingSearchText(s)
+          .toLocaleLowerCase(searchLocale)
+          .includes(lower)
+      )
+        return false
       if (filterMode === 'modified' && !isSandboxNonDefault(s)) return false
       if (filterMode === 'nondefault' && !isSandboxModified(s)) return false
       return true
     })
     return groupByCategory(filtered)
-  }, [deferredSearchQuery, filterMode, isSandboxModified, isSandboxNonDefault, searchLocale])
+  }, [
+    deferredSearchQuery,
+    filterMode,
+    isSandboxModified,
+    isSandboxNonDefault,
+    searchLocale,
+  ])
 
   const iniModifiedByCategory = useMemo(() => {
     const out: Record<string, number> = {}
-    for (const s of INI_SCHEMA) if (isIniModified(s)) out[s.category] = (out[s.category] || 0) + 1
+    for (const s of INI_SCHEMA)
+      if (isIniModified(s)) out[s.category] = (out[s.category] || 0) + 1
     return out
   }, [isIniModified])
 
   const sandboxModifiedByCategory = useMemo(() => {
     const out: Record<string, number> = {}
-    for (const s of SANDBOX_SCHEMA) if (isSandboxModified(s)) out[s.category] = (out[s.category] || 0) + 1
+    for (const s of SANDBOX_SCHEMA)
+      if (isSandboxModified(s)) out[s.category] = (out[s.category] || 0) + 1
     return out
   }, [isSandboxModified])
 
   const uncategorizedIniKeys = useMemo(() => {
-    const schemaKeys = new Set(INI_SCHEMA.map(s => s.key))
+    const schemaKeys = new Set(INI_SCHEMA.map((s) => s.key))
     const lower = deferredSearchQuery.toLowerCase()
     const out: { key: string; value: string }[] = []
     for (const [key, value] of Object.entries(iniSettings)) {
       if (schemaKeys.has(key) || UNSUPPORTED_INI_KEYS.has(key)) continue
-      if (deferredSearchQuery && !(
-        key.toLowerCase().includes(lower) ||
-        String(value).toLowerCase().includes(lower)
-      )) continue
+      if (
+        deferredSearchQuery &&
+        !(
+          key.toLowerCase().includes(lower) ||
+          String(value).toLowerCase().includes(lower)
+        )
+      )
+        continue
       out.push({ key, value })
     }
     return out.sort((a, b) => a.key.localeCompare(b.key))
@@ -1586,18 +2180,30 @@ export default function ServerConfig() {
 
   const uncategorizedSandboxKeys = useMemo(() => {
     if (!sandboxData) return []
-    const schemaKeys = new Set(SANDBOX_SCHEMA.map(s => `${s.section || 'settings'}.${s.key}`))
-    const uncategorized: { section: string; key: string; value: string | number | boolean }[] = []
+    const schemaKeys = new Set(
+      SANDBOX_SCHEMA.map((s) => `${s.section || 'settings'}.${s.key}`),
+    )
+    const uncategorized: {
+      section: string
+      key: string
+      value: string | number | boolean
+    }[] = []
 
     for (const sectionName of Object.keys(sandboxData)) {
       if (sectionName === 'VERSION') continue
       const sectionData = sandboxData[sectionName as keyof SandboxData]
       if (typeof sectionData !== 'object' || sectionData === null) continue
-      for (const [key, value] of Object.entries(sectionData as Record<string, string | number | boolean>)) {
+      for (const [key, value] of Object.entries(
+        sectionData as Record<string, string | number | boolean>,
+      )) {
         if (key === 'VERSION') continue
         if (!schemaKeys.has(`${sectionName}.${key}`)) {
           const lower = deferredSearchQuery?.toLowerCase() || ''
-          if (!deferredSearchQuery || key.toLowerCase().includes(lower) || String(value).toLowerCase().includes(lower)) {
+          if (
+            !deferredSearchQuery ||
+            key.toLowerCase().includes(lower) ||
+            String(value).toLowerCase().includes(lower)
+          ) {
             uncategorized.push({ section: sectionName, key, value })
           }
         }
@@ -1625,31 +2231,37 @@ export default function ServerConfig() {
       setShowBackups(true)
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.loadBackupsFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to load backups.'),
+        variant: 'destructive',
       })
     }
   }
 
   const handleRestoreBackup = async (filename: string) => {
     const ok = await confirm({
-      title: t('restoreBackupConfirm.title'),
-      description: t('restoreBackupConfirm.description', { filename }),
-      confirmLabel: t('restoreBackupConfirm.confirmLabel'),
+      title: 'Restore this backup?',
+      description:
+        'Replace the current file with "' +
+        String(filename) +
+        '"? Unsaved changes to the live config will be lost.',
+      confirmLabel: 'Restore',
     })
     if (!ok) return
 
     try {
       await serverFilesApi.restoreBackup(filename)
-      toast({ title: t('toasts.restoredTitle'), description: t('toasts.restoredDesc', { filename }) })
+      toast({
+        title: 'Restored',
+        description: 'Restored from ' + String(filename),
+      })
       setShowBackups(false)
       loadData()
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.restoreBackupFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to restore backup.'),
+        variant: 'destructive',
       })
     }
   }
@@ -1662,9 +2274,12 @@ export default function ServerConfig() {
       setShowTemplates(true)
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.loadTemplatesFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(
+          error,
+          'Failed to load saved configs.',
+        ),
+        variant: 'destructive',
       })
     } finally {
       setTemplateLoading(false)
@@ -1673,7 +2288,11 @@ export default function ServerConfig() {
 
   const handleSaveTemplate = async () => {
     if (!newTemplateName.trim()) {
-      toast({ title: t('toasts.error'), description: t('toasts.templateNameRequired'), variant: 'destructive' })
+      toast({
+        title: 'Error',
+        description: 'Name is required',
+        variant: 'destructive',
+      })
       return
     }
 
@@ -1683,9 +2302,9 @@ export default function ServerConfig() {
         name: newTemplateName.trim(),
         description: newTemplateDesc.trim(),
         includeIni: saveTemplateIni,
-        includeSandbox: saveTemplateSandbox
+        includeSandbox: saveTemplateSandbox,
       })
-      toast({ title: t('toasts.savedTitle'), description: result.message })
+      toast({ title: 'Saved', description: result.message })
       setShowSaveTemplate(false)
       setNewTemplateName('')
       setNewTemplateDesc('')
@@ -1695,9 +2314,9 @@ export default function ServerConfig() {
       }
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.saveTemplateFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to save config.'),
+        variant: 'destructive',
       })
     } finally {
       setTemplateLoading(false)
@@ -1706,11 +2325,11 @@ export default function ServerConfig() {
 
   const handleApplyTemplate = async (template: ConfigTemplate) => {
     const ok = await confirm({
-      title: t('applyTemplateConfirm.title', { name: template.name }),
+      title: 'Apply saved config "' + String(template.name) + '"?',
       description: template.hasIni
-        ? `${t('applyTemplateConfirm.description')}\n\n${t('applyTemplateConfirm.rconWarning')}`
-        : t('applyTemplateConfirm.description'),
-      confirmLabel: t('applyTemplateConfirm.confirmLabel'),
+        ? `${"Replace your current server settings with this saved config? The panel backs up what's live first, so Restore can undo it if needed."}\n\n${"The RCON password isn't stored in saved configs, so applying this one will remove your server's RCON password — you'll need to re-enter it afterward."}`
+        : "Replace your current server settings with this saved config? The panel backs up what's live first, so Restore can undo it if needed.",
+      confirmLabel: 'Apply',
     })
     if (!ok) return
 
@@ -1718,16 +2337,14 @@ export default function ServerConfig() {
     try {
       const result = await serverFilesApi.applyTemplate(template.id)
       toast({
-        title: t('toasts.appliedTitle'),
-        description: result.message
+        title: 'Applied',
+        description: result.message,
       })
       const backupWarnings = getApplyTemplateBackupWarnings(result)
       if (backupWarnings) {
         toast({
-          title: t('toasts.applyTemplateBackupWarningTitle'),
-          description: t('toasts.applyTemplateBackupWarningDesc', {
-            warnings: backupWarnings.join(' '),
-          }),
+          title: 'Applied, but not backed up',
+          description: String(backupWarnings.join(' ')),
           variant: 'destructive',
         })
       }
@@ -1737,19 +2354,25 @@ export default function ServerConfig() {
       const partiallyApplied = getPartiallyAppliedFromApplyTemplateError(error)
       if (partiallyApplied) {
         toast({
-          title: t('toasts.applyTemplatePartialTitle'),
-          description: t('toasts.applyTemplatePartialDesc', {
-            applied: partiallyApplied.join(', '),
-            error: getUserErrorMessage(error, t('toasts.applyTemplateFailed')),
-          }),
-          variant: 'destructive'
+          title: 'Partially applied',
+          description:
+            String(partiallyApplied.join(', ')) +
+            ' settings were written to disk before this failed: ' +
+            String(
+              getUserErrorMessage(error, 'Failed to apply saved config.'),
+            ) +
+            ' The rest of the saved config was not applied.',
+          variant: 'destructive',
         })
         loadData()
       } else {
         toast({
-          title: t('toasts.error'),
-          description: getUserErrorMessage(error, t('toasts.applyTemplateFailed')),
-          variant: 'destructive'
+          title: 'Error',
+          description: getUserErrorMessage(
+            error,
+            'Failed to apply saved config.',
+          ),
+          variant: 'destructive',
         })
       }
     } finally {
@@ -1759,105 +2382,152 @@ export default function ServerConfig() {
 
   const handleDeleteTemplate = async (id: string, name: string) => {
     const ok = await confirm({
-      title: t('deleteTemplateConfirm.title'),
-      description: t('deleteTemplateConfirm.description', { name }),
-      confirmLabel: t('deleteTemplateConfirm.confirmLabel'),
+      title: 'Delete saved config?',
+      description:
+        'Delete saved config "' + String(name) + '"? This cannot be undone.',
+      confirmLabel: 'Delete',
     })
     if (!ok) return
 
     try {
       await serverFilesApi.deleteTemplate(id)
-      toast({ title: t('toasts.deletedTitle'), description: t('toasts.templateDeletedDesc', { name }) })
-      setTemplates(prev => prev.filter(tpl => tpl.id !== id))
+      toast({
+        title: 'Deleted',
+        description: 'Saved config "' + String(name) + '" deleted',
+      })
+      setTemplates((prev) => prev.filter((tpl) => tpl.id !== id))
     } catch (error) {
       toast({
-        title: t('toasts.error'),
-        description: getUserErrorMessage(error, t('toasts.deleteTemplateFailed')),
-        variant: 'destructive'
+        title: 'Error',
+        description: getUserErrorMessage(
+          error,
+          'Failed to delete saved config.',
+        ),
+        variant: 'destructive',
       })
     }
   }
 
   const updateIniValue = useCallback((key: string, value: string) => {
-    setIniSettings(prev => ({ ...prev, [key]: value }))
+    setIniSettings((prev) => ({ ...prev, [key]: value }))
   }, [])
 
-  const applyUnresolvedModCorrection = useCallback((modId: string, suggestion: string) => {
-    setIniSettings(prev => {
-      const tokens = (prev.Mods || '').split(';').map(v => v.trim()).filter(Boolean)
-      const next = tokens.map(v => (v === modId ? suggestion : v))
-      return { ...prev, Mods: next.join(';') }
-    })
-    toast({
-      title: t('unresolvedReview.correctedTitle'),
-      description: t('unresolvedReview.correctedToast', { modId, suggestion }),
-    })
-  }, [toast, t])
+  const applyUnresolvedModCorrection = useCallback(
+    (modId: string, suggestion: string) => {
+      setIniSettings((prev) => {
+        const tokens = (prev.Mods || '')
+          .split(';')
+          .map((v) => v.trim())
+          .filter(Boolean)
+        const next = tokens.map((v) => (v === modId ? suggestion : v))
+        return { ...prev, Mods: next.join(';') }
+      })
+      toast({
+        title: 'Mods= entry corrected',
+        description:
+          'Replaced "' +
+          String(modId) +
+          '" with "' +
+          String(suggestion) +
+          '" in Mods=. Unsaved — review and save below.',
+      })
+    },
+    [toast],
+  )
 
-  const removeUnresolvedModEntry = useCallback(async (modId: string) => {
-    const ok = await confirm({
-      title: t('unresolvedReview.removeConfirmTitle'),
-      description: t('unresolvedReview.removeConfirm', { modId }),
-      confirmLabel: t('unresolvedReview.removeConfirmButton'),
-      destructive: true,
-    })
-    if (!ok) return
-    setIniSettings(prev => {
-      const tokens = (prev.Mods || '').split(';').map(v => v.trim()).filter(Boolean)
-      return { ...prev, Mods: tokens.filter(v => v !== modId).join(';') }
-    })
-    toast({
-      title: t('unresolvedReview.removedTitle'),
-      description: t('unresolvedReview.removedToast', { modId }),
-    })
-  }, [confirm, toast, t])
+  const removeUnresolvedModEntry = useCallback(
+    async (modId: string) => {
+      const ok = await confirm({
+        title: 'Remove from Mods=?',
+        description:
+          'Remove "' +
+          String(modId) +
+          '" from Mods=? This only stages the change here — nothing is written to disk until you save.',
+        confirmLabel: 'Remove',
+        destructive: true,
+      })
+      if (!ok) return
+      setIniSettings((prev) => {
+        const tokens = (prev.Mods || '')
+          .split(';')
+          .map((v) => v.trim())
+          .filter(Boolean)
+        return { ...prev, Mods: tokens.filter((v) => v !== modId).join(';') }
+      })
+      toast({
+        title: 'Mods= entry removed',
+        description:
+          'Removed "' +
+          String(modId) +
+          '" from Mods=. Unsaved — review and save below.',
+      })
+    },
+    [confirm, toast],
+  )
 
-  const updateSandboxValue = useCallback((setting: SandboxSetting, value: SandboxScalar) => {
-    setSandboxData(prev => {
-      if (!prev) return prev
-      const section = (setting.section || 'settings') as keyof SandboxData
-      const sectionData = { ...(prev[section] as Record<string, unknown> || {}) }
-      sectionData[setting.key] = value
-      return { ...prev, [section]: sectionData } as SandboxData
-    })
-  }, [])
+  const updateSandboxValue = useCallback(
+    (setting: SandboxSetting, value: SandboxScalar) => {
+      setSandboxData((prev) => {
+        if (!prev) return prev
+        const section = (setting.section || 'settings') as keyof SandboxData
+        const sectionData = {
+          ...((prev[section] as Record<string, unknown>) || {}),
+        }
+        sectionData[setting.key] = value
+        return { ...prev, [section]: sectionData } as SandboxData
+      })
+    },
+    [],
+  )
 
-  const resetIniValue = useCallback((key: string) => {
-    if (originalIniSettings[key] !== undefined) {
-      setIniSettings(prev => ({ ...prev, [key]: originalIniSettings[key] }))
-    }
-  }, [originalIniSettings])
+  const resetIniValue = useCallback(
+    (key: string) => {
+      if (originalIniSettings[key] !== undefined) {
+        setIniSettings((prev) => ({ ...prev, [key]: originalIniSettings[key] }))
+      }
+    },
+    [originalIniSettings],
+  )
 
   const discardIniChanges = useCallback(() => {
     setIniSettings({ ...originalIniSettings })
   }, [originalIniSettings])
 
   const discardSandboxChanges = useCallback(() => {
-    if (originalSandboxData) setSandboxData(JSON.parse(JSON.stringify(originalSandboxData)))
+    if (originalSandboxData)
+      setSandboxData(JSON.parse(JSON.stringify(originalSandboxData)))
   }, [originalSandboxData])
 
-  const resetSandboxValue = useCallback((setting: SandboxSetting) => {
-    if (!originalSandboxData || !sandboxData) return
-    const section = (setting.section || 'settings') as keyof SandboxData
-    const originalSection = originalSandboxData[section] as SandboxRecord | undefined
-    if (originalSection && originalSection[setting.key] !== undefined) {
-      setSandboxData(prev => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          [section]: {
-            ...(prev[section] as SandboxRecord),
-            [setting.key]: originalSection[setting.key]
+  const resetSandboxValue = useCallback(
+    (setting: SandboxSetting) => {
+      if (!originalSandboxData || !sandboxData) return
+      const section = (setting.section || 'settings') as keyof SandboxData
+      const originalSection = originalSandboxData[section] as
+        SandboxRecord | undefined
+      if (originalSection && originalSection[setting.key] !== undefined) {
+        setSandboxData((prev) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            [section]: {
+              ...(prev[section] as SandboxRecord),
+              [setting.key]: originalSection[setting.key],
+            },
           }
-        }
-      })
-    }
-  }, [originalSandboxData, sandboxData])
+        })
+      }
+    },
+    [originalSandboxData, sandboxData],
+  )
 
   const changedIniCount = useMemo(() => {
     let count = 0
     for (const key of Object.keys(iniSettings)) {
-      if (originalIniSettings[key] !== undefined && iniSettings[key] !== originalIniSettings[key]) count++
+      if (
+        originalIniSettings[key] !== undefined &&
+        iniSettings[key] !== originalIniSettings[key]
+      )
+        count++
     }
     return count
   }, [iniSettings, originalIniSettings])
@@ -1865,10 +2535,12 @@ export default function ServerConfig() {
   const changedSandboxCount = useMemo(() => {
     if (!sandboxData || !originalSandboxData) return 0
     let count = 0
-    SANDBOX_SCHEMA.forEach(setting => {
+    SANDBOX_SCHEMA.forEach((setting) => {
       const section = (setting.section || 'settings') as keyof SandboxData
       const curr = (sandboxData[section] as SandboxRecord)?.[setting.key]
-      const orig = (originalSandboxData[section] as SandboxRecord)?.[setting.key]
+      const orig = (originalSandboxData[section] as SandboxRecord)?.[
+        setting.key
+      ]
       if (JSON.stringify(curr) !== JSON.stringify(orig)) count++
     })
     return count
@@ -1877,13 +2549,24 @@ export default function ServerConfig() {
   const searchResultsCount = useMemo(() => {
     if (!deferredSearchQuery) return 0
     if (activeTab === 'ini') {
-      return Object.values(filteredIniSettings).reduce((acc, settings) => acc + settings.length, 0)
+      return Object.values(filteredIniSettings).reduce(
+        (acc, settings) => acc + settings.length,
+        0,
+      )
     }
     if (activeTab === 'sandbox') {
-      return Object.values(filteredSandboxSettings).reduce((acc, settings) => acc + settings.length, 0)
+      return Object.values(filteredSandboxSettings).reduce(
+        (acc, settings) => acc + settings.length,
+        0,
+      )
     }
     return 0
-  }, [deferredSearchQuery, activeTab, filteredIniSettings, filteredSandboxSettings])
+  }, [
+    deferredSearchQuery,
+    activeTab,
+    filteredIniSettings,
+    filteredSandboxSettings,
+  ])
 
   const handleSaveIniRef = useRef(handleSaveIni)
   const handleSaveSandboxRef = useRef(handleSaveSandbox)
@@ -1901,7 +2584,8 @@ export default function ServerConfig() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault()
-        const searchInput = activeTab === 'ini' ? iniSearchRef.current : sandboxSearchRef.current
+        const searchInput =
+          activeTab === 'ini' ? iniSearchRef.current : sandboxSearchRef.current
         searchInput?.focus()
       }
     }
@@ -1914,8 +2598,10 @@ export default function ServerConfig() {
       <div className="space-y-4 page-transition">
         <EmptyState
           type="noData"
-          title={t('noAccess.title')}
-          description={t('noAccess.description')}
+          title={"You don't have access to Server Configuration"}
+          description={
+            'This page requires the "Manage server files" permission. Ask an administrator to grant it to your role if you need to edit server settings here.'
+          }
         />
       </div>
     )
@@ -1931,14 +2617,17 @@ export default function ServerConfig() {
         </div>
         <div className="rounded-md border border-border/55 bg-card/85 h-12 animate-pulse" />
         <div className="flex gap-1">
-          {[0,1,2,3,4].map(i => (
-            <div key={i} className="flex-1 h-9 rounded-md bg-muted/40 animate-pulse" />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="flex-1 h-9 rounded-md bg-muted/40 animate-pulse"
+            />
           ))}
         </div>
         <div className="rounded-md border border-border/55 bg-card/85 h-[400px] flex items-center justify-center">
           <div className="flex items-center gap-3 text-muted-foreground text-xs font-medium">
             <Loader2 className="w-4 h-4 animate-spin" />
-            {t('loading')}
+            {'loading configuration…'}
           </div>
         </div>
       </div>
@@ -1946,34 +2635,57 @@ export default function ServerConfig() {
   }
 
   const iniSettingsCount = Object.keys(iniSettings).length
-  const sandboxSettingsCount = sandboxData ? Object.keys(sandboxData.settings || {}).length : 0
-  const spawnPointsCount = Object.values(spawnPoints).reduce((acc, points) => acc + points.length, 0)
+  const sandboxSettingsCount = sandboxData
+    ? Object.keys(sandboxData.settings || {}).length
+    : 0
+  const spawnPointsCount = Object.values(spawnPoints).reduce(
+    (acc, points) => acc + points.length,
+    0,
+  )
   const professionsCount = Object.keys(spawnPoints).length
 
   return (
     <div className="space-y-4 page-transition pb-24">
-      {loadError && (
-        activeServerRemote ? (
+      {loadError &&
+        (activeServerRemote ? (
           <Alert className="border-warning/40 bg-warning/10">
             <AlertTriangle className="h-4 w-4 text-warning" />
-            <AlertTitle>{t('loadErrorTitle')}</AlertTitle>
-            <AlertDescription className="min-w-0 break-words" dir="auto" title={loadError}>
+            <AlertTitle>
+              {'Configuration data could not be fully loaded'}
+            </AlertTitle>
+            <AlertDescription
+              className="min-w-0 break-words"
+              dir="auto"
+              title={loadError}
+            >
               {loadError}
             </AlertDescription>
           </Alert>
         ) : (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>{t('loadErrorTitle')}</AlertTitle>
+            <AlertTitle>
+              {'Configuration data could not be fully loaded'}
+            </AlertTitle>
             <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <span className="min-w-0 break-words" dir="auto" title={loadError}>{loadError}</span>
-              <Button variant="outline" size="sm" onClick={loadData} className="self-start">
-                <RefreshCw className="me-2 h-4 w-4" /> {t('retry')}
+              <span
+                className="min-w-0 break-words"
+                dir="auto"
+                title={loadError}
+              >
+                {loadError}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadData}
+                className="self-start"
+              >
+                <RefreshCw className="me-2 h-4 w-4" /> {'Retry'}
               </Button>
             </AlertDescription>
           </Alert>
-        )
-      )}
+        ))}
 
       {duplicateKeys.length > 0 && (
         <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -1981,13 +2693,18 @@ export default function ServerConfig() {
             <AlertTriangle className="w-5 h-5 text-warning" />
             <div>
               <p className="font-medium text-warning">
-                {t('duplicateKeysWarning.title', {
-                  count: duplicateKeys.length,
-                  keys: duplicateKeys.map(d => d.key).join(', '),
-                })}
+                {Number(duplicateKeys.length) === 1
+                  ? '"' +
+                    String(duplicateKeys.map((d) => d.key).join(', ')) +
+                    '" appears more than once in this configuration file'
+                  : String(duplicateKeys.length) +
+                    ' settings appear more than once in this configuration file: ' +
+                    String(duplicateKeys.map((d) => d.key).join(', '))}
               </p>
               <p className="text-xs text-muted-foreground">
-                {t('duplicateKeysWarning.desc')}
+                {
+                  'This editor reads the last copy and the Mods page reads the first, so the two can show different values for the same setting.'
+                }
               </p>
             </div>
           </div>
@@ -1997,40 +2714,67 @@ export default function ServerConfig() {
       {serverChangedSinceLoad && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>{t('serverChangedBanner.title')}</AlertTitle>
+          <AlertTitle>{'Active server changed'}</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="min-w-0 break-words">
-              {t('serverChangedBanner.desc')}
+              {
+                "The active server changed while this page was open. The settings below are still from the previous server -- reload before saving, or the save would overwrite the new active server's config."
+              }
             </span>
-            <Button variant="outline" size="sm" onClick={loadData} className="self-start">
-              <RefreshCw className="me-2 h-4 w-4" /> {t('retry')}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadData}
+              className="self-start"
+            >
+              <RefreshCw className="me-2 h-4 w-4" /> {'Retry'}
             </Button>
           </AlertDescription>
         </Alert>
       )}
 
       <PageHeader
-        title={t('pageHeader.title')}
-        description={t('pageHeader.description')}
-        eyebrow={t('pageHeader.eyebrow')}
+        title={'Server Configuration'}
+        description={
+          'Edit the live INI, sandbox, spawn, and mod settings for this server.'
+        }
+        eyebrow={'config'}
         tone="config"
         icon={<Settings className="h-5 w-5 text-primary" />}
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
             {(hasIniChanges || hasSandboxChanges) && (
-              <Badge variant="warning" className="motion-safe:animate-pulse text-xs font-medium">
+              <Badge
+                variant="warning"
+                className="motion-safe:animate-pulse text-xs font-medium"
+              >
                 <AlertTriangle className="me-1 h-3 w-3" />
-                {t('pageHeader.unsavedChanges')}
+                {'Unsaved changes'}
               </Badge>
             )}
-            <Button variant="command" size="sm" className="h-9 gap-1.5 text-xs font-medium" onClick={loadTemplates}>
-              <Bookmark className="h-3.5 w-3.5" /> {t('pageHeader.templates')}
+            <Button
+              variant="command"
+              size="sm"
+              className="h-9 gap-1.5 text-xs font-medium"
+              onClick={loadTemplates}
+            >
+              <Bookmark className="h-3.5 w-3.5" /> {'Saved Configs'}
             </Button>
-            <Button variant="command" size="sm" className="h-9 gap-1.5 text-xs font-medium" onClick={loadBackups}>
-              <History className="h-3.5 w-3.5" /> {t('pageHeader.backups')}
+            <Button
+              variant="command"
+              size="sm"
+              className="h-9 gap-1.5 text-xs font-medium"
+              onClick={loadBackups}
+            >
+              <History className="h-3.5 w-3.5" /> {'Backups'}
             </Button>
-            <Button variant="command" size="sm" className="h-9 gap-1.5 text-xs font-medium" onClick={loadData}>
-              <RefreshCw className="h-3.5 w-3.5" /> {t('pageHeader.refresh')}
+            <Button
+              variant="command"
+              size="sm"
+              className="h-9 gap-1.5 text-xs font-medium"
+              onClick={loadData}
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> {'Refresh'}
             </Button>
           </div>
         }
@@ -2041,7 +2785,7 @@ export default function ServerConfig() {
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground whitespace-nowrap">
               <FolderOpen className="w-3.5 h-3.5" />
-              <span>{t('activeServerStrip.label')}</span>
+              <span>{'Active server'}</span>
             </div>
             {pathsInfo ? (
               <div className="flex items-center gap-2 min-w-0">
@@ -2058,61 +2802,112 @@ export default function ServerConfig() {
                 </span>
               </div>
             ) : activeServerName ? (
-              <span className="text-sm font-semibold text-foreground">{activeServerName}</span>
+              <span className="text-sm font-semibold text-foreground">
+                {activeServerName}
+              </span>
             ) : (
-              <span className="text-xs text-muted-foreground/60">{t('activeServerStrip.noServerSelected')}</span>
+              <span className="text-xs text-muted-foreground/60">
+                {'No server selected'}
+              </span>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-muted-foreground">
             <StatChip
               icon={<Settings className="h-3 w-3" />}
               value={iniSettingsCount}
-              label={t('activeServerStrip.iniLabel')}
+              label={'INI'}
               ok={pathsInfo?.exists.ini}
             />
             <span className="h-3 w-px bg-border/60" aria-hidden />
             <StatChip
               icon={<FileText className="h-3 w-3" />}
               value={sandboxSettingsCount}
-              label={t('activeServerStrip.sandboxLabel')}
+              label={'Sandbox'}
               ok={pathsInfo?.exists.sandbox}
             />
             <span className="h-3 w-px bg-border/60" aria-hidden />
             <StatChip
               icon={<MapPin className="h-3 w-3" />}
               value={spawnPointsCount}
-              label={t('activeServerStrip.spawnsLabel', { count: professionsCount })}
+              label={
+                Number(professionsCount) === 1
+                  ? 'Spawns · ' + String(professionsCount) + ' prof'
+                  : 'Spawns · ' + String(professionsCount) + ' profs'
+              }
             />
             <span className="h-3 w-px bg-border/60" aria-hidden />
             <StatChip
               icon={<Map className="h-3 w-3" />}
               value={spawnRegions.length}
-              label={t('activeServerStrip.regionsLabel')}
+              label={'Regions'}
             />
           </div>
         </div>
       </TacticalPanel>
 
-      <Tabs value={activeTab} onValueChange={(v) => {
-        setActiveTab(v)
-        if (editorMode === 'raw') {
-          const typeMap: Record<string, 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions'> = {
-            ini: 'ini',
-            sandbox: 'sandbox',
-            spawnpoints: 'spawnpoints',
-            spawnregions: 'spawnregions'
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          setActiveTab(v)
+          if (editorMode === 'raw') {
+            const typeMap: Record<
+              string,
+              'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions'
+            > = {
+              ini: 'ini',
+              sandbox: 'sandbox',
+              spawnpoints: 'spawnpoints',
+              spawnregions: 'spawnregions',
+            }
+            loadRawContent(typeMap[v] || 'ini')
           }
-          loadRawContent(typeMap[v] || 'ini')
-        }
-      }}>
+        }}
+      >
         <TabsList className="flex h-auto flex-wrap gap-1 bg-muted/30 border border-border/50 p-1 rounded-md w-full">
-          {([
-            { value: 'ini', label: t('tabs.serverSettings'), icon: Settings, dirty: hasIniChanges, count: changedIniCount, missing: !activeServerRemote && !pathsInfo?.exists.ini },
-            { value: 'sandbox', label: t('tabs.sandbox'), icon: FileText, dirty: hasSandboxChanges, count: changedSandboxCount, missing: !activeServerRemote && !pathsInfo?.exists.sandbox },
-            { value: 'spawnpoints', label: t('tabs.spawnPoints'), icon: MapPin, dirty: false, count: 0, missing: false },
-            { value: 'spawnregions', label: t('tabs.spawnRegions'), icon: Map, dirty: false, count: 0, missing: false },
-            { value: 'modsettings', label: t('tabs.modSettings'), icon: Puzzle, dirty: false, count: modifiedModSettingsCount, missing: false },
-          ] as const).map((tabDef) => (
+          {(
+            [
+              {
+                value: 'ini',
+                label: 'Server Settings',
+                icon: Settings,
+                dirty: hasIniChanges,
+                count: changedIniCount,
+                missing: !activeServerRemote && !pathsInfo?.exists.ini,
+              },
+              {
+                value: 'sandbox',
+                label: 'Sandbox',
+                icon: FileText,
+                dirty: hasSandboxChanges,
+                count: changedSandboxCount,
+                missing: !activeServerRemote && !pathsInfo?.exists.sandbox,
+              },
+              {
+                value: 'spawnpoints',
+                label: 'Spawn Points',
+                icon: MapPin,
+                dirty: false,
+                count: 0,
+                missing: false,
+              },
+              {
+                value: 'spawnregions',
+                label: 'Spawn Regions',
+                icon: Map,
+                dirty: false,
+                count: 0,
+                missing: false,
+              },
+              {
+                value: 'modsettings',
+                label: 'Mod Settings',
+                icon: Puzzle,
+                dirty: false,
+                count: modifiedModSettingsCount,
+                missing: false,
+              },
+            ] as const
+          ).map((tabDef) => (
             <TabsTrigger
               key={tabDef.value}
               value={tabDef.value}
@@ -2121,15 +2916,24 @@ export default function ServerConfig() {
               <tabDef.icon className="w-4 h-4 shrink-0" />
               {tabDef.label}
               {tabDef.count > 0 && (
-                <Badge variant="warning" className="h-5 px-1.5 py-0 font-mono text-[10px] leading-none">
+                <Badge
+                  variant="warning"
+                  className="h-5 px-1.5 py-0 font-mono text-[10px] leading-none"
+                >
                   {tabDef.count}
                 </Badge>
               )}
               {tabDef.dirty && activeTab !== tabDef.value && (
-                <span className="h-1.5 w-1.5 rounded-full bg-warning motion-safe:animate-pulse" aria-label={t('tabs.unsavedChangesAria')} />
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-warning motion-safe:animate-pulse"
+                  aria-label={'unsaved changes'}
+                />
               )}
               {tabDef.missing && (
-                <AlertCircle className="w-4 h-4 text-warning" aria-label={t('tabs.fileMissingAria')} />
+                <AlertCircle
+                  className="w-4 h-4 text-warning"
+                  aria-label={'file missing'}
+                />
               )}
             </TabsTrigger>
           ))}
@@ -2137,7 +2941,9 @@ export default function ServerConfig() {
         {activeTab === 'ini' && initialDeepLink.unresolved.length > 0 && (
           <Alert className="mt-3 border-warning/40 bg-warning/10">
             <AlertTriangle className="h-4 w-4 text-warning" />
-            <AlertTitle className="text-warning">{t('unresolvedReview.title')}</AlertTitle>
+            <AlertTitle className="text-warning">
+              {'Unresolved Mods= IDs'}
+            </AlertTitle>
             <AlertDescription className="mt-2 space-y-3">
               {initialDeepLink.unresolved.map((modId) => {
                 const triage = initialDeepLink.unresolvedTriage.get(modId)
@@ -2152,14 +2958,25 @@ export default function ServerConfig() {
                           size="sm"
                           variant="outline"
                           className="h-6 px-2 text-xs"
-                          onClick={() => applyUnresolvedModCorrection(modId, triage.suggestion as string)}
+                          onClick={() =>
+                            applyUnresolvedModCorrection(
+                              modId,
+                              triage.suggestion as string,
+                            )
+                          }
                         >
-                          {t('unresolvedReview.correctAction', { suggestion: triage.suggestion })}
+                          {'Use "' + String(triage.suggestion) + '"'}
                         </Button>
                       )}
-                      {(triage?.cause === 'stillDownloading' || triage?.cause === 'workshopNotOnDisk') && (
-                        <Button asChild size="sm" variant="ghost" className="h-6 px-2 text-xs">
-                          <Link to="/debug">{t('unresolvedReview.rerunDiagnostics')}</Link>
+                      {(triage?.cause === 'stillDownloading' ||
+                        triage?.cause === 'workshopNotOnDisk') && (
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-xs"
+                        >
+                          <Link to="/debug">{'Re-run diagnostics'}</Link>
                         </Button>
                       )}
                       {triage?.cause === 'absent' && (
@@ -2169,16 +2986,24 @@ export default function ServerConfig() {
                           className="h-6 px-2 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
                           onClick={() => removeUnresolvedModEntry(modId)}
                         >
-                          {t('unresolvedReview.removeAction')}
+                          {'Remove from Mods='}
                         </Button>
                       )}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {!triage && t('unresolvedReview.causeUnknown')}
-                      {triage?.cause === 'typo' && triage.suggestion && t('unresolvedReview.causeTypo', { suggestion: triage.suggestion })}
-                      {triage?.cause === 'stillDownloading' && t('unresolvedReview.causeStillDownloading')}
-                      {triage?.cause === 'workshopNotOnDisk' && t('unresolvedReview.causeWorkshopNotOnDisk')}
-                      {triage?.cause === 'absent' && t('unresolvedReview.causeAbsent')}
+                      {!triage &&
+                        'No triage available for this entry yet — re-run diagnostics.'}
+                      {triage?.cause === 'typo' &&
+                        triage.suggestion &&
+                        'Looks like a typo of the installed mod "' +
+                          String(triage.suggestion) +
+                          '".'}
+                      {triage?.cause === 'stillDownloading' &&
+                        'A Workshop download is in progress — wait for it to finish, then re-run diagnostics.'}
+                      {triage?.cause === 'workshopNotOnDisk' &&
+                        "Listed in WorkshopItems= but its content isn't on disk and nothing is downloading it right now. Restart the server or re-validate the Workshop download, then re-run diagnostics."}
+                      {triage?.cause === 'absent' &&
+                        'No installed Workshop or local mod matches this ID.'}
                     </p>
                   </div>
                 )
@@ -2186,30 +3011,45 @@ export default function ServerConfig() {
             </AlertDescription>
           </Alert>
         )}
-        {serverMayBeRunning && ['ini', 'sandbox', 'spawnpoints', 'spawnregions'].includes(activeTab) && (
-          <Alert className="mt-3 border-primary/30 bg-primary/5">
-            <Info className="h-4 w-4 text-primary" />
-            <AlertTitle>{serverRunning === true ? t('stopServerAlert.title') : t('stopServerAlert.unknownTitle')}</AlertTitle>
-            <AlertDescription>
-              {serverRunning === true ? t('stopServerAlert.description') : t('stopServerAlert.unknownDescription')}
-            </AlertDescription>
-          </Alert>
-        )}
+        {serverMayBeRunning &&
+          ['ini', 'sandbox', 'spawnpoints', 'spawnregions'].includes(
+            activeTab,
+          ) && (
+            <Alert className="mt-3 border-primary/30 bg-primary/5">
+              <Info className="h-4 w-4 text-primary" />
+              <AlertTitle>
+                {serverRunning === true
+                  ? 'The server is running'
+                  : "Can't confirm the server is stopped"}
+              </AlertTitle>
+              <AlertDescription>
+                {serverRunning === true
+                  ? "You can save changes now. Depending on what you're editing, they may need a server restart to take effect — the confirmation after saving will tell you."
+                  : "We couldn't determine whether the server is currently running. If it is, changes may need a server restart to take effect — the confirmation after saving will tell you."}
+              </AlertDescription>
+            </Alert>
+          )}
         {activeTab === 'ini' && invalidIniSettings.length > 0 && (
           <Alert className="mt-3 border-destructive/40 bg-destructive/10">
             <AlertCircle className="h-4 w-4 text-destructive" />
-            <AlertTitle>{t('invalidValuesAlert.title')}</AlertTitle>
+            <AlertTitle>{'Fix invalid values before saving'}</AlertTitle>
             <AlertDescription>
-              {t('invalidValuesAlert.description', { settings: invalidIniSettings.map(getIniSettingLabel).join(listSep) })}
+              {String(
+                invalidIniSettings.map(getIniSettingLabel).join(listSep),
+              ) + ' must be valid numbers within the shown range.'}
             </AlertDescription>
           </Alert>
         )}
         {activeTab === 'sandbox' && invalidSandboxSettings.length > 0 && (
           <Alert className="mt-3 border-destructive/40 bg-destructive/10">
             <AlertCircle className="h-4 w-4 text-destructive" />
-            <AlertTitle>{t('invalidValuesAlert.title')}</AlertTitle>
+            <AlertTitle>{'Fix invalid values before saving'}</AlertTitle>
             <AlertDescription>
-              {t('invalidValuesAlert.description', { settings: invalidSandboxSettings.map(getSandboxSettingLabel).join(listSep) })}
+              {String(
+                invalidSandboxSettings
+                  .map(getSandboxSettingLabel)
+                  .join(listSep),
+              ) + ' must be valid numbers within the shown range.'}
             </AlertDescription>
           </Alert>
         )}
@@ -2217,27 +3057,32 @@ export default function ServerConfig() {
         <TabsContent value="ini" className="mt-4">
           <TacticalPanel tone={hasIniChanges ? 'warning' : 'primary'}>
             <SectionHeader
-              label={t('iniTab.sectionLabel')}
-              sublabel={t('iniTab.sectionSublabel')}
+              label={'Server settings'}
+              sublabel={'INI · behavior, network, players'}
               icon={FileText}
               tone={hasIniChanges ? 'warning' : 'primary'}
               action={
                 <div className="flex flex-wrap items-center gap-1.5">
                   {hasIniChanges && (
-                    <Badge variant="warning" className="h-5 px-1.5 py-0 font-mono text-[10px]">
+                    <Badge
+                      variant="warning"
+                      className="h-5 px-1.5 py-0 font-mono text-[10px]"
+                    >
                       <AlertTriangle className="me-1 h-3 w-3" />
                       {changedIniCount}
                     </Badge>
                   )}
                   <div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/30 p-0.5">
                     <Button
-                      variant={editorMode === 'structured' ? 'secondary' : 'ghost'}
+                      variant={
+                        editorMode === 'structured' ? 'secondary' : 'ghost'
+                      }
                       size="sm"
                       onClick={() => setEditorMode('structured')}
                       className="h-7 gap-1.5 px-2 text-xs font-medium"
                       aria-pressed={editorMode === 'structured'}
                     >
-                      <FormInput className="h-3 w-3" /> {t('editorToolbar.form')}
+                      <FormInput className="h-3 w-3" /> {'Form'}
                     </Button>
                     <Button
                       variant={editorMode === 'raw' ? 'secondary' : 'ghost'}
@@ -2249,17 +3094,23 @@ export default function ServerConfig() {
                       className="h-7 gap-1.5 px-2 text-xs font-medium"
                       aria-pressed={editorMode === 'raw'}
                     >
-                      <Code className="h-3 w-3" /> {t('editorToolbar.raw')}
+                      <Code className="h-3 w-3" /> {'Raw'}
                     </Button>
                   </div>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleCreateBackup('ini')} aria-label={t('editorToolbar.downloadIniAria')}>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleCreateBackup('ini')}
+                          aria-label={'Download INI backup'}
+                        >
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{t('editorToolbar.downloadIniTooltip')}</TooltipContent>
+                      <TooltipContent>{'Download INI backup'}</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <a
@@ -2268,15 +3119,26 @@ export default function ServerConfig() {
                     rel="noopener noreferrer"
                     className="flex h-7 items-center gap-1 rounded border border-border/60 bg-muted/30 px-2 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
                   >
-                    <ExternalLink className="h-3 w-3" /> {t('editorToolbar.wiki')}
+                    <ExternalLink className="h-3 w-3" /> {'Wiki'}
                   </a>
-                  <Button onClick={handleSaveIni} disabled={saving || !hasIniChanges || invalidIniSettings.length > 0 || serverChangedSinceLoad} variant="command" size="sm" className="h-7 gap-1.5 text-xs font-medium">
+                  <Button
+                    onClick={handleSaveIni}
+                    disabled={
+                      saving ||
+                      !hasIniChanges ||
+                      invalidIniSettings.length > 0 ||
+                      serverChangedSinceLoad
+                    }
+                    variant="command"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs font-medium"
+                  >
                     {saving ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
                       <Save className="h-3 w-3" />
                     )}
-                    {t('editorToolbar.saveAndReload')}
+                    {'Save & reload'}
                   </Button>
                 </div>
               }
@@ -2285,11 +3147,17 @@ export default function ServerConfig() {
               {iniSettings['DoLuaChecksum']?.toLowerCase() === 'true' && (
                 <Alert variant="destructive" className="mb-4">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>{t('iniTab.luaChecksumTitle')}</AlertTitle>
+                  <AlertTitle>{'Lua Checksum is enabled'}</AlertTitle>
                   <AlertDescription>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <span className="min-w-0 flex-1">
-                        <Trans i18nKey="iniTab.luaChecksumBody" t={t} components={{ 1: <strong /> }} />
+                        <>
+                          {
+                            'PanelBridge modifies server-side Lua files. With Lua Checksum enabled, clients will fail verification and cannot connect. Disable '
+                          }
+                          <strong>{'DoLuaChecksum'}</strong>
+                          {' in the Mods category to allow players to join.'}
+                        </>
                       </span>
                       <Button
                         size="sm"
@@ -2297,7 +3165,7 @@ export default function ServerConfig() {
                         className="h-7 shrink-0 gap-1.5 text-xs font-medium"
                         onClick={() => updateIniValue('DoLuaChecksum', 'false')}
                       >
-                        {t('iniTab.disableNow')}
+                        {'disable now'}
                       </Button>
                     </div>
                   </AlertDescription>
@@ -2321,7 +3189,9 @@ export default function ServerConfig() {
                           )}
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{copied ? t('editorToolbar.copied') : t('editorToolbar.copyToClipboard')}</TooltipContent>
+                      <TooltipContent>
+                        {copied ? 'Copied!' : 'Copy to clipboard'}
+                      </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <Textarea
@@ -2338,11 +3208,11 @@ export default function ServerConfig() {
                       <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         ref={iniSearchRef}
-                        placeholder={t('search.settingsPlaceholder')}
+                        placeholder={'Search server settings…'}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="h-8 bg-background/50 ps-9 pe-20"
-                        aria-label={t('search.aria')}
+                        aria-label={'Search server settings'}
                         maxLength={128}
                       />
                       {searchQuery && (
@@ -2355,7 +3225,7 @@ export default function ServerConfig() {
                             size="sm"
                             className="pointer-events-auto h-6 w-6 p-0"
                             onClick={() => setSearchQuery('')}
-                            aria-label={t('search.clearAria')}
+                            aria-label={'Clear search'}
                           >
                             <X className="h-3.5 w-3.5" />
                           </Button>
@@ -2363,27 +3233,37 @@ export default function ServerConfig() {
                       )}
                     </div>
                     <div className="ms-auto flex items-center gap-2">
-                      <div className="inline-flex items-center rounded-md border border-border/60 bg-background/50 p-0.5" role="group" aria-label={t('search.filterAria')}>
-                        {(['all','modified','nondefault'] as const).map(mode => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setFilterMode(mode)}
-                            className={`h-7 px-2.5 text-xs font-medium rounded transition-colors ${
-                              filterMode === mode
-                                ? 'bg-primary/15 text-primary'
-                                : 'text-muted-foreground hover:text-foreground'
-                            }`}
-                          >
-                            {mode === 'nondefault' ? t('search.filterUnsaved') : mode === 'modified' ? t('search.filterModified') : t('search.filterAll')}
-                          </button>
-                        ))}
+                      <div
+                        className="inline-flex items-center rounded-md border border-border/60 bg-background/50 p-0.5"
+                        role="group"
+                        aria-label={'Filter settings'}
+                      >
+                        {(['all', 'modified', 'nondefault'] as const).map(
+                          (mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setFilterMode(mode)}
+                              className={`h-7 px-2.5 text-xs font-medium rounded transition-colors ${
+                                filterMode === mode
+                                  ? 'bg-primary/15 text-primary'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {mode === 'nondefault'
+                                ? 'unsaved'
+                                : mode === 'modified'
+                                  ? 'modified'
+                                  : 'all'}
+                            </button>
+                          ),
+                        )}
                       </div>
                     </div>
                   </div>
                   {searchQuery ? (
                     <ScrollArea className="h-[calc(100vh-420px)] min-h-[360px] pe-4">
-                      {INI_CATEGORIES.map(category => {
+                      {INI_CATEGORIES.map((category) => {
                         const settings = filteredIniSettings[category.id] || []
                         if (settings.length === 0) return null
                         return (
@@ -2393,16 +3273,20 @@ export default function ServerConfig() {
                                 {getIniCategoryLabel(category)}
                               </span>
                               <span className="text-[10px] text-muted-foreground/70">
-                                {t('categoriesNav.matchCount', { count: settings.length })}
+                                {Number(settings.length) === 1
+                                  ? String(settings.length) + ' match'
+                                  : String(settings.length) + ' matches'}
                               </span>
                             </div>
                             <div className="space-y-1">
-                              {settings.map(setting => (
+                              {settings.map((setting) => (
                                 <IniSettingRow
                                   key={setting.key}
                                   setting={setting}
                                   value={iniSettings[setting.key] || ''}
-                                  originalValue={originalIniSettings[setting.key]}
+                                  originalValue={
+                                    originalIniSettings[setting.key]
+                                  }
                                   onChange={updateIniValue}
                                   onReset={resetIniValue}
                                   onBrowse={openFileBrowser}
@@ -2414,120 +3298,188 @@ export default function ServerConfig() {
                       })}
                       {searchResultsCount === 0 && (
                         <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                          {t('search.noMatches', { query: searchQuery })}
+                          {'No settings match “' + String(searchQuery) + '”.'}
                         </div>
                       )}
                     </ScrollArea>
                   ) : (
                     <div className="grid gap-0 md:grid-cols-[252px_minmax(0,1fr)]">
                       <nav
-                        aria-label={t('categoriesNav.iniAria')}
+                        aria-label={'Server settings categories'}
                         className="-mx-2 flex flex-col gap-0.5 px-2 pb-2 md:mx-0 md:order-1 md:border-e md:border-border/50 md:pb-0 md:pe-3 md:pt-1 md:max-h-[calc(100vh-420px)] md:min-h-[360px] md:overflow-y-auto"
                       >
                         <div className="hidden md:flex items-center justify-between px-3 pb-1">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
-                            {t('categoriesNav.categoriesLabel')}
+                            {'Categories'}
                           </span>
                           <button
                             type="button"
-                            onClick={() => setAllGroupsCollapsed('ini', !iniAllCollapsed)}
+                            onClick={() =>
+                              setAllGroupsCollapsed('ini', !iniAllCollapsed)
+                            }
                             className="inline-flex items-center gap-1 rounded text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 hover:text-foreground transition-colors"
-                            aria-label={iniAllCollapsed ? t('categoriesNav.expandAllAria') : t('categoriesNav.collapseAllAria')}
+                            aria-label={
+                              iniAllCollapsed
+                                ? 'Expand all category groups'
+                                : 'Collapse all category groups'
+                            }
                           >
-                            {iniAllCollapsed
-                              ? <ChevronsUpDown className="h-3 w-3" />
-                              : <ChevronsDownUp className="h-3 w-3" />}
-                            <span>{iniAllCollapsed ? t('categoriesNav.expandAll') : t('categoriesNav.collapseAll')}</span>
+                            {iniAllCollapsed ? (
+                              <ChevronsUpDown className="h-3 w-3" />
+                            ) : (
+                              <ChevronsDownUp className="h-3 w-3" />
+                            )}
+                            <span>
+                              {iniAllCollapsed ? 'Expand all' : 'Collapse all'}
+                            </span>
                           </button>
                         </div>
                         {INI_CATEGORY_GROUPS.map((group, gIdx) => {
                           const groupLabel = getIniCategoryGroupLabel(group)
-                          const cats = INI_CATEGORIES.filter(c => c.group === group.id)
-                          const totalInGroup = cats.reduce((acc, c) => acc + (filteredIniSettings[c.id] || []).length, 0)
-                          if (totalInGroup === 0 && filterMode !== 'all') return null
+                          const cats = INI_CATEGORIES.filter(
+                            (c) => c.group === group.id,
+                          )
+                          const totalInGroup = cats.reduce(
+                            (acc, c) =>
+                              acc + (filteredIniSettings[c.id] || []).length,
+                            0,
+                          )
+                          if (totalInGroup === 0 && filterMode !== 'all')
+                            return null
                           const groupKey = `ini:${group.id}`
                           const isCollapsed = !!collapsedGroups[groupKey]
-                          const groupModCount = cats.reduce((acc, c) => acc + (iniModifiedByCategory[c.id] || 0), 0)
+                          const groupModCount = cats.reduce(
+                            (acc, c) =>
+                              acc + (iniModifiedByCategory[c.id] || 0),
+                            0,
+                          )
                           return (
-                            <div key={group.id} className={`shrink-0 md:shrink ${gIdx > 0 ? 'mt-2 md:mt-3' : ''}`}>
+                            <div
+                              key={group.id}
+                              className={`shrink-0 md:shrink ${gIdx > 0 ? 'mt-2 md:mt-3' : ''}`}
+                            >
                               <button
                                 type="button"
                                 onClick={() => toggleGroup(groupKey)}
                                 aria-expanded={!isCollapsed}
                                 className="hidden md:flex w-full items-center gap-2 px-3 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-foreground/80 hover:text-foreground transition-colors"
                               >
-                                {isCollapsed
-                                  ? <ChevronRight className="h-3 w-3 shrink-0" />
-                                  : <ChevronDown className="h-3 w-3 shrink-0" />
-                                }
+                                {isCollapsed ? (
+                                  <ChevronRight className="h-3 w-3 shrink-0" />
+                                ) : (
+                                  <ChevronDown className="h-3 w-3 shrink-0" />
+                                )}
                                 <span>{groupLabel}</span>
                                 {groupModCount > 0 && (
-                                  <span className="rounded-full bg-warning/20 px-1.5 py-0.5 text-[8px] font-semibold text-warning">{groupModCount}</span>
+                                  <span className="rounded-full bg-warning/20 px-1.5 py-0.5 text-[8px] font-semibold text-warning">
+                                    {groupModCount}
+                                  </span>
                                 )}
                                 <span className="h-px flex-1 bg-border/40" />
                               </button>
-                              {!isCollapsed && cats.map(category => {
-                                const count = (filteredIniSettings[category.id] || []).length
-                                if (count === 0 && filterMode !== 'all') return null
-                                const isActive = activeIniCategory === category.id
-                                const modCount = iniModifiedByCategory[category.id] || 0
-                                return (
-                                  <button
-                                    key={category.id}
-                                    type="button"
-                                    onClick={() => setActiveIniCategory(category.id)}
-                                    aria-current={isActive ? 'page' : undefined}
-                                    className={`group relative flex shrink-0 items-center gap-2 whitespace-nowrap border-s-2 px-3 py-2 text-start text-sm transition-colors md:whitespace-normal ${
-                                      isActive
-                                        ? 'border-primary bg-primary/10 text-primary'
-                                        : 'border-transparent text-muted-foreground hover:border-primary/30 hover:bg-muted/40 hover:text-foreground'
-                                    }`}
-                                  >
-                                    <CategoryIcon name={category.icon} isActive={isActive} className="h-4 w-4 shrink-0" />
-                                    <span className="min-w-0 flex-1 truncate font-medium" title={getIniCategoryLabel(category)}>{getIniCategoryLabel(category)}</span>
-                                    {modCount > 0 && (
+                              {!isCollapsed &&
+                                cats.map((category) => {
+                                  const count = (
+                                    filteredIniSettings[category.id] || []
+                                  ).length
+                                  if (count === 0 && filterMode !== 'all')
+                                    return null
+                                  const isActive =
+                                    activeIniCategory === category.id
+                                  const modCount =
+                                    iniModifiedByCategory[category.id] || 0
+                                  return (
+                                    <button
+                                      key={category.id}
+                                      type="button"
+                                      onClick={() =>
+                                        setActiveIniCategory(category.id)
+                                      }
+                                      aria-current={
+                                        isActive ? 'page' : undefined
+                                      }
+                                      className={`group relative flex shrink-0 items-center gap-2 whitespace-nowrap border-s-2 px-3 py-2 text-start text-sm transition-colors md:whitespace-normal ${
+                                        isActive
+                                          ? 'border-primary bg-primary/10 text-primary'
+                                          : 'border-transparent text-muted-foreground hover:border-primary/30 hover:bg-muted/40 hover:text-foreground'
+                                      }`}
+                                    >
+                                      <CategoryIcon
+                                        name={category.icon}
+                                        isActive={isActive}
+                                        className="h-4 w-4 shrink-0"
+                                      />
                                       <span
-                                        className="shrink-0 rounded-full bg-warning/20 px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider text-warning"
-                                        title={t('categoriesNav.modifiedCountTitle', { count: modCount })}
+                                        className="min-w-0 flex-1 truncate font-medium"
+                                        title={getIniCategoryLabel(category)}
                                       >
-                                        {modCount}
+                                        {getIniCategoryLabel(category)}
                                       </span>
-                                    )}
-                                    <span className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
-                                      isActive ? 'text-primary/80' : 'bg-muted text-muted-foreground'
-                                    }`}>
-                                      {count}
-                                    </span>
-                                  </button>
-                                )
-                              })}
+                                      {modCount > 0 && (
+                                        <span
+                                          className="shrink-0 rounded-full bg-warning/20 px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider text-warning"
+                                          title={
+                                            Number(modCount) === 1
+                                              ? String(modCount) +
+                                                ' unsaved change'
+                                              : String(modCount) +
+                                                ' unsaved changes'
+                                          }
+                                        >
+                                          {modCount}
+                                        </span>
+                                      )}
+                                      <span
+                                        className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
+                                          isActive
+                                            ? 'text-primary/80'
+                                            : 'bg-muted text-muted-foreground'
+                                        }`}
+                                      >
+                                        {count}
+                                      </span>
+                                    </button>
+                                  )
+                                })}
                             </div>
                           )
                         })}
-                        {uncategorizedIniKeys.length > 0 && (() => {
-                          const isActive = activeIniCategory === 'uncategorized'
-                          return (
-                            <button
-                              key="uncategorized"
-                              type="button"
-                              onClick={() => setActiveIniCategory('uncategorized')}
-                              aria-current={isActive ? 'page' : undefined}
-                              className={`group relative mt-2 flex shrink-0 items-center gap-2 whitespace-nowrap border-s-2 px-3 py-2 text-start text-sm transition-colors md:mt-3 md:whitespace-normal md:border-t md:border-t-border/50 md:pt-3 ${
-                                isActive
-                                  ? 'border-s-amber-500 bg-amber-500/10 text-amber-500'
-                                  : 'border-s-transparent text-muted-foreground hover:border-s-amber-500/30 hover:bg-amber-500/5 hover:text-amber-500/80'
-                              }`}
-                              title={t('categoriesNav.uncategorizedIniTitle')}
-                            >
-                              <span className="min-w-0 flex-1 truncate font-medium">{t('categoriesNav.uncategorizedIniLabel')}</span>
-                              <span className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
-                                isActive ? 'text-amber-500/80' : 'bg-muted text-muted-foreground'
-                              }`}>
-                                {uncategorizedIniKeys.length}
-                              </span>
-                            </button>
-                          )
-                        })()}
+                        {uncategorizedIniKeys.length > 0 &&
+                          (() => {
+                            const isActive =
+                              activeIniCategory === 'uncategorized'
+                            return (
+                              <button
+                                key="uncategorized"
+                                type="button"
+                                onClick={() =>
+                                  setActiveIniCategory('uncategorized')
+                                }
+                                aria-current={isActive ? 'page' : undefined}
+                                className={`group relative mt-2 flex shrink-0 items-center gap-2 whitespace-nowrap border-s-2 px-3 py-2 text-start text-sm transition-colors md:mt-3 md:whitespace-normal md:border-t md:border-t-border/50 md:pt-3 ${
+                                  isActive
+                                    ? 'border-s-amber-500 bg-amber-500/10 text-amber-500'
+                                    : 'border-s-transparent text-muted-foreground hover:border-s-amber-500/30 hover:bg-amber-500/5 hover:text-amber-500/80'
+                                }`}
+                                title={
+                                  'Keys present in your INI file but not in the schema (newer vanilla keys, mod-injected keys, or custom)'
+                                }
+                              >
+                                <span className="min-w-0 flex-1 truncate font-medium">
+                                  {'Uncategorized / Unknown'}
+                                </span>
+                                <span
+                                  className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
+                                    isActive
+                                      ? 'text-amber-500/80'
+                                      : 'bg-muted text-muted-foreground'
+                                  }`}
+                                >
+                                  {uncategorizedIniKeys.length}
+                                </span>
+                              </button>
+                            )
+                          })()}
                       </nav>
                       <ScrollArea className="h-[calc(100vh-420px)] min-h-[360px] md:ps-5 pe-4 md:order-2">
                         {(() => {
@@ -2535,7 +3487,7 @@ export default function ServerConfig() {
                             if (uncategorizedIniKeys.length === 0) {
                               return (
                                 <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                                  {t('uncategorizedIni.empty')}
+                                  {'No uncategorized keys.'}
                                 </div>
                               )
                             }
@@ -2543,55 +3495,89 @@ export default function ServerConfig() {
                               <div>
                                 <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-amber-500/30 bg-card/95 px-1 pb-2 pt-1 backdrop-blur">
                                   <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-500">
-                                    {t('uncategorizedIni.heading')}
+                                    {'Uncategorized / Unknown Keys'}
                                   </h3>
                                   <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                                    {t('uncategorizedIni.keyCount', { count: uncategorizedIniKeys.length })}
+                                    {Number(uncategorizedIniKeys.length) === 1
+                                      ? String(uncategorizedIniKeys.length) +
+                                        ' key'
+                                      : String(uncategorizedIniKeys.length) +
+                                        ' keys'}
                                   </span>
                                 </div>
                                 <p className="mb-3 text-xs text-muted-foreground">
-                                  {t('uncategorizedIni.description')}
+                                  {
+                                    'Keys present in your INI but not recognized by the schema. Likely newer vanilla settings or mod-injected. Values are preserved on save — edit with care.'
+                                  }
                                 </p>
                                 <div className="space-y-1">
-                                  {uncategorizedIniKeys.map(({ key, value }) => {
-                                    const orig = originalIniSettings[key]
-                                    const isModified = orig !== undefined && orig !== value
-                                    return (
-                                      <div key={key} className={`flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors ${isModified ? 'border border-amber-500/20 bg-amber-500/10' : 'hover:bg-muted/50'}`}>
-                                        <div className="min-w-0 flex-1">
-                                          <div className="flex items-center gap-2">
-                                            <span className="truncate text-sm font-medium" title={key}>{key}</span>
-                                            {isModified && (
-                                              <button
-                                                onClick={() => setIniSettings(prev => ({ ...prev, [key]: orig ?? '' }))}
-                                                className="text-xs text-amber-500 hover:text-amber-400"
-                                                title={t('uncategorizedIni.undoTitle')}
-                                                aria-label={t('uncategorizedIni.undoTitle')}
-                                              >↩</button>
-                                            )}
+                                  {uncategorizedIniKeys.map(
+                                    ({ key, value }) => {
+                                      const orig = originalIniSettings[key]
+                                      const isModified =
+                                        orig !== undefined && orig !== value
+                                      return (
+                                        <div
+                                          key={key}
+                                          className={`flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors ${isModified ? 'border border-amber-500/20 bg-amber-500/10' : 'hover:bg-muted/50'}`}
+                                        >
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                              <span
+                                                className="truncate text-sm font-medium"
+                                                title={key}
+                                              >
+                                                {key}
+                                              </span>
+                                              {isModified && (
+                                                <button
+                                                  onClick={() =>
+                                                    setIniSettings((prev) => ({
+                                                      ...prev,
+                                                      [key]: orig ?? '',
+                                                    }))
+                                                  }
+                                                  className="text-xs text-amber-500 hover:text-amber-400"
+                                                  title={'Undo change'}
+                                                  aria-label={'Undo change'}
+                                                >
+                                                  ↩
+                                                </button>
+                                              )}
+                                            </div>
                                           </div>
+                                          <Input
+                                            className="h-8 w-56 text-sm"
+                                            value={value}
+                                            maxLength={500}
+                                            onChange={(e) =>
+                                              setIniSettings((prev) => ({
+                                                ...prev,
+                                                [key]: e.target.value,
+                                              }))
+                                            }
+                                          />
                                         </div>
-                                        <Input
-                                          className="h-8 w-56 text-sm"
-                                          value={value}
-                                          maxLength={500}
-                                          onChange={e => setIniSettings(prev => ({ ...prev, [key]: e.target.value }))}
-                                        />
-                                      </div>
-                                    )
-                                  })}
+                                      )
+                                    },
+                                  )}
                                 </div>
                               </div>
                             )
                           }
-                          const settings = filteredIniSettings[activeIniCategory] || []
-                          const active = INI_CATEGORIES.find(c => c.id === activeIniCategory)
+                          const settings =
+                            filteredIniSettings[activeIniCategory] || []
+                          const active = INI_CATEGORIES.find(
+                            (c) => c.id === activeIniCategory,
+                          )
                           if (settings.length === 0) {
                             return (
                               <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                                {filterMode === 'modified' ? t('categoryContent.noneModified') :
-                                 filterMode === 'nondefault' ? t('categoryContent.noneUnsaved') :
-                                 t('categoryContent.none')}
+                                {filterMode === 'modified'
+                                  ? 'No settings in this category differ from Project Zomboid defaults.'
+                                  : filterMode === 'nondefault'
+                                    ? 'No unsaved settings in this category.'
+                                    : 'No settings in this category.'}
                               </div>
                             )
                           }
@@ -2602,16 +3588,20 @@ export default function ServerConfig() {
                                   {active ? getIniCategoryLabel(active) : null}
                                 </h3>
                                 <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                                  {t('categoryContent.settingCount', { count: settings.length })}
+                                  {Number(settings.length) === 1
+                                    ? String(settings.length) + ' setting'
+                                    : String(settings.length) + ' settings'}
                                 </span>
                               </div>
                               <div className="space-y-1">
-                                {settings.map(setting => (
+                                {settings.map((setting) => (
                                   <IniSettingRow
                                     key={setting.key}
                                     setting={setting}
                                     value={iniSettings[setting.key] || ''}
-                                    originalValue={originalIniSettings[setting.key]}
+                                    originalValue={
+                                      originalIniSettings[setting.key]
+                                    }
                                     onChange={updateIniValue}
                                     onReset={resetIniValue}
                                     onBrowse={openFileBrowser}
@@ -2633,27 +3623,32 @@ export default function ServerConfig() {
         <TabsContent value="sandbox" className="mt-4">
           <TacticalPanel tone={hasSandboxChanges ? 'warning' : 'primary'}>
             <SectionHeader
-              label={t('sandboxTab.sectionLabel')}
-              sublabel={t('sandboxTab.sectionSublabel')}
+              label={'Sandbox'}
+              sublabel={'world, zombies, survival'}
               icon={Code}
               tone={hasSandboxChanges ? 'warning' : 'primary'}
               action={
                 <div className="flex flex-wrap items-center gap-1.5">
                   {hasSandboxChanges && (
-                    <Badge variant="warning" className="h-5 px-1.5 py-0 font-mono text-[10px]">
+                    <Badge
+                      variant="warning"
+                      className="h-5 px-1.5 py-0 font-mono text-[10px]"
+                    >
                       <AlertTriangle className="me-1 h-3 w-3" />
                       {changedSandboxCount}
                     </Badge>
                   )}
                   <div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/30 p-0.5">
                     <Button
-                      variant={editorMode === 'structured' ? 'secondary' : 'ghost'}
+                      variant={
+                        editorMode === 'structured' ? 'secondary' : 'ghost'
+                      }
                       size="sm"
                       onClick={() => setEditorMode('structured')}
                       className="h-7 gap-1.5 px-2 text-xs font-medium"
                       aria-pressed={editorMode === 'structured'}
                     >
-                      <FormInput className="h-3 w-3" /> {t('editorToolbar.form')}
+                      <FormInput className="h-3 w-3" /> {'Form'}
                     </Button>
                     <Button
                       variant={editorMode === 'raw' ? 'secondary' : 'ghost'}
@@ -2665,17 +3660,25 @@ export default function ServerConfig() {
                       className="h-7 gap-1.5 px-2 text-xs font-medium"
                       aria-pressed={editorMode === 'raw'}
                     >
-                      <Code className="h-3 w-3" /> {t('editorToolbar.raw')}
+                      <Code className="h-3 w-3" /> {'Raw'}
                     </Button>
                   </div>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleCreateBackup('sandbox')} aria-label={t('editorToolbar.downloadSandboxAria')}>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleCreateBackup('sandbox')}
+                          aria-label={'Download Sandbox backup'}
+                        >
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{t('editorToolbar.downloadSandboxTooltip')}</TooltipContent>
+                      <TooltipContent>
+                        {'Download Sandbox backup'}
+                      </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <a
@@ -2684,15 +3687,26 @@ export default function ServerConfig() {
                     rel="noopener noreferrer"
                     className="flex h-7 items-center gap-1 rounded border border-border/60 bg-muted/30 px-2 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
                   >
-                    <ExternalLink className="h-3 w-3" /> {t('editorToolbar.wiki')}
+                    <ExternalLink className="h-3 w-3" /> {'Wiki'}
                   </a>
-                  <Button onClick={handleSaveSandbox} disabled={saving || !hasSandboxChanges || invalidSandboxSettings.length > 0 || serverChangedSinceLoad} variant="command" size="sm" className="h-7 gap-1.5 text-xs font-medium">
+                  <Button
+                    onClick={handleSaveSandbox}
+                    disabled={
+                      saving ||
+                      !hasSandboxChanges ||
+                      invalidSandboxSettings.length > 0 ||
+                      serverChangedSinceLoad
+                    }
+                    variant="command"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs font-medium"
+                  >
                     {saving ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
                       <Save className="h-3 w-3" />
                     )}
-                    {t('editorToolbar.saveAndReload')}
+                    {'Save & reload'}
                   </Button>
                 </div>
               }
@@ -2700,9 +3714,11 @@ export default function ServerConfig() {
             <div className="p-4">
               <Alert className="mb-3 border-primary/30 bg-primary/5">
                 <AlertCircle className="h-4 w-4 text-primary" />
-                <AlertTitle>{t('sandboxTab.build42Title')}</AlertTitle>
+                <AlertTitle>{'Build 42 Optimized'}</AlertTitle>
                 <AlertDescription>
-                  {t('sandboxTab.build42Body')}
+                  {
+                    'Sandbox values and option wording in this editor are aligned to Project Zomboid Build 42 defaults.'
+                  }
                 </AlertDescription>
               </Alert>
               {editorMode === 'raw' ? (
@@ -2723,7 +3739,9 @@ export default function ServerConfig() {
                           )}
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{copied ? t('editorToolbar.copied') : t('editorToolbar.copyToClipboard')}</TooltipContent>
+                      <TooltipContent>
+                        {copied ? 'Copied!' : 'Copy to clipboard'}
+                      </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <Textarea
@@ -2740,11 +3758,11 @@ export default function ServerConfig() {
                       <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         ref={sandboxSearchRef}
-                        placeholder={t('search.sandboxPlaceholder')}
+                        placeholder={'Search sandbox settings…'}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="h-8 bg-background/50 ps-9 pe-20"
-                        aria-label={t('search.sandboxAria')}
+                        aria-label={'Search sandbox settings'}
                         maxLength={128}
                       />
                       {searchQuery && (
@@ -2757,7 +3775,7 @@ export default function ServerConfig() {
                             size="sm"
                             className="pointer-events-auto h-6 w-6 p-0"
                             onClick={() => setSearchQuery('')}
-                            aria-label={t('search.clearAria')}
+                            aria-label={'Clear search'}
                           >
                             <X className="h-3.5 w-3.5" />
                           </Button>
@@ -2765,28 +3783,39 @@ export default function ServerConfig() {
                       )}
                     </div>
                     <div className="ms-auto flex items-center gap-2">
-                      <div className="inline-flex items-center rounded-md border border-border/60 bg-background/50 p-0.5" role="group" aria-label={t('search.filterAria')}>
-                        {(['all','modified','nondefault'] as const).map(mode => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setFilterMode(mode)}
-                            className={`h-7 px-2.5 text-xs font-medium rounded transition-colors ${
-                              filterMode === mode
-                                ? 'bg-primary/15 text-primary'
-                                : 'text-muted-foreground hover:text-foreground'
-                            }`}
-                          >
-                            {mode === 'nondefault' ? t('search.filterUnsaved') : mode === 'modified' ? t('search.filterModified') : t('search.filterAll')}
-                          </button>
-                        ))}
+                      <div
+                        className="inline-flex items-center rounded-md border border-border/60 bg-background/50 p-0.5"
+                        role="group"
+                        aria-label={'Filter settings'}
+                      >
+                        {(['all', 'modified', 'nondefault'] as const).map(
+                          (mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setFilterMode(mode)}
+                              className={`h-7 px-2.5 text-xs font-medium rounded transition-colors ${
+                                filterMode === mode
+                                  ? 'bg-primary/15 text-primary'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {mode === 'nondefault'
+                                ? 'unsaved'
+                                : mode === 'modified'
+                                  ? 'modified'
+                                  : 'all'}
+                            </button>
+                          ),
+                        )}
                       </div>
                     </div>
                   </div>
                   {searchQuery ? (
                     <ScrollArea className="h-[calc(100vh-420px)] min-h-[360px] pe-4">
-                      {SANDBOX_CATEGORIES.map(category => {
-                        const settings = filteredSandboxSettings[category.id] || []
+                      {SANDBOX_CATEGORIES.map((category) => {
+                        const settings =
+                          filteredSandboxSettings[category.id] || []
                         if (settings.length === 0) return null
                         return (
                           <div key={category.id} className="mb-5">
@@ -2795,16 +3824,32 @@ export default function ServerConfig() {
                                 {getSandboxCategoryLabel(category)}
                               </span>
                               <span className="text-[10px] text-muted-foreground/70">
-                                {t('categoriesNav.matchCount', { count: settings.length })}
+                                {Number(settings.length) === 1
+                                  ? String(settings.length) + ' match'
+                                  : String(settings.length) + ' matches'}
                               </span>
                             </div>
                             <div className="space-y-1">
-                              {settings.map(setting => (
+                              {settings.map((setting) => (
                                 <SandboxSettingRow
                                   key={`${setting.section || 'settings'}.${setting.key}`}
                                   setting={setting}
-                                  value={(sandboxData?.[(setting.section || 'settings') as keyof SandboxData] as SandboxRecord)?.[setting.key]}
-                                  originalValue={(originalSandboxData?.[(setting.section || 'settings') as keyof SandboxData] as SandboxRecord)?.[setting.key]}
+                                  value={
+                                    (
+                                      sandboxData?.[
+                                        (setting.section ||
+                                          'settings') as keyof SandboxData
+                                      ] as SandboxRecord
+                                    )?.[setting.key]
+                                  }
+                                  originalValue={
+                                    (
+                                      originalSandboxData?.[
+                                        (setting.section ||
+                                          'settings') as keyof SandboxData
+                                      ] as SandboxRecord
+                                    )?.[setting.key]
+                                  }
                                   onChange={updateSandboxValue}
                                   onReset={resetSandboxValue}
                                 />
@@ -2815,120 +3860,196 @@ export default function ServerConfig() {
                       })}
                       {searchResultsCount === 0 && (
                         <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                          {t('search.noMatches', { query: searchQuery })}
+                          {'No settings match “' + String(searchQuery) + '”.'}
                         </div>
                       )}
                     </ScrollArea>
                   ) : (
                     <div className="grid gap-0 md:grid-cols-[252px_minmax(0,1fr)]">
                       <nav
-                        aria-label={t('categoriesNav.sandboxAria')}
+                        aria-label={'Sandbox categories'}
                         className="-mx-2 flex flex-col gap-0.5 px-2 pb-2 md:mx-0 md:order-1 md:border-e md:border-border/50 md:pb-0 md:pe-3 md:pt-1 md:max-h-[calc(100vh-420px)] md:min-h-[360px] md:overflow-y-auto"
                       >
                         <div className="hidden md:flex items-center justify-between px-3 pb-1">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
-                            {t('categoriesNav.categoriesLabel')}
+                            {'Categories'}
                           </span>
                           <button
                             type="button"
-                            onClick={() => setAllGroupsCollapsed('sandbox', !sandboxAllCollapsed)}
+                            onClick={() =>
+                              setAllGroupsCollapsed(
+                                'sandbox',
+                                !sandboxAllCollapsed,
+                              )
+                            }
                             className="inline-flex items-center gap-1 rounded text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 hover:text-foreground transition-colors"
-                            aria-label={sandboxAllCollapsed ? t('categoriesNav.expandAllAria') : t('categoriesNav.collapseAllAria')}
+                            aria-label={
+                              sandboxAllCollapsed
+                                ? 'Expand all category groups'
+                                : 'Collapse all category groups'
+                            }
                           >
-                            {sandboxAllCollapsed
-                              ? <ChevronsUpDown className="h-3 w-3" />
-                              : <ChevronsDownUp className="h-3 w-3" />}
-                            <span>{sandboxAllCollapsed ? t('categoriesNav.expandAll') : t('categoriesNav.collapseAll')}</span>
+                            {sandboxAllCollapsed ? (
+                              <ChevronsUpDown className="h-3 w-3" />
+                            ) : (
+                              <ChevronsDownUp className="h-3 w-3" />
+                            )}
+                            <span>
+                              {sandboxAllCollapsed
+                                ? 'Expand all'
+                                : 'Collapse all'}
+                            </span>
                           </button>
                         </div>
                         {SANDBOX_CATEGORY_GROUPS.map((group, gIdx) => {
                           const groupLabel = getSandboxCategoryGroupLabel(group)
-                          const cats = SANDBOX_CATEGORIES.filter(c => c.group === group.id)
-                          const totalInGroup = cats.reduce((acc, c) => acc + (filteredSandboxSettings[c.id] || []).length, 0)
-                          if (totalInGroup === 0 && filterMode !== 'all') return null
+                          const cats = SANDBOX_CATEGORIES.filter(
+                            (c) => c.group === group.id,
+                          )
+                          const totalInGroup = cats.reduce(
+                            (acc, c) =>
+                              acc +
+                              (filteredSandboxSettings[c.id] || []).length,
+                            0,
+                          )
+                          if (totalInGroup === 0 && filterMode !== 'all')
+                            return null
                           const groupKey = `sandbox:${group.id}`
                           const isCollapsed = !!collapsedGroups[groupKey]
-                          const groupModCount = cats.reduce((acc, c) => acc + (sandboxModifiedByCategory[c.id] || 0), 0)
+                          const groupModCount = cats.reduce(
+                            (acc, c) =>
+                              acc + (sandboxModifiedByCategory[c.id] || 0),
+                            0,
+                          )
                           return (
-                            <div key={group.id} className={`shrink-0 md:shrink ${gIdx > 0 ? 'mt-2 md:mt-3' : ''}`}>
+                            <div
+                              key={group.id}
+                              className={`shrink-0 md:shrink ${gIdx > 0 ? 'mt-2 md:mt-3' : ''}`}
+                            >
                               <button
                                 type="button"
                                 onClick={() => toggleGroup(groupKey)}
                                 aria-expanded={!isCollapsed}
                                 className="hidden md:flex w-full items-center gap-2 px-3 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-foreground/80 hover:text-foreground transition-colors"
                               >
-                                {isCollapsed
-                                  ? <ChevronRight className="h-3 w-3 shrink-0" />
-                                  : <ChevronDown className="h-3 w-3 shrink-0" />
-                                }
+                                {isCollapsed ? (
+                                  <ChevronRight className="h-3 w-3 shrink-0" />
+                                ) : (
+                                  <ChevronDown className="h-3 w-3 shrink-0" />
+                                )}
                                 <span>{groupLabel}</span>
                                 {groupModCount > 0 && (
-                                  <span className="rounded-full bg-warning/20 px-1.5 py-0.5 text-[8px] font-semibold text-warning">{groupModCount}</span>
+                                  <span className="rounded-full bg-warning/20 px-1.5 py-0.5 text-[8px] font-semibold text-warning">
+                                    {groupModCount}
+                                  </span>
                                 )}
                                 <span className="h-px flex-1 bg-border/40" />
                               </button>
-                              {!isCollapsed && cats.map(category => {
-                                const count = (filteredSandboxSettings[category.id] || []).length
-                                if (count === 0 && filterMode !== 'all') return null
-                                const isActive = activeSandboxCategory === category.id
-                                const modCount = sandboxModifiedByCategory[category.id] || 0
-                                return (
-                                  <button
-                                    key={category.id}
-                                    type="button"
-                                    onClick={() => setActiveSandboxCategory(category.id)}
-                                    aria-current={isActive ? 'page' : undefined}
-                                    className={`group relative flex shrink-0 items-center gap-2 whitespace-nowrap border-s-2 px-3 py-2 text-start text-sm transition-colors md:whitespace-normal ${
-                                      isActive
-                                        ? 'border-primary bg-primary/10 text-primary'
-                                        : 'border-transparent text-muted-foreground hover:border-primary/30 hover:bg-muted/40 hover:text-foreground'
-                                    }`}
-                                  >
-                                    <CategoryIcon name={category.icon} isActive={isActive} className="h-4 w-4 shrink-0" />
-                                    <span className="min-w-0 flex-1 truncate font-medium" title={getSandboxCategoryLabel(category)}>{getSandboxCategoryLabel(category)}</span>
-                                    {modCount > 0 && (
+                              {!isCollapsed &&
+                                cats.map((category) => {
+                                  const count = (
+                                    filteredSandboxSettings[category.id] || []
+                                  ).length
+                                  if (count === 0 && filterMode !== 'all')
+                                    return null
+                                  const isActive =
+                                    activeSandboxCategory === category.id
+                                  const modCount =
+                                    sandboxModifiedByCategory[category.id] || 0
+                                  return (
+                                    <button
+                                      key={category.id}
+                                      type="button"
+                                      onClick={() =>
+                                        setActiveSandboxCategory(category.id)
+                                      }
+                                      aria-current={
+                                        isActive ? 'page' : undefined
+                                      }
+                                      className={`group relative flex shrink-0 items-center gap-2 whitespace-nowrap border-s-2 px-3 py-2 text-start text-sm transition-colors md:whitespace-normal ${
+                                        isActive
+                                          ? 'border-primary bg-primary/10 text-primary'
+                                          : 'border-transparent text-muted-foreground hover:border-primary/30 hover:bg-muted/40 hover:text-foreground'
+                                      }`}
+                                    >
+                                      <CategoryIcon
+                                        name={category.icon}
+                                        isActive={isActive}
+                                        className="h-4 w-4 shrink-0"
+                                      />
                                       <span
-                                        className="shrink-0 rounded-full bg-warning/20 px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider text-warning"
-                                        title={t('categoriesNav.modifiedCountTitle', { count: modCount })}
+                                        className="min-w-0 flex-1 truncate font-medium"
+                                        title={getSandboxCategoryLabel(
+                                          category,
+                                        )}
                                       >
-                                        {modCount}
+                                        {getSandboxCategoryLabel(category)}
                                       </span>
-                                    )}
-                                    <span className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
-                                      isActive ? 'text-primary/80' : 'bg-muted text-muted-foreground'
-                                    }`}>
-                                      {count}
-                                    </span>
-                                  </button>
-                                )
-                              })}
+                                      {modCount > 0 && (
+                                        <span
+                                          className="shrink-0 rounded-full bg-warning/20 px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider text-warning"
+                                          title={
+                                            Number(modCount) === 1
+                                              ? String(modCount) +
+                                                ' unsaved change'
+                                              : String(modCount) +
+                                                ' unsaved changes'
+                                          }
+                                        >
+                                          {modCount}
+                                        </span>
+                                      )}
+                                      <span
+                                        className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
+                                          isActive
+                                            ? 'text-primary/80'
+                                            : 'bg-muted text-muted-foreground'
+                                        }`}
+                                      >
+                                        {count}
+                                      </span>
+                                    </button>
+                                  )
+                                })}
                             </div>
                           )
                         })}
-                        {uncategorizedSandboxKeys.length > 0 && (() => {
-                          const isActive = activeSandboxCategory === 'uncategorized'
-                          return (
-                            <button
-                              key="uncategorized"
-                              type="button"
-                              onClick={() => setActiveSandboxCategory('uncategorized')}
-                              aria-current={isActive ? 'page' : undefined}
-                              className={`group relative mt-2 flex shrink-0 items-center gap-2 whitespace-nowrap border-s-2 px-3 py-2 text-start text-sm transition-colors md:mt-3 md:whitespace-normal md:border-t md:border-t-border/50 md:pt-3 ${
-                                isActive
-                                  ? 'border-s-amber-500 bg-amber-500/10 text-amber-500'
-                                  : 'border-s-transparent text-muted-foreground hover:border-s-amber-500/30 hover:bg-amber-500/5 hover:text-amber-500/80'
-                              }`}
-                              title={t('categoriesNav.uncategorizedSandboxTitle')}
-                            >
-                              <span className="min-w-0 flex-1 truncate font-medium">{t('categoriesNav.uncategorizedSandboxLabel')}</span>
-                              <span className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
-                                isActive ? 'text-amber-500/80' : 'bg-muted text-muted-foreground'
-                              }`}>
-                                {uncategorizedSandboxKeys.length}
-                              </span>
-                            </button>
-                          )
-                        })()}
+                        {uncategorizedSandboxKeys.length > 0 &&
+                          (() => {
+                            const isActive =
+                              activeSandboxCategory === 'uncategorized'
+                            return (
+                              <button
+                                key="uncategorized"
+                                type="button"
+                                onClick={() =>
+                                  setActiveSandboxCategory('uncategorized')
+                                }
+                                aria-current={isActive ? 'page' : undefined}
+                                className={`group relative mt-2 flex shrink-0 items-center gap-2 whitespace-nowrap border-s-2 px-3 py-2 text-start text-sm transition-colors md:mt-3 md:whitespace-normal md:border-t md:border-t-border/50 md:pt-3 ${
+                                  isActive
+                                    ? 'border-s-amber-500 bg-amber-500/10 text-amber-500'
+                                    : 'border-s-transparent text-muted-foreground hover:border-s-amber-500/30 hover:bg-amber-500/5 hover:text-amber-500/80'
+                                }`}
+                                title={
+                                  'Sandbox settings not yet grouped by the editor'
+                                }
+                              >
+                                <span className="min-w-0 flex-1 truncate font-medium">
+                                  {'Additional Settings'}
+                                </span>
+                                <span
+                                  className={`shrink-0 min-w-[1.5rem] rounded text-center px-1 py-0.5 text-[10px] font-mono tabular-nums ${
+                                    isActive
+                                      ? 'text-amber-500/80'
+                                      : 'bg-muted text-muted-foreground'
+                                  }`}
+                                >
+                                  {uncategorizedSandboxKeys.length}
+                                </span>
+                              </button>
+                            )
+                          })()}
                       </nav>
                       <ScrollArea className="h-[calc(100vh-420px)] min-h-[360px] md:ps-5 pe-4 md:order-2">
                         {(() => {
@@ -2936,7 +4057,7 @@ export default function ServerConfig() {
                             if (uncategorizedSandboxKeys.length === 0) {
                               return (
                                 <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                                  {t('uncategorizedSandbox.empty')}
+                                  {'No uncategorized settings.'}
                                 </div>
                               )
                             }
@@ -2944,89 +4065,172 @@ export default function ServerConfig() {
                               <div>
                                 <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-amber-500/30 bg-card/95 px-1 pb-2 pt-1 backdrop-blur">
                                   <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-500">
-                                    {t('uncategorizedSandbox.heading')}
+                                    {'Additional Sandbox Settings'}
                                   </h3>
                                   <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                                    {t('uncategorizedSandbox.keyCount', { count: uncategorizedSandboxKeys.length })}
+                                    {Number(uncategorizedSandboxKeys.length) ===
+                                    1
+                                      ? String(
+                                          uncategorizedSandboxKeys.length,
+                                        ) + ' key'
+                                      : String(
+                                          uncategorizedSandboxKeys.length,
+                                        ) + ' keys'}
                                   </span>
                                 </div>
                                 <p className="mb-3 text-xs text-muted-foreground">
-                                  {t('uncategorizedSandbox.description')}
+                                  {
+                                    'Settings the editor has no schema for, grouped by the section that owns them. Mostly mod-added keys. Edit with care.'
+                                  }
                                 </p>
                                 <div className="space-y-5">
-                                  {Object.entries(uncategorizedGroups).map(([groupName, groupEntries]) => (
-                                    <div key={groupName}>
-                                      <div className="mb-1.5 flex items-baseline justify-between border-b border-border/40 pb-1">
-                                        <h4 className="font-mono text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                          {groupName === 'settings' ? t('uncategorizedSandbox.mainSection') : groupName}
-                                        </h4>
-                                        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">{groupEntries.length}</span>
-                                      </div>
-                                      <div className="space-y-1">
-                                        {groupEntries.map(({ section, key, value }) => {
-                                    const origSection = originalSandboxData?.[section as keyof SandboxData]
-                                    const origValue = typeof origSection === 'object' ? (origSection as Record<string, unknown>)?.[key] : undefined
-                                    const isModified = value !== origValue
-                                    return (
-                                      <div key={`${section}.${key}`} className={`flex items-center justify-between py-2 px-3 rounded-md transition-colors ${isModified ? 'bg-amber-500/10 border border-amber-500/20' : 'hover:bg-muted/50'}`}>
-                                        <div className="flex-1 min-w-0 me-4">
-                                          <div className="flex items-center gap-2 min-w-0">
-                                            <span className="text-sm font-medium truncate" title={key}>{key}</span>
-                                            {isModified && (
-                                              <button
-                                                onClick={() => {
-                                                  if (origValue !== undefined) {
-                                                    setSandboxData(prev => {
-                                                      if (!prev) return prev
-                                                      const s = { ...(prev[section as keyof SandboxData] as Record<string, unknown> || {}) }
-                                                      s[key] = origValue
-                                                      return { ...prev, [section]: s } as SandboxData
-                                                    })
-                                                  }
-                                                }}
-                                                className="text-xs text-amber-500 hover:text-amber-400"
-                                                title={t('uncategorizedSandbox.undoTitle')}
-                                                aria-label={t('uncategorizedSandbox.undoTitle')}
-                                              >↩</button>
-                                            )}
-                                          </div>
+                                  {Object.entries(uncategorizedGroups).map(
+                                    ([groupName, groupEntries]) => (
+                                      <div key={groupName}>
+                                        <div className="mb-1.5 flex items-baseline justify-between border-b border-border/40 pb-1">
+                                          <h4 className="font-mono text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            {groupName === 'settings'
+                                              ? 'Main section'
+                                              : groupName}
+                                          </h4>
+                                          <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                                            {groupEntries.length}
+                                          </span>
                                         </div>
-                                        <Input
-                                          className="w-48 h-8 text-sm flex-shrink-0"
-                                          value={String(value)}
-                                          maxLength={500}
-                                          onChange={e => {
-                                            const raw = e.target.value
-                                            let parsed: string | number | boolean = raw
-                                            if (raw === 'true') parsed = true
-                                            else if (raw === 'false') parsed = false
-                                            else if (raw !== '' && !isNaN(Number(raw))) parsed = Number(raw)
-                                            setSandboxData(prev => {
-                                              if (!prev) return prev
-                                              const s = { ...(prev[section as keyof SandboxData] as Record<string, unknown> || {}) }
-                                              s[key] = parsed
-                                              return { ...prev, [section]: s } as SandboxData
-                                            })
-                                          }}
-                                        />
+                                        <div className="space-y-1">
+                                          {groupEntries.map(
+                                            ({ section, key, value }) => {
+                                              const origSection =
+                                                originalSandboxData?.[
+                                                  section as keyof SandboxData
+                                                ]
+                                              const origValue =
+                                                typeof origSection === 'object'
+                                                  ? (
+                                                      origSection as Record<
+                                                        string,
+                                                        unknown
+                                                      >
+                                                    )?.[key]
+                                                  : undefined
+                                              const isModified =
+                                                value !== origValue
+                                              return (
+                                                <div
+                                                  key={`${section}.${key}`}
+                                                  className={`flex items-center justify-between py-2 px-3 rounded-md transition-colors ${isModified ? 'bg-amber-500/10 border border-amber-500/20' : 'hover:bg-muted/50'}`}
+                                                >
+                                                  <div className="flex-1 min-w-0 me-4">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                      <span
+                                                        className="text-sm font-medium truncate"
+                                                        title={key}
+                                                      >
+                                                        {key}
+                                                      </span>
+                                                      {isModified && (
+                                                        <button
+                                                          onClick={() => {
+                                                            if (
+                                                              origValue !==
+                                                              undefined
+                                                            ) {
+                                                              setSandboxData(
+                                                                (prev) => {
+                                                                  if (!prev)
+                                                                    return prev
+                                                                  const s = {
+                                                                    ...((prev[
+                                                                      section as keyof SandboxData
+                                                                    ] as Record<
+                                                                      string,
+                                                                      unknown
+                                                                    >) || {}),
+                                                                  }
+                                                                  s[key] =
+                                                                    origValue
+                                                                  return {
+                                                                    ...prev,
+                                                                    [section]:
+                                                                      s,
+                                                                  } as SandboxData
+                                                                },
+                                                              )
+                                                            }
+                                                          }}
+                                                          className="text-xs text-amber-500 hover:text-amber-400"
+                                                          title={'Undo change'}
+                                                          aria-label={
+                                                            'Undo change'
+                                                          }
+                                                        >
+                                                          ↩
+                                                        </button>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                  <Input
+                                                    className="w-48 h-8 text-sm flex-shrink-0"
+                                                    value={String(value)}
+                                                    maxLength={500}
+                                                    onChange={(e) => {
+                                                      const raw = e.target.value
+                                                      let parsed:
+                                                        | string
+                                                        | number
+                                                        | boolean = raw
+                                                      if (raw === 'true')
+                                                        parsed = true
+                                                      else if (raw === 'false')
+                                                        parsed = false
+                                                      else if (
+                                                        raw !== '' &&
+                                                        !isNaN(Number(raw))
+                                                      )
+                                                        parsed = Number(raw)
+                                                      setSandboxData((prev) => {
+                                                        if (!prev) return prev
+                                                        const s = {
+                                                          ...((prev[
+                                                            section as keyof SandboxData
+                                                          ] as Record<
+                                                            string,
+                                                            unknown
+                                                          >) || {}),
+                                                        }
+                                                        s[key] = parsed
+                                                        return {
+                                                          ...prev,
+                                                          [section]: s,
+                                                        } as SandboxData
+                                                      })
+                                                    }}
+                                                  />
+                                                </div>
+                                              )
+                                            },
+                                          )}
+                                        </div>
                                       </div>
-                                    )
-                                        })}
-                                      </div>
-                                    </div>
-                                  ))}
+                                    ),
+                                  )}
                                 </div>
                               </div>
                             )
                           }
-                          const settings = filteredSandboxSettings[activeSandboxCategory] || []
-                          const active = SANDBOX_CATEGORIES.find(c => c.id === activeSandboxCategory)
+                          const settings =
+                            filteredSandboxSettings[activeSandboxCategory] || []
+                          const active = SANDBOX_CATEGORIES.find(
+                            (c) => c.id === activeSandboxCategory,
+                          )
                           if (settings.length === 0) {
                             return (
                               <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                                {filterMode === 'modified' ? t('categoryContent.noneModified') :
-                                 filterMode === 'nondefault' ? t('categoryContent.noneUnsaved') :
-                                 t('categoryContent.none')}
+                                {filterMode === 'modified'
+                                  ? 'No settings in this category differ from Project Zomboid defaults.'
+                                  : filterMode === 'nondefault'
+                                    ? 'No unsaved settings in this category.'
+                                    : 'No settings in this category.'}
                               </div>
                             )
                           }
@@ -3034,19 +4238,37 @@ export default function ServerConfig() {
                             <div>
                               <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-baseline justify-between border-b border-border/50 bg-card/95 px-1 pb-2 pt-1 backdrop-blur">
                                 <h3 className="text-sm font-semibold uppercase tracking-wider text-primary">
-                                  {active ? getSandboxCategoryLabel(active) : null}
+                                  {active
+                                    ? getSandboxCategoryLabel(active)
+                                    : null}
                                 </h3>
                                 <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                                  {t('categoryContent.settingCount', { count: settings.length })}
+                                  {Number(settings.length) === 1
+                                    ? String(settings.length) + ' setting'
+                                    : String(settings.length) + ' settings'}
                                 </span>
                               </div>
                               <div className="space-y-1">
-                                {settings.map(setting => (
+                                {settings.map((setting) => (
                                   <SandboxSettingRow
                                     key={`${setting.section || 'settings'}.${setting.key}`}
                                     setting={setting}
-                                    value={(sandboxData?.[(setting.section || 'settings') as keyof SandboxData] as SandboxRecord)?.[setting.key]}
-                                    originalValue={(originalSandboxData?.[(setting.section || 'settings') as keyof SandboxData] as SandboxRecord)?.[setting.key]}
+                                    value={
+                                      (
+                                        sandboxData?.[
+                                          (setting.section ||
+                                            'settings') as keyof SandboxData
+                                        ] as SandboxRecord
+                                      )?.[setting.key]
+                                    }
+                                    originalValue={
+                                      (
+                                        originalSandboxData?.[
+                                          (setting.section ||
+                                            'settings') as keyof SandboxData
+                                        ] as SandboxRecord
+                                      )?.[setting.key]
+                                    }
                                     onChange={updateSandboxValue}
                                     onReset={resetSandboxValue}
                                   />
@@ -3067,21 +4289,23 @@ export default function ServerConfig() {
         <TabsContent value="spawnpoints" className="mt-4">
           <TacticalPanel tone="muted">
             <SectionHeader
-              label={t('spawnPointsTab.sectionLabel')}
-              sublabel={t('spawnPointsTab.sectionSublabel')}
+              label={'Spawn points'}
+              sublabel={'mod-managed · player start locations'}
               icon={MapPin}
               tone="muted"
               action={
                 <div className="flex flex-wrap items-center gap-1.5">
                   <div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/30 p-0.5">
                     <Button
-                      variant={editorMode === 'structured' ? 'secondary' : 'ghost'}
+                      variant={
+                        editorMode === 'structured' ? 'secondary' : 'ghost'
+                      }
                       size="sm"
                       onClick={() => setEditorMode('structured')}
                       className="h-7 gap-1.5 px-2 text-xs font-medium"
                       aria-pressed={editorMode === 'structured'}
                     >
-                      <FormInput className="h-3 w-3" /> {t('spawnPointsTab.infoTab')}
+                      <FormInput className="h-3 w-3" /> {'info'}
                     </Button>
                     <Button
                       variant={editorMode === 'raw' ? 'secondary' : 'ghost'}
@@ -3093,17 +4317,25 @@ export default function ServerConfig() {
                       className="h-7 gap-1.5 px-2 text-xs font-medium"
                       aria-pressed={editorMode === 'raw'}
                     >
-                      <Code className="h-3 w-3" /> {t('editorToolbar.raw')}
+                      <Code className="h-3 w-3" /> {'Raw'}
                     </Button>
                   </div>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleCreateBackup('spawnpoints')} aria-label={t('editorToolbar.downloadSpawnPointsAria')}>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleCreateBackup('spawnpoints')}
+                          aria-label={'Download Spawn Points backup'}
+                        >
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{t('editorToolbar.downloadSpawnPointsTooltip')}</TooltipContent>
+                      <TooltipContent>
+                        {'Download Spawnpoints backup'}
+                      </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <a
@@ -3112,16 +4344,22 @@ export default function ServerConfig() {
                     rel="noopener noreferrer"
                     className="flex h-7 items-center gap-1 rounded border border-border/60 bg-muted/30 px-2 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
                   >
-                    <ExternalLink className="h-3 w-3" /> {t('editorToolbar.map')}
+                    <ExternalLink className="h-3 w-3" /> {'map'}
                   </a>
                   {editorMode === 'raw' && (
-                    <Button onClick={handleSaveSpawnPoints} disabled={saving} variant="command" size="sm" className="h-7 gap-1.5 text-xs font-medium">
+                    <Button
+                      onClick={handleSaveSpawnPoints}
+                      disabled={saving}
+                      variant="command"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs font-medium"
+                    >
                       {saving ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
                       ) : (
                         <Save className="h-3 w-3" />
                       )}
-                      {t('editorToolbar.save')}
+                      {'save'}
                     </Button>
                   )}
                 </div>
@@ -3146,7 +4384,9 @@ export default function ServerConfig() {
                           )}
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{copied ? t('editorToolbar.copied') : t('editorToolbar.copyToClipboard')}</TooltipContent>
+                      <TooltipContent>
+                        {copied ? 'Copied!' : 'Copy to clipboard'}
+                      </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <Textarea
@@ -3161,9 +4401,17 @@ export default function ServerConfig() {
                   <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
                     <MapPin className="w-8 h-8" />
                   </div>
-                  <h3 className="text-lg font-medium mb-2">{t('spawnPointsTab.modManagedTitle')}</h3>
+                  <h3 className="text-lg font-medium mb-2">
+                    {'Spawn points are mod-managed'}
+                  </h3>
                   <p className="text-muted-foreground max-w-md mx-auto text-sm">
-                    <Trans i18nKey="spawnPointsTab.modManagedBody" t={t} components={{ 1: <strong /> }} />
+                    <>
+                      {
+                        'Spawn locations are typically handled by mods like “Spawn Select.” Switch to '
+                      }
+                      <strong>{'raw'}</strong>
+                      {' to inspect or edit the file directly.'}
+                    </>
                   </p>
                   <div className="mt-6">
                     <Button
@@ -3174,7 +4422,7 @@ export default function ServerConfig() {
                       }}
                       className="gap-1.5 text-xs font-medium"
                     >
-                      <Code className="h-3.5 w-3.5" /> {t('spawnPointsTab.openRawFile')}
+                      <Code className="h-3.5 w-3.5" /> {'open raw file'}
                     </Button>
                   </div>
                 </div>
@@ -3186,20 +4434,26 @@ export default function ServerConfig() {
         <TabsContent value="spawnregions" className="mt-4">
           <TacticalPanel tone="primary">
             <SectionHeader
-              label={t('spawnRegionsTab.sectionLabel')}
-              sublabel={t('spawnRegionsTab.sectionSublabel', { count: spawnRegions.length })}
+              label={'Spawn regions'}
+              sublabel={
+                Number(spawnRegions.length) === 1
+                  ? String(spawnRegions.length) + ' region · cities & towns'
+                  : String(spawnRegions.length) + ' regions · cities & towns'
+              }
               icon={Map}
               action={
                 <div className="flex flex-wrap items-center gap-1.5">
                   <div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/30 p-0.5">
                     <Button
-                      variant={editorMode === 'structured' ? 'secondary' : 'ghost'}
+                      variant={
+                        editorMode === 'structured' ? 'secondary' : 'ghost'
+                      }
                       size="sm"
                       onClick={() => setEditorMode('structured')}
                       className="h-7 gap-1.5 px-2 text-xs font-medium"
                       aria-pressed={editorMode === 'structured'}
                     >
-                      <FormInput className="h-3 w-3" /> {t('editorToolbar.form')}
+                      <FormInput className="h-3 w-3" /> {'Form'}
                     </Button>
                     <Button
                       variant={editorMode === 'raw' ? 'secondary' : 'ghost'}
@@ -3211,26 +4465,40 @@ export default function ServerConfig() {
                       className="h-7 gap-1.5 px-2 text-xs font-medium"
                       aria-pressed={editorMode === 'raw'}
                     >
-                      <Code className="h-3 w-3" /> {t('editorToolbar.raw')}
+                      <Code className="h-3 w-3" /> {'Raw'}
                     </Button>
                   </div>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleCreateBackup('spawnregions')} aria-label={t('editorToolbar.downloadSpawnRegionsAria')}>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleCreateBackup('spawnregions')}
+                          aria-label={'Download Spawn Regions backup'}
+                        >
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{t('editorToolbar.downloadSpawnRegionsTooltip')}</TooltipContent>
+                      <TooltipContent>
+                        {'Download Spawnregions backup'}
+                      </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <Button onClick={handleSaveSpawnRegions} disabled={saving} variant="command" size="sm" className="h-7 gap-1.5 text-xs font-medium">
+                  <Button
+                    onClick={handleSaveSpawnRegions}
+                    disabled={saving}
+                    variant="command"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs font-medium"
+                  >
                     {saving ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
                       <Save className="h-3 w-3" />
                     )}
-                    {t('editorToolbar.save')}
+                    {'save'}
                   </Button>
                 </div>
               }
@@ -3246,15 +4514,26 @@ export default function ServerConfig() {
               ) : (
                 <div className="space-y-3">
                   {spawnRegions.length === 0 ? (
-                    <EmptyState type="noData" title={t('spawnRegionsTab.noRegionsTitle')} description={t('spawnRegionsTab.noRegionsDesc')} compact />
+                    <EmptyState
+                      type="noData"
+                      title={'No spawn regions found'}
+                      description={
+                        'Try switching to Raw mode to view the file contents'
+                      }
+                      compact
+                    />
                   ) : (
                     <div className="overflow-hidden rounded-lg border">
                       <div className="hidden sm:grid grid-cols-[2rem_minmax(180px,260px)_minmax(0,1fr)_2.25rem] items-center gap-3 border-b bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         <span className="text-center">#</span>
-                        <span>{t('spawnRegionsTab.columnDisplayName')}</span>
+                        <span>{'Display Name'}</span>
                         <span className="flex items-center gap-1">
-                          {t('spawnRegionsTab.columnMapFilePath')}
-                          <HelpTip label={t('spawnRegionsTab.columnMapFilePath')}>{t('spawnRegionsTab.mapFilePathTip')}</HelpTip>
+                          {'Map File Path'}
+                          <HelpTip label={'Map File Path'}>
+                            {
+                              "Must exactly match a map file that already exists in this server's Maps folder — no extension, and it's case-sensitive. Get it wrong and the game either skips this region or fails to start."
+                            }
+                          </HelpTip>
                         </span>
                         <span aria-hidden="true" />
                       </div>
@@ -3268,25 +4547,41 @@ export default function ServerConfig() {
                               {index + 1}
                             </span>
                             <div className="min-w-0">
-                              <Label className="sm:sr-only text-[10px] uppercase tracking-wide text-muted-foreground">{t('spawnRegionsTab.columnDisplayName')}</Label>
+                              <Label className="sm:sr-only text-[10px] uppercase tracking-wide text-muted-foreground">
+                                {'Display Name'}
+                              </Label>
                               <Input
                                 value={region.name}
                                 onChange={(e) => {
                                   const newRegions = [...spawnRegions]
-                                  newRegions[index] = { ...region, name: e.target.value }
+                                  newRegions[index] = {
+                                    ...region,
+                                    name: e.target.value,
+                                  }
                                   setSpawnRegions(newRegions)
                                 }}
-                                placeholder={t('spawnRegionsTab.displayNamePlaceholder')}
+                                placeholder={'e.g., Muldraugh, KY'}
                                 maxLength={64}
                                 className="mt-0.5 h-9 sm:mt-0"
-                                aria-label={t('spawnRegionsTab.displayNameAria', { index: index + 1 })}
+                                aria-label={
+                                  'Region ' +
+                                  String(index + 1) +
+                                  ' display name'
+                                }
                               />
                             </div>
                             <div className="min-w-0">
                               <Label className="sm:sr-only text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-2">
-                                {region.isServerFile ? t('spawnRegionsTab.serverFileLabel') : t('spawnRegionsTab.columnMapFilePath')}
+                                {region.isServerFile
+                                  ? 'Server File'
+                                  : 'Map File Path'}
                                 {region.isServerFile && (
-                                  <Badge variant="secondary" className="text-[10px] py-0">{t('spawnRegionsTab.serverFileBadge')}</Badge>
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-[10px] py-0"
+                                  >
+                                    {'serverfile'}
+                                  </Badge>
                                 )}
                               </Label>
                               <div className="relative mt-0.5 sm:mt-0">
@@ -3294,17 +4589,35 @@ export default function ServerConfig() {
                                   value={region.file}
                                   onChange={(e) => {
                                     const newRegions = [...spawnRegions]
-                                    newRegions[index] = { ...region, file: e.target.value }
+                                    newRegions[index] = {
+                                      ...region,
+                                      file: e.target.value,
+                                    }
                                     setSpawnRegions(newRegions)
                                   }}
-                                  placeholder={region.isServerFile ? t('spawnRegionsTab.serverFilePlaceholder') : t('spawnRegionsTab.mapFilePlaceholder')}
+                                  placeholder={
+                                    region.isServerFile
+                                      ? 'ServerName_spawnpoints.lua'
+                                      : 'media/maps/Muldraugh, KY/spawnpoints.lua'
+                                  }
                                   className={`h-9 font-mono text-xs ${region.isServerFile ? 'pe-20' : ''}`}
                                   maxLength={512}
-                                  aria-label={region.isServerFile ? t('spawnRegionsTab.fileAriaServerFile', { index: index + 1 }) : t('spawnRegionsTab.fileAriaMapPath', { index: index + 1 })}
+                                  aria-label={
+                                    region.isServerFile
+                                      ? 'Region ' +
+                                        String(index + 1) +
+                                        ' server file'
+                                      : 'Region ' +
+                                        String(index + 1) +
+                                        ' map file path'
+                                  }
                                 />
                                 {region.isServerFile && (
-                                  <Badge variant="secondary" className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] py-0">
-                                    {t('spawnRegionsTab.serverFileBadge')}
+                                  <Badge
+                                    variant="secondary"
+                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] py-0"
+                                  >
+                                    {'serverfile'}
                                   </Badge>
                                 )}
                               </div>
@@ -3313,8 +4626,15 @@ export default function ServerConfig() {
                               variant="ghost"
                               size="icon"
                               className="h-9 w-9 justify-self-end text-muted-foreground hover:text-destructive sm:justify-self-center"
-                              onClick={() => setSpawnRegions(spawnRegions.filter((_, i) => i !== index))}
-                              aria-label={t('spawnRegionsTab.deleteAria', { name: region.name || index + 1 })}
+                              onClick={() =>
+                                setSpawnRegions(
+                                  spawnRegions.filter((_, i) => i !== index),
+                                )
+                              }
+                              aria-label={
+                                'Delete spawn region ' +
+                                String(region.name || index + 1)
+                              }
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -3328,10 +4648,15 @@ export default function ServerConfig() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setSpawnRegions([...spawnRegions, { name: '', file: 'media/maps/' }])}
+                      onClick={() =>
+                        setSpawnRegions([
+                          ...spawnRegions,
+                          { name: '', file: 'media/maps/' },
+                        ])
+                      }
                       className="gap-1.5 text-xs font-medium"
                     >
-                      <Plus className="h-3.5 w-3.5" /> {t('spawnRegionsTab.addRegion')}
+                      <Plus className="h-3.5 w-3.5" /> {'add region'}
                     </Button>
                   </div>
                 </div>
@@ -3341,17 +4666,30 @@ export default function ServerConfig() {
         </TabsContent>
 
         <TabsContent value="modsettings" className="mt-4">
-          <TacticalPanel tone={modifiedModSettingsCount > 0 ? 'warning' : 'info'}>
+          <TacticalPanel
+            tone={modifiedModSettingsCount > 0 ? 'warning' : 'info'}
+          >
             <SectionHeader
-              label={t('modSettingsTab.sectionLabel')}
-              sublabel={modSettings ? t('modSettingsTab.sectionSublabelLoaded', { count: modSettingsGroups.length }) : t('modSettingsTab.sectionSublabelIdle')}
+              label={'Mod sandbox options'}
+              sublabel={
+                modSettings
+                  ? Number(modSettingsGroups.length) === 1
+                    ? String(modSettingsGroups.length) +
+                      ' mod · live from bridge'
+                    : String(modSettingsGroups.length) +
+                      ' mods · live from bridge'
+                  : 'panelbridge · live'
+              }
               icon={Puzzle}
               tone={modifiedModSettingsCount > 0 ? 'warning' : 'info'}
               action={
                 <div className="flex flex-wrap items-center gap-1.5">
                   {modifiedModSettingsCount > 0 && (
-                    <Badge variant="warning" className="h-5 px-1.5 py-0 font-mono text-[10px]">
-                      {t('modSettingsTab.modifiedBadge', { count: modifiedModSettingsCount })}
+                    <Badge
+                      variant="warning"
+                      className="h-5 px-1.5 py-0 font-mono text-[10px]"
+                    >
+                      {String(modifiedModSettingsCount) + ' modified'}
                     </Badge>
                   )}
                   <Button
@@ -3366,7 +4704,7 @@ export default function ServerConfig() {
                     ) : (
                       <RefreshCw className="h-3 w-3" />
                     )}
-                    {modSettings ? t('modSettingsTab.refresh') : t('modSettingsTab.load')}
+                    {modSettings ? 'refresh' : 'load'}
                   </Button>
                 </div>
               }
@@ -3378,10 +4716,15 @@ export default function ServerConfig() {
                     <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       ref={modSettingsSearchRef}
-                      placeholder={t('modSettingsTab.searchPlaceholder')}
+                      placeholder={'Search mod settings…  (press /)'}
                       value={modSettingsSearch}
                       onChange={(e) => setModSettingsSearch(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Escape') { setModSettingsSearch(''); e.currentTarget.blur() } }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setModSettingsSearch('')
+                          e.currentTarget.blur()
+                        }
+                      }}
                       className="ps-9 pe-8"
                       maxLength={200}
                     />
@@ -3389,27 +4732,41 @@ export default function ServerConfig() {
                       <button
                         onClick={() => setModSettingsSearch('')}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={t('modSettingsTab.clearSearchAria')}
+                        aria-label={'Clear search'}
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
-                  <DisabledReason reason={modifiedModSettingsCount === 0 && !modSettingsModifiedOnly ? t('modSettingsTab.modifiedFilterNoneTitle') : null}>
+                  <DisabledReason
+                    reason={
+                      modifiedModSettingsCount === 0 && !modSettingsModifiedOnly
+                        ? 'No options differ from default'
+                        : null
+                    }
+                  >
                     <Button
                       variant={modSettingsModifiedOnly ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setModSettingsModifiedOnly(v => !v)}
-                      disabled={modifiedModSettingsCount === 0 && !modSettingsModifiedOnly}
+                      onClick={() => setModSettingsModifiedOnly((v) => !v)}
+                      disabled={
+                        modifiedModSettingsCount === 0 &&
+                        !modSettingsModifiedOnly
+                      }
                       className="shrink-0 h-9 gap-1.5 text-xs font-medium"
                       aria-pressed={modSettingsModifiedOnly}
                       // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27: the disabled-reason branch (no modified options) now lives in the DisabledReason wrapper above; this title carries only the enabled-state hint.
-                      title={t('modSettingsTab.modifiedFilterTitle')}
+                      title={'Show only options changed from default'}
                     >
                       <Filter className="w-3.5 h-3.5" />
-                      {t('modSettingsTab.modifiedFilter')}
+                      {'modified'}
                       {modifiedModSettingsCount > 0 && (
-                        <Badge variant={modSettingsModifiedOnly ? 'secondary' : 'warning'} className="ms-0.5 h-4 px-1.5 py-0 text-xs">
+                        <Badge
+                          variant={
+                            modSettingsModifiedOnly ? 'secondary' : 'warning'
+                          }
+                          className="ms-0.5 h-4 px-1.5 py-0 text-xs"
+                        >
                           {modifiedModSettingsCount}
                         </Badge>
                       )}
@@ -3419,19 +4776,32 @@ export default function ServerConfig() {
                     variant="ghost"
                     size="sm"
                     onClick={() => {
-                      const allVisible = filteredModGroups.length > 0 && filteredModGroups.every(g => expandedModGroups.has(g.name))
+                      const allVisible =
+                        filteredModGroups.length > 0 &&
+                        filteredModGroups.every((g) =>
+                          expandedModGroups.has(g.name),
+                        )
                       if (allVisible) {
                         setExpandedModGroups(new Set())
                       } else {
-                        setExpandedModGroups(new Set(filteredModGroups.map(g => g.name)))
+                        setExpandedModGroups(
+                          new Set(filteredModGroups.map((g) => g.name)),
+                        )
                       }
                     }}
                     className="shrink-0 gap-1.5 text-xs font-medium"
                   >
-                    {filteredModGroups.length > 0 && filteredModGroups.every(g => expandedModGroups.has(g.name)) ? (
-                      <><ChevronDown className="w-3.5 h-3.5" /> {t('modSettingsTab.collapseAll')}</>
+                    {filteredModGroups.length > 0 &&
+                    filteredModGroups.every((g) =>
+                      expandedModGroups.has(g.name),
+                    ) ? (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5" /> {'Collapse all'}
+                      </>
                     ) : (
-                      <><ChevronRight className="w-3.5 h-3.5" /> {t('modSettingsTab.expandAll')}</>
+                      <>
+                        <ChevronRight className="w-3.5 h-3.5" /> {'expand all'}
+                      </>
                     )}
                   </Button>
                 </div>
@@ -3439,27 +4809,52 @@ export default function ServerConfig() {
               {!modSettings && !modSettingsLoading && !modSettingsError && (
                 <EmptyState
                   type="noMods"
-                  title={t('modSettingsTab.notLoadedTitle')}
+                  title={'Mod settings not loaded'}
                   description={
                     <span>
-                      {t('modSettingsTab.notLoadedDescPrefix')}
-                      <HelpTip label={t('modSettingsTab.panelBridgeLabel')} side="bottom" className="mx-1 align-[-2px]">
-                        {t('modSettingsTab.panelBridgeTip')}
+                      {
+                        'Click load to fetch sandbox options from all installed mods via PanelBridge'
+                      }
+                      <HelpTip
+                        label={'PanelBridge'}
+                        side="bottom"
+                        className="mx-1 align-[-2px]"
+                      >
+                        {
+                          "PanelBridge is the Lua mod that runs on the game server and gives this panel live access to sandbox options, weather, teleport, and item control. Mod settings only load once it's installed on the server and the server is running."
+                        }
                       </HelpTip>
-                      {t('modSettingsTab.notLoadedDescSuffix')}
+                      {
+                        '. The PZ server must be running with PanelBridge active.'
+                      }
                     </span>
                   }
                 />
               )}
 
               {modSettingsError && (
-                <Alert variant={modSettings ? 'default' : 'destructive'} className="mb-3">
+                <Alert
+                  variant={modSettings ? 'default' : 'destructive'}
+                  className="mb-3"
+                >
                   <AlertCircle className="w-4 h-4" />
-                  <AlertTitle>{modSettings ? t('modSettingsTab.refreshFailedTitle') : t('modSettingsTab.loadFailedTitle')}</AlertTitle>
+                  <AlertTitle>
+                    {modSettings
+                      ? 'Refresh failed — showing previous data'
+                      : 'Failed to load mod settings'}
+                  </AlertTitle>
                   <AlertDescription className="flex items-center justify-between gap-3">
-                    <span className="break-words min-w-0">{modSettingsError}</span>
-                    <Button variant="outline" size="sm" onClick={loadModSettings} disabled={modSettingsLoading} className="shrink-0 gap-1.5">
-                      <RefreshCw className="w-3.5 h-3.5" /> {t('modSettingsTab.retry')}
+                    <span className="break-words min-w-0">
+                      {modSettingsError}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={loadModSettings}
+                      disabled={modSettingsLoading}
+                      className="shrink-0 gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> {'Retry'}
                     </Button>
                   </AlertDescription>
                 </Alert>
@@ -3468,276 +4863,468 @@ export default function ServerConfig() {
               {modSettingsLoading && (
                 <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>{t('modSettingsTab.loadingOptions')}</span>
+                  <span>{'Loading sandbox options from server...'}</span>
                 </div>
               )}
 
-              {modSettings && modSettingsGroups.length === 0 && !modSettingsLoading && (
-                <EmptyState
-                  type="noMods"
-                  title={t('modSettingsTab.noOptionsTitle')}
-                  description={t('modSettingsTab.noOptionsDesc')}
-                />
-              )}
+              {modSettings &&
+                modSettingsGroups.length === 0 &&
+                !modSettingsLoading && (
+                  <EmptyState
+                    type="noMods"
+                    title={'No sandbox options found'}
+                    description={
+                      "The server returned no sandbox options. This may happen if no mods register custom sandbox settings, or the API isn't available in this PZ build."
+                    }
+                  />
+                )}
 
               {modSettings && modSettingsGroups.length > 0 && (
                 <ScrollArea className="h-[calc(100vh-440px)] min-h-[400px] pe-4">
                   <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
                     <Badge variant="secondary">
-                      {modSettingsSearch || modSettingsModifiedOnly ? `${filteredModGroups.length} / ${modSettingsGroups.length}` : modSettingsGroups.length} {t('modSettingsTab.groupsBadge')}
+                      {modSettingsSearch || modSettingsModifiedOnly
+                        ? `${filteredModGroups.length} / ${modSettingsGroups.length}`
+                        : modSettingsGroups.length}{' '}
+                      {'groups'}
                     </Badge>
                     <Badge variant="secondary">
                       {modSettingsSearch || modSettingsModifiedOnly
                         ? `${filteredModGroups.reduce((s, g) => s + g.filteredOpts.length, 0)} / ${modSettingsGroups.reduce((s, g) => s + g.count, 0)}`
-                        : modSettingsGroups.reduce((s, g) => s + g.count, 0)
-                      } {t('modSettingsTab.optionsBadge')}
+                        : modSettingsGroups.reduce(
+                            (s, g) => s + g.count,
+                            0,
+                          )}{' '}
+                      {'options'}
                     </Badge>
                     {modifiedModSettingsCount > 0 && (
-                      <Badge variant="warning" className="gap-1" title={t('modSettingsTab.modifiedBadgeTitle')}>
+                      <Badge
+                        variant="warning"
+                        className="gap-1"
+                        title={'Options that differ from their default value'}
+                      >
                         <AlertTriangle className="w-3 h-3" />
-                        {t('modSettingsTab.modifiedBadge', { count: modifiedModSettingsCount })}
+                        {String(modifiedModSettingsCount) + ' modified'}
                       </Badge>
                     )}
                     {modSettingsLastLoaded && (
                       <span className="text-xs text-muted-foreground/60 ms-auto">
-                        {t('modSettingsTab.loadedAt', { time: modSettingsLastLoaded.toLocaleTimeString(i18n.language) })}
+                        {'Loaded ' +
+                          String(
+                            modSettingsLastLoaded.toLocaleTimeString('en'),
+                          )}
                       </span>
                     )}
                   </div>
-                  {filteredModGroups
-                    .map(group => {
-                      const isFiltering = !!modSettingsSearch.trim() || modSettingsModifiedOnly
-                      const isExpanded = isFiltering || expandedModGroups.has(group.name)
-                      const filteredOpts = group.filteredOpts
-                      const groupAllOpts = modSettings[group.name] || []
-                      const groupModifiedCount = groupAllOpts.reduce((c, o) => c + (isOptModified(o) ? 1 : 0), 0)
+                  {filteredModGroups.map((group) => {
+                    const isFiltering =
+                      !!modSettingsSearch.trim() || modSettingsModifiedOnly
+                    const isExpanded =
+                      isFiltering || expandedModGroups.has(group.name)
+                    const filteredOpts = group.filteredOpts
+                    const groupAllOpts = modSettings[group.name] || []
+                    const groupModifiedCount = groupAllOpts.reduce(
+                      (c, o) => c + (isOptModified(o) ? 1 : 0),
+                      0,
+                    )
 
-                      return (
-                        <div key={group.name} className="mb-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExpandedModGroups(prev => {
-                                const next = new Set(prev)
-                                if (next.has(group.name)) next.delete(group.name)
-                                else next.add(group.name)
-                                return next
-                              })
-                            }}
-                            aria-expanded={isExpanded}
-                            className={`flex items-center gap-3 w-full py-2.5 px-4 rounded-lg transition-[background-color,border-color,box-shadow,color] duration-200 ${
-                              isExpanded
-                                ? 'border border-primary/30 bg-primary/10 shadow-sm'
-                                : 'bg-muted/50 hover:bg-muted border border-transparent'
-                            }`}
+                    return (
+                      <div key={group.name} className="mb-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedModGroups((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(group.name)) next.delete(group.name)
+                              else next.add(group.name)
+                              return next
+                            })
+                          }}
+                          aria-expanded={isExpanded}
+                          className={`flex items-center gap-3 w-full py-2.5 px-4 rounded-lg transition-[background-color,border-color,box-shadow,color] duration-200 ${
+                            isExpanded
+                              ? 'border border-primary/30 bg-primary/10 shadow-sm'
+                              : 'bg-muted/50 hover:bg-muted border border-transparent'
+                          }`}
+                        >
+                          <div
+                            className={`p-1 rounded transition-colors ${isExpanded ? 'bg-primary/20 text-primary' : 'bg-muted'}`}
                           >
-                            <div className={`p-1 rounded transition-colors ${isExpanded ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>
-                              {isExpanded ? (
-                                <ChevronDown className="w-4 h-4" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4" />
-                              )}
-                            </div>
-                            <span className={`font-medium truncate min-w-0 ${isExpanded ? 'text-primary' : ''}`} title={formatModSettingLabel(group.name)}>{formatModSettingLabel(group.name)}</span>
-                            {groupModifiedCount > 0 && (
-                              <Badge variant="warning" className="h-5 px-1.5 py-0 text-[10px] font-mono shrink-0" title={t('modSettingsTab.groupModifiedTitle', { count: groupModifiedCount })}>
-                                {t('modSettingsTab.groupModifiedBadge', { count: groupModifiedCount })}
-                              </Badge>
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
                             )}
-                            <Badge variant={isExpanded ? "default" : "secondary"} className="ms-auto">
-                              {filteredOpts.length}
+                          </div>
+                          <span
+                            className={`font-medium truncate min-w-0 ${isExpanded ? 'text-primary' : ''}`}
+                            title={formatModSettingLabel(group.name)}
+                          >
+                            {formatModSettingLabel(group.name)}
+                          </span>
+                          {groupModifiedCount > 0 && (
+                            <Badge
+                              variant="warning"
+                              className="h-5 px-1.5 py-0 text-[10px] font-mono shrink-0"
+                              title={
+                                Number(groupModifiedCount) === 1
+                                  ? String(groupModifiedCount) +
+                                    ' option differs from default'
+                                  : String(groupModifiedCount) +
+                                    ' options differ from default'
+                              }
+                            >
+                              {String(groupModifiedCount) + ' mod'}
                             </Badge>
-                          </button>
-                          {isExpanded && (
-                            <div className="mt-3 ms-4 space-y-1 ps-4">
-                              {filteredOpts.map((opt, idx) => {
-                                const rawDisplayName = opt.shortName || opt.name || `Option ${idx}`
-                                const displayName = formatModSettingLabel(
-                                  opt.translatedName && opt.translatedName !== rawDisplayName ? opt.translatedName : rawDisplayName,
+                          )}
+                          <Badge
+                            variant={isExpanded ? 'default' : 'secondary'}
+                            className="ms-auto"
+                          >
+                            {filteredOpts.length}
+                          </Badge>
+                        </button>
+                        {isExpanded && (
+                          <div className="mt-3 ms-4 space-y-1 ps-4">
+                            {filteredOpts.map((opt, idx) => {
+                              const rawDisplayName =
+                                opt.shortName || opt.name || `Option ${idx}`
+                              const displayName =
+                                formatModSettingLabel(
+                                  opt.translatedName &&
+                                    opt.translatedName !== rawDisplayName
+                                    ? opt.translatedName
+                                    : rawDisplayName,
                                   group.name,
                                 ) || `Option ${idx + 1}`
-                                const rawTooltip = opt.tooltipText || opt.tooltip || ''
-                                const description = formatModSettingDescription(rawTooltip.replace(/\n?Default\s*=\s*.*/i, ''))
-                                const rawVal = opt.value
-                                let displayValue: string
-                                if (rawVal === undefined || rawVal === null) {
-                                  displayValue = '—'
-                                } else if (typeof rawVal === 'number') {
-                                  displayValue = Number.isInteger(rawVal) ? String(rawVal) : rawVal.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
-                                } else {
-                                  displayValue = String(rawVal)
-                                }
-                                const typeLabel = opt.type || 'unknown'
-                                const boolValue = typeLabel === 'boolean'
-                                  ? (rawVal === true || rawVal === 'true' || rawVal === 1)
+                              const rawTooltip =
+                                opt.tooltipText || opt.tooltip || ''
+                              const description = formatModSettingDescription(
+                                rawTooltip.replace(/\n?Default\s*=\s*.*/i, ''),
+                              )
+                              const rawVal = opt.value
+                              let displayValue: string
+                              if (rawVal === undefined || rawVal === null) {
+                                displayValue = '—'
+                              } else if (typeof rawVal === 'number') {
+                                displayValue = Number.isInteger(rawVal)
+                                  ? String(rawVal)
+                                  : rawVal
+                                      .toFixed(4)
+                                      .replace(/0+$/, '')
+                                      .replace(/\.$/, '')
+                              } else {
+                                displayValue = String(rawVal)
+                              }
+                              const typeLabel = opt.type || 'unknown'
+                              const boolValue =
+                                typeLabel === 'boolean'
+                                  ? rawVal === true ||
+                                    rawVal === 'true' ||
+                                    rawVal === 1
                                   : false
-                                const isSaving = opt.name ? savingOptions.has(opt.name) : false
-                                const isModified = isOptModified(opt)
+                              const isSaving = opt.name
+                                ? savingOptions.has(opt.name)
+                                : false
+                              const isModified = isOptModified(opt)
 
-                                return (
-                                  <div
-                                    key={`${opt.name || 'opt'}-${idx}`}
-                                    className={`flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 gap-4 ${isSaving ? 'opacity-60 pointer-events-none' : ''}`}
-                                  >
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-medium text-sm truncate" title={opt.name || displayName}>
-                                        {displayName}
-                                      </div>
-                                      {description && (
-                                        <div className="text-xs text-muted-foreground/70 mt-0.5 line-clamp-2" title={rawTooltip}>
-                                          {description}
-                                        </div>
-                                      )}
-                                      {opt.name && opt.name !== displayName && (
-                                        <div className="text-[10px] text-muted-foreground/40 font-mono truncate mt-0.5" title={opt.name}>{opt.name}</div>
-                                      )}
+                              return (
+                                <div
+                                  key={`${opt.name || 'opt'}-${idx}`}
+                                  className={`flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 gap-4 ${isSaving ? 'opacity-60 pointer-events-none' : ''}`}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div
+                                      className="font-medium text-sm truncate"
+                                      title={opt.name || displayName}
+                                    >
+                                      {displayName}
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      {typeLabel === 'boolean' ? (
-                                        <div className="flex items-center gap-2">
-                                          <Switch
-                                            checked={boolValue}
-                                            onCheckedChange={(checked) => opt.name && !isSaving && handleOptionChange(opt.name, checked, group.name)}
-                                            disabled={isSaving}
-                                            aria-label={t('modSettingsTab.toggleAria', { label: displayName, state: boolValue ? t('modSettingsTab.onCaps') : t('modSettingsTab.offCaps') })}
-                                          />
-                                          <span className={`text-xs font-mono ${boolValue ? 'text-primary' : 'text-muted-foreground'}`}>
-                                            {boolValue ? t('modSettingsTab.onCaps') : t('modSettingsTab.offCaps')}
-                                          </span>
-                                        </div>
-                                      ) : typeLabel === 'enum' && opt.enumValues && opt.enumValues.length > 0 ? (
-                                        <Select
-                                          value={opt.selectedIndex !== undefined ? String(opt.selectedIndex) : displayValue}
-                                          onValueChange={(val) => {
-                                            if (!opt.name || isSaving) return
-                                            const idx = parseInt(val, 10)
-                                            if (isNaN(idx)) return
-                                            handleOptionChange(opt.name, idx, group.name)
-                                          }}
+                                    {description && (
+                                      <div
+                                        className="text-xs text-muted-foreground/70 mt-0.5 line-clamp-2"
+                                        title={rawTooltip}
+                                      >
+                                        {description}
+                                      </div>
+                                    )}
+                                    {opt.name && opt.name !== displayName && (
+                                      <div
+                                        className="text-[10px] text-muted-foreground/40 font-mono truncate mt-0.5"
+                                        title={opt.name}
+                                      >
+                                        {opt.name}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {typeLabel === 'boolean' ? (
+                                      <div className="flex items-center gap-2">
+                                        <Switch
+                                          checked={boolValue}
+                                          onCheckedChange={(checked) =>
+                                            opt.name &&
+                                            !isSaving &&
+                                            handleOptionChange(
+                                              opt.name,
+                                              checked,
+                                              group.name,
+                                            )
+                                          }
                                           disabled={isSaving}
+                                          aria-label={
+                                            String(displayName) +
+                                            ': ' +
+                                            String(boolValue ? 'ON' : 'OFF')
+                                          }
+                                        />
+                                        <span
+                                          className={`text-xs font-mono ${boolValue ? 'text-primary' : 'text-muted-foreground'}`}
                                         >
-                                          <SelectTrigger className="h-7 w-full sm:w-[180px] text-xs font-mono" aria-label={displayName}>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {opt.enumValues.map((ev, ei) => (
-                                              <SelectItem key={ei} value={String(ei)} className="text-xs font-mono">
-                                                {ev}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      ) : typeLabel === 'number' || typeLabel === 'double' || typeLabel === 'integer' ? (
-                                        <Input
-                                          key={`${opt.name}-${displayValue}`}
-                                          type="number"
-                                          className="h-7 w-full sm:w-[100px] text-xs font-mono text-end"
-                                          defaultValue={displayValue}
-                                          min={opt.min}
-                                          max={opt.max}
-                                          step={typeLabel === 'integer' && Number.isInteger(opt.min ?? 0) ? 1 : 'any'}
-                                          disabled={isSaving}
+                                          {boolValue ? 'ON' : 'OFF'}
+                                        </span>
+                                      </div>
+                                    ) : typeLabel === 'enum' &&
+                                      opt.enumValues &&
+                                      opt.enumValues.length > 0 ? (
+                                      <Select
+                                        value={
+                                          opt.selectedIndex !== undefined
+                                            ? String(opt.selectedIndex)
+                                            : displayValue
+                                        }
+                                        onValueChange={(val) => {
+                                          if (!opt.name || isSaving) return
+                                          const idx = parseInt(val, 10)
+                                          if (isNaN(idx)) return
+                                          handleOptionChange(
+                                            opt.name,
+                                            idx,
+                                            group.name,
+                                          )
+                                        }}
+                                        disabled={isSaving}
+                                      >
+                                        <SelectTrigger
+                                          className="h-7 w-full sm:w-[180px] text-xs font-mono"
                                           aria-label={displayName}
-                                          onBlur={(e) => {
-                                            let num = parseFloat(e.target.value)
-                                            if (isNaN(num) || !opt.name) return
-                                            if (opt.min !== undefined) num = Math.max(opt.min, num)
-                                            if (opt.max !== undefined) num = Math.min(opt.max, num)
-                                            if (num === rawVal) return
-                                            e.target.value = String(num)
-                                            handleOptionChange(opt.name, num, group.name)
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              (e.target as HTMLInputElement).blur()
-                                            }
-                                          }}
-                                        />
-                                      ) : (
-                                        <Input
-                                          key={`${opt.name}-${displayValue}`}
-                                          type="text"
-                                          className="h-7 w-full sm:w-[160px] text-xs font-mono"
-                                          defaultValue={displayValue}
-                                          disabled={isSaving}
-                                          aria-label={displayName}
-                                          onBlur={(e) => {
-                                            if (e.target.value !== String(rawVal) && opt.name) {
-                                              handleOptionChange(opt.name, e.target.value, group.name)
-                                            }
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              (e.target as HTMLInputElement).blur()
-                                            }
-                                          }}
-                                        />
-                                      )}
-                                      {opt.min !== undefined && opt.max !== undefined && (
+                                        >
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {opt.enumValues.map((ev, ei) => (
+                                            <SelectItem
+                                              key={ei}
+                                              value={String(ei)}
+                                              className="text-xs font-mono"
+                                            >
+                                              {ev}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : typeLabel === 'number' ||
+                                      typeLabel === 'double' ||
+                                      typeLabel === 'integer' ? (
+                                      <Input
+                                        key={`${opt.name}-${displayValue}`}
+                                        type="number"
+                                        className="h-7 w-full sm:w-[100px] text-xs font-mono text-end"
+                                        defaultValue={displayValue}
+                                        min={opt.min}
+                                        max={opt.max}
+                                        step={
+                                          typeLabel === 'integer' &&
+                                          Number.isInteger(opt.min ?? 0)
+                                            ? 1
+                                            : 'any'
+                                        }
+                                        disabled={isSaving}
+                                        aria-label={displayName}
+                                        onBlur={(e) => {
+                                          let num = parseFloat(e.target.value)
+                                          if (isNaN(num) || !opt.name) return
+                                          if (opt.min !== undefined)
+                                            num = Math.max(opt.min, num)
+                                          if (opt.max !== undefined)
+                                            num = Math.min(opt.max, num)
+                                          if (num === rawVal) return
+                                          e.target.value = String(num)
+                                          handleOptionChange(
+                                            opt.name,
+                                            num,
+                                            group.name,
+                                          )
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            ;(
+                                              e.target as HTMLInputElement
+                                            ).blur()
+                                          }
+                                        }}
+                                      />
+                                    ) : (
+                                      <Input
+                                        key={`${opt.name}-${displayValue}`}
+                                        type="text"
+                                        className="h-7 w-full sm:w-[160px] text-xs font-mono"
+                                        defaultValue={displayValue}
+                                        disabled={isSaving}
+                                        aria-label={displayName}
+                                        onBlur={(e) => {
+                                          if (
+                                            e.target.value !== String(rawVal) &&
+                                            opt.name
+                                          ) {
+                                            handleOptionChange(
+                                              opt.name,
+                                              e.target.value,
+                                              group.name,
+                                            )
+                                          }
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            ;(
+                                              e.target as HTMLInputElement
+                                            ).blur()
+                                          }
+                                        }}
+                                      />
+                                    )}
+                                    {opt.min !== undefined &&
+                                      opt.max !== undefined && (
                                         <span className="text-xs text-muted-foreground/60 whitespace-nowrap">
                                           {opt.min}–{opt.max}
                                         </span>
                                       )}
-                                      {isModified && (
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <button
-                                              type="button"
-                                              className="text-xs text-muted-foreground/50 hover:text-primary whitespace-nowrap flex items-center gap-1"
-                                              onClick={() => opt.name && opt.default !== undefined && handleOptionChange(opt.name, opt.default, group.name)}
-                                              disabled={isSaving}
-                                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint naming the action + value; disables only transiently while a save is in flight (the adjacent spinner is the self-evident why). Triaged 2026-08-27. Note: the wrapping Radix Tooltip here has the same "no pointer/focus events on a disabled native button" limitation as this title, so its content is equally unreachable while isSaving -- out of scope for this rule (it only checks title+disabled), flagged here rather than fixed since isSaving is brief and self-evident.
-                                              title={t('modSettingsTab.resetToDefaultTitle', { value: formatRawConfigValue(opt.default) })}
-                                            >
-                                              <Undo2 className="w-3 h-3" />
-                                              <span>{t('modSettingsTab.resetToDefaultLabel', { value: formatRawConfigValue(opt.default) })}</span>
-                                            </button>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="left">
-                                            <p>{t('modSettingsTab.resetToDefaultTooltip', { value: formatRawConfigValue(opt.default) })}</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      )}
-                                      {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
-                                    </div>
+                                    {isModified && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className="text-xs text-muted-foreground/50 hover:text-primary whitespace-nowrap flex items-center gap-1"
+                                            onClick={() =>
+                                              opt.name &&
+                                              opt.default !== undefined &&
+                                              handleOptionChange(
+                                                opt.name,
+                                                opt.default,
+                                                group.name,
+                                              )
+                                            }
+                                            disabled={isSaving}
+                                            // eslint-disable-next-line local/no-dead-disabled-title -- pure hint naming the action + value; disables only transiently while a save is in flight (the adjacent spinner is the self-evident why). Triaged 2026-08-27. Note: the wrapping Radix Tooltip here has the same "no pointer/focus events on a disabled native button" limitation as this title, so its content is equally unreachable while isSaving -- out of scope for this rule (it only checks title+disabled), flagged here rather than fixed since isSaving is brief and self-evident.
+                                            title={
+                                              'Reset to default: ' +
+                                              String(
+                                                formatRawConfigValue(
+                                                  opt.default,
+                                                ),
+                                              )
+                                            }
+                                          >
+                                            <Undo2 className="w-3 h-3" />
+                                            <span>
+                                              {'def: ' +
+                                                String(
+                                                  formatRawConfigValue(
+                                                    opt.default,
+                                                  ),
+                                                )}
+                                            </span>
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="left">
+                                          <p>
+                                            {'Reset to default: ' +
+                                              String(
+                                                formatRawConfigValue(
+                                                  opt.default,
+                                                ),
+                                              )}
+                                          </p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                    {isSaving && (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                                    )}
                                   </div>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  {filteredModGroups.length === 0 && (modSettingsSearch || modSettingsModifiedOnly) && (
-                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2">
-                      {modSettingsModifiedOnly && !modSettingsSearch ? (
-                        <>
-                          <Filter className="w-5 h-5 opacity-50" />
-                          <p className="text-sm">{t('modSettingsTab.noModifiedOptions')}</p>
-                          <Button variant="ghost" size="sm" onClick={() => setModSettingsModifiedOnly(false)} className="text-xs">
-                            {t('modSettingsTab.showAllOptions')}
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Search className="w-5 h-5 opacity-50" />
-                          <p className="text-sm">{t('modSettingsTab.noMatches', { query: modSettingsSearch.length > 60 ? modSettingsSearch.slice(0, 60) + '…' : modSettingsSearch, suffix: modSettingsModifiedOnly ? t('modSettingsTab.noMatchesInModified') : '' })}</p>
-                          <div className="flex gap-2">
-                            {modSettingsSearch && (
-                              <Button variant="ghost" size="sm" onClick={() => setModSettingsSearch('')} className="text-xs">
-                                {t('modSettingsTab.clearSearch')}
-                              </Button>
-                            )}
-                            {modSettingsModifiedOnly && (
-                              <Button variant="ghost" size="sm" onClick={() => setModSettingsModifiedOnly(false)} className="text-xs">
-                                {t('modSettingsTab.showAllOptions')}
-                              </Button>
-                            )}
+                                </div>
+                              )
+                            })}
                           </div>
-                        </>
-                      )}
-                    </div>
-                  )}
+                        )}
+                      </div>
+                    )
+                  })}
+                  {filteredModGroups.length === 0 &&
+                    (modSettingsSearch || modSettingsModifiedOnly) && (
+                      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2">
+                        {modSettingsModifiedOnly && !modSettingsSearch ? (
+                          <>
+                            <Filter className="w-5 h-5 opacity-50" />
+                            <p className="text-sm">
+                              {
+                                'No options have been modified from their defaults.'
+                              }
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setModSettingsModifiedOnly(false)}
+                              className="text-xs"
+                            >
+                              {'Show all options'}
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Search className="w-5 h-5 opacity-50" />
+                            <p className="text-sm">
+                              {'No settings match “' +
+                                String(
+                                  modSettingsSearch.length > 60
+                                    ? modSettingsSearch.slice(0, 60) + '…'
+                                    : modSettingsSearch,
+                                ) +
+                                '”' +
+                                String(
+                                  modSettingsModifiedOnly
+                                    ? ' in modified options'
+                                    : '',
+                                )}
+                            </p>
+                            <div className="flex gap-2">
+                              {modSettingsSearch && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setModSettingsSearch('')}
+                                  className="text-xs"
+                                >
+                                  {'Clear search'}
+                                </Button>
+                              )}
+                              {modSettingsModifiedOnly && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setModSettingsModifiedOnly(false)
+                                  }
+                                  className="text-xs"
+                                >
+                                  {'Show all options'}
+                                </Button>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                 </ScrollArea>
               )}
             </div>
@@ -3745,7 +5332,8 @@ export default function ServerConfig() {
         </TabsContent>
       </Tabs>
 
-      {((activeTab === 'ini' && hasIniChanges) || (activeTab === 'sandbox' && hasSandboxChanges)) && (
+      {((activeTab === 'ini' && hasIniChanges) ||
+        (activeTab === 'sandbox' && hasSandboxChanges)) && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-4 sm:px-6 sm:pb-5">
           <div
             role="status"
@@ -3757,30 +5345,55 @@ export default function ServerConfig() {
             </span>
             <div className="min-w-0 flex-1">
               <div className="text-xs font-medium text-foreground">
-                {t('stickySaveBar.unsavedChange', { count: activeTab === 'ini' ? changedIniCount : changedSandboxCount })}
+                {Number(
+                  activeTab === 'ini' ? changedIniCount : changedSandboxCount,
+                ) === 1
+                  ? String(
+                      activeTab === 'ini'
+                        ? changedIniCount
+                        : changedSandboxCount,
+                    ) + ' unsaved change'
+                  : String(
+                      activeTab === 'ini'
+                        ? changedIniCount
+                        : changedSandboxCount,
+                    ) + ' unsaved changes'}
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {activeTab === 'ini' ? t('stickySaveBar.iniScope') : t('stickySaveBar.sandboxScope')} · {t('stickySaveBar.hint')}
+                {activeTab === 'ini' ? 'server ini' : 'sandbox lua'} ·{' '}
+                {'ctrl+s to save · applies on reload'}
               </div>
             </div>
             <Button
               variant="ghost"
               size="sm"
-              onClick={activeTab === 'ini' ? discardIniChanges : discardSandboxChanges}
+              onClick={
+                activeTab === 'ini' ? discardIniChanges : discardSandboxChanges
+              }
               disabled={saving || serverMayBeRunning}
               className="h-8 gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive"
             >
-              <Undo2 className="h-3 w-3" /> {t('stickySaveBar.discard')}
+              <Undo2 className="h-3 w-3" /> {'discard'}
             </Button>
             <Button
               variant="command"
               size="sm"
               onClick={activeTab === 'ini' ? handleSaveIni : handleSaveSandbox}
-              disabled={saving || serverChangedSinceLoad || (activeTab === 'ini' ? invalidIniSettings.length > 0 : invalidSandboxSettings.length > 0)}
+              disabled={
+                saving ||
+                serverChangedSinceLoad ||
+                (activeTab === 'ini'
+                  ? invalidIniSettings.length > 0
+                  : invalidSandboxSettings.length > 0)
+              }
               className="h-8 gap-1.5 text-xs font-medium"
             >
-              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-              {t('stickySaveBar.saveAndReload')}
+              {saving ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Save className="h-3 w-3" />
+              )}
+              {'save & reload'}
             </Button>
           </div>
         </div>
@@ -3790,19 +5403,23 @@ export default function ServerConfig() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <RotateCcw className="w-5 h-5" />
-              {t('backupsDialog.title')}
+              {'Configuration Backups'}
             </DialogTitle>
             <DialogDescription>
-              {t('backupsDialog.description')}
+              {
+                'Restore a previous version of your configuration files. Backups are created automatically when you save.'
+              }
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex items-center gap-2 border-b pb-3">
             <span className="text-sm text-muted-foreground me-2">
               <Filter className="w-4 h-4 inline me-1" />
-              {t('backupsDialog.filterLabel')}
+              {'Filter:'}
             </span>
-            {(['all', 'ini', 'sandbox', 'spawnpoints', 'spawnregions'] as const).map((filter) => (
+            {(
+              ['all', 'ini', 'sandbox', 'spawnpoints', 'spawnregions'] as const
+            ).map((filter) => (
               <Button
                 key={filter}
                 variant={backupFilter === filter ? 'default' : 'outline'}
@@ -3810,52 +5427,80 @@ export default function ServerConfig() {
                 onClick={() => setBackupFilter(filter)}
                 className="capitalize"
               >
-                {filter === 'all' ? t('backupsDialog.filterAll') : filter}
+                {filter === 'all' ? 'All Files' : filter}
               </Button>
             ))}
           </div>
 
           <ScrollArea className="h-[400px]">
             {backups.length === 0 ? (
-              <EmptyState type="noData" title={t('backupsDialog.emptyTitle')} description={t('backupsDialog.emptyDesc')} compact />
+              <EmptyState
+                type="noData"
+                title={'No backups available yet'}
+                description={
+                  'Backups are created automatically when you save any config file'
+                }
+                compact
+              />
             ) : (
               <div className="space-y-2">
                 {backups
-                  .filter(backup => {
+                  .filter((backup) => {
                     if (backupFilter === 'all') return true
                     const filename = backup.filename.toLowerCase()
-                    if (backupFilter === 'ini') return filename.includes('_ini_') || filename.endsWith('.ini')
-                    if (backupFilter === 'sandbox') return filename.includes('sandbox')
-                    if (backupFilter === 'spawnpoints') return filename.includes('spawnpoints')
-                    if (backupFilter === 'spawnregions') return filename.includes('spawnregions')
+                    if (backupFilter === 'ini')
+                      return (
+                        filename.includes('_ini_') || filename.endsWith('.ini')
+                      )
+                    if (backupFilter === 'sandbox')
+                      return filename.includes('sandbox')
+                    if (backupFilter === 'spawnpoints')
+                      return filename.includes('spawnpoints')
+                    if (backupFilter === 'spawnregions')
+                      return filename.includes('spawnregions')
                     return true
                   })
                   .map((backup) => {
                     const filename = backup.filename.toLowerCase()
-                    let fileType = t('backupsDialog.typeConfig')
+                    let fileType = 'config'
                     let typeColor = 'bg-muted-foreground'
-                    if (filename.includes('_ini_') || filename.endsWith('.ini')) {
-                      fileType = t('backupsDialog.typeIni')
+                    if (
+                      filename.includes('_ini_') ||
+                      filename.endsWith('.ini')
+                    ) {
+                      fileType = 'INI'
                       typeColor = 'bg-primary'
                     } else if (filename.includes('sandbox')) {
-                      fileType = t('backupsDialog.typeSandbox')
+                      fileType = 'Sandbox'
                       typeColor = 'bg-chart-4'
                     } else if (filename.includes('spawnpoints')) {
-                      fileType = t('backupsDialog.typeSpawnPoints')
+                      fileType = 'SpawnPoints'
                       typeColor = 'bg-accent-foreground'
                     } else if (filename.includes('spawnregions')) {
-                      fileType = t('backupsDialog.typeSpawnRegions')
+                      fileType = 'SpawnRegions'
                       typeColor = 'bg-warning'
                     }
 
                     return (
-                      <div key={backup.filename} className="flex flex-col gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between">
+                      <div
+                        key={backup.filename}
+                        className="flex flex-col gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between"
+                      >
                         <div className="flex min-w-0 items-start gap-3 sm:items-center">
-                          <Badge className={`${typeColor} text-white text-xs`}>{fileType}</Badge>
+                          <Badge className={`${typeColor} text-white text-xs`}>
+                            {fileType}
+                          </Badge>
                           <div className="min-w-0">
-                            <p className="break-all text-sm font-medium font-mono" dir="auto" title={backup.filename}>{backup.filename}</p>
+                            <p
+                              className="break-all text-sm font-medium font-mono"
+                              dir="auto"
+                              title={backup.filename}
+                            >
+                              {backup.filename}
+                            </p>
                             <p className="text-xs text-muted-foreground">
-                              {new Date(backup.created).toLocaleString(i18n.language)} • {t('backupsDialog.sizeKb', { size: Math.round(backup.size / 1024) })}
+                              {new Date(backup.created).toLocaleString('en')} •{' '}
+                              {String(Math.round(backup.size / 1024)) + 'KB'}
                             </p>
                           </div>
                         </div>
@@ -3866,45 +5511,66 @@ export default function ServerConfig() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleRestoreBackup(backup.filename)}
+                                  onClick={() =>
+                                    handleRestoreBackup(backup.filename)
+                                  }
                                 >
                                   <Upload className="w-4 h-4 me-1" />
-                                  {t('backupsDialog.restore')}
+                                  {'Restore'}
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>{t('backupsDialog.restoreTooltip')}</TooltipContent>
+                              <TooltipContent>
+                                {'Replace current file with this backup'}
+                              </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </div>
                       </div>
                     )
                   })}
-                {backups.filter(backup => {
+                {backups.filter((backup) => {
                   if (backupFilter === 'all') return true
                   const filename = backup.filename.toLowerCase()
-                  if (backupFilter === 'ini') return filename.includes('_ini_') || filename.endsWith('.ini')
-                  if (backupFilter === 'sandbox') return filename.includes('sandbox')
-                  if (backupFilter === 'spawnpoints') return filename.includes('spawnpoints')
-                  if (backupFilter === 'spawnregions') return filename.includes('spawnregions')
+                  if (backupFilter === 'ini')
+                    return (
+                      filename.includes('_ini_') || filename.endsWith('.ini')
+                    )
+                  if (backupFilter === 'sandbox')
+                    return filename.includes('sandbox')
+                  if (backupFilter === 'spawnpoints')
+                    return filename.includes('spawnpoints')
+                  if (backupFilter === 'spawnregions')
+                    return filename.includes('spawnregions')
                   return true
-                }).length === 0 && backups.length > 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <p>{t('backupsDialog.noneForFilter', { filter: backupFilter })}</p>
-                    <Button variant="link" size="sm" onClick={() => setBackupFilter('all')}>
-                      {t('backupsDialog.showAllBackups')}
-                    </Button>
-                  </div>
-                )}
+                }).length === 0 &&
+                  backups.length > 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>
+                        {'No backups found for "' +
+                          String(backupFilter) +
+                          '" files.'}
+                      </p>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => setBackupFilter('all')}
+                      >
+                        {'Show all backups'}
+                      </Button>
+                    </div>
+                  )}
               </div>
             )}
           </ScrollArea>
 
           <DialogFooter className="flex items-center justify-between sm:justify-between">
             <p className="text-xs text-muted-foreground">
-              {t('backupsDialog.totalCount', { count: backups.length })}
+              {Number(backups.length) === 1
+                ? String(backups.length) + ' backup total'
+                : String(backups.length) + ' backups total'}
             </p>
             <Button variant="outline" onClick={() => setShowBackups(false)}>
-              {t('backupsDialog.close')}
+              {'Close'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3916,54 +5582,99 @@ export default function ServerConfig() {
             <DialogTitle className="flex items-center gap-2">
               <Bookmark className="w-5 h-5" />
               <span className="flex items-center gap-1.5">
-                {t('templatesDialog.title')}
-                <HelpTip label={t('templatesDialog.title')}>{t('templatesDialog.applyTip')}</HelpTip>
+                {'Saved Configs'}
+                <HelpTip label={'Saved Configs'}>
+                  {
+                    "Applying a saved config replaces ALL of your current settings — it doesn't merge with what's there now. The panel backs up what's live before applying, so Restore can undo it, but the server must be stopped first."
+                  }
+                </HelpTip>
               </span>
             </DialogTitle>
             <DialogDescription>
-              {t('templatesDialog.description')}
+              {
+                'Save your current configuration, or load one you saved earlier.'
+              }
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex items-center justify-between border-b pb-3">
             <span className="text-sm text-muted-foreground">
-              {t('templatesDialog.savedCount', { count: templates.length })}
+              {Number(templates.length) === 1
+                ? String(templates.length) + ' config saved'
+                : String(templates.length) + ' configs saved'}
             </span>
             <Button onClick={() => setShowSaveTemplate(true)}>
               <Plus className="w-4 h-4 me-2" />
-              {t('templatesDialog.saveCurrentAsTemplate')}
+              {'Save Current Config'}
             </Button>
           </div>
 
           <ScrollArea className="h-[400px]">
             {templates.length === 0 ? (
-              <EmptyState type="noData" title={t('templatesDialog.emptyTitle')} description={t('templatesDialog.emptyDesc')} compact />
+              <EmptyState
+                type="noData"
+                title={'No saved configs yet'}
+                description={
+                  "Click 'Save Current Config' to create your first one"
+                }
+                compact
+              />
             ) : (
               <div className="space-y-3">
                 {templates.map((template) => (
-                  <div key={template.id} className="rounded-lg border p-4 transition-colors hover:bg-muted/50">
+                  <div
+                    key={template.id}
+                    className="rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                  >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="font-medium break-words" dir="auto" title={template.name}>{template.name}</h4>
+                          <h4
+                            className="font-medium break-words"
+                            dir="auto"
+                            title={template.name}
+                          >
+                            {template.name}
+                          </h4>
                           <Badge variant="secondary" className="text-xs">
-                            {template.type === 'both' ? t('templatesDialog.typeBoth') : template.type.toUpperCase()}
+                            {template.type === 'both'
+                              ? 'INI + Sandbox'
+                              : template.type.toUpperCase()}
                           </Badge>
                         </div>
                         {template.description && (
-                          <p className="mt-1 break-words text-sm text-muted-foreground" dir="auto" title={template.description}>{template.description}</p>
+                          <p
+                            className="mt-1 break-words text-sm text-muted-foreground"
+                            dir="auto"
+                            title={template.description}
+                          >
+                            {template.description}
+                          </p>
                         )}
                         <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                          <span>{t('templatesDialog.createdLabel', { date: new Date(template.created).toLocaleDateString(i18n.language) })}</span>
+                          <span>
+                            {'Created: ' +
+                              String(
+                                new Date(template.created).toLocaleDateString(
+                                  'en',
+                                ),
+                              )}
+                          </span>
                           <span>•</span>
                           <span className="flex items-center gap-1">
-                            {template.hasIni && <CheckCircle className="w-3 h-3 text-primary" />}
-                            {template.hasIni && t('activeServerStrip.iniLabel')}
+                            {template.hasIni && (
+                              <CheckCircle className="w-3 h-3 text-primary" />
+                            )}
+                            {template.hasIni && 'INI'}
                           </span>
-                          {template.hasIni && template.hasSandbox && <span>•</span>}
+                          {template.hasIni && template.hasSandbox && (
+                            <span>•</span>
+                          )}
                           <span className="flex items-center gap-1">
-                            {template.hasSandbox && <CheckCircle className="w-3 h-3 text-primary" />}
-                            {template.hasSandbox && t('activeServerStrip.sandboxLabel')}
+                            {template.hasSandbox && (
+                              <CheckCircle className="w-3 h-3 text-primary" />
+                            )}
+                            {template.hasSandbox && 'Sandbox'}
                           </span>
                         </div>
                       </div>
@@ -3982,12 +5693,14 @@ export default function ServerConfig() {
                                 ) : (
                                   <>
                                     <FolderOpen className="w-4 h-4 me-1" />
-                                    {t('templatesDialog.apply')}
+                                    {'Apply'}
                                   </>
                                 )}
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>{t('templatesDialog.applyTooltip')}</TooltipContent>
+                            <TooltipContent>
+                              {'Load this config (creates backup first)'}
+                            </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                         <TooltipProvider>
@@ -3997,13 +5710,22 @@ export default function ServerConfig() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-11 w-11 text-destructive hover:text-destructive sm:h-9 sm:w-9"
-                                onClick={() => handleDeleteTemplate(template.id, template.name)}
-                                aria-label={t('templatesDialog.deleteAria', { name: template.name })}
+                                onClick={() =>
+                                  handleDeleteTemplate(
+                                    template.id,
+                                    template.name,
+                                  )
+                                }
+                                aria-label={
+                                  'Delete saved config ' + String(template.name)
+                                }
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>{t('templatesDialog.deleteTooltip')}</TooltipContent>
+                            <TooltipContent>
+                              {'Delete this saved config'}
+                            </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </div>
@@ -4016,7 +5738,7 @@ export default function ServerConfig() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowTemplates(false)}>
-              {t('templatesDialog.close')}
+              {'Close'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4027,80 +5749,101 @@ export default function ServerConfig() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Save className="w-5 h-5" />
-              {t('saveTemplateDialog.title')}
+              {'Save Current Config'}
             </DialogTitle>
             <DialogDescription>
-              {t('saveTemplateDialog.description')}
+              {
+                'Save your current INI and/or Sandbox settings so you can load them again later.'
+              }
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="template-name">{t('saveTemplateDialog.nameLabel')}</Label>
+              <Label htmlFor="template-name">{'Name *'}</Label>
               <Input
                 id="template-name"
-                placeholder={t('saveTemplateDialog.namePlaceholder')}
+                placeholder={'e.g., PvE Casual, Hardcore Survival...'}
                 value={newTemplateName}
-                onChange={(e) => setNewTemplateName(e.target.value.slice(0, 60))}
+                onChange={(e) =>
+                  setNewTemplateName(e.target.value.slice(0, 60))
+                }
                 maxLength={60}
               />
-              <p className="text-xs text-muted-foreground">{t('saveTemplateDialog.nameCharCount', { count: newTemplateName.length })}</p>
+              <p className="text-xs text-muted-foreground">
+                {String(newTemplateName.length) + '/60 characters'}
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="template-desc">{t('saveTemplateDialog.descLabel')}</Label>
+              <Label htmlFor="template-desc">{'Description (optional)'}</Label>
               <Textarea
                 id="template-desc"
-                placeholder={t('saveTemplateDialog.descPlaceholder')}
+                placeholder={'Describe what this is for...'}
                 value={newTemplateDesc}
-                onChange={(e) => setNewTemplateDesc(e.target.value.slice(0, 240))}
+                onChange={(e) =>
+                  setNewTemplateDesc(e.target.value.slice(0, 240))
+                }
                 className="min-h-[80px] resize-y"
                 maxLength={240}
               />
-              <p className="text-xs text-muted-foreground">{t('saveTemplateDialog.descCharCount', { count: newTemplateDesc.length })}</p>
+              <p className="text-xs text-muted-foreground">
+                {String(newTemplateDesc.length) + '/240 characters'}
+              </p>
             </div>
 
             <div className="space-y-3">
-              <Label>{t('saveTemplateDialog.includeLabel')}</Label>
+              <Label>{'Include'}</Label>
               <div className="flex items-center justify-between p-3 border rounded-lg">
                 <div>
-                  <p className="font-medium">{t('saveTemplateDialog.includeIniTitle')}</p>
-                  <p className="text-xs text-muted-foreground">{t('saveTemplateDialog.includeIniDesc')}</p>
+                  <p className="font-medium">{'Server Settings (INI)'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {'Network, players, RCON, server behavior'}
+                  </p>
                 </div>
                 <Switch
                   checked={saveTemplateIni}
                   onCheckedChange={setSaveTemplateIni}
-                  aria-label={t('saveTemplateDialog.includeIniAria')}
+                  aria-label={'Include server settings'}
                 />
               </div>
               <div className="flex items-center justify-between p-3 border rounded-lg">
                 <div>
-                  <p className="font-medium">{t('saveTemplateDialog.includeSandboxTitle')}</p>
-                  <p className="text-xs text-muted-foreground">{t('saveTemplateDialog.includeSandboxDesc')}</p>
+                  <p className="font-medium">{'Sandbox Settings'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {'World, zombies, loot, survival settings'}
+                  </p>
                 </div>
                 <Switch
                   checked={saveTemplateSandbox}
                   onCheckedChange={setSaveTemplateSandbox}
-                  aria-label={t('saveTemplateDialog.includeSandboxAria')}
+                  aria-label={'Include sandbox settings'}
                 />
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSaveTemplate(false)}>
-              {t('saveTemplateDialog.cancel')}
+            <Button
+              variant="outline"
+              onClick={() => setShowSaveTemplate(false)}
+            >
+              {'Cancel'}
             </Button>
             <Button
               onClick={handleSaveTemplate}
-              disabled={templateLoading || !newTemplateName.trim() || (!saveTemplateIni && !saveTemplateSandbox)}
+              disabled={
+                templateLoading ||
+                !newTemplateName.trim() ||
+                (!saveTemplateIni && !saveTemplateSandbox)
+              }
             >
               {templateLoading ? (
                 <Loader2 className="w-4 h-4 me-2 animate-spin" />
               ) : (
                 <Save className="w-4 h-4 me-2" />
               )}
-              {t('saveTemplateDialog.save')}
+              {'Save Config'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4111,15 +5854,20 @@ export default function ServerConfig() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FolderOpen className="w-5 h-5" />
-              {t('fileBrowserDialog.title')}
+              {'Select Image File'}
             </DialogTitle>
             <DialogDescription>
-              {t('fileBrowserDialog.description')}
+              {'Browse to find a PNG image file for your server.'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex items-center gap-1.5 text-xs font-mono bg-muted/50 rounded-md px-3 py-2 overflow-x-auto">
-            <span className="text-muted-foreground truncate" title={fileBrowserPath}>{fileBrowserPath || t('fileBrowserDialog.loadingPath')}</span>
+            <span
+              className="text-muted-foreground truncate"
+              title={fileBrowserPath}
+            >
+              {fileBrowserPath || 'Loading...'}
+            </span>
           </div>
 
           <ScrollArea className="flex-1 min-h-[300px] max-h-[400px] border rounded-md">
@@ -4139,10 +5887,21 @@ export default function ServerConfig() {
                   </button>
                 )}
 
-                {fileBrowserDirs.map(dir => (
+                {fileBrowserDirs.map((dir) => (
                   <button
                     key={`d-${dir}`}
-                    onClick={() => browseTo(fileBrowserPath + (fileBrowserPath.endsWith('/') || fileBrowserPath.endsWith('\\') ? '' : (fileBrowserPath.includes('/') ? '/' : '\\')) + dir)}
+                    onClick={() =>
+                      browseTo(
+                        fileBrowserPath +
+                          (fileBrowserPath.endsWith('/') ||
+                          fileBrowserPath.endsWith('\\')
+                            ? ''
+                            : fileBrowserPath.includes('/')
+                              ? '/'
+                              : '\\') +
+                          dir,
+                      )
+                    }
                     className="flex items-center gap-2 w-full px-3 py-2 rounded-md hover:bg-muted/70 text-sm transition-colors"
                   >
                     <FolderOpen className="w-4 h-4 text-amber-500 shrink-0" />
@@ -4150,8 +5909,16 @@ export default function ServerConfig() {
                   </button>
                 ))}
 
-                {fileBrowserFiles.map(file => {
-                  const fullPath = fileBrowserPath + (fileBrowserPath.endsWith('/') || fileBrowserPath.endsWith('\\') ? '' : (fileBrowserPath.includes('/') ? '/' : '\\')) + file.name
+                {fileBrowserFiles.map((file) => {
+                  const fullPath =
+                    fileBrowserPath +
+                    (fileBrowserPath.endsWith('/') ||
+                    fileBrowserPath.endsWith('\\')
+                      ? ''
+                      : fileBrowserPath.includes('/')
+                        ? '/'
+                        : '\\') +
+                    file.name
                   const isSelected = fileBrowserSelected === fullPath
                   return (
                     <button
@@ -4159,30 +5926,43 @@ export default function ServerConfig() {
                       onClick={() => setFileBrowserSelected(fullPath)}
                       onDoubleClick={() => {
                         setFileBrowserSelected(fullPath)
-                        setIniSettings(prev => ({ ...prev, [fileBrowserKey]: fullPath }))
+                        setIniSettings((prev) => ({
+                          ...prev,
+                          [fileBrowserKey]: fullPath,
+                        }))
                         setFileBrowserOpen(false)
                       }}
                       className={`flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm transition-colors ${
-                        isSelected ? 'bg-primary/15 border border-primary/30 ring-1 ring-primary/20' : 'hover:bg-muted/70'
+                        isSelected
+                          ? 'bg-primary/15 border border-primary/30 ring-1 ring-primary/20'
+                          : 'hover:bg-muted/70'
                       }`}
                     >
                       <FileText className="w-4 h-4 text-primary shrink-0" />
-                      <span className="truncate flex-1 text-start">{file.name}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">{file.ext}</span>
+                      <span className="truncate flex-1 text-start">
+                        {file.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {file.ext}
+                      </span>
                     </button>
                   )
                 })}
 
-                {fileBrowserDirs.length === 0 && fileBrowserFiles.length === 0 && !fileBrowserParent && (
-                  <div className="text-center py-8 text-sm text-muted-foreground">
-                    {t('fileBrowserDialog.emptyNoParent')}
-                  </div>
-                )}
-                {fileBrowserDirs.length === 0 && fileBrowserFiles.length === 0 && fileBrowserParent && (
-                  <div className="text-center py-4 text-sm text-muted-foreground">
-                    {t('fileBrowserDialog.emptyWithParent')}
-                  </div>
-                )}
+                {fileBrowserDirs.length === 0 &&
+                  fileBrowserFiles.length === 0 &&
+                  !fileBrowserParent && (
+                    <div className="text-center py-8 text-sm text-muted-foreground">
+                      {'No image files found in this directory'}
+                    </div>
+                  )}
+                {fileBrowserDirs.length === 0 &&
+                  fileBrowserFiles.length === 0 &&
+                  fileBrowserParent && (
+                    <div className="text-center py-4 text-sm text-muted-foreground">
+                      {'No image files here — try a different folder'}
+                    </div>
+                  )}
               </div>
             )}
           </ScrollArea>
@@ -4197,19 +5977,29 @@ export default function ServerConfig() {
                 />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{fileBrowserSelected.split(/[/\\]/).pop()}</p>
-                <p className="text-xs text-muted-foreground font-mono truncate mt-0.5" title={fileBrowserSelected}>{fileBrowserSelected}</p>
+                <p className="text-sm font-medium truncate">
+                  {fileBrowserSelected.split(/[/\\]/).pop()}
+                </p>
+                <p
+                  className="text-xs text-muted-foreground font-mono truncate mt-0.5"
+                  title={fileBrowserSelected}
+                >
+                  {fileBrowserSelected}
+                </p>
               </div>
             </div>
           )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setFileBrowserOpen(false)}>
-              {t('fileBrowserDialog.cancel')}
+              {'Cancel'}
             </Button>
-            <Button onClick={confirmFileBrowserSelection} disabled={!fileBrowserSelected}>
+            <Button
+              onClick={confirmFileBrowserSelection}
+              disabled={!fileBrowserSelected}
+            >
               <Check className="w-4 h-4 me-2" />
-              {t('fileBrowserDialog.selectFile')}
+              {'Select File'}
             </Button>
           </DialogFooter>
         </DialogContent>

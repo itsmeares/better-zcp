@@ -7,7 +7,10 @@ export function mapConfigsEqual(a: MapConfig, b: MapConfig): boolean {
   ])
   return Array.from(keys).every((key) => {
     if (key === 'defaultCenter') {
-      return a.defaultCenter?.x === b.defaultCenter?.x && a.defaultCenter?.y === b.defaultCenter?.y
+      return (
+        a.defaultCenter?.x === b.defaultCenter?.x &&
+        a.defaultCenter?.y === b.defaultCenter?.y
+      )
     }
     return a[key] === b[key]
   })

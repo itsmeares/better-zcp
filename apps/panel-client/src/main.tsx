@@ -2,7 +2,6 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from '@tanstack/react-router'
 import './index.css'
-import './i18n'
 import { isDemoMode, installDemoFetchShim } from './lib/demo'
 import { router } from './router'
 
