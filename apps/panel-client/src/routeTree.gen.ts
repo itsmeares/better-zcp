@@ -22,7 +22,6 @@ import { Route as ModsRouteImport } from './routes/mods'
 import { Route as PlayersRouteImport } from './routes/players'
 import { Route as SchedulerRouteImport } from './routes/scheduler'
 import { Route as ServerConfigRouteImport } from './routes/server-config'
-import { Route as ServerFinderRouteImport } from './routes/server-finder'
 import { Route as ServerSetupRouteImport } from './routes/server-setup'
 import { Route as ServersRouteImport } from './routes/servers'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -99,11 +98,6 @@ const ServerConfigRoute = ServerConfigRouteImport.update({
   path: '/server-config',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ServerFinderRoute = ServerFinderRouteImport.update({
-  id: '/server-finder',
-  path: '/server-finder',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ServerSetupRoute = ServerSetupRouteImport.update({
   id: '/server-setup',
   path: '/server-setup',
@@ -169,7 +163,6 @@ export interface FileRoutesByFullPath {
   '/players': typeof PlayersRoute
   '/scheduler': typeof SchedulerRoute
   '/server-config': typeof ServerConfigRoute
-  '/server-finder': typeof ServerFinderRoute
   '/server-setup': typeof ServerSetupRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
@@ -195,7 +188,6 @@ export interface FileRoutesByTo {
   '/players': typeof PlayersRoute
   '/scheduler': typeof SchedulerRoute
   '/server-config': typeof ServerConfigRoute
-  '/server-finder': typeof ServerFinderRoute
   '/server-setup': typeof ServerSetupRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
@@ -222,7 +214,6 @@ export interface FileRoutesById {
   '/players': typeof PlayersRoute
   '/scheduler': typeof SchedulerRoute
   '/server-config': typeof ServerConfigRoute
-  '/server-finder': typeof ServerFinderRoute
   '/server-setup': typeof ServerSetupRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
@@ -250,7 +241,6 @@ export interface FileRouteTypes {
     | '/players'
     | '/scheduler'
     | '/server-config'
-    | '/server-finder'
     | '/server-setup'
     | '/servers'
     | '/settings'
@@ -276,7 +266,6 @@ export interface FileRouteTypes {
     | '/players'
     | '/scheduler'
     | '/server-config'
-    | '/server-finder'
     | '/server-setup'
     | '/servers'
     | '/settings'
@@ -302,7 +291,6 @@ export interface FileRouteTypes {
     | '/players'
     | '/scheduler'
     | '/server-config'
-    | '/server-finder'
     | '/server-setup'
     | '/servers'
     | '/settings'
@@ -329,7 +317,6 @@ export interface RootRouteChildren {
   PlayersRoute: typeof PlayersRoute
   SchedulerRoute: typeof SchedulerRoute
   ServerConfigRoute: typeof ServerConfigRoute
-  ServerFinderRoute: typeof ServerFinderRoute
   ServerSetupRoute: typeof ServerSetupRoute
   ServersRoute: typeof ServersRoute
   SettingsRoute: typeof SettingsRoute
@@ -435,13 +422,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServerConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/server-finder': {
-      id: '/server-finder'
-      path: '/server-finder'
-      fullPath: '/server-finder'
-      preLoaderRoute: typeof ServerFinderRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/server-setup': {
       id: '/server-setup'
       path: '/server-setup'
@@ -529,7 +509,6 @@ const rootRouteChildren: RootRouteChildren = {
   PlayersRoute: PlayersRoute,
   SchedulerRoute: SchedulerRoute,
   ServerConfigRoute: ServerConfigRoute,
-  ServerFinderRoute: ServerFinderRoute,
   ServerSetupRoute: ServerSetupRoute,
   ServersRoute: ServersRoute,
   SettingsRoute: SettingsRoute,
