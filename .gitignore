@@ -45,6 +45,7 @@ ZomboidControlPanel-windows.zip
 *.ipynb
 lh-*.json
 _artifacts/
+.plans/
 
 # Per-machine data/log root override (absolute paths, never committed).
 # Also written by the server test setup for the duration of a test run.
