@@ -1,7 +1,6 @@
 import { reportClientWarning } from "./client-errors";
 import { clearAccessToken, getAccessToken, setAccessToken } from "./authToken";
 import { toast } from "@/components/ui/use-toast";
-import i18n from "@/i18n";
 import type { LifecycleState } from "./serverStatus";
 import {
   getDiskSpace,
@@ -639,7 +638,7 @@ function showBackupWarning(data: unknown): void {
   if (typeof backupWarning !== "string" || !backupWarning) return;
   toast({
     variant: "warning",
-    title: i18n.t("toastTitle", { ns: "backupWarning" }),
+    title: "Backup warning",
     description: backupWarning,
   });
 }

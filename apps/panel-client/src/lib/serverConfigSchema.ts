@@ -1,6 +1,4 @@
 
-import { resolveRegisteredTranslation, type TranslationParams } from './paramTranslation'
-
 export interface IniSetting {
   key: string
   label: string
@@ -4668,27 +4666,17 @@ export function getSandboxSetting(key: string, section?: string): SandboxSetting
 }
 
 
-function translatedOrFallback(key: string, fallback: string, params?: TranslationParams): string {
-  return resolveRegisteredTranslation('serverconfig', key, params) ?? fallback
-}
-
-function translatedSandboxLabel(key: string, fallback: string): string {
-  const serverConfigValue = resolveRegisteredTranslation('serverconfig', `sandboxSettings.${key}`, undefined)
-  if (serverConfigValue !== null && serverConfigValue !== fallback) return serverConfigValue
-  return resolveRegisteredTranslation('sandboxPz', key, undefined) ?? serverConfigValue ?? fallback
-}
-
 export function getIniSettingLabel(setting: IniSetting): string {
-  return translatedOrFallback(`iniSettings.${setting.category}.${setting.key}.label`, setting.label)
+  return setting.label
 }
 
 export function getIniSettingDescription(setting: IniSetting): string {
-  return translatedOrFallback(`iniSettings.${setting.category}.${setting.key}.description`, setting.description)
+  return setting.description
 }
 
 export function getIniSettingOptionLabel(setting: IniSetting, value: string): string {
   const fallback = setting.options?.find(o => o.value === value)?.label ?? value
-  return translatedOrFallback(`iniSettings.${setting.category}.${setting.key}.options.${value}.label`, fallback)
+  return fallback
 }
 
 export function getIniSettingSearchText(setting: IniSetting): string {
@@ -4713,24 +4701,24 @@ export function getIniSettingSearchText(setting: IniSetting): string {
 }
 
 export function getIniCategoryLabel(category: { id: string; label: string }): string {
-  return translatedOrFallback(`iniCategories.${category.id}.label`, category.label)
+  return category.label
 }
 
 export function getIniCategoryGroupLabel(group: { id: string; label: string }): string {
-  return translatedOrFallback(`iniCategoryGroups.${group.id}.label`, group.label)
+  return group.label
 }
 
 export function getSandboxSettingLabel(setting: SandboxSetting): string {
-  return translatedSandboxLabel(`${setting.category}.${setting.key}.label`, setting.label)
+  return setting.label
 }
 
 export function getSandboxSettingDescription(setting: SandboxSetting): string {
-  return translatedOrFallback(`sandboxSettings.${setting.category}.${setting.key}.description`, setting.description)
+  return setting.description
 }
 
 export function getSandboxSettingOptionLabel(setting: SandboxSetting, value: number): string {
   const fallback = setting.options?.find(o => o.value === value)?.label ?? String(value)
-  return translatedSandboxLabel(`${setting.category}.${setting.key}.options.${value}.label`, fallback)
+  return fallback
 }
 
 export function getSandboxSettingSearchText(setting: SandboxSetting): string {
@@ -4757,19 +4745,15 @@ export function getSandboxSettingSearchText(setting: SandboxSetting): string {
 }
 
 export function getUnrecognizedSandboxOptionWarning(value: number | string): string {
-  return translatedOrFallback(
-    'unrecognizedSandboxOptionWarning',
-    `This server is currently set to ${value}, which this panel does not recognize. The value is preserved and will not be changed unless you pick a different option here.`,
-    { value },
-  )
+  return `This server is currently set to ${value}, which this panel does not recognize. The value is preserved and will not be changed unless you pick a different option here.`
 }
 
 export function getSandboxCategoryLabel(category: { id: string; label: string }): string {
-  return translatedOrFallback(`sandboxCategories.${category.id}.label`, category.label)
+  return category.label
 }
 
 export function getSandboxCategoryGroupLabel(group: { id: string; label: string }): string {
-  return translatedOrFallback(`sandboxCategoryGroups.${group.id}.label`, group.label)
+  return group.label
 }
 
 export function groupByCategory<T extends { category: string }>(settings: T[]): Record<string, T[]> {

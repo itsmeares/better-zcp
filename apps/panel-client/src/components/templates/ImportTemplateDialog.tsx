@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Loader2, Upload } from 'lucide-react'
 import {
   Dialog,
@@ -22,8 +21,11 @@ interface ImportTemplateDialogProps {
   onImported: () => void
 }
 
-export function ImportTemplateDialog({ open, onClose, onImported }: ImportTemplateDialogProps) {
-  const { t } = useTranslation('templateImportDialog')
+export function ImportTemplateDialog({
+  open,
+  onClose,
+  onImported,
+}: ImportTemplateDialogProps) {
   const { toast } = useToast()
   const [text, setText] = useState('')
   const [importing, setImporting] = useState(false)
@@ -34,7 +36,7 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
     try {
       setText(await file.text())
     } catch (err) {
-      setError(getUserErrorMessage(err, t('failedToReadFile')))
+      setError(getUserErrorMessage(err, "Couldn't read that file."))
     }
   }
 
@@ -44,16 +46,24 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
     try {
       const parsed = JSON.parse(text)
       const result = await templatesApi.import(parsed)
-      if (!result.success) throw new Error(result.error || t('failedToImport'))
+      if (!result.success)
+        throw new Error(result.error || 'Failed to import template')
       toast({
-        title: t('toastImportedTitle'),
-        description: t('toastImportedDesc', { name: result.template?.meta.name }),
+        title: 'Template Imported',
+        description:
+          '"' +
+          String(result.template?.meta.name) +
+          '" was added to your templates.',
         variant: 'success' as const,
       })
       setText('')
       onImported()
     } catch (err) {
-      setError(err instanceof SyntaxError ? t('notValidJson') : getUserErrorMessage(err, t('failedToImport')))
+      setError(
+        err instanceof SyntaxError
+          ? 'That file is not valid JSON.'
+          : getUserErrorMessage(err, 'Failed to import template'),
+      )
     } finally {
       setImporting(false)
     }
@@ -63,8 +73,10 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t('title')}</DialogTitle>
-          <DialogDescription>{t('description')}</DialogDescription>
+          <DialogTitle>{'Import Template'}</DialogTitle>
+          <DialogDescription>
+            {"Paste a .pztemplate.json file's contents, or pick a file below."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -73,32 +85,40 @@ export function ImportTemplateDialog({ open, onClose, onImported }: ImportTempla
             type="file"
             accept=".json,.pztemplate.json,application/json"
             className="hidden"
-            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+            onChange={(e) =>
+              e.target.files?.[0] && handleFile(e.target.files[0])
+            }
           />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full"
+          >
             <Upload className="h-4 w-4" />
-            {t('chooseFile')}
+            {'Choose File'}
           </Button>
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={t('pastePlaceholder')}
+            placeholder={'Paste template JSON here'}
             rows={10}
             className="font-mono text-xs"
           />
           {error && (
             <Alert variant="destructive">
-              <AlertTitle>{t('importFailedTitle')}</AlertTitle>
+              <AlertTitle>{'Import Failed'}</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={importing}>{t('cancel')}</Button>
+          <Button variant="outline" onClick={onClose} disabled={importing}>
+            {'Cancel'}
+          </Button>
           <Button onClick={handleImport} disabled={importing || !text.trim()}>
             {importing && <Loader2 className="h-4 w-4 animate-spin" />}
-            {t('import')}
+            {'Import'}
           </Button>
         </DialogFooter>
       </DialogContent>

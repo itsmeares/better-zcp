@@ -1,7 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { Link, useLocation } from '@tanstack/react-router'
-import { Trans, useTranslation } from 'react-i18next'
-import type { TFunction } from 'i18next'
+import { useLocation } from '@tanstack/react-router'
 import { reportClientError } from '@/lib/client-errors'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import {
@@ -56,7 +54,7 @@ import {
   SelectItem,
   SelectLabel,
   SelectTrigger,
-  SelectValue
+  SelectValue,
 } from '@/components/ui/select'
 import {
   Dialog,
@@ -124,7 +122,7 @@ interface WhitelistAccount {
 }
 
 export function sanitizeSteamId(value: string): string {
-  return value.replace(/\D/g, '').slice(0, 17);
+  return value.replace(/\D/g, '').slice(0, 17)
 }
 
 export function isPlayerConfirmedNotWhitelisted(
@@ -137,20 +135,20 @@ export function isPlayerConfirmedNotWhitelisted(
     !whitelistLoading &&
     !whitelistError &&
     !!selectedPlayer &&
-    !whitelistAccounts.some(account => account.username === selectedPlayer)
-  );
+    !whitelistAccounts.some((account) => account.username === selectedPlayer)
+  )
 }
 
 const ACTIVITY_LOG_FETCH_LIMIT = 200
 
-function getAccessLevelLabels(t: TFunction): Record<string, string> {
+function getAccessLevelLabels(): Record<string, string> {
   return {
-    admin: t('accessLevels.admin'),
-    moderator: t('accessLevels.moderator'),
-    gm: t('accessLevels.gm'),
-    observer: t('accessLevels.observer'),
-    user: t('accessLevels.user'),
-    none: t('accessLevels.none'),
+    admin: 'Admin',
+    moderator: 'Moderator',
+    gm: 'GM',
+    observer: 'Observer',
+    user: 'User (demote — try this first)',
+    none: 'None (official demote value)',
   }
 }
 
@@ -205,19 +203,32 @@ function SummaryCard({
   const t = toneMap[tone]
   return (
     <div className="group relative flex flex-1 items-center gap-3 overflow-hidden rounded-md border border-border/55 bg-card/70 px-4 py-3 shadow-sm">
-      <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-[2px] ${t.accent}`} />
-      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border ${t.iconWrap}`}>
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 w-[2px] ${t.accent}`}
+      />
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border ${t.iconWrap}`}
+      >
         {icon}
       </div>
       <div className="min-w-0">
         <div className="flex items-baseline gap-1.5">
-          <p className={`text-xl font-semibold tabular-nums leading-none tracking-tight ${t.value}`}>{value}</p>
+          <p
+            className={`text-xl font-semibold tabular-nums leading-none tracking-tight ${t.value}`}
+          >
+            {value}
+          </p>
           {caption ? (
-            <span className="text-xs font-medium text-muted-foreground/70">{caption}</span>
+            <span className="text-xs font-medium text-muted-foreground/70">
+              {caption}
+            </span>
           ) : null}
         </div>
         <div className="mt-1 flex items-center gap-1">
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/75">{label}</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/75">
+            {label}
+          </p>
           {help}
         </div>
       </div>
@@ -243,7 +254,8 @@ function ActionTile({
   const emphasisMap = {
     default: {
       base: 'border-border/60 bg-card/50 hover:bg-accent/30 hover:border-border',
-      iconWrap: 'border-border/60 bg-muted/40 text-muted-foreground group-hover:text-foreground',
+      iconWrap:
+        'border-border/60 bg-muted/40 text-muted-foreground group-hover:text-foreground',
       label: 'text-foreground/90',
     },
     primary: {
@@ -272,42 +284,74 @@ function ActionTile({
         disabled ? 'opacity-50' : '',
       )}
     >
-      <div className={cn('flex shrink-0 items-center justify-center rounded-sm border', compact ? 'h-7 w-7' : 'h-8 w-8', e.iconWrap)}>
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-center rounded-sm border',
+          compact ? 'h-7 w-7' : 'h-8 w-8',
+          e.iconWrap,
+        )}
+      >
         {icon}
       </div>
       <div className="min-w-0 flex-1">
-        <p className={cn('font-medium leading-tight', compact ? 'text-[12px]' : 'text-sm', e.label)}>{label}</p>
+        <p
+          className={cn(
+            'font-medium leading-tight',
+            compact ? 'text-[12px]' : 'text-sm',
+            e.label,
+          )}
+        >
+          {label}
+        </p>
         {description && !compact ? (
-          <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{description}</p>
+          <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+            {description}
+          </p>
         ) : null}
       </div>
     </div>
   )
 }
 
-function VitalBar({ label, value, goodWhenLow }: { label: string; value: number; goodWhenLow: boolean }) {
+function VitalBar({
+  label,
+  value,
+  goodWhenLow,
+}: {
+  label: string
+  value: number
+  goodWhenLow: boolean
+}) {
   const pct = Math.max(0, Math.min(100, value * 100))
   const severity = goodWhenLow ? value : 1 - value
   const color =
-    severity < 0.5 ? 'hsl(var(--success))'
-    : severity < 0.75 ? 'hsl(var(--warning))'
-    : 'hsl(var(--destructive))'
+    severity < 0.5
+      ? 'hsl(var(--success))'
+      : severity < 0.75
+        ? 'hsl(var(--warning))'
+        : 'hsl(var(--destructive))'
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="w-16 shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">{label}</span>
+      <span className="w-16 shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+        {label}
+      </span>
       <div className="flex flex-1 items-center gap-1.5">
         <div className="h-1.5 flex-1 overflow-hidden rounded-sm bg-muted/60 ring-1 ring-black/20">
-          <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+          <div
+            className="h-full transition-all"
+            style={{ width: `${pct}%`, backgroundColor: color }}
+          />
         </div>
-        <span className="w-8 shrink-0 text-end font-mono text-xs tabular-nums text-foreground/85">{Math.round(pct)}%</span>
+        <span className="w-8 shrink-0 text-end font-mono text-xs tabular-nums text-foreground/85">
+          {Math.round(pct)}%
+        </span>
       </div>
     </div>
   )
 }
 
 export default function Players() {
-  const { t, i18n } = useTranslation('players')
-  const accessLevelLabels = useMemo(() => getAccessLevelLabels(t), [t])
+  const accessLevelLabels = useMemo(() => getAccessLevelLabels(), [])
   const { can } = useAuth()
   const { searchStr } = useLocation()
   const searchParams = new URLSearchParams(searchStr)
@@ -346,7 +390,9 @@ export default function Players() {
   const [unbanUsername, setUnbanUsername] = useState('')
   const [unbanSteamIdDialogOpen, setUnbanSteamIdDialogOpen] = useState(false)
   const [unbanSteamId, setUnbanSteamId] = useState('')
-  const [bannedSteamIds, setBannedSteamIds] = useState<Array<{ steamId: string; banned_at: string; reason?: string }>>([])
+  const [bannedSteamIds, setBannedSteamIds] = useState<
+    Array<{ steamId: string; banned_at: string; reason?: string }>
+  >([])
   const [loadingBans, setLoadingBans] = useState(false)
 
   const [addUserUsername, setAddUserUsername] = useState('')
@@ -363,7 +409,9 @@ export default function Players() {
   const [voiceBanUsername, setVoiceBanUsername] = useState('')
   const [voiceBanEnabled, setVoiceBanEnabled] = useState(true)
 
-  const [playerPowers, setPlayerPowers] = useState<Record<string, { godMode: boolean; invisible: boolean; noclip: boolean }>>({})
+  const [playerPowers, setPlayerPowers] = useState<
+    Record<string, { godMode: boolean; invisible: boolean; noclip: boolean }>
+  >({})
 
   const [playerSearchFilter, setPlayerSearchFilter] = useState('')
 
@@ -374,12 +422,22 @@ export default function Players() {
   const [copied, setCopied] = useState(false)
   const [importExportOpen, setImportExportOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
-  const [pendingImportData, setPendingImportData] = useState<Record<string, unknown> | null>(null)
+  const [pendingImportData, setPendingImportData] = useState<Record<
+    string,
+    unknown
+  > | null>(null)
 
   const [bridgeConnected, setBridgeConnected] = useState(false)
 
   const [autoExportEnabled, setAutoExportEnabled] = useState(false)
-  const [savedExports, setSavedExports] = useState<Array<{ username: string; filename: string; size: number; timestamp: string }>>([])
+  const [savedExports, setSavedExports] = useState<
+    Array<{
+      username: string
+      filename: string
+      size: number
+      timestamp: string
+    }>
+  >([])
 
   const copiedTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -458,22 +516,31 @@ export default function Players() {
   }
   const [playerVitals, setPlayerVitals] = useState<PlayerVitals | null>(null)
   const [playerVitalsLoading, setPlayerVitalsLoading] = useState(false)
-  const [playerVitalsError, setPlayerVitalsError] = useState<string | null>(null)
+  const [playerVitalsError, setPlayerVitalsError] = useState<string | null>(
+    null,
+  )
 
-  const [rosterVitals, setRosterVitals] = useState<Record<string, { health?: number; isInfected?: boolean }>>({})
+  const [rosterVitals, setRosterVitals] = useState<
+    Record<string, { health?: number; isInfected?: boolean }>
+  >({})
 
   const getErrorMessage = (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback
 
-  const filteredPlayers = useMemo(() =>
-    players.filter(player =>
-      player.name.toLowerCase().includes(playerSearchFilter.toLowerCase())
-    ),
-    [players, playerSearchFilter]
+  const filteredPlayers = useMemo(
+    () =>
+      players.filter((player) =>
+        player.name.toLowerCase().includes(playerSearchFilter.toLowerCase()),
+      ),
+    [players, playerSearchFilter],
   )
 
-  const [rosterTab, setRosterTab] = useState<'online' | 'roster' | 'banned' | 'whitelist'>('online')
-  const [whitelistAccounts, setWhitelistAccounts] = useState<WhitelistAccount[]>([])
+  const [rosterTab, setRosterTab] = useState<
+    'online' | 'roster' | 'banned' | 'whitelist'
+  >('online')
+  const [whitelistAccounts, setWhitelistAccounts] = useState<
+    WhitelistAccount[]
+  >([])
   const [allowedSteamIds, setAllowedSteamIds] = useState<string[]>([])
   const [allowedSteamIdInput, setAllowedSteamIdInput] = useState('')
   const [whitelistAvailable, setWhitelistAvailable] = useState(true)
@@ -481,15 +548,17 @@ export default function Players() {
   const [whitelistLoading, setWhitelistLoading] = useState(false)
   const [accessLevelOptions, setAccessLevelOptions] = useState<string[]>([])
   const offlineRoster = useMemo(() => {
-    const onlineLower = new Set(players.map(p => p.name.toLowerCase()))
+    const onlineLower = new Set(players.map((p) => p.name.toLowerCase()))
     const stats = Object.values(playerStats) as PlayerStat[]
-    const filtered = stats.filter(s => {
+    const filtered = stats.filter((s) => {
       const name = s.player_name || s.playerName
       return name && !onlineLower.has(name.toLowerCase())
     })
     const search = playerSearchFilter.trim().toLowerCase()
     const matched = search
-      ? filtered.filter(s => (s.player_name || s.playerName || '').toLowerCase().includes(search))
+      ? filtered.filter((s) =>
+          (s.player_name || s.playerName || '').toLowerCase().includes(search),
+        )
       : filtered
     return matched.sort((a, b) => {
       const ta = a.last_seen ? new Date(a.last_seen).getTime() : 0
@@ -501,19 +570,20 @@ export default function Players() {
   const filteredBans = useMemo(() => {
     const search = playerSearchFilter.trim().toLowerCase()
     if (!search) return bannedSteamIds
-    return bannedSteamIds.filter(b =>
-      b.steamId.toLowerCase().includes(search) ||
-      (b.reason || '').toLowerCase().includes(search)
+    return bannedSteamIds.filter(
+      (b) =>
+        b.steamId.toLowerCase().includes(search) ||
+        (b.reason || '').toLowerCase().includes(search),
     )
   }, [bannedSteamIds, playerSearchFilter])
 
   const filteredWhitelist = useMemo(() => {
     const search = playerSearchFilter.trim().toLowerCase()
     if (!search) return whitelistAccounts
-    return whitelistAccounts.filter(account =>
+    return whitelistAccounts.filter((account) =>
       [account.username, account.displayName, account.steamId, account.role]
         .filter(Boolean)
-        .some(value => String(value).toLowerCase().includes(search)),
+        .some((value) => String(value).toLowerCase().includes(search)),
     )
   }, [playerSearchFilter, whitelistAccounts])
 
@@ -533,9 +603,9 @@ export default function Players() {
       setPlayersLoadError(null)
     } catch (error) {
       reportClientError('Failed to fetch players.', error)
-      setPlayersLoadError(getErrorMessage(error, t('loadErrors.players')))
+      setPlayersLoadError(getErrorMessage(error, 'Failed to load players.'))
     }
-  }, [t])
+  }, [])
 
   const fetchRosterVitals = useCallback(async () => {
     try {
@@ -555,29 +625,34 @@ export default function Players() {
   const fetchActivityLogs = useCallback(async (playerFilter?: string) => {
     setLogsLoading(true)
     try {
-      const data = await playersApi.getActivityLogs(playerFilter, ACTIVITY_LOG_FETCH_LIMIT)
+      const data = await playersApi.getActivityLogs(
+        playerFilter,
+        ACTIVITY_LOG_FETCH_LIMIT,
+      )
       if (data.logs) {
         setActivityLogs(data.logs)
       }
       setLogsError(null)
     } catch (error) {
       reportClientError('Failed to fetch activity logs.', error)
-      setLogsError(getErrorMessage(error, t('loadErrors.activityLogs')))
+      setLogsError(getErrorMessage(error, 'Failed to load activity logs.'))
     } finally {
       setLogsLoading(false)
     }
-  }, [t])
+  }, [])
 
   const fetchNotesAndStats = useCallback(async () => {
     setNotesLoading(true)
     try {
       const [notesData, statsData] = await Promise.all([
         playersApi.getNotes(),
-        playersApi.getStats()
+        playersApi.getStats(),
       ])
       const notesMap: Record<string, PlayerNote> = {}
       if (notesData.notes) {
-        notesData.notes.forEach((n: PlayerNote) => { notesMap[n.playerName] = n })
+        notesData.notes.forEach((n: PlayerNote) => {
+          notesMap[n.playerName] = n
+        })
       }
       const statsMap: Record<string, PlayerStat> = {}
       if (statsData.stats) {
@@ -593,11 +668,13 @@ export default function Players() {
       setNotesError(null)
     } catch (error) {
       reportClientError('Failed to fetch notes and stats.', error)
-      setNotesError(getErrorMessage(error, t('loadErrors.notesAndStats')))
+      setNotesError(
+        getErrorMessage(error, 'Failed to load player notes and stats.'),
+      )
     } finally {
       setNotesLoading(false)
     }
-  }, [t])
+  }, [])
 
   const handleSaveNote = async () => {
     if (!selectedPlayer) return
@@ -606,23 +683,23 @@ export default function Players() {
     try {
       await playersApi.saveNote(selectedPlayer, normalizedNote, currentTags)
       toast({
-        title: t('toasts.noteSavedTitle'),
-        description: t('toasts.noteSavedDesc', { player: selectedPlayer }),
+        title: 'Note Saved',
+        description: 'Note for ' + String(selectedPlayer) + ' has been saved',
         variant: 'success' as const,
       })
-      setPlayerNotes(prev => ({
+      setPlayerNotes((prev) => ({
         ...prev,
         [selectedPlayer]: {
           playerName: selectedPlayer,
           note: normalizedNote,
           tags: currentTags,
-          updated_at: new Date().toISOString()
-        }
+          updated_at: new Date().toISOString(),
+        },
       }))
     } catch (error) {
       toast({
-        title: t('toasts.errorTitle'),
-        description: getUserErrorMessage(error, t('toasts.saveNoteFailedFallback')),
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to save note'),
         variant: 'destructive',
       })
     } finally {
@@ -636,11 +713,11 @@ export default function Players() {
     try {
       await playersApi.deleteNote(selectedPlayer)
       toast({
-        title: t('toasts.noteDeletedTitle'),
-        description: t('toasts.noteDeletedDesc', { player: selectedPlayer }),
+        title: 'Note Deleted',
+        description: 'Note for ' + String(selectedPlayer) + ' has been deleted',
         variant: 'success' as const,
       })
-      setPlayerNotes(prev => {
+      setPlayerNotes((prev) => {
         const updated = { ...prev }
         delete updated[selectedPlayer]
         return updated
@@ -649,8 +726,8 @@ export default function Players() {
       setCurrentTags([])
     } catch (error) {
       toast({
-        title: t('toasts.errorTitle'),
-        description: getUserErrorMessage(error, t('toasts.deleteNoteFailedFallback')),
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Failed to delete note'),
         variant: 'destructive',
       })
     } finally {
@@ -668,7 +745,7 @@ export default function Players() {
   }
 
   const removeTag = (tag: string) => {
-    setCurrentTags(currentTags.filter(t => t !== tag))
+    setCurrentTags(currentTags.filter((t) => t !== tag))
   }
 
   const formatPlaytime = (seconds: number): string => {
@@ -695,16 +772,25 @@ export default function Players() {
       const perksData = await playersApi.getPerks()
       setPerks(
         perksData.catalog ??
-          (perksData.perks || []).map((id: string) => ({ id, label: id, category: t('spawn.skillsCategoryFallback') })),
+          (perksData.perks || []).map((id: string) => ({
+            id,
+            label: id,
+            category: 'Skills',
+          })),
       )
       setToolsLoadError(null)
     } catch (error) {
       reportClientError('Failed to fetch player data.', error)
-      setToolsLoadError(getErrorMessage(error, t('loadErrors.toolsAndReference')))
+      setToolsLoadError(
+        getErrorMessage(
+          error,
+          'Failed to load player tools and reference data.',
+        ),
+      )
     } finally {
       setInitialLoading(false)
     }
-  }, [t])
+  }, [])
 
   const fetchBannedSteamIds = useCallback(async () => {
     setLoadingBans(true)
@@ -725,14 +811,20 @@ export default function Players() {
       setWhitelistAccounts(result.accounts || [])
       setAllowedSteamIds(result.allowedSteamIds || [])
       setWhitelistAvailable(result.available !== false)
-      setWhitelistError(result.available === false ? result.reason || t('loadErrors.whitelistUnavailableFallback') : null)
+      setWhitelistError(
+        result.available === false
+          ? result.reason || 'Whitelist roster unavailable'
+          : null,
+      )
     } catch (error) {
       reportClientError('Failed to fetch whitelist accounts.', error)
-      setWhitelistError(getErrorMessage(error, t('loadErrors.whitelist')))
+      setWhitelistError(
+        getErrorMessage(error, 'Failed to load whitelist accounts.'),
+      )
     } finally {
       setWhitelistLoading(false)
     }
-  }, [t])
+  }, [])
 
   const fetchAccessLevels = useCallback(async () => {
     try {
@@ -744,21 +836,43 @@ export default function Players() {
   }, [])
 
   useEffect(() => {
-    Promise.all([fetchPlayers(), fetchData(), fetchNotesAndStats(), fetchBannedSteamIds(), fetchWhitelist(), fetchAccessLevels()]).catch(err => {
+    Promise.all([
+      fetchPlayers(),
+      fetchData(),
+      fetchNotesAndStats(),
+      fetchBannedSteamIds(),
+      fetchWhitelist(),
+      fetchAccessLevels(),
+    ]).catch((err) => {
       reportClientError('Failed to load initial player data.', err)
     })
     let isMounted = true
-    panelBridgeApi.getStatus().then(status => {
-      if (isMounted) setBridgeConnected(Boolean(status.modConnected && status.isRunning))
-    }).catch(() => { if (isMounted) setBridgeConnected(false) })
-    configApi.getAppSettings().then(response => {
-      if (isMounted && response?.settings) {
-        setAutoExportEnabled(response.settings.autoExportOnLogin === true || response.settings.autoExportOnLogin === 'true')
-      }
-    }).catch(() => {})
-    playersApi.getExports().then(response => {
-      if (isMounted && response?.exports) setSavedExports(response.exports)
-    }).catch(() => {})
+    panelBridgeApi
+      .getStatus()
+      .then((status) => {
+        if (isMounted)
+          setBridgeConnected(Boolean(status.modConnected && status.isRunning))
+      })
+      .catch(() => {
+        if (isMounted) setBridgeConnected(false)
+      })
+    configApi
+      .getAppSettings()
+      .then((response) => {
+        if (isMounted && response?.settings) {
+          setAutoExportEnabled(
+            response.settings.autoExportOnLogin === true ||
+              response.settings.autoExportOnLogin === 'true',
+          )
+        }
+      })
+      .catch(() => {})
+    playersApi
+      .getExports()
+      .then((response) => {
+        if (isMounted && response?.exports) setSavedExports(response.exports)
+      })
+      .catch(() => {})
     if (canGmTools) fetchRosterVitals()
     const interval = setInterval(() => {
       if (document.visibilityState === 'hidden') return
@@ -769,7 +883,16 @@ export default function Players() {
       isMounted = false
       clearInterval(interval)
     }
-  }, [fetchPlayers, fetchData, fetchNotesAndStats, fetchBannedSteamIds, fetchWhitelist, fetchAccessLevels, fetchRosterVitals, canGmTools])
+  }, [
+    fetchPlayers,
+    fetchData,
+    fetchNotesAndStats,
+    fetchBannedSteamIds,
+    fetchWhitelist,
+    fetchAccessLevels,
+    fetchRosterVitals,
+    canGmTools,
+  ])
 
   useEffect(() => {
     if (!socket) return
@@ -782,14 +905,28 @@ export default function Players() {
       if (canGmTools) fetchRosterVitals()
     }
     socket.on('activeServerChanged', handleActiveServerChanged)
-    return () => { socket.off('activeServerChanged', handleActiveServerChanged) }
-  }, [socket, fetchPlayers, fetchNotesAndStats, fetchBannedSteamIds, fetchWhitelist, fetchAccessLevels, fetchRosterVitals, canGmTools])
+    return () => {
+      socket.off('activeServerChanged', handleActiveServerChanged)
+    }
+  }, [
+    socket,
+    fetchPlayers,
+    fetchNotesAndStats,
+    fetchBannedSteamIds,
+    fetchWhitelist,
+    fetchAccessLevels,
+    fetchRosterVitals,
+    canGmTools,
+  ])
 
   const requestedPlayerAppliedRef = useRef(false)
   useEffect(() => {
-    if (requestedPlayerAppliedRef.current || !requestedPlayer || initialLoading) return
+    if (requestedPlayerAppliedRef.current || !requestedPlayer || initialLoading)
+      return
     requestedPlayerAppliedRef.current = true
-    const matchingPlayer = players.find((player) => player.name.toLowerCase() === requestedPlayer.toLowerCase())
+    const matchingPlayer = players.find(
+      (player) => player.name.toLowerCase() === requestedPlayer.toLowerCase(),
+    )
     setSelectedPlayer(matchingPlayer?.name || requestedPlayer)
   }, [initialLoading, players, requestedPlayer])
 
@@ -813,12 +950,20 @@ export default function Players() {
       const result = await fn()
       const override =
         result && typeof result === 'object' && 'toastOverride' in result
-          ? (result as { toastOverride: { title: string; description?: string; variant?: 'default' | 'destructive' | 'success' } }).toastOverride
+          ? (
+              result as {
+                toastOverride: {
+                  title: string
+                  description?: string
+                  variant?: 'default' | 'destructive' | 'success'
+                }
+              }
+            ).toastOverride
           : null
       toast(
         override ?? {
-          title: t('toasts.successTitle'),
-          description: t('toasts.successDesc', { action }),
+          title: 'Success',
+          description: String(action) + ' completed',
           variant: 'success' as const,
         },
       )
@@ -826,8 +971,8 @@ export default function Players() {
       closeDialog?.()
     } catch (error) {
       toast({
-        title: t('toasts.errorTitle'),
-        description: getUserErrorMessage(error, t('toasts.actionFailedFallback')),
+        title: 'Error',
+        description: getUserErrorMessage(error, 'Action failed'),
         variant: 'destructive',
       })
     } finally {
@@ -837,34 +982,57 @@ export default function Players() {
 
   const handleKick = () => {
     if (!selectedPlayer) return
-    handleAction(t('actions.kickPlayer'), () => playersApi.kick(selectedPlayer, kickReason), () => {
-      setKickDialogOpen(false)
-      setKickReason('')
-      setSelectedPlayer('')
-      searchInputRef.current?.focus()
-    })
+    handleAction(
+      'Kick player',
+      () => playersApi.kick(selectedPlayer, kickReason),
+      () => {
+        setKickDialogOpen(false)
+        setKickReason('')
+        setSelectedPlayer('')
+        searchInputRef.current?.focus()
+      },
+    )
   }
 
   const runCharacterImport = async (data: Record<string, unknown>) => {
     setImporting(true)
     try {
       const { panelBridgeApi } = await import('@/lib/api')
-      const response = await panelBridgeApi.importCharacter(selectedPlayer, data)
+      const response = await panelBridgeApi.importCharacter(
+        selectedPlayer,
+        data,
+      )
       const restored = response.data?.restored
-      const submittedPerks = data && typeof data.perks === 'object' && data.perks !== null && Object.keys(data.perks).length > 0
-      const submittedItems = Array.isArray((data as { inventory?: unknown[] })?.inventory) && (data as { inventory: unknown[] }).inventory.length > 0
-      const noneApplied = (restored?.perks ?? 0) === 0 && (restored?.items ?? 0) === 0 && (submittedPerks || submittedItems)
+      const submittedPerks =
+        data &&
+        typeof data.perks === 'object' &&
+        data.perks !== null &&
+        Object.keys(data.perks).length > 0
+      const submittedItems =
+        Array.isArray((data as { inventory?: unknown[] })?.inventory) &&
+        (data as { inventory: unknown[] }).inventory.length > 0
+      const noneApplied =
+        (restored?.perks ?? 0) === 0 &&
+        (restored?.items ?? 0) === 0 &&
+        (submittedPerks || submittedItems)
       toast({
-        title: t(noneApplied ? 'toasts.characterImportedTitleNoneApplied' : 'toasts.characterImportedTitle'),
+        title: noneApplied ? 'Import Applied Nothing' : 'Character Imported',
         description: noneApplied
-          ? t('toasts.characterImportedDescNoneApplied', { player: selectedPlayer })
-          : t('toasts.characterImportedDesc', { perks: restored?.perks ?? 0, items: restored?.items ?? 0, player: selectedPlayer }),
+          ? 'None of the submitted skills or items were applied to ' +
+            String(selectedPlayer) +
+            ". The data may not match this server's mods or item definitions."
+          : 'Applied ' +
+            String(restored?.perks ?? 0) +
+            ' skills and ' +
+            String(restored?.items ?? 0) +
+            ' items to ' +
+            String(selectedPlayer),
       })
       setImportCharacterData('')
     } catch (error) {
       toast({
-        title: t('toasts.importFailedTitle'),
-        description: getUserErrorMessage(error, t('toasts.importFailedFallback')),
+        title: 'Import Failed',
+        description: getUserErrorMessage(error, 'Failed to import character'),
         variant: 'destructive',
       })
     } finally {
@@ -876,40 +1044,63 @@ export default function Players() {
 
   const handleBan = () => {
     if (!selectedPlayer) return
-    handleAction(t('actions.banPlayer'), () => playersApi.ban(selectedPlayer, banIp, banReason), () => {
-      setBanDialogOpen(false)
-      setBanConfirmOpen(false)
-      setBanReason('')
-      setBanIp(false)
-      setSelectedPlayer('')
-      searchInputRef.current?.focus()
-    })
+    handleAction(
+      'Ban player',
+      () => playersApi.ban(selectedPlayer, banIp, banReason),
+      () => {
+        setBanDialogOpen(false)
+        setBanConfirmOpen(false)
+        setBanReason('')
+        setBanIp(false)
+        setSelectedPlayer('')
+        searchInputRef.current?.focus()
+      },
+    )
   }
 
   const handleUnban = () => {
     if (!unbanUsername) return
-    handleAction(t('actions.unbanPlayer'), () => playersApi.unban(unbanUsername), () => {
-      setUnbanUsername('')
-      setUnbanDialogOpen(false)
-    })
+    handleAction(
+      'Unban player',
+      () => playersApi.unban(unbanUsername),
+      () => {
+        setUnbanUsername('')
+        setUnbanDialogOpen(false)
+      },
+    )
   }
 
   const handleUnbanSteamId = () => {
     if (!unbanSteamId) return
-    handleAction(t('actions.unbanSteamId'), () => playersApi.unbanSteamId(unbanSteamId), () => {
-      setUnbanSteamId('')
-      setUnbanSteamIdDialogOpen(false)
-      setBannedSteamIds(prev => prev.filter(b => b.steamId !== unbanSteamId))
-    })
+    handleAction(
+      'Unban SteamID',
+      () => playersApi.unbanSteamId(unbanSteamId),
+      () => {
+        setUnbanSteamId('')
+        setUnbanSteamIdDialogOpen(false)
+        setBannedSteamIds((prev) =>
+          prev.filter((b) => b.steamId !== unbanSteamId),
+        )
+      },
+    )
   }
 
-  const bridgeVerifyToastOverride = (actionLabel: string, actionKey: string, data: unknown) => {
-    const state = getBridgeVerifiedState(actionKey, data as { verified?: unknown } | null | undefined)
+  const bridgeVerifyToastOverride = (
+    actionLabel: string,
+    actionKey: string,
+    data: unknown,
+  ) => {
+    const state = getBridgeVerifiedState(
+      actionKey,
+      data as { verified?: unknown } | null | undefined,
+    )
     if (state === 'unverifiable') {
       return {
         toastOverride: {
           title: actionLabel,
-          description: t('toasts.bridgeUnverifiedDesc', { action: actionLabel }),
+          description:
+            String(actionLabel) +
+            ' was sent, but the mod could not confirm it took effect.',
           variant: 'default' as const,
         },
       }
@@ -918,7 +1109,9 @@ export default function Players() {
       return {
         toastOverride: {
           title: actionLabel,
-          description: t('toasts.bridgeOldBridgeDesc', { action: actionLabel }),
+          description:
+            String(actionLabel) +
+            " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
           variant: 'default' as const,
         },
       }
@@ -927,103 +1120,126 @@ export default function Players() {
   }
 
   const handleTeleport = (targetOverride?: string) => {
-    const target = (targetOverride ?? teleportTarget ?? '').trim() || selectedPlayer
+    const target =
+      (targetOverride ?? teleportTarget ?? '').trim() || selectedPlayer
     if (!target || !teleportX || !teleportY) return
-    const label = t('actions.teleportPlayer')
-    handleAction(label, async () => {
-      const response = await playersApi.teleport(target, {
-        x: Number(teleportX),
-        y: Number(teleportY),
-        z: Number(teleportZ || '0'),
-      })
-      return bridgeVerifyToastOverride(label, 'teleportPlayer', response?.data)
-    }, () => {
-      setTeleportDialogOpen(false)
-      setTeleportX('')
-      setTeleportY('')
-      setTeleportZ('0')
-      setTeleportTarget('')
-    })
+    const label = 'Teleport player'
+    handleAction(
+      label,
+      async () => {
+        const response = await playersApi.teleport(target, {
+          x: Number(teleportX),
+          y: Number(teleportY),
+          z: Number(teleportZ || '0'),
+        })
+        return bridgeVerifyToastOverride(
+          label,
+          'teleportPlayer',
+          response?.data,
+        )
+      },
+      () => {
+        setTeleportDialogOpen(false)
+        setTeleportX('')
+        setTeleportY('')
+        setTeleportZ('0')
+        setTeleportTarget('')
+      },
+    )
   }
 
   const handleSteamIdBan = () => {
     const steamId = banSteamId.trim()
     const reason = steamBanReason.trim()
     if (!steamId) return
-    handleAction(t('actions.banSteamId'), () => playersApi.banSteamId(steamId, reason), () => {
-      setSteamIdBanDialogOpen(false)
-      setBanSteamId('')
-      setSteamBanReason('')
-      void fetchBannedSteamIds()
-    })
+    handleAction(
+      'Ban SteamID',
+      () => playersApi.banSteamId(steamId, reason),
+      () => {
+        setSteamIdBanDialogOpen(false)
+        setBanSteamId('')
+        setSteamBanReason('')
+        void fetchBannedSteamIds()
+      },
+    )
   }
 
   const handleAddUser = () => {
     if (!addUserUsername.trim()) {
       toast({
-        title: t('toasts.errorTitle'),
-        description: t('toasts.usernameRequired'),
+        title: 'Error',
+        description: 'Username is required',
         variant: 'destructive',
       })
       return
     }
     if (addUserPassword.length > 0 && addUserPassword.length < 4) {
       toast({
-        title: t('toasts.errorTitle'),
-        description: t('toasts.passwordLengthError'),
+        title: 'Error',
+        description: 'Password must be empty or at least 4 characters',
         variant: 'destructive',
       })
       return
     }
-    handleAction(t('actions.addUser'), () => playersApi.addUser(addUserUsername.trim(), addUserPassword), () => {
-      setAddUserDialogOpen(false)
-      setAddUserUsername('')
-      setAddUserPassword('')
-      void fetchWhitelist()
-    })
+    handleAction(
+      'Add user',
+      () => playersApi.addUser(addUserUsername.trim(), addUserPassword),
+      () => {
+        setAddUserDialogOpen(false)
+        setAddUserUsername('')
+        setAddUserPassword('')
+        void fetchWhitelist()
+      },
+    )
   }
 
   const handleAddAllowedSteamId = () => {
     const steamId = allowedSteamIdInput.trim()
     if (!/^\d{17}$/.test(steamId)) {
       toast({
-        title: t('toasts.invalidSteamIdTitle'),
-        description: t('toasts.invalidSteamIdDesc'),
+        title: 'Invalid Steam ID',
+        description: 'Steam IDs must contain exactly 17 digits.',
         variant: 'destructive',
       })
       return
     }
-    handleAction(t('actions.addAllowedSteamId'), () => playersApi.addAllowedSteamId(steamId), () => {
-      setAllowedSteamIdInput('')
-      void fetchWhitelist()
-    })
+    handleAction(
+      'Add allowed Steam ID',
+      () => playersApi.addAllowedSteamId(steamId),
+      () => {
+        setAllowedSteamIdInput('')
+        void fetchWhitelist()
+      },
+    )
   }
 
   const handleSetAccessLevel = () => {
     if (!selectedPlayer || !accessLevel) return
-    handleAction(t('actions.setAccessLevel'), () => playersApi.setAccessLevel(selectedPlayer, accessLevel))
+    handleAction('Set access level', () =>
+      playersApi.setAccessLevel(selectedPlayer, accessLevel),
+    )
   }
 
   const spawnItemFromBrowser = async (id: string, qty?: number) => {
-    if (!selectedPlayer) throw new Error(t('spawn.noPlayerSelected'))
+    if (!selectedPlayer) throw new Error('No player selected')
     const count = qty ?? 1
     setLoading(true)
     try {
       await playersApi.addItem(selectedPlayer, id, count)
       toast({
-        title: t('toasts.itemGivenTitle'),
-        description: t('toasts.itemGivenDesc', {
-          item: id.replace(/^Base\./, ''),
-          qty: count > 1 ? ` × ${count}` : '',
-          player: selectedPlayer,
-        }),
+        title: 'Item given',
+        description:
+          String(id.replace(/^Base\./, '')) +
+          String(count > 1 ? ` × ${count}` : '') +
+          ' → ' +
+          String(selectedPlayer),
         variant: 'success' as const,
       })
       fetchPlayers()
     } catch (error) {
       toast({
-        title: t('toasts.giveItemFailedTitle'),
-        description: getUserErrorMessage(error, t('toasts.giveItemFailedFallback')),
+        title: 'Give item failed',
+        description: getUserErrorMessage(error, 'Could not deliver the item'),
         variant: 'destructive',
       })
       throw error
@@ -1038,17 +1254,17 @@ export default function Players() {
       await playersApi.addVehicle(id, selectedPlayer || undefined)
       const vehicle = id.replace(/^Base\./, '')
       toast({
-        title: t('toasts.vehicleSpawnedTitle'),
+        title: 'Vehicle spawned',
         description: selectedPlayer
-          ? t('toasts.vehicleSpawnedDescWithPlayer', { vehicle, player: selectedPlayer })
-          : t('toasts.vehicleSpawnedDescNoPlayer', { vehicle }),
+          ? String(vehicle) + ' near ' + String(selectedPlayer)
+          : String(vehicle),
         variant: 'success' as const,
       })
       fetchPlayers()
     } catch (error) {
       toast({
-        title: t('toasts.vehicleSpawnFailedTitle'),
-        description: getUserErrorMessage(error, t('toasts.vehicleSpawnFailedFallback')),
+        title: 'Vehicle spawn failed',
+        description: getUserErrorMessage(error, 'Could not spawn the vehicle'),
         variant: 'destructive',
       })
       throw error
@@ -1059,20 +1275,25 @@ export default function Players() {
 
   const handleAddXp = () => {
     if (!selectedPlayer || !selectedPerk) return
-    handleAction(t('actions.addXp'), () => playersApi.addXp(selectedPlayer, selectedPerk, xpAmount))
+    handleAction('Add XP', () =>
+      playersApi.addXp(selectedPlayer, selectedPerk, xpAmount),
+    )
   }
 
   const handleGodMode = (enabled: boolean) => {
     const player = selectedPlayer
     if (!player) return
-    const label = enabled ? t('actions.enableGodMode') : t('actions.disableGodMode')
+    const label = enabled ? 'Enable god mode' : 'Disable god mode'
     handleAction(label, async () => {
-      const response = await panelBridgeApi.sendCommand('setGodMode', { username: player, enabled })
+      const response = await panelBridgeApi.sendCommand('setGodMode', {
+        username: player,
+        enabled,
+      })
       const state = getBridgeVerifiedState('setGodMode', response?.data)
       if (state === null || state === 'confirmed') {
-        setPlayerPowers(prev => ({
+        setPlayerPowers((prev) => ({
           ...prev,
-          [player]: { ...prev[player], godMode: enabled }
+          [player]: { ...prev[player], godMode: enabled },
         }))
       }
       return bridgeVerifyToastOverride(label, 'setGodMode', response?.data)
@@ -1082,14 +1303,17 @@ export default function Players() {
   const handleInvisible = (enabled: boolean) => {
     const player = selectedPlayer
     if (!player) return
-    const label = enabled ? t('actions.enableInvisible') : t('actions.disableInvisible')
+    const label = enabled ? 'Enable invisible' : 'Disable invisible'
     handleAction(label, async () => {
-      const response = await panelBridgeApi.sendCommand('setInvisible', { username: player, enabled })
+      const response = await panelBridgeApi.sendCommand('setInvisible', {
+        username: player,
+        enabled,
+      })
       const state = getBridgeVerifiedState('setInvisible', response?.data)
       if (state === null || state === 'confirmed') {
-        setPlayerPowers(prev => ({
+        setPlayerPowers((prev) => ({
           ...prev,
-          [player]: { ...prev[player], invisible: enabled }
+          [player]: { ...prev[player], invisible: enabled },
         }))
       }
       return bridgeVerifyToastOverride(label, 'setInvisible', response?.data)
@@ -1099,14 +1323,17 @@ export default function Players() {
   const handleNoclip = (enabled: boolean) => {
     const player = selectedPlayer
     if (!player) return
-    const label = enabled ? t('actions.enableNoclip') : t('actions.disableNoclip')
+    const label = enabled ? 'Enable noclip' : 'Disable noclip'
     handleAction(label, async () => {
-      const response = await panelBridgeApi.sendCommand('setNoclip', { username: player, enabled })
+      const response = await panelBridgeApi.sendCommand('setNoclip', {
+        username: player,
+        enabled,
+      })
       const state = getBridgeVerifiedState('setNoclip', response?.data)
       if (state === null || state === 'confirmed') {
-        setPlayerPowers(prev => ({
+        setPlayerPowers((prev) => ({
           ...prev,
-          [player]: { ...prev[player], noclip: enabled }
+          [player]: { ...prev[player], noclip: enabled },
         }))
       }
       return bridgeVerifyToastOverride(label, 'setNoclip', response?.data)
@@ -1116,41 +1343,42 @@ export default function Players() {
   const handleHealPlayer = () => {
     const player = selectedPlayer
     if (!player) return
-    handleAction(t('actions.healPlayer'),
-      async () => {
-        await panelBridgeApi.sendCommand('healPlayer', { username: player })
-      })
+    handleAction('Heal player', async () => {
+      await panelBridgeApi.sendCommand('healPlayer', { username: player })
+    })
   }
 
   const handleKillPlayer = async () => {
     const player = selectedPlayer
     if (!player) return
     const confirmed = await confirm({
-      title: t('powers.killConfirmTitle', { player }),
-      description: t('powers.killConfirmDesc', { player }),
-      confirmLabel: t('powers.killConfirmButton'),
+      title: 'Kill ' + String(player) + '?',
+      description:
+        'This immediately ends ' +
+        String(player) +
+        "'s character. On a permadeath server there is no undo, no respawn as the same character, and no restore. Type their username below to confirm you mean to do this to them.",
+      confirmLabel: 'Kill player',
       destructive: true,
       requireTypedConfirmation: {
         value: player,
-        label: t('powers.killConfirmTypeLabel', { player }),
+        label: 'Type ' + String(player) + ' to confirm',
         placeholder: '',
       },
     })
     if (!confirmed) return
-    handleAction(t('actions.killPlayer'),
-      async () => {
-        await panelBridgeApi.killPlayer(player)
-      })
+    handleAction('Kill player', async () => {
+      await panelBridgeApi.killPlayer(player)
+    })
   }
 
-  const selectedPlayerPowers = useMemo(() =>
-    selectedPlayer ? playerPowers[selectedPlayer] : null,
-    [selectedPlayer, playerPowers]
+  const selectedPlayerPowers = useMemo(
+    () => (selectedPlayer ? playerPowers[selectedPlayer] : null),
+    [selectedPlayer, playerPowers],
   )
 
   const isSelectedPlayerOnline = useMemo(
-    () => !!selectedPlayer && players.some(p => p.name === selectedPlayer),
-    [selectedPlayer, players]
+    () => !!selectedPlayer && players.some((p) => p.name === selectedPlayer),
+    [selectedPlayer, players],
   )
 
   useEffect(() => {
@@ -1170,10 +1398,13 @@ export default function Players() {
           setPlayerVitals(response.data)
           setPlayerVitalsError(null)
         } else {
-          setPlayerVitalsError(response.error || t('vitals.loadError'))
+          setPlayerVitalsError(response.error || 'Failed to load live status.')
         }
       } catch (err) {
-        if (!cancelled) setPlayerVitalsError(getErrorMessage(err, t('vitals.loadError')))
+        if (!cancelled)
+          setPlayerVitalsError(
+            getErrorMessage(err, 'Failed to load live status.'),
+          )
       } finally {
         if (!cancelled) setPlayerVitalsLoading(false)
       }
@@ -1187,29 +1418,43 @@ export default function Players() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [selectedPlayer, isSelectedPlayerOnline, bridgeConnected, t])
+  }, [selectedPlayer, isSelectedPlayerOnline, bridgeConnected])
 
-  const selectedPlayerConfirmedNotWhitelisted = useMemo(() =>
-    isPlayerConfirmedNotWhitelisted(selectedPlayer, whitelistAccounts, whitelistLoading, whitelistError),
-    [selectedPlayer, whitelistAccounts, whitelistLoading, whitelistError]
+  const selectedPlayerConfirmedNotWhitelisted = useMemo(
+    () =>
+      isPlayerConfirmedNotWhitelisted(
+        selectedPlayer,
+        whitelistAccounts,
+        whitelistLoading,
+        whitelistError,
+      ),
+    [selectedPlayer, whitelistAccounts, whitelistLoading, whitelistError],
   )
 
   return (
     <div className="space-y-6 page-transition">
       <PageHeader
-        title={t('pageHeader.title')}
-        description={t('pageHeader.description')}
+        title={'Players'}
+        description={'Manage connected players and their permissions'}
         icon={<Users className="w-5 h-5 text-primary" />}
         actions={
           <div className="flex items-center gap-2">
             {lastRefresh && (
               <span className="text-xs text-muted-foreground">
-                {t('pageHeader.updated', { time: lastRefresh.toLocaleTimeString(i18n.language) })}
+                {'Updated ' + String(lastRefresh.toLocaleTimeString('en'))}
               </span>
             )}
-            <Button onClick={() => { fetchPlayers(); void fetchWhitelist() }} variant="outline" size="sm" className="gap-2">
+            <Button
+              onClick={() => {
+                fetchPlayers()
+                void fetchWhitelist()
+              }}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
               <RefreshCw className="w-4 h-4" />
-              {t('pageHeader.refresh')}
+              {'Refresh'}
             </Button>
           </div>
         }
@@ -1218,7 +1463,7 @@ export default function Players() {
       {(playersLoadError || toolsLoadError) && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>{t('errorBanner.title')}</AlertTitle>
+          <AlertTitle>{'Players page is partially unavailable'}</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="min-w-0 break-words">
               {playersLoadError || toolsLoadError}
@@ -1232,7 +1477,7 @@ export default function Players() {
               }}
               className="self-start"
             >
-              <RefreshCw className="me-2 h-4 w-4" /> {t('errorBanner.retry')}
+              <RefreshCw className="me-2 h-4 w-4" /> {'Retry'}
             </Button>
           </AlertDescription>
         </Alert>
@@ -1241,45 +1486,69 @@ export default function Players() {
       <div className="flex flex-col gap-2 stagger-in sm:flex-row sm:flex-wrap">
         <SummaryCard
           icon={<Users className="h-4 w-4" />}
-          label={t('summary.online')}
+          label={'Online'}
           value={players.length}
           tone={players.length > 0 ? 'success' : 'default'}
-          caption={t('summary.onlineCaption', { count: players.length })}
+          caption={Number(players.length) === 1 ? 'player' : 'players'}
         />
         <SummaryCard
           icon={<TrendingUp className="h-4 w-4" />}
-          label={t('summary.peakToday')}
+          label={'Peak Today'}
           value={peakPlayers}
           tone="default"
         />
         <SummaryCard
           icon={<Users className="h-4 w-4" />}
-          label={t('summary.roster')}
+          label={'Roster'}
           value={offlineRoster.length}
-          caption={t('summary.rosterCaption')}
-          help={<HelpTip label={t('summary.roster')}>{t('summary.rosterTip')}</HelpTip>}
+          caption={'seen'}
+          help={
+            <HelpTip label={'Roster'}>
+              {
+                "Players you've connected with before, now offline. Someone online right now isn't counted here until they disconnect — that's why this can read 0 while a player card is live above it."
+              }
+            </HelpTip>
+          }
         />
         {bannedSteamIds.length > 0 && (
-          <DisabledReason className="flex-1" reason={!canModerate ? t('permissions.noModerate') : null}>
-          <button
-            type="button"
-            onClick={() => setUnbanSteamIdDialogOpen(true)}
-            disabled={!canModerate}
-            className="group relative flex flex-1 items-center gap-3 overflow-hidden rounded-md border border-border/55 bg-card/70 px-4 py-3 text-start shadow-sm transition-colors hover:border-destructive/45 hover:bg-destructive/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label={t('summary.bannedAria', { count: bannedSteamIds.length })}
+          <DisabledReason
+            className="flex-1"
+            reason={
+              !canModerate
+                ? "This action requires the players.moderate permission, which this role doesn't have."
+                : null
+            }
           >
-            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[2px] bg-destructive/60" />
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-destructive/30 bg-destructive/10 text-destructive">
-              <Ban className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-1.5">
-                <p className="text-xl font-semibold tabular-nums leading-none tracking-tight">{bannedSteamIds.length}</p>
-                <span className="text-xs font-medium text-muted-foreground/70">{t('summary.bannedManage')}</span>
+            <button
+              type="button"
+              onClick={() => setUnbanSteamIdDialogOpen(true)}
+              disabled={!canModerate}
+              className="group relative flex flex-1 items-center gap-3 overflow-hidden rounded-md border border-border/55 bg-card/70 px-4 py-3 text-start shadow-sm transition-colors hover:border-destructive/45 hover:bg-destructive/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label={
+                'View ' + String(bannedSteamIds.length) + ' banned SteamIDs'
+              }
+            >
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 left-0 w-[2px] bg-destructive/60"
+              />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-destructive/30 bg-destructive/10 text-destructive">
+                <Ban className="h-4 w-4" />
               </div>
-              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.22em] text-destructive/80">{t('summary.bannedLabel')}</p>
-            </div>
-          </button>
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-1.5">
+                  <p className="text-xl font-semibold tabular-nums leading-none tracking-tight">
+                    {bannedSteamIds.length}
+                  </p>
+                  <span className="text-xs font-medium text-muted-foreground/70">
+                    {'manage'}
+                  </span>
+                </div>
+                <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.22em] text-destructive/80">
+                  {'Banned SteamIDs'}
+                </p>
+              </div>
+            </button>
           </DisabledReason>
         )}
       </div>
@@ -1289,14 +1558,26 @@ export default function Players() {
           <div className="flex items-center justify-between border-b border-border/40 bg-muted/20 px-4 py-2">
             <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
               <span className="text-primary/80">//</span>
-              <span>{t('roster.headerLabel')}</span>
+              <span>{'roster'}</span>
               <span className="text-muted-foreground/50">·</span>
               <span>
-                {rosterTab === 'online' ? t('roster.subheaderLive') : rosterTab === 'roster' ? t('roster.subheaderHistory') : rosterTab === 'banned' ? t('roster.subheaderBans') : t('roster.subheaderAccounts')}
+                {rosterTab === 'online'
+                  ? 'live'
+                  : rosterTab === 'roster'
+                    ? 'history'
+                    : rosterTab === 'banned'
+                      ? 'bans'
+                      : 'accounts'}
               </span>
             </div>
             <span className="font-mono text-[11px] tabular-nums text-foreground/80">
-              {rosterTab === 'online' ? players.length : rosterTab === 'roster' ? offlineRoster.length : rosterTab === 'banned' ? bannedSteamIds.length : whitelistAccounts.length}
+              {rosterTab === 'online'
+                ? players.length
+                : rosterTab === 'roster'
+                  ? offlineRoster.length
+                  : rosterTab === 'banned'
+                    ? bannedSteamIds.length
+                    : whitelistAccounts.length}
             </span>
           </div>
           <CardHeader className="space-y-3 pb-3 pt-4">
@@ -1308,11 +1589,13 @@ export default function Players() {
                   'flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors',
                   rosterTab === 'online'
                     ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <span>{t('roster.tabOnline')}</span>
-                <span className="tabular-nums text-foreground/70">{players.length}</span>
+                <span>{'Online'}</span>
+                <span className="tabular-nums text-foreground/70">
+                  {players.length}
+                </span>
               </button>
               <button
                 type="button"
@@ -1321,37 +1604,49 @@ export default function Players() {
                   'flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors',
                   rosterTab === 'roster'
                     ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <span>{t('roster.tabRoster')}</span>
-                <span className="tabular-nums text-foreground/70">{offlineRoster.length}</span>
+                <span>{'Roster'}</span>
+                <span className="tabular-nums text-foreground/70">
+                  {offlineRoster.length}
+                </span>
               </button>
               <button
                 type="button"
-                onClick={() => { setRosterTab('banned'); fetchBannedSteamIds() }}
+                onClick={() => {
+                  setRosterTab('banned')
+                  fetchBannedSteamIds()
+                }}
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors',
                   rosterTab === 'banned'
                     ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <span>{t('roster.tabBanned')}</span>
-                <span className="tabular-nums text-foreground/70">{bannedSteamIds.length}</span>
+                <span>{'Banned'}</span>
+                <span className="tabular-nums text-foreground/70">
+                  {bannedSteamIds.length}
+                </span>
               </button>
               <button
                 type="button"
-                onClick={() => { setRosterTab('whitelist'); void fetchWhitelist() }}
+                onClick={() => {
+                  setRosterTab('whitelist')
+                  void fetchWhitelist()
+                }}
                 className={cn(
                   'flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors',
                   rosterTab === 'whitelist'
                     ? 'bg-background text-foreground shadow-sm ring-1 ring-border/60'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <span>{t('roster.tabWhitelist')}</span>
-                <span className="tabular-nums text-foreground/70">{whitelistAccounts.length}</span>
+                <span>{'Whitelist'}</span>
+                <span className="tabular-nums text-foreground/70">
+                  {whitelistAccounts.length}
+                </span>
               </button>
             </div>
           </CardHeader>
@@ -1362,23 +1657,23 @@ export default function Players() {
                 ref={searchInputRef}
                 placeholder={
                   rosterTab === 'online'
-                    ? t('roster.searchOnline')
+                    ? 'Search players...'
                     : rosterTab === 'roster'
-                      ? t('roster.searchRoster')
+                      ? 'Search roster...'
                       : rosterTab === 'banned'
-                        ? t('roster.searchBanned')
-                        : t('roster.searchWhitelist')
+                        ? 'Search bans...'
+                        : 'Search whitelist...'
                 }
                 value={playerSearchFilter}
                 onChange={(e) => setPlayerSearchFilter(e.target.value)}
                 className="ps-9"
-                aria-label={t('roster.searchAria')}
+                aria-label={'Search players'}
               />
             </div>
 
             <ScrollArea className="h-[250px] sm:h-[320px]">
-              {rosterTab === 'online' && (
-                initialLoading ? (
+              {rosterTab === 'online' &&
+                (initialLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin text-primary" />
                   </div>
@@ -1387,14 +1682,27 @@ export default function Players() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 bg-muted/30">
                       <Users className="h-6 w-6 text-muted-foreground/70" />
                     </div>
-                    <p className="mt-3 text-sm font-medium">{t('roster.onlineEmptyTitle')}</p>
+                    <p className="mt-3 text-sm font-medium">
+                      {'No players online'}
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {t('roster.onlineEmptyDesc')}
+                      {'Players appear here when they connect.'}
                     </p>
                     {offlineRoster.length > 0 && (
-                      <Button variant="ghost" size="sm" className="mt-4 text-xs text-muted-foreground" onClick={() => setRosterTab('roster')}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-4 text-xs text-muted-foreground"
+                        onClick={() => setRosterTab('roster')}
+                      >
                         <Users className="me-1.5 h-3.5 w-3.5" />
-                        {t('roster.seePreviouslySeen', { count: offlineRoster.length })}
+                        {Number(offlineRoster.length) === 1
+                          ? 'See ' +
+                            String(offlineRoster.length) +
+                            ' previously seen player'
+                          : 'See ' +
+                            String(offlineRoster.length) +
+                            ' previously seen players'}
                       </Button>
                     )}
                     {bannedSteamIds.length > 0 && (
@@ -1405,18 +1713,33 @@ export default function Players() {
                         onClick={() => setRosterTab('banned')}
                       >
                         <Ban className="me-1.5 h-3.5 w-3.5" />
-                        {t('roster.reviewBanned', { count: bannedSteamIds.length })}
+                        {Number(bannedSteamIds.length) === 1
+                          ? 'Review ' +
+                            String(bannedSteamIds.length) +
+                            ' banned SteamID'
+                          : 'Review ' +
+                            String(bannedSteamIds.length) +
+                            ' banned SteamIDs'}
                       </Button>
                     )}
                   </div>
                 ) : filteredPlayers.length === 0 ? (
-                  <EmptyState type="noResults" title={t('roster.noMatchesTitle', { query: playerSearchFilter })} description={t('roster.noMatchesDesc')} compact />
+                  <EmptyState
+                    type="noResults"
+                    title={
+                      'No matches for "' + String(playerSearchFilter) + '"'
+                    }
+                    description={'Try a different search term'}
+                    compact
+                  />
                 ) : (
                   <div className="space-y-1">
                     {filteredPlayers.map((player) => {
                       const isSelected = selectedPlayer === player.name
                       const powers = playerPowers[player.name]
-                      const hasPowers = powers && (powers.godMode || powers.invisible || powers.noclip)
+                      const hasPowers =
+                        powers &&
+                        (powers.godMode || powers.invisible || powers.noclip)
                       const note = playerNotes[player.name]
                       const stat = playerStats[player.name]
                       const vitals = rosterVitals[player.name]
@@ -1434,18 +1757,30 @@ export default function Players() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 min-w-0">
-                              <div className="w-2 h-2 rounded-full bg-primary motion-safe:animate-pulse shrink-0" aria-hidden="true" />
-                              <span className="font-medium truncate">{player.name}</span>
-                              <span className="sr-only">{t('roster.tabOnline')}</span>
+                              <div
+                                className="w-2 h-2 rounded-full bg-primary motion-safe:animate-pulse shrink-0"
+                                aria-hidden="true"
+                              />
+                              <span className="font-medium truncate">
+                                {player.name}
+                              </span>
+                              <span className="sr-only">{'Online'}</span>
                               {note && note.tags && note.tags.length > 0 && (
                                 <div className="flex gap-1">
-                                  {note.tags.slice(0, 2).map(tag => (
-                                    <Badge key={tag} variant="outline" className="text-xs px-1.5 py-0 h-4">
+                                  {note.tags.slice(0, 2).map((tag) => (
+                                    <Badge
+                                      key={tag}
+                                      variant="outline"
+                                      className="text-xs px-1.5 py-0 h-4"
+                                    >
                                       {tag}
                                     </Badge>
                                   ))}
                                   {note.tags.length > 2 && (
-                                    <Badge variant="outline" className="text-xs px-1.5 py-0 h-4">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs px-1.5 py-0 h-4"
+                                    >
                                       +{note.tags.length - 2}
                                     </Badge>
                                   )}
@@ -1457,63 +1792,86 @@ export default function Players() {
                                 <span
                                   className={cn(
                                     'flex items-center gap-0.5 text-xs font-mono tabular-nums me-1',
-                                    vitals.health >= 60 ? 'text-emerald-500' : vitals.health >= 30 ? 'text-amber-500' : 'text-destructive',
+                                    vitals.health >= 60
+                                      ? 'text-emerald-500'
+                                      : vitals.health >= 30
+                                        ? 'text-amber-500'
+                                        : 'text-destructive',
                                   )}
-                                  title={t('roster.rosterHealthTooltip', { health: Math.round(vitals.health) })}
+                                  title={
+                                    'Health: ' +
+                                    String(Math.round(vitals.health)) +
+                                    '%'
+                                  }
                                 >
                                   <Heart className="w-3 h-3" />
                                   {Math.round(vitals.health)}%
                                 </span>
                               )}
                               {vitals?.isInfected && (
-                                <Skull className="w-3 h-3 text-destructive me-1" aria-label={t('vitals.infected')} />
+                                <Skull
+                                  className="w-3 h-3 text-destructive me-1"
+                                  aria-label={'Infected'}
+                                />
                               )}
                               {stat && (
                                 <span className="text-xs text-muted-foreground me-1">
                                   {formatPlaytime(stat.total_playtime_seconds)}
                                 </span>
                               )}
-                              {note && <StickyNote className="w-3 h-3 text-muted-foreground" />}
+                              {note && (
+                                <StickyNote className="w-3 h-3 text-muted-foreground" />
+                              )}
                               {hasPowers && (
                                 <div className="flex gap-0.5">
                                   {powers.godMode && (
-                                    <Badge variant="secondary" className="px-1 py-0 text-xs">
+                                    <Badge
+                                      variant="secondary"
+                                      className="px-1 py-0 text-xs"
+                                    >
                                       <Ghost className="w-3 h-3" />
                                     </Badge>
                                   )}
                                   {powers.invisible && (
-                                    <Badge variant="secondary" className="px-1 py-0 text-xs">
+                                    <Badge
+                                      variant="secondary"
+                                      className="px-1 py-0 text-xs"
+                                    >
                                       <Eye className="w-3 h-3" />
                                     </Badge>
                                   )}
                                   {powers.noclip && (
-                                    <Badge variant="secondary" className="px-1 py-0 text-xs">
+                                    <Badge
+                                      variant="secondary"
+                                      className="px-1 py-0 text-xs"
+                                    >
                                       <Layers className="w-3 h-3" />
                                     </Badge>
                                   )}
                                 </div>
                               )}
-                              <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${isSelected ? 'rotate-90' : ''}`} />
+                              <ChevronRight
+                                className={`w-4 h-4 text-muted-foreground transition-transform ${isSelected ? 'rotate-90' : ''}`}
+                              />
                             </div>
                           </div>
                         </button>
                       )
                     })}
                   </div>
-                )
-              )}
+                ))}
 
-              {rosterTab === 'roster' && (
-                offlineRoster.length === 0 ? (
+              {rosterTab === 'roster' &&
+                (offlineRoster.length === 0 ? (
                   <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
                     <Users className="h-6 w-6 text-muted-foreground/70" />
                     <p className="mt-3 text-sm font-medium">
-                      {playerSearchFilter ? t('roster.rosterEmptySearchTitle') : t('roster.rosterEmptyNoSearchTitle')}
+                      {playerSearchFilter ? 'No matches' : 'Roster is empty'}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {playerSearchFilter
-                        ? t('roster.rosterEmptySearchDesc')
-                        : t('roster.rosterEmptyNoSearchDesc')}
+                        ? 'Try a different search term.'
+                        : 'Players you’ve seen before will appear here once they disconnect.'}
                     </p>
                   </div>
                 ) : (
@@ -1522,7 +1880,9 @@ export default function Players() {
                       const name = stat.player_name || stat.playerName || ''
                       const isSelected = selectedPlayer === name
                       const note = playerNotes[name]
-                      const lastSeen = stat.last_seen ? new Date(stat.last_seen) : null
+                      const lastSeen = stat.last_seen
+                        ? new Date(stat.last_seen)
+                        : null
                       return (
                         <button
                           key={name}
@@ -1533,14 +1893,29 @@ export default function Players() {
                               : 'hover:bg-muted/50 border-transparent hover:border-border'
                           }`}
                           onClick={() => setSelectedPlayer(name)}
-                          title={t('roster.lastSeenTitle', { when: lastSeen ? lastSeen.toLocaleString(i18n.language) : t('roster.lastSeenUnknown') })}
+                          title={
+                            'Last seen ' +
+                            String(
+                              lastSeen
+                                ? lastSeen.toLocaleString('en')
+                                : 'unknown',
+                            )
+                          }
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
-                              <div className="w-2 h-2 rounded-full bg-muted-foreground/40 shrink-0" aria-hidden="true" />
-                              <span className="font-medium truncate">{name}</span>
+                              <div
+                                className="w-2 h-2 rounded-full bg-muted-foreground/40 shrink-0"
+                                aria-hidden="true"
+                              />
+                              <span className="font-medium truncate">
+                                {name}
+                              </span>
                               {note && note.tags && note.tags.length > 0 && (
-                                <Badge variant="outline" className="text-xs px-1.5 py-0 h-4">
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs px-1.5 py-0 h-4"
+                                >
                                   {note.tags[0]}
                                 </Badge>
                               )}
@@ -1551,7 +1926,7 @@ export default function Players() {
                               </span>
                               {lastSeen && (
                                 <span className="text-[10px] text-muted-foreground/70">
-                                  {lastSeen.toLocaleDateString(i18n.language)}
+                                  {lastSeen.toLocaleDateString('en')}
                                 </span>
                               )}
                             </div>
@@ -1560,20 +1935,19 @@ export default function Players() {
                       )
                     })}
                   </div>
-                )
-              )}
+                ))}
 
-              {rosterTab === 'banned' && (
-                filteredBans.length === 0 ? (
+              {rosterTab === 'banned' &&
+                (filteredBans.length === 0 ? (
                   <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
                     <Ban className="h-6 w-6 text-muted-foreground/70" />
                     <p className="mt-3 text-sm font-medium">
-                      {playerSearchFilter ? t('roster.bannedEmptySearchTitle') : t('roster.bannedEmptyNoSearchTitle')}
+                      {playerSearchFilter ? 'No matches' : 'No SteamID bans'}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {playerSearchFilter
-                        ? t('roster.bannedEmptySearchDesc')
-                        : t('roster.bannedEmptyNoSearchDesc')}
+                        ? 'Try a different search term.'
+                        : 'Banned SteamIDs will appear here.'}
                     </p>
                   </div>
                 ) : (
@@ -1585,44 +1959,63 @@ export default function Players() {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="font-mono text-sm truncate">{ban.steamId}</p>
+                            <p className="font-mono text-sm truncate">
+                              {ban.steamId}
+                            </p>
                             {(ban.reason || ban.banned_at) && (
-                              <p className="text-[11px] text-muted-foreground truncate" title={ban.reason || ''}>
+                              <p
+                                className="text-[11px] text-muted-foreground truncate"
+                                title={ban.reason || ''}
+                              >
                                 {ban.reason ? `\u201c${ban.reason}\u201d` : ''}
                                 {ban.reason && ban.banned_at ? ' \u00b7 ' : ''}
-                                {ban.banned_at ? new Date(ban.banned_at).toLocaleDateString(i18n.language) : ''}
+                                {ban.banned_at
+                                  ? new Date(ban.banned_at).toLocaleDateString(
+                                      'en',
+                                    )
+                                  : ''}
                               </p>
                             )}
                           </div>
-                          <DisabledReason reason={!canModerate ? t('permissions.noModerate') : null}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0"
-                            disabled={!canModerate}
-                            onClick={() => {
-                              setUnbanSteamId(ban.steamId)
-                              setUnbanSteamIdDialogOpen(true)
-                            }}
-                            // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Unban {steamId}"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                            title={t('roster.unbanTitle', { steamId: ban.steamId })}
+                          <DisabledReason
+                            reason={
+                              !canModerate
+                                ? "This action requires the players.moderate permission, which this role doesn't have."
+                                : null
+                            }
                           >
-                            {t('roster.unbanButton')}
-                          </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              disabled={!canModerate}
+                              onClick={() => {
+                                setUnbanSteamId(ban.steamId)
+                                setUnbanSteamIdDialogOpen(true)
+                              }}
+                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Unban {steamId}"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
+                              title={'Unban ' + String(ban.steamId)}
+                            >
+                              {'Unban'}
+                            </Button>
                           </DisabledReason>
                         </div>
                       </div>
                     ))}
                   </div>
-                )
-              )}
+                ))}
 
-              {rosterTab === 'whitelist' && (
-                !whitelistAvailable ? (
+              {rosterTab === 'whitelist' &&
+                (!whitelistAvailable ? (
                   <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
                     <Shield className="h-6 w-6 text-muted-foreground/70" />
-                    <p className="mt-3 text-sm font-medium">{t('roster.whitelistUnavailableTitle')}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{whitelistError || t('roster.whitelistUnavailableFallback')}</p>
+                    <p className="mt-3 text-sm font-medium">
+                      {'Whitelist roster unavailable'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {whitelistError ||
+                        'The account database could not be read for this server.'}
+                    </p>
                   </div>
                 ) : whitelistLoading ? (
                   <div className="flex items-center justify-center py-8">
@@ -1631,99 +2024,210 @@ export default function Players() {
                 ) : filteredWhitelist.length === 0 ? (
                   <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
                     <Shield className="h-6 w-6 text-muted-foreground/70" />
-                    <p className="mt-3 text-sm font-medium">{playerSearchFilter ? t('roster.whitelistEmptySearchTitle') : t('roster.whitelistEmptyNoSearchTitle')}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{playerSearchFilter ? t('roster.whitelistEmptySearchDesc') : t('roster.whitelistEmptyNoSearchDesc')}</p>
+                    <p className="mt-3 text-sm font-medium">
+                      {playerSearchFilter ? 'No matches' : 'Whitelist is empty'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {playerSearchFilter
+                        ? 'Try a different search term.'
+                        : 'Add an account with a username and password.'}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-1">
                     {filteredWhitelist.map((account) => {
-                      const online = players.some(player => player.name.toLowerCase() === account.username.toLowerCase())
+                      const online = players.some(
+                        (player) =>
+                          player.name.toLowerCase() ===
+                          account.username.toLowerCase(),
+                      )
                       return (
-                        <div key={`${account.id}-${account.username}`} className="w-full rounded-lg border border-transparent p-3 hover:border-border hover:bg-muted/40">
+                        <div
+                          key={`${account.id}-${account.username}`}
+                          className="w-full rounded-lg border border-transparent p-3 hover:border-border hover:bg-muted/40"
+                        >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className={cn('h-2 w-2 shrink-0 rounded-full', online ? 'bg-primary' : 'bg-muted-foreground/40')} />
-                                <span className="truncate font-medium">{account.username}</span>
-                                <Badge variant="outline" className="px-1.5 py-0 text-[10px] uppercase">{account.role}</Badge>
+                                <span
+                                  className={cn(
+                                    'h-2 w-2 shrink-0 rounded-full',
+                                    online
+                                      ? 'bg-primary'
+                                      : 'bg-muted-foreground/40',
+                                  )}
+                                />
+                                <span className="truncate font-medium">
+                                  {account.username}
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className="px-1.5 py-0 text-[10px] uppercase"
+                                >
+                                  {account.role}
+                                </Badge>
                               </div>
                               <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] text-muted-foreground">
-                                {account.steamId && <span className="font-mono">{account.steamId}</span>}
-                                {account.lastConnection && <span>{t('roster.whitelistLastConnection', { date: new Date(account.lastConnection).toLocaleDateString(i18n.language) })}</span>}
-                                <span>{online ? t('roster.whitelistOnline') : t('roster.whitelistOffline')}</span>
+                                {account.steamId && (
+                                  <span className="font-mono">
+                                    {account.steamId}
+                                  </span>
+                                )}
+                                {account.lastConnection && (
+                                  <span>
+                                    {'last ' +
+                                      String(
+                                        new Date(
+                                          account.lastConnection,
+                                        ).toLocaleDateString('en'),
+                                      )}
+                                  </span>
+                                )}
+                                <span>{online ? 'online' : 'offline'}</span>
                               </div>
                             </div>
-                            <DisabledReason reason={!canModerate ? t('permissions.noModerate') : null}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="shrink-0"
-                              onClick={() => handleAction(t('actions.removeFromWhitelist'), () => playersApi.removeFromWhitelist(account.username), () => { void fetchWhitelist() })}
-                              disabled={loading || !canModerate}
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Remove {username} from whitelist"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={t('roster.removeTitle', { username: account.username })}
+                            <DisabledReason
+                              reason={
+                                !canModerate
+                                  ? "This action requires the players.moderate permission, which this role doesn't have."
+                                  : null
+                              }
                             >
-                              <UserMinus className="me-1.5 h-3.5 w-3.5" />
-                              {t('roster.removeButton')}
-                            </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0"
+                                onClick={() =>
+                                  handleAction(
+                                    'Remove from whitelist',
+                                    () =>
+                                      playersApi.removeFromWhitelist(
+                                        account.username,
+                                      ),
+                                    () => {
+                                      void fetchWhitelist()
+                                    },
+                                  )
+                                }
+                                disabled={loading || !canModerate}
+                                // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Remove {username} from whitelist"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
+                                title={
+                                  'Remove ' +
+                                  String(account.username) +
+                                  ' from whitelist'
+                                }
+                              >
+                                <UserMinus className="me-1.5 h-3.5 w-3.5" />
+                                {'Remove'}
+                              </Button>
                             </DisabledReason>
                           </div>
                         </div>
                       )
                     })}
                   </div>
-                )
-              )}
+                ))}
 
-              {rosterTab === 'whitelist' && whitelistAvailable && !whitelistLoading && (
-                <div className="mt-3 space-y-2 border-t border-border/40 pt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{t('roster.allowedSteamIdsLabel')}</span>
-                    <span className="font-mono text-[11px] tabular-nums text-foreground/70">{allowedSteamIds.length}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      value={allowedSteamIdInput}
-                      onChange={(event) => setAllowedSteamIdInput(sanitizeSteamId(event.target.value))}
-                      placeholder="76561198XXXXXXXXX"
-                      inputMode="numeric"
-                      className="h-8 font-mono text-xs"
-                      aria-label={t('roster.allowedSteamIdAria')}
-                    />
-                    <DisabledReason reason={!canModerate ? t('permissions.noModerate') : null}>
-                    <Button onClick={handleAddAllowedSteamId} disabled={loading || !canModerate || allowedSteamIdInput.length !== 17} size="sm" className="shrink-0">
-                      <Plus className="me-1.5 h-3.5 w-3.5" /> {t('roster.addButton')}
-                    </Button>
-                    </DisabledReason>
-                  </div>
-                  {allowedSteamIds.filter(id => !playerSearchFilter.trim() || id.includes(playerSearchFilter.trim())).map((steamId) => (
-                    <div key={steamId} className="flex items-center justify-between gap-2 rounded-md border border-transparent px-2 py-1.5 hover:border-border hover:bg-muted/30">
-                      <span className="font-mono text-xs">{steamId}</span>
-                      <DisabledReason reason={!canModerate ? t('permissions.noModerate') : null}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                        onClick={() => handleAction(t('actions.removeAllowedSteamId'), () => playersApi.removeAllowedSteamId(steamId), () => { void fetchWhitelist() })}
-                        disabled={loading || !canModerate}
-                        // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Remove allowed Steam ID {steamId}"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                        title={t('roster.removeAllowedTitle', { steamId })}
+              {rosterTab === 'whitelist' &&
+                whitelistAvailable &&
+                !whitelistLoading && (
+                  <div className="mt-3 space-y-2 border-t border-border/40 pt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                        {'Allowed Steam IDs'}
+                      </span>
+                      <span className="font-mono text-[11px] tabular-nums text-foreground/70">
+                        {allowedSteamIds.length}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={allowedSteamIdInput}
+                        onChange={(event) =>
+                          setAllowedSteamIdInput(
+                            sanitizeSteamId(event.target.value),
+                          )
+                        }
+                        placeholder="76561198XXXXXXXXX"
+                        inputMode="numeric"
+                        className="h-8 font-mono text-xs"
+                        aria-label={'Allowed Steam ID'}
+                      />
+                      <DisabledReason
+                        reason={
+                          !canModerate
+                            ? "This action requires the players.moderate permission, which this role doesn't have."
+                            : null
+                        }
                       >
-                        <Trash2 className="me-1 h-3.5 w-3.5" /> {t('roster.removeAllowedButton')}
-                      </Button>
+                        <Button
+                          onClick={handleAddAllowedSteamId}
+                          disabled={
+                            loading ||
+                            !canModerate ||
+                            allowedSteamIdInput.length !== 17
+                          }
+                          size="sm"
+                          className="shrink-0"
+                        >
+                          <Plus className="me-1.5 h-3.5 w-3.5" /> {'Add'}
+                        </Button>
                       </DisabledReason>
                     </div>
-                  ))}
-                </div>
-              )}
+                    {allowedSteamIds
+                      .filter(
+                        (id) =>
+                          !playerSearchFilter.trim() ||
+                          id.includes(playerSearchFilter.trim()),
+                      )
+                      .map((steamId) => (
+                        <div
+                          key={steamId}
+                          className="flex items-center justify-between gap-2 rounded-md border border-transparent px-2 py-1.5 hover:border-border hover:bg-muted/30"
+                        >
+                          <span className="font-mono text-xs">{steamId}</span>
+                          <DisabledReason
+                            reason={
+                              !canModerate
+                                ? "This action requires the players.moderate permission, which this role doesn't have."
+                                : null
+                            }
+                          >
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                              onClick={() =>
+                                handleAction(
+                                  'Remove allowed Steam ID',
+                                  () =>
+                                    playersApi.removeAllowedSteamId(steamId),
+                                  () => {
+                                    void fetchWhitelist()
+                                  },
+                                )
+                              }
+                              disabled={loading || !canModerate}
+                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Remove allowed Steam ID {steamId}"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
+                              title={
+                                'Remove allowed Steam ID ' + String(steamId)
+                              }
+                            >
+                              <Trash2 className="me-1 h-3.5 w-3.5" /> {'Remove'}
+                            </Button>
+                          </DisabledReason>
+                        </div>
+                      ))}
+                  </div>
+                )}
             </ScrollArea>
 
             <div className="space-y-1.5 border-t border-border/40 pt-3">
               <Label className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/80">
-                <span className="text-primary/70">›</span> {t('roster.manualTargetLabelText')}
+                <span className="text-primary/70">›</span> {'Manual target'}
               </Label>
               <Input
-                placeholder={t('roster.manualTargetPlaceholder')}
+                placeholder={'Enter username…'}
                 value={selectedPlayer}
                 onChange={(e) => setSelectedPlayer(e.target.value)}
                 className="h-9 font-mono text-sm"
@@ -1736,17 +2240,21 @@ export default function Players() {
           <div className="flex items-center justify-between border-b border-border/40 bg-muted/20 px-4 py-2">
             <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
               <span className="text-primary/80">//</span>
-              <span>{t('dossier.subheaderLabel')}</span>
+              <span>{'dossier'}</span>
               <span className="text-muted-foreground/50">·</span>
-              <span className={selectedPlayer ? 'text-foreground/85' : 'text-amber-400/85'}>
-                {selectedPlayer ? t('dossier.targetAcquired') : t('dossier.standby')}
+              <span
+                className={
+                  selectedPlayer ? 'text-foreground/85' : 'text-amber-400/85'
+                }
+              >
+                {selectedPlayer ? 'target.acquired' : 'standby'}
               </span>
             </div>
             {selectedPlayer && (
               <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground/70">
                 {(() => {
-                  const online = players.some(p => p.name === selectedPlayer)
-                  return online ? t('dossier.online') : t('dossier.offline')
+                  const online = players.some((p) => p.name === selectedPlayer)
+                  return online ? 'online' : 'offline'
                 })()}
               </span>
             )}
@@ -1755,15 +2263,29 @@ export default function Players() {
             {selectedPlayer ? (
               <>
                 {(() => {
-                  const isOnline = players.some(p => p.name === selectedPlayer)
+                  const isOnline = players.some(
+                    (p) => p.name === selectedPlayer,
+                  )
                   const note = playerNotes[selectedPlayer]
                   const stat = playerStats[selectedPlayer]
                   return (
                     <div className="relative overflow-hidden rounded-md border border-border/50 bg-gradient-to-br from-muted/30 via-card to-card p-4">
-                      <span aria-hidden="true" className="pointer-events-none absolute -left-px -top-px h-3 w-3 border-s-2 border-t-2 border-primary/40" />
-                      <span aria-hidden="true" className="pointer-events-none absolute -right-px -top-px h-3 w-3 border-e-2 border-t-2 border-primary/40" />
-                      <span aria-hidden="true" className="pointer-events-none absolute -left-px -bottom-px h-3 w-3 border-b-2 border-s-2 border-primary/40" />
-                      <span aria-hidden="true" className="pointer-events-none absolute -right-px -bottom-px h-3 w-3 border-b-2 border-e-2 border-primary/40" />
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -left-px -top-px h-3 w-3 border-s-2 border-t-2 border-primary/40"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -right-px -top-px h-3 w-3 border-e-2 border-t-2 border-primary/40"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -left-px -bottom-px h-3 w-3 border-b-2 border-s-2 border-primary/40"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -right-px -bottom-px h-3 w-3 border-b-2 border-e-2 border-primary/40"
+                      />
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -1771,12 +2293,16 @@ export default function Players() {
                               aria-hidden="true"
                               className={cn(
                                 'h-2 w-2 rounded-full',
-                                isOnline ? 'bg-emerald-400 motion-safe:animate-pulse shadow-[0_0_8px_hsl(var(--primary)/0.65)]' : 'bg-muted-foreground/40'
+                                isOnline
+                                  ? 'bg-emerald-400 motion-safe:animate-pulse shadow-[0_0_8px_hsl(var(--primary)/0.65)]'
+                                  : 'bg-muted-foreground/40',
                               )}
                             />
-                            <h2 className="truncate text-xl font-semibold tracking-tight">{selectedPlayer}</h2>
+                            <h2 className="truncate text-xl font-semibold tracking-tight">
+                              {selectedPlayer}
+                            </h2>
                             <span className="text-xs font-medium text-muted-foreground/80">
-                              {isOnline ? t('dossier.connected') : t('dossier.lastSeen')}
+                              {isOnline ? 'connected' : 'last seen'}
                             </span>
                           </div>
                           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground/85">
@@ -1784,49 +2310,86 @@ export default function Players() {
                               <>
                                 <span className="flex items-center gap-1.5">
                                   <Clock className="h-3 w-3 text-primary/70" />
-                                  <span className="tabular-nums text-foreground/85">{formatPlaytime(stat.total_playtime_seconds)}</span>
-                                  <span className="text-muted-foreground/70">{t('dossier.played')}</span>
+                                  <span className="tabular-nums text-foreground/85">
+                                    {formatPlaytime(
+                                      stat.total_playtime_seconds,
+                                    )}
+                                  </span>
+                                  <span className="text-muted-foreground/70">
+                                    {'played'}
+                                  </span>
                                 </span>
                                 <span className="flex items-center gap-1.5">
                                   <TrendingUp className="h-3 w-3 text-primary/70" />
-                                  <span className="tabular-nums text-foreground/85">{stat.session_count}</span>
-                                  <span className="text-muted-foreground/70">{t('dossier.sessions')}</span>
+                                  <span className="tabular-nums text-foreground/85">
+                                    {stat.session_count}
+                                  </span>
+                                  <span className="text-muted-foreground/70">
+                                    {'sessions'}
+                                  </span>
                                 </span>
                                 {stat.last_seen && (
                                   <span className="text-muted-foreground/70">
-                                    {t('dossier.lastLabel')} <span className="text-foreground/80">{new Date(stat.last_seen).toLocaleDateString(i18n.language)}</span>
+                                    {'last:'}{' '}
+                                    <span className="text-foreground/80">
+                                      {new Date(
+                                        stat.last_seen,
+                                      ).toLocaleDateString('en')}
+                                    </span>
                                   </span>
                                 )}
                               </>
                             ) : (
-                              <span className="text-muted-foreground/60">{t('dossier.noHistory')}</span>
+                              <span className="text-muted-foreground/60">
+                                {'No history recorded yet'}
+                              </span>
                             )}
                           </div>
-                          {((note?.tags && note.tags.length > 0) || (selectedPlayerPowers && (selectedPlayerPowers.godMode || selectedPlayerPowers.invisible || selectedPlayerPowers.noclip))) && (
+                          {((note?.tags && note.tags.length > 0) ||
+                            (selectedPlayerPowers &&
+                              (selectedPlayerPowers.godMode ||
+                                selectedPlayerPowers.invisible ||
+                                selectedPlayerPowers.noclip))) && (
                             <div className="mt-3 flex flex-wrap items-center gap-1.5">
                               {selectedPlayerPowers?.godMode && (
-                                <Badge variant="outline" className="gap-1 border-primary/40 bg-primary/10 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-primary">
-                                  <Ghost className="h-3 w-3" /> {t('dossier.godBadge')}
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 border-primary/40 bg-primary/10 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-primary"
+                                >
+                                  <Ghost className="h-3 w-3" /> {'God'}
                                 </Badge>
                               )}
                               {selectedPlayerPowers?.invisible && (
-                                <Badge variant="outline" className="gap-1 border-primary/40 bg-primary/10 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-primary">
-                                  <Eye className="h-3 w-3" /> {t('dossier.invisibleBadge')}
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 border-primary/40 bg-primary/10 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-primary"
+                                >
+                                  <Eye className="h-3 w-3" /> {'Invisible'}
                                 </Badge>
                               )}
                               {selectedPlayerPowers?.noclip && (
-                                <Badge variant="outline" className="gap-1 border-primary/40 bg-primary/10 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-primary">
-                                  <Layers className="h-3 w-3" /> {t('dossier.noclipBadge')}
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 border-primary/40 bg-primary/10 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-primary"
+                                >
+                                  <Layers className="h-3 w-3" /> {'Noclip'}
                                 </Badge>
                               )}
-                              {note?.tags?.map(tag => (
-                                <Badge key={tag} variant="secondary" className="px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider">
+                              {note?.tags?.map((tag) => (
+                                <Badge
+                                  key={tag}
+                                  variant="secondary"
+                                  className="px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider"
+                                >
                                   {tag}
                                 </Badge>
                               ))}
                               {note?.note && (
-                                <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                                  <StickyNote className="h-3 w-3" /> {t('dossier.noteBadge')}
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 px-1.5 py-0 text-[10px] font-mono uppercase tracking-wider text-muted-foreground"
+                                >
+                                  <StickyNote className="h-3 w-3" /> {'Note'}
                                 </Badge>
                               )}
                             </div>
@@ -1834,91 +2397,211 @@ export default function Players() {
                         </div>
 
                         <div className="flex shrink-0 items-center gap-1.5">
-                          <DisabledReason reason={!canModerate ? t('permissions.noModerate') : null}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setKickDialogOpen(true)}
-                            disabled={!canModerate}
-                            className="h-8 gap-1.5 border-amber-500/40 text-xs font-medium text-amber-300 hover:border-amber-500/60 hover:bg-amber-500/10 hover:text-amber-200"
-                            // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Kick player"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                            title={t('dossier.kickTitle')}
+                          <DisabledReason
+                            reason={
+                              !canModerate
+                                ? "This action requires the players.moderate permission, which this role doesn't have."
+                                : null
+                            }
                           >
-                            <UserX className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">{t('dossier.kickButton')}</span>
-                          </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setKickDialogOpen(true)}
+                              disabled={!canModerate}
+                              className="h-8 gap-1.5 border-amber-500/40 text-xs font-medium text-amber-300 hover:border-amber-500/60 hover:bg-amber-500/10 hover:text-amber-200"
+                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Kick player"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
+                              title={'Kick player'}
+                            >
+                              <UserX className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">{'Kick'}</span>
+                            </Button>
                           </DisabledReason>
-                          <DisabledReason reason={!canModerate ? t('permissions.noModerate') : null}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setBanDialogOpen(true)}
-                            disabled={!canModerate}
-                            className="h-8 gap-1.5 border-destructive/45 text-xs font-medium text-destructive hover:border-destructive/65 hover:bg-destructive/10"
-                            // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Ban player"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                            title={t('dossier.banTitle')}
+                          <DisabledReason
+                            reason={
+                              !canModerate
+                                ? "This action requires the players.moderate permission, which this role doesn't have."
+                                : null
+                            }
                           >
-                            <Ban className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">{t('dossier.banButton')}</span>
-                          </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setBanDialogOpen(true)}
+                              disabled={!canModerate}
+                              className="h-8 gap-1.5 border-destructive/45 text-xs font-medium text-destructive hover:border-destructive/65 hover:bg-destructive/10"
+                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Ban player"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
+                              title={'Ban player'}
+                            >
+                              <Ban className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">{'Ban'}</span>
+                            </Button>
                           </DisabledReason>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="outline" size="sm" className="h-8 w-8 p-0" aria-label={t('dossier.moreActionsAria')}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                aria-label={'More player actions'}
+                              >
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DisabledReason className="w-full" reason={!canGmTools ? t('permissions.noGmTools') : (!bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
-                                <DropdownMenuItem onClick={() => { if (!canGmTools) return; handleGodMode(!selectedPlayerPowers?.godMode) }} disabled={loading || !bridgeConnected || !canGmTools}>
-                                  <Ghost className="w-4 h-4 me-2" />
-                                  {selectedPlayerPowers?.godMode ? t('dossier.disableGodMode') : t('dossier.enableGodMode')}
-                                </DropdownMenuItem>
-                              </DisabledReason>
-                              <DisabledReason className="w-full" reason={!canGmTools ? t('permissions.noGmTools') : (!bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
-                                <DropdownMenuItem onClick={() => { if (!canGmTools) return; handleInvisible(!selectedPlayerPowers?.invisible) }} disabled={loading || !bridgeConnected || !canGmTools}>
-                                  <Eye className="w-4 h-4 me-2" />
-                                  {selectedPlayerPowers?.invisible ? t('dossier.disableInvisible') : t('dossier.enableInvisible')}
-                                </DropdownMenuItem>
-                              </DisabledReason>
-                              <DisabledReason className="w-full" reason={!canGmTools ? t('permissions.noGmTools') : (!bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
-                                <DropdownMenuItem onClick={() => { if (!canGmTools) return; handleNoclip(!selectedPlayerPowers?.noclip) }} disabled={loading || !bridgeConnected || !canGmTools}>
-                                  <Layers className="w-4 h-4 me-2" />
-                                  {selectedPlayerPowers?.noclip ? t('dossier.disableNoclip') : t('dossier.enableNoclip')}
-                                </DropdownMenuItem>
-                              </DisabledReason>
-                              <DropdownMenuSeparator />
-                              <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  if (!canModerate) return
-                                  setAddUserUsername(selectedPlayer)
-                                  setAddUserPassword('')
-                                  setAddUserDialogOpen(true)
-                                }}
-                                disabled={loading || !canModerate}
+                              <DisabledReason
+                                className="w-full"
+                                reason={
+                                  !canGmTools
+                                    ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                                    : !bridgeConnected
+                                      ? 'Requires PanelBridge to be connected'
+                                      : null
+                                }
                               >
-                                <UserPlus className="w-4 h-4 me-2" />
-                                {t('dossier.addToWhitelist')}
-                              </DropdownMenuItem>
-                              </DisabledReason>
-                              <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
-                              <DropdownMenuItem
-                                onClick={() => { if (!canModerate) return; handleAction(t('actions.removeFromWhitelist'), () => playersApi.removeFromWhitelist(selectedPlayer), () => { void fetchWhitelist() }) }}
-                                disabled={loading || !canModerate || selectedPlayerConfirmedNotWhitelisted}
-                              >
-                                <UserMinus className="w-4 h-4 me-2" />
-                                {t('dossier.removeFromWhitelist')}
-                              </DropdownMenuItem>
-                              </DisabledReason>
-                              <DropdownMenuSeparator />
-                              <DisabledReason className="w-full" reason={!canGmTools ? t('permissions.noGmTools') : (!bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
                                 <DropdownMenuItem
-                                  onClick={() => { if (!canGmTools) return; setImportExportOpen(true) }}
+                                  onClick={() => {
+                                    if (!canGmTools) return
+                                    handleGodMode(
+                                      !selectedPlayerPowers?.godMode,
+                                    )
+                                  }}
+                                  disabled={
+                                    loading || !bridgeConnected || !canGmTools
+                                  }
+                                >
+                                  <Ghost className="w-4 h-4 me-2" />
+                                  {selectedPlayerPowers?.godMode
+                                    ? 'Disable God Mode'
+                                    : 'Enable God Mode'}
+                                </DropdownMenuItem>
+                              </DisabledReason>
+                              <DisabledReason
+                                className="w-full"
+                                reason={
+                                  !canGmTools
+                                    ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                                    : !bridgeConnected
+                                      ? 'Requires PanelBridge to be connected'
+                                      : null
+                                }
+                              >
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    if (!canGmTools) return
+                                    handleInvisible(
+                                      !selectedPlayerPowers?.invisible,
+                                    )
+                                  }}
+                                  disabled={
+                                    loading || !bridgeConnected || !canGmTools
+                                  }
+                                >
+                                  <Eye className="w-4 h-4 me-2" />
+                                  {selectedPlayerPowers?.invisible
+                                    ? 'Disable Invisible'
+                                    : 'Enable Invisible'}
+                                </DropdownMenuItem>
+                              </DisabledReason>
+                              <DisabledReason
+                                className="w-full"
+                                reason={
+                                  !canGmTools
+                                    ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                                    : !bridgeConnected
+                                      ? 'Requires PanelBridge to be connected'
+                                      : null
+                                }
+                              >
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    if (!canGmTools) return
+                                    handleNoclip(!selectedPlayerPowers?.noclip)
+                                  }}
+                                  disabled={
+                                    loading || !bridgeConnected || !canGmTools
+                                  }
+                                >
+                                  <Layers className="w-4 h-4 me-2" />
+                                  {selectedPlayerPowers?.noclip
+                                    ? 'Disable Noclip'
+                                    : 'Enable Noclip'}
+                                </DropdownMenuItem>
+                              </DisabledReason>
+                              <DropdownMenuSeparator />
+                              <DisabledReason
+                                className="w-full"
+                                reason={
+                                  !canModerate
+                                    ? "This action requires the players.moderate permission, which this role doesn't have."
+                                    : null
+                                }
+                              >
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    if (!canModerate) return
+                                    setAddUserUsername(selectedPlayer)
+                                    setAddUserPassword('')
+                                    setAddUserDialogOpen(true)
+                                  }}
+                                  disabled={loading || !canModerate}
+                                >
+                                  <UserPlus className="w-4 h-4 me-2" />
+                                  {'Add to Whitelist'}
+                                </DropdownMenuItem>
+                              </DisabledReason>
+                              <DisabledReason
+                                className="w-full"
+                                reason={
+                                  !canModerate
+                                    ? "This action requires the players.moderate permission, which this role doesn't have."
+                                    : null
+                                }
+                              >
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    if (!canModerate) return
+                                    handleAction(
+                                      'Remove from whitelist',
+                                      () =>
+                                        playersApi.removeFromWhitelist(
+                                          selectedPlayer,
+                                        ),
+                                      () => {
+                                        void fetchWhitelist()
+                                      },
+                                    )
+                                  }}
+                                  disabled={
+                                    loading ||
+                                    !canModerate ||
+                                    selectedPlayerConfirmedNotWhitelisted
+                                  }
+                                >
+                                  <UserMinus className="w-4 h-4 me-2" />
+                                  {'Remove from Whitelist'}
+                                </DropdownMenuItem>
+                              </DisabledReason>
+                              <DropdownMenuSeparator />
+                              <DisabledReason
+                                className="w-full"
+                                reason={
+                                  !canGmTools
+                                    ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                                    : !bridgeConnected
+                                      ? 'Requires PanelBridge to be connected'
+                                      : null
+                                }
+                              >
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    if (!canGmTools) return
+                                    setImportExportOpen(true)
+                                  }}
                                   disabled={!bridgeConnected || !canGmTools}
                                 >
                                   <Download className="w-4 h-4 me-2" />
-                                  {t('dossier.importExportCharacter')}
+                                  {'Import/Export Character'}
                                 </DropdownMenuItem>
                               </DisabledReason>
                             </DropdownMenuContent>
@@ -1931,15 +2614,35 @@ export default function Players() {
               </>
             ) : (
               <div className="relative overflow-hidden rounded-md border border-dashed border-border/50 bg-muted/10 px-6 py-10 text-center">
-                <span aria-hidden="true" className="pointer-events-none absolute -left-px -top-px h-3 w-3 border-s-2 border-t-2 border-border/60" />
-                <span aria-hidden="true" className="pointer-events-none absolute -right-px -top-px h-3 w-3 border-e-2 border-t-2 border-border/60" />
-                <span aria-hidden="true" className="pointer-events-none absolute -left-px -bottom-px h-3 w-3 border-b-2 border-s-2 border-border/60" />
-                <span aria-hidden="true" className="pointer-events-none absolute -right-px -bottom-px h-3 w-3 border-b-2 border-e-2 border-border/60" />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -left-px -top-px h-3 w-3 border-s-2 border-t-2 border-border/60"
+                />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -right-px -top-px h-3 w-3 border-e-2 border-t-2 border-border/60"
+                />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -left-px -bottom-px h-3 w-3 border-b-2 border-s-2 border-border/60"
+                />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -right-px -bottom-px h-3 w-3 border-b-2 border-e-2 border-border/60"
+                />
                 <p className="font-mono text-[10px] uppercase tracking-[0.32em] text-muted-foreground/70">
-                  {t('dossier.noTargetTitle')}
+                  {'no target selected'}
                 </p>
                 <p className="mx-auto mt-3 max-w-xs text-sm text-muted-foreground">
-                  <Trans i18nKey="dossier.noTargetDesc" t={t} components={{ 1: <span className="font-mono text-foreground/80" /> }} />
+                  <>
+                    {
+                      'Pick a player from the roster to view their dossier, or type a username under '
+                    }
+                    <span className="font-mono text-foreground/80">
+                      {'› Manual target'}
+                    </span>
+                    {'.'}
+                  </>
                 </p>
               </div>
             )}
@@ -1947,122 +2650,243 @@ export default function Players() {
           <CardContent>
             <Tabs defaultValue="moderation">
               <TabsList className="flex h-auto flex-wrap items-center gap-1 rounded-md border border-border/55 bg-muted/30 p-1">
-                <TabsTrigger value="vitals" className="min-h-8 shrink-0 px-3 text-xs font-medium">{t('tabs.vitals')}</TabsTrigger>
-                <TabsTrigger value="moderation" className="min-h-8 shrink-0 px-3 text-xs font-medium">{t('tabs.moderation')}</TabsTrigger>
-                <TabsTrigger value="spawn" className="min-h-8 shrink-0 px-3 text-xs font-medium">{t('tabs.spawn')}</TabsTrigger>
-                <TabsTrigger value="powers" className="min-h-8 shrink-0 px-3 text-xs font-medium">{t('tabs.powers')}</TabsTrigger>
-                <TabsTrigger value="notes" className="min-h-8 shrink-0 px-3 text-xs font-medium" onClick={() => fetchActivityLogs()}>{t('tabs.notesLog')}</TabsTrigger>
+                <TabsTrigger
+                  value="vitals"
+                  className="min-h-8 shrink-0 px-3 text-xs font-medium"
+                >
+                  {'Vitals'}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="moderation"
+                  className="min-h-8 shrink-0 px-3 text-xs font-medium"
+                >
+                  {'Moderation'}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="spawn"
+                  className="min-h-8 shrink-0 px-3 text-xs font-medium"
+                >
+                  {'Spawn'}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="powers"
+                  className="min-h-8 shrink-0 px-3 text-xs font-medium"
+                >
+                  {'Powers'}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="notes"
+                  className="min-h-8 shrink-0 px-3 text-xs font-medium"
+                  onClick={() => fetchActivityLogs()}
+                >
+                  {'Notes & Log'}
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="vitals" className="space-y-4 mt-4">
                 {!selectedPlayer ? (
-                  <p className="text-sm text-muted-foreground">{t('vitals.noTarget')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {'Select a player to see their live status.'}
+                  </p>
                 ) : !isSelectedPlayerOnline ? (
-                  <p className="text-sm text-muted-foreground">{t('vitals.offline')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {'This player is offline.'}
+                  </p>
                 ) : !bridgeConnected ? (
-                  <p className="text-sm text-muted-foreground">{t('vitals.bridgeRequired')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {'PanelBridge is not connected.'}
+                  </p>
                 ) : playerVitalsLoading && !playerVitals ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> {t('vitals.loading')}
+                    <Loader2 className="h-4 w-4 animate-spin" />{' '}
+                    {'Loading live status…'}
                   </div>
                 ) : playerVitalsError && !playerVitals ? (
-                  <p className="text-sm text-destructive">{playerVitalsError}</p>
+                  <p className="text-sm text-destructive">
+                    {playerVitalsError}
+                  </p>
                 ) : !playerVitals ? (
-                  <p className="text-sm text-muted-foreground">{t('vitals.unavailable')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {'Live status is unavailable for this player.'}
+                  </p>
                 ) : (
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {playerVitals.accessLevel && playerVitals.accessLevel !== 'none' && playerVitals.accessLevel !== 'user' && (
-                        <Badge variant="outline" className="text-[10px] font-mono uppercase tracking-wider text-amber-400">
-                          {playerVitals.accessLevel}
-                        </Badge>
-                      )}
+                      {playerVitals.accessLevel &&
+                        playerVitals.accessLevel !== 'none' &&
+                        playerVitals.accessLevel !== 'user' && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-mono uppercase tracking-wider text-amber-400"
+                          >
+                            {playerVitals.accessLevel}
+                          </Badge>
+                        )}
                       {playerVitals.health?.isInfected && (
-                        <Badge variant="outline" className="gap-1 border-destructive/40 text-[10px] font-mono uppercase tracking-wider text-destructive">
-                          <Skull className="h-3 w-3" /> {t('vitals.infected')}
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-destructive/40 text-[10px] font-mono uppercase tracking-wider text-destructive"
+                        >
+                          <Skull className="h-3 w-3" /> {'Infected'}
                         </Badge>
                       )}
                       {playerVitals.health?.isBleeding && (
-                        <Badge variant="outline" className="border-destructive/40 text-[10px] font-mono uppercase tracking-wider text-destructive">
-                          {t('vitals.bleeding')}
+                        <Badge
+                          variant="outline"
+                          className="border-destructive/40 text-[10px] font-mono uppercase tracking-wider text-destructive"
+                        >
+                          {'Bleeding'}
                         </Badge>
                       )}
                       {playerVitals.isAsleep && (
-                        <Badge variant="outline" className="gap-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                          <Moon className="h-3 w-3" /> {t('vitals.asleep')}
+                        <Badge
+                          variant="outline"
+                          className="gap-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground"
+                        >
+                          <Moon className="h-3 w-3" /> {'Asleep'}
                         </Badge>
                       )}
                       {playerVitals.isSneaking && (
-                        <Badge variant="outline" className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                          {t('vitals.sneaking')}
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground"
+                        >
+                          {'Sneaking'}
                         </Badge>
                       )}
                       {playerVitals.isRunning && (
-                        <Badge variant="outline" className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                          {t('vitals.running')}
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground"
+                        >
+                          {'Running'}
                         </Badge>
                       )}
                     </div>
 
-                    {typeof playerVitals.x === 'number' && typeof playerVitals.y === 'number' && (
-                      <div className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground/85">
-                        <MapPin className="h-3.5 w-3.5 text-primary/70" />
-                        <span className="tabular-nums">{Math.round(playerVitals.x)}, {Math.round(playerVitals.y)}{typeof playerVitals.z === 'number' ? `, ${playerVitals.z}` : ''}</span>
-                      </div>
-                    )}
+                    {typeof playerVitals.x === 'number' &&
+                      typeof playerVitals.y === 'number' && (
+                        <div className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground/85">
+                          <MapPin className="h-3.5 w-3.5 text-primary/70" />
+                          <span className="tabular-nums">
+                            {Math.round(playerVitals.x)},{' '}
+                            {Math.round(playerVitals.y)}
+                            {typeof playerVitals.z === 'number'
+                              ? `, ${playerVitals.z}`
+                              : ''}
+                          </span>
+                        </div>
+                      )}
 
                     <div className="space-y-2">
                       {playerVitals.health?.overallBodyHealth !== undefined && (
                         <VitalBar
-                          label={t('vitals.health')}
+                          label={'HP'}
                           value={playerVitals.health.overallBodyHealth / 100}
                           goodWhenLow={false}
                         />
                       )}
-                      {([
-                        { key: 'hunger', value: playerVitals.stats?.hunger, label: t('vitals.hunger') },
-                        { key: 'thirst', value: playerVitals.stats?.thirst, label: t('vitals.thirst') },
-                        { key: 'fatigue', value: playerVitals.stats?.fatigue, label: t('vitals.fatigue') },
-                      ] as const).map(({ key, value, label }) => value === undefined ? null : (
-                        <VitalBar key={key} label={label} value={value} goodWhenLow />
-                      ))}
+                      {(
+                        [
+                          {
+                            key: 'hunger',
+                            value: playerVitals.stats?.hunger,
+                            label: 'Hunger',
+                          },
+                          {
+                            key: 'thirst',
+                            value: playerVitals.stats?.thirst,
+                            label: 'Thirst',
+                          },
+                          {
+                            key: 'fatigue',
+                            value: playerVitals.stats?.fatigue,
+                            label: 'Fatigue',
+                          },
+                        ] as const
+                      ).map(({ key, value, label }) =>
+                        value === undefined ? null : (
+                          <VitalBar
+                            key={key}
+                            label={label}
+                            value={value}
+                            goodWhenLow
+                          />
+                        ),
+                      )}
                     </div>
 
                     {playerVitals.stats && (
                       <div className="border-t border-border/40 pt-2">
                         <div className="mb-1 flex items-center gap-1">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                            {t('vitals.otherStatsLabel')}
+                            {'Other stats'}
                           </span>
-                          <HelpTip label={t('vitals.otherStatsLabel')}>{t('vitals.otherStatsTip')}</HelpTip>
+                          <HelpTip label={'Other stats'}>
+                            {
+                              "Shown as raw numbers, not a bar like the vitals above: PanelBridge sends these values, but which of them use a 0-1 scale versus 0-100 hasn't been confirmed against the game itself for every one of them. A colored bar would have to guess the scale, and a confidently wrong severity is worse than no severity at all."
+                            }
+                          </HelpTip>
                         </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground/85 sm:grid-cols-3">
-                        {([
-                          ['endurance', playerVitals.stats.endurance, t('vitals.endurance')],
-                          ['stress', playerVitals.stats.stress, t('vitals.stress')],
-                          ['boredom', playerVitals.stats.boredom, t('vitals.boredom')],
-                          ['unhappiness', playerVitals.stats.unhappiness, t('vitals.unhappiness')],
-                          ['pain', playerVitals.stats.pain, t('vitals.pain')],
-                        ] as const).map(([key, value, label]) => value === undefined ? null : (
-                          <div key={key} className="flex items-center justify-between gap-2">
-                            <span className="uppercase tracking-wide text-[10px] text-muted-foreground/70">{label}</span>
-                            <span className="tabular-nums text-foreground/85">{Math.round(value * 100) / 100}</span>
-                          </div>
-                        ))}
-                      </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground/85 sm:grid-cols-3">
+                          {(
+                            [
+                              [
+                                'endurance',
+                                playerVitals.stats.endurance,
+                                'Endurance',
+                              ],
+                              ['stress', playerVitals.stats.stress, 'Stress'],
+                              [
+                                'boredom',
+                                playerVitals.stats.boredom,
+                                'Boredom',
+                              ],
+                              [
+                                'unhappiness',
+                                playerVitals.stats.unhappiness,
+                                'Unhappiness',
+                              ],
+                              ['pain', playerVitals.stats.pain, 'Pain'],
+                            ] as const
+                          ).map(([key, value, label]) =>
+                            value === undefined ? null : (
+                              <div
+                                key={key}
+                                className="flex items-center justify-between gap-2"
+                              >
+                                <span className="uppercase tracking-wide text-[10px] text-muted-foreground/70">
+                                  {label}
+                                </span>
+                                <span className="tabular-nums text-foreground/85">
+                                  {Math.round(value * 100) / 100}
+                                </span>
+                              </div>
+                            ),
+                          )}
+                        </div>
                       </div>
                     )}
 
-                    {(playerVitals.health?.temperature !== undefined || playerVitals.health?.wetness !== undefined) && (
+                    {(playerVitals.health?.temperature !== undefined ||
+                      playerVitals.health?.wetness !== undefined) && (
                       <div className="flex items-center gap-4 border-t border-border/40 pt-2 font-mono text-xs text-muted-foreground/85">
                         {playerVitals.health?.temperature !== undefined && (
                           <span className="flex items-center gap-1.5">
                             <Thermometer className="h-3.5 w-3.5 text-primary/70" />
-                            <span className="tabular-nums">{Math.round(playerVitals.health.temperature * 10) / 10}°</span>
+                            <span className="tabular-nums">
+                              {Math.round(
+                                playerVitals.health.temperature * 10,
+                              ) / 10}
+                              °
+                            </span>
                           </span>
                         )}
                         {playerVitals.health?.wetness !== undefined && (
-                          <span className="tabular-nums">{t('vitals.wetness')}: {Math.round(playerVitals.health.wetness * 100)}%</span>
+                          <span className="tabular-nums">
+                            {'Wetness'}:{' '}
+                            {Math.round(playerVitals.health.wetness * 100)}%
+                          </span>
                         )}
                       </div>
                     )}
@@ -2072,615 +2896,1015 @@ export default function Players() {
 
               <TabsContent value="moderation" className="space-y-4 mt-4">
                 {selectedPlayer ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                  <DisabledReason className="w-full" reason={selectedPlayer && !canModerate ? t('permissions.noModerate') : null}>
-                  <Dialog open={kickDialogOpen} onOpenChange={setKickDialogOpen}>
-                    <DialogTrigger asChild>
-                      <button type="button" disabled={!selectedPlayer || !canModerate} className="block h-auto w-full p-0 text-start">
-                        <ActionTile icon={<UserX className="w-4 h-4" />} label={t('dossier.kickButton')} description={t('actionTiles.kickDesc')} disabled={!selectedPlayer || !canModerate} emphasis="warning" />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t('kickDialog.title')}</DialogTitle>
-                        <DialogDescription>
-                          {t('kickDialog.description', { player: selectedPlayer })}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="kick-reason">{t('kickDialog.reasonLabel')}</Label>
-                          <Input
-                            id="kick-reason"
-                            value={kickReason}
-                            onChange={(e) => setKickReason(e.target.value)}
-                            placeholder={t('kickDialog.reasonPlaceholder')}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="destructive" onClick={handleKick} disabled={loading}>
-                          {loading ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : null}
-                          {t('kickDialog.submit')}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                  </DisabledReason>
-
-                  <DisabledReason className="w-full" reason={selectedPlayer && !canModerate ? t('permissions.noModerate') : null}>
-                  <Dialog open={banDialogOpen} onOpenChange={setBanDialogOpen}>
-                    <DialogTrigger asChild>
-                      <button type="button" disabled={!selectedPlayer || !canModerate} className="block h-auto w-full p-0 text-start">
-                        <ActionTile icon={<Ban className="w-4 h-4" />} label={t('dossier.banButton')} description={t('actionTiles.banDesc')} disabled={!selectedPlayer || !canModerate} emphasis="danger" />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-destructive" />
-                          {t('banDialog.title')}
-                        </DialogTitle>
-                        <DialogDescription>
-                          {t('banDialog.description', { player: selectedPlayer })}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="ban-reason">{t('banDialog.reasonLabel')}</Label>
-                          <Input
-                            id="ban-reason"
-                            value={banReason}
-                            onChange={(e) => setBanReason(e.target.value)}
-                            placeholder={t('banDialog.reasonPlaceholder')}
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="banIp"
-                            checked={banIp}
-                            onCheckedChange={(checked) => setBanIp(checked === true)}
-                          />
-                          <Label htmlFor="banIp">{t('banDialog.banIpLabel')}</Label>
-                          <HelpTip label={t('banDialog.banIpLabel')}>{t('banDialog.banIpTip')}</HelpTip>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setBanDialogOpen(false)}>
-                          {t('banDialog.cancel')}
-                        </Button>
-                        <Button variant="destructive" onClick={() => setBanConfirmOpen(true)}>
-                          {t('banDialog.continue')}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                  </DisabledReason>
-
-                  <AlertDialog open={banConfirmOpen} onOpenChange={setBanConfirmOpen}>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{t('banConfirm.title')}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {banIp ? (
-                            <Trans i18nKey="banConfirm.descriptionWithIp" t={t} values={{ player: selectedPlayer }} components={{ 1: <strong /> }} />
-                          ) : (
-                            <Trans i18nKey="banConfirm.description" t={t} values={{ player: selectedPlayer }} components={{ 1: <strong /> }} />
-                          )}
-                          {banReason && <><br />{t('banConfirm.reasonLine', { reason: banReason })}</>}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{t('banConfirm.cancel')}</AlertDialogCancel>
-                        <AlertDialogAction
-                          disabled={loading}
-                          onClick={(e) => { e.preventDefault(); handleBan() }}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          {loading ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : null}
-                          {t('banConfirm.confirm')}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-
-                  <DisabledReason className="w-full" reason={selectedPlayer && !canModerate ? t('permissions.noModerate') : null}>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <button type="button" disabled={!selectedPlayer || !canModerate} className="block h-auto w-full p-0 text-start">
-                        <ActionTile icon={<Shield className="w-4 h-4" />} label={t('actionTiles.accessLevelLabel')} description={t('actionTiles.accessLevelDesc')} disabled={!selectedPlayer || !canModerate} emphasis="primary" />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t('accessLevelDialog.title')}</DialogTitle>
-                        <DialogDescription>
-                          {t('accessLevelDialog.description', { player: selectedPlayer })}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div>
-                        <Label htmlFor="access-level">{t('accessLevelDialog.label')}</Label>
-                        <Select value={accessLevel} onValueChange={setAccessLevel}>
-                          <SelectTrigger id="access-level">
-                            <SelectValue placeholder={t('accessLevelDialog.placeholder')} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {accessLevelOptions.map((level) => (
-                              <SelectItem key={level} value={level}>
-                                {accessLevelLabels[level] || level.charAt(0).toUpperCase() + level.slice(1)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <DialogFooter>
-                        <Button onClick={handleSetAccessLevel} disabled={loading || !accessLevel}>
-                          {t('accessLevelDialog.submit')}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                  </DisabledReason>
-
-                  <DisabledReason className="w-full" reason={!canGmTools ? t('permissions.noGmTools') : null}>
-                  <Dialog open={teleportDialogOpen} onOpenChange={(open) => {
-                    setTeleportDialogOpen(open)
-                    if (open && !teleportTarget) setTeleportTarget(selectedPlayer)
-                  }}>
-                    <DialogTrigger asChild>
-                      <button type="button" disabled={!canGmTools} className="block h-auto w-full p-0 text-start">
-                        <ActionTile icon={<MapPin className="w-4 h-4" />} label={t('actionTiles.teleportLabel')} description={t('actionTiles.teleportDesc')} />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>{t('teleportDialog.title')}</DialogTitle>
-                        <DialogDescription>
-                          {t('teleportDialog.description', { player: selectedPlayer })}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="teleport-target">{t('teleportDialog.targetLabel')}</Label>
-                          <Input
-                            id="teleport-target"
-                            value={teleportTarget || selectedPlayer}
-                            onChange={(e) => setTeleportTarget(e.target.value)}
-                            placeholder={t('teleportDialog.targetPlaceholder')}
-                          />
-                        </div>
-
-                        <div>
-                          <Label className="text-xs text-muted-foreground mb-2 block">{t('teleportDialog.quickLocations')}</Label>
-                          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
-                            {TELEPORT_PRESETS.map((preset) => (
-                              <Button
-                                key={preset.name}
-                                variant="outline"
-                                size="sm"
-                                className="h-8 min-w-0 text-xs"
-                                onClick={() => {
-                                  setTeleportX(preset.x)
-                                  setTeleportY(preset.y)
-                                  setTeleportZ(preset.z)
-                                }}
-                              >
-                                {preset.name}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <Label htmlFor="teleport-x">{t('teleportDialog.xLabel')}</Label>
-                            <Input
-                              id="teleport-x"
-                              type="number"
-                              value={teleportX}
-                              onChange={(e) => setTeleportX(e.target.value)}
-                              placeholder="10500"
-                              min={0}
-                              max={24000}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    <DisabledReason
+                      className="w-full"
+                      reason={
+                        selectedPlayer && !canModerate
+                          ? "This action requires the players.moderate permission, which this role doesn't have."
+                          : null
+                      }
+                    >
+                      <Dialog
+                        open={kickDialogOpen}
+                        onOpenChange={setKickDialogOpen}
+                      >
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!selectedPlayer || !canModerate}
+                            className="block h-auto w-full p-0 text-start"
+                          >
+                            <ActionTile
+                              icon={<UserX className="w-4 h-4" />}
+                              label={'Kick'}
+                              description={'Boot player with reason'}
+                              disabled={!selectedPlayer || !canModerate}
+                              emphasis="warning"
                             />
-                          </div>
-                          <div>
-                            <Label htmlFor="teleport-y">{t('teleportDialog.yLabel')}</Label>
-                            <Input
-                              id="teleport-y"
-                              type="number"
-                              value={teleportY}
-                              onChange={(e) => setTeleportY(e.target.value)}
-                              placeholder="9700"
-                              min={0}
-                              max={24000}
-                            />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <Label htmlFor="teleport-z">{t('teleportDialog.zLabel')}</Label>
-                              <HelpTip label={t('teleportDialog.zLabel')}>{t('teleportDialog.zTip')}</HelpTip>
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{'Kick Player'}</DialogTitle>
+                            <DialogDescription>
+                              {'Kick ' +
+                                String(selectedPlayer) +
+                                ' from the server'}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="kick-reason">
+                                {'Reason (optional)'}
+                              </Label>
+                              <Input
+                                id="kick-reason"
+                                value={kickReason}
+                                onChange={(e) => setKickReason(e.target.value)}
+                                placeholder={'Enter reason...'}
+                              />
                             </div>
-                            <Input
-                              id="teleport-z"
-                              type="number"
-                              value={teleportZ}
-                              onChange={(e) => setTeleportZ(e.target.value)}
-                              placeholder="0"
-                              min={0}
-                              max={8}
-                            />
                           </div>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          onClick={() => handleTeleport(teleportTarget || selectedPlayer)}
-                          disabled={loading || !teleportX || !teleportY || !(teleportTarget || selectedPlayer)}
-                        >
-                          {loading ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : null}
-                          {t('teleportDialog.submit')}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                  </DisabledReason>
-                </div>
-                ) : null}
+                          <DialogFooter>
+                            <Button
+                              variant="destructive"
+                              onClick={handleKick}
+                              disabled={loading}
+                            >
+                              {loading ? (
+                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                              ) : null}
+                              {'Kick Player'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </DisabledReason>
 
-                <div className="pt-4 mt-2 border-t border-border/30">
-                  <div className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground/80">
-                    <span className="text-primary/70">//</span>
-                    <span>{t('secondaryOpsHeader')}</span>
-                    <span className="h-px flex-1 bg-border/40" aria-hidden="true" />
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
-                  <Dialog open={voiceBanDialogOpen} onOpenChange={setVoiceBanDialogOpen}>
-                    <DialogTrigger asChild>
-                      <button type="button" disabled={!canModerate} title={t('actionTiles.voiceBanTooltip')} className="block h-auto w-full p-0 text-start">
-                        <ActionTile icon={<MicOff className="w-4 h-4" />} label={t('actionTiles.voiceBanLabel')} compact />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t('voiceBanDialog.title')}</DialogTitle>
-                        <DialogDescription>
-                          {t('voiceBanDialog.description')}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label>{t('voiceBanDialog.usernameLabel')}</Label>
-                          <Input
-                            value={voiceBanUsername || selectedPlayer}
-                            onChange={(e) => setVoiceBanUsername(e.target.value)}
-                            placeholder={t('voiceBanDialog.usernamePlaceholder')}
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="voiceBanEnabled"
-                            checked={voiceBanEnabled}
-                            onCheckedChange={(checked) => setVoiceBanEnabled(checked === true)}
-                          />
-                          <Label htmlFor="voiceBanEnabled">
-                            {voiceBanEnabled ? t('voiceBanDialog.banLabel') : t('voiceBanDialog.unbanLabel')}
-                          </Label>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          onClick={() => {
-                            const target = voiceBanUsername || selectedPlayer
-                            if (!target) return
-                            setVoiceBanUsername(target)
-                            handleAction(voiceBanEnabled ? t('actions.voiceBan') : t('actions.voiceUnban'),
-                              () => playersApi.voiceBan(target, voiceBanEnabled), () => {
-                                setVoiceBanDialogOpen(false)
-                                setVoiceBanUsername('')
-                              })
-                          }}
-                          disabled={loading || (!voiceBanUsername && !selectedPlayer)}
-                        >
-                          {loading ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : null}
-                          {voiceBanEnabled ? (
-                            <><MicOff className="w-4 h-4 me-2" /> {t('voiceBanDialog.muteButton')}</>
-                          ) : (
-                            <><Mic className="w-4 h-4 me-2" /> {t('voiceBanDialog.unmuteButton')}</>
-                          )}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                  </DisabledReason>
+                    <DisabledReason
+                      className="w-full"
+                      reason={
+                        selectedPlayer && !canModerate
+                          ? "This action requires the players.moderate permission, which this role doesn't have."
+                          : null
+                      }
+                    >
+                      <Dialog
+                        open={banDialogOpen}
+                        onOpenChange={setBanDialogOpen}
+                      >
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!selectedPlayer || !canModerate}
+                            className="block h-auto w-full p-0 text-start"
+                          >
+                            <ActionTile
+                              icon={<Ban className="w-4 h-4" />}
+                              label={'Ban'}
+                              description={'Permanent · two-step'}
+                              disabled={!selectedPlayer || !canModerate}
+                              emphasis="danger"
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                              <AlertTriangle className="w-5 h-5 text-destructive" />
+                              {'Ban Player'}
+                            </DialogTitle>
+                            <DialogDescription>
+                              {'Ban ' +
+                                String(selectedPlayer) +
+                                ' from the server'}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="ban-reason">
+                                {'Reason (optional)'}
+                              </Label>
+                              <Input
+                                id="ban-reason"
+                                value={banReason}
+                                onChange={(e) => setBanReason(e.target.value)}
+                                placeholder={'Enter reason...'}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="banIp"
+                                checked={banIp}
+                                onCheckedChange={(checked) =>
+                                  setBanIp(checked === true)
+                                }
+                              />
+                              <Label htmlFor="banIp">
+                                {'Also ban IP address'}
+                              </Label>
+                              <HelpTip label={'Also ban IP address'}>
+                                {
+                                  'Also blocks the IP, not just the account — can affect others on the same network, and this panel has no way to review or lift IP bans separately.'
+                                }
+                              </HelpTip>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              variant="outline"
+                              onClick={() => setBanDialogOpen(false)}
+                            >
+                              {'Cancel'}
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              onClick={() => setBanConfirmOpen(true)}
+                            >
+                              {'Continue to Ban'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </DisabledReason>
 
-                  <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
-                  <Dialog open={steamIdBanDialogOpen} onOpenChange={setSteamIdBanDialogOpen}>
-                    <DialogTrigger asChild>
-                      <button type="button" disabled={!canModerate} title={t('actionTiles.steamIdBanTooltip')} className="block h-auto w-full p-0 text-start">
-                        <ActionTile icon={<Ban className="w-4 h-4" />} label={t('actionTiles.steamIdBanLabel')} emphasis="danger" compact />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-destructive" />
-                          {t('steamIdBanDialog.title')}
-                        </DialogTitle>
-                        <DialogDescription>
-                          {t('steamIdBanDialog.description')}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label>{t('steamIdBanDialog.steamIdLabel')}</Label>
-                          <Input
-                            value={banSteamId}
-                            onChange={(e) => setBanSteamId(sanitizeSteamId(e.target.value))}
-                            placeholder="76561198XXXXXXXXX"
-                          />
-                        </div>
-                        <div>
-                          <Label>{t('steamIdBanDialog.reasonLabel')}</Label>
-                          <Input
-                            value={steamBanReason}
-                            onChange={(e) => setSteamBanReason(e.target.value)}
-                            placeholder={t('steamIdBanDialog.reasonPlaceholder')}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setSteamIdBanDialogOpen(false)}>
-                          {t('steamIdBanDialog.cancel')}
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          onClick={handleSteamIdBan}
-                          disabled={loading || banSteamId.length !== 17}
-                        >
-                          {loading ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : null}
-                          {t('steamIdBanDialog.submit')}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                  </DisabledReason>
+                    <AlertDialog
+                      open={banConfirmOpen}
+                      onOpenChange={setBanConfirmOpen}
+                    >
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            {'Are you absolutely sure?'}
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {banIp ? (
+                              <>
+                                {'This will permanently ban '}
+                                <strong>{selectedPlayer}</strong>
+                                {' from the server and their IP address.'}
+                              </>
+                            ) : (
+                              <>
+                                {'This will permanently ban '}
+                                <strong>{selectedPlayer}</strong>
+                                {' from the server.'}
+                              </>
+                            )}
+                            {banReason && (
+                              <>
+                                <br />
+                                {'Reason: ' + String(banReason)}
+                              </>
+                            )}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{'Cancel'}</AlertDialogCancel>
+                          <AlertDialogAction
+                            disabled={loading}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              handleBan()
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            {loading ? (
+                              <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            ) : null}
+                            {'Yes, Ban Player'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
 
-                  <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
-                  <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
-                    <DialogTrigger asChild>
-                      <button type="button" disabled={!canModerate} title={t('actionTiles.addUserTooltip')} className="block h-auto w-full p-0 text-start">
-                        <ActionTile icon={<UserPlus className="w-4 h-4" />} label={t('actionTiles.addUserLabel')} compact />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t('addUserDialog.title')}</DialogTitle>
-                        <DialogDescription>
-                          {t('addUserDialog.description')}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label>{t('addUserDialog.usernameLabel')}</Label>
-                          <Input
-                            value={addUserUsername}
-                            onChange={(e) => setAddUserUsername(e.target.value)}
-                            placeholder={t('addUserDialog.usernamePlaceholder')}
-                            maxLength={64}
-                          />
-                        </div>
-                        <div>
-                          <Label>{t('addUserDialog.passwordLabel')}</Label>
-                          <Input
-                            type="password"
-                            value={addUserPassword}
-                            onChange={(e) => setAddUserPassword(e.target.value)}
-                            placeholder={t('addUserDialog.passwordPlaceholder')}
-                            maxLength={128}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setAddUserDialogOpen(false)}>
-                          {t('addUserDialog.cancel')}
-                        </Button>
-                        <Button
-                          onClick={handleAddUser}
-                          disabled={loading || !addUserUsername.trim() || (addUserPassword.length > 0 && addUserPassword.length < 4)}
-                        >
-                          {loading ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : null}
-                          {t('addUserDialog.submit')}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                  </DisabledReason>
-
-                  <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
-                  <Dialog open={unbanDialogOpen} onOpenChange={setUnbanDialogOpen}>
-                    <DialogTrigger asChild>
-                      <button type="button" disabled={!canModerate} title={t('actionTiles.unbanTooltip')} className="block h-auto w-full p-0 text-start">
-                        <ActionTile icon={<UserPlus className="w-4 h-4" />} label={t('actionTiles.unbanLabel')} compact />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t('unbanDialog.title')}</DialogTitle>
-                      </DialogHeader>
-                      <div>
-                        <Label htmlFor="unban-username">{t('unbanDialog.usernameLabel')}</Label>
-                        <Input
-                          id="unban-username"
-                          value={unbanUsername}
-                          onChange={(e) => setUnbanUsername(e.target.value)}
-                          placeholder={t('unbanDialog.usernamePlaceholder')}
-                        />
-                      </div>
-                      <DialogFooter>
-                        <Button onClick={handleUnban} disabled={loading || !unbanUsername}>
-                          {t('unbanDialog.submit')}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                  </DisabledReason>
-
-                  <DisabledReason className="w-full" reason={!canModerate ? t('permissions.noModerate') : null}>
-                  <Dialog open={unbanSteamIdDialogOpen} onOpenChange={(open) => {
-                    setUnbanSteamIdDialogOpen(open)
-                    if (open) fetchBannedSteamIds()
-                    else setUnbanSteamId('')
-                  }}>
-                    <DialogTrigger asChild>
-                      <button type="button" disabled={!canModerate} title={t('actionTiles.unbanSteamIdTooltip')} className="block h-auto w-full p-0 text-start">
-                        <ActionTile icon={<UserPlus className="w-4 h-4" />} label={t('actionTiles.unbanSteamIdLabel')} compact />
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t('unbanSteamIdDialog.title')}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-3">
-                        {bannedSteamIds.length > 0 && (
+                    <DisabledReason
+                      className="w-full"
+                      reason={
+                        selectedPlayer && !canModerate
+                          ? "This action requires the players.moderate permission, which this role doesn't have."
+                          : null
+                      }
+                    >
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!selectedPlayer || !canModerate}
+                            className="block h-auto w-full p-0 text-start"
+                          >
+                            <ActionTile
+                              icon={<Shield className="w-4 h-4" />}
+                              label={'Access Level'}
+                              description={'Admin · Mod · User'}
+                              disabled={!selectedPlayer || !canModerate}
+                              emphasis="primary"
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{'Set Access Level'}</DialogTitle>
+                            <DialogDescription>
+                              {'Change access level for ' +
+                                String(selectedPlayer)}
+                            </DialogDescription>
+                          </DialogHeader>
                           <div>
-                            <Label>{t('unbanSteamIdDialog.selectLabel')}</Label>
-                            <Select value={unbanSteamId} onValueChange={setUnbanSteamId}>
-                              <SelectTrigger>
-                                <SelectValue placeholder={loadingBans ? t('unbanSteamIdDialog.selectPlaceholderLoading') : t('unbanSteamIdDialog.selectPlaceholder')} />
+                            <Label htmlFor="access-level">
+                              {'Access Level'}
+                            </Label>
+                            <Select
+                              value={accessLevel}
+                              onValueChange={setAccessLevel}
+                            >
+                              <SelectTrigger id="access-level">
+                                <SelectValue placeholder={'Select level...'} />
                               </SelectTrigger>
                               <SelectContent>
-                                {bannedSteamIds.map((ban) => (
-                                  <SelectItem key={ban.steamId} value={ban.steamId}>
-                                    {ban.steamId}
-                                    {ban.banned_at && <span className="ms-2 text-xs text-muted-foreground">{new Date(ban.banned_at).toLocaleDateString(i18n.language)}</span>}
+                                {accessLevelOptions.map((level) => (
+                                  <SelectItem key={level} value={level}>
+                                    {accessLevelLabels[level] ||
+                                      level.charAt(0).toUpperCase() +
+                                        level.slice(1)}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
-                        )}
-                        <div>
-                          <Label htmlFor="unban-steamid">{bannedSteamIds.length > 0 ? t('unbanSteamIdDialog.orEnterManually') : t('unbanSteamIdDialog.steamIdLabel')}</Label>
-                          <Input
-                            id="unban-steamid"
-                            value={unbanSteamId}
-                            onChange={(e) => setUnbanSteamId(sanitizeSteamId(e.target.value))}
-                            placeholder={t('unbanSteamIdDialog.placeholder')}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button onClick={handleUnbanSteamId} disabled={loading || unbanSteamId.length !== 17}>
-                          {t('unbanSteamIdDialog.submit')}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                  </DisabledReason>
-                </div>
+                          <DialogFooter>
+                            <Button
+                              onClick={handleSetAccessLevel}
+                              disabled={loading || !accessLevel}
+                            >
+                              {'Set Level'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </DisabledReason>
+
+                    <DisabledReason
+                      className="w-full"
+                      reason={
+                        !canGmTools
+                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                          : null
+                      }
+                    >
+                      <Dialog
+                        open={teleportDialogOpen}
+                        onOpenChange={(open) => {
+                          setTeleportDialogOpen(open)
+                          if (open && !teleportTarget)
+                            setTeleportTarget(selectedPlayer)
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!canGmTools}
+                            className="block h-auto w-full p-0 text-start"
+                          >
+                            <ActionTile
+                              icon={<MapPin className="w-4 h-4" />}
+                              label={'Teleport'}
+                              description={
+                                'Build 42 multiplayer · may not sync'
+                              }
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>{'Teleport Player'}</DialogTitle>
+                            <DialogDescription>
+                              {'Teleport ' +
+                                String(selectedPlayer) +
+                                ' to coordinates'}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="teleport-target">
+                                {'Target Player'}
+                              </Label>
+                              <Input
+                                id="teleport-target"
+                                value={teleportTarget || selectedPlayer}
+                                onChange={(e) =>
+                                  setTeleportTarget(e.target.value)
+                                }
+                                placeholder={'Player to teleport'}
+                              />
+                            </div>
+
+                            <div>
+                              <Label className="text-xs text-muted-foreground mb-2 block">
+                                {'Quick Locations'}
+                              </Label>
+                              <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+                                {TELEPORT_PRESETS.map((preset) => (
+                                  <Button
+                                    key={preset.name}
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 min-w-0 text-xs"
+                                    onClick={() => {
+                                      setTeleportX(preset.x)
+                                      setTeleportY(preset.y)
+                                      setTeleportZ(preset.z)
+                                    }}
+                                  >
+                                    {preset.name}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <Label htmlFor="teleport-x">{'X'}</Label>
+                                <Input
+                                  id="teleport-x"
+                                  type="number"
+                                  value={teleportX}
+                                  onChange={(e) => setTeleportX(e.target.value)}
+                                  placeholder="10500"
+                                  min={0}
+                                  max={24000}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="teleport-y">{'Y'}</Label>
+                                <Input
+                                  id="teleport-y"
+                                  type="number"
+                                  value={teleportY}
+                                  onChange={(e) => setTeleportY(e.target.value)}
+                                  placeholder="9700"
+                                  min={0}
+                                  max={24000}
+                                />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <Label htmlFor="teleport-z">{'Z'}</Label>
+                                  <HelpTip label={'Z'}>
+                                    {
+                                      'The building floor, not a height — 0 is ground level, higher is an upper floor.'
+                                    }
+                                  </HelpTip>
+                                </div>
+                                <Input
+                                  id="teleport-z"
+                                  type="number"
+                                  value={teleportZ}
+                                  onChange={(e) => setTeleportZ(e.target.value)}
+                                  placeholder="0"
+                                  min={0}
+                                  max={8}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              onClick={() =>
+                                handleTeleport(teleportTarget || selectedPlayer)
+                              }
+                              disabled={
+                                loading ||
+                                !teleportX ||
+                                !teleportY ||
+                                !(teleportTarget || selectedPlayer)
+                              }
+                            >
+                              {loading ? (
+                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                              ) : null}
+                              {'Teleport'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </DisabledReason>
+                  </div>
+                ) : null}
+
+                <div className="pt-4 mt-2 border-t border-border/30">
+                  <div className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground/80">
+                    <span className="text-primary/70">//</span>
+                    <span>{'standalone ops'}</span>
+                    <span
+                      className="h-px flex-1 bg-border/40"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <DisabledReason
+                      className="w-full"
+                      reason={
+                        !canModerate
+                          ? "This action requires the players.moderate permission, which this role doesn't have."
+                          : null
+                      }
+                    >
+                      <Dialog
+                        open={voiceBanDialogOpen}
+                        onOpenChange={setVoiceBanDialogOpen}
+                      >
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!canModerate}
+                            title={
+                              "Mute or unmute a player from in-game voice chat. They stay connected, but can't talk in proximity voice."
+                            }
+                            className="block h-auto w-full p-0 text-start"
+                          >
+                            <ActionTile
+                              icon={<MicOff className="w-4 h-4" />}
+                              label={'Voice Ban'}
+                              compact
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{'Voice Ban'}</DialogTitle>
+                            <DialogDescription>
+                              {"Mute or unmute a player's voice chat"}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label>{'Username'}</Label>
+                              <Input
+                                value={voiceBanUsername || selectedPlayer}
+                                onChange={(e) =>
+                                  setVoiceBanUsername(e.target.value)
+                                }
+                                placeholder={'Enter username...'}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="voiceBanEnabled"
+                                checked={voiceBanEnabled}
+                                onCheckedChange={(checked) =>
+                                  setVoiceBanEnabled(checked === true)
+                                }
+                              />
+                              <Label htmlFor="voiceBanEnabled">
+                                {voiceBanEnabled
+                                  ? 'Ban from voice chat'
+                                  : 'Unban from voice chat'}
+                              </Label>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              onClick={() => {
+                                const target =
+                                  voiceBanUsername || selectedPlayer
+                                if (!target) return
+                                setVoiceBanUsername(target)
+                                handleAction(
+                                  voiceBanEnabled ? 'Voice ban' : 'Voice unban',
+                                  () =>
+                                    playersApi.voiceBan(
+                                      target,
+                                      voiceBanEnabled,
+                                    ),
+                                  () => {
+                                    setVoiceBanDialogOpen(false)
+                                    setVoiceBanUsername('')
+                                  },
+                                )
+                              }}
+                              disabled={
+                                loading ||
+                                (!voiceBanUsername && !selectedPlayer)
+                              }
+                            >
+                              {loading ? (
+                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                              ) : null}
+                              {voiceBanEnabled ? (
+                                <>
+                                  <MicOff className="w-4 h-4 me-2" /> {'Mute'}
+                                </>
+                              ) : (
+                                <>
+                                  <Mic className="w-4 h-4 me-2" /> {'Unmute'}
+                                </>
+                              )}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </DisabledReason>
+
+                    <DisabledReason
+                      className="w-full"
+                      reason={
+                        !canModerate
+                          ? "This action requires the players.moderate permission, which this role doesn't have."
+                          : null
+                      }
+                    >
+                      <Dialog
+                        open={steamIdBanDialogOpen}
+                        onOpenChange={setSteamIdBanDialogOpen}
+                      >
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!canModerate}
+                            title={
+                              "Ban a player by their Steam ID, even when they're offline. Works without needing them to be connected."
+                            }
+                            className="block h-auto w-full p-0 text-start"
+                          >
+                            <ActionTile
+                              icon={<Ban className="w-4 h-4" />}
+                              label={'SteamID Ban'}
+                              emphasis="danger"
+                              compact
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                              <AlertTriangle className="w-5 h-5 text-destructive" />
+                              {'Ban by SteamID'}
+                            </DialogTitle>
+                            <DialogDescription>
+                              {
+                                'Ban a player by their Steam ID (useful for offline bans)'
+                              }
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label>{'Steam ID'}</Label>
+                              <Input
+                                value={banSteamId}
+                                onChange={(e) =>
+                                  setBanSteamId(sanitizeSteamId(e.target.value))
+                                }
+                                placeholder="76561198XXXXXXXXX"
+                              />
+                            </div>
+                            <div>
+                              <Label>{'Reason (optional)'}</Label>
+                              <Input
+                                value={steamBanReason}
+                                onChange={(e) =>
+                                  setSteamBanReason(e.target.value)
+                                }
+                                placeholder={'Enter ban reason...'}
+                              />
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              variant="outline"
+                              onClick={() => setSteamIdBanDialogOpen(false)}
+                            >
+                              {'Cancel'}
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              onClick={handleSteamIdBan}
+                              disabled={loading || banSteamId.length !== 17}
+                            >
+                              {loading ? (
+                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                              ) : null}
+                              {'Ban SteamID'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </DisabledReason>
+
+                    <DisabledReason
+                      className="w-full"
+                      reason={
+                        !canModerate
+                          ? "This action requires the players.moderate permission, which this role doesn't have."
+                          : null
+                      }
+                    >
+                      <Dialog
+                        open={addUserDialogOpen}
+                        onOpenChange={setAddUserDialogOpen}
+                      >
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!canModerate}
+                            title={
+                              'Create a new account on the server (username + password). Mostly used for whitelist-only servers.'
+                            }
+                            className="block h-auto w-full p-0 text-start"
+                          >
+                            <ActionTile
+                              icon={<UserPlus className="w-4 h-4" />}
+                              label={'Add User'}
+                              compact
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{'Add User'}</DialogTitle>
+                            <DialogDescription>
+                              {
+                                'Create a new user account for whitelist servers. Build 42 allows an empty password.'
+                              }
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label>{'Username'}</Label>
+                              <Input
+                                value={addUserUsername}
+                                onChange={(e) =>
+                                  setAddUserUsername(e.target.value)
+                                }
+                                placeholder={'Enter username...'}
+                                maxLength={64}
+                              />
+                            </div>
+                            <div>
+                              <Label>{'Password (optional)'}</Label>
+                              <Input
+                                type="password"
+                                value={addUserPassword}
+                                onChange={(e) =>
+                                  setAddUserPassword(e.target.value)
+                                }
+                                placeholder={
+                                  'Optional password (min 4 characters)...'
+                                }
+                                maxLength={128}
+                              />
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              variant="outline"
+                              onClick={() => setAddUserDialogOpen(false)}
+                            >
+                              {'Cancel'}
+                            </Button>
+                            <Button
+                              onClick={handleAddUser}
+                              disabled={
+                                loading ||
+                                !addUserUsername.trim() ||
+                                (addUserPassword.length > 0 &&
+                                  addUserPassword.length < 4)
+                              }
+                            >
+                              {loading ? (
+                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                              ) : null}
+                              {'Add User'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </DisabledReason>
+
+                    <DisabledReason
+                      className="w-full"
+                      reason={
+                        !canModerate
+                          ? "This action requires the players.moderate permission, which this role doesn't have."
+                          : null
+                      }
+                    >
+                      <Dialog
+                        open={unbanDialogOpen}
+                        onOpenChange={setUnbanDialogOpen}
+                      >
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!canModerate}
+                            title={
+                              'Lift a ban by username so the player can rejoin.'
+                            }
+                            className="block h-auto w-full p-0 text-start"
+                          >
+                            <ActionTile
+                              icon={<UserPlus className="w-4 h-4" />}
+                              label={'Unban'}
+                              compact
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{'Unban Player'}</DialogTitle>
+                          </DialogHeader>
+                          <div>
+                            <Label htmlFor="unban-username">{'Username'}</Label>
+                            <Input
+                              id="unban-username"
+                              value={unbanUsername}
+                              onChange={(e) => setUnbanUsername(e.target.value)}
+                              placeholder={'Enter username to unban...'}
+                            />
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              onClick={handleUnban}
+                              disabled={loading || !unbanUsername}
+                            >
+                              {'Unban Player'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </DisabledReason>
+
+                    <DisabledReason
+                      className="w-full"
+                      reason={
+                        !canModerate
+                          ? "This action requires the players.moderate permission, which this role doesn't have."
+                          : null
+                      }
+                    >
+                      <Dialog
+                        open={unbanSteamIdDialogOpen}
+                        onOpenChange={(open) => {
+                          setUnbanSteamIdDialogOpen(open)
+                          if (open) fetchBannedSteamIds()
+                          else setUnbanSteamId('')
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!canModerate}
+                            title={
+                              'Lift a SteamID ban. Pick from the list of banned IDs or paste one manually.'
+                            }
+                            className="block h-auto w-full p-0 text-start"
+                          >
+                            <ActionTile
+                              icon={<UserPlus className="w-4 h-4" />}
+                              label={'Unban SteamID'}
+                              compact
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{'Unban SteamID'}</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-3">
+                            {bannedSteamIds.length > 0 && (
+                              <div>
+                                <Label>{'Select banned SteamID'}</Label>
+                                <Select
+                                  value={unbanSteamId}
+                                  onValueChange={setUnbanSteamId}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue
+                                      placeholder={
+                                        loadingBans
+                                          ? 'Loading...'
+                                          : 'Select a banned SteamID...'
+                                      }
+                                    />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {bannedSteamIds.map((ban) => (
+                                      <SelectItem
+                                        key={ban.steamId}
+                                        value={ban.steamId}
+                                      >
+                                        {ban.steamId}
+                                        {ban.banned_at && (
+                                          <span className="ms-2 text-xs text-muted-foreground">
+                                            {new Date(
+                                              ban.banned_at,
+                                            ).toLocaleDateString('en')}
+                                          </span>
+                                        )}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                            <div>
+                              <Label htmlFor="unban-steamid">
+                                {bannedSteamIds.length > 0
+                                  ? 'Or enter manually'
+                                  : 'Steam ID'}
+                              </Label>
+                              <Input
+                                id="unban-steamid"
+                                value={unbanSteamId}
+                                onChange={(e) =>
+                                  setUnbanSteamId(
+                                    sanitizeSteamId(e.target.value),
+                                  )
+                                }
+                                placeholder={'Enter Steam ID to unban...'}
+                              />
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              onClick={handleUnbanSteamId}
+                              disabled={loading || unbanSteamId.length !== 17}
+                            >
+                              {'Unban SteamID'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </DisabledReason>
+                  </div>
                 </div>
               </TabsContent>
               <TabsContent value="spawn" className="space-y-3 mt-4">
-                <DisabledReason className="w-full" reason={selectedPlayer && !canGmTools ? t('permissions.noGmTools') : null}>
-                <button
-                  type="button"
-                  onClick={() => setItemBrowserOpen(true)}
-                  disabled={!selectedPlayer || loading || !canGmTools}
-                  className={cn(
-                    'group w-full rounded-xl border bg-card/50 p-4 text-start',
-                    'motion-safe:transition-all duration-150',
-                    'border-border/60',
-                    selectedPlayer && !loading && 'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
-                    (!selectedPlayer || loading) && 'opacity-60 cursor-not-allowed'
-                  )}
+                <DisabledReason
+                  className="w-full"
+                  reason={
+                    selectedPlayer && !canGmTools
+                      ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                      : null
+                  }
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'rounded-lg border p-2.5 shrink-0',
-                      'motion-safe:transition-colors duration-150',
-                      selectedPlayer && !loading
-                        ? 'border-primary/20 bg-primary/10 text-primary group-hover:bg-primary/15 group-hover:border-primary/30'
-                        : 'border-border/40 bg-muted/30 text-muted-foreground'
-                    )}>
-                      <Package className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground flex items-center gap-2">
-                        {t('spawn.giveItemsTitle')}
-                        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">
-                          {t('spawn.browserBadge')}
-                        </span>
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                        {selectedPlayer
-                          ? <Trans i18nKey="spawn.giveItemsDescWithPlayer" t={t} values={{ player: selectedPlayer }} components={{ 1: <span className="text-primary font-medium" /> }} />
-                          : t('spawn.giveItemsDescNoPlayer')}
-                      </p>
-                    </div>
-                    <div className={cn(
-                      'flex items-center gap-1 text-xs shrink-0',
+                  <button
+                    type="button"
+                    onClick={() => setItemBrowserOpen(true)}
+                    disabled={!selectedPlayer || loading || !canGmTools}
+                    className={cn(
+                      'group w-full rounded-xl border bg-card/50 p-4 text-start',
                       'motion-safe:transition-all duration-150',
-                      selectedPlayer && !loading
-                        ? 'text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5'
-                        : 'text-muted-foreground/30'
-                    )}>
-                      <span className="uppercase tracking-wider text-[10px] font-semibold">{t('spawn.browse')}</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      'border-border/60',
+                      selectedPlayer &&
+                        !loading &&
+                        'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
+                      (!selectedPlayer || loading) &&
+                        'opacity-60 cursor-not-allowed',
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          'rounded-lg border p-2.5 shrink-0',
+                          'motion-safe:transition-colors duration-150',
+                          selectedPlayer && !loading
+                            ? 'border-primary/20 bg-primary/10 text-primary group-hover:bg-primary/15 group-hover:border-primary/30'
+                            : 'border-border/40 bg-muted/30 text-muted-foreground',
+                        )}
+                      >
+                        <Package className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground flex items-center gap-2">
+                          {'Give items'}
+                          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">
+                            {'browser'}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {selectedPlayer ? (
+                            <>
+                              {
+                                'Weapons, food, medical, tools — give as many items as you want to '
+                              }
+                              {selectedPlayer}
+                              {' without closing the dialog.'}
+                            </>
+                          ) : (
+                            'Pick a player first, then browse the full item catalog to fill their inventory.'
+                          )}
+                        </p>
+                      </div>
+                      <div
+                        className={cn(
+                          'flex items-center gap-1 text-xs shrink-0',
+                          'motion-safe:transition-all duration-150',
+                          selectedPlayer && !loading
+                            ? 'text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5'
+                            : 'text-muted-foreground/30',
+                        )}
+                      >
+                        <span className="uppercase tracking-wider text-[10px] font-semibold">
+                          {'Browse'}
+                        </span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
                 </DisabledReason>
 
-                <DisabledReason className="w-full" reason={!canGmTools ? t('permissions.noGmTools') : null}>
-                <button
-                  type="button"
-                  onClick={() => setVehicleBrowserOpen(true)}
-                  disabled={loading || !canGmTools}
-                  className={cn(
-                    'group w-full rounded-xl border bg-card/50 p-4 text-start',
-                    'motion-safe:transition-all duration-150',
-                    'border-border/60',
-                    !loading && 'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
-                    loading && 'opacity-60 cursor-not-allowed'
-                  )}
+                <DisabledReason
+                  className="w-full"
+                  reason={
+                    !canGmTools
+                      ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                      : null
+                  }
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      'rounded-lg border p-2.5 shrink-0',
-                      'motion-safe:transition-colors duration-150',
-                      !loading
-                        ? 'border-primary/20 bg-primary/10 text-primary group-hover:bg-primary/15 group-hover:border-primary/30'
-                        : 'border-border/40 bg-muted/30 text-muted-foreground'
-                    )}>
-                      <Car className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground flex items-center gap-2">
-                        {t('spawn.spawnVehiclesTitle')}
-                        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">
-                          {t('spawn.browserBadge')}
-                        </span>
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                        {selectedPlayer
-                          ? <Trans i18nKey="spawn.spawnVehiclesDescWithPlayer" t={t} values={{ player: selectedPlayer }} components={{ 1: <span className="text-primary font-medium" /> }} />
-                          : t('spawn.spawnVehiclesDescNoPlayer')}
-                      </p>
-                    </div>
-                    <div className={cn(
-                      'flex items-center gap-1 text-xs shrink-0',
+                  <button
+                    type="button"
+                    onClick={() => setVehicleBrowserOpen(true)}
+                    disabled={loading || !canGmTools}
+                    className={cn(
+                      'group w-full rounded-xl border bg-card/50 p-4 text-start',
                       'motion-safe:transition-all duration-150',
-                      !loading
-                        ? 'text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5'
-                        : 'text-muted-foreground/30'
-                    )}>
-                      <span className="uppercase tracking-wider text-[10px] font-semibold">{t('spawn.browse')}</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      'border-border/60',
+                      !loading &&
+                        'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
+                      loading && 'opacity-60 cursor-not-allowed',
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          'rounded-lg border p-2.5 shrink-0',
+                          'motion-safe:transition-colors duration-150',
+                          !loading
+                            ? 'border-primary/20 bg-primary/10 text-primary group-hover:bg-primary/15 group-hover:border-primary/30'
+                            : 'border-border/40 bg-muted/30 text-muted-foreground',
+                        )}
+                      >
+                        <Car className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground flex items-center gap-2">
+                          {'Spawn vehicles'}
+                          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">
+                            {'browser'}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {selectedPlayer ? (
+                            <>
+                              {
+                                'Sedans, trucks, emergency, military — spawn one after another near '
+                              }
+                              {selectedPlayer}
+                              {'.'}
+                            </>
+                          ) : (
+                            "Spawns at the caller's position — select a player to spawn vehicles near them instead."
+                          )}
+                        </p>
+                      </div>
+                      <div
+                        className={cn(
+                          'flex items-center gap-1 text-xs shrink-0',
+                          'motion-safe:transition-all duration-150',
+                          !loading
+                            ? 'text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5'
+                            : 'text-muted-foreground/30',
+                        )}
+                      >
+                        <span className="uppercase tracking-wider text-[10px] font-semibold">
+                          {'Browse'}
+                        </span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
                 </DisabledReason>
 
                 <div className="rounded-xl border border-border/60 bg-card/50 p-4 transition-colors">
@@ -2689,19 +3913,27 @@ export default function Players() {
                       <TrendingUp className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="font-medium">{t('spawn.giveXpTitle')}</p>
+                      <p className="font-medium">{'Give XP'}</p>
                       <p className="text-xs text-muted-foreground">
-                        {selectedPlayer
-                          ? <Trans i18nKey="spawn.giveXpDescWithPlayer" t={t} values={{ player: selectedPlayer }} components={{ 1: <span className="text-foreground font-medium" /> }} />
-                          : t('spawn.giveXpDescNoPlayer')}
+                        {selectedPlayer ? (
+                          <>
+                            {'Grant experience to '}
+                            {selectedPlayer}
+                          </>
+                        ) : (
+                          'Grant experience to the selected player'
+                        )}
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
                     <div className="flex-1 min-w-0">
-                      <Select value={selectedPerk} onValueChange={setSelectedPerk}>
+                      <Select
+                        value={selectedPerk}
+                        onValueChange={setSelectedPerk}
+                      >
                         <SelectTrigger>
-                          <SelectValue placeholder={t('spawn.perkPlaceholder')} />
+                          <SelectValue placeholder={'Select perk...'} />
                         </SelectTrigger>
                         <SelectContent>
                           {perkGroups.map(([category, items]) => (
@@ -2718,7 +3950,9 @@ export default function Players() {
                       </Select>
                     </div>
                     <div className="w-full sm:w-24 shrink-0">
-                      <Label className="text-xs text-muted-foreground">{t('spawn.amountLabel')}</Label>
+                      <Label className="text-xs text-muted-foreground">
+                        {'Amount'}
+                      </Label>
                       <NumberInput
                         value={xpAmount}
                         onChange={setXpAmount}
@@ -2726,16 +3960,28 @@ export default function Players() {
                         max={10000}
                       />
                     </div>
-                    <DisabledReason reason={!canGmTools ? t('permissions.noGmTools') : null}>
-                    <Button
-                      onClick={handleAddXp}
-                      disabled={loading || !canGmTools || !selectedPlayer || !selectedPerk || !Number.isFinite(xpAmount)}
-                      size="sm"
-                      className="shrink-0 sm:min-w-[100px]"
+                    <DisabledReason
+                      reason={
+                        !canGmTools
+                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                          : null
+                      }
                     >
-                      <TrendingUp className="w-4 h-4 me-2" />
-                      {t('spawn.giveXpButton')}
-                    </Button>
+                      <Button
+                        onClick={handleAddXp}
+                        disabled={
+                          loading ||
+                          !canGmTools ||
+                          !selectedPlayer ||
+                          !selectedPerk ||
+                          !Number.isFinite(xpAmount)
+                        }
+                        size="sm"
+                        className="shrink-0 sm:min-w-[100px]"
+                      >
+                        <TrendingUp className="w-4 h-4 me-2" />
+                        {'Give XP'}
+                      </Button>
                     </DisabledReason>
                   </div>
                 </div>
@@ -2743,7 +3989,11 @@ export default function Players() {
 
               <TabsContent value="powers" className="space-y-4 mt-4">
                 <p className="text-sm text-muted-foreground">
-                  {selectedPlayer ? t('powers.introWithPlayer', { player: selectedPlayer }) : t('powers.introNoPlayer')}
+                  {selectedPlayer
+                    ? 'Toggle special abilities for ' +
+                      String(selectedPlayer) +
+                      '.'
+                    : 'Toggle special abilities for the selected player.'}
                 </p>
                 <div className="grid gap-3">
                   <div className="flex items-center justify-between rounded-xl border border-border/60 bg-card/50 p-4 transition-colors hover:bg-accent/30">
@@ -2752,37 +4002,94 @@ export default function Players() {
                         <Ghost className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="font-medium">{t('powers.godModeLabel')}</p>
-                        <p className="text-xs text-muted-foreground">{t('powers.godModeDesc')}</p>
+                        <p className="font-medium">{'God Mode'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {'Invulnerable to damage'}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {selectedPlayer && (
                         <Badge
-                          variant={selectedPlayerPowers?.godMode === undefined ? 'outline' : selectedPlayerPowers.godMode ? 'default' : 'secondary'}
-                          className={cn('text-xs', selectedPlayerPowers?.godMode === undefined && 'border-dashed text-muted-foreground')}
+                          variant={
+                            selectedPlayerPowers?.godMode === undefined
+                              ? 'outline'
+                              : selectedPlayerPowers.godMode
+                                ? 'default'
+                                : 'secondary'
+                          }
+                          className={cn(
+                            'text-xs',
+                            selectedPlayerPowers?.godMode === undefined &&
+                              'border-dashed text-muted-foreground',
+                          )}
                         >
-                          {selectedPlayerPowers?.godMode === undefined ? t('powers.unknown') : selectedPlayerPowers.godMode ? t('powers.on') : t('powers.off')}
+                          {selectedPlayerPowers?.godMode === undefined
+                            ? 'UNKNOWN'
+                            : selectedPlayerPowers.godMode
+                              ? 'ON'
+                              : 'OFF'}
                         </Badge>
                       )}
-                      <DisabledReason reason={!canGmTools ? t('permissions.noGmTools') : (selectedPlayer && !bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
+                      <DisabledReason
+                        reason={
+                          !canGmTools
+                            ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                            : selectedPlayer && !bridgeConnected
+                              ? 'Requires PanelBridge to be connected'
+                              : null
+                        }
+                      >
                         {selectedPlayerPowers?.godMode === undefined ? (
                           <div className="flex items-center gap-1.5">
-                            <Button variant="outline" size="sm" disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools} onClick={() => handleGodMode(true)}>
-                              {t('powers.enable')}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                !selectedPlayer ||
+                                loading ||
+                                !bridgeConnected ||
+                                !canGmTools
+                              }
+                              onClick={() => handleGodMode(true)}
+                            >
+                              {'Enable'}
                             </Button>
-                            <Button variant="outline" size="sm" disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools} onClick={() => handleGodMode(false)}>
-                              {t('powers.disable')}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                !selectedPlayer ||
+                                loading ||
+                                !bridgeConnected ||
+                                !canGmTools
+                              }
+                              onClick={() => handleGodMode(false)}
+                            >
+                              {'Disable'}
                             </Button>
                           </div>
                         ) : (
                           <Button
-                            variant={selectedPlayerPowers.godMode ? 'default' : 'outline'}
+                            variant={
+                              selectedPlayerPowers.godMode
+                                ? 'default'
+                                : 'outline'
+                            }
                             size="sm"
-                            disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools}
-                            onClick={() => handleGodMode(!selectedPlayerPowers.godMode)}
+                            disabled={
+                              !selectedPlayer ||
+                              loading ||
+                              !bridgeConnected ||
+                              !canGmTools
+                            }
+                            onClick={() =>
+                              handleGodMode(!selectedPlayerPowers.godMode)
+                            }
                           >
-                            {selectedPlayerPowers.godMode ? t('powers.disable') : t('powers.enable')}
+                            {selectedPlayerPowers.godMode
+                              ? 'Disable'
+                              : 'Enable'}
                           </Button>
                         )}
                       </DisabledReason>
@@ -2795,37 +4102,94 @@ export default function Players() {
                         <Eye className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="font-medium">{t('powers.invisibleLabel')}</p>
-                        <p className="text-xs text-muted-foreground">{t('powers.invisibleDesc')}</p>
+                        <p className="font-medium">{'Invisible'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {'Hidden from other players'}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {selectedPlayer && (
                         <Badge
-                          variant={selectedPlayerPowers?.invisible === undefined ? 'outline' : selectedPlayerPowers.invisible ? 'default' : 'secondary'}
-                          className={cn('text-xs', selectedPlayerPowers?.invisible === undefined && 'border-dashed text-muted-foreground')}
+                          variant={
+                            selectedPlayerPowers?.invisible === undefined
+                              ? 'outline'
+                              : selectedPlayerPowers.invisible
+                                ? 'default'
+                                : 'secondary'
+                          }
+                          className={cn(
+                            'text-xs',
+                            selectedPlayerPowers?.invisible === undefined &&
+                              'border-dashed text-muted-foreground',
+                          )}
                         >
-                          {selectedPlayerPowers?.invisible === undefined ? t('powers.unknown') : selectedPlayerPowers.invisible ? t('powers.on') : t('powers.off')}
+                          {selectedPlayerPowers?.invisible === undefined
+                            ? 'UNKNOWN'
+                            : selectedPlayerPowers.invisible
+                              ? 'ON'
+                              : 'OFF'}
                         </Badge>
                       )}
-                      <DisabledReason reason={!canGmTools ? t('permissions.noGmTools') : (selectedPlayer && !bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
+                      <DisabledReason
+                        reason={
+                          !canGmTools
+                            ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                            : selectedPlayer && !bridgeConnected
+                              ? 'Requires PanelBridge to be connected'
+                              : null
+                        }
+                      >
                         {selectedPlayerPowers?.invisible === undefined ? (
                           <div className="flex items-center gap-1.5">
-                            <Button variant="outline" size="sm" disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools} onClick={() => handleInvisible(true)}>
-                              {t('powers.enable')}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                !selectedPlayer ||
+                                loading ||
+                                !bridgeConnected ||
+                                !canGmTools
+                              }
+                              onClick={() => handleInvisible(true)}
+                            >
+                              {'Enable'}
                             </Button>
-                            <Button variant="outline" size="sm" disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools} onClick={() => handleInvisible(false)}>
-                              {t('powers.disable')}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                !selectedPlayer ||
+                                loading ||
+                                !bridgeConnected ||
+                                !canGmTools
+                              }
+                              onClick={() => handleInvisible(false)}
+                            >
+                              {'Disable'}
                             </Button>
                           </div>
                         ) : (
                           <Button
-                            variant={selectedPlayerPowers.invisible ? 'default' : 'outline'}
+                            variant={
+                              selectedPlayerPowers.invisible
+                                ? 'default'
+                                : 'outline'
+                            }
                             size="sm"
-                            disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools}
-                            onClick={() => handleInvisible(!selectedPlayerPowers.invisible)}
+                            disabled={
+                              !selectedPlayer ||
+                              loading ||
+                              !bridgeConnected ||
+                              !canGmTools
+                            }
+                            onClick={() =>
+                              handleInvisible(!selectedPlayerPowers.invisible)
+                            }
                           >
-                            {selectedPlayerPowers.invisible ? t('powers.disable') : t('powers.enable')}
+                            {selectedPlayerPowers.invisible
+                              ? 'Disable'
+                              : 'Enable'}
                           </Button>
                         )}
                       </DisabledReason>
@@ -2838,37 +4202,92 @@ export default function Players() {
                         <Layers className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="font-medium">{t('powers.noclipLabel')}</p>
-                        <p className="text-xs text-muted-foreground">{t('powers.noclipDesc')}</p>
+                        <p className="font-medium">{'Noclip'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {'Walk through walls'}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {selectedPlayer && (
                         <Badge
-                          variant={selectedPlayerPowers?.noclip === undefined ? 'outline' : selectedPlayerPowers.noclip ? 'default' : 'secondary'}
-                          className={cn('text-xs', selectedPlayerPowers?.noclip === undefined && 'border-dashed text-muted-foreground')}
+                          variant={
+                            selectedPlayerPowers?.noclip === undefined
+                              ? 'outline'
+                              : selectedPlayerPowers.noclip
+                                ? 'default'
+                                : 'secondary'
+                          }
+                          className={cn(
+                            'text-xs',
+                            selectedPlayerPowers?.noclip === undefined &&
+                              'border-dashed text-muted-foreground',
+                          )}
                         >
-                          {selectedPlayerPowers?.noclip === undefined ? t('powers.unknown') : selectedPlayerPowers.noclip ? t('powers.on') : t('powers.off')}
+                          {selectedPlayerPowers?.noclip === undefined
+                            ? 'UNKNOWN'
+                            : selectedPlayerPowers.noclip
+                              ? 'ON'
+                              : 'OFF'}
                         </Badge>
                       )}
-                      <DisabledReason reason={!canGmTools ? t('permissions.noGmTools') : (selectedPlayer && !bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
+                      <DisabledReason
+                        reason={
+                          !canGmTools
+                            ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                            : selectedPlayer && !bridgeConnected
+                              ? 'Requires PanelBridge to be connected'
+                              : null
+                        }
+                      >
                         {selectedPlayerPowers?.noclip === undefined ? (
                           <div className="flex items-center gap-1.5">
-                            <Button variant="outline" size="sm" disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools} onClick={() => handleNoclip(true)}>
-                              {t('powers.enable')}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                !selectedPlayer ||
+                                loading ||
+                                !bridgeConnected ||
+                                !canGmTools
+                              }
+                              onClick={() => handleNoclip(true)}
+                            >
+                              {'Enable'}
                             </Button>
-                            <Button variant="outline" size="sm" disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools} onClick={() => handleNoclip(false)}>
-                              {t('powers.disable')}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                !selectedPlayer ||
+                                loading ||
+                                !bridgeConnected ||
+                                !canGmTools
+                              }
+                              onClick={() => handleNoclip(false)}
+                            >
+                              {'Disable'}
                             </Button>
                           </div>
                         ) : (
                           <Button
-                            variant={selectedPlayerPowers.noclip ? 'default' : 'outline'}
+                            variant={
+                              selectedPlayerPowers.noclip
+                                ? 'default'
+                                : 'outline'
+                            }
                             size="sm"
-                            disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools}
-                            onClick={() => handleNoclip(!selectedPlayerPowers.noclip)}
+                            disabled={
+                              !selectedPlayer ||
+                              loading ||
+                              !bridgeConnected ||
+                              !canGmTools
+                            }
+                            onClick={() =>
+                              handleNoclip(!selectedPlayerPowers.noclip)
+                            }
                           >
-                            {selectedPlayerPowers.noclip ? t('powers.disable') : t('powers.enable')}
+                            {selectedPlayerPowers.noclip ? 'Disable' : 'Enable'}
                           </Button>
                         )}
                       </DisabledReason>
@@ -2881,18 +4300,33 @@ export default function Players() {
                         <Heart className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="font-medium">{t('powers.healLabel')}</p>
-                        <p className="text-xs text-muted-foreground">{t('powers.healDesc')}</p>
+                        <p className="font-medium">{'Heal'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {'Restore full health & stats'}
+                        </p>
                       </div>
                     </div>
-                    <DisabledReason reason={!canGmTools ? t('permissions.noGmTools') : (selectedPlayer && !bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
+                    <DisabledReason
+                      reason={
+                        !canGmTools
+                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                          : selectedPlayer && !bridgeConnected
+                            ? 'Requires PanelBridge to be connected'
+                            : null
+                      }
+                    >
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools}
+                        disabled={
+                          !selectedPlayer ||
+                          loading ||
+                          !bridgeConnected ||
+                          !canGmTools
+                        }
                         onClick={handleHealPlayer}
                       >
-                        {t('powers.healButton')}
+                        {'Heal'}
                       </Button>
                     </DisabledReason>
                   </div>
@@ -2904,20 +4338,39 @@ export default function Players() {
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <p className="font-medium">{t('powers.killLabel')}</p>
-                          <HelpTip label={t('powers.killLabel')}>{t('powers.killTip')}</HelpTip>
+                          <p className="font-medium">{'Kill'}</p>
+                          <HelpTip label={'Kill'}>
+                            {
+                              "Also turns off God Mode first, even if the kill itself fails — it isn't turned back on automatically."
+                            }
+                          </HelpTip>
                         </div>
-                        <p className="text-xs text-muted-foreground">{t('powers.killDesc')}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {'Permanently ends the character'}
+                        </p>
                       </div>
                     </div>
-                    <DisabledReason reason={!canGmTools ? t('permissions.noGmTools') : (selectedPlayer && !bridgeConnected ? t('powers.bridgeRequiredTooltip') : null)}>
+                    <DisabledReason
+                      reason={
+                        !canGmTools
+                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
+                          : selectedPlayer && !bridgeConnected
+                            ? 'Requires PanelBridge to be connected'
+                            : null
+                      }
+                    >
                       <Button
                         variant="destructive"
                         size="sm"
-                        disabled={!selectedPlayer || loading || !bridgeConnected || !canGmTools}
+                        disabled={
+                          !selectedPlayer ||
+                          loading ||
+                          !bridgeConnected ||
+                          !canGmTools
+                        }
                         onClick={handleKillPlayer}
                       >
-                        {t('powers.killButton')}
+                        {'Kill'}
                       </Button>
                     </DisabledReason>
                   </div>
@@ -2930,7 +4383,10 @@ export default function Players() {
                     <Loader2 className="w-6 h-6 animate-spin text-primary" />
                   </div>
                 ) : !selectedPlayer ? (
-                  <EmptyState type="noData" title={t('notes.selectPlayerEmpty')} />
+                  <EmptyState
+                    type="noData"
+                    title={'Select a player to view or add notes'}
+                  />
                 ) : (
                   <div className="space-y-4">
                     {playerStats[selectedPlayer] && (
@@ -2940,24 +4396,47 @@ export default function Players() {
                             <div className="flex items-center gap-2">
                               <Clock className="w-4 h-4 text-primary" />
                               <div>
-                                <div className="text-muted-foreground text-xs">{t('notes.totalPlaytime')}</div>
-                                <div className="font-medium">{formatPlaytime(playerStats[selectedPlayer].total_playtime_seconds)}</div>
+                                <div className="text-muted-foreground text-xs">
+                                  {'Total Playtime'}
+                                </div>
+                                <div className="font-medium">
+                                  {formatPlaytime(
+                                    playerStats[selectedPlayer]
+                                      .total_playtime_seconds,
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
                               <TrendingUp className="w-4 h-4 text-primary" />
                               <div>
-                                <div className="text-muted-foreground text-xs">{t('notes.sessions')}</div>
-                                <div className="font-medium">{playerStats[selectedPlayer].session_count}</div>
+                                <div className="text-muted-foreground text-xs">
+                                  {'Sessions'}
+                                </div>
+                                <div className="font-medium">
+                                  {playerStats[selectedPlayer].session_count}
+                                </div>
                               </div>
                             </div>
                             <div>
-                              <div className="text-muted-foreground text-xs">{t('notes.firstSeen')}</div>
-                              <div className="font-medium text-xs">{new Date(playerStats[selectedPlayer].first_seen).toLocaleDateString(i18n.language)}</div>
+                              <div className="text-muted-foreground text-xs">
+                                {'First Seen'}
+                              </div>
+                              <div className="font-medium text-xs">
+                                {new Date(
+                                  playerStats[selectedPlayer].first_seen,
+                                ).toLocaleDateString('en')}
+                              </div>
                             </div>
                             <div>
-                              <div className="text-muted-foreground text-xs">{t('notes.lastSeen')}</div>
-                              <div className="font-medium text-xs">{new Date(playerStats[selectedPlayer].last_seen).toLocaleString(i18n.language)}</div>
+                              <div className="text-muted-foreground text-xs">
+                                {'Last Seen'}
+                              </div>
+                              <div className="font-medium text-xs">
+                                {new Date(
+                                  playerStats[selectedPlayer].last_seen,
+                                ).toLocaleString('en')}
+                              </div>
                             </div>
                           </div>
                         </CardContent>
@@ -2967,17 +4446,21 @@ export default function Players() {
                     <div className="space-y-2">
                       <Label className="text-sm font-medium flex items-center gap-2">
                         <Tag className="w-4 h-4" />
-                        {t('notes.tagsLabel')}
+                        {'Tags'}
                       </Label>
                       <div className="flex flex-wrap gap-2 min-h-[32px]">
-                        {currentTags.map(tag => (
-                          <Badge key={tag} variant="secondary" className="gap-1 pe-1">
+                        {currentTags.map((tag) => (
+                          <Badge
+                            key={tag}
+                            variant="secondary"
+                            className="gap-1 pe-1"
+                          >
                             {tag}
                             <button
                               type="button"
                               onClick={() => removeTag(tag)}
                               className="ms-1 rounded p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                              aria-label={t('notes.removeTagAria', { tag })}
+                              aria-label={'Remove ' + String(tag) + ' tag'}
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
@@ -2986,24 +4469,34 @@ export default function Players() {
                         <div className="flex items-center gap-1">
                           <Input
                             value={newTag}
-                            onChange={(e) => setNewTag(e.target.value.slice(0, 24))}
+                            onChange={(e) =>
+                              setNewTag(e.target.value.slice(0, 24))
+                            }
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault()
                                 addTag()
                               }
                             }}
-                            placeholder={t('notes.addTagPlaceholder')}
+                            placeholder={'Add tag...'}
                             className="h-8 w-28 text-xs"
                             maxLength={24}
                           />
-                          <Button size="sm" variant="ghost" onClick={addTag} className="h-8 w-8 p-0" aria-label={t('notes.addTagAria')}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={addTag}
+                            className="h-8 w-8 p-0"
+                            aria-label={'Add tag'}
+                          >
                             <Plus className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {t('notes.commonTagsHint')}
+                        {
+                          'Common tags: trusted, suspicious, new, vip, builder, griefer, afk. Up to 10 tags, 24 characters each.'
+                        }
                       </p>
                     </div>
 
@@ -3011,80 +4504,132 @@ export default function Players() {
                       {notesError && (
                         <Alert variant="destructive">
                           <AlertTriangle className="h-4 w-4" />
-                          <AlertTitle>{t('notes.notesErrorTitle')}</AlertTitle>
+                          <AlertTitle>{'Notes could not be loaded'}</AlertTitle>
                           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <span className="min-w-0 break-words">{notesError}</span>
-                            <Button variant="outline" size="sm" onClick={() => fetchNotesAndStats()} className="self-start">
-                              <RefreshCw className="me-2 h-4 w-4" /> {t('notes.retry')}
+                            <span className="min-w-0 break-words">
+                              {notesError}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => fetchNotesAndStats()}
+                              className="self-start"
+                            >
+                              <RefreshCw className="me-2 h-4 w-4" /> {'Retry'}
                             </Button>
                           </AlertDescription>
                         </Alert>
                       )}
                       <Label className="text-sm font-medium flex items-center gap-2">
                         <StickyNote className="w-4 h-4" />
-                        {t('notes.adminNoteLabel')}
+                        {'Admin Note'}
                       </Label>
                       <Textarea
                         value={currentNote}
-                        onChange={(e) => setCurrentNote(e.target.value.slice(0, 1000))}
-                        placeholder={t('notes.notePlaceholder')}
+                        onChange={(e) =>
+                          setCurrentNote(e.target.value.slice(0, 1000))
+                        }
+                        placeholder={'Add notes about this player...'}
                         className="min-h-[120px] resize-y"
                         maxLength={1000}
                       />
-                      <p className="text-xs text-muted-foreground">{t('notes.charCount', { count: currentNote.length })}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {String(currentNote.length) + '/1000 characters'}
+                      </p>
                     </div>
 
                     <div className="flex justify-between items-center pt-2">
                       <div className="text-xs text-muted-foreground">
                         {playerNotes[selectedPlayer]?.updated_at && (
-                          <span>{t('notes.lastUpdated', { date: new Date(playerNotes[selectedPlayer].updated_at).toLocaleString(i18n.language) })}</span>
+                          <span>
+                            {'Last updated: ' +
+                              String(
+                                new Date(
+                                  playerNotes[selectedPlayer].updated_at,
+                                ).toLocaleString('en'),
+                              )}
+                          </span>
                         )}
                       </div>
                       <div className="flex gap-2">
                         {playerNotes[selectedPlayer] && (
-                          <DisabledReason reason={!canModerate ? t('permissions.noModerate') : null}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setDeleteNoteConfirmOpen(true)}
-                            disabled={savingNote || !canModerate}
-                            className="text-destructive hover:text-destructive"
+                          <DisabledReason
+                            reason={
+                              !canModerate
+                                ? "This action requires the players.moderate permission, which this role doesn't have."
+                                : null
+                            }
                           >
-                            <Trash2 className="w-4 h-4 me-1" />
-                            {t('notes.deleteButton')}
-                          </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setDeleteNoteConfirmOpen(true)}
+                              disabled={savingNote || !canModerate}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4 me-1" />
+                              {'Delete'}
+                            </Button>
                           </DisabledReason>
                         )}
-                        <AlertDialog open={deleteNoteConfirmOpen} onOpenChange={setDeleteNoteConfirmOpen}>
+                        <AlertDialog
+                          open={deleteNoteConfirmOpen}
+                          onOpenChange={setDeleteNoteConfirmOpen}
+                        >
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>{t('notes.deleteConfirmTitle')}</AlertDialogTitle>
+                              <AlertDialogTitle>
+                                {'Delete this note?'}
+                              </AlertDialogTitle>
                               <AlertDialogDescription>
-                                {t('notes.deleteConfirmDesc', { player: selectedPlayer })}
+                                {'The admin note and tags saved for ' +
+                                  String(selectedPlayer) +
+                                  ' will be permanently deleted. This cannot be undone.'}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel disabled={savingNote}>{t('notes.deleteConfirmCancel')}</AlertDialogCancel>
+                              <AlertDialogCancel disabled={savingNote}>
+                                {'Cancel'}
+                              </AlertDialogCancel>
                               <AlertDialogAction
                                 disabled={savingNote}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                onClick={(e) => { e.preventDefault(); void handleDeleteNote() }}
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  void handleDeleteNote()
+                                }}
                               >
-                                {savingNote ? <Loader2 className="w-4 h-4 me-1 animate-spin" /> : null}
-                                {t('notes.deleteConfirmConfirm')}
+                                {savingNote ? (
+                                  <Loader2 className="w-4 h-4 me-1 animate-spin" />
+                                ) : null}
+                                {'Delete note'}
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-                        <DisabledReason reason={!canModerate ? t('permissions.noModerate') : null}>
-                        <Button
-                          size="sm"
-                          onClick={handleSaveNote}
-                          disabled={savingNote || !canModerate || (!currentNote.trim() && currentTags.length === 0)}
+                        <DisabledReason
+                          reason={
+                            !canModerate
+                              ? "This action requires the players.moderate permission, which this role doesn't have."
+                              : null
+                          }
                         >
-                          {savingNote ? <Loader2 className="w-4 h-4 me-1 animate-spin" /> : <Save className="w-4 h-4 me-1" />}
-                          {t('notes.saveButton')}
-                        </Button>
+                          <Button
+                            size="sm"
+                            onClick={handleSaveNote}
+                            disabled={
+                              savingNote ||
+                              !canModerate ||
+                              (!currentNote.trim() && currentTags.length === 0)
+                            }
+                          >
+                            {savingNote ? (
+                              <Loader2 className="w-4 h-4 me-1 animate-spin" />
+                            ) : (
+                              <Save className="w-4 h-4 me-1" />
+                            )}
+                            {'Save Note'}
+                          </Button>
                         </DisabledReason>
                       </div>
                     </div>
@@ -3095,17 +4640,24 @@ export default function Players() {
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-medium flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      {t('notes.activityLogTitle')}
+                      {'Activity Log'}
                     </h4>
                   </div>
                   {logsError && (
                     <Alert variant="destructive">
                       <AlertTriangle className="h-4 w-4" />
-                      <AlertTitle>{t('notes.logsErrorTitle')}</AlertTitle>
+                      <AlertTitle>{'Activity log unavailable'}</AlertTitle>
                       <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <span className="min-w-0 break-words">{logsError}</span>
-                        <Button variant="outline" size="sm" onClick={() => fetchActivityLogs(logPlayerFilter || undefined)} className="self-start">
-                          <RefreshCw className="me-2 h-4 w-4" /> {t('notes.retry')}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            fetchActivityLogs(logPlayerFilter || undefined)
+                          }
+                          className="self-start"
+                        >
+                          <RefreshCw className="me-2 h-4 w-4" /> {'Retry'}
                         </Button>
                       </AlertDescription>
                     </Alert>
@@ -3114,24 +4666,31 @@ export default function Players() {
                     <div className="relative flex-1">
                       <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
-                        placeholder={t('notes.filterPlaceholder')}
+                        placeholder={'Filter by player name...'}
                         value={logPlayerFilter}
                         onChange={(e) => setLogPlayerFilter(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') fetchActivityLogs(logPlayerFilter || undefined)
+                          if (e.key === 'Enter')
+                            fetchActivityLogs(logPlayerFilter || undefined)
                         }}
                         className="ps-9"
-                        aria-label={t('notes.filterAria')}
+                        aria-label={'Filter activity logs by player name'}
                       />
                     </div>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => fetchActivityLogs(logPlayerFilter || undefined)}
+                      onClick={() =>
+                        fetchActivityLogs(logPlayerFilter || undefined)
+                      }
                       disabled={logsLoading}
                       className="w-full sm:w-auto"
                     >
-                      {logsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      {logsLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
 
@@ -3139,32 +4698,48 @@ export default function Players() {
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50 sticky top-0">
                         <tr>
-                          <th className="text-start p-2 font-medium text-xs">{t('notes.tableTime')}</th>
-                          <th className="text-start p-2 font-medium text-xs">{t('notes.tablePlayer')}</th>
-                          <th className="text-start p-2 font-medium text-xs">{t('notes.tableAction')}</th>
-                          <th className="text-start p-2 font-medium text-xs hidden sm:table-cell">{t('notes.tableDetails')}</th>
+                          <th className="text-start p-2 font-medium text-xs">
+                            {'Time'}
+                          </th>
+                          <th className="text-start p-2 font-medium text-xs">
+                            {'Player'}
+                          </th>
+                          <th className="text-start p-2 font-medium text-xs">
+                            {'Action'}
+                          </th>
+                          <th className="text-start p-2 font-medium text-xs hidden sm:table-cell">
+                            {'Details'}
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
                         {activityLogs.length === 0 ? (
                           <tr>
-                            <td colSpan={4} className="p-4 text-center text-muted-foreground text-sm">
-                              {logsLoading ? t('notes.loadingRow') : t('notes.noLogsRow')}
+                            <td
+                              colSpan={4}
+                              className="p-4 text-center text-muted-foreground text-sm"
+                            >
+                              {logsLoading
+                                ? 'Loading...'
+                                : 'No activity logs yet — moderation actions taken on this player (bans, kicks, whitelist changes) will appear here.'}
                             </td>
                           </tr>
                         ) : (
                           activityLogs.map((log) => (
                             <tr key={log.id} className="hover:bg-muted/50">
                               <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
-                                {new Date(log.logged_at).toLocaleString(i18n.language)}
+                                {new Date(log.logged_at).toLocaleString('en')}
                               </td>
-                              <td className="p-2 text-xs font-medium break-words">{log.player_name}</td>
+                              <td className="p-2 text-xs font-medium break-words">
+                                {log.player_name}
+                              </td>
                               <td className="p-2">
                                 <Badge
                                   variant={
                                     log.action === 'connect'
                                       ? 'success'
-                                      : log.action === 'disconnect' || log.action === 'ban'
+                                      : log.action === 'disconnect' ||
+                                          log.action === 'ban'
                                         ? 'destructive'
                                         : log.action === 'kick'
                                           ? 'warning'
@@ -3175,11 +4750,11 @@ export default function Players() {
                                   {log.action}
                                 </Badge>
                                 <p className="mt-1 max-w-[220px] text-[11px] text-muted-foreground break-words sm:hidden">
-                                  {log.details || t('notes.detailsFallback')}
+                                  {log.details || '-'}
                                 </p>
                               </td>
                               <td className="max-w-[220px] p-2 text-xs text-muted-foreground break-words hidden sm:table-cell">
-                                {log.details || t('notes.detailsFallback')}
+                                {log.details || '-'}
                               </td>
                             </tr>
                           ))
@@ -3189,7 +4764,9 @@ export default function Players() {
                   </div>
                   {activityLogs.length >= ACTIVITY_LOG_FETCH_LIMIT && (
                     <p className="text-xs text-muted-foreground">
-                      {t('notes.activityLogTruncatedHint', { count: activityLogs.length })}
+                      {'Showing the most recent ' +
+                        String(activityLogs.length) +
+                        ' entries -- older activity may not be shown.'}
                     </p>
                   )}
                 </div>
@@ -3204,32 +4781,44 @@ export default function Players() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Download className="w-5 h-5" />
-              {t('importExport.title')}
+              {'Import/Export Character'}
             </DialogTitle>
             <DialogDescription>
-              {t('importExport.description')}
+              {
+                "Export or restore a player's XP, perks, and skills via PanelBridge."
+              }
             </DialogDescription>
           </DialogHeader>
           {!bridgeConnected && (
             <Alert className="border-warning/40 bg-warning/10">
               <AlertTriangle className="h-4 w-4 text-warning" />
-              <AlertTitle className="text-warning">{t('importExport.bridgeOfflineTitle')}</AlertTitle>
+              <AlertTitle className="text-warning">
+                {'Bridge Offline'}
+              </AlertTitle>
               <AlertDescription>
-                <Trans
-                  i18nKey="importExport.bridgeOfflineDesc"
-                  t={t}
-                  components={{ 1: <Link to="/settings" className="text-primary underline hover:text-foreground" /> }}
-                />
+                <>
+                  {
+                    'Character export and import require PanelBridge to be connected. '
+                  }
+                  {'Open Bridge Setup'}
+                </>
               </AlertDescription>
             </Alert>
           )}
-          <div className={cn("grid grid-cols-1 md:grid-cols-2 gap-4", !bridgeConnected && 'opacity-60 pointer-events-none')}>
+          <div
+            className={cn(
+              'grid grid-cols-1 md:grid-cols-2 gap-4',
+              !bridgeConnected && 'opacity-60 pointer-events-none',
+            )}
+          >
             <div className="space-y-3">
               <h4 className="text-sm font-medium flex items-center gap-2">
                 <Download className="w-4 h-4" />
-                {t('importExport.exportTitle')}
+                {'Export Character'}
               </h4>
-              <p className="text-xs text-muted-foreground">{t('importExport.exportDesc')}</p>
+              <p className="text-xs text-muted-foreground">
+                {'Export XP, perks, skills, and inventory'}
+              </p>
               <Button
                 variant="outline"
                 disabled={!selectedPlayer || exporting}
@@ -3237,18 +4826,23 @@ export default function Players() {
                   setExporting(true)
                   try {
                     const { panelBridgeApi } = await import('@/lib/api')
-                    const response = await panelBridgeApi.exportCharacter(selectedPlayer)
+                    const response =
+                      await panelBridgeApi.exportCharacter(selectedPlayer)
                     const exportData = response.data || response
                     const jsonStr = JSON.stringify(exportData, null, 2)
                     setCharacterData(jsonStr)
                     toast({
-                      title: t('toasts.characterExportedTitle'),
-                      description: t('toasts.characterExportedDesc', { player: selectedPlayer }),
+                      title: 'Character Exported',
+                      description:
+                        'Exported character data for ' + String(selectedPlayer),
                     })
                   } catch (error) {
                     toast({
-                      title: t('toasts.exportFailedTitle'),
-                      description: getUserErrorMessage(error, t('toasts.exportFailedFallback')),
+                      title: 'Export Failed',
+                      description: getUserErrorMessage(
+                        error,
+                        'Failed to export character',
+                      ),
                       variant: 'destructive',
                     })
                   } finally {
@@ -3263,26 +4857,36 @@ export default function Players() {
                 ) : (
                   <Download className="w-4 h-4 me-2" />
                 )}
-                {t('importExport.exportButton', { player: selectedPlayer || t('importExport.exportButtonFallback') })}
+                {'Export ' + String(selectedPlayer || 'Player')}
               </Button>
 
               {characterData && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">{t('importExport.characterDataLabel')}</span>
+                    <span className="text-xs font-medium">
+                      {'Character Data'}
+                    </span>
                     <Button
                       size="sm"
                       variant="ghost"
                       className="h-7 w-7 p-0"
-                      aria-label={copied ? t('importExport.copiedAria') : t('importExport.copyCharacterDataAria')}
+                      aria-label={copied ? 'Copied' : 'Copy character data'}
                       onClick={() => {
                         copyText(characterData)
                         setCopied(true)
-                        if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current)
-                        copiedTimeoutRef.current = setTimeout(() => setCopied(false), 2000)
+                        if (copiedTimeoutRef.current)
+                          clearTimeout(copiedTimeoutRef.current)
+                        copiedTimeoutRef.current = setTimeout(
+                          () => setCopied(false),
+                          2000,
+                        )
                       }}
                     >
-                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      {copied ? (
+                        <Check className="w-3 h-3" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
                     </Button>
                   </div>
                   <Textarea
@@ -3295,7 +4899,9 @@ export default function Players() {
                     variant="outline"
                     className="w-full"
                     onClick={() => {
-                      const blob = new Blob([characterData], { type: 'application/json' })
+                      const blob = new Blob([characterData], {
+                        type: 'application/json',
+                      })
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a')
                       a.href = url
@@ -3305,7 +4911,7 @@ export default function Players() {
                     }}
                   >
                     <Download className="w-4 h-4 me-2" />
-                    {t('importExport.downloadFileButton')}
+                    {'Download File'}
                   </Button>
                 </div>
               )}
@@ -3314,26 +4920,31 @@ export default function Players() {
             <div className="space-y-3">
               <h4 className="text-sm font-medium flex items-center gap-2">
                 <Upload className="w-4 h-4" />
-                {t('importExport.importTitle')}
+                {'Import Character'}
               </h4>
-              <p className="text-xs text-muted-foreground">{t('importExport.importDesc')}</p>
+              <p className="text-xs text-muted-foreground">
+                {'Restore XP, perks, skills, and exported inventory'}
+              </p>
               <Textarea
                 value={importCharacterData}
                 onChange={(e) => setImportCharacterData(e.target.value)}
-                placeholder={t('importExport.importPlaceholder')}
+                placeholder={'Paste character JSON here...'}
                 className="h-24 resize-none font-mono text-xs"
               />
               <div className="flex gap-2">
                 <Button
-                  disabled={importing || !selectedPlayer || !importCharacterData.trim()}
+                  disabled={
+                    importing || !selectedPlayer || !importCharacterData.trim()
+                  }
                   onClick={() => {
                     let data
                     try {
                       data = JSON.parse(importCharacterData)
                     } catch {
                       toast({
-                        title: t('toasts.invalidJsonTitle'),
-                        description: t('toasts.invalidJsonDesc'),
+                        title: 'Invalid JSON',
+                        description:
+                          'The character data is not valid JSON format',
                         variant: 'destructive',
                       })
                       return
@@ -3349,13 +4960,13 @@ export default function Players() {
                   ) : (
                     <Upload className="w-4 h-4 me-2" />
                   )}
-                  {t('importExport.applyButton')}
+                  {'Apply'}
                 </Button>
                 <label className="cursor-pointer">
                   <Button variant="outline" size="sm" asChild>
                     <span>
                       <Upload className="w-4 h-4 me-1" />
-                      {t('importExport.fileButton')}
+                      {'File'}
                     </span>
                   </Button>
                   <input
@@ -3367,8 +4978,9 @@ export default function Players() {
                       if (file) {
                         if (file.size > 5 * 1024 * 1024) {
                           toast({
-                            title: t('toasts.fileTooLargeTitle'),
-                            description: t('toasts.fileTooLargeDesc'),
+                            title: 'File Too Large',
+                            description:
+                              'Character data file must be under 5MB',
                             variant: 'destructive',
                           })
                           e.target.value = ''
@@ -3376,7 +4988,9 @@ export default function Players() {
                         }
                         const reader = new FileReader()
                         reader.onload = (ev) => {
-                          setImportCharacterData(ev.target?.result as string || '')
+                          setImportCharacterData(
+                            (ev.target?.result as string) || '',
+                          )
                         }
                         reader.readAsText(file)
                       }
@@ -3385,15 +4999,23 @@ export default function Players() {
                   />
                 </label>
               </div>
-              <p className="text-xs text-muted-foreground">{t('importExport.playerMustBeOnline')}</p>
+              <p className="text-xs text-muted-foreground">
+                {'Player must be online.'}
+              </p>
             </div>
           </div>
 
           <div className="border-t border-border/40 pt-4 mt-2 space-y-3">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <h4 className="text-sm font-medium">{t('importExport.autoExportTitle')}</h4>
-                <p className="text-xs text-muted-foreground">{t('importExport.autoExportDesc')}</p>
+                <h4 className="text-sm font-medium">
+                  {'Auto-export on login'}
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  {
+                    'Automatically save a character backup when players join the server'
+                  }
+                </p>
               </div>
               <Checkbox
                 id="autoExportOnLogin"
@@ -3401,10 +5023,15 @@ export default function Players() {
                 onCheckedChange={async (checked: boolean) => {
                   setAutoExportEnabled(checked)
                   try {
-                    await configApi.updateAppSettings({ autoExportOnLogin: checked })
+                    await configApi.updateAppSettings({
+                      autoExportOnLogin: checked,
+                    })
                   } catch {
                     setAutoExportEnabled(!checked)
-                    toast({ title: t('toasts.updateSettingFailed'), variant: 'destructive' })
+                    toast({
+                      title: 'Failed to update setting',
+                      variant: 'destructive',
+                    })
                   }
                 }}
               />
@@ -3412,27 +5039,48 @@ export default function Players() {
 
             {savedExports.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-xs font-medium text-muted-foreground">{t('importExport.savedExportsTitle', { count: savedExports.length })}</h4>
+                <h4 className="text-xs font-medium text-muted-foreground">
+                  {'Saved Exports (' + String(savedExports.length) + ')'}
+                </h4>
                 <ScrollArea className="max-h-[180px]">
                   <div className="space-y-1">
                     {savedExports.map((exp) => (
-                      <div key={`${exp.username}-${exp.filename}`} className="flex items-center justify-between gap-2 rounded-md border border-border/40 px-3 py-1.5 text-xs">
+                      <div
+                        key={`${exp.username}-${exp.filename}`}
+                        className="flex items-center justify-between gap-2 rounded-md border border-border/40 px-3 py-1.5 text-xs"
+                      >
                         <div className="min-w-0 flex-1">
                           <span className="font-medium">{exp.username}</span>
-                          <span className="text-muted-foreground ms-2">{new Date(exp.timestamp).toLocaleString(i18n.language)}</span>
-                          <span className="text-muted-foreground ms-2">{t('importExport.sizeKb', { size: (exp.size / 1024).toFixed(1) })}</span>
+                          <span className="text-muted-foreground ms-2">
+                            {new Date(exp.timestamp).toLocaleString('en')}
+                          </span>
+                          <span className="text-muted-foreground ms-2">
+                            {'(' +
+                              String((exp.size / 1024).toFixed(1)) +
+                              ' KB)'}
+                          </span>
                         </div>
                         <div className="flex gap-1 shrink-0">
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-6 w-6 p-0"
-                            title={t('importExport.downloadTitle')}
-                            aria-label={t('importExport.downloadExportAria', { username: exp.username })}
+                            title={'Download'}
+                            aria-label={
+                              'Download ' +
+                              String(exp.username) +
+                              "'s saved export"
+                            }
                             onClick={async () => {
                               try {
-                                const data = await playersApi.getExport(exp.username, exp.filename)
-                                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                                const data = await playersApi.getExport(
+                                  exp.username,
+                                  exp.filename,
+                                )
+                                const blob = new Blob(
+                                  [JSON.stringify(data, null, 2)],
+                                  { type: 'application/json' },
+                                )
                                 const url = URL.createObjectURL(blob)
                                 const a = document.createElement('a')
                                 a.href = url
@@ -3440,7 +5088,10 @@ export default function Players() {
                                 a.click()
                                 URL.revokeObjectURL(url)
                               } catch {
-                                toast({ title: t('toasts.downloadFailed'), variant: 'destructive' })
+                                toast({
+                                  title: 'Download failed',
+                                  variant: 'destructive',
+                                })
                               }
                             }}
                           >
@@ -3450,14 +5101,30 @@ export default function Players() {
                             variant="ghost"
                             size="sm"
                             className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                            title={t('importExport.deleteTitle')}
-                            aria-label={t('importExport.deleteExportAria', { username: exp.username })}
+                            title={'Delete'}
+                            aria-label={
+                              'Delete ' +
+                              String(exp.username) +
+                              "'s saved export"
+                            }
                             onClick={async () => {
                               try {
-                                await playersApi.deleteExport(exp.username, exp.filename)
-                                setSavedExports(prev => prev.filter(e => e.filename !== exp.filename || e.username !== exp.username))
+                                await playersApi.deleteExport(
+                                  exp.username,
+                                  exp.filename,
+                                )
+                                setSavedExports((prev) =>
+                                  prev.filter(
+                                    (e) =>
+                                      e.filename !== exp.filename ||
+                                      e.username !== exp.username,
+                                  ),
+                                )
                               } catch {
-                                toast({ title: t('toasts.deleteFailed'), variant: 'destructive' })
+                                toast({
+                                  title: 'Delete failed',
+                                  variant: 'destructive',
+                                })
                               }
                             }}
                           >
@@ -3474,23 +5141,44 @@ export default function Players() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={importConfirmOpen} onOpenChange={(open) => { if (!open) { setImportConfirmOpen(false); setPendingImportData(null) } }}>
+      <AlertDialog
+        open={importConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setImportConfirmOpen(false)
+            setPendingImportData(null)
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('importConfirm.title', { player: selectedPlayer })}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {'Overwrite ' + String(selectedPlayer) + "'s character?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {t('importConfirm.description', { player: selectedPlayer })}
+              {'This replaces ' +
+                String(selectedPlayer) +
+                "'s XP, perks, skills, traits, inventory, and worn items with the pasted data. " +
+                String(selectedPlayer) +
+                "'s current state is saved to Saved Exports first, so you can restore it from there if this is the wrong player or the wrong file."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={importing}>{t('importConfirm.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel disabled={importing}>
+              {'Cancel'}
+            </AlertDialogCancel>
             <AlertDialogAction
               disabled={importing}
-              onClick={(e) => { e.preventDefault(); if (pendingImportData) runCharacterImport(pendingImportData) }}
+              onClick={(e) => {
+                e.preventDefault()
+                if (pendingImportData) runCharacterImport(pendingImportData)
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {importing ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : null}
-              {t('importConfirm.confirm')}
+              {importing ? (
+                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+              ) : null}
+              {'Yes, Overwrite Character'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

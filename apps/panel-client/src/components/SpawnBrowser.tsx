@@ -1,11 +1,27 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import {
-  Search, RefreshCw, Loader2, X, AlertCircle, SearchX, LayoutGrid,
-  Package, Car, User, Sparkles, Minus, Plus, RotateCw, HelpCircle, Trash2,
+  Search,
+  RefreshCw,
+  Loader2,
+  X,
+  AlertCircle,
+  SearchX,
+  LayoutGrid,
+  Package,
+  Car,
+  User,
+  Sparkles,
+  Minus,
+  Plus,
+  RotateCw,
+  HelpCircle,
+  Trash2,
 } from 'lucide-react'
 import {
-  Dialog, DialogContent, DialogTitle, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { NumberInput } from '@/components/NumberInput'
@@ -14,11 +30,17 @@ import { panelBridgeApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { useToast } from '@/components/ui/use-toast'
 import {
-  getItemGroup, GROUP_META, VEHICLE_CATEGORIES, fmtWeight,
+  getItemGroup,
+  GROUP_META,
+  VEHICLE_CATEGORIES,
+  fmtWeight,
   type CatalogItem,
 } from './ItemPicker'
 import {
-  getVehicleType, TYPE_ORDER, TYPE_ICON, formatVehicleName,
+  getVehicleType,
+  TYPE_ORDER,
+  TYPE_ICON,
+  formatVehicleName,
   type CatalogVehicle,
 } from './VehiclePicker'
 
@@ -43,7 +65,6 @@ const MAX_VISIBLE = 220
 const MAX_RECENT = 8
 const RECENT_KEY_PREFIX = 'pz-spawn-recent-'
 
-
 function loadRecent(mode: SpawnMode): RecentEntry[] {
   try {
     const raw = localStorage.getItem(RECENT_KEY_PREFIX + mode)
@@ -58,7 +79,10 @@ function loadRecent(mode: SpawnMode): RecentEntry[] {
 
 function saveRecent(mode: SpawnMode, entries: RecentEntry[]) {
   try {
-    localStorage.setItem(RECENT_KEY_PREFIX + mode, JSON.stringify(entries.slice(0, MAX_RECENT)))
+    localStorage.setItem(
+      RECENT_KEY_PREFIX + mode,
+      JSON.stringify(entries.slice(0, MAX_RECENT)),
+    )
   } catch {
     // storage quota / disabled — fine, ephemeral fallback
   }
@@ -72,10 +96,14 @@ function clearRecent(mode: SpawnMode) {
   }
 }
 
-
-export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: SpawnBrowserProps) {
+export function SpawnBrowser({
+  mode,
+  open,
+  onOpenChange,
+  playerName,
+  onSpawn,
+}: SpawnBrowserProps) {
   const isItems = mode === 'items'
-  const { t, i18n } = useTranslation(['spawnBrowser', 'itemPicker', 'vehiclePicker'])
   const { toast } = useToast()
 
   const [items, setItems] = useState<CatalogItem[]>([])
@@ -98,26 +126,28 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
   const listRef = useRef<HTMLDivElement>(null)
   const flashTimer = useRef<NodeJS.Timeout | null>(null)
 
-
-  const loadCatalog = useCallback(async (signal?: AbortSignal) => {
-    try {
-      if (isItems) {
-        const data = await panelBridgeApi.getCatalogItems()
-        if (signal?.aborted) return
-        setItems(data.items || [])
-        setScannedAt(data.scannedAt)
-      } else {
-        const data = await panelBridgeApi.getCatalogVehicles()
-        if (signal?.aborted) return
-        setVehicles(data.vehicles || [])
-        setScannedAt(data.scannedAt)
+  const loadCatalog = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        if (isItems) {
+          const data = await panelBridgeApi.getCatalogItems()
+          if (signal?.aborted) return
+          setItems(data.items || [])
+          setScannedAt(data.scannedAt)
+        } else {
+          const data = await panelBridgeApi.getCatalogVehicles()
+          if (signal?.aborted) return
+          setVehicles(data.vehicles || [])
+          setScannedAt(data.scannedAt)
+        }
+      } catch {
+        // No catalog yet — empty state will prompt a scan
+      } finally {
+        if (!signal?.aborted) setInitialLoad(false)
       }
-    } catch {
-      // No catalog yet — empty state will prompt a scan
-    } finally {
-      if (!signal?.aborted) setInitialLoad(false)
-    }
-  }, [isItems])
+    },
+    [isItems],
+  )
 
   useEffect(() => {
     if (!open) return
@@ -140,12 +170,16 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     return () => clearTimeout(timer)
   }, [open])
 
-  useEffect(() => () => {
-    if (flashTimer.current) clearTimeout(flashTimer.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current)
+    },
+    [],
+  )
 
-  useEffect(() => { setHighlightIndex(-1) }, [search, activeCategory])
-
+  useEffect(() => {
+    setHighlightIndex(-1)
+  }, [search, activeCategory])
 
   const handleScan = useCallback(async () => {
     if (scanning) return
@@ -156,32 +190,37 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
         const data = await panelBridgeApi.scanCatalogItems()
         setItems(data.items || [])
         setScannedAt(data.scannedAt)
-        toast({ title: t('toastCatalogUpdatedTitle', { ns: 'itemPicker' }), description: t('toastCatalogUpdatedDesc', { ns: 'itemPicker', count: data.count || 0 }) })
+        toast({
+          title: 'Item catalog updated',
+          description: 'Found ' + String(data.count || 0) + ' items',
+        })
       } else {
         const data = await panelBridgeApi.scanCatalogVehicles()
         setVehicles(data.vehicles || [])
         setScannedAt(data.scannedAt)
-        toast({ title: t('toastCatalogUpdatedTitle', { ns: 'vehiclePicker' }), description: t('toastCatalogUpdatedDesc', { ns: 'vehiclePicker', count: data.count || 0 }) })
+        toast({
+          title: 'Vehicle catalog updated',
+          description: 'Found ' + String(data.count || 0) + ' vehicles',
+        })
       }
     } catch (err: unknown) {
-      const msg = getUserErrorMessage(err, t('scanFailed', { ns: isItems ? 'itemPicker' : 'vehiclePicker' }))
+      const msg = getUserErrorMessage(err, 'Scan failed')
       setScanError(msg)
       toast({
-        title: t('toastScanFailedTitle', { ns: isItems ? 'itemPicker' : 'vehiclePicker' }),
+        title: isItems ? 'Item scan failed' : 'Vehicle scan failed',
         description: msg.includes('Bridge not running')
-          ? t('bridgeNotRunning', { ns: isItems ? 'itemPicker' : 'vehiclePicker' })
+          ? 'Server must be online with PanelBridge mod active'
           : msg,
         variant: 'destructive',
       })
     } finally {
       setScanning(false)
     }
-  }, [scanning, isItems, toast, t])
-
+  }, [scanning, isItems, toast])
 
   const nonVehicleItems = useMemo(
-    () => items.filter(it => !VEHICLE_CATEGORIES.has(it.category)),
-    [items]
+    () => items.filter((it) => !VEHICLE_CATEGORIES.has(it.category)),
+    [items],
   )
 
   const itemCategories = useMemo(() => {
@@ -194,10 +233,38 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     return Array.from(counts.entries())
       .map(([group, count]) => {
         const meta = GROUP_META[group] || GROUP_META['Other']
-        return { raw: group, label: t(`groups.${group}`, { ns: 'itemPicker' }), order: meta.order, count, Icon: meta.icon }
+        return {
+          raw: group,
+          label:
+            (
+              {
+                Weapons: 'Weapons',
+                Ammo: 'Ammo',
+                'Food & Drink': 'Food & Drink',
+                Medical: 'Medical',
+                Clothing: 'Clothing',
+                'Protective Gear': 'Protective Gear',
+                Tools: 'Tools',
+                Materials: 'Materials',
+                'Vehicle Parts': 'Vehicle Parts',
+                Electronics: 'Electronics',
+                'Books & Maps': 'Books & Maps',
+                Containers: 'Containers',
+                'Farming & Outdoors': 'Farming & Outdoors',
+                Household: 'Household',
+                Explosives: 'Explosives',
+                Junk: 'Junk',
+                Misc: 'Misc',
+                Other: 'Other',
+              } as Record<string, string>
+            )[String(group)] ?? String(group),
+          order: meta.order,
+          count,
+          Icon: meta.icon,
+        }
       })
       .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
-  }, [nonVehicleItems, isItems, t])
+  }, [nonVehicleItems, isItems])
 
   const vehicleCategories = useMemo(() => {
     if (isItems) return []
@@ -209,13 +276,24 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     return Array.from(counts.entries())
       .map(([type, count]) => ({
         raw: type,
-        label: t(`types.${type}`, { ns: 'vehiclePicker' }),
+        label:
+          (
+            {
+              Sedans: 'Sedans',
+              Performance: 'Performance',
+              'SUVs & Off-road': 'SUVs & Off-road',
+              Trucks: 'Trucks',
+              'Vans & Buses': 'Vans & Buses',
+              'Emergency & Military': 'Emergency & Military',
+              Trailers: 'Trailers',
+            } as Record<string, string>
+          )[String(type)] ?? String(type),
         order: TYPE_ORDER[type] ?? 99,
         count,
         Icon: TYPE_ICON[type] || Car,
       }))
       .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
-  }, [vehicles, isItems, t])
+  }, [vehicles, isItems])
 
   const categories = isItems ? itemCategories : vehicleCategories
 
@@ -224,36 +302,57 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
 
     if (isItems) {
       let filtered = nonVehicleItems
-      if (activeCategory) filtered = filtered.filter(it => getItemGroup(it.category) === activeCategory)
-      if (q) filtered = filtered.filter(it => it.id.toLowerCase().includes(q) || it.name.toLowerCase().includes(q))
+      if (activeCategory)
+        filtered = filtered.filter(
+          (it) => getItemGroup(it.category) === activeCategory,
+        )
+      if (q)
+        filtered = filtered.filter(
+          (it) =>
+            it.id.toLowerCase().includes(q) ||
+            it.name.toLowerCase().includes(q),
+        )
       const total = filtered.length
       const isCapped = total > MAX_VISIBLE
       const sliced = [...(isCapped ? filtered.slice(0, MAX_VISIBLE) : filtered)]
       sliced.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
-      return { rows: sliced.map(it => ({ kind: 'item' as const, it })), totalFiltered: total, capped: isCapped }
+      return {
+        rows: sliced.map((it) => ({ kind: 'item' as const, it })),
+        totalFiltered: total,
+        capped: isCapped,
+      }
     } else {
       let filtered = vehicles
-      if (activeCategory) filtered = filtered.filter(v => getVehicleType(v) === activeCategory)
-      if (q) filtered = filtered.filter(v => v.id.toLowerCase().includes(q) || v.name.toLowerCase().includes(q))
+      if (activeCategory)
+        filtered = filtered.filter((v) => getVehicleType(v) === activeCategory)
+      if (q)
+        filtered = filtered.filter(
+          (v) =>
+            v.id.toLowerCase().includes(q) || v.name.toLowerCase().includes(q),
+        )
       const total = filtered.length
       const isCapped = total > MAX_VISIBLE
       const sliced = [...(isCapped ? filtered.slice(0, MAX_VISIBLE) : filtered)]
-      sliced.sort((a, b) => formatVehicleName(a).localeCompare(formatVehicleName(b)))
-      return { rows: sliced.map(v => ({ kind: 'veh' as const, v })), totalFiltered: total, capped: isCapped }
+      sliced.sort((a, b) =>
+        formatVehicleName(a).localeCompare(formatVehicleName(b)),
+      )
+      return {
+        rows: sliced.map((v) => ({ kind: 'veh' as const, v })),
+        totalFiltered: total,
+        capped: isCapped,
+      }
     }
   }, [isItems, nonVehicleItems, vehicles, search, activeCategory])
-
 
   const selectedRow = useMemo(() => {
     if (!selectedId) return null
     if (isItems) {
-      const it = items.find(x => x.id === selectedId)
+      const it = items.find((x) => x.id === selectedId)
       return it ? { kind: 'item' as const, it } : null
     }
-    const v = vehicles.find(x => x.id === selectedId)
+    const v = vehicles.find((x) => x.id === selectedId)
     return v ? { kind: 'veh' as const, v } : null
   }, [selectedId, isItems, items, vehicles])
-
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -266,10 +365,10 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setHighlightIndex(prev => Math.min(prev + 1, rows.length - 1))
+      setHighlightIndex((prev) => Math.min(prev + 1, rows.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setHighlightIndex(prev => Math.max(prev - 1, 0))
+      setHighlightIndex((prev) => Math.max(prev - 1, 0))
     } else if (e.key === 'Enter' && !e.shiftKey) {
       if (highlightIndex < 0 && selectedId) {
         e.preventDefault()
@@ -294,14 +393,16 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
 
   useEffect(() => {
     if (highlightIndex < 0 || !listRef.current) return
-    const el = listRef.current.querySelector(`[data-row-index="${highlightIndex}"]`)
+    const el = listRef.current.querySelector(
+      `[data-row-index="${highlightIndex}"]`,
+    )
     el?.scrollIntoView({ block: 'nearest' })
   }, [highlightIndex])
 
-
   const canSpawnItem = isItems && !!playerName
   const canSpawnVehicle = !isItems
-  const canSpawn = (isItems ? canSpawnItem : canSpawnVehicle) && !!selectedId && !spawning
+  const canSpawn =
+    (isItems ? canSpawnItem : canSpawnVehicle) && !!selectedId && !spawning
 
   const handleSpawn = async (overrideId?: string, overrideQty?: number) => {
     const id = overrideId || selectedId
@@ -314,10 +415,10 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
       await onSpawn(id, effectiveQty)
       const name = (() => {
         if (isItems) {
-          const it = items.find(x => x.id === id)
+          const it = items.find((x) => x.id === id)
           return it?.name || id
         }
-        const v = vehicles.find(x => x.id === id)
+        const v = vehicles.find((x) => x.id === id)
         return v ? formatVehicleName(v) : id
       })()
 
@@ -325,8 +426,16 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
       if (flashTimer.current) clearTimeout(flashTimer.current)
       flashTimer.current = setTimeout(() => setFlashId(null), 900)
 
-      const entry: RecentEntry = { id, name, qty: effectiveQty || 1, at: Date.now() }
-      const next = [entry, ...recent.filter(r => r.id !== id)].slice(0, MAX_RECENT)
+      const entry: RecentEntry = {
+        id,
+        name,
+        qty: effectiveQty || 1,
+        at: Date.now(),
+      }
+      const next = [entry, ...recent.filter((r) => r.id !== id)].slice(
+        0,
+        MAX_RECENT,
+      )
       setRecent(next)
       saveRecent(mode, next)
 
@@ -340,14 +449,18 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
     }
   }
 
-
   const Hero = isItems ? Package : Car
-  const modeLabel = isItems ? t('giveItemsTitle') : t('spawnVehicleTitle')
-  const catalogEmpty = isItems ? nonVehicleItems.length === 0 : vehicles.length === 0
-  const contextVerb = isItems ? t('givingTo') : t('spawningNear')
+  const modeLabel = isItems ? 'Give Items' : 'Spawn Vehicle'
+  const catalogEmpty = isItems
+    ? nonVehicleItems.length === 0
+    : vehicles.length === 0
+  const contextVerb = isItems ? 'Giving to' : 'Spawning near'
   const contextPlayer = playerName || '—'
-  const activeCategoryLabel = categories.find(c => c.raw === activeCategory)?.label
-  const activeLabel = activeCategoryLabel || (isItems ? t('allItems') : t('allVehicles'))
+  const activeCategoryLabel = categories.find(
+    (c) => c.raw === activeCategory,
+  )?.label
+  const activeLabel =
+    activeCategoryLabel || (isItems ? 'All items' : 'All vehicles')
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -357,7 +470,7 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
           'min-w-0',
           'w-[min(1200px,95vw)] max-w-[min(1200px,95vw)]',
           'h-[min(780px,90vh)]',
-          'grid grid-rows-[auto_auto_1fr_auto]'
+          'grid grid-rows-[auto_auto_1fr_auto]',
         )}
         onKeyDown={handleKeyDown}
       >
@@ -371,16 +484,21 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
             </DialogTitle>
             <DialogDescription className="text-sm font-medium text-foreground leading-tight mt-0.5 flex items-center gap-1.5 min-w-0">
               <User className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
-              <span className="text-muted-foreground text-[13px] shrink-0">{contextVerb}</span>
-              <span className={cn(
-                'truncate font-semibold',
-                playerName ? 'text-primary' : 'text-muted-foreground/50'
-              )}>
+              <span className="text-muted-foreground text-[13px] shrink-0">
+                {contextVerb}
+              </span>
+              <span
+                className={cn(
+                  'truncate font-semibold',
+                  playerName ? 'text-primary' : 'text-muted-foreground/50',
+                )}
+              >
                 {contextPlayer}
               </span>
               {scannedAt && (
                 <span className="ms-auto text-[11px] text-muted-foreground/50 tabular-nums shrink-0 hidden sm:inline">
-                  {t('scannedOn', { date: new Date(scannedAt).toLocaleDateString(i18n.language) })}
+                  {'scanned ' +
+                    String(new Date(scannedAt).toLocaleDateString('en'))}
                 </span>
               )}
             </DialogDescription>
@@ -393,24 +511,33 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
             ref={searchRef}
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder={
               catalogEmpty
-                ? (isItems ? t('loadToScanItems') : t('loadToScanVehicles'))
-                : (isItems
-                  ? t('searchNItems', { count: nonVehicleItems.length.toLocaleString(i18n.language) })
-                  : t('searchNVehicles', { count: vehicles.length.toLocaleString(i18n.language) }))
+                ? isItems
+                  ? 'Scan the server to load items…'
+                  : 'Scan the server to load vehicles…'
+                : isItems
+                  ? 'Search ' +
+                    String(nonVehicleItems.length.toLocaleString('en')) +
+                    ' items…  (↑↓ navigate · enter select)'
+                  : 'Search ' +
+                    String(vehicles.length.toLocaleString('en')) +
+                    ' vehicles…  (↑↓ navigate · enter select)'
             }
             className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
-            aria-label={isItems ? t('searchItemsAria') : t('searchVehiclesAria')}
+            aria-label={isItems ? 'Search items' : 'Search vehicles'}
             disabled={catalogEmpty}
           />
           {search && (
             <button
               type="button"
-              onClick={() => { setSearch(''); searchRef.current?.focus() }}
+              onClick={() => {
+                setSearch('')
+                searchRef.current?.focus()
+              }}
               className="flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              aria-label={t('clearSearchAria')}
+              aria-label={'Clear search'}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -423,17 +550,23 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
             disabled={scanning}
             className="h-8 px-2.5 text-xs"
             // eslint-disable-next-line local/no-dead-disabled-title -- pure hint; disables only while a scan is already in flight (the spinner is the self-evident why). Triaged 2026-08-27.
-            title={t('rescanTitle')}
+            title={'Re-scan the server catalog via PanelBridge'}
           >
-            {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            <span className="ms-1.5 hidden sm:inline">{catalogEmpty ? t('scan') : t('rescan')}</span>
+            {scanning ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            <span className="ms-1.5 hidden sm:inline">
+              {catalogEmpty ? 'Scan' : 'Rescan'}
+            </span>
           </Button>
         </div>
 
         <div className="grid grid-cols-[220px_1fr] min-h-0 min-w-0">
           <aside className="border-e border-border/70 bg-card/40 overflow-y-auto overscroll-contain">
             <div className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm px-3 pt-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] font-semibold text-muted-foreground/60">
-              {t('categories')}
+              {'Categories'}
             </div>
 
             <button
@@ -444,21 +577,24 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
                 'motion-safe:transition-colors duration-100',
                 !activeCategory
                   ? 'bg-primary/12 text-primary border-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 border-transparent'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 border-transparent',
               )}
             >
               <LayoutGrid className="w-4 h-4 shrink-0" />
               <span className="flex-1 min-w-0 font-medium">
-                {isItems ? t('allItems') : t('allVehicles')}
+                {isItems ? 'All items' : 'All vehicles'}
               </span>
               <span className="text-[10px] tabular-nums opacity-60">
-                {(isItems ? nonVehicleItems.length : vehicles.length).toLocaleString(i18n.language)}
+                {(isItems
+                  ? nonVehicleItems.length
+                  : vehicles.length
+                ).toLocaleString('en')}
               </span>
             </button>
 
             <div className="h-px bg-border/40 mx-3 my-1.5" />
 
-            {categories.map(cat => {
+            {categories.map((cat) => {
               const Icon = cat.Icon
               const isActive = activeCategory === cat.raw
               return (
@@ -471,12 +607,19 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
                     'motion-safe:transition-colors duration-100',
                     isActive
                       ? 'bg-primary/12 text-primary border-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 border-transparent'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/10 border-transparent',
                   )}
                 >
-                  <Icon className={cn('w-4 h-4 shrink-0', isActive ? 'opacity-100' : 'opacity-70')} />
+                  <Icon
+                    className={cn(
+                      'w-4 h-4 shrink-0',
+                      isActive ? 'opacity-100' : 'opacity-70',
+                    )}
+                  />
                   <span className="flex-1 min-w-0 truncate">{cat.label}</span>
-                  <span className="text-[10px] tabular-nums opacity-50">{cat.count.toLocaleString(i18n.language)}</span>
+                  <span className="text-[10px] tabular-nums opacity-50">
+                    {cat.count.toLocaleString('en')}
+                  </span>
                 </button>
               )
             })}
@@ -488,11 +631,13 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
                 {activeLabel}
               </span>
               <span className="text-[11px] text-muted-foreground/40 tabular-nums">
-                {t('resultsCount', { count: totalFiltered })}
+                {Number(totalFiltered) === 1
+                  ? String(totalFiltered) + ' result'
+                  : String(totalFiltered) + ' results'}
               </span>
               {capped && (
                 <span className="text-[10px] uppercase tracking-wider text-warning/80 font-semibold ms-auto">
-                  {t('showingFirstN', { max: MAX_VISIBLE })}
+                  {'showing first ' + String(MAX_VISIBLE) + ' · narrow search'}
                 </span>
               )}
             </div>
@@ -501,12 +646,12 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
               ref={listRef}
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
               role="listbox"
-              aria-label={isItems ? t('itemCatalogAria') : t('vehicleCatalogAria')}
+              aria-label={isItems ? 'Item catalog' : 'Vehicle catalog'}
             >
               {initialLoad ? (
                 <div className="h-full flex items-center justify-center text-muted-foreground text-sm gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  {t('loadingCatalog')}
+                  {'Loading catalog…'}
                 </div>
               ) : catalogEmpty ? (
                 <EmptyCatalog
@@ -519,7 +664,11 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-10 px-6 text-center">
                   <SearchX className="w-8 h-8 mb-2 opacity-30" />
                   <p className="text-sm">
-                    {search ? (isItems ? t('noItemsMatch', { search }) : t('noVehiclesMatch', { search })) : t('noResults')}
+                    {search
+                      ? isItems
+                        ? 'No items match “' + String(search) + '”'
+                        : 'No vehicles match “' + String(search) + '”'
+                      : 'No results'}
                   </p>
                   {activeCategory && (
                     <button
@@ -527,7 +676,7 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
                       onClick={() => setActiveCategory(null)}
                       className="mt-3 text-xs text-primary hover:underline"
                     >
-                      {t('searchAcrossAllCategories')}
+                      {'Search across all categories'}
                     </button>
                   )}
                 </div>
@@ -551,7 +700,9 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
                           setSelectedId(id)
                           setHighlightIndex(idx)
                         }}
-                        onDoubleSpawn={() => void handleSpawn(id, isItems ? qty : undefined)}
+                        onDoubleSpawn={() =>
+                          void handleSpawn(id, isItems ? qty : undefined)
+                        }
                       />
                     )
                   })}
@@ -565,18 +716,18 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
           {recent.length > 0 && (
             <div
               role="group"
-              aria-label={t('recent')}
+              aria-label={'Recent'}
               className="flex min-w-0 items-center gap-2 border-b border-border/40 px-4 h-10"
             >
               <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-muted-foreground/60 shrink-0">
-                {t('recent')}
+                {'Recent'}
               </span>
               <div
                 data-slot="recent-history-scroll"
                 className="min-w-0 flex-1 overflow-x-auto overscroll-contain"
               >
                 <div className="flex w-max items-center gap-1.5 pe-1">
-                  {recent.map(r => (
+                  {recent.map((r) => (
                     <button
                       key={r.id}
                       type="button"
@@ -589,15 +740,25 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
                         'group flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[11px] shrink-0',
                         'border-border/60 bg-background/40 text-foreground/90 hover:bg-primary/10 hover:border-primary/40 hover:text-primary',
                         'motion-safe:transition-colors duration-100',
-                        'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background/40 disabled:hover:border-border/60 disabled:hover:text-foreground/90'
+                        'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-background/40 disabled:hover:border-border/60 disabled:hover:text-foreground/90',
                       )}
                       // eslint-disable-next-line local/no-dead-disabled-title -- pure hint naming the action ("Spawn X again"); when disabled for the isItems-without-a-player case, the actual reason is already surfaced visibly in this dialog's own hint row below (t('pickPlayerFirst')), so nothing is hidden. Triaged 2026-08-27.
-                      title={isItems ? t('spawnAgainTitleWithQty', { name: r.name, qty: r.qty }) : t('spawnAgainTitle', { name: r.name })}
+                      title={
+                        isItems
+                          ? 'Spawn ' +
+                            String(r.name) +
+                            ' × ' +
+                            String(r.qty) +
+                            ' again'
+                          : 'Spawn ' + String(r.name) + ' again'
+                      }
                     >
                       <RotateCw className="w-3 h-3 opacity-50 motion-safe:group-hover:opacity-100 motion-safe:transition-opacity" />
                       <span className="truncate max-w-[160px]">{r.name}</span>
                       {isItems && r.qty > 1 && (
-                        <span className="tabular-nums text-muted-foreground/70 group-hover:text-primary/80">× {r.qty}</span>
+                        <span className="tabular-nums text-muted-foreground/70 group-hover:text-primary/80">
+                          × {r.qty}
+                        </span>
                       )}
                     </button>
                   ))}
@@ -610,11 +771,11 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
                   clearRecent(mode)
                 }}
                 className="flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 text-[11px] text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                aria-label={t('clearRecentAria')}
-                title={t('clearRecentAria')}
+                aria-label={'Clear recent history'}
+                title={'Clear recent history'}
               >
                 <Trash2 className="h-3 w-3" />
-                <span className="hidden sm:inline">{t('clearRecent')}</span>
+                <span className="hidden sm:inline">{'Clear'}</span>
               </button>
             </div>
           )}
@@ -624,22 +785,26 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
               {selectedRow ? (
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-muted-foreground/60 leading-none">
-                    {t('selected')}
+                    {'Selected'}
                   </span>
                   <div className="flex items-baseline gap-2 min-w-0">
                     <span className="text-sm font-medium truncate text-foreground">
                       {selectedRow.kind === 'item'
-                        ? (selectedRow.it.name || selectedRow.it.id)
+                        ? selectedRow.it.name || selectedRow.it.id
                         : formatVehicleName(selectedRow.v)}
                     </span>
                     <span className="text-[11px] font-mono text-muted-foreground/50 truncate">
-                      {selectedRow.kind === 'item' ? selectedRow.it.id : selectedRow.v.id}
+                      {selectedRow.kind === 'item'
+                        ? selectedRow.it.id
+                        : selectedRow.v.id}
                     </span>
                   </div>
                 </div>
               ) : (
                 <span className="text-sm text-muted-foreground/60">
-                  {catalogEmpty ? t('noCatalogLoadedYet') : t('pickSomethingFromList')}
+                  {catalogEmpty
+                    ? 'No catalog loaded yet'
+                    : 'Pick something from the list'}
                 </span>
               )}
             </div>
@@ -648,31 +813,31 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
               <div className="flex items-center gap-0 border border-border/70 rounded-md overflow-hidden shrink-0 bg-background/60">
                 <button
                   type="button"
-                  onClick={() => setQty(q => Math.max(1, q - 1))}
+                  onClick={() => setQty((q) => Math.max(1, q - 1))}
                   disabled={qty <= 1 || spawning}
                   className="h-9 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent/10 disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:bg-accent/10"
-                  aria-label={t('decreaseQuantityAria')}
+                  aria-label={'Decrease quantity'}
                 >
                   <Minus className="w-3.5 h-3.5" />
                 </button>
                 <NumberInput
                   value={qty}
-                  onChange={n => {
+                  onChange={(n) => {
                     if (Number.isFinite(n)) setQty(n)
                   }}
-                  clamp={n => Math.max(1, Math.min(100, n))}
+                  clamp={(n) => Math.max(1, Math.min(100, n))}
                   min={1}
                   max={100}
                   disabled={spawning}
                   className="h-9 w-12 rounded-none border-x border-y-0 border-border/70 bg-transparent px-0 text-center text-sm shadow-none tabular-nums focus-visible:bg-accent/10 focus-visible:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  aria-label={t('quantityAria')}
+                  aria-label={'Quantity'}
                 />
                 <button
                   type="button"
-                  onClick={() => setQty(q => Math.min(100, q + 1))}
+                  onClick={() => setQty((q) => Math.min(100, q + 1))}
                   disabled={qty >= 100 || spawning}
                   className="h-9 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent/10 disabled:opacity-30 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:bg-accent/10"
-                  aria-label={t('increaseQuantityAria')}
+                  aria-label={'Increase quantity'}
                 >
                   <Plus className="w-3.5 h-3.5" />
                 </button>
@@ -688,12 +853,16 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
               {spawning ? (
                 <>
                   <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                  {t('sending')}
+                  {'Sending…'}
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 me-2" />
-                  {isItems ? (qty > 1 ? t('giveWithQty', { qty }) : t('give')) : t('spawn')}
+                  {isItems
+                    ? qty > 1
+                      ? 'Give × ' + String(qty)
+                      : 'Give'
+                    : 'Spawn'}
                 </>
               )}
             </Button>
@@ -702,11 +871,11 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
           <div className="flex items-center justify-between gap-3 px-4 pb-2 text-[10px] text-muted-foreground/50">
             <span>
               {isItems && !playerName
-                ? t('pickPlayerFirst')
-                : t('dialogStaysOpen')}
+                ? 'Pick a player before giving items'
+                : 'Dialog stays open — keep spawning until you close it'}
             </span>
             <span className="tabular-nums hidden sm:inline">
-              {t('keyboardHint')}
+              {'↵ spawn selected · esc close'}
             </span>
           </div>
         </footer>
@@ -715,11 +884,8 @@ export function SpawnBrowser({ mode, open, onOpenChange, playerName, onSpawn }: 
   )
 }
 
-
 interface ResultRowProps {
-  row:
-    | { kind: 'item'; it: CatalogItem }
-    | { kind: 'veh'; v: CatalogVehicle }
+  row: { kind: 'item'; it: CatalogItem } | { kind: 'veh'; v: CatalogVehicle }
   index: number
   isSelected: boolean
   isHighlighted: boolean
@@ -730,18 +896,23 @@ interface ResultRowProps {
 }
 
 function ResultRow({
-  row, index, isSelected, isHighlighted, isFlashing,
-  showCategoryIcon, onSelect, onDoubleSpawn,
+  row,
+  index,
+  isSelected,
+  isHighlighted,
+  isFlashing,
+  showCategoryIcon,
+  onSelect,
+  onDoubleSpawn,
 }: ResultRowProps) {
-  const { t } = useTranslation('vehiclePicker')
   const isItem = row.kind === 'item'
   const id = isItem ? row.it.id : row.v.id
 
   const Icon = isItem
-    ? (GROUP_META[getItemGroup(row.it.category)]?.icon || HelpCircle)
-    : (TYPE_ICON[getVehicleType(row.v)] || Car)
+    ? GROUP_META[getItemGroup(row.it.category)]?.icon || HelpCircle
+    : TYPE_ICON[getVehicleType(row.v)] || Car
 
-  const name = isItem ? (row.it.name || row.it.id) : formatVehicleName(row.v)
+  const name = isItem ? row.it.name || row.it.id : formatVehicleName(row.v)
 
   return (
     <button
@@ -759,21 +930,25 @@ function ResultRow({
           : isHighlighted
             ? 'bg-accent/15 border-transparent'
             : 'border-transparent hover:bg-accent/10',
-        isFlashing && 'motion-safe:animate-spawn-flash'
+        isFlashing && 'motion-safe:animate-spawn-flash',
       )}
     >
       {showCategoryIcon && (
-        <Icon className={cn(
-          'w-4 h-4 shrink-0',
-          isSelected ? 'text-primary' : 'text-muted-foreground/40'
-        )} />
+        <Icon
+          className={cn(
+            'w-4 h-4 shrink-0',
+            isSelected ? 'text-primary' : 'text-muted-foreground/40',
+          )}
+        />
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className={cn(
-            'text-sm font-medium truncate',
-            isSelected ? 'text-primary' : 'text-foreground'
-          )}>
+          <span
+            className={cn(
+              'text-sm font-medium truncate',
+              isSelected ? 'text-primary' : 'text-foreground',
+            )}
+          >
             {name}
           </span>
           {isItem && typeof row.it.weight === 'number' && row.it.weight > 0 && (
@@ -783,7 +958,7 @@ function ResultRow({
           )}
           {!isItem && typeof row.v.seats === 'number' && row.v.seats > 0 && (
             <span className="text-[10px] text-muted-foreground/60 tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-muted/40">
-              {t('seatsTitle', { count: row.v.seats })}
+              {`${row.v.seats} ${row.v.seats === 1 ? 'seat' : 'seats'}`}
             </span>
           )}
           {!isItem && typeof row.v.mass === 'number' && row.v.mass > 0 && (
@@ -800,7 +975,6 @@ function ResultRow({
   )
 }
 
-
 interface EmptyCatalogProps {
   mode: SpawnMode
   scanning: boolean
@@ -808,23 +982,37 @@ interface EmptyCatalogProps {
   onScan: () => void
 }
 
-function EmptyCatalog({ mode, scanning, scanError, onScan }: EmptyCatalogProps) {
-  const { t } = useTranslation('spawnBrowser')
+function EmptyCatalog({
+  mode,
+  scanning,
+  scanError,
+  onScan,
+}: EmptyCatalogProps) {
   const isItems = mode === 'items'
   return (
     <div className="h-full flex flex-col items-center justify-center text-center px-8 py-10">
       <div className="w-12 h-12 rounded-md border border-border/60 bg-muted/20 flex items-center justify-center mb-4">
-        {isItems ? <Package className="w-5 h-5 text-muted-foreground/60" /> : <Car className="w-5 h-5 text-muted-foreground/60" />}
+        {isItems ? (
+          <Package className="w-5 h-5 text-muted-foreground/60" />
+        ) : (
+          <Car className="w-5 h-5 text-muted-foreground/60" />
+        )}
       </div>
       <p className="text-sm font-medium text-foreground mb-1">
-        {isItems ? t('noItemsCachedYet') : t('noVehiclesCachedYet')}
+        {isItems ? 'No items cached yet' : 'No vehicles cached yet'}
       </p>
       <p className="text-[12px] text-muted-foreground max-w-xs leading-snug mb-4">
-        {isItems ? t('scanItemsBody') : t('scanVehiclesBody')}
+        {isItems
+          ? 'Scan the running server via PanelBridge to pull the full item catalog. The server must be online with the PanelBridge mod active.'
+          : 'Scan the running server via PanelBridge to pull the full vehicle catalog. The server must be online with the PanelBridge mod active.'}
       </p>
       <Button onClick={onScan} disabled={scanning} size="sm">
-        {scanning ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : <RefreshCw className="w-4 h-4 me-2" />}
-        {scanning ? t('scanning') : (isItems ? t('scanItems') : t('scanVehicles'))}
+        {scanning ? (
+          <Loader2 className="w-4 h-4 me-2 animate-spin" />
+        ) : (
+          <RefreshCw className="w-4 h-4 me-2" />
+        )}
+        {scanning ? 'Scanning…' : isItems ? 'Scan items' : 'Scan vehicles'}
       </Button>
       {scanError && (
         <p className="mt-3 text-[11px] text-destructive flex items-center gap-1">

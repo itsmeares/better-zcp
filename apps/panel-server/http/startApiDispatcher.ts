@@ -54,7 +54,6 @@ const routeModules: RouteModule[] = [
   { base: "/api/config", load: loadRouteModule("../routes/config.ts") },
   { base: "/api/docker", load: loadRouteModule("../routes/docker.ts") },
   { base: "/api/discovery", load: loadRouteModule("../routes/discovery.ts") },
-  { base: "/api/server-finder", load: loadRouteModule("../routes/serverFinder.ts") },
   { base: "/api/permissions", load: loadRouteModule("../routes/permissions.ts") },
   { base: "/api/scheduler", load: loadRouteModule("../routes/scheduler.ts") },
   { base: "/api/system", load: loadRouteModule("../routes/system.ts") },

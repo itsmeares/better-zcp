@@ -130,19 +130,6 @@ describe("serverFiles.ts: admin+technician (config/backups), ahead of the file's
   });
 });
 
-describe("serverFinder.js: admin+technician (setup/verification diagnostic)", () => {
-  it("refuses a moderator", async () => {
-    const { default: router } = await import("../routes/serverFinder.ts");
-    const { res } = await runFirstUseLayer(router, { user: { role: "moderator" } });
-    expect(res.getStatusCode()).toBe(403);
-  });
-  it("does not refuse a technician", async () => {
-    const { default: router } = await import("../routes/serverFinder.ts");
-    const { calledNext } = await runFirstUseLayer(router, { user: { role: "technician" } });
-    expect(calledNext).toBe(true);
-  });
-});
-
 async function runFirstHandlerOnly(router, routePath, method, req) {
   const res = createResponse();
   const layer = getRouteLayer(router, routePath, method);

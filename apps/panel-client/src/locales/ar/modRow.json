@@ -1,8 +1,0 @@
-{
-  "copyWorkshopIdAria": "نسخ معرّف الورشة {{id}}",
-  "copyWorkshopIdTooltip": "نسخ معرّف الورشة",
-  "openWorkshopPageForAria": "فتح صفحة الورشة لـ {{label}}",
-  "openWorkshopPageHint": "فتح صفحة الورشة",
-  "openOnSteamAria": "فتح {{label}} في ورشة Steam",
-  "openWorkshopPageTitle": "فتح صفحة ورشة Steam"
-}

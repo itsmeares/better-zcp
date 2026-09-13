@@ -38,7 +38,6 @@ type RouteSource =
   | 'permissions'
   | 'resources'
   | 'resourceActions'
-  | 'finder'
   | 'mods'
   | 'system'
   | 'fileReads'
@@ -92,7 +91,6 @@ const implementations: Record<
   permissions: () => import('./serverPermissions.server'),
   resources: () => import('./serverResourceReads.server'),
   resourceActions: () => import('./serverResourceActions.server'),
-  finder: () => import('./serverFinder.server'),
   mods: () => import('./serverMods.server'),
   system: () => import('./serverSystem.server'),
   fileReads: () => import('./serverFileReads.server'),
@@ -1959,39 +1957,6 @@ const routes: RouteSpec[] = [
     functionName: 'unhideTemplate',
     capability: 'templates.manage',
     data: mergeBody,
-  },
-
-  {
-    method: 'GET',
-    pattern: '/api/server-finder/query',
-    source: 'finder',
-    functionName: 'queryServerFinder',
-    capability: 'server.install',
-    data: queryData('ip', 'port'),
-    status: (result) => (result?.success === false ? 504 : 200),
-  },
-  {
-    method: 'GET',
-    pattern: '/api/server-finder/ping',
-    source: 'finder',
-    functionName: 'pingServerFinder',
-    capability: 'server.install',
-    data: queryData('ip', 'port'),
-  },
-  {
-    method: 'GET',
-    pattern: '/api/server-finder/debug',
-    source: 'finder',
-    functionName: 'getServerFinderDebug',
-    capability: 'server.install',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/server-finder',
-    source: 'finder',
-    functionName: 'getServerFinder',
-    capability: 'server.install',
-    data: (query) => ({ refresh: query.get('refresh') === 'true' }),
   },
 
   {

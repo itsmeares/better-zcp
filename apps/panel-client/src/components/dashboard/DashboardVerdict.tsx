@@ -1,11 +1,9 @@
 import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-
 
 export type VerdictLevel = 'calm' | 'warning' | 'critical'
 
@@ -35,7 +33,10 @@ function VerdictActionButton({ action }: { action: VerdictAction }) {
     return (
       <Link
         to={action.to}
-        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-7 gap-1.5 px-2.5 text-xs')}
+        className={cn(
+          buttonVariants({ variant: 'outline', size: 'sm' }),
+          'h-7 gap-1.5 px-2.5 text-xs',
+        )}
       >
         {action.label}
         <ChevronRight className="h-3 w-3" aria-hidden="true" />
@@ -50,22 +51,32 @@ function VerdictActionButton({ action }: { action: VerdictAction }) {
       onClick={action.onClick}
       disabled={action.disabled || action.busy}
     >
-      {action.busy && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
+      {action.busy && (
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      )}
       {action.label}
     </Button>
   )
 }
 
-function Freshness({ lastUpdated, stale }: { lastUpdated: Date | null; stale: boolean }) {
-  const { t } = useTranslation('dashboardVerdict')
+function Freshness({
+  lastUpdated,
+  stale,
+}: {
+  lastUpdated: Date | null
+  stale: boolean
+}) {
   const label = (() => {
-    if (!lastUpdated) return t('noUpdateYet')
-    const secs = Math.max(0, Math.round((Date.now() - lastUpdated.getTime()) / 1000))
-    if (secs < 10) return t('updatedJustNow')
-    if (secs < 60) return t('updatedSecondsAgo', { count: secs })
+    if (!lastUpdated) return 'no update yet'
+    const secs = Math.max(
+      0,
+      Math.round((Date.now() - lastUpdated.getTime()) / 1000),
+    )
+    if (secs < 10) return 'updated just now'
+    if (secs < 60) return 'updated ' + String(secs) + 's ago'
     const mins = Math.floor(secs / 60)
-    if (mins < 60) return t('updatedMinutesAgo', { count: mins })
-    return t('updatedHoursAgo', { count: Math.floor(mins / 60) })
+    if (mins < 60) return 'updated ' + String(mins) + 'm ago'
+    return 'updated ' + String(Math.floor(mins / 60)) + 'h ago'
   })()
 
   return (
@@ -85,7 +96,7 @@ function Freshness({ lastUpdated, stale }: { lastUpdated: Date | null; stale: bo
           )}
         />
       </span>
-      {stale ? t('staleLink', { label }) : label}
+      {stale ? 'link may be stale, ' + String(label) : label}
     </p>
   )
 }
@@ -103,8 +114,9 @@ export function VerdictBand({
   lastUpdated: Date | null
   stale: boolean
 }) {
-  const { t } = useTranslation('dashboardVerdict')
-  const hasBody = Boolean(verdict.headline || verdict.action) || (showPresence && players.length > 0)
+  const hasBody =
+    Boolean(verdict.headline || verdict.action) ||
+    (showPresence && players.length > 0)
   return (
     <section
       aria-label="Server verdict"
@@ -152,33 +164,40 @@ export function VerdictBand({
       )}
 
       {showPresence && players.length > 0 && (
-          <ul className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
-            {players.slice(0, 10).map(player => (
-              <li key={player.name} className="min-w-0">
-                <Link
-                  to="/players"
-                  className="group flex items-baseline gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+        <ul className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
+          {players.slice(0, 10).map((player) => (
+            <li key={player.name} className="min-w-0">
+              <Link
+                to="/players"
+                className="group flex items-baseline gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+              >
+                <span
+                  className="h-1.5 w-1.5 shrink-0 self-center rounded-full bg-success"
+                  aria-hidden="true"
+                />
+                <span
+                  className="truncate text-[13px] font-medium text-foreground/90 transition-colors group-hover:text-primary"
+                  dir="auto"
+                  title={player.name}
                 >
-                  <span className="h-1.5 w-1.5 shrink-0 self-center rounded-full bg-success" aria-hidden="true" />
-                  <span
-                    className="truncate text-[13px] font-medium text-foreground/90 transition-colors group-hover:text-primary"
-                    dir="auto"
-                    title={player.name}
-                  >
-                    {player.name}
+                  {player.name}
+                </span>
+                {player.since && (
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-foreground/35">
+                    {player.since}
                   </span>
-                  {player.since && (
-                    <span className="shrink-0 font-mono text-[11px] tabular-nums text-foreground/35">{player.since}</span>
-                  )}
-                </Link>
-              </li>
-            ))}
-            {players.length > 10 && (
-              <li className="font-mono text-[11px] tabular-nums text-foreground/35">
-                {t('andMore', { count: players.length - 10 })}
-              </li>
-            )}
-          </ul>
+                )}
+              </Link>
+            </li>
+          ))}
+          {players.length > 10 && (
+            <li className="font-mono text-[11px] tabular-nums text-foreground/35">
+              {Number(players.length - 10) === 1
+                ? 'and ' + String(players.length - 10) + ' more'
+                : 'and ' + String(players.length - 10) + ' more'}
+            </li>
+          )}
+        </ul>
       )}
 
       <div className={hasBody ? 'mt-2' : ''}>
@@ -187,7 +206,6 @@ export function VerdictBand({
     </section>
   )
 }
-
 
 export interface WorkItem {
   id: string
@@ -198,12 +216,13 @@ export interface WorkItem {
   tone?: 'default' | 'good' | 'warning' | 'bad'
 }
 
-const WORK_STATE_TONE: Record<'default' | 'good' | 'warning' | 'bad', string> = {
-  default: 'text-foreground/40',
-  good: 'text-success/80',
-  warning: 'text-warning',
-  bad: 'text-destructive',
-}
+const WORK_STATE_TONE: Record<'default' | 'good' | 'warning' | 'bad', string> =
+  {
+    default: 'text-foreground/40',
+    good: 'text-success/80',
+    warning: 'text-warning',
+    bad: 'text-destructive',
+  }
 
 export function WorkList({ items }: { items: WorkItem[] }) {
   return (
@@ -214,8 +233,13 @@ export function WorkList({ items }: { items: WorkItem[] }) {
           to={to}
           className="group flex items-center gap-3 py-2.5 ps-1 pe-1.5 transition-colors hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         >
-          <Icon className="h-3.5 w-3.5 shrink-0 text-foreground/35 transition-colors group-hover:text-foreground/70" aria-hidden="true" />
-          <span className="shrink-0 text-sm text-foreground/85 transition-colors group-hover:text-foreground">{label}</span>
+          <Icon
+            className="h-3.5 w-3.5 shrink-0 text-foreground/35 transition-colors group-hover:text-foreground/70"
+            aria-hidden="true"
+          />
+          <span className="shrink-0 text-sm text-foreground/85 transition-colors group-hover:text-foreground">
+            {label}
+          </span>
           {state && (
             <span
               className={cn(

@@ -1,7 +1,17 @@
 import { memo } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Activity, TrendingUp, Server, HardDrive } from 'lucide-react'
-import { Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip as RTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useTheme } from '@/contexts/ThemeContext'
 
@@ -38,11 +48,12 @@ function useChartColors() {
   }
 }
 
-function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsProps) {
-  const { t } = useTranslation('debugPerformanceCharts')
+function DebugPerformanceCharts({
+  performanceHistory,
+}: DebugPerformanceChartsProps) {
   const colors = useChartColors()
 
-  const hasPzData = performanceHistory.some(p => p.pzMemMB != null)
+  const hasPzData = performanceHistory.some((p) => p.pzMemMB != null)
 
   const tooltipStyle = {
     contentStyle: {
@@ -64,7 +75,7 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
           <Card key={index}>
             <CardContent>
               <div className="flex h-[250px] items-center justify-center text-muted-foreground">
-                {t('noDataYet')}
+                {'No performance data yet. Data collects every 60 seconds.'}
               </div>
             </CardContent>
           </Card>
@@ -80,19 +91,57 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2">
               <Server className="h-5 w-5" />
-              {t('pzServerMemoryTitle')}
+              {'PZ Server Memory (JVM)'}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <AreaChart data={performanceHistory}>
                 <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-                <XAxis dataKey="time" stroke={colors.axis} fontSize={12} minTickGap={30} />
+                <XAxis
+                  dataKey="time"
+                  stroke={colors.axis}
+                  fontSize={12}
+                  minTickGap={30}
+                />
                 <YAxis stroke={colors.axis} fontSize={12} unit=" MB" />
-                <RTooltip {...tooltipStyle} formatter={(value) => [`${value} MB`, t('pzServer')]} />
-                <ReferenceLine y={6000} stroke={colors.warn} strokeDasharray="4 4" strokeOpacity={0.6} label={{ value: t('warnLabel'), fill: colors.warn, fontSize: 10, position: 'insideTopRight' }} />
-                <ReferenceLine y={7600} stroke={colors.danger} strokeDasharray="4 4" strokeOpacity={0.7} label={{ value: t('limitLabel'), fill: colors.danger, fontSize: 10, position: 'insideTopRight' }} />
-                <Area type="monotone" dataKey="pzMemMB" stroke={colors.pz} fill={colors.pz} fillOpacity={0.3} name={t('pzServerMb')} connectNulls />
+                <RTooltip
+                  {...tooltipStyle}
+                  formatter={(value) => [`${value} MB`, 'PZ Server']}
+                />
+                <ReferenceLine
+                  y={6000}
+                  stroke={colors.warn}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.6}
+                  label={{
+                    value: 'warn 6 GB',
+                    fill: colors.warn,
+                    fontSize: 10,
+                    position: 'insideTopRight',
+                  }}
+                />
+                <ReferenceLine
+                  y={7600}
+                  stroke={colors.danger}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.7}
+                  label={{
+                    value: 'limit 7.6 GB',
+                    fill: colors.danger,
+                    fontSize: 10,
+                    position: 'insideTopRight',
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="pzMemMB"
+                  stroke={colors.pz}
+                  fill={colors.pz}
+                  fillOpacity={0.3}
+                  name={'PZ Server (MB)'}
+                  connectNulls
+                />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
@@ -103,17 +152,32 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <HardDrive className="h-5 w-5" />
-            {t('hostMemoryTitle')}
+            {'Host Memory'}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={250}>
             <AreaChart data={performanceHistory}>
               <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-              <XAxis dataKey="time" stroke={colors.axis} fontSize={12} minTickGap={30} />
+              <XAxis
+                dataKey="time"
+                stroke={colors.axis}
+                fontSize={12}
+                minTickGap={30}
+              />
               <YAxis stroke={colors.axis} fontSize={12} unit=" GB" />
-              <RTooltip {...tooltipStyle} formatter={(value) => [`${value} GB`, t('hostUsed')]} />
-              <Area type="monotone" dataKey="hostMemUsedGB" stroke={colors.memory} fill={colors.memory} fillOpacity={0.3} name={t('hostUsedGb')} />
+              <RTooltip
+                {...tooltipStyle}
+                formatter={(value) => [`${value} GB`, 'Host Used']}
+              />
+              <Area
+                type="monotone"
+                dataKey="hostMemUsedGB"
+                stroke={colors.memory}
+                fill={colors.memory}
+                fillOpacity={0.3}
+                name={'Host Used (GB)'}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </CardContent>
@@ -123,19 +187,49 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
-            {t('hostCpuUsageTitle')}
+            {'Host CPU Usage'}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={performanceHistory}>
               <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-              <XAxis dataKey="time" stroke={colors.axis} fontSize={12} minTickGap={30} />
-              <YAxis stroke={colors.axis} fontSize={12} unit="%" domain={[0, 100]} />
-              <RTooltip {...tooltipStyle} formatter={(value) => [`${value}%`, t('cpu')]} />
-              <ReferenceLine y={75} stroke={colors.warn} strokeDasharray="4 4" strokeOpacity={0.5} />
-              <ReferenceLine y={90} stroke={colors.danger} strokeDasharray="4 4" strokeOpacity={0.6} />
-              <Line type="monotone" dataKey="cpuLoad" stroke={colors.cpu} strokeWidth={2} dot={false} name={t('cpuPercent')} />
+              <XAxis
+                dataKey="time"
+                stroke={colors.axis}
+                fontSize={12}
+                minTickGap={30}
+              />
+              <YAxis
+                stroke={colors.axis}
+                fontSize={12}
+                unit="%"
+                domain={[0, 100]}
+              />
+              <RTooltip
+                {...tooltipStyle}
+                formatter={(value) => [`${value}%`, 'CPU']}
+              />
+              <ReferenceLine
+                y={75}
+                stroke={colors.warn}
+                strokeDasharray="4 4"
+                strokeOpacity={0.5}
+              />
+              <ReferenceLine
+                y={90}
+                stroke={colors.danger}
+                strokeDasharray="4 4"
+                strokeOpacity={0.6}
+              />
+              <Line
+                type="monotone"
+                dataKey="cpuLoad"
+                stroke={colors.cpu}
+                strokeWidth={2}
+                dot={false}
+                name={'CPU %'}
+              />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
@@ -145,17 +239,29 @@ function DebugPerformanceCharts({ performanceHistory }: DebugPerformanceChartsPr
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
-            {t('playerCountTitle')}
+            {'Player Count'}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={performanceHistory}>
               <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-              <XAxis dataKey="time" stroke={colors.axis} fontSize={12} minTickGap={30} />
+              <XAxis
+                dataKey="time"
+                stroke={colors.axis}
+                fontSize={12}
+                minTickGap={30}
+              />
               <YAxis stroke={colors.axis} fontSize={12} allowDecimals={false} />
               <RTooltip {...tooltipStyle} />
-              <Line type="stepAfter" dataKey="playerCount" stroke={colors.players} strokeWidth={2} dot={false} name={t('players')} />
+              <Line
+                type="stepAfter"
+                dataKey="playerCount"
+                stroke={colors.players}
+                strokeWidth={2}
+                dot={false}
+                name={'Players'}
+              />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>

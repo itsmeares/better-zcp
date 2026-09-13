@@ -1,8 +1,11 @@
 import { ReactNode } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Sliders, FileCog, Package } from 'lucide-react'
 import { SimTemplateDiff, SimTemplateModRef } from '@/lib/api'
-import { getIniKeyLabel, getSandboxKeyLabel, formatDiffValue } from '@/lib/templateLabels'
+import {
+  getIniKeyLabel,
+  getSandboxKeyLabel,
+  formatDiffValue,
+} from '@/lib/templateLabels'
 
 interface DiffRow {
   label: string
@@ -18,15 +21,26 @@ function DiffRows({ rows, emptyText }: { rows: DiffRow[]; emptyText: string }) {
   return (
     <ul className="divide-y divide-border/50 rounded-md border border-border/50">
       {rows.map((row) => (
-        <li key={`${row.sub || ''}${row.label}`} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+        <li
+          key={`${row.sub || ''}${row.label}`}
+          className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+        >
           <div className="min-w-0">
             <p className="truncate font-medium text-foreground">{row.label}</p>
-            {row.sub && <p className="text-[11px] uppercase tracking-wide text-muted-foreground/70">{row.sub}</p>}
+            {row.sub && (
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/70">
+                {row.sub}
+              </p>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5 font-mono text-xs">
-            <span className="text-muted-foreground line-through">{formatDiffValue(row.from)}</span>
+            <span className="text-muted-foreground line-through">
+              {formatDiffValue(row.from)}
+            </span>
             <span className="text-muted-foreground">&rarr;</span>
-            <span className="font-semibold text-primary">{formatDiffValue(row.to)}</span>
+            <span className="font-semibold text-primary">
+              {formatDiffValue(row.to)}
+            </span>
           </div>
         </li>
       ))}
@@ -34,7 +48,15 @@ function DiffRows({ rows, emptyText }: { rows: DiffRow[]; emptyText: string }) {
   )
 }
 
-function Section({ icon: Icon, title, children }: { icon: typeof Sliders; title: string; children: ReactNode }) {
+function Section({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: typeof Sliders
+  title: string
+  children: ReactNode
+}) {
   return (
     <div className="space-y-2">
       <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -52,7 +74,6 @@ interface TemplateDiffListProps {
 }
 
 export function TemplateDiffList({ diff, mods }: TemplateDiffListProps) {
-  const { t } = useTranslation('templateDiffList')
   const sandboxRows: DiffRow[] = diff.sandboxVars.map((c) => ({
     label: getSandboxKeyLabel(c.key, c.section),
     sub: c.section,
@@ -67,15 +88,20 @@ export function TemplateDiffList({ diff, mods }: TemplateDiffListProps) {
 
   return (
     <div className="space-y-4">
-      <Section icon={Sliders} title={t('sandboxChanges')}>
-        <DiffRows rows={sandboxRows} emptyText={t('noSandboxChanges')} />
+      <Section icon={Sliders} title={'Sandbox Changes'}>
+        <DiffRows
+          rows={sandboxRows}
+          emptyText={'No sandbox setting changes.'}
+        />
       </Section>
-      <Section icon={FileCog} title={t('serverIniChanges')}>
-        <DiffRows rows={iniRows} emptyText={t('noIniChanges')} />
+      <Section icon={FileCog} title={'Server INI Changes'}>
+        <DiffRows rows={iniRows} emptyText={'No server.ini changes.'} />
       </Section>
-      <Section icon={Package} title={t('mods')}>
+      <Section icon={Package} title={'Mods'}>
         {mods.length === 0 ? (
-          <p className="text-xs text-muted-foreground">{t('noModsReferenced')}</p>
+          <p className="text-xs text-muted-foreground">
+            {"This template doesn't reference any mods."}
+          </p>
         ) : (
           <>
             <ul className="rounded-md border border-border/50 divide-y divide-border/50">
@@ -86,7 +112,9 @@ export function TemplateDiffList({ diff, mods }: TemplateDiffListProps) {
               ))}
             </ul>
             <p className="text-[11px] text-muted-foreground">
-              {t('modsNotInstalledAutomatically')}
+              {
+                "Referenced mods aren't installed automatically — add them from the Mod Manager."
+              }
             </p>
           </>
         )}

@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { HelpCircle } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 interface HelpTipProps {
@@ -11,8 +14,12 @@ interface HelpTipProps {
   className?: string
 }
 
-export function HelpTip({ label, children, side = 'top', className }: HelpTipProps) {
-  const { t } = useTranslation('helpTip')
+export function HelpTip({
+  label,
+  children,
+  side = 'top',
+  className,
+}: HelpTipProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -23,7 +30,7 @@ export function HelpTip({ label, children, side = 'top', className }: HelpTipPro
           event.preventDefault()
           setOpen(true)
         }}
-        aria-label={t('ariaLabel', { label })}
+        aria-label={'Help: ' + String(label)}
         className={cn(
           'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
           className,
@@ -31,7 +38,10 @@ export function HelpTip({ label, children, side = 'top', className }: HelpTipPro
       >
         <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
       </TooltipTrigger>
-      <TooltipContent side={side} className="max-w-xs text-start text-xs leading-relaxed">
+      <TooltipContent
+        side={side}
+        className="max-w-xs text-start text-xs leading-relaxed"
+      >
         {children}
       </TooltipContent>
     </Tooltip>

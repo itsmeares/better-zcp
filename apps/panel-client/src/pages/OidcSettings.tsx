@@ -1,11 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
-import { KeyRound, ShieldAlert, Loader2, Copy, Check, CheckCircle2, XCircle } from 'lucide-react'
+import {
+  KeyRound,
+  ShieldAlert,
+  Loader2,
+  Copy,
+  Check,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardDescription, CardContent } from '@/components/ui/card'
+import {
+  Card,
+  CardHeader,
+  CardDescription,
+  CardContent,
+} from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,7 +49,11 @@ interface ProviderPreset {
   scope: string
 }
 const PROVIDER_PRESETS: ProviderPreset[] = [
-  { id: 'google', issuerTemplate: 'https://accounts.google.com', scope: 'openid email profile' },
+  {
+    id: 'google',
+    issuerTemplate: 'https://accounts.google.com',
+    scope: 'openid email profile',
+  },
   {
     id: 'authentik',
     issuerTemplate: 'https://<authentik-domain>/application/o/<app-slug>/',
@@ -53,24 +69,44 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     issuerTemplate: 'https://login.microsoftonline.com/<tenant-id>/v2.0',
     scope: 'openid email profile',
   },
-  { id: 'okta', issuerTemplate: 'https://<okta-domain>/oauth2/default', scope: 'openid email profile' },
-  { id: 'auth0', issuerTemplate: 'https://<your-domain>.auth0.com/', scope: 'openid email profile' },
+  {
+    id: 'okta',
+    issuerTemplate: 'https://<okta-domain>/oauth2/default',
+    scope: 'openid email profile',
+  },
+  {
+    id: 'auth0',
+    issuerTemplate: 'https://<your-domain>.auth0.com/',
+    scope: 'openid email profile',
+  },
 ]
 const CUSTOM_PRESET_ID = 'custom'
 
 const MASKED_SECRET_SENTINEL = '••••••••'
 
-const FIELD_KEYS = (['issuerUrl', 'clientId', 'redirectUri', 'scope', 'providerName'] as const) satisfies readonly (keyof OidcSettingsFields)[]
+const FIELD_KEYS = [
+  'issuerUrl',
+  'clientId',
+  'redirectUri',
+  'scope',
+  'providerName',
+] as const satisfies readonly (keyof OidcSettingsFields)[]
 type FieldKey = (typeof FIELD_KEYS)[number]
 
-type UncoveredOidcSettingsField = Exclude<keyof OidcSettingsFields, FieldKey | 'allowInsecureHttp'>
+type UncoveredOidcSettingsField = Exclude<
+  keyof OidcSettingsFields,
+  FieldKey | 'allowInsecureHttp'
+>
 const _assertFieldKeysCoversOidcSettingsFields: UncoveredOidcSettingsField extends never
   ? true
   : { MISSING_FROM_FIELD_KEYS: UncoveredOidcSettingsField } = true
 void _assertFieldKeysCoversOidcSettingsFields
 
-export default function OidcSettings({ embedded = false }: { embedded?: boolean }) {
-  const { t } = useTranslation('oidcSettings')
+export default function OidcSettings({
+  embedded = false,
+}: {
+  embedded?: boolean
+}) {
   const { toast } = useToast()
 
   const {
@@ -85,10 +121,12 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
     staleTime: 30_000,
   })
   const loading = settingsPending
-  const permissionDenied = settingsError instanceof ApiError && settingsError.status === 403
-  const loadError = !permissionDenied && settingsError
-    ? getUserErrorMessage(settingsError, t('toasts.unknownError'))
-    : null
+  const permissionDenied =
+    settingsError instanceof ApiError && settingsError.status === 403
+  const loadError =
+    !permissionDenied && settingsError
+      ? getUserErrorMessage(settingsError, 'Unknown error')
+      : null
 
   const [form, setForm] = useState<Record<FieldKey, string>>({
     issuerUrl: '',
@@ -105,7 +143,8 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
   const [formError, setFormError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [selectedPreset, setSelectedPreset] = useState<string>(CUSTOM_PRESET_ID)
-  const [discoveryResult, setDiscoveryResult] = useState<OidcDiscoveredMetadata | null>(null)
+  const [discoveryResult, setDiscoveryResult] =
+    useState<OidcDiscoveredMetadata | null>(null)
 
   const applySettings = (data: OidcSettingsWithEnv) => {
     setForm({
@@ -151,13 +190,14 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
       const result = await oidcSettingsApi.update(updates)
       await fetchSettings()
       toast({
-        title: t('toasts.settingsSavedTitle'),
-        description: t('toasts.settingsSavedDescription'),
+        title: 'Sign-in settings saved',
+        description:
+          'The panel will use the new settings for the next sign-in attempt.',
         variant: 'success',
       })
       void result
     } catch (error) {
-      setFormError(getUserErrorMessage(error, t('toasts.unknownError')))
+      setFormError(getUserErrorMessage(error, 'Unknown error'))
     } finally {
       setSaving(false)
     }
@@ -172,15 +212,17 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
       const result = await oidcSettingsApi.testConnection(updates)
       setDiscoveryResult(result.metadata)
       toast({
-        title: t('toasts.testSuccessTitle'),
-        description: t('toasts.testSuccessDescription'),
+        title: 'Connection successful',
+        description:
+          'The panel reached the identity provider and confirmed it accepts these credentials.',
         variant: 'success',
       })
     } catch (error) {
-      const isUndetermined = error instanceof ApiError && error.code === 'OIDC_TEST_UNDETERMINED'
+      const isUndetermined =
+        error instanceof ApiError && error.code === 'OIDC_TEST_UNDETERMINED'
       toast({
-        title: isUndetermined ? t('toasts.testUndeterminedTitle') : t('toasts.testFailedTitle'),
-        description: getUserErrorMessage(error, t('toasts.unknownError')),
+        title: isUndetermined ? 'Could not confirm' : 'Connection failed',
+        description: getUserErrorMessage(error, 'Unknown error'),
         variant: isUndetermined ? 'default' : 'destructive',
       })
     } finally {
@@ -195,7 +237,9 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
     if (!preset) return
     setForm((prev) => ({
       ...prev,
-      issuerUrl: envOverrides?.issuerUrl ? prev.issuerUrl : preset.issuerTemplate,
+      issuerUrl: envOverrides?.issuerUrl
+        ? prev.issuerUrl
+        : preset.issuerTemplate,
       scope: envOverrides?.scope ? prev.scope : preset.scope,
     }))
   }
@@ -216,9 +260,11 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
     <div className={embedded ? 'space-y-4' : 'space-y-6 page-transition'}>
       {!embedded && (
         <PageHeader
-          eyebrow={t('pageHeader.eyebrow')}
-          title={t('pageHeader.title')}
-          description={t('pageHeader.description')}
+          eyebrow={'Identity'}
+          title={'Sign-in'}
+          description={
+            'Let people sign in with an existing account from an identity provider (Google Workspace, Okta, Authentik, and similar), instead of — never instead of — a username and password. Local sign-in always keeps working.'
+          }
           icon={<KeyRound className="h-6 w-6" />}
           tone="config"
         />
@@ -232,15 +278,17 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
         <EmptyState
           type="accessDenied"
           icon={<ShieldAlert className="h-14 w-14 text-muted-foreground/40" />}
-          title={t('permissionDenied.title')}
-          description={t('permissionDenied.description')}
+          title={"You can't manage sign-in settings"}
+          description={
+            'Your account\'s role doesn\'t include "Manage panel-wide settings". Ask an administrator to grant it if you need access to this screen.'
+          }
         />
       ) : loadError ? (
         <EmptyState
           type="noData"
-          title={t('loadError.title')}
+          title={"Couldn't load sign-in settings"}
           description={loadError}
-          action={{ label: t('loadError.retry'), onClick: fetchSettings }}
+          action={{ label: 'Try again', onClick: fetchSettings }}
         />
       ) : settings ? (
         <Card>
@@ -249,61 +297,96 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
               {settings.configured ? (
                 <Badge variant="success" className="gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  {t('status.configured')}
+                  {'Single sign-on is configured'}
                 </Badge>
               ) : (
                 <Badge variant="outline" className="gap-1">
                   <XCircle className="h-3.5 w-3.5" />
-                  {t('status.notConfigured')}
+                  {'Single sign-on is not configured yet'}
                 </Badge>
               )}
             </div>
             {!settings.configured && (
-              <CardDescription>{t('status.notConfiguredHint')}</CardDescription>
+              <CardDescription>
+                {'Fill in the provider details below and save to turn it on.'}
+              </CardDescription>
             )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-4 rounded-xl border border-border/70 bg-background/40 p-4">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">{t('sections.provider')}</p>
-                <p className="text-xs text-muted-foreground">{t('sections.providerDescription')}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {'Provider'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {
+                    'How this panel connects to your identity provider, and what to register there.'
+                  }
+                </p>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="oidc-provider-preset">{t('providerPresets.label')}</Label>
-                  <Select value={selectedPreset} onValueChange={handlePresetChange}>
+                  <Label htmlFor="oidc-provider-preset">
+                    {'Provider preset'}
+                  </Label>
+                  <Select
+                    value={selectedPreset}
+                    onValueChange={handlePresetChange}
+                  >
                     <SelectTrigger id="oidc-provider-preset">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={CUSTOM_PRESET_ID}>{t('providerPresets.custom')}</SelectItem>
+                      <SelectItem value={CUSTOM_PRESET_ID}>
+                        {'Custom / other'}
+                      </SelectItem>
                       {PROVIDER_PRESETS.map((preset) => (
                         <SelectItem key={preset.id} value={preset.id}>
-                          {t(`providerPresets.${preset.id}.label`)}
+                          {(
+                            {
+                              google: 'Google',
+                              authentik: 'Authentik',
+                              keycloak: 'Keycloak',
+                              azuread: 'Azure AD (Microsoft Entra ID)',
+                              okta: 'Okta',
+                              auth0: 'Auth0',
+                            } as Record<string, string>
+                          )[String(preset.id)] ?? String(preset.id)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">{t('providerPresets.help')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {
+                      'Fills in the issuer URL shape and recommended scope for a known provider. Replace anything in angle brackets with your own values before testing or saving.'
+                    }
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="oidc-provider-name">{t('fields.providerName')}</Label>
+                  <Label htmlFor="oidc-provider-name">{'Display name'}</Label>
                   <Input
                     id="oidc-provider-name"
                     value={form.providerName}
-                    onChange={(e) => setForm((prev) => ({ ...prev, providerName: e.target.value }))}
-                    placeholder={t('fields.providerNamePlaceholder')}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        providerName: e.target.value,
+                      }))
+                    }
+                    placeholder={'e.g. Google, Okta, Authentik'}
                     disabled={envOverrides?.providerName}
                   />
                   <p className="text-xs text-muted-foreground">
-                    {envOverrides?.providerName ? t('envPinnedNote') : t('fields.providerNameHelp')}
+                    {envOverrides?.providerName
+                      ? 'Set via an environment variable on this install — edit it there, not here.'
+                      : 'Shown on the login button, such as “Continue with Authentik”.'}
                   </p>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="oidc-issuer-url">{t('fields.issuerUrl')}</Label>
+                <Label htmlFor="oidc-issuer-url">{'Issuer URL'}</Label>
                 <Input
                   id="oidc-issuer-url"
                   value={form.issuerUrl}
@@ -311,31 +394,44 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
                     setForm((prev) => ({ ...prev, issuerUrl: e.target.value }))
                     setDiscoveryResult(null)
                   }}
-                  placeholder={t('fields.issuerUrlPlaceholder')}
+                  placeholder={'https://accounts.example.com'}
                   disabled={envOverrides?.issuerUrl}
                 />
                 <p className="text-xs text-muted-foreground">
-                  {envOverrides?.issuerUrl ? t('envPinnedNote') : t('fields.issuerUrlHelp')}
+                  {envOverrides?.issuerUrl
+                    ? 'Set via an environment variable on this install — edit it there, not here.'
+                    : 'The base URL your identity provider gave you for OpenID Connect — the panel discovers everything else from it.'}
                 </p>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="oidc-redirect-uri">{t('fields.redirectUri')}</Label>
+                <Label htmlFor="oidc-redirect-uri">{'Redirect URI'}</Label>
                 <Input
                   id="oidc-redirect-uri"
                   value={form.redirectUri}
                   onChange={(e) => {
-                    setForm((prev) => ({ ...prev, redirectUri: e.target.value }))
+                    setForm((prev) => ({
+                      ...prev,
+                      redirectUri: e.target.value,
+                    }))
                     setDiscoveryResult(null)
                   }}
                   disabled={envOverrides?.redirectUri}
                 />
                 {envOverrides?.redirectUri ? (
-                  <p className="text-xs text-muted-foreground">{t('envPinnedNote')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {
+                      'Set via an environment variable on this install — edit it there, not here.'
+                    }
+                  </p>
                 ) : (
                   <>
                     <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/[0.04] px-2.5 py-2 text-xs">
-                      <span className="text-muted-foreground">{t('fields.redirectUriHelp')}</span>
+                      <span className="text-muted-foreground">
+                        {
+                          "Paste this exact URL into your identity provider's app registration:"
+                        }
+                      </span>
                       <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground/85">
                         {settings.suggestedRedirectUri}
                       </code>
@@ -346,11 +442,19 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
                         className="ms-auto h-7 gap-1.5 px-2 text-xs"
                         onClick={handleUseRedirectUri}
                       >
-                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        {t('fields.useAndCopy')}
+                        {copied ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                        {'Use & copy'}
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">{t('fields.redirectUriConfirmNote')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {
+                        "Double-check this matches the web address you actually use to reach this panel — especially http vs. https. Behind a reverse proxy, the panel can't always tell which one your browser used."
+                      }
+                    </p>
                   </>
                 )}
               </div>
@@ -358,8 +462,12 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
-                    <Label htmlFor="oidc-client-id">{t('fields.clientId')}</Label>
-                    <HelpTip label={t('fields.clientId')}>{t('fields.clientIdHelp')}</HelpTip>
+                    <Label htmlFor="oidc-client-id">{'Client ID'}</Label>
+                    <HelpTip label={'Client ID'}>
+                      {
+                        "The public identifier your identity provider assigned to this panel when you registered it as an application there — paired with the client secret below, but not sensitive on its own. Copy it from your provider's app registration page."
+                      }
+                    </HelpTip>
                   </div>
                   <Input
                     id="oidc-client-id"
@@ -371,12 +479,16 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
                     disabled={envOverrides?.clientId}
                   />
                   {envOverrides?.clientId && (
-                    <p className="text-xs text-muted-foreground">{t('envPinnedNote')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {
+                        'Set via an environment variable on this install — edit it there, not here.'
+                      }
+                    </p>
                   )}
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="oidc-client-secret">{t('fields.clientSecret')}</Label>
+                  <Label htmlFor="oidc-client-secret">{'Client secret'}</Label>
                   <Input
                     id="oidc-client-secret"
                     type="password"
@@ -387,15 +499,23 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
                     }}
                     placeholder={
                       settings.clientSecretConfigured
-                        ? t('fields.clientSecretPlaceholderConfigured')
-                        : t('fields.clientSecretPlaceholderEmpty')
+                        ? 'Leave unchanged to keep the current secret'
+                        : 'Enter the client secret'
                     }
                     disabled={envOverrides?.clientSecret}
                   />
                   {envOverrides?.clientSecret ? (
-                    <p className="text-xs text-muted-foreground">{t('envPinnedNote')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {
+                        'Set via an environment variable on this install — edit it there, not here.'
+                      }
+                    </p>
                   ) : settings.clientSecretConfigured ? (
-                    <p className="text-xs text-muted-foreground">{t('fields.clientSecretConfiguredHelp')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {
+                        "A secret is already stored — these dots aren't the real value. Leave them as-is to keep it, type a new value to replace it, or clear the field and save to remove sign-in with this provider."
+                      }
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -403,11 +523,17 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
 
             <div className="space-y-4 rounded-xl border border-border/70 bg-background/40 p-4">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">{t('sections.advanced')}</p>
-                <p className="text-xs text-muted-foreground">{t('sections.advancedDescription')}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {'Advanced'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {
+                    'Scope and transport options — leave as-is unless your provider needs something different.'
+                  }
+                </p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="oidc-scope">{t('fields.scope')}</Label>
+                <Label htmlFor="oidc-scope">{'Scope'}</Label>
                 <Input
                   id="oidc-scope"
                   value={form.scope}
@@ -418,16 +544,28 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
                   disabled={envOverrides?.scope}
                 />
                 <p className="text-xs text-muted-foreground">
-                  {envOverrides?.scope ? t('envPinnedNote') : t('fields.scopeHelp')}
+                  {envOverrides?.scope
+                    ? 'Set via an environment variable on this install — edit it there, not here.'
+                    : 'Advanced. Leave as-is unless your provider needs something different.'}
                 </p>
               </div>
 
               <div className="flex items-start justify-between gap-4 rounded-md border border-border/60 p-3">
                 <div className="space-y-0.5">
-                  <Label htmlFor="oidc-allow-insecure-http">{t('fields.allowInsecureHttp')}</Label>
-                  <p className="text-xs text-muted-foreground">{t('fields.allowInsecureHttpHelp')}</p>
+                  <Label htmlFor="oidc-allow-insecure-http">
+                    {'Allow plain HTTP for this provider'}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {
+                      'Only for a self-hosted identity provider reachable solely over a private, HTTP-only address (e.g. behind a VPN). Never enable this for a provider reachable from the internet.'
+                    }
+                  </p>
                   {envOverrides?.allowInsecureHttp && (
-                    <p className="text-xs text-muted-foreground">{t('envPinnedNote')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {
+                        'Set via an environment variable on this install — edit it there, not here.'
+                      }
+                    </p>
                   )}
                 </div>
                 <Switch
@@ -439,53 +577,78 @@ export default function OidcSettings({ embedded = false }: { embedded?: boolean 
               </div>
             </div>
 
-            {formError && <p className="text-sm text-destructive">{formError}</p>}
+            {formError && (
+              <p className="text-sm text-destructive">{formError}</p>
+            )}
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <Button onClick={handleSave} disabled={saving || testing}>
-                {saving ? t('actions.saving') : t('actions.save')}
+                {saving ? 'Saving…' : 'Save'}
               </Button>
-              <Button variant="outline" onClick={handleTestConnection} disabled={saving || testing}>
-                {testing ? t('actions.testing') : t('actions.testConnection')}
+              <Button
+                variant="outline"
+                onClick={handleTestConnection}
+                disabled={saving || testing}
+              >
+                {testing ? 'Testing…' : 'Test Connection'}
               </Button>
             </div>
 
             {discoveryResult && (
               <div className="space-y-2.5 rounded-lg border border-primary/25 bg-primary/[0.03] p-4 text-sm">
-                <p className="font-medium text-foreground">{t('discoveryResult.title')}</p>
+                <p className="font-medium text-foreground">
+                  {'What the provider returned'}
+                </p>
                 <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
                   <div className="min-w-0 space-y-0.5">
-                    <dt className="text-xs text-muted-foreground">{t('discoveryResult.issuer')}</dt>
-                    <dd className="break-all font-mono text-xs">{discoveryResult.issuer}</dd>
-                  </div>
-                  <div className="min-w-0 space-y-0.5">
-                    <dt className="text-xs text-muted-foreground">{t('discoveryResult.authorizationEndpoint')}</dt>
+                    <dt className="text-xs text-muted-foreground">
+                      {'Issuer'}
+                    </dt>
                     <dd className="break-all font-mono text-xs">
-                      {discoveryResult.authorizationEndpoint || t('discoveryResult.notAvailable')}
+                      {discoveryResult.issuer}
                     </dd>
                   </div>
                   <div className="min-w-0 space-y-0.5">
-                    <dt className="text-xs text-muted-foreground">{t('discoveryResult.tokenEndpoint')}</dt>
+                    <dt className="text-xs text-muted-foreground">
+                      {'Authorization endpoint'}
+                    </dt>
                     <dd className="break-all font-mono text-xs">
-                      {discoveryResult.tokenEndpoint || t('discoveryResult.notAvailable')}
+                      {discoveryResult.authorizationEndpoint ||
+                        'Not advertised'}
                     </dd>
                   </div>
                   <div className="min-w-0 space-y-0.5">
-                    <dt className="text-xs text-muted-foreground">{t('discoveryResult.userinfoEndpoint')}</dt>
+                    <dt className="text-xs text-muted-foreground">
+                      {'Token endpoint'}
+                    </dt>
                     <dd className="break-all font-mono text-xs">
-                      {discoveryResult.userinfoEndpoint || t('discoveryResult.notAvailable')}
+                      {discoveryResult.tokenEndpoint || 'Not advertised'}
                     </dd>
                   </div>
                   <div className="min-w-0 space-y-0.5">
-                    <dt className="text-xs text-muted-foreground">{t('discoveryResult.jwksUri')}</dt>
-                    <dd className="break-all font-mono text-xs">{discoveryResult.jwksUri || t('discoveryResult.notAvailable')}</dd>
+                    <dt className="text-xs text-muted-foreground">
+                      {'Userinfo endpoint'}
+                    </dt>
+                    <dd className="break-all font-mono text-xs">
+                      {discoveryResult.userinfoEndpoint || 'Not advertised'}
+                    </dd>
                   </div>
                   <div className="min-w-0 space-y-0.5">
-                    <dt className="text-xs text-muted-foreground">{t('discoveryResult.scopesSupported')}</dt>
+                    <dt className="text-xs text-muted-foreground">
+                      {'JWKS URI'}
+                    </dt>
+                    <dd className="break-all font-mono text-xs">
+                      {discoveryResult.jwksUri || 'Not advertised'}
+                    </dd>
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <dt className="text-xs text-muted-foreground">
+                      {'Scopes advertised'}
+                    </dt>
                     <dd className="break-all font-mono text-xs">
                       {discoveryResult.scopesSupported.length > 0
                         ? discoveryResult.scopesSupported.join(', ')
-                        : t('discoveryResult.scopesNone')}
+                        : 'Not advertised'}
                     </dd>
                   </div>
                 </dl>

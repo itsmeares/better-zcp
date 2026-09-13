@@ -1,6 +1,5 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
 
 export interface ShortcutDef {
   key: string
@@ -10,31 +9,29 @@ export interface ShortcutDef {
   group: string
 }
 
-type TFn = (key: string) => string
-
-function buildNavShortcuts(t: TFn): ShortcutDef[] {
-  const group = t('groups.navigation')
+function buildNavShortcuts(): ShortcutDef[] {
+  const group = 'Navigation'
   return [
-    { key: '1', label: t('nav.dashboard'), path: '/', group },
-    { key: '2', label: t('nav.console'), path: '/console', group },
-    { key: '3', label: t('nav.players'), path: '/players', group },
-    { key: '4', label: t('nav.chat'), path: '/chat', group },
-    { key: '5', label: t('nav.events'), path: '/events', group },
-    { key: '6', label: t('nav.mods'), path: '/mods', group },
-    { key: '7', label: t('nav.backups'), path: '/backups', group },
-    { key: '8', label: t('nav.serverConfig'), path: '/server-config', group },
-    { key: '9', label: t('nav.settings'), path: '/settings', group },
+    { key: '1', label: 'Dashboard', path: '/', group },
+    { key: '2', label: 'Console', path: '/console', group },
+    { key: '3', label: 'Players', path: '/players', group },
+    { key: '4', label: 'Chat', path: '/chat', group },
+    { key: '5', label: 'Events', path: '/events', group },
+    { key: '6', label: 'Mods', path: '/mods', group },
+    { key: '7', label: 'Backups', path: '/backups', group },
+    { key: '8', label: 'Server Config', path: '/server-config', group },
+    { key: '9', label: 'Settings', path: '/settings', group },
   ]
 }
 
-function buildPageShortcuts(t: TFn): ShortcutDef[] {
-  const group = t('groups.pageActions')
+function buildPageShortcuts(): ShortcutDef[] {
+  const group = 'Page Actions'
   return [
-    { key: 'Ctrl+S', label: t('page.save'), group },
-    { key: 'Ctrl+K', label: t('page.focusSearch'), group },
-    { key: 'R', label: t('page.refreshDashboard'), group },
-    { key: '`', label: t('page.switchConsoleTab'), group },
-    { key: 'A', label: t('page.toggleAutoScroll'), group },
+    { key: 'Ctrl+S', label: 'Save', group },
+    { key: 'Ctrl+K', label: 'Focus search', group },
+    { key: 'R', label: 'Refresh (Dashboard)', group },
+    { key: '`', label: 'Switch console tab', group },
+    { key: 'A', label: 'Toggle auto-scroll (Console)', group },
   ]
 }
 
@@ -49,40 +46,47 @@ function isInputFocused(): boolean {
 
 export function useKeyboardShortcuts() {
   const navigate = useNavigate()
-  const { t } = useTranslation('keyboardShortcuts')
   const [helpOpen, setHelpOpen] = useState(false)
 
-  const navShortcuts = buildNavShortcuts(t)
+  const navShortcuts = buildNavShortcuts()
 
   const allShortcuts: ShortcutDef[] = [
     ...navShortcuts,
-    ...buildPageShortcuts(t),
-    { key: '?', label: t('showShortcuts'), action: () => setHelpOpen(true), group: t('groups.general') },
+    ...buildPageShortcuts(),
+    {
+      key: '?',
+      label: 'Show keyboard shortcuts',
+      action: () => setHelpOpen(true),
+      group: 'General',
+    },
   ]
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (isInputFocused()) return
-    if (e.ctrlKey || e.altKey || e.metaKey) return
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (isInputFocused()) return
+      if (e.ctrlKey || e.altKey || e.metaKey) return
 
-    const key = e.key
+      const key = e.key
 
-    if (key === '?') {
-      e.preventDefault()
-      setHelpOpen(prev => !prev)
-      return
-    }
+      if (key === '?') {
+        e.preventDefault()
+        setHelpOpen((prev) => !prev)
+        return
+      }
 
-    if (key === 'Escape') {
-      setHelpOpen(false)
-      return
-    }
+      if (key === 'Escape') {
+        setHelpOpen(false)
+        return
+      }
 
-    const shortcut = navShortcuts.find(s => s.key === key)
-    if (shortcut?.path) {
-      e.preventDefault()
-      void navigate({ to: shortcut.path as never })
-    }
-  }, [navigate, navShortcuts])
+      const shortcut = navShortcuts.find((s) => s.key === key)
+      if (shortcut?.path) {
+        e.preventDefault()
+        void navigate({ to: shortcut.path as never })
+      }
+    },
+    [navigate, navShortcuts],
+  )
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
@@ -95,7 +99,7 @@ export function useKeyboardShortcuts() {
 export function usePageShortcut(
   key: string,
   handler: () => void,
-  options: { ctrl?: boolean } = {}
+  options: { ctrl?: boolean } = {},
 ) {
   const stableHandler = useCallback(handler, [handler])
 

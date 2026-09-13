@@ -1,13 +1,16 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ShieldAlert, HelpCircle, X } from 'lucide-react'
 import { SocketContext } from '@/contexts/SocketContext'
 import { systemApi, type StorageHealth } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const POLL_INTERVAL_MS = 30_000
-const DISK_SOCKET_EVENTS = ['disk:warning', 'disk:critical', 'disk:normal'] as const
+const DISK_SOCKET_EVENTS = [
+  'disk:warning',
+  'disk:critical',
+  'disk:normal',
+] as const
 
 type Level = 'warning' | 'critical'
 
@@ -18,7 +21,7 @@ interface Banner {
   dismissible: boolean
 }
 
-function deriveBanner(health: StorageHealth | null, t: (key: string, opts?: Record<string, unknown>) => string): Banner | null {
+function deriveBanner(health: StorageHealth | null): Banner | null {
   if (!health) return null
   const { diskSpace, circuitBreaker } = health
   const save = diskSpace?.saveVolume
@@ -26,24 +29,24 @@ function deriveBanner(health: StorageHealth | null, t: (key: string, opts?: Reco
   if (circuitBreaker?.open) {
     return {
       level: 'critical',
-      title: t('writesBlockedTitle'),
-      message: t('writesBlockedMessage'),
+      title: 'Panel writes blocked',
+      message: 'Storage write failure',
       dismissible: false,
     }
   }
   if (save?.critical) {
     return {
       level: 'critical',
-      title: t('saveVolumeCriticalTitle'),
-      message: t('usedPercent', { percent: save.usedPercent }),
+      title: 'Save volume critical',
+      message: String(save.usedPercent) + '% used',
       dismissible: false,
     }
   }
   if (save?.warning) {
     return {
       level: 'warning',
-      title: t('saveVolumeWarningTitle'),
-      message: t('usedPercent', { percent: save.usedPercent }),
+      title: 'Save volume warning',
+      message: String(save.usedPercent) + '% used',
       dismissible: true,
     }
   }
@@ -51,25 +54,31 @@ function deriveBanner(health: StorageHealth | null, t: (key: string, opts?: Reco
 }
 
 export function SystemHealthBanner() {
-  const { t } = useTranslation('systemHealthBanner')
   const [health, setHealth] = useState<StorageHealth | null>(null)
   const [dismissed, setDismissed] = useState(false)
   const socket = useContext(SocketContext)
   const navigate = useNavigate()
 
   const refresh = useCallback(() => {
-    systemApi.getStorageHealth().then((next) => {
-      setHealth((prev) => {
-        if (!prev) return next
-        const saveVolume = next.diskSpace.saveVolume?.ok === false
-          ? prev.diskSpace.saveVolume
-          : next.diskSpace.saveVolume
-        const panelData = next.diskSpace.panelData.ok === false
-          ? prev.diskSpace.panelData
-          : next.diskSpace.panelData
-        return { ...next, diskSpace: { saveVolume, panelData } }
+    systemApi
+      .getStorageHealth()
+      .then((next) => {
+        setHealth((prev) => {
+          if (!prev) return next
+          const saveVolume =
+            next.diskSpace.saveVolume?.ok === false
+              ? prev.diskSpace.saveVolume
+              : next.diskSpace.saveVolume
+          const panelData =
+            next.diskSpace.panelData.ok === false
+              ? prev.diskSpace.panelData
+              : next.diskSpace.panelData
+          return { ...next, diskSpace: { saveVolume, panelData } }
+        })
       })
-    }).catch(() => { /* keep last-known state */ })
+      .catch(() => {
+        /* keep last-known state */
+      })
   }, [])
 
   useEffect(() => {
@@ -81,10 +90,12 @@ export function SystemHealthBanner() {
   useEffect(() => {
     if (!socket) return
     DISK_SOCKET_EVENTS.forEach((evt) => socket.on(evt, refresh))
-    return () => { DISK_SOCKET_EVENTS.forEach((evt) => socket.off(evt, refresh)) }
+    return () => {
+      DISK_SOCKET_EVENTS.forEach((evt) => socket.off(evt, refresh))
+    }
   }, [socket, refresh])
 
-  const banner = deriveBanner(health, t)
+  const banner = deriveBanner(health)
 
   useEffect(() => {
     if (!banner) setDismissed(false)
@@ -103,23 +114,28 @@ export function SystemHealthBanner() {
         'mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2',
         isCritical
           ? 'border-destructive/35 bg-destructive/[0.05]'
-          : 'border-warning/35 bg-warning/[0.04]'
+          : 'border-warning/35 bg-warning/[0.04]',
       )}
     >
       <Icon
-        className={cn('h-3.5 w-3.5 shrink-0', isCritical ? 'text-destructive' : 'text-warning')}
+        className={cn(
+          'h-3.5 w-3.5 shrink-0',
+          isCritical ? 'text-destructive' : 'text-warning',
+        )}
         aria-hidden="true"
       />
       <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-0.5">
         <span
           className={cn(
             'font-mono text-[10px] font-semibold uppercase tracking-[0.18em]',
-            isCritical ? 'text-destructive' : 'text-warning'
+            isCritical ? 'text-destructive' : 'text-warning',
           )}
         >
           {banner.title}
         </span>
-        <span className="min-w-0 text-xs text-muted-foreground">{banner.message}</span>
+        <span className="min-w-0 text-xs text-muted-foreground">
+          {banner.message}
+        </span>
       </div>
       <div className="ms-auto flex items-center gap-1">
         <button
@@ -128,15 +144,15 @@ export function SystemHealthBanner() {
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           <HelpCircle className="h-3 w-3" aria-hidden="true" />
-          {t('diagnostics')}
+          {'Diagnostics'}
         </button>
         {banner.dismissible && (
           <button
             type="button"
             onClick={() => setDismissed(true)}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
-            aria-label={t('dismissAria')}
-            title={t('dismiss')}
+            aria-label={'Dismiss storage warning'}
+            title={'Dismiss'}
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>

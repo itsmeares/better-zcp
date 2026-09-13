@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserErrorMessage } from '../lib/errorMessage'
 import { Button } from '../components/ui/button'
@@ -8,7 +7,20 @@ import { Label } from '../components/ui/label'
 import { Checkbox } from '../components/ui/checkbox'
 import { AuthScreenLayout } from '../components/AuthScreenLayout'
 import { HelpTip } from '../components/HelpTip'
-import { AlertTriangle, ArrowRight, CheckCircle, Eye, EyeOff, KeyRound, Loader2, RadioTower, Server, ShieldCheck, ShieldAlert, XCircle } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  RadioTower,
+  Server,
+  ShieldCheck,
+  ShieldAlert,
+  XCircle,
+} from 'lucide-react'
 
 type StrengthKey = 'tooShort' | 'weak' | 'fair' | 'good' | 'strong'
 
@@ -37,7 +49,6 @@ function scorePassword(pw: string): PasswordStrength {
 }
 
 export default function Setup() {
-  const { t } = useTranslation('setup')
   const { setup } = useAuth()
   const [username, setUsername] = useState('admin')
   const [setupToken, setSetupToken] = useState('')
@@ -58,7 +69,10 @@ export default function Setup() {
   const passwordLongEnough = password.length >= 6
   const usernameValid = /^[a-zA-Z0-9_-]{3,32}$/.test(username)
   const panelPortNumber = Number(panelPort)
-  const panelPortValid = Number.isInteger(panelPortNumber) && panelPortNumber >= 1024 && panelPortNumber <= 65535
+  const panelPortValid =
+    Number.isInteger(panelPortNumber) &&
+    panelPortNumber >= 1024 &&
+    panelPortNumber <= 65535
   const strength = useMemo(() => scorePassword(password), [password])
 
   const detectCaps = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -72,23 +86,25 @@ export default function Setup() {
     setError('')
 
     if (!setupToken.trim()) {
-      setError(t('errors.setupTokenRequired'))
+      setError(
+        "Enter the setup token printed to the panel's startup log or console output.",
+      )
       return
     }
     if (!usernameValid) {
-      setError(t('errors.invalidUsername'))
+      setError('Username must be 3-32 characters (letters, numbers, _ or -)')
       return
     }
     if (!passwordLongEnough) {
-      setError(t('errors.passwordTooShort'))
+      setError('Password must be at least 6 characters')
       return
     }
     if (!passwordsMatch) {
-      setError(t('errors.passwordsDontMatch'))
+      setError('Passwords do not match')
       return
     }
     if (!panelPortValid) {
-      setError(t('errors.invalidPort'))
+      setError('Panel port must be a whole number between 1024 and 65535')
       return
     }
 
@@ -99,8 +115,8 @@ export default function Setup() {
       const message = err instanceof Error ? err.message : ''
       setError(
         message === 'SETUP_TOKEN_REQUIRED'
-          ? t('errors.invalidSetupToken')
-          : getUserErrorMessage(err, t('errors.setupFailed')),
+          ? "Invalid or missing setup token. Check the panel's startup log or console output for the one-time token."
+          : getUserErrorMessage(err, 'Setup failed'),
       )
     } finally {
       setLoading(false)
@@ -109,35 +125,52 @@ export default function Setup() {
 
   return (
     <AuthScreenLayout
-      badge={t('badge')}
-      title={t('title')}
-      description={t('description')}
-      cardTitle={t('cardTitle')}
-      cardDescription={t('cardDescription')}
+      badge={'Initial Provisioning'}
+      title={'Zomboid Control Panel'}
+      description={
+        'Create the first admin account for this panel, then continue to the rest of setup.'
+      }
+      cardTitle={'Create Admin Account'}
+      cardDescription={
+        'This account unlocks the control panel and signs you in right away.'
+      }
       footer={
         <span className="inline-flex items-start gap-1.5 text-start">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning/80" aria-hidden="true" />
-          <span>{t('footer')}</span>
+          <AlertTriangle
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning/80"
+            aria-hidden="true"
+          />
+          <span>
+            {
+              'Store this password safely. There is no email recovery — resetting it later requires filesystem access to this server.'
+            }
+          </span>
         </span>
       }
     >
       <ol
         className="-mt-1 mb-1 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground"
-        aria-label={t('stepsAriaLabel')}
+        aria-label={'Setup progress'}
       >
         <li className="flex items-center gap-1.5">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-[10px] font-semibold text-primary">1</span>
-          <span className="text-foreground/80">{t('steps.account')}</span>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-[10px] font-semibold text-primary">
+            1
+          </span>
+          <span className="text-foreground/80">{'Account'}</span>
         </li>
         <span aria-hidden="true" className="h-px w-6 bg-border/60" />
         <li className="flex items-center gap-1.5 opacity-70">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground">2</span>
-          <span>{t('steps.server')}</span>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground">
+            2
+          </span>
+          <span>{'Server'}</span>
         </li>
         <span aria-hidden="true" className="h-px w-6 bg-border/60" />
         <li className="flex items-center gap-1.5 opacity-50">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground">3</span>
-          <span>{t('steps.online')}</span>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/60 bg-muted/20 text-[10px] font-semibold text-muted-foreground">
+            3
+          </span>
+          <span>{'Online'}</span>
         </li>
       </ol>
 
@@ -156,62 +189,85 @@ export default function Setup() {
 
         <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-3">
           <Label htmlFor="setupToken" className="flex items-center gap-1.5">
-            <ShieldAlert className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            {t('setupToken.label')}
+            <ShieldAlert
+              className="h-3.5 w-3.5 text-primary"
+              aria-hidden="true"
+            />
+            {'Setup Token'}
           </Label>
           <Input
             id="setupToken"
             type="text"
             value={setupToken}
             onChange={(e) => setSetupToken(e.target.value)}
-            placeholder={t('setupToken.placeholder')}
+            placeholder={'Paste the token from the startup log'}
             autoComplete="off"
             disabled={loading}
             aria-describedby="setup-token-hint"
             required
           />
-          <p id="setup-token-hint" className="text-xs leading-5 text-muted-foreground">
-            {t('setupToken.help')}
+          <p
+            id="setup-token-hint"
+            className="text-xs leading-5 text-muted-foreground"
+          >
+            {
+              "Printed to the panel's startup log or console output the first time it runs, to prove you're the one setting it up. Restart the panel to print it again if you've lost it."
+            }
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="username">{t('username.label')}</Label>
+          <Label htmlFor="username">{'Username'}</Label>
           <Input
             id="username"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder={t('username.placeholder')}
+            placeholder={'admin'}
             autoComplete="username"
             autoFocus
             maxLength={32}
             disabled={loading}
-            aria-describedby={[usernameHintId, errorId].filter(Boolean).join(' ')}
+            aria-describedby={[usernameHintId, errorId]
+              .filter(Boolean)
+              .join(' ')}
             aria-invalid={Boolean(error && !usernameValid)}
             required
           />
-          <div id={usernameHintId} className="flex items-center gap-1.5 text-xs leading-5">
+          <div
+            id={usernameHintId}
+            className="flex items-center gap-1.5 text-xs leading-5"
+          >
             {username.length === 0 ? (
               <span className="text-muted-foreground">
-                {t('username.hintEmpty')}
+                {
+                  'Use 3-32 characters: letters, numbers, underscores, or hyphens.'
+                }
               </span>
             ) : usernameValid ? (
               <>
-                <CheckCircle className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                <span className="text-primary">{t('username.hintValid')}</span>
+                <CheckCircle
+                  className="h-3.5 w-3.5 text-primary"
+                  aria-hidden="true"
+                />
+                <span className="text-primary">{'Looks good.'}</span>
               </>
             ) : (
               <>
-                <div className="h-3.5 w-3.5 rounded-full border border-destructive" aria-hidden="true" />
-                <span className="text-destructive">{t('username.hintInvalid')}</span>
+                <div
+                  className="h-3.5 w-3.5 rounded-full border border-destructive"
+                  aria-hidden="true"
+                />
+                <span className="text-destructive">
+                  {'3-32 chars; letters, numbers, _ or - only.'}
+                </span>
               </>
             )}
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="panelPort">{t('panelPort.label')}</Label>
+          <Label htmlFor="panelPort">{'Panel Port'}</Label>
           <Input
             id="panelPort"
             type="number"
@@ -225,17 +281,22 @@ export default function Setup() {
             required
           />
           <p className="text-xs leading-5 text-muted-foreground">
-            {t('panelPort.help')}
+            {
+              'Port used to open the panel. Default: 3001. If it is busy, the panel will choose and save a free port automatically.'
+            }
           </p>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">{t('password.label')}</Label>
+            <Label htmlFor="password">{'Password'}</Label>
             {capsLockOn && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-warning" role="status">
+              <span
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-warning"
+                role="status"
+              >
                 <KeyRound className="h-3 w-3" aria-hidden="true" />
-                {t('password.capsLockOn')}
+                {'Caps Lock is on'}
               </span>
             )}
           </div>
@@ -251,7 +312,9 @@ export default function Setup() {
               placeholder="••••••••"
               autoComplete="new-password"
               disabled={loading}
-              aria-describedby={[passwordHintId, errorId].filter(Boolean).join(' ')}
+              aria-describedby={[passwordHintId, errorId]
+                .filter(Boolean)
+                .join(' ')}
               aria-invalid={Boolean(error && !passwordLongEnough)}
               required
             />
@@ -259,11 +322,15 @@ export default function Setup() {
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              title={showPassword ? t('password.hidePassword') : t('password.showPassword')}
-              aria-label={showPassword ? t('password.hidePassword') : t('password.showPassword')}
+              title={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
               aria-pressed={showPassword}
             >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {showPassword ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
             </button>
           </div>
 
@@ -292,12 +359,24 @@ export default function Setup() {
             <div className="flex items-center justify-between text-xs leading-5">
               <span className="flex items-center gap-1.5">
                 {passwordLongEnough ? (
-                  <CheckCircle className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                  <CheckCircle
+                    className="h-3.5 w-3.5 text-primary"
+                    aria-hidden="true"
+                  />
                 ) : (
-                  <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground/30" aria-hidden="true" />
+                  <div
+                    className="h-3.5 w-3.5 rounded-full border border-muted-foreground/30"
+                    aria-hidden="true"
+                  />
                 )}
-                <span className={passwordLongEnough ? 'text-primary' : 'text-muted-foreground'}>
-                  {t('password.hint')}
+                <span
+                  className={
+                    passwordLongEnough
+                      ? 'text-primary'
+                      : 'text-muted-foreground'
+                  }
+                >
+                  {'Use at least 6 characters.'}
                 </span>
               </span>
               {strength.key && (
@@ -313,7 +392,15 @@ export default function Setup() {
                   }
                   aria-live="polite"
                 >
-                  {t(`password.strength.${strength.key}`)}
+                  {(
+                    {
+                      tooShort: 'Too short',
+                      weak: 'Weak',
+                      fair: 'Fair',
+                      good: 'Good',
+                      strong: 'Strong',
+                    } as Record<string, string>
+                  )[String(strength.key)] ?? String(strength.key)}
                 </span>
               )}
             </div>
@@ -321,7 +408,7 @@ export default function Setup() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="confirmPassword">{t('confirmPassword.label')}</Label>
+          <Label htmlFor="confirmPassword">{'Confirm Password'}</Label>
           <Input
             id="confirmPassword"
             type={showPassword ? 'text' : 'password'}
@@ -333,25 +420,41 @@ export default function Setup() {
             placeholder="••••••••"
             autoComplete="new-password"
             disabled={loading}
-            aria-describedby={[confirmHintId, errorId].filter(Boolean).join(' ')}
+            aria-describedby={[confirmHintId, errorId]
+              .filter(Boolean)
+              .join(' ')}
             aria-invalid={Boolean(confirmPassword && !passwordsMatch)}
             required
           />
           {confirmPassword && (
-            <div id={confirmHintId} className="flex items-center gap-1.5 text-xs leading-5">
+            <div
+              id={confirmHintId}
+              className="flex items-center gap-1.5 text-xs leading-5"
+            >
               {passwordsMatch ? (
-                <CheckCircle className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
+                <CheckCircle
+                  className="w-3.5 h-3.5 text-primary"
+                  aria-hidden="true"
+                />
               ) : (
-                <div className="h-3.5 w-3.5 rounded-full border border-destructive" aria-hidden="true" />
+                <div
+                  className="h-3.5 w-3.5 rounded-full border border-destructive"
+                  aria-hidden="true"
+                />
               )}
-              <span className={passwordsMatch ? 'text-primary' : 'text-destructive'}>
-                {passwordsMatch ? t('confirmPassword.match') : t('confirmPassword.noMatch')}
+              <span
+                className={passwordsMatch ? 'text-primary' : 'text-destructive'}
+              >
+                {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
               </span>
             </div>
           )}
           {!confirmPassword && (
-            <p id={confirmHintId} className="text-xs leading-5 text-muted-foreground">
-              {t('confirmPassword.hint')}
+            <p
+              id={confirmHintId}
+              className="text-xs leading-5 text-muted-foreground"
+            >
+              {'Type the same password again to confirm it.'}
             </p>
           )}
         </div>
@@ -362,25 +465,39 @@ export default function Setup() {
             checked={rememberMe}
             onCheckedChange={(checked) => setRememberMe(checked === true)}
           />
-          <Label htmlFor="rememberMe" className="flex cursor-pointer items-center gap-1.5 text-sm font-normal text-foreground/90">
-            {t('rememberMe')}
+          <Label
+            htmlFor="rememberMe"
+            className="flex cursor-pointer items-center gap-1.5 text-sm font-normal text-foreground/90"
+          >
+            {'Keep me signed in on this browser'}
           </Label>
-          <HelpTip label={t('rememberMe')}>{t('rememberMeHelp')}</HelpTip>
+          <HelpTip label={'Keep me signed in on this browser'}>
+            {
+              'Skips the login screen next time you open the panel in this browser. Leave this off on a shared or public computer — anyone who uses that browser afterward would be able to control this server without a password.'
+            }
+          </HelpTip>
         </div>
 
         <Button
           type="submit"
           className="w-full onboarding-cta"
-          disabled={loading || !setupToken.trim() || !usernameValid || !passwordLongEnough || !passwordsMatch || !panelPortValid}
+          disabled={
+            loading ||
+            !setupToken.trim() ||
+            !usernameValid ||
+            !passwordLongEnough ||
+            !passwordsMatch ||
+            !panelPortValid
+          }
         >
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {t('submitting')}
+              {'Creating admin account...'}
             </>
           ) : (
             <>
-              {t('submit')}
+              {'Create account & continue'}
               <ArrowRight className="ms-1 h-4 w-4" aria-hidden="true" />
             </>
           )}
@@ -390,10 +507,10 @@ export default function Setup() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <ArrowRight className="h-4 w-4 text-primary" aria-hidden="true" />
-              {t('afterThisStep.heading')}
+              {'After this step'}
             </div>
             <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              {t('afterThisStep.previewBadge')}
+              {'Preview'}
             </span>
           </div>
           <div className="mission-step-grid mt-3 space-y-2">
@@ -402,9 +519,13 @@ export default function Setup() {
                 <Server className="h-3.5 w-3.5" aria-hidden="true" />
               </div>
               <div className="min-w-0 pt-0.5">
-                <p className="text-[13px] font-medium leading-tight text-foreground">{t('afterThisStep.step1Title')}</p>
+                <p className="text-[13px] font-medium leading-tight text-foreground">
+                  {'Bring a server into the panel'}
+                </p>
                 <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                  {t('afterThisStep.step1Desc')}
+                  {
+                    'Add an existing install or run the guided setup to create one.'
+                  }
                 </p>
               </div>
             </div>
@@ -414,9 +535,13 @@ export default function Setup() {
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
               </div>
               <div className="min-w-0 pt-0.5">
-                <p className="text-[13px] font-medium leading-tight text-foreground">{t('afterThisStep.step2Title')}</p>
+                <p className="text-[13px] font-medium leading-tight text-foreground">
+                  {'Confirm RCON and paths'}
+                </p>
                 <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                  {t('afterThisStep.step2Desc')}
+                  {
+                    'The panel needs to authenticate against the server before it can do anything useful.'
+                  }
                 </p>
               </div>
             </div>
@@ -426,9 +551,13 @@ export default function Setup() {
                 <RadioTower className="h-3.5 w-3.5" aria-hidden="true" />
               </div>
               <div className="min-w-0 pt-0.5">
-                <p className="text-[13px] font-medium leading-tight text-foreground">{t('afterThisStep.step3Title')}</p>
+                <p className="text-[13px] font-medium leading-tight text-foreground">
+                  {'Take the dashboard live'}
+                </p>
                 <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                  {t('afterThisStep.step3Desc')}
+                  {
+                    'Verify status, players, backups, and quick admin actions from one screen.'
+                  }
                 </p>
               </div>
             </div>

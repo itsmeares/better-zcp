@@ -127,7 +127,7 @@ export default {
     type: "problem",
     docs: {
       description:
-        "Disallow showing a caught error's raw .message directly (via a ternary or a `|| fallback`) in a toast or error state; use getUserErrorMessage() so a registered error code's translation and recovery link aren't silently discarded",
+        "Disallow showing a caught error's raw .message directly (via a ternary or a `|| fallback`) in a toast or error state; use getUserErrorMessage() so server-error handling and recovery links stay consistent",
     },
     schema: [],
     messages: {

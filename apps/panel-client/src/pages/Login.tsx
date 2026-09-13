@@ -1,16 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
-import { Trans, useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
-import { rawErrorMessageIntentional, getUserErrorMessage } from '../lib/errorMessage'
+import {
+  rawErrorMessageIntentional,
+  getUserErrorMessage,
+} from '../lib/errorMessage'
 import { ApiError } from '../lib/api'
 import { Button, buttonVariants } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Checkbox } from '../components/ui/checkbox'
-import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { panelHealthQueryOptions } from '../lib/panelHealth'
-import { getOidcStatusWithFallback, getRecoveryStatusWithFallback } from '../lib/serverAuth'
+import {
+  getOidcStatusWithFallback,
+  getRecoveryStatusWithFallback,
+} from '../lib/serverAuth'
 import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound } from 'lucide-react'
 
 type PanelStatus = 'checking' | 'online' | 'unreachable'
@@ -32,13 +36,16 @@ function usePanelHealth() {
     refetchInterval: 15000,
   })
   return {
-    status: (isPending ? 'checking' : isError ? 'unreachable' : 'online') as PanelStatus,
+    status: (isPending
+      ? 'checking'
+      : isError
+        ? 'unreachable'
+        : 'online') as PanelStatus,
     version: data?.version ?? null,
   }
 }
 
 export default function Login() {
-  const { t } = useTranslation('login')
   const { login } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -47,7 +54,9 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const errorId = error ? 'login-error' : undefined
-  const [deviceFailedAttempts, setDeviceFailedAttempts] = useState(readDeviceFailureCount)
+  const [deviceFailedAttempts, setDeviceFailedAttempts] = useState(
+    readDeviceFailureCount,
+  )
 
   const [resetMode, setResetMode] = useState(false)
   const [resetAvailable, setResetAvailable] = useState(false)
@@ -65,7 +74,10 @@ export default function Login() {
 
   const { status, version } = usePanelHealth()
 
-  const [oidcStatus, setOidcStatus] = useState<{ configured: boolean; providerName: string } | null>(null)
+  const [oidcStatus, setOidcStatus] = useState<{
+    configured: boolean
+    providerName: string
+  } | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -73,7 +85,10 @@ export default function Login() {
       .then((d) =>
         setOidcStatus({
           configured: d?.configured === true,
-          providerName: typeof d?.providerName === 'string' && d.providerName ? d.providerName : 'SSO',
+          providerName:
+            typeof d?.providerName === 'string' && d.providerName
+              ? d.providerName
+              : 'SSO',
         }),
       )
       .catch(() => setOidcStatus({ configured: false, providerName: 'SSO' }))
@@ -84,11 +99,35 @@ export default function Login() {
     const params = new URLSearchParams(window.location.search)
     const oidcError = params.get('oidcError')
     if (!oidcError) return
-    setError(t(`errors.oidc.${oidcError}`, { defaultValue: t('errors.oidc.generic') }))
+    setError(
+      (
+        {
+          not_configured:
+            "Single sign-on isn't available right now. Sign in with your username and password.",
+          expired_flow: 'Your sign-in attempt expired. Try again.',
+          invalid_token:
+            "The identity provider's response couldn't be verified. Try again, or sign in with your username and password.",
+          session_failed:
+            'Something went wrong finishing sign-in. Try again, or sign in with your username and password.',
+          refused:
+            "That account isn't permitted to sign in this way. Sign in with your username and password, or contact your administrator.",
+          setup_required:
+            'No admin account exists yet. Complete first-run setup with a username and password, then link single sign-on from Settings.',
+          generic:
+            "Single sign-on couldn't be completed. Try again, or sign in with your username and password.",
+        } as Record<string, string>
+      )[String(oidcError)] ?? String(oidcError),
+    )
     params.delete('oidcError')
     const query = params.toString()
-    window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : '') + window.location.hash)
-  }, [t])
+    window.history.replaceState(
+      null,
+      '',
+      window.location.pathname +
+        (query ? `?${query}` : '') +
+        window.location.hash,
+    )
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -97,7 +136,10 @@ export default function Login() {
   }, [])
 
   const fetchResetStatus = async (signal?: AbortSignal) => {
-    const response = await fetch('/api/auth/reset-status', signal ? { signal } : undefined)
+    const response = await fetch(
+      '/api/auth/reset-status',
+      signal ? { signal } : undefined,
+    )
     const data = await response.json()
     const available = data.resetAvailable === true
     const localSupported = data.localResetSupported === true
@@ -108,13 +150,14 @@ export default function Login() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetchResetStatus(controller.signal)
-      .catch(() => {
-        setResetAvailable(false)
-        setLocalResetSupported(false)
-      })
+    fetchResetStatus(controller.signal).catch(() => {
+      setResetAvailable(false)
+      setLocalResetSupported(false)
+    })
     getRecoveryStatusWithFallback(controller.signal)
-      .then((d) => setRecoveryCodesAvailable(d?.recoveryCodesAvailable === true))
+      .then((d) =>
+        setRecoveryCodesAvailable(d?.recoveryCodesAvailable === true),
+      )
       .catch(() => setRecoveryCodesAvailable(false))
     return () => controller.abort()
   }, [])
@@ -126,12 +169,20 @@ export default function Login() {
     try {
       await login(username, password, rememberMe)
       setDeviceFailedAttempts(0)
-      try { localStorage.removeItem(LOGIN_DEVICE_FAILURE_KEY) } catch { /* ignore */ }
+      try {
+        localStorage.removeItem(LOGIN_DEVICE_FAILURE_KEY)
+      } catch {
+        /* ignore */
+      }
     } catch (err) {
-      setError(rawErrorMessageIntentional(err, t('errors.loginFailed')))
+      setError(rawErrorMessageIntentional(err, 'Login failed'))
       setDeviceFailedAttempts((prev) => {
         const next = prev + 1
-        try { localStorage.setItem(LOGIN_DEVICE_FAILURE_KEY, String(next)) } catch { /* ignore */ }
+        try {
+          localStorage.setItem(LOGIN_DEVICE_FAILURE_KEY, String(next))
+        } catch {
+          /* ignore */
+        }
         return next
       })
     } finally {
@@ -144,22 +195,24 @@ export default function Login() {
     setError('')
     setResetSuccess('')
     if (!resetToken || resetToken.trim().length < 8) {
-      setError(t('errors.resetTokenTooShort'))
+      setError('Reset token must be at least 8 characters')
       return
     }
     if (!newPassword || newPassword.length < 6) {
-      setError(t('errors.passwordTooShort'))
+      setError('Password must be at least 6 characters')
       return
     }
     if (newPassword !== confirmPassword) {
-      setError(t('errors.passwordsDontMatch'))
+      setError('Passwords do not match')
       return
     }
     setLoading(true)
     try {
       const useRecoveryCode = !resetAvailable && recoveryCodesAvailable
       const res = await fetch(
-        useRecoveryCode ? '/api/auth/recover-with-code' : '/api/auth/reset-password',
+        useRecoveryCode
+          ? '/api/auth/recover-with-code'
+          : '/api/auth/reset-password',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -171,7 +224,11 @@ export default function Login() {
         },
       )
       const data = await res.json()
-      if (!res.ok) throw new ApiError(data.error || t('errors.resetFailed'), { status: res.status, code: data.code })
+      if (!res.ok)
+        throw new ApiError(data.error || 'Reset failed', {
+          status: res.status,
+          code: data.code,
+        })
       setResetSuccess(data.message)
       setResetToken('')
       setNewPassword('')
@@ -184,7 +241,7 @@ export default function Login() {
       }, 3000)
       resetTimerRef.current = timer
     } catch (err) {
-      setError(getUserErrorMessage(err, t('errors.resetFailed')))
+      setError(getUserErrorMessage(err, 'Reset failed'))
     } finally {
       setLoading(false)
     }
@@ -213,9 +270,11 @@ export default function Login() {
         return
       }
 
-      setError(t('errors.noRecoveryTokenYet'))
+      setError(
+        'No recovery token found yet. Create data/reset-token.txt on the panel host, then try again.',
+      )
     } catch {
-      setError(t('errors.couldNotCheckStatus'))
+      setError('Could not check recovery status. Try again in a moment.')
     } finally {
       setCheckingResetStatus(false)
     }
@@ -228,26 +287,45 @@ export default function Login() {
     try {
       const res = await fetch('/api/auth/reset-token/local', { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) throw new ApiError(data.error || t('errors.couldNotCreateToken'), { status: res.status, code: data.code })
+      if (!res.ok)
+        throw new ApiError(data.error || 'Could not create a recovery token', {
+          status: res.status,
+          code: data.code,
+        })
 
       setResetAvailable(true)
       setLocalResetSupported(true)
       setResetToken('')
       setShowRecoveryHelp(false)
-      setResetSuccess(typeof data.message === 'string' ? data.message : t('resetTokenCreated'))
+      setResetSuccess(
+        typeof data.message === 'string'
+          ? data.message
+          : 'Recovery token created at data/reset-token.txt. Paste it below to continue.',
+      )
       setResetMode(true)
     } catch (err) {
       setShowRecoveryHelp(true)
-      setError(getUserErrorMessage(err, t('errors.couldNotCreateToken')))
+      setError(getUserErrorMessage(err, 'Could not create a recovery token'))
     } finally {
       setCreatingLocalReset(false)
     }
   }
 
-  const statusMap: Record<PanelStatus, { label: string; tone: string; dot: string }> = {
-    checking: { label: t('status.checking'), tone: 'text-muted-foreground', dot: 'bg-muted-foreground/60' },
-    online: { label: t('status.online'), tone: 'text-success', dot: 'bg-success' },
-    unreachable: { label: t('status.offline'), tone: 'text-destructive', dot: 'bg-destructive' },
+  const statusMap: Record<
+    PanelStatus,
+    { label: string; tone: string; dot: string }
+  > = {
+    checking: {
+      label: 'Checking',
+      tone: 'text-muted-foreground',
+      dot: 'bg-muted-foreground/60',
+    },
+    online: { label: 'Online', tone: 'text-success', dot: 'bg-success' },
+    unreachable: {
+      label: 'Offline',
+      tone: 'text-destructive',
+      dot: 'bg-destructive',
+    },
   }
   const s = statusMap[status]
 
@@ -257,7 +335,7 @@ export default function Login() {
         href="#login-form"
         className="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:text-primary-foreground"
       >
-        {t('skipToForm')}
+        {'Skip to form'}
       </a>
 
       <div
@@ -271,15 +349,22 @@ export default function Login() {
 
       <header className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 text-sm sm:px-8">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">{t('brand.title')}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{t('brand.subtitle')}</p>
+          <p className="text-sm font-medium text-foreground">
+            {'Project Zomboid Control Panel'}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {'Admin access'}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-          <LanguageSwitcher />
           <span className="flex items-center gap-2">
             <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
             <span className={s.tone}>{s.label}</span>
-            {version && <span className="hidden text-muted-foreground/70 sm:inline">v{version}</span>}
+            {version && (
+              <span className="hidden text-muted-foreground/70 sm:inline">
+                v{version}
+              </span>
+            )}
           </span>
         </div>
       </header>
@@ -291,13 +376,18 @@ export default function Login() {
         >
           <div className="mb-6 space-y-2">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              {resetMode ? t('recovery.eyebrow') : t('signIn.eyebrow')}
+              {resetMode ? 'Account recovery' : 'Secure sign in'}
             </p>
-            <h1 id="login-title" className="text-2xl font-semibold tracking-normal text-foreground">
-              {resetMode ? t('recovery.title') : t('signIn.title')}
+            <h1
+              id="login-title"
+              className="text-2xl font-semibold tracking-normal text-foreground"
+            >
+              {resetMode ? 'Reset your password' : 'Sign in'}
             </h1>
             <p className="text-sm leading-6 text-muted-foreground">
-              {resetMode ? t('recovery.description') : t('signIn.description')}
+              {resetMode
+                ? 'Use the recovery token from the panel host to choose a new admin password.'
+                : 'Use your admin account to manage this server.'}
             </p>
           </div>
 
@@ -323,15 +413,20 @@ export default function Login() {
               )}
 
               <div className="space-y-1.5">
-                <Label htmlFor="resetToken" className="text-sm font-medium text-foreground">
-                  {resetAvailable ? t('recovery.tokenLabel') : t('recovery.codeLabel')}
+                <Label
+                  htmlFor="resetToken"
+                  className="text-sm font-medium text-foreground"
+                >
+                  {resetAvailable ? 'Recovery token' : 'Recovery code'}
                 </Label>
                 <Input
                   id="resetToken"
                   type="text"
                   value={resetToken}
                   onChange={(e) => setResetToken(e.target.value)}
-                  placeholder={resetAvailable ? t('recovery.tokenPlaceholder') : t('recovery.codePlaceholder')}
+                  placeholder={
+                    resetAvailable ? 'Paste token' : 'XXXXX-XXXXX-XXXXX'
+                  }
                   autoFocus
                   disabled={loading}
                   required
@@ -340,13 +435,18 @@ export default function Login() {
                   className="text-sm"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {resetAvailable ? t('recovery.tokenHelp') : t('recovery.codeHelp')}
+                  {resetAvailable
+                    ? 'Stored at data/reset-token.txt on the panel host.'
+                    : 'One of the recovery codes you saved from Settings → Security. Each code works once.'}
                 </p>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="newPassword" className="text-sm font-medium text-foreground">
-                  {t('recovery.newPasswordLabel')}
+                <Label
+                  htmlFor="newPassword"
+                  className="text-sm font-medium text-foreground"
+                >
+                  {'New password'}
                 </Label>
                 <div className="relative">
                   <Input
@@ -354,7 +454,7 @@ export default function Login() {
                     type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder={t('recovery.newPasswordPlaceholder')}
+                    placeholder={'Minimum 6 characters'}
                     className="pe-10 text-sm"
                     disabled={loading}
                     required
@@ -365,25 +465,34 @@ export default function Login() {
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute inset-y-0 end-3 flex items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    title={showNewPassword ? t('signIn.hidePassword') : t('signIn.showPassword')}
-                    aria-label={showNewPassword ? t('signIn.hidePassword') : t('signIn.showPassword')}
+                    title={showNewPassword ? 'Hide password' : 'Show password'}
+                    aria-label={
+                      showNewPassword ? 'Hide password' : 'Show password'
+                    }
                     aria-pressed={showNewPassword}
                   >
-                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">
-                  {t('recovery.confirmPasswordLabel')}
+                <Label
+                  htmlFor="confirmPassword"
+                  className="text-sm font-medium text-foreground"
+                >
+                  {'Confirm password'}
                 </Label>
                 <Input
                   id="confirmPassword"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder={t('recovery.confirmPasswordPlaceholder')}
+                  placeholder={'Repeat new password'}
                   disabled={loading}
                   required
                   minLength={6}
@@ -393,17 +502,27 @@ export default function Login() {
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? (<><Loader2 className="h-4 w-4 animate-spin" /> {t('recovery.submitting')}</>) : t('recovery.submit')}
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> {'Resetting…'}
+                  </>
+                ) : (
+                  'Reset password'
+                )}
               </Button>
 
               <Button
                 type="button"
                 variant="ghost"
                 className="w-full text-muted-foreground hover:text-foreground"
-                onClick={() => { setResetMode(false); setError(''); setResetSuccess('') }}
+                onClick={() => {
+                  setResetMode(false)
+                  setError('')
+                  setResetSuccess('')
+                }}
               >
                 <ArrowLeft className="me-1.5 h-4 w-4" />
-                {t('recovery.back')}
+                {'Back to sign in'}
               </Button>
             </form>
           ) : (
@@ -412,186 +531,260 @@ export default function Login() {
                 <div className="mb-4 space-y-4">
                   <a
                     href="/api/auth/oidc/login"
-                    className={buttonVariants({ variant: 'outline' }) + ' w-full'}
+                    className={
+                      buttonVariants({ variant: 'outline' }) + ' w-full'
+                    }
                   >
-                    {t('sso.continueWith', { provider: oidcStatus.providerName })}
+                    {'Continue with ' + String(oidcStatus.providerName)}
                   </a>
                   <div className="relative text-center text-xs uppercase tracking-wide text-muted-foreground">
-                    <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60" aria-hidden="true" />
-                    <span className="relative bg-card/90 px-2">{t('sso.divider')}</span>
+                    <div
+                      className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60"
+                      aria-hidden="true"
+                    />
+                    <span className="relative bg-card/90 px-2">
+                      {'or sign in with a password'}
+                    </span>
                   </div>
                 </div>
               )}
-              <form id="login-form" onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div
-                  id="login-error"
-                  role="alert"
-                  aria-live="assertive"
-                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  {error}
-                </div>
-              )}
+              <form
+                id="login-form"
+                onSubmit={handleSubmit}
+                className="space-y-4"
+              >
+                {error && (
+                  <div
+                    id="login-error"
+                    role="alert"
+                    aria-live="assertive"
+                    className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  >
+                    {error}
+                  </div>
+                )}
 
-              {deviceFailedAttempts >= DEVICE_HINT_THRESHOLD && (
-                <div
-                  role="status"
-                  className="rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 text-xs leading-5 text-muted-foreground"
-                >
-                  <p className="font-medium text-foreground">{t('repeatedFailureHint.title')}</p>
-                  <p className="mt-1">
-                    <Trans
-                      t={t}
-                      i18nKey="repeatedFailureHint.body"
-                      components={{ code: <span className="font-mono text-foreground/85" /> }}
-                    />
-                  </p>
-                </div>
-              )}
+                {deviceFailedAttempts >= DEVICE_HINT_THRESHOLD && (
+                  <div
+                    role="status"
+                    className="rounded-md border border-border/70 bg-muted/20 px-3 py-2.5 text-xs leading-5 text-muted-foreground"
+                  >
+                    <p className="font-medium text-foreground">
+                      {'Still not working?'}
+                    </p>
+                    <p className="mt-1">
+                      <>
+                        {
+                          'After several failed attempts, an account locks automatically for 15 minutes as a security precaution -- this screen will not say so. A saved recovery code, or starting the panel with '
+                        }
+                        {'--reset-password'}
+                        {
+                          ' from the server terminal, can reset the password without waiting.'
+                        }
+                      </>
+                    </p>
+                  </div>
+                )}
 
-              <div className="space-y-1.5">
-                <Label htmlFor="username" className="text-sm font-medium text-foreground">
-                  {t('signIn.usernameLabel')}
-                </Label>
-                <Input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin"
-                  autoComplete="username"
-                  autoFocus
-                  maxLength={32}
-                  disabled={loading}
-                  aria-describedby={errorId}
-                  aria-invalid={error ? true : undefined}
-                  required
-                  className="text-sm"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-sm font-medium text-foreground">
-                  {t('signIn.passwordLabel')}
-                </Label>
-                <div className="relative">
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="username"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    {'Username'}
+                  </Label>
                   <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={t('signIn.passwordLabel')}
-                    autoComplete="current-password"
-                    className="pe-10 text-sm"
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="admin"
+                    autoComplete="username"
+                    autoFocus
+                    maxLength={32}
                     disabled={loading}
                     aria-describedby={errorId}
                     aria-invalid={error ? true : undefined}
                     required
-                    maxLength={128}
+                    className="text-sm"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 end-3 flex items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    title={showPassword ? t('signIn.hidePassword') : t('signIn.showPassword')}
-                    aria-label={showPassword ? t('signIn.hidePassword') : t('signIn.showPassword')}
-                    aria-pressed={showPassword}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 pt-0.5">
-                <Checkbox
-                  id="rememberMe"
-                  checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked === true)}
-                />
-                <Label htmlFor="rememberMe" className="cursor-pointer text-sm font-normal text-muted-foreground">
-                  {t('signIn.rememberMe')}
-                </Label>
-              </div>
-
-              <div className="space-y-2 pt-1">
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? (<><Loader2 className="h-4 w-4 animate-spin" /> {t('signIn.submitting')}</>) : t('signIn.submit')}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full text-muted-foreground hover:text-foreground"
-                  onClick={handleLostPassword}
-                  disabled={loading || checkingResetStatus || creatingLocalReset}
-                >
-                  {creatingLocalReset ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                  {creatingLocalReset
-                    ? t('lostPassword.creatingLocalReset')
-                    : (resetAvailable || recoveryCodesAvailable)
-                      ? t('lostPassword.useRecoveryToken')
-                      : localResetSupported
-                        ? t('lostPassword.createRecoveryFile')
-                        : t('lostPassword.recoverAccount')}
-                </Button>
-              </div>
-
-              {showRecoveryHelp && !resetAvailable && (
-                <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">{t('lostPassword.helpTitle')}</p>
-                  {localResetSupported ? (
-                    <p className="mt-2 leading-6">
-                      {t('lostPassword.helpLocal')}
-                    </p>
-                  ) : (
-                    <>
-                      <p className="mt-2 leading-6">
-                        {t('lostPassword.helpRemote1')}
-                      </p>
-                      <p className="mt-2 leading-6">
-                        <Trans
-                          t={t}
-                          i18nKey="lostPassword.helpRemote2"
-                          components={{ code: <span className="font-mono text-foreground/85" /> }}
-                        />
-                      </p>
-                    </>
-                  )}
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                    {localResetSupported ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="sm:flex-1"
-                        onClick={() => void handleCreateLocalReset()}
-                        disabled={creatingLocalReset || checkingResetStatus || loading}
-                      >
-                        {creatingLocalReset ? (<><Loader2 className="h-4 w-4 animate-spin" /> {t('lostPassword.creatingFile')}</>) : t('lostPassword.createFile')}
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="sm:flex-1"
-                        onClick={handleRecoveryCheck}
-                        disabled={checkingResetStatus || loading}
-                      >
-                        {checkingResetStatus ? (<><Loader2 className="h-4 w-4 animate-spin" /> {t('lostPassword.checkingToken')}</>) : t('lostPassword.checkToken')}
-                      </Button>
-                    )}
-                    <Button
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="password"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    {'Password'}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={'Password'}
+                      autoComplete="current-password"
+                      className="pe-10 text-sm"
+                      disabled={loading}
+                      aria-describedby={errorId}
+                      aria-invalid={error ? true : undefined}
+                      required
+                      maxLength={128}
+                    />
+                    <button
                       type="button"
-                      variant="ghost"
-                      className="sm:flex-1"
-                      onClick={() => { setShowRecoveryHelp(false); setError('') }}
-                      disabled={creatingLocalReset || checkingResetStatus || loading}
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 end-3 flex items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                      aria-label={
+                        showPassword ? 'Hide password' : 'Show password'
+                      }
+                      aria-pressed={showPassword}
                     >
-                      {t('lostPassword.cancel')}
-                    </Button>
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
                 </div>
-              )}
+
+                <div className="flex items-center gap-2 pt-0.5">
+                  <Checkbox
+                    id="rememberMe"
+                    checked={rememberMe}
+                    onCheckedChange={(checked) =>
+                      setRememberMe(checked === true)
+                    }
+                  />
+                  <Label
+                    htmlFor="rememberMe"
+                    className="cursor-pointer text-sm font-normal text-muted-foreground"
+                  >
+                    {'Keep me signed in'}
+                  </Label>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />{' '}
+                        {'Signing in…'}
+                      </>
+                    ) : (
+                      'Sign in'
+                    )}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-muted-foreground hover:text-foreground"
+                    onClick={handleLostPassword}
+                    disabled={
+                      loading || checkingResetStatus || creatingLocalReset
+                    }
+                  >
+                    {creatingLocalReset ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <KeyRound className="h-4 w-4" />
+                    )}
+                    {creatingLocalReset
+                      ? 'Preparing recovery…'
+                      : resetAvailable || recoveryCodesAvailable
+                        ? 'Use recovery token'
+                        : localResetSupported
+                          ? 'Create recovery file'
+                          : 'Recover account'}
+                  </Button>
+                </div>
+
+                {showRecoveryHelp && !resetAvailable && (
+                  <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">
+                      {'Account recovery'}
+                    </p>
+                    {localResetSupported ? (
+                      <p className="mt-2 leading-6">
+                        {
+                          'This browser is running on the panel host. Create a recovery file, then use its token to reset the admin password.'
+                        }
+                      </p>
+                    ) : (
+                      <>
+                        <p className="mt-2 leading-6">
+                          {
+                            'Create data/reset-token.txt on the panel host with any token at least 8 characters long.'
+                          }
+                        </p>
+                        <p className="mt-2 leading-6">
+                          <>
+                            {'You can also start the panel with '}
+                            {'--reset-password'}
+                            {' from the server terminal.'}
+                          </>
+                        </p>
+                      </>
+                    )}
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      {localResetSupported ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="sm:flex-1"
+                          onClick={() => void handleCreateLocalReset()}
+                          disabled={
+                            creatingLocalReset || checkingResetStatus || loading
+                          }
+                        >
+                          {creatingLocalReset ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />{' '}
+                              {'Preparing…'}
+                            </>
+                          ) : (
+                            'Create file'
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="sm:flex-1"
+                          onClick={handleRecoveryCheck}
+                          disabled={checkingResetStatus || loading}
+                        >
+                          {checkingResetStatus ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />{' '}
+                              {'Checking…'}
+                            </>
+                          ) : (
+                            'Check token'
+                          )}
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="sm:flex-1"
+                        onClick={() => {
+                          setShowRecoveryHelp(false)
+                          setError('')
+                        }}
+                        disabled={
+                          creatingLocalReset || checkingResetStatus || loading
+                        }
+                      >
+                        {'Cancel'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </form>
             </>
           )}

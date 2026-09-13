@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react'
-import { useTranslation } from 'react-i18next'
 import { ExternalLink } from 'lucide-react'
 import { copyText } from '@/lib/utils'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
-const workshopUrl = (wsId: string) => `https://steamcommunity.com/sharedfiles/filedetails/?id=${wsId}`
+const workshopUrl = (wsId: string) =>
+  `https://steamcommunity.com/sharedfiles/filedetails/?id=${wsId}`
 
 export function WorkshopIdChip({
   wsId,
@@ -15,7 +19,6 @@ export function WorkshopIdChip({
   onCopied?: (wsId: string) => void
   className?: string
 }) {
-  const { t } = useTranslation('modRow')
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -23,22 +26,35 @@ export function WorkshopIdChip({
           type="button"
           onClick={(e) => {
             e.stopPropagation()
-            copyText(wsId).then(() => onCopied?.(wsId)).catch(() => { /* clipboard blocked — ignore */ })
+            copyText(wsId)
+              .then(() => onCopied?.(wsId))
+              .catch(() => {
+                /* clipboard blocked — ignore */
+              })
           }}
           className={`inline-flex items-center gap-1 rounded border border-border/40 bg-muted/30 px-1.5 py-0.5 font-mono text-[10px] leading-none tabular-nums text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 ${className}`}
-          aria-label={t('copyWorkshopIdAria', { id: wsId })}
+          aria-label={'Copy workshop ID ' + String(wsId)}
         >
-          <span className="text-[9px] font-semibold uppercase tracking-wider opacity-70">WS</span>
+          <span className="text-[9px] font-semibold uppercase tracking-wider opacity-70">
+            WS
+          </span>
           <span>{wsId}</span>
         </button>
       </TooltipTrigger>
-      <TooltipContent>{t('copyWorkshopIdTooltip')}</TooltipContent>
+      <TooltipContent>{'Copy Workshop ID'}</TooltipContent>
     </Tooltip>
   )
 }
 
-export function WorkshopLinkAction({ wsId, label, hint }: { wsId: string; label: string; hint?: string }) {
-  const { t } = useTranslation('modRow')
+export function WorkshopLinkAction({
+  wsId,
+  label,
+  hint,
+}: {
+  wsId: string
+  label: string
+  hint?: string
+}) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -48,12 +64,12 @@ export function WorkshopLinkAction({ wsId, label, hint }: { wsId: string; label:
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className="inline-flex shrink-0 rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
-          aria-label={t('openWorkshopPageForAria', { label })}
+          aria-label={'Open workshop page for ' + String(label)}
         >
           <ExternalLink className="h-4 w-4" />
         </a>
       </TooltipTrigger>
-      <TooltipContent>{hint || t('openWorkshopPageHint')}</TooltipContent>
+      <TooltipContent>{hint || 'Open Workshop Page'}</TooltipContent>
     </Tooltip>
   )
 }
@@ -71,24 +87,29 @@ export function WorkshopThumb({
   fallbackIcon: ReactNode
   demo?: boolean
 }) {
-  const { t } = useTranslation('modRow')
   return (
     <a
       href={workshopUrl(wsId)}
       target="_blank"
       rel="noreferrer"
       className={`relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 ${tone}`}
-      aria-label={t('openOnSteamAria', { label })}
-      title={t('openWorkshopPageTitle')}
+      aria-label={'Open ' + String(label) + ' on Steam Workshop'}
+      title={'Open Steam Workshop page'}
     >
       {fallbackIcon}
       <img
-        src={demo ? `${import.meta.env.BASE_URL}spiffo.png` : `/api/mods/thumbnail/${wsId}`}
+        src={
+          demo
+            ? `${import.meta.env.BASE_URL}spiffo.png`
+            : `/api/mods/thumbnail/${wsId}`
+        }
         alt=""
         loading="lazy"
         decoding="async"
         className="absolute inset-0 h-full w-full rounded-md object-cover"
-        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+        onError={(e) => {
+          ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+        }}
       />
     </a>
   )
@@ -123,7 +144,9 @@ export function ModRow({
     <div
       onClick={onClick}
       className={`group/modrow perf-list-row motion-safe:transition-colors ${onClick ? 'cursor-pointer' : ''} ${
-        selected ? 'bg-primary/[0.055] shadow-[inset_2px_0_0_hsl(var(--primary)/0.55)]' : 'hover:bg-accent/40'
+        selected
+          ? 'bg-primary/[0.055] shadow-[inset_2px_0_0_hsl(var(--primary)/0.55)]'
+          : 'hover:bg-accent/40'
       } ${dimmed ? 'opacity-60' : ''} ${className}`}
     >
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:flex-nowrap sm:gap-3">
@@ -134,12 +157,18 @@ export function ModRow({
             {titleBadges}
           </div>
           {meta != null && (
-            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">{meta}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+              {meta}
+            </div>
           )}
         </div>
-        {actions != null && <div className="flex shrink-0 items-center gap-0.5">{actions}</div>}
+        {actions != null && (
+          <div className="flex shrink-0 items-center gap-0.5">{actions}</div>
+        )}
       </div>
-      {footer != null && <div className="space-y-1 px-3 pb-2 sm:ps-8">{footer}</div>}
+      {footer != null && (
+        <div className="space-y-1 px-3 pb-2 sm:ps-8">{footer}</div>
+      )}
     </div>
   )
 }

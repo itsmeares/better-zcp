@@ -1,5 +1,4 @@
 import { memo, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 export interface DashboardPerformancePoint {
@@ -68,8 +67,6 @@ function DashboardPerformanceCharts({
   serverRunning = true,
   maxMemoryGB,
 }: DashboardPerformanceChartsProps) {
-  const { t } = useTranslation('dashboardPerformanceCharts')
-
   const latest = performanceHistory[performanceHistory.length - 1]
 
   const pzMem = latest?.pzMemMB ?? latest?.memoryMB ?? 0
@@ -83,9 +80,16 @@ function DashboardPerformanceCharts({
 
   const pzMemoryGB = pzMem / 1024
   const pzRatio = maxMemoryGB != null ? pzMemoryGB / maxMemoryGB : null
-  const hostRatio = hostUsed != null && hostTotal != null ? hostUsed / hostTotal : null
-  const diskRatio = diskUsed != null && diskTotal != null && diskTotal > 0 ? diskUsed / diskTotal : null
-  const swapRatio = swapUsed != null && swapTotal != null && swapTotal > 0 ? swapUsed / swapTotal : null
+  const hostRatio =
+    hostUsed != null && hostTotal != null ? hostUsed / hostTotal : null
+  const diskRatio =
+    diskUsed != null && diskTotal != null && diskTotal > 0
+      ? diskUsed / diskTotal
+      : null
+  const swapRatio =
+    swapUsed != null && swapTotal != null && swapTotal > 0
+      ? swapUsed / swapTotal
+      : null
   const cpuAlert = cpu >= 90
   const hostRamAlert = hostRatio != null && hostRatio > 0.9
   const diskAlert = diskRatio != null && diskRatio >= 0.9
@@ -99,22 +103,25 @@ function DashboardPerformanceCharts({
       const pzDataKey = latest.pzMemMB != null ? 'pzMemMB' : 'memoryMB'
       m.push({
         key: 'pzMem',
-        label: t('pzMemory'),
-        value: maxMemoryGB != null
-          ? `${pzMemoryGB.toFixed(1)} / ${maxMemoryGB}`
-          : pzMem > 1024 ? pzMemoryGB.toFixed(1) : pzMem,
+        label: 'PZ memory',
+        value:
+          maxMemoryGB != null
+            ? `${pzMemoryGB.toFixed(1)} / ${maxMemoryGB}`
+            : pzMem > 1024
+              ? pzMemoryGB.toFixed(1)
+              : pzMem,
         unit: maxMemoryGB != null || pzMem > 1024 ? 'GB' : 'MB',
         dataKey: pzDataKey,
         tone: 'neutral',
         ratio: pzRatio,
       })
 
-      if (performanceHistory.some(point => point.playerCount > 0)) {
+      if (performanceHistory.some((point) => point.playerCount > 0)) {
         m.push({
           key: 'players',
-          label: t('players'),
+          label: 'Players',
           value: latest.playerCount,
-          unit: t('onlineUnit'),
+          unit: 'online',
           dataKey: 'playerCount',
           tone: latest.playerCount > 0 ? 'good' : 'neutral',
         })
@@ -123,7 +130,7 @@ function DashboardPerformanceCharts({
 
     m.push({
       key: 'cpu',
-      label: t('hostCpu'),
+      label: 'Host CPU',
       value: cpu,
       unit: '%',
       dataKey: 'cpuPercent',
@@ -135,7 +142,7 @@ function DashboardPerformanceCharts({
     if (hostUsed != null && hostTotal != null) {
       m.push({
         key: 'hostMem',
-        label: t('hostMemory'),
+        label: 'Host memory',
         value: `${hostUsed.toFixed(1)} / ${hostTotal}`,
         unit: 'GB',
         dataKey: 'hostMemUsedGB',
@@ -148,7 +155,7 @@ function DashboardPerformanceCharts({
     if (swapUsed != null && swapTotal != null) {
       m.push({
         key: 'swap',
-        label: t('hostSwap'),
+        label: 'Host swap',
         value: `${swapUsed.toFixed(1)} / ${swapTotal}`,
         unit: 'GB',
         dataKey: 'hostSwapUsedGB',
@@ -161,7 +168,7 @@ function DashboardPerformanceCharts({
     if (diskUsed != null && diskTotal != null) {
       m.push({
         key: 'disk',
-        label: t('disk'),
+        label: 'Disk',
         value: `${diskUsed.toFixed(0)} / ${diskTotal.toFixed(0)}`,
         unit: 'GB',
         dataKey: 'hostDiskUsedGB',
@@ -172,15 +179,38 @@ function DashboardPerformanceCharts({
     }
 
     return m
-  }, [t, performanceHistory, serverRunning, maxMemoryGB, latest, pzMem, pzMemoryGB, cpu, hostUsed, hostTotal, diskUsed, diskTotal, swapUsed, swapTotal, cpuAlert, hostRamAlert, diskAlert, swapAlert, pzRatio, hostRatio, diskRatio, swapRatio])
+  }, [
+    performanceHistory,
+    serverRunning,
+    maxMemoryGB,
+    latest,
+    pzMem,
+    pzMemoryGB,
+    cpu,
+    hostUsed,
+    hostTotal,
+    diskUsed,
+    diskTotal,
+    swapUsed,
+    swapTotal,
+    cpuAlert,
+    hostRamAlert,
+    diskAlert,
+    swapAlert,
+    pzRatio,
+    hostRatio,
+    diskRatio,
+    swapRatio,
+  ])
 
   if (!latest) return null
 
   return (
     <div className="divide-y divide-border/20">
-      {metrics.map(m => {
+      {metrics.map((m) => {
         const tone = m.tone ?? 'neutral'
-        const pct = m.ratio != null ? Math.min(100, Math.max(0, m.ratio * 100)) : null
+        const pct =
+          m.ratio != null ? Math.min(100, Math.max(0, m.ratio * 100)) : null
         return (
           <div
             key={m.key}
@@ -196,14 +226,22 @@ function DashboardPerformanceCharts({
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/35">
               {pct != null && (
                 <div
-                  className={cn('h-full rounded-full transition-[width] duration-700 ease-out', TONE_BAR[tone])}
+                  className={cn(
+                    'h-full rounded-full transition-[width] duration-700 ease-out',
+                    TONE_BAR[tone],
+                  )}
                   style={{ width: `${pct}%` }}
                 />
               )}
             </div>
 
             <div className="flex items-baseline justify-end gap-1 whitespace-nowrap">
-              <span className={cn('text-[15px] font-medium leading-none tabular-nums', TONE_VALUE[tone])}>
+              <span
+                className={cn(
+                  'text-[15px] font-medium leading-none tabular-nums',
+                  TONE_VALUE[tone],
+                )}
+              >
                 {m.value}
               </span>
               {m.unit && (
@@ -214,7 +252,11 @@ function DashboardPerformanceCharts({
             </div>
 
             <span className="text-end font-mono text-[11px] tabular-nums text-muted-foreground/50">
-              {m.key === 'pzMem' ? t('normal') : pct != null && m.unit !== '%' ? `${Math.round(pct)}%` : ''}
+              {m.key === 'pzMem'
+                ? 'normal'
+                : pct != null && m.unit !== '%'
+                  ? `${Math.round(pct)}%`
+                  : ''}
             </span>
           </div>
         )

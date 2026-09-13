@@ -1,11 +1,15 @@
 import type { ComponentType } from 'react'
-import { useTranslation } from 'react-i18next'
 import { FeatureErrorBoundary } from './components/FeatureErrorBoundary'
 
-export function FeatureRoute({ featureName, Component }: { featureName: string; Component: ComponentType }) {
-  const { t } = useTranslation('shell')
+export function FeatureRoute({
+  featureName,
+  Component,
+}: {
+  featureName: string
+  Component: ComponentType
+}) {
   return (
-    <FeatureErrorBoundary featureName={t(featureName)}>
+    <FeatureErrorBoundary featureName={featureName}>
       <Component />
     </FeatureErrorBoundary>
   )

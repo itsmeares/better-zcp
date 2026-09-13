@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -25,8 +24,11 @@ interface CreateTemplateDialogProps {
   onCreated: () => void
 }
 
-export function CreateTemplateDialog({ open, onClose, onCreated }: CreateTemplateDialogProps) {
-  const { t } = useTranslation('templateCreateDialog')
+export function CreateTemplateDialog({
+  open,
+  onClose,
+  onCreated,
+}: CreateTemplateDialogProps) {
   const { toast } = useToast()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -44,10 +46,12 @@ export function CreateTemplateDialog({ open, onClose, onCreated }: CreateTemplat
     setError(null)
     setLoading(true)
     Promise.all([serverFilesApi.getIni(), serverFilesApi.getSandbox()])
-      .then(([ini, sandbox]) => setCapture(buildTemplateCapture(ini.settings, sandbox.sandbox)))
-      .catch(() => setError(t('failedToReadConfig')))
+      .then(([ini, sandbox]) =>
+        setCapture(buildTemplateCapture(ini.settings, sandbox.sandbox)),
+      )
+      .catch(() => setError('Failed to read the current server configuration.'))
       .finally(() => setLoading(false))
-  }, [open, t])
+  }, [open])
 
   const handleSave = async () => {
     if (!capture || !name.trim()) return
@@ -57,15 +61,23 @@ export function CreateTemplateDialog({ open, onClose, onCreated }: CreateTemplat
       const result = await templatesApi.create({
         name: name.trim(),
         description: description.trim(),
-        tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+        tags: tags
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
         serverIni: capture.serverIni,
         sandboxVars: capture.sandboxVars,
       })
-      if (!result.success) throw new Error(result.error || t('failedToSave'))
-      toast({ title: t('toastSavedTitle'), description: t('toastSavedDesc', { name: name.trim() }), variant: 'success' as const })
+      if (!result.success)
+        throw new Error(result.error || 'Failed to save template')
+      toast({
+        title: 'Template Saved',
+        description: '"' + String(name.trim()) + '" is ready to reuse.',
+        variant: 'success' as const,
+      })
       onCreated()
     } catch (err) {
-      setError(getUserErrorMessage(err, t('failedToSave')))
+      setError(getUserErrorMessage(err, 'Failed to save template'))
     } finally {
       setSaving(false)
     }
@@ -75,8 +87,10 @@ export function CreateTemplateDialog({ open, onClose, onCreated }: CreateTemplat
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('title')}</DialogTitle>
-          <DialogDescription>{t('description')}</DialogDescription>
+          <DialogTitle>{'Save Current Config as Template'}</DialogTitle>
+          <DialogDescription>
+            {"Captures this server's current server.ini and sandbox settings."}
+          </DialogDescription>
         </DialogHeader>
 
         {loading ? (
@@ -86,28 +100,52 @@ export function CreateTemplateDialog({ open, onClose, onCreated }: CreateTemplat
         ) : (
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="template-name">{t('nameLabel')}</Label>
-              <Input id="template-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('namePlaceholder')} />
+              <Label htmlFor="template-name">{'Name'}</Label>
+              <Input
+                id="template-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={'My Ruleset'}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="template-description">{t('descriptionLabel')}</Label>
-              <Textarea id="template-description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+              <Label htmlFor="template-description">{'Description'}</Label>
+              <Textarea
+                id="template-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="template-tags">{t('tagsLabel')}</Label>
-              <Input id="template-tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder={t('tagsPlaceholder')} />
+              <Label htmlFor="template-tags">{'Tags (comma separated)'}</Label>
+              <Input
+                id="template-tags"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder={'hardcore, pvp'}
+              />
             </div>
             {capture && (
               <p className="text-xs text-muted-foreground">
-                {t('willSave', {
-                  sandbox: t('sandboxSettingCount', { count: capture.sandboxKeyCount }),
-                  ini: t('iniKeyCount', { count: capture.iniKeyCount }),
-                })}
+                {'Will save ' +
+                  String(
+                    Number(capture.sandboxKeyCount) === 1
+                      ? String(capture.sandboxKeyCount) + ' sandbox setting'
+                      : String(capture.sandboxKeyCount) + ' sandbox settings',
+                  ) +
+                  ' and ' +
+                  String(
+                    Number(capture.iniKeyCount) === 1
+                      ? String(capture.iniKeyCount) + ' server.ini key'
+                      : String(capture.iniKeyCount) + ' server.ini keys',
+                  ) +
+                  '. Identity and connection settings (name, ports, passwords) are never included.'}
               </p>
             )}
             {error && (
               <Alert variant="destructive">
-                <AlertTitle>{t('errorTitle')}</AlertTitle>
+                <AlertTitle>{"Couldn't save template"}</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
@@ -115,10 +153,15 @@ export function CreateTemplateDialog({ open, onClose, onCreated }: CreateTemplat
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>{t('cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving || loading || !name.trim() || !capture}>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            {'Cancel'}
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || loading || !name.trim() || !capture}
+          >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {t('saveTemplate')}
+            {'Save Template'}
           </Button>
         </DialogFooter>
       </DialogContent>

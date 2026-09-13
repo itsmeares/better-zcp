@@ -71,7 +71,7 @@ jobs:
         run: node scripts/check-engine-signatures.mjs
 
   scripts-checkers:
-    name: Scripts checkers (bridge actions/routes, RCON commands, i18n duplicates)
+    name: Scripts checkers (bridge actions/routes and RCON commands)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -88,9 +88,6 @@ jobs:
 
       - name: RCON commands (panel-side denominator only)
         run: node scripts/audit-rcon-commands.mjs .
-
-      - name: i18n French duplicate-value check (against the reviewed baseline)
-        run: node scripts/i18n-check.mjs --all
 
   client:
     name: Client (lint + types + tests)

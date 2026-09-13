@@ -1,8 +1,0 @@
-{
-  "copyWorkshopIdAria": "Copier l'ID Workshop {{id}}",
-  "copyWorkshopIdTooltip": "Copier l'ID Workshop",
-  "openWorkshopPageForAria": "Ouvrir la page Workshop pour {{label}}",
-  "openWorkshopPageHint": "Ouvrir la page Workshop",
-  "openOnSteamAria": "Ouvrir {{label}} sur Steam Workshop",
-  "openWorkshopPageTitle": "Ouvrir la page Steam Workshop"
-}
