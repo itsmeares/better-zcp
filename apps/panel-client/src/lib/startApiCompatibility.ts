@@ -35,7 +35,6 @@ type RouteSource =
   | 'integrations'
   | 'admin'
   | 'auth'
-  | 'permissions'
   | 'resources'
   | 'resourceActions'
   | 'mods'
@@ -88,7 +87,6 @@ const implementations: Record<
   integrations: () => import('./serverIntegrations.server'),
   admin: () => import('./serverAdmin.server'),
   auth: () => import('./serverAuth.server'),
-  permissions: () => import('./serverPermissions.server'),
   resources: () => import('./serverResourceReads.server'),
   resourceActions: () => import('./serverResourceActions.server'),
   mods: () => import('./serverMods.server'),
@@ -1838,51 +1836,6 @@ const routes: RouteSpec[] = [
 
   {
     method: 'GET',
-    pattern: '/api/permissions/capabilities',
-    source: 'permissions',
-    functionName: 'getCapabilities',
-    capability: 'roles.manage',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/permissions/roles',
-    source: 'permissions',
-    functionName: 'getRoles',
-    capability: 'roles.manage',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/permissions/roles',
-    source: 'admin',
-    functionName: 'createManagedRole',
-    capability: 'roles.manage',
-    status: 201,
-  },
-  {
-    method: 'PUT',
-    pattern: '/api/permissions/roles/:id',
-    source: 'admin',
-    functionName: 'updateManagedRole',
-    capability: 'roles.manage',
-    data: mergeBody,
-  },
-  {
-    method: 'DELETE',
-    pattern: '/api/permissions/roles/:id',
-    source: 'admin',
-    functionName: 'deleteManagedRole',
-    capability: 'roles.manage',
-    data: (query, body, params) => ({
-      ...body,
-      ...params,
-      ...(query.has('reassignTo')
-        ? { reassignTo: query.get('reassignTo') }
-        : {}),
-    }),
-  },
-
-  {
-    method: 'GET',
     pattern: '/api/templates/hidden',
     source: 'resources',
     functionName: 'getHiddenTemplates',
@@ -2487,13 +2440,6 @@ const routes: RouteSpec[] = [
     public: true,
   },
   {
-    method: 'POST',
-    pattern: '/api/auth/recover-with-code',
-    source: 'auth',
-    functionName: 'recoverWithCode',
-    public: true,
-  },
-  {
     method: 'GET',
     pattern: '/api/auth/me',
     source: 'auth',
@@ -2507,110 +2453,11 @@ const routes: RouteSpec[] = [
     data: mergeBody,
   },
   {
-    method: 'GET',
-    pattern: '/api/auth/users',
-    source: 'admin',
-    functionName: 'getManagedUsers',
-    capability: 'users.manage',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/auth/users',
-    source: 'admin',
-    functionName: 'createManagedUser',
-    capability: 'users.manage',
-    status: 201,
-  },
-  {
-    method: 'PATCH',
-    pattern: '/api/auth/users/:id/role',
-    source: 'admin',
-    functionName: 'assignManagedUserRole',
-    capability: 'users.manage',
-    data: (_query, body, params) => ({
-      ...body,
-      userId: params.id,
-    }),
-  },
-  {
-    method: 'DELETE',
-    pattern: '/api/auth/users/:id',
-    source: 'admin',
-    functionName: 'removeManagedUser',
-    capability: 'users.manage',
-    data: mergeBody,
-  },
-  {
     method: 'POST',
     pattern: '/api/auth/regenerate-jwt-secret',
     source: 'admin',
     functionName: 'regenerateJwtSecret',
     role: 'admin',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/auth/recovery-codes',
-    source: 'admin',
-    functionName: 'getRecoveryCodes',
-    role: 'admin',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/auth/recovery-codes',
-    source: 'admin',
-    functionName: 'generateRecoveryCodes',
-    role: 'admin',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/auth/recovery-status',
-    source: 'auth',
-    functionName: 'getRecoveryStatus',
-    public: true,
-  },
-  {
-    method: 'GET',
-    pattern: '/api/auth/oidc/status',
-    source: 'auth',
-    functionName: 'getOidcStatus',
-    public: true,
-  },
-  {
-    method: 'GET',
-    pattern: '/api/auth/oidc/login',
-    source: 'http',
-    functionName: 'oidcLogin',
-    public: true,
-  },
-  {
-    method: 'GET',
-    pattern: '/api/auth/oidc/callback',
-    source: 'http',
-    functionName: 'oidcCallback',
-    public: true,
-  },
-  {
-    method: 'GET',
-    pattern: '/api/auth/oidc/settings',
-    source: 'admin',
-    functionName: 'getOidcSettings',
-    capability: 'panel.settings',
-  },
-  {
-    method: 'PUT',
-    pattern: '/api/auth/oidc/settings',
-    source: 'admin',
-    functionName: 'updateOidcSettings',
-    capability: 'panel.settings',
-    data: mergeBody,
-  },
-  {
-    method: 'POST',
-    pattern: '/api/auth/oidc/test-connection',
-    source: 'admin',
-    functionName: 'testOidcConnection',
-    capability: 'panel.settings',
-    data: mergeBody,
   },
 ]
 

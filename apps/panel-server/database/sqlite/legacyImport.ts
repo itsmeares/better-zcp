@@ -37,7 +37,6 @@ const SECRET_SETTING_FILES = {
   steamSessionId: "steamSessionId.secret",
   steamLoginSecure: "steamLoginSecure.secret",
   discordBotToken: "discordBotToken.secret",
-  oidcClientSecret: "oidcClientSecret.secret",
 };
 
 const SECRET_SETTINGS_REQUIRING_MANUAL_REENTRY = new Set(["steamApiKey"]);

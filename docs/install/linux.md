@@ -376,9 +376,8 @@ a remote visitor as local.
 If you get locked out while running behind a reverse proxy, you still have
 two options that don't depend on how the request reached the panel:
 
-- **Recovery codes** — single-use codes you generate in advance from an
-  already-logged-in admin session (**Settings > Security**, recovery section).
-  Generate these *before* you need them.
+- **A reset token file** — create `data/reset-token.txt` on the host with a
+  private value of at least 8 characters, then paste it into the login page.
 - **The `--reset-password` CLI flag**, run directly on the server:
   ```bash
   sudo systemctl stop zomboid-panel
@@ -389,9 +388,8 @@ two options that don't depend on how the request reached the panel:
   Stopping the service first avoids two processes touching the panel's
   database at the same time.
 
-**You know it's set up right when:** you can see, before you ever get locked
-out, that **Settings > Security** shows recovery codes already generated and
-saved somewhere safe.
+**You know it's set up right when:** the admin can sign in and the
+`--reset-password` command can read the configured account.
 
 ---
 

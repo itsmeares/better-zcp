@@ -175,7 +175,7 @@ describe("authService.regenerateJwtSecret()", () => {
   });
 });
 
-describe("POST /api/auth/regenerate-jwt-secret — admin-only route gate", () => {
+describe("POST /api/auth/regenerate-jwt-secret", () => {
   beforeEach(async () => {
     settings.clear();
     db.data.users = [];
@@ -189,28 +189,13 @@ describe("POST /api/auth/regenerate-jwt-secret — admin-only route gate", () =>
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("refuses a technician", async () => {
-    const req = { user: { role: "technician" } };
-    const res = createResponse();
-    await runRoute("/regenerate-jwt-secret", "post", req, res);
-    expect(res.status).toHaveBeenCalledWith(403);
-  });
-
-  it("refuses a moderator", async () => {
-    const req = { user: { role: "moderator" } };
-    const res = createResponse();
-    await runRoute("/regenerate-jwt-secret", "post", req, res);
-    expect(res.status).toHaveBeenCalledWith(403);
-  });
-
-  it("admits an admin, invalidates the caller's own refresh cookie, and reports success", async () => {
+  it("invalidates the caller's own refresh cookie and reports success", async () => {
     const oldSecret = authService.jwtSecret;
     const req = { user: { role: "admin", username: "boss" }, headers: {} };
     const res = createResponse();
 
     await runRoute("/regenerate-jwt-secret", "post", req, res);
 
-    expect(res.status).not.toHaveBeenCalledWith(403);
     expect(res.clearCookie).toHaveBeenCalledWith(
       "refreshToken",
       expect.any(Object),

@@ -9,7 +9,6 @@ vi.mock("../services/auth.ts", () => ({
     authenticateAccessToken,
     changePassword,
   },
-  USER_ROLES: ["admin", "technician", "moderator"],
   requireRole: () => (req, res, next) => next(),
 }));
 

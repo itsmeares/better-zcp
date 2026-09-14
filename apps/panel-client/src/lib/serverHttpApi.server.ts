@@ -13,7 +13,6 @@ import {
 import { confineToRoots } from '../../../panel-server/utils/browseRoots.ts'
 import { ErrorCode } from '../../../panel-server/utils/errorCodes.ts'
 import { sanitizeErrorParams } from '../../../panel-server/utils/sanitize.ts'
-import { getRefreshCookieOptions } from '../../../panel-server/utils/refreshCookie.ts'
 
 type AnyRecord = Record<string, any>
 type HandlerContext = {
@@ -33,37 +32,6 @@ function fail(message: string, status = 500, code?: string, extra?: AnyRecord): 
     ...(code ? { code } : {}),
     ...(extra || {}),
   })
-}
-
-function cookieValue(
-  name: string,
-  value: unknown,
-  options: {
-    maxAge?: unknown
-    path?: unknown
-    httpOnly?: unknown
-    secure?: unknown
-    sameSite?: unknown
-  },
-): string {
-  const parts = [`${encodeURIComponent(name)}=${encodeURIComponent(String(value ?? ''))}`]
-  if (typeof options.maxAge === 'number') parts.push(`Max-Age=${Math.max(0, Math.floor(options.maxAge / 1000))}`)
-  if (typeof options.path === 'string') parts.push(`Path=${options.path}`)
-  if (options.httpOnly) parts.push('HttpOnly')
-  if (options.secure) parts.push('Secure')
-  if (options.sameSite) parts.push(`SameSite=${String(options.sameSite).replace(/^./, (c) => c.toUpperCase())}`)
-  return parts.join('; ')
-}
-
-function requestIsSecure(request: Request): boolean {
-  return new URL(request.url).protocol === 'https:' ||
-    request.headers.get('x-forwarded-proto') === 'https'
-}
-
-function redirect(location: string, cookies: string[] = []): Response {
-  const headers = new Headers({ Location: location })
-  for (const cookie of cookies) headers.append('Set-Cookie', cookie)
-  return new Response(null, { status: 302, headers })
 }
 
 export async function downloadBackup(data: AnyRecord): Promise<Response> {
@@ -196,55 +164,6 @@ export async function browseServerFolder(data: AnyRecord): Promise<Response | An
       else resolve({ success: false, path: null, cancelled: true })
     })
   })
-}
-
-export async function oidcLogin(_data: AnyRecord, context: HandlerContext): Promise<Response> {
-  const request = context.request
-  if (!request) fail('Request unavailable')
-  const { getOidcSettings, isOidcConfigured, buildOidcAuthorizationRequest } = await import('../../../panel-server/services/oidc.ts')
-  const settings = await getOidcSettings()
-  if (!isOidcConfigured(settings)) fail('OIDC is not configured', 404)
-  try {
-    const flow = await buildOidcAuthorizationRequest()
-    const options = { httpOnly: true, secure: requestIsSecure(request), sameSite: 'lax', path: '/api/auth/oidc', maxAge: 10 * 60 * 1000 }
-    return redirect(flow.authorizationUrl, [cookieValue('oidcFlow', JSON.stringify({ state: flow.state, nonce: flow.nonce, codeVerifier: flow.codeVerifier }), options)])
-  } catch {
-    fail('Could not reach the identity provider. Try local sign-in, or contact your administrator.', 502)
-  }
-}
-
-function requestCookie(request: Request, name: string): string | null {
-  const row = request.headers.get('cookie')?.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))
-  if (!row) return null
-  try { return decodeURIComponent(row.slice(name.length + 1)) } catch { return row.slice(name.length + 1) }
-}
-
-export async function oidcCallback(_data: AnyRecord, context: HandlerContext): Promise<Response> {
-  const request = context.request
-  if (!request) fail('Request unavailable')
-  const { getOidcSettings, isOidcConfigured, handleOidcCallback } = await import('../../../panel-server/services/oidc.ts')
-  const authService = (await import('../../../panel-server/services/auth.ts')).default
-  const settings = await getOidcSettings()
-  const clearOptions = { httpOnly: true, secure: requestIsSecure(request), sameSite: 'lax', path: '/api/auth/oidc', maxAge: 0 }
-  const clearCookie = cookieValue('oidcFlow', '', clearOptions)
-  if (!isOidcConfigured(settings)) return redirect('/?oidcError=not_configured', [clearCookie])
-  let flow: AnyRecord | null = null
-  try { flow = JSON.parse(requestCookie(request, 'oidcFlow') || 'null') } catch { flow = null }
-  if (!flow) return redirect('/?oidcError=expired_flow', [clearCookie])
-  try {
-    const currentUrl = new URL(settings.redirectUri)
-    currentUrl.search = new URL(request.url).search
-    const claims = await handleOidcCallback(currentUrl, flow as {
-      state: string
-      nonce: string
-      codeVerifier: string
-    })
-    const result = await authService.loginWithExternalIdentity({ issuer: claims.iss, subject: claims.sub, email: typeof claims.email === 'string' ? claims.email : undefined }, true)
-    if (!result.linked) return redirect(result.canBootstrapAdmin ? '/?oidcError=setup_required' : '/?oidcError=refused', [clearCookie])
-    return redirect('/', [clearCookie, cookieValue('refreshToken', result.refreshToken, getRefreshCookieOptions({ secure: requestIsSecure(request), headers: { 'x-forwarded-proto': request.headers.get('x-forwarded-proto') || undefined } }))])
-  } catch {
-    return redirect('/?oidcError=invalid_token', [clearCookie])
-  }
 }
 
 export async function getActiveServerStatus(): Promise<AnyRecord> {

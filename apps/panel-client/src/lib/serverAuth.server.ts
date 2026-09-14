@@ -18,15 +18,6 @@ export type AuthStatus = {
   authEnabled: boolean
 }
 
-export type OidcStatus = {
-  configured: boolean
-  providerName: string
-}
-
-export type RecoveryStatus = {
-  recoveryCodesAvailable: boolean
-}
-
 export type CurrentUser = {
   user: {
     id: string
@@ -416,7 +407,7 @@ const setupImplementation = createServerOnlyFn(async (data: unknown) => {
     const { setSetting } =
       await import('../../../panel-server/database/init.ts')
     await setSetting('panelPort', body.panelPort)
-    await authService.createUser(body.username, body.password)
+    await authService.createAdmin(body.username, body.password)
     await clearSetupToken()
     const result = await authService.login(
       body.username,
@@ -559,7 +550,7 @@ const createLocalResetTokenImplementation = createServerOnlyFn(async () => {
   if (!isLocalPanelRequest(request)) {
     if (isPanelBehindTrustProxy(request)) {
       throwAuthError(
-        "This panel is running behind a reverse proxy, so it can't verify a request came from the server itself. Create data/reset-token.txt on the host directly, or use a recovery code instead.",
+        "This panel is running behind a reverse proxy, so it can't verify a request came from the server itself. Create data/reset-token.txt on the host directly.",
         403,
         'LOCAL_RESET_BEHIND_PROXY',
       )
@@ -657,80 +648,6 @@ export const resetPassword = createServerFn({ method: 'POST' })
   .validator((data: unknown) => data ?? {})
   .handler(({ data }) => resetPasswordImplementation(data))
 ;(resetPassword as any).__executeImplementation = resetPasswordImplementation
-
-const recoverWithCodeImplementation = createServerOnlyFn(
-  async (data: unknown) => {
-    enforceAuthRateLimit(
-      'reset',
-      3,
-      15 * 60 * 1000,
-      'Too many reset attempts. Please try again later.',
-      'RATE_LIMIT_RESET',
-    )
-    const body = record(data)
-    if (
-      typeof body.code !== 'string' ||
-      !body.code ||
-      typeof body.newPassword !== 'string' ||
-      !body.newPassword
-    ) {
-      throwAuthError(
-        'A recovery code and a new password are required',
-        400,
-        'RECOVERY_CODE_FIELDS_REQUIRED',
-      )
-    }
-    const authService = await getAuthService()
-    try {
-      const result = await authService.redeemRecoveryCode(
-        body.code,
-        body.newPassword,
-      )
-      return {
-        success: true,
-        message: `Password reset for ${result.username}`,
-        remaining: result.remaining,
-      }
-    } catch (error) {
-      throwAuthError(errorMessage(error), 403)
-    }
-  },
-)
-
-export const recoverWithCode = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data }) => recoverWithCodeImplementation(data))
-;(recoverWithCode as any).__executeImplementation =
-  recoverWithCodeImplementation
-
-async function getOidcStatusImplementation() {
-  const { getOidcSettings, isOidcConfigured } =
-    await import('../../../panel-server/services/oidc.ts')
-  const settings = await getOidcSettings()
-
-  return {
-    configured: isOidcConfigured(settings),
-    providerName: settings.providerName,
-  }
-}
-
-export const getOidcStatus = createServerFn({ method: 'GET' }).handler(
-  getOidcStatusImplementation,
-)
-;(getOidcStatus as any).__executeImplementation = getOidcStatusImplementation
-
-async function getRecoveryStatusImplementation() {
-  const authService = await getAuthService()
-  const status = await authService.getRecoveryCodeStatus()
-
-  return { recoveryCodesAvailable: status.remaining > 0 }
-}
-
-export const getRecoveryStatus = createServerFn({ method: 'GET' }).handler(
-  getRecoveryStatusImplementation,
-)
-;(getRecoveryStatus as any).__executeImplementation =
-  getRecoveryStatusImplementation
 
 async function getCurrentUserImplementation(context: unknown) {
   const user = (context as { authenticatedUser: AuthContextUser })

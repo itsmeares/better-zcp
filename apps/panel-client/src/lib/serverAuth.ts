@@ -10,15 +10,6 @@ export type AuthStatus = {
   authEnabled: boolean
 }
 
-export type OidcStatus = {
-  configured: boolean
-  providerName: string
-}
-
-export type RecoveryStatus = {
-  recoveryCodesAvailable: boolean
-}
-
 export type CurrentUser = {
   user: {
     id: string
@@ -46,27 +37,6 @@ function parseAuthStatus(value: unknown): AuthStatus {
   }
 }
 
-function parseOidcStatus(value: unknown): OidcStatus {
-  if (
-    !isRecord(value) ||
-    typeof value.configured !== 'boolean' ||
-    typeof value.providerName !== 'string'
-  ) {
-    throw new Error('OIDC status response was invalid')
-  }
-  return {
-    configured: value.configured,
-    providerName: value.providerName,
-  }
-}
-
-function parseRecoveryStatus(value: unknown): RecoveryStatus {
-  if (!isRecord(value) || typeof value.recoveryCodesAvailable !== 'boolean') {
-    throw new Error('Recovery status response was invalid')
-  }
-  return { recoveryCodesAvailable: value.recoveryCodesAvailable }
-}
-
 function invoke<T>(
   serverFunction: unknown,
   name: string,
@@ -83,27 +53,6 @@ export const getAuthStatus = createServerFn({
     data,
     context,
   }),
-)
-
-export const getOidcStatus = createServerFn({
-  method: 'GET',
-  strict: { output: false },
-}).handler(({ data, context }) =>
-  invoke<OidcStatus>(serverImplementation.getOidcStatus, 'getOidcStatus', {
-    data,
-    context,
-  }),
-)
-
-export const getRecoveryStatus = createServerFn({
-  method: 'GET',
-  strict: { output: false },
-}).handler(({ data, context }) =>
-  invoke<RecoveryStatus>(
-    serverImplementation.getRecoveryStatus,
-    'getRecoveryStatus',
-    { data, context },
-  ),
 )
 
 export const getCurrentUser = createServerFn({
@@ -123,36 +72,5 @@ export async function getAuthStatusWithFallback(): Promise<AuthStatus> {
     const response = await fetch('/api/auth/status')
     if (!response.ok) throw new Error(`Auth status returned ${response.status}`)
     return parseAuthStatus(await response.json())
-  }
-}
-
-export async function getOidcStatusWithFallback(
-  signal?: AbortSignal,
-): Promise<OidcStatus> {
-  try {
-    return parseOidcStatus(await getOidcStatus())
-  } catch {
-    const response = await fetch(
-      '/api/auth/oidc/status',
-      signal ? { signal } : undefined,
-    )
-    if (!response.ok) throw new Error(`OIDC status returned ${response.status}`)
-    return parseOidcStatus(await response.json())
-  }
-}
-
-export async function getRecoveryStatusWithFallback(
-  signal?: AbortSignal,
-): Promise<RecoveryStatus> {
-  try {
-    return parseRecoveryStatus(await getRecoveryStatus())
-  } catch {
-    const response = await fetch(
-      '/api/auth/recovery-status',
-      signal ? { signal } : undefined,
-    )
-    if (!response.ok)
-      throw new Error(`Recovery status returned ${response.status}`)
-    return parseRecoveryStatus(await response.json())
   }
 }

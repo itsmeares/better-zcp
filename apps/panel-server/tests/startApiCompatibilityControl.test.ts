@@ -127,16 +127,7 @@ const mocks = vi.hoisted(() => {
       "getDebugRam",
       "getPerformanceHistory",
       "changePassword",
-      "getManagedUsers",
-      "createManagedUser",
-      "assignManagedUserRole",
-      "removeManagedUser",
       "regenerateJwtSecret",
-      "getRecoveryCodes",
-      "generateRecoveryCodes",
-      "getOidcSettings",
-      "updateOidcSettings",
-      "testOidcConnection",
     ].map((name) => [name, serverFunction(name)]),
   );
   const auth = Object.fromEntries(
@@ -149,10 +140,7 @@ const mocks = vi.hoisted(() => {
       "resetStatus",
       "createLocalResetToken",
       "resetPassword",
-      "recoverWithCode",
       "getCurrentUser",
-      "getRecoveryStatus",
-      "getOidcStatus",
     ].map((name) => [name, serverFunction(name)]),
   );
   const mods = Object.fromEntries(
@@ -613,13 +601,6 @@ const PUBLIC_AUTH_ROUTES = [
     "/api/auth/reset-password",
     "resetPassword",
     { token: "token", newPassword: "password" },
-    200,
-  ],
-  [
-    "POST",
-    "/api/auth/recover-with-code",
-    "recoverWithCode",
-    { code: "code", newPassword: "password" },
     200,
   ],
 ];
@@ -1103,8 +1084,6 @@ describe("Start compatibility server and player routes", () => {
 
   it.each([
     ["POST", "/api/auth/regenerate-jwt-secret", "regenerateJwtSecret"],
-    ["GET", "/api/auth/recovery-codes", "getRecoveryCodes"],
-    ["POST", "/api/auth/recovery-codes", "generateRecoveryCodes"],
   ])("keeps %s %s admin-only", async (method, path, functionName) => {
     mocks.authenticate.mockResolvedValue({
       ok: true,

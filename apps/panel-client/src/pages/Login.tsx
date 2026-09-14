@@ -6,15 +6,11 @@ import {
   getUserErrorMessage,
 } from '../lib/errorMessage'
 import { ApiError } from '../lib/api'
-import { Button, buttonVariants } from '../components/ui/button'
+import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Checkbox } from '../components/ui/checkbox'
 import { panelHealthQueryOptions } from '../lib/panelHealth'
-import {
-  getOidcStatusWithFallback,
-  getRecoveryStatusWithFallback,
-} from '../lib/serverAuth'
 import { Eye, EyeOff, Loader2, ArrowLeft, KeyRound } from 'lucide-react'
 
 type PanelStatus = 'checking' | 'online' | 'unreachable'
@@ -61,7 +57,6 @@ export default function Login() {
   const [resetMode, setResetMode] = useState(false)
   const [resetAvailable, setResetAvailable] = useState(false)
   const [resetToken, setResetToken] = useState('')
-  const [recoveryCodesAvailable, setRecoveryCodesAvailable] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [resetSuccess, setResetSuccess] = useState('')
@@ -73,61 +68,6 @@ export default function Login() {
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { status, version } = usePanelHealth()
-
-  const [oidcStatus, setOidcStatus] = useState<{
-    configured: boolean
-    providerName: string
-  } | null>(null)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    getOidcStatusWithFallback(controller.signal)
-      .then((d) =>
-        setOidcStatus({
-          configured: d?.configured === true,
-          providerName:
-            typeof d?.providerName === 'string' && d.providerName
-              ? d.providerName
-              : 'SSO',
-        }),
-      )
-      .catch(() => setOidcStatus({ configured: false, providerName: 'SSO' }))
-    return () => controller.abort()
-  }, [])
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const oidcError = params.get('oidcError')
-    if (!oidcError) return
-    setError(
-      (
-        {
-          not_configured:
-            "Single sign-on isn't available right now. Sign in with your username and password.",
-          expired_flow: 'Your sign-in attempt expired. Try again.',
-          invalid_token:
-            "The identity provider's response couldn't be verified. Try again, or sign in with your username and password.",
-          session_failed:
-            'Something went wrong finishing sign-in. Try again, or sign in with your username and password.',
-          refused:
-            "That account isn't permitted to sign in this way. Sign in with your username and password, or contact your administrator.",
-          setup_required:
-            'No admin account exists yet. Complete first-run setup with a username and password, then link single sign-on from Settings.',
-          generic:
-            "Single sign-on couldn't be completed. Try again, or sign in with your username and password.",
-        } as Record<string, string>
-      )[String(oidcError)] ?? String(oidcError),
-    )
-    params.delete('oidcError')
-    const query = params.toString()
-    window.history.replaceState(
-      null,
-      '',
-      window.location.pathname +
-        (query ? `?${query}` : '') +
-        window.location.hash,
-    )
-  }, [])
 
   useEffect(() => {
     return () => {
@@ -154,11 +94,6 @@ export default function Login() {
       setResetAvailable(false)
       setLocalResetSupported(false)
     })
-    getRecoveryStatusWithFallback(controller.signal)
-      .then((d) =>
-        setRecoveryCodesAvailable(d?.recoveryCodesAvailable === true),
-      )
-      .catch(() => setRecoveryCodesAvailable(false))
     return () => controller.abort()
   }, [])
 
@@ -208,21 +143,11 @@ export default function Login() {
     }
     setLoading(true)
     try {
-      const useRecoveryCode = !resetAvailable && recoveryCodesAvailable
-      const res = await fetch(
-        useRecoveryCode
-          ? '/api/auth/recover-with-code'
-          : '/api/auth/reset-password',
-        {
+      const res = await fetch('/api/auth/reset-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            useRecoveryCode
-              ? { code: resetToken, newPassword }
-              : { token: resetToken, newPassword },
-          ),
-        },
-      )
+          body: JSON.stringify({ token: resetToken, newPassword }),
+        })
       const data = await res.json()
       if (!res.ok)
         throw new ApiError(data.error || 'Reset failed', {
@@ -250,7 +175,7 @@ export default function Login() {
   const handleLostPassword = () => {
     setError('')
     setResetSuccess('')
-    if (resetAvailable || recoveryCodesAvailable) {
+    if (resetAvailable) {
       setShowRecoveryHelp(false)
       setResetMode(true)
       return
@@ -417,16 +342,14 @@ export default function Login() {
                   htmlFor="resetToken"
                   className="text-sm font-medium text-foreground"
                 >
-                  {resetAvailable ? 'Recovery token' : 'Recovery code'}
+                  {'Recovery token'}
                 </Label>
                 <Input
                   id="resetToken"
                   type="text"
                   value={resetToken}
                   onChange={(e) => setResetToken(e.target.value)}
-                  placeholder={
-                    resetAvailable ? 'Paste token' : 'XXXXX-XXXXX-XXXXX'
-                  }
+                  placeholder="Paste token"
                   autoFocus
                   disabled={loading}
                   required
@@ -435,9 +358,7 @@ export default function Login() {
                   className="text-sm"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {resetAvailable
-                    ? 'Stored at data/reset-token.txt on the panel host.'
-                    : 'One of the recovery codes you saved from Settings → Security. Each code works once.'}
+                  {'Stored at data/reset-token.txt on the panel host.'}
                 </p>
               </div>
 
@@ -527,27 +448,6 @@ export default function Login() {
             </form>
           ) : (
             <>
-              {oidcStatus?.configured && (
-                <div className="mb-4 space-y-4">
-                  <a
-                    href="/api/auth/oidc/login"
-                    className={
-                      buttonVariants({ variant: 'outline' }) + ' w-full'
-                    }
-                  >
-                    {'Continue with ' + String(oidcStatus.providerName)}
-                  </a>
-                  <div className="relative text-center text-xs uppercase tracking-wide text-muted-foreground">
-                    <div
-                      className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60"
-                      aria-hidden="true"
-                    />
-                    <span className="relative bg-card/90 px-2">
-                      {'or sign in with a password'}
-                    </span>
-                  </div>
-                </div>
-              )}
               <form
                 id="login-form"
                 onSubmit={handleSubmit}
@@ -575,7 +475,7 @@ export default function Login() {
                     <p className="mt-1">
                       <>
                         {
-                          'After several failed attempts, an account locks automatically for 15 minutes as a security precaution -- this screen will not say so. A saved recovery code, or starting the panel with '
+                          'After several failed attempts, the admin account locks automatically for 15 minutes as a security precaution -- this screen will not say so. Starting the panel with '
                         }
                         {'--reset-password'}
                         {
@@ -695,7 +595,7 @@ export default function Login() {
                     )}
                     {creatingLocalReset
                       ? 'Preparing recovery…'
-                      : resetAvailable || recoveryCodesAvailable
+                      : resetAvailable
                         ? 'Use recovery token'
                         : localResetSupported
                           ? 'Create recovery file'

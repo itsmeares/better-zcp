@@ -33,8 +33,6 @@ import {
   RotateCw,
   Lock,
   User,
-  Users as UsersIcon,
-  ShieldCheck,
   KeyRound,
   ExternalLink,
   FolderOpen,
@@ -59,9 +57,6 @@ import {
 } from '@/components/ui/card'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSkeleton } from '@/components/PageSkeleton'
-import Users from '@/pages/Users'
-import RolesPermissions from '@/pages/RolesPermissions'
-import OidcSettings from '@/pages/OidcSettings'
 import { PasswordInput } from '@/components/PasswordInput'
 import { NumberInput } from '@/components/NumberInput'
 import { Button } from '@/components/ui/button'
@@ -339,15 +334,6 @@ export default function Settings() {
   const [changingPassword, setChangingPassword] = useState(false)
   const [regenerateJwtDialogOpen, setRegenerateJwtDialogOpen] = useState(false)
   const [regeneratingJwtSecret, setRegeneratingJwtSecret] = useState(false)
-  const [recoveryCodeStatus, setRecoveryCodeStatus] = useState<{
-    configured: boolean
-    remaining: number
-    total: number
-  } | null>(null)
-  const [generatedRecoveryCodes, setGeneratedRecoveryCodes] = useState<
-    string[]
-  >([])
-  const [generatingRecoveryCodes, setGeneratingRecoveryCodes] = useState(false)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [localPasswordResetSupported, setLocalPasswordResetSupported] =
@@ -507,32 +493,6 @@ export default function Settings() {
       description: 'Panel account password and sign-in controls.',
     },
     {
-      id: 'users',
-      label: 'Users',
-      icon: UsersIcon,
-      group: 'Access control',
-      tip: 'Panel accounts and their assigned roles',
-      description: 'Create, remove, and reassign roles for panel accounts.',
-    },
-    {
-      id: 'roles',
-      label: 'Roles & Permissions',
-      icon: ShieldCheck,
-      group: 'Access control',
-      tip: 'Capability matrix for each role',
-      description:
-        'Which capabilities each role grants, and which panel accounts hold them.',
-    },
-    {
-      id: 'sso',
-      label: 'Sign-in',
-      icon: KeyRound,
-      group: 'Access control',
-      tip: 'Single sign-on (OIDC) provider',
-      description:
-        'Let panel accounts sign in through an external identity provider.',
-    },
-    {
       id: 'connection',
       label: 'RCON',
       icon: Link,
@@ -576,12 +536,7 @@ export default function Settings() {
       description:
         'Panel version and runtime details, plus where the remaining settings live.',
     },
-  ].filter((section) => {
-    if (section.id === 'users') return can('users.manage')
-    if (section.id === 'roles') return can('roles.manage')
-    if (section.id === 'sso') return can('panel.settings')
-    return true
-  })
+  ]
   const settingsGroups = settingsSections.reduce<
     { name: string; sections: typeof settingsSections }[]
   >((groups, section) => {
@@ -864,41 +819,6 @@ export default function Settings() {
       validateCorsOriginsInput(settings.corsAllowedOrigins),
     )
   }, [settings.corsAllowedOrigins, validateCorsOriginsInput])
-
-  const fetchRecoveryCodeStatus = useCallback(async () => {
-    try {
-      const status = await authApi.getRecoveryCodes()
-      setRecoveryCodeStatus(status)
-    } catch {
-      setRecoveryCodeStatus(null)
-    }
-  }, [])
-
-  useEffect(() => {
-    void fetchRecoveryCodeStatus()
-  }, [fetchRecoveryCodeStatus])
-
-  const handleGenerateRecoveryCodes = async () => {
-    setGeneratingRecoveryCodes(true)
-    try {
-      const result = await authApi.generateRecoveryCodes()
-      setGeneratedRecoveryCodes(result.codes || [])
-      await fetchRecoveryCodeStatus()
-      toast({
-        title: 'Recovery codes generated',
-        description: 'Save them now — they cannot be shown again.',
-        variant: 'success' as const,
-      })
-    } catch (error) {
-      toast({
-        title: 'Could not generate recovery codes',
-        description: getUserErrorMessage(error, 'Try again.'),
-        variant: 'destructive',
-      })
-    } finally {
-      setGeneratingRecoveryCodes(false)
-    }
-  }
 
   const handleSave = async () => {
     if (!isValidPort(Number(settings.panelPort))) {
@@ -5817,113 +5737,6 @@ export default function Settings() {
                       </Button>
                     </form>
 
-                    <div className="max-w-2xl rounded-xl border border-border/70 p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {'Recovery codes'}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {
-                              'Save these now while you can still sign in. If you forget the password, enter one on the login screen to set a new one. No server or file access needed.'
-                            }
-                          </p>
-                        </div>
-                        <Key className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void handleGenerateRecoveryCodes()}
-                          disabled={generatingRecoveryCodes}
-                        >
-                          {generatingRecoveryCodes ? (
-                            <Loader2 className="me-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Key className="me-2 h-4 w-4" />
-                          )}
-                          {recoveryCodeStatus?.configured
-                            ? 'Generate new codes'
-                            : 'Generate recovery codes'}
-                        </Button>
-                        {recoveryCodeStatus && (
-                          <span className="text-xs text-muted-foreground">
-                            {recoveryCodeStatus.configured
-                              ? String(recoveryCodeStatus.remaining) +
-                                ' of ' +
-                                String(recoveryCodeStatus.total) +
-                                ' unused'
-                              : 'No codes generated yet'}
-                          </span>
-                        )}
-                      </div>
-
-                      {recoveryCodeStatus?.configured && (
-                        <p className="text-xs text-muted-foreground">
-                          {'Generating new codes replaces every existing code.'}
-                        </p>
-                      )}
-
-                      {generatedRecoveryCodes.length > 0 && (
-                        <div className="space-y-2 rounded-md border border-warning/40 bg-warning/10 p-3">
-                          <p className="text-xs font-medium text-warning">
-                            {
-                              'Copy these now. They are shown once and cannot be retrieved later.'
-                            }
-                          </p>
-                          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                            {generatedRecoveryCodes.map((code) => (
-                              <code
-                                key={code}
-                                className="rounded bg-background/70 px-2 py-1 font-mono text-xs tracking-wider"
-                              >
-                                {code}
-                              </code>
-                            ))}
-                          </div>
-                          <div className="flex flex-wrap gap-2 pt-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                const blob = new Blob(
-                                  [
-                                    `Zomboid Control Panel recovery codes\nGenerated: ${new Date().toISOString()}\nEach code works once.\n\n${generatedRecoveryCodes.join('\n')}\n`,
-                                  ],
-                                  { type: 'text/plain' },
-                                )
-                                const url = URL.createObjectURL(blob)
-                                const a = document.createElement('a')
-                                a.href = url
-                                a.download = 'zomboid-panel-recovery-codes.txt'
-                                document.body.appendChild(a)
-                                a.click()
-                                a.remove()
-                                window.setTimeout(
-                                  () => URL.revokeObjectURL(url),
-                                  1500,
-                                )
-                              }}
-                            >
-                              <Download className="me-1.5 h-3.5 w-3.5" />
-                              {'Download'}
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setGeneratedRecoveryCodes([])}
-                            >
-                              {'Done'}
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
                     <div className="max-w-2xl rounded-xl border border-border/70 bg-muted/35 p-4 text-sm text-muted-foreground">
                       <div className="flex items-start gap-3">
                         <Info className="mt-0.5 h-4 w-4 text-primary" />
@@ -6140,7 +5953,7 @@ export default function Settings() {
                       </div>
                     </div>
 
-                    {user?.role === 'admin' && (
+                    {user && (
                       <div className="max-w-2xl rounded-xl border border-destructive/40 bg-destructive/5 p-4 space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -6234,18 +6047,6 @@ export default function Settings() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="users" className="mt-0">
-            <Users embedded />
-          </TabsContent>
-
-          <TabsContent value="roles" className="mt-0">
-            <RolesPermissions embedded />
-          </TabsContent>
-
-          <TabsContent value="sso" className="mt-0">
-            <OidcSettings embedded />
           </TabsContent>
 
           <TabsContent value="about" className="mt-0 space-y-5">

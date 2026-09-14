@@ -39,11 +39,6 @@ import panelBridgeService from "../services/panelBridge.ts";
 import authService from "../services/auth.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
 import {
-  getOidcSettings,
-  getOidcEnvOverrides,
-  isOidcConfigured,
-} from "../services/oidc.ts";
-import {
   PZ_TILES_ROOT,
   getB42Dir,
   getB42TopFormat,
@@ -1175,25 +1170,6 @@ async function buildNetworkInterfaces() {
   }
 }
 
-async function buildOidcStatus() {
-  try {
-    const settings = await getOidcSettings();
-    return {
-      configured: isOidcConfigured(settings),
-      issuerUrl: settings.issuerUrl || null,
-      clientId: settings.clientId || null,
-      clientSecretSet: Boolean(settings.clientSecret),
-      redirectUri: settings.redirectUri || null,
-      scope: settings.scope || null,
-      providerName: settings.providerName || null,
-      allowInsecureHttp: settings.allowInsecureHttp,
-      envOverrides: getOidcEnvOverrides(),
-    };
-  } catch (e: any) {
-    return { _error: e.message };
-  }
-}
-
 async function buildRolesAndPermissions() {
   try {
     const [roles, users] = await Promise.all([
@@ -1382,12 +1358,11 @@ function buildBundleReadme() {
     "13. `server-config-summary.json` — sanitized effective server settings, mod/map lists, sandbox integrity, and whether the Mods/WorkshopItems lists are the same length (a mismatch is a cheap signal of an unresolved mod).",
     "14. `sandbox-options-diagnostics.json` — PZ/PanelBridge versions, sandbox-option exception signatures and excerpts, triggering action counts, configured mods, and installed mod.info/sandbox-option metadata.",
     "15. `pz-build-info.json` — installed Project Zomboid branch and Steam build ID.",
-    "16. `oidc-status.json` — whether SSO is configured, issuer/client/redirect/scope, which fields are pinned by an env var, and whether a client secret is set (never its value). No live IdP check — see the file's own notes.",
-    "17. `roles-and-permissions.json` — every role, what it grants, how many/which local users hold it. Start here for \"why can't this person see X\".",
-    "18. `world-map-diagnostics.json` — whether `curl` is present on this host (a missing one is the most likely new World Map support ticket this release) and the resolved B42 tile-build source/directory/reason.",
-    "19. `db-write-health.json` — the database write circuit-breaker state and retry count. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
-    "20. `backups-summary.json` — the last 20 backup runs. Only successful runs are recorded; a failed scheduled backup shows up in `admin-panel/error.log` instead, not here.",
-    "21. `discord-bot-status.json` — connected or not, which guild/channel/mod-role it's wired to, and the last start failure if any (token presence only, never the value).",
+    "16. `roles-and-permissions.json` — every role, what it grants, how many/which local users hold it. Start here for \"why can't this person see X\".",
+    "17. `world-map-diagnostics.json` — whether `curl` is present on this host (a missing one is the most likely new World Map support ticket this release) and the resolved B42 tile-build source/directory/reason.",
+    "18. `db-write-health.json` — the database write circuit-breaker state and retry count. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
+    "19. `backups-summary.json` — the last 20 backup runs. Only successful runs are recorded; a failed scheduled backup shows up in `admin-panel/error.log` instead, not here.",
+    "20. `discord-bot-status.json` — connected or not, which guild/channel/mod-role it's wired to, and the last start failure if any (token presence only, never the value).",
     "",
     "## Then the raw logs",
     "",
@@ -1406,13 +1381,12 @@ function buildBundleReadme() {
     "",
     "## What is NOT in this bundle",
     "",
-    "- Plaintext RCON / Discord / Steam / OIDC client secret credentials (masked or presence-only).",
+    "- Plaintext RCON / Discord / Steam credentials (masked or presence-only).",
     "- Full environment variable values (only allow-listed keys show values).",
     "- MAC addresses (network interfaces list IPs only).",
     "- The panel database itself — only sanitized excerpts.",
     "- A guarantee that the raw logs contain nothing sensitive beyond the credential shapes described above — see the warning in that section.",
     "- Whether a config edit is still waiting on a restart to take effect. The panel computes that live per-request and never stores it — `system-info.json`'s `serverProcess` (was the server running right now) is the closest fact actually available.",
-    "- A record of the OIDC \"Test connection\" button's last result, or a live check against the identity provider run while building this bundle — `oidc-status.json` reports configuration only.",
     "- Failed backup attempts as structured data (only successful runs are recorded) — check `admin-panel/error.log` for those.",
     "- Retry/failure counters for config-file (INI/Lua) writes specifically — only the database's own write health is tracked today.",
     "- OpenRC service output (`managed-service-logs.txt` reports this explicitly rather than guessing at a log path).",
@@ -1454,7 +1428,6 @@ async function buildBundleDiagnostics(
       buildSandboxOptionsDiagnostics(activeServer, knownSecrets),
     ),
     wrap("pz-build-info.json", () => buildPzBuildInfo(activeServer)),
-    wrap("oidc-status.json", () => buildOidcStatus()),
     wrap("roles-and-permissions.json", () => buildRolesAndPermissions()),
     wrap("world-map-diagnostics.json", () => buildWorldMapDiagnostics()),
     wrap("db-write-health.json", async () => buildDbWriteHealth()),
@@ -5867,7 +5840,6 @@ export {
   buildSystemInfo,
   buildServerConfigSummary,
   buildSandboxOptionsDiagnostics,
-  buildOidcStatus,
   buildRolesAndPermissions,
   checkCurlAvailable,
   buildWorldMapDiagnostics,

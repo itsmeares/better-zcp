@@ -224,54 +224,6 @@ describe("rcon.js: mixed -- /execute, connection lifecycle and /history are admi
   });
 });
 
-describe("auth.js: recovery codes are admin-only, not delegable to users.manage or any other role", () => {
-  const ROUTES = [
-    ["/recovery-codes", "get"],
-    ["/recovery-codes", "post"],
-  ];
-
-  it.each(ROUTES)("refuses a moderator on %s %s", async (routePath, method) => {
-    const { default: router } = await import("../routes/auth.ts");
-    const res = await runRoute(router, routePath, method, {
-      user: { role: "moderator" },
-      headers: {},
-      body: {},
-      params: {},
-      query: {},
-    });
-    expect(res.getStatusCode()).toBe(403);
-  });
-
-  it.each(ROUTES)(
-    "refuses a technician too on %s %s -- users.manage-adjacent is not enough, this is admin-only",
-    async (routePath, method) => {
-      const { default: router } = await import("../routes/auth.ts");
-      const res = await runRoute(router, routePath, method, {
-        user: { role: "technician" },
-        headers: {},
-        body: {},
-        params: {},
-        query: {},
-      });
-      expect(res.getStatusCode()).toBe(403);
-    },
-  );
-
-  it.each(ROUTES)(
-    "does not refuse an admin at the role gate on %s %s (a missing Authorization header still 401s downstream -- this only proves the gate itself let an admin through)",
-    async (routePath, method) => {
-      const { default: router } = await import("../routes/auth.ts");
-      const res = await runRoute(router, routePath, method, {
-        user: { role: "admin" },
-        headers: {},
-        body: {},
-        params: {},
-        query: {},
-      });
-      expect(res.getStatusCode()).not.toBe(403);
-    },
-  );
-});
 
 describe("mapProxy.ts / serverStatus.js / system.js: deliberately open to every role", () => {
   it("mapProxy /resolve and /vehicles do not refuse a moderator", async () => {

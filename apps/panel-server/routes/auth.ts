@@ -1,14 +1,10 @@
 import { Router, type Request, createRateLimiter as rateLimit } from "../http/startApiRouter.ts";
-import authService, { USER_ROLES, requireRole } from "../services/auth.ts";
+import authService from "../services/auth.ts";
 import { createLogger } from "../utils/logger.ts";
-import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
+import { sanitizeError } from "../utils/sanitize.ts";
 import { setSetting } from "../database/init.ts";
 import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
 import { getRefreshCookieOptions } from "../utils/refreshCookie.ts";
-import {
-  requirePermission,
-  getCapabilitiesForRole,
-} from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import {
   checkResetToken,
@@ -32,18 +28,8 @@ type AuthenticatedRequest = Request & {
   } | null;
 };
 
-type RouteError = {
-  code?: string;
-  params?: unknown;
-  status?: number;
-};
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function routeError(error: unknown): RouteError {
-  return error && typeof error === "object" ? (error as RouteError) : {};
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -155,7 +141,7 @@ router.post("/setup", setupLimiter, async (req, res) => {
       panelPort: normalizedPanelPort,
     } = parsedBody.data;
     await setSetting("panelPort", normalizedPanelPort);
-    await authService.createUser(username, password);
+    await authService.createAdmin(username, password);
     await clearSetupToken();
 
     const result = await authService.login(
@@ -284,14 +270,10 @@ router.get("/me", async (req, res) => {
       });
     }
 
-    const capabilities = await getCapabilitiesForRole(user.role);
-
     res.json({
       user: {
         id: user.userId,
         username: user.username,
-        role: user.role,
-        capabilities,
       },
     });
   } catch (error: unknown) {
@@ -340,120 +322,8 @@ router.post("/change-password", async (req, res) => {
   }
 });
 
-router.get("/users", requirePermission("users.manage"), async (req, res) => {
-  try {
-    const users = await authService.getUsers();
-    res.json({ users });
-  } catch (error: unknown) {
-    log.error(`Failed to list users: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.post(
-  "/users",
-  requirePermission("users.manage"),
-  async (req: AuthenticatedRequest, res) => {
-    try {
-      const { username, password, role, roleId } = req.body || {};
-      if (!isNonEmptyString(username) || !isNonEmptyString(password)) {
-        return res.status(400).json({
-          error: "Username and password are required",
-          code: ErrorCode.AUTH_USERNAME_PASSWORD_REQUIRED,
-        });
-      }
-      const normalizedRoleId =
-        typeof roleId === "string" && roleId.trim() ? roleId.trim() : undefined;
-      if (!normalizedRoleId && !USER_ROLES.includes(role)) {
-        return res.status(400).json({
-          error: `role must be one of: ${USER_ROLES.join(", ")}`,
-          code: ErrorCode.AUTH_INVALID_ROLE,
-        });
-      }
-      const user = await authService.createUser(username, password, role, {
-        actingUserId: req.user?.userId,
-        roleId: normalizedRoleId,
-      });
-      log.info(`User created by admin: ${username} (role: ${user.role})`);
-      res.status(201).json({ success: true, user });
-    } catch (error: unknown) {
-      log.warn(`User creation failed: ${errorMessage(error)}`);
-      const details = routeError(error);
-      const body: Record<string, unknown> = {
-        error: sanitizeError(errorMessage(error)),
-      };
-      if (details.code) body.code = details.code;
-      if (details.params) body.params = sanitizeErrorParams(details.params);
-      res.status(details.status || 400).json(body);
-    }
-  },
-);
-
-router.patch(
-  "/users/:id/role",
-  requirePermission("users.manage"),
-  async (req: AuthenticatedRequest, res) => {
-    try {
-      const { roleId, role } = req.body || {};
-      let user;
-      if (typeof roleId === "string" && roleId.trim()) {
-        user = await authService.changeUserRoleById(
-          String(req.params.id),
-          roleId.trim(),
-          { actingUserId: req.user?.userId },
-        );
-      } else {
-        if (!USER_ROLES.includes(role)) {
-          return res.status(400).json({
-            error: `role must be one of: ${USER_ROLES.join(", ")}`,
-            code: ErrorCode.AUTH_INVALID_ROLE,
-          });
-        }
-        user = await authService.changeUserRole(String(req.params.id), role, {
-          actingUserId: req.user?.userId,
-        });
-      }
-      log.info(`Role changed by admin: ${user.username} -> ${user.role}`);
-      res.json({ success: true, user });
-    } catch (error: unknown) {
-      const details = routeError(error);
-      log.warn(`Role change failed: ${errorMessage(error)}`);
-      const body: Record<string, unknown> = {
-        error: sanitizeError(errorMessage(error)),
-      };
-      if (details.code) body.code = details.code;
-      if (details.params) body.params = sanitizeErrorParams(details.params);
-      res.status(details.status || 400).json(body);
-    }
-  },
-);
-
-router.delete(
-  "/users/:id",
-  requirePermission("users.manage"),
-  async (req: AuthenticatedRequest, res) => {
-    try {
-      const user = await authService.deleteUser(String(req.params.id), {
-        actingUserId: req.user?.userId,
-      });
-      log.info(`User deleted by admin: ${user.username}`);
-      res.json({ success: true, user });
-    } catch (error: unknown) {
-      const details = routeError(error);
-      log.warn(`User deletion failed: ${errorMessage(error)}`);
-      const body: Record<string, unknown> = {
-        error: sanitizeError(errorMessage(error)),
-      };
-      if (details.code) body.code = details.code;
-      if (details.params) body.params = sanitizeErrorParams(details.params);
-      res.status(details.status || 400).json(body);
-    }
-  },
-);
-
 router.post(
   "/regenerate-jwt-secret",
-  requireRole("admin"),
   async (req: AuthenticatedRequest, res) => {
     try {
       await authService.regenerateJwtSecret();
@@ -507,74 +377,13 @@ const localResetTokenLimiter = rateLimit({
   },
 });
 
-router.get("/recovery-codes", requireRole("admin"), async (req, res) => {
-  try {
-    const user = await getAuthenticatedUser(req);
-    if (!user)
-      return res.status(401).json({
-        error: "Not authenticated",
-        code: ErrorCode.NOT_AUTHENTICATED,
-      });
-    res.json(await authService.getRecoveryCodeStatus());
-  } catch (error: unknown) {
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.post("/recovery-codes", requireRole("admin"), async (req, res) => {
-  try {
-    const user = await getAuthenticatedUser(req);
-    if (!user)
-      return res.status(401).json({
-        error: "Not authenticated",
-        code: ErrorCode.NOT_AUTHENTICATED,
-      });
-    const result = await authService.generateRecoveryCodes(10);
-    log.info("New recovery codes generated");
-    res.json({ success: true, ...result });
-  } catch (error: unknown) {
-    res.status(400).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.get("/recovery-status", async (req, res) => {
-  try {
-    const status = await authService.getRecoveryCodeStatus();
-    res.json({ recoveryCodesAvailable: status.remaining > 0 });
-  } catch {
-    res.json({ recoveryCodesAvailable: false });
-  }
-});
-
-router.post("/recover-with-code", resetLimiter, async (req, res) => {
-  try {
-    const { code, newPassword } = req.body || {};
-    if (!isNonEmptyString(code) || !isNonEmptyString(newPassword)) {
-      return res.status(400).json({
-        error: "A recovery code and a new password are required",
-        code: ErrorCode.RECOVERY_CODE_FIELDS_REQUIRED,
-      });
-    }
-    const result = await authService.redeemRecoveryCode(code, newPassword);
-    log.info(`Password recovered via recovery code for ${result.username}`);
-    res.json({
-      success: true,
-      message: `Password reset for ${result.username}`,
-      remaining: result.remaining,
-    });
-  } catch (error: unknown) {
-    log.warn(`Recovery code redemption failed: ${errorMessage(error)}`);
-    res.status(403).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
 router.post("/reset-token/local", localResetTokenLimiter, async (req, res) => {
   try {
     if (!isLocalPanelRequest(req)) {
       if (isPanelBehindTrustProxy(req)) {
         return res.status(403).json({
           error:
-            "This panel is running behind a reverse proxy, so it can't verify a request came from the server itself. Create data/reset-token.txt on the host directly, or use a recovery code instead.",
+            "This panel is running behind a reverse proxy, so it can't verify a request came from the server itself. Create data/reset-token.txt on the host directly.",
           code: ErrorCode.LOCAL_RESET_BEHIND_PROXY,
         });
       }

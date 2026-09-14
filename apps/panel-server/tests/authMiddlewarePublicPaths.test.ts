@@ -43,8 +43,6 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
     "/api/auth/reset-status",
     "/api/auth/reset-token/local",
     "/api/auth/reset-password",
-    "/api/auth/recovery-status",
-    "/api/auth/recover-with-code",
   ];
 
   it.each(PUBLIC_PATHS)("still lets %s through with NO token — these are meant to be public", async (path) => {
@@ -53,28 +51,9 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it.each(["/api/auth/oidc/status", "/api/auth/oidc/login", "/api/auth/oidc/callback"])(
-    "still lets %s through with no token — genuinely pre-session (login screen status check, or the act of becoming authenticated)",
-    async (path) => {
-      const { next } = await run(path);
-      expect(next).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  it.each(["/api/auth/oidc/settings", "/api/auth/oidc/test-connection"])(
-    "%s is NOT exempt — it requires a token like any other authenticated route",
-    async (path) => {
-      const { next, res } = await run(path);
-      expect(next).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(401);
-    },
-  );
-
   const FORMERLY_VULNERABLE_PATHS = [
-    "/api/auth/users",
     "/api/auth/me",
     "/api/auth/change-password",
-    "/api/auth/recovery-codes",
   ];
 
   it.each(FORMERLY_VULNERABLE_PATHS)(
@@ -86,8 +65,8 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
     },
   );
 
-  it("the exact live-reproduced case: /api/auth/users with no Authorization header is refused, not admitted", async () => {
-    const { next, res } = await run("/api/auth/users");
+  it("refuses /api/auth/me without an Authorization header", async () => {
+    const { next, res } = await run("/api/auth/me");
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith(
@@ -100,7 +79,7 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
     const jwt = (await import("jsonwebtoken")).default;
     const token = jwt.sign({ userId: "u1", tokenGen: 0 }, authService.jwtSecret);
 
-    const { req, next, res } = await run("/api/auth/users", {
+    const { req, next, res } = await run("/api/auth/me", {
       auth: `Bearer ${token}`,
     });
     expect(next).toHaveBeenCalledTimes(1);
@@ -110,7 +89,7 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
 
   it("auth explicitly disabled (authEnabled=false): req.user is set to an explicit synthetic full-access user, not left absent", async () => {
     settings.set("authEnabled", false);
-    const { req, next, res } = await run("/api/auth/users");
+    const { req, next, res } = await run("/api/auth/me");
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
@@ -174,7 +153,7 @@ describe("requireRole() — the guard itself fails closed, independent of middle
   });
 });
 
-describe("/me, /change-password, /recovery-codes — independently safe, pinned so nobody 'simplifies' them onto req.user later", () => {
+describe("/me and /change-password authenticate their own bearer token", () => {
   function getLayer(routePath, method) {
     return authRouter.stack.find(
       (entry) => entry.route?.path === routePath && entry.route.methods[method],
@@ -203,8 +182,4 @@ describe("/me, /change-password, /recovery-codes — independently safe, pinned 
     expect(res.status).toHaveBeenCalledWith(401);
   });
 
-  it("GET /recovery-codes refuses with no Authorization header the same way", async () => {
-    const res = await runHandlerDirect("/recovery-codes", "get", { headers: {} });
-    expect(res.status).toHaveBeenCalledWith(401);
-  });
 });

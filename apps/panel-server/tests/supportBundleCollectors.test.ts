@@ -13,7 +13,6 @@ const {
   buildSystemInfo,
   buildServerConfigSummary,
   buildSandboxOptionsDiagnostics,
-  buildOidcStatus,
   buildRolesAndPermissions,
   checkCurlAvailable,
   buildWorldMapDiagnostics,
@@ -100,17 +99,6 @@ describe("support bundle: curl availability (World Map's runtime dependency)", (
     expect(result.b42Resolution).toHaveProperty("source");
     expect(result.b42Resolution).toHaveProperty("directory");
     expect(result.b42Resolution).toHaveProperty("reason");
-  });
-});
-
-describe("support bundle: OIDC status never leaks the client secret value", () => {
-  it("reports configuration only -- clientSecretSet is a boolean, the actual secret never appears anywhere in the output", async () => {
-    const result = await buildOidcStatus();
-    expect(result).not.toHaveProperty("_error");
-    expect(typeof result.clientSecretSet).toBe("boolean");
-    expect(JSON.stringify(result)).not.toMatch(/clientSecret"\s*:\s*"(?!.*Set)/);
-    expect(result).not.toHaveProperty("clientSecret");
-    expect(result).toHaveProperty("envOverrides");
   });
 });
 
@@ -414,7 +402,6 @@ describe("support bundle assembly: one collector throwing never breaks the rest"
       "boom-backup-service",
     );
     for (const name of [
-      "oidc-status.json",
       "roles-and-permissions.json",
       "world-map-diagnostics.json",
       "db-write-health.json",
@@ -425,7 +412,6 @@ describe("support bundle assembly: one collector throwing never breaks the rest"
       expect(JSON.parse(byName[name])._error).toBeUndefined();
     }
     expect(byName["README.md"]).toContain("roles-and-permissions.json");
-    expect(byName["README.md"]).toContain("oidc-status.json");
   });
 });
 

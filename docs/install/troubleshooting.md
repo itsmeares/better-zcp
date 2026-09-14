@@ -147,7 +147,7 @@ before assuming it's actually wrong.
 
 After a few failed sign-in attempts from the same browser, the login page
 itself starts showing a **"Still not working?"** hint explaining this same
-15-minute lockout and pointing at recovery codes and `--reset-password` —
+15-minute lockout and pointing at `--reset-password` —
 it appears the same way regardless of whether the account you're typing
 exists, is locked, or the password was simply wrong, so seeing it isn't
 itself a sign anything is broken.
@@ -156,38 +156,35 @@ Also check for `Too many login attempts. Please try again later.` — that's
 a separate, shorter limit (5 attempts per minute per IP) and clears in under
 a minute.
 
-**If you actually don't know the password**, the panel has three recovery
+**If you actually don't know the password**, the panel has two recovery
 paths, in order of convenience:
 
-1. **A recovery code** — if you generated single-use recovery codes in
-   advance (**Settings → Security**), use one on the login screen's "Recover
-   account" flow. Each code works once.
-2. **A local recovery token** — only works when you open the panel directly
+1. **A local recovery token** — only works when you open the panel directly
    on the machine it's running on (loopback or one of the host's own IPs).
    The login screen's recovery flow creates `data/reset-token.txt` on the
    host; open that file, paste the token back into the browser. If the
    panel reports `No recovery token found yet. Create data/reset-token.txt
    on the panel host, then try again.`, the panel couldn't confirm the
    request came from the host itself — see the reverse-proxy case below.
-3. **The `--reset-password` CLI flag** — run the panel binary/start script
+2. **The `--reset-password` CLI flag** — run the panel binary/start script
    with `--reset-password` from a terminal on the host itself. This is
    interactive: it lists existing users and asks for a new password.
 
 **If you're behind a reverse proxy** (nginx, Caddy, a VPS setup) and the
 recovery screen says `This panel is running behind a reverse proxy, so it
 can't verify a request came from the server itself. Create
-data/reset-token.txt on the host directly, or use a recovery code instead.`
+data/reset-token.txt on the host directly.`
 — the local-token flow can't confirm your browser request truly originated
 on the host once a proxy sits in front of it. Either create
 `data/reset-token.txt` yourself directly on the host — at least 8 characters
 after trimming whitespace, under 1KB, and less than 24 hours old when you use
-it, or the panel treats it the same as missing — or use a recovery code, or
-run `--reset-password` on the host instead.
+it, or the panel treats it the same as missing — or run `--reset-password`
+on the host instead.
 
 If you see `This recovery action is only available when the panel is opened
 from the server itself.` instead (no proxy mentioned), you're just not
 browsing from the host — open the panel's URL from the machine it's
-actually running on, or use a recovery code / `--reset-password`.
+actually running on, or use `--reset-password`.
 
 ---
 

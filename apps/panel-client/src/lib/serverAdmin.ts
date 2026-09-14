@@ -1,13 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import * as serverImplementation from './serverAdmin.server'
-import type {
-  ConfigTestRconResult,
-  ManagedUserAccount,
-  OidcDiscoveredMetadata,
-  OidcSettings,
-  OidcSettingsWithEnv,
-  RoleInfo,
-} from './api'
+import type { ConfigTestRconResult } from './api'
 import {
   invokeServerFunction,
   type ServerFunctionOptions,
@@ -34,140 +27,6 @@ function invoke<T>(
 ): Promise<T> {
   return invokeServerFunction<T>(serverFunction, name, options)
 }
-
-export const getManagedUsers = createServerFn({
-  method: 'GET',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{ users: ManagedUserAccount[] }>(
-      serverImplementation.getManagedUsers,
-      'getManagedUsers',
-      { data, context },
-    ),
-  )
-
-export const createManagedUser = createServerFn({
-  method: 'POST',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{ success: boolean; user: ManagedUserAccount }>(
-      serverImplementation.createManagedUser,
-      'createManagedUser',
-      { data, context },
-    ),
-  )
-
-export const assignManagedUserRole = createServerFn({
-  method: 'POST',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{ success: boolean; user: ManagedUserAccount }>(
-      serverImplementation.assignManagedUserRole,
-      'assignManagedUserRole',
-      { data, context },
-    ),
-  )
-
-export const removeManagedUser = createServerFn({
-  method: 'POST',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{ success: boolean; user: { id: string; username: string } }>(
-      serverImplementation.removeManagedUser,
-      'removeManagedUser',
-      { data, context },
-    ),
-  )
-
-export const createManagedRole = createServerFn({
-  method: 'POST',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{ success: boolean; role: RoleInfo }>(
-      serverImplementation.createManagedRole,
-      'createManagedRole',
-      { data, context },
-    ),
-  )
-
-export const updateManagedRole = createServerFn({
-  method: 'POST',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{ success: boolean; role: RoleInfo }>(
-      serverImplementation.updateManagedRole,
-      'updateManagedRole',
-      { data, context },
-    ),
-  )
-
-export const deleteManagedRole = createServerFn({
-  method: 'POST',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{
-      success: boolean
-      deleted: boolean
-      reassigned: number
-      reassignedTo: string | null
-    }>(serverImplementation.deleteManagedRole, 'deleteManagedRole', {
-      data,
-      context,
-    }),
-  )
-
-export const getOidcSettings = createServerFn({
-  method: 'GET',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<OidcSettingsWithEnv>(
-      serverImplementation.getOidcSettings,
-      'getOidcSettings',
-      { data, context },
-    ),
-  )
-
-export const updateOidcSettings = createServerFn({
-  method: 'POST',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{ success: boolean } & OidcSettings>(
-      serverImplementation.updateOidcSettings,
-      'updateOidcSettings',
-      { data, context },
-    ),
-  )
-
-export const testOidcConnection = createServerFn({
-  method: 'POST',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{ success: true; metadata: OidcDiscoveredMetadata }>(
-      serverImplementation.testOidcConnection,
-      'testOidcConnection',
-      { data, context },
-    ),
-  )
 
 export const getAppSettings = createServerFn({
   method: 'GET',
@@ -269,36 +128,6 @@ export const getPerformanceHistory = createServerFn({
     invoke<{ history: PerformanceHistoryEntry[] }>(
       serverImplementation.getPerformanceHistory,
       'getPerformanceHistory',
-      { data, context },
-    ),
-  )
-
-export const getRecoveryCodes = createServerFn({
-  method: 'GET',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{
-      configured: boolean
-      remaining: number
-      total: number
-      createdAt: string | null
-    }>(serverImplementation.getRecoveryCodes, 'getRecoveryCodes', {
-      data,
-      context,
-    }),
-  )
-
-export const generateRecoveryCodes = createServerFn({
-  method: 'POST',
-  strict: { output: false },
-})
-  .validator((data: unknown) => data ?? {})
-  .handler(({ data, context }) =>
-    invoke<{ success: boolean; codes: string[]; createdAt: string }>(
-      serverImplementation.generateRecoveryCodes,
-      'generateRecoveryCodes',
       { data, context },
     ),
   )

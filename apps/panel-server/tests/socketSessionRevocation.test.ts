@@ -79,16 +79,8 @@ describe("Socket.IO session revocation wiring", () => {
     expect(disconnectSocketsSpy).not.toHaveBeenCalled();
   });
 
-  it("evicts the affected user's sockets for reset, role change, deletion, and logout", async () => {
+  it("evicts the admin's sockets for reset and logout", async () => {
     await authService.resetPassword("new-reset-password");
-    expect(inSpy).toHaveBeenLastCalledWith("user:u-tech");
-
-    resetWith();
-    await authService.changeUserRoleById("u-tech", "role-admin");
-    expect(inSpy).toHaveBeenLastCalledWith("user:u-tech");
-
-    resetWith();
-    await authService.deleteUser("u-tech", { actingUserId: "u-admin" });
     expect(inSpy).toHaveBeenLastCalledWith("user:u-tech");
 
     resetWith();
