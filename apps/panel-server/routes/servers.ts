@@ -1,4 +1,9 @@
-import { Router, type NextFunction, type Request, type Response } from "../http/startApiRouter.ts";
+import {
+  Router,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "../http/startApiRouter.ts";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";
@@ -16,8 +21,10 @@ import {
   getAllSettings,
 } from "../database/init.ts";
 import { isRemoteConfigConfigured } from "../services/remoteConfigFiles.ts";
-import { normalizeUserPath, inspectZomboidPath } from "../utils/zomboidPaths.ts";
-import { requirePermission } from "../services/permissions.ts";
+import {
+  normalizeUserPath,
+  inspectZomboidPath,
+} from "../utils/zomboidPaths.ts";
 import {
   parseBoundedInteger,
   parseClampedInteger,
@@ -57,18 +64,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function requireCapabilityInline(
-  capability: string,
-  req: Request,
-  res: Response,
-): Promise<boolean> {
-  let passed = false;
-  await requirePermission(capability)(req, res, (() => {
-    passed = true;
-  }) as NextFunction);
-  return passed;
-}
-
 async function mapWithConcurrency<T, R>(
   items: T[],
   limit: number,
@@ -76,12 +71,15 @@ async function mapWithConcurrency<T, R>(
 ): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let nextIndex = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
     while (nextIndex < items.length) {
       const index = nextIndex++;
       results[index] = await mapper(items[index]);
     }
-  });
+    },
+  );
   await Promise.all(workers);
   return results;
 }
@@ -234,11 +232,15 @@ function scanForPzPaths(rootPath: string, maxDepth = 3): ScanResults {
             scan(itemPath, depth + 1);
           }
         } catch (e: unknown) {
-          log.debug(`Skipping inaccessible path ${itemPath}: ${errorMessage(e)}`);
+          log.debug(
+            `Skipping inaccessible path ${itemPath}: ${errorMessage(e)}`,
+          );
         }
       }
     } catch (e: unknown) {
-      log.debug(`Skipping inaccessible folder ${currentPath}: ${errorMessage(e)}`);
+      log.debug(
+        `Skipping inaccessible folder ${currentPath}: ${errorMessage(e)}`,
+      );
     }
   }
 
@@ -246,7 +248,7 @@ function scanForPzPaths(rootPath: string, maxDepth = 3): ScanResults {
   return results;
 }
 
-router.post("/auto-scan", requirePermission("servers.discover"), async (req, res) => {
+router.post("/auto-scan", async (req, res) => {
   try {
     const { scanPath, maxDepth = 3 } = req.body || {};
 
@@ -268,9 +270,7 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
         ? /^[A-Za-z]:[\\/]?$/.test(resolvedPath)
         : resolvedPath === "/";
     if (isRootPath) {
-      return res
-        .status(400)
-        .json({
+      return res.status(400).json({
           error: "Cannot scan a root path. Please specify a subfolder.",
         });
     }
@@ -306,7 +306,11 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
             .replace(/\r\n/g, "\n");
           const settings = parseIni(content);
           const rconPort = parseDiscoveredPort(settings.RCONPort, 27015);
-          const serverPort = parseDiscoveredPort(settings.DefaultPort, 16261, GAME_PORT_MAX);
+          const serverPort = parseDiscoveredPort(
+            settings.DefaultPort,
+            16261,
+            GAME_PORT_MAX,
+          );
           if (rconPort === null || serverPort === null) {
             throw new Error("RCONPort or DefaultPort is invalid");
           }
@@ -352,7 +356,7 @@ router.post("/auto-scan", requirePermission("servers.discover"), async (req, res
   }
 });
 
-router.post("/detect", requirePermission("servers.discover"), async (req, res) => {
+router.post("/detect", async (req, res) => {
   try {
     const { dataPath, installPath } = req.body || {};
     log.info(
@@ -378,9 +382,7 @@ router.post("/detect", requirePermission("servers.discover"), async (req, res) =
 
     const serverConfigPath = path.join(resolvedData, "Server");
     if (!fs.existsSync(serverConfigPath)) {
-      return res
-        .status(400)
-        .json({
+      return res.status(400).json({
           error: "Not a valid Zomboid data folder (no Server subfolder found)",
         });
     }
@@ -433,7 +435,11 @@ router.post("/detect", requirePermission("servers.discover"), async (req, res) =
             .replace(/\r\n/g, "\n");
           const settings = parseIni(content);
           const rconPort = parseDiscoveredPort(settings.RCONPort, 27015);
-          const serverPort = parseDiscoveredPort(settings.DefaultPort, 16261, GAME_PORT_MAX);
+          const serverPort = parseDiscoveredPort(
+            settings.DefaultPort,
+            16261,
+            GAME_PORT_MAX,
+          );
           if (rconPort === null || serverPort === null) {
             throw new Error("RCONPort or DefaultPort is invalid");
           }
@@ -520,7 +526,8 @@ router.get("/status", async (req, res) => {
         .replace(/\\/g, "/")
         .trim();
 
-    const statuses = await Promise.all(servers.map(async (server: JsonRecord) => {
+    const statuses = await Promise.all(
+      servers.map(async (server: JsonRecord) => {
       if (isManagedLifecycleProvider(server.lifecycleProvider)) {
         try {
           const status = await createLinuxServiceLifecycle(
@@ -573,7 +580,8 @@ router.get("/status", async (req, res) => {
         provider: "direct",
         stateUnknown: Boolean(detectionError),
       };
-    }));
+      }),
+    );
 
     res.json({
       servers: statuses,
@@ -589,7 +597,10 @@ router.get("/status", async (req, res) => {
 router.get("/rcon-status", async (req, res) => {
   try {
     const servers = (await getServers()) as JsonRecord[];
-    const statuses = await mapWithConcurrency(servers, 3, async (server: JsonRecord) => {
+    const statuses = await mapWithConcurrency(
+      servers,
+      3,
+      async (server: JsonRecord) => {
       const rconHost =
         typeof server.rconHost === "string" ? server.rconHost.trim() : "";
       const rconPort = parseBoundedInteger(server.rconPort, null, 1, 65535);
@@ -612,7 +623,8 @@ router.get("/rcon-status", async (req, res) => {
         id: server.id,
         status: result.success ? "connected" : result.error || "unavailable",
       };
-    });
+      },
+    );
     res.json({ servers: statuses });
   } catch (error: unknown) {
     log.error(`Failed to probe server RCON status: ${errorMessage(error)}`);
@@ -662,10 +674,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.get(
-  "/:id/lifecycle-template",
-  requirePermission("servers.manage"),
-  async (req, res) => {
+router.get("/:id/lifecycle-template", async (req, res) => {
     try {
       const template = await getLifecycleTemplateForServer(
         req.params.id,
@@ -675,18 +684,12 @@ router.get(
       res.json(template);
     } catch (error: unknown) {
       if (sendProfileError(error, res)) return;
-      log.error(
-        `Failed to generate lifecycle template: ${errorMessage(error)}`,
-      );
+    log.error(`Failed to generate lifecycle template: ${errorMessage(error)}`);
       res.status(400).json({ error: sanitizeError(errorMessage(error)) });
     }
-  },
-);
+});
 
-router.post(
-  "/:id/lifecycle-provider",
-  requirePermission("servers.manage"),
-  async (req, res) => {
+router.post("/:id/lifecycle-provider", async (req, res) => {
     try {
       const result = await activateLifecycleProvider(
         req.params.id,
@@ -703,10 +706,9 @@ router.post(
       log.error(`Failed to change lifecycle provider: ${errorMessage(error)}`);
       res.status(400).json({ error: sanitizeError(errorMessage(error)) });
     }
-  },
-);
+});
 
-router.post("/", requirePermission("servers.manage"), async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const config =
       req.body && typeof req.body === "object" && !Array.isArray(req.body)
@@ -716,15 +718,9 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
       `POST / — creating server: name=${config.name}, remote=${!!config.isRemote}`,
     );
 
-    let allowIniImport = false;
-    if (config.importIniFrom && typeof config.importIniFrom === "object") {
-      allowIniImport = await requireCapabilityInline(
-        "servers.discover",
-        req,
-        res,
+    const allowIniImport = Boolean(
+      config.importIniFrom && typeof config.importIniFrom === "object",
       );
-      if (!allowIniImport) return;
-    }
 
     const server = await createServerProfile(config, { allowIniImport });
     res.status(201).json({
@@ -738,7 +734,7 @@ router.post("/", requirePermission("servers.manage"), async (req, res) => {
   }
 });
 
-router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
     const result = await updateServerProfile(
       req.params.id,
@@ -756,7 +752,7 @@ router.put("/:id", requirePermission("servers.manage"), async (req, res) => {
   }
 });
 
-router.delete("/:id", requirePermission("servers.manage"), async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
     res.json(await deleteServerProfile(req.params.id, profileRuntime(req)));
   } catch (error: unknown) {
@@ -766,10 +762,7 @@ router.delete("/:id", requirePermission("servers.manage"), async (req, res) => {
   }
 });
 
-router.post(
-  "/:id/activate",
-  requirePermission("servers.manage"),
-  async (req, res) => {
+router.post("/:id/activate", async (req, res) => {
     try {
       const result = await activateServerProfile(
         req.params.id,
@@ -784,7 +777,6 @@ router.post(
       log.error(`Failed to activate server: ${errorMessage(error)}`);
       res.status(500).json({ error: sanitizeError(errorMessage(error)) });
     }
-  },
-);
+});
 
 export default router;

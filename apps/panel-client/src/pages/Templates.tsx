@@ -12,14 +12,12 @@ import { TemplateCard } from '@/components/templates/TemplateCard'
 import { TemplatePreviewDialog } from '@/components/templates/TemplatePreviewDialog'
 import { CreateTemplateDialog } from '@/components/templates/CreateTemplateDialog'
 import { ImportTemplateDialog } from '@/components/templates/ImportTemplateDialog'
-import { useAuth } from '@/contexts/AuthContext'
 import { panelQueryKeys } from '@/lib/queryClient'
 
 export default function Templates() {
   const { toast } = useToast()
   const confirm = useConfirm()
-  const { can, authEnabled } = useAuth()
-  const canManage = !authEnabled || can('templates.manage')
+  const canManage = true
 
   const {
     data: templatesData,

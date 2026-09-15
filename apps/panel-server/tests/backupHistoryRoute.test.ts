@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 const listBackupRecords = vi.fn();
 
 vi.mock("../database/init.ts", () => ({ getActiveServer: vi.fn() }));
-vi.mock("../services/auth.ts", () => ({ requireRole: () => (_req, _res, next) => next() }));
 vi.mock("../services/backupRecords.ts", () => ({ listBackupRecords }));
 
 const { default: router } = await import("../routes/backup.ts");
@@ -22,8 +21,13 @@ it("filters backup history by server and bounds the requested limit", async () =
 
   await handler({ query: { serverId: "server-1", limit: "9999" } }, response);
 
-  expect(listBackupRecords).toHaveBeenCalledWith({ serverId: "server-1", limit: 500 });
-  expect(response.json).toHaveBeenCalledWith({ records: [{ fileName: "DoomerZ.zip" }] });
+  expect(listBackupRecords).toHaveBeenCalledWith({
+    serverId: "server-1",
+    limit: 500,
+  });
+  expect(response.json).toHaveBeenCalledWith({
+    records: [{ fileName: "DoomerZ.zip" }],
+  });
 });
 
 it("returns 400 for a missing backup settings body", async () => {

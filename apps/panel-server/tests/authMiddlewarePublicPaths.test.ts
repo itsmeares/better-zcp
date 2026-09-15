@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const settings = new Map();
-const db = { data: { users: [{ id: "u1", username: "admin", role: "admin" }] } };
+const db = {
+  data: { users: [{ id: "u1", username: "admin", role: "admin" }] },
+};
 
 vi.mock("../database/init.ts", () => ({
   getSetting: async (key) => settings.get(key) ?? null,
@@ -12,7 +14,7 @@ vi.mock("../database/init.ts", () => ({
   commitNow: async () => {},
 }));
 
-const { default: authService, requireRole } = await import("../services/auth.ts");
+const { default: authService } = await import("../services/auth.ts");
 const { default: authRouter } = await import("../routes/auth.ts");
 
 describe("authService.middleware() — /api/auth/* is no longer a blanket exemption", () => {
@@ -45,11 +47,14 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
     "/api/auth/reset-password",
   ];
 
-  it.each(PUBLIC_PATHS)("still lets %s through with NO token — these are meant to be public", async (path) => {
+  it.each(PUBLIC_PATHS)(
+    "still lets %s through with NO token — these are meant to be public",
+    async (path) => {
     const { next, res } = await run(path);
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
-  });
+    },
+  );
 
   const FORMERLY_VULNERABLE_PATHS = [
     "/api/auth/me",
@@ -77,23 +82,26 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
   it("a formerly-vulnerable path DOES work with a valid token — the fix isn't a new blanket refusal either", async () => {
     authService.jwtSecret = "test-secret-for-this-file";
     const jwt = (await import("jsonwebtoken")).default;
-    const token = jwt.sign({ userId: "u1", tokenGen: 0 }, authService.jwtSecret);
+    const token = jwt.sign(
+      { userId: "u1", tokenGen: 0 },
+      authService.jwtSecret,
+    );
 
     const { req, next, res } = await run("/api/auth/me", {
       auth: `Bearer ${token}`,
     });
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
-    expect(req.user).toMatchObject({ username: "admin", role: "admin" });
+    expect(req.user).toMatchObject({ username: "admin" });
   });
 
-  it("auth explicitly disabled (authEnabled=false): req.user is set to an explicit synthetic full-access user, not left absent", async () => {
+  it("auth explicitly disabled (authEnabled=false): req.user is set to an explicit authenticated user", async () => {
     settings.set("authEnabled", false);
     const { req, next, res } = await run("/api/auth/me");
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
-    expect(req.user).toMatchObject({ role: "admin", authDisabled: true });
+    expect(req.user).toMatchObject({ authDisabled: true });
   });
 
   it("shares the same authentication result with non-Express callers", async () => {
@@ -106,50 +114,17 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
 
     authService.jwtSecret = "test-secret-for-shared-auth";
     const jwt = (await import("jsonwebtoken")).default;
-    const token = jwt.sign({ userId: "u1", tokenGen: 0 }, authService.jwtSecret);
+    const token = jwt.sign(
+      { userId: "u1", tokenGen: 0 },
+      authService.jwtSecret,
+    );
 
     await expect(
       authService.authenticateApiRequest(`Bearer ${token}`),
     ).resolves.toMatchObject({
       ok: true,
-      user: { userId: "u1", username: "admin", role: "admin" },
+      user: { userId: "u1", username: "admin" },
     });
-  });
-});
-
-describe("requireRole() — the guard itself fails closed, independent of middleware()", () => {
-  function createResponse() {
-    const res = { status: vi.fn(), json: vi.fn() };
-    res.status.mockReturnValue(res);
-    return res;
-  }
-
-  it("refuses (401) when req.user is missing, rather than the old pass-through — the defense-in-depth half of the fix", () => {
-    const gate = requireRole("admin");
-    const req = {};
-    const res = createResponse();
-    const next = vi.fn();
-
-    gate(req, res, next);
-
-    expect(next).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "AUTH_REQUIRED" }),
-    );
-  });
-
-  it("still checks the role normally when req.user IS present — unaffected by the fail-closed change", () => {
-    const gate = requireRole("admin");
-    const res = createResponse();
-    const next = vi.fn();
-
-    gate({ user: { role: "admin" } }, res, next);
-    expect(next).toHaveBeenCalledTimes(1);
-
-    const res2 = createResponse();
-    gate({ user: { role: "technician" } }, res2, vi.fn());
-    expect(res2.status).toHaveBeenCalledWith(403);
   });
 });
 
@@ -181,5 +156,4 @@ describe("/me and /change-password authenticate their own bearer token", () => {
     });
     expect(res.status).toHaveBeenCalledWith(401);
   });
-
 });

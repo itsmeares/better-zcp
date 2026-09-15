@@ -13,7 +13,6 @@ const {
   buildSystemInfo,
   buildServerConfigSummary,
   buildSandboxOptionsDiagnostics,
-  buildRolesAndPermissions,
   checkCurlAvailable,
   buildWorldMapDiagnostics,
   buildDbWriteHealth,
@@ -64,9 +63,9 @@ describe("support bundle: recursive log discovery", () => {
         "server-logs/nested/runtime/server.err",
       ]),
     );
-    expect(entries.some((entry) => entry.archivePath.includes("ignored.log"))).toBe(
-      false,
-    );
+    expect(
+      entries.some((entry) => entry.archivePath.includes("ignored.log")),
+    ).toBe(false);
   });
 });
 
@@ -93,31 +92,14 @@ describe("support bundle: curl availability (World Map's runtime dependency)", (
   });
 
   it("buildWorldMapDiagnostics combines curl status with the B42 resolution contract shape", async () => {
-    mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "curl 8.4.0", ""));
+    mockExecFile.mockImplementation((cmd, args, opts, cb) =>
+      cb(null, "curl 8.4.0", ""),
+    );
     const result = await buildWorldMapDiagnostics();
     expect(result.curl.available).toBe(true);
     expect(result.b42Resolution).toHaveProperty("source");
     expect(result.b42Resolution).toHaveProperty("directory");
     expect(result.b42Resolution).toHaveProperty("reason");
-  });
-});
-
-describe("support bundle: roles and permissions", () => {
-  it("returns an array of roles and an array of local users with no unexpected shape", async () => {
-    const result = await buildRolesAndPermissions();
-    expect(result).not.toHaveProperty("_error");
-    expect(Array.isArray(result.roles)).toBe(true);
-    expect(Array.isArray(result.users)).toBe(true);
-    for (const role of result.roles) {
-      expect(role).toHaveProperty("name");
-      expect(Array.isArray(role.capabilities)).toBe(true);
-      expect(typeof role.memberCount).toBe("number");
-    }
-    for (const user of result.users) {
-      expect(user).toHaveProperty("username");
-      expect(user).toHaveProperty("role");
-      expect(user).not.toHaveProperty("password");
-    }
   });
 });
 
@@ -194,15 +176,25 @@ describe("support bundle: Discord bot status", () => {
 describe("support bundle: system info reports whether the server process was running", () => {
   it("reports running:true, scanFailed:false when the process check succeeds", async () => {
     const serverManager = {
-      getServerProcessDetails: async () => ({ running: true, scanFailed: false }),
+      getServerProcessDetails: async () => ({
+        running: true,
+        scanFailed: false,
+      }),
     };
     const result = await buildSystemInfo(null, serverManager);
-    expect(result.serverProcess).toEqual({ checked: true, running: true, scanFailed: false });
+    expect(result.serverProcess).toEqual({
+      checked: true,
+      running: true,
+      scanFailed: false,
+    });
   });
 
   it("reports scanFailed:true rather than a false 'not running' when detection itself fails", async () => {
     const serverManager = {
-      getServerProcessDetails: async () => ({ running: false, scanFailed: true }),
+      getServerProcessDetails: async () => ({
+        running: false,
+        scanFailed: true,
+      }),
     };
     const result = await buildSystemInfo(null, serverManager);
     expect(result.serverProcess.scanFailed).toBe(true);
@@ -221,36 +213,49 @@ describe("support bundle: system info reports whether the server process was run
 
 describe("support bundle: UI language reported by the bundle-download request", () => {
   beforeEach(() => {
-    mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "curl 8.4.0", ""));
+    mockExecFile.mockImplementation((cmd, args, opts, cb) =>
+      cb(null, "curl 8.4.0", ""),
+    );
   });
   afterEach(() => mockExecFile.mockReset());
 
   it("threads a plausible BCP-47-shaped header value straight through system-info.json", async () => {
     const req = fakeReq({}, { "x-ui-language": "zh-CN" });
     const files = await buildBundleDiagnostics(null, req);
-    const systemInfo = JSON.parse(files.find((f) => f.name === "system-info.json").content);
+    const systemInfo = JSON.parse(
+      files.find((f) => f.name === "system-info.json").content,
+    );
     expect(systemInfo.uiLanguage).toBe("zh-CN");
   });
 
   it("degrades to 'not reported' rather than guessing 'en' when the header is absent", async () => {
     const req = fakeReq({});
     const files = await buildBundleDiagnostics(null, req);
-    const systemInfo = JSON.parse(files.find((f) => f.name === "system-info.json").content);
+    const systemInfo = JSON.parse(
+      files.find((f) => f.name === "system-info.json").content,
+    );
     expect(systemInfo.uiLanguage).toBe("not reported");
   });
 
   it("degrades to 'not reported' for a garbage or oversized header rather than writing it through unvalidated", async () => {
     const tooLong = fakeReq({}, { "x-ui-language": "a".repeat(200) });
-    const notALocale = fakeReq({}, { "x-ui-language": "<script>alert(1)</script>" });
+    const notALocale = fakeReq(
+      {},
+      { "x-ui-language": "<script>alert(1)</script>" },
+    );
 
     const tooLongResult = await buildBundleDiagnostics(null, tooLong);
     const notALocaleResult = await buildBundleDiagnostics(null, notALocale);
 
     expect(
-      JSON.parse(tooLongResult.find((f) => f.name === "system-info.json").content).uiLanguage,
+      JSON.parse(
+        tooLongResult.find((f) => f.name === "system-info.json").content,
+      ).uiLanguage,
     ).toBe("not reported");
     expect(
-      JSON.parse(notALocaleResult.find((f) => f.name === "system-info.json").content).uiLanguage,
+      JSON.parse(
+        notALocaleResult.find((f) => f.name === "system-info.json").content,
+      ).uiLanguage,
     ).toBe("not reported");
   });
 
@@ -259,7 +264,9 @@ describe("support bundle: UI language reported by the bundle-download request", 
     const files = await buildBundleDiagnostics(null, req);
     const readme = files.find((f) => f.name === "README.md").content;
     expect(readme).toContain("uiLanguage");
-    expect(readme).not.toContain("Which UI language the reporting user had selected");
+    expect(readme).not.toContain(
+      "Which UI language the reporting user had selected",
+    );
   });
 });
 
@@ -369,7 +376,9 @@ describe("support bundle: sandbox-options diagnostics", () => {
     expect(result.detected).toBe(true);
     expect(result.pzVersion).toBe("42.20.4");
     expect(result.panelBridgeVersion).toBe("1.7.57");
-    expect(result.error.javaMethod).toContain("getValueTranslationByIndexOrNull");
+    expect(result.error.javaMethod).toContain(
+      "getValueTranslationByIndexOrNull",
+    );
     expect(result.error.optionName).toBeNull();
     expect(result.candidateMods).toEqual(
       expect.arrayContaining([
@@ -388,7 +397,9 @@ describe("support bundle: sandbox-options diagnostics", () => {
 
 describe("support bundle assembly: one collector throwing never breaks the rest", () => {
   it("degrades exactly the failing file to _error and leaves every other file intact", async () => {
-    mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "curl 8.4.0", ""));
+    mockExecFile.mockImplementation((cmd, args, opts, cb) =>
+      cb(null, "curl 8.4.0", ""),
+    );
     const req = fakeReq({});
     req.app.get = (key) => {
       if (key === "backupService") throw new Error("boom-backup-service");
@@ -402,7 +413,6 @@ describe("support bundle assembly: one collector throwing never breaks the rest"
       "boom-backup-service",
     );
     for (const name of [
-      "roles-and-permissions.json",
       "world-map-diagnostics.json",
       "db-write-health.json",
       "discord-bot-status.json",
@@ -411,7 +421,7 @@ describe("support bundle assembly: one collector throwing never breaks the rest"
       expect(byName[name]).toBeDefined();
       expect(JSON.parse(byName[name])._error).toBeUndefined();
     }
-    expect(byName["README.md"]).toContain("roles-and-permissions.json");
+    expect(byName["README.md"]).toContain("system-info.json");
   });
 });
 
@@ -481,7 +491,10 @@ describe("support bundle: Docker container logs", () => {
       return "hello\n";
     });
     setDockerClient({ enabled: true, available: true, getContainerLogs });
-    await buildDockerContainerLogsText({ id: "s1", dockerContainerId: "abc123" });
+    await buildDockerContainerLogsText({
+      id: "s1",
+      dockerContainerId: "abc123",
+    });
     expect(getContainerLogs).toHaveBeenCalledOnce();
   });
 });
@@ -498,20 +511,31 @@ describe("support bundle: managed-service (systemd/OpenRC) logs", () => {
   });
 
   it("skips with a clear reason when the server is not lifecycle-managed", async () => {
-    const text = await buildManagedServiceLogsText({ id: "s1", lifecycleProvider: "direct" });
-    expect(text).toContain("not running under a systemd/OpenRC managed lifecycle");
+    const text = await buildManagedServiceLogsText({
+      id: "s1",
+      lifecycleProvider: "direct",
+    });
+    expect(text).toContain(
+      "not running under a systemd/OpenRC managed lifecycle",
+    );
     expect(mockExecFile).not.toHaveBeenCalled();
   });
 
   it("reports OpenRC as a known, honest gap rather than guessing a log path", async () => {
-    const text = await buildManagedServiceLogsText({ id: "s1", lifecycleProvider: "openrc" });
+    const text = await buildManagedServiceLogsText({
+      id: "s1",
+      lifecycleProvider: "openrc",
+    });
     expect(text).toContain("known gap");
     expect(mockExecFile).not.toHaveBeenCalled();
   });
 
   it("skips with a clear reason on a non-Linux panel host", async () => {
     setPlatform("win32");
-    const text = await buildManagedServiceLogsText({ id: "s1", lifecycleProvider: "systemd" });
+    const text = await buildManagedServiceLogsText({
+      id: "s1",
+      lifecycleProvider: "systemd",
+    });
     expect(text).toContain("Linux-only");
     expect(mockExecFile).not.toHaveBeenCalled();
   });
@@ -527,7 +551,10 @@ describe("support bundle: managed-service (systemd/OpenRC) logs", () => {
       );
       cb(null, "Aug 30 panel bash[1]: server ready\n", "");
     });
-    const text = await buildManagedServiceLogsText({ id: "s1", lifecycleProvider: "systemd" });
+    const text = await buildManagedServiceLogsText({
+      id: "s1",
+      lifecycleProvider: "systemd",
+    });
     expect(text).toContain("server ready");
     expect(text).toContain("zomboid-panel-server-s1.service");
   });
@@ -539,14 +566,20 @@ describe("support bundle: managed-service (systemd/OpenRC) logs", () => {
       err.code = 1;
       cb(err, "", "Failed to query journal: Permission denied");
     });
-    const text = await buildManagedServiceLogsText({ id: "s1", lifecycleProvider: "systemd" });
+    const text = await buildManagedServiceLogsText({
+      id: "s1",
+      lifecycleProvider: "systemd",
+    });
     expect(text).toContain("Permission denied");
   });
 
   it("reports an empty journal distinctly from a failure", async () => {
     setPlatform("linux");
     mockExecFile.mockImplementation((cmd, args, opts, cb) => cb(null, "", ""));
-    const text = await buildManagedServiceLogsText({ id: "s1", lifecycleProvider: "systemd" });
+    const text = await buildManagedServiceLogsText({
+      id: "s1",
+      lifecycleProvider: "systemd",
+    });
     expect(text).toContain("no entries for this unit yet");
   });
 });

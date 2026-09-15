@@ -5,10 +5,6 @@ import {
   setResponseStatus,
 } from '@tanstack/react-start/server'
 import {
-  adminRoleMiddleware,
-  diagnosticsMiddleware,
-  panelSettingsMiddleware,
-  permissionMiddleware,
   protectedServerFunctionMiddleware,
   type AuthContextUser,
 } from './serverAuth.server'
@@ -47,8 +43,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-const throwServerError: (error: unknown, fallbackStatus: number) => never = createServerOnlyFn(
-  (error: unknown, fallbackStatus: number): never => {
+const throwServerError: (error: unknown, fallbackStatus: number) => never =
+  createServerOnlyFn((error: unknown, fallbackStatus: number): never => {
     const details =
       error && typeof error === 'object' ? (error as ServiceError) : {}
     const status =
@@ -61,8 +57,7 @@ const throwServerError: (error: unknown, fallbackStatus: number) => never = crea
     })
     setResponseStatus(status)
     throw safeError
-  },
-)
+  })
 
 function currentUser(context: unknown): AuthContextUser {
   return (context as { authenticatedUser: AuthContextUser }).authenticatedUser
@@ -102,10 +97,7 @@ export const getAppSettings = createServerFn({ method: 'GET' }).handler(
 )
 ;(getAppSettings as any).__executeImplementation = getAppSettingsImplementation
 
-const serverConfigureMiddleware = [
-  ...protectedServerFunctionMiddleware,
-  permissionMiddleware('server.configure'),
-] as const
+const serverConfigureMiddleware = protectedServerFunctionMiddleware
 
 async function getPanelRuntime() {
   const { getPanelRuntime: readPanelRuntime } =
@@ -115,13 +107,12 @@ async function getPanelRuntime() {
 
 async function updateAppSettingsImplementation(
   data: { settings?: unknown },
-  context: unknown,
+  _context: unknown,
 ) {
   try {
     const { saveAppSettings } =
       await import('../../../panel-server/services/appSettings.ts')
     return await saveAppSettings(data.settings, {
-      userRole: currentUser(context).role,
       runtime: await getPanelRuntime(),
     })
   } catch (error) {
@@ -130,12 +121,13 @@ async function updateAppSettingsImplementation(
 }
 
 export const updateAppSettings = createServerFn({ method: 'POST' })
-  .middleware(panelSettingsMiddleware)
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: { settings?: unknown } | undefined) => data ?? {})
   .handler(({ data, context }) =>
     updateAppSettingsImplementation(data, context),
   )
-;(updateAppSettings as any).__executeImplementation = updateAppSettingsImplementation
+;(updateAppSettings as any).__executeImplementation =
+  updateAppSettingsImplementation
 
 async function getCorsDiagnosticsImplementation() {
   const runtime = await getPanelRuntime()
@@ -151,9 +143,10 @@ async function getCorsDiagnosticsImplementation() {
 }
 
 export const getCorsDiagnostics = createServerFn({ method: 'GET' })
-  .middleware(diagnosticsMiddleware)
+  .middleware(protectedServerFunctionMiddleware)
   .handler(getCorsDiagnosticsImplementation)
-;(getCorsDiagnostics as any).__executeImplementation = getCorsDiagnosticsImplementation
+;(getCorsDiagnostics as any).__executeImplementation =
+  getCorsDiagnosticsImplementation
 
 async function reloadCorsDiagnosticsImplementation() {
   const runtime = await getPanelRuntime()
@@ -172,9 +165,10 @@ async function reloadCorsDiagnosticsImplementation() {
 }
 
 export const reloadCorsDiagnostics = createServerFn({ method: 'POST' })
-  .middleware(diagnosticsMiddleware)
+  .middleware(protectedServerFunctionMiddleware)
   .handler(reloadCorsDiagnosticsImplementation)
-;(reloadCorsDiagnostics as any).__executeImplementation = reloadCorsDiagnosticsImplementation
+;(reloadCorsDiagnostics as any).__executeImplementation =
+  reloadCorsDiagnosticsImplementation
 
 async function clearCorsBlockedOriginsImplementation() {
   const runtime = await getPanelRuntime()
@@ -197,9 +191,10 @@ async function clearCorsBlockedOriginsImplementation() {
 }
 
 export const clearCorsBlockedOrigins = createServerFn({ method: 'POST' })
-  .middleware(diagnosticsMiddleware)
+  .middleware(protectedServerFunctionMiddleware)
   .handler(clearCorsBlockedOriginsImplementation)
-;(clearCorsBlockedOrigins as any).__executeImplementation = clearCorsBlockedOriginsImplementation
+;(clearCorsBlockedOrigins as any).__executeImplementation =
+  clearCorsBlockedOriginsImplementation
 
 async function testAppRconConnectionImplementation(): Promise<AppRconTestResult> {
   const runtime = await getPanelRuntime()
@@ -218,7 +213,8 @@ async function testAppRconConnectionImplementation(): Promise<AppRconTestResult>
             await import('../../../panel-server/utils/sanitize.ts')
           return {
             success: true,
-            message: 'Connected but command failed: ' + sanitizeError(probe?.error),
+            message:
+              'Connected but command failed: ' + sanitizeError(probe?.error),
             connected: true,
             warning: true,
           }
@@ -233,7 +229,8 @@ async function testAppRconConnectionImplementation(): Promise<AppRconTestResult>
           await import('../../../panel-server/utils/sanitize.ts')
         return {
           success: true,
-          message: 'Connected but command failed: ' + sanitizeError(commandError),
+          message:
+            'Connected but command failed: ' + sanitizeError(commandError),
           connected: true,
           warning: true,
         }
@@ -279,7 +276,8 @@ async function testAppRconConnectionImplementation(): Promise<AppRconTestResult>
 export const testAppRconConnection = createServerFn({ method: 'POST' })
   .middleware(serverConfigureMiddleware)
   .handler(testAppRconConnectionImplementation)
-;(testAppRconConnection as any).__executeImplementation = testAppRconConnectionImplementation
+;(testAppRconConnection as any).__executeImplementation =
+  testAppRconConnectionImplementation
 
 async function getDebugRamImplementation() {
   const os = await import('node:os')
@@ -296,13 +294,13 @@ async function getDebugRamImplementation() {
 }
 
 export const getDebugRam = createServerFn({ method: 'GET' })
-  .middleware(diagnosticsMiddleware)
+  .middleware(protectedServerFunctionMiddleware)
   .handler(getDebugRamImplementation)
 ;(getDebugRam as any).__executeImplementation = getDebugRamImplementation
 
-async function getPerformanceHistoryImplementation(
-  data: { limit?: number },
-): Promise<{ history: PerformanceHistoryEntry[] }> {
+async function getPerformanceHistoryImplementation(data: {
+  limit?: number
+}): Promise<{ history: PerformanceHistoryEntry[] }> {
   try {
     const { getPerformanceHistory: readPerformanceHistory } =
       await import('../../../panel-server/database/init.ts')
@@ -317,10 +315,11 @@ async function getPerformanceHistoryImplementation(
 }
 
 export const getPerformanceHistory = createServerFn({ method: 'GET' })
-  .middleware(diagnosticsMiddleware)
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: { limit?: number } | undefined) => data ?? {})
   .handler(({ data }) => getPerformanceHistoryImplementation(data))
-;(getPerformanceHistory as any).__executeImplementation = getPerformanceHistoryImplementation
+;(getPerformanceHistory as any).__executeImplementation =
+  getPerformanceHistoryImplementation
 
 async function changePasswordImplementation(
   data: { currentPassword: string; newPassword: string },
@@ -336,9 +335,12 @@ async function changePasswordImplementation(
       })
     }
     if (data.newPassword.length > 128) {
-      throw Object.assign(new Error('Password must be 128 characters or fewer'), {
+      throw Object.assign(
+        new Error('Password must be 128 characters or fewer'),
+        {
         status: 400,
-      })
+        },
+      )
     }
     const { default: authService } =
       await import('../../../panel-server/services/auth.ts')
@@ -377,6 +379,7 @@ async function regenerateJwtSecretImplementation() {
 }
 
 export const regenerateJwtSecret = createServerFn({ method: 'POST' })
-  .middleware(adminRoleMiddleware)
+  .middleware(protectedServerFunctionMiddleware)
   .handler(regenerateJwtSecretImplementation)
-;(regenerateJwtSecret as any).__executeImplementation = regenerateJwtSecretImplementation
+;(regenerateJwtSecret as any).__executeImplementation =
+  regenerateJwtSecretImplementation

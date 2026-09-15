@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useSocket } from '@/contexts/SocketContext'
-import { useAuth } from '@/contexts/AuthContext'
 import { DisabledReason } from '@/components/DisabledReason'
 import { HelpTip } from '@/components/HelpTip'
 import {
@@ -534,10 +533,9 @@ const PZ_LANDMARKS = [
 export default function WorldMap() {
   const { theme } = useTheme()
   const socket = useSocket()
-  const { can } = useAuth()
-  const canRunBridgeCommand = can('bridge.command')
-  const canWorldEvents = can('server.world_events')
-  const canGmTools = can('players.gm_tools')
+  const canRunBridgeCommand = true
+  const canWorldEvents = true
+  const canGmTools = true
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const mapWrapperRef = useRef<HTMLDivElement>(null)

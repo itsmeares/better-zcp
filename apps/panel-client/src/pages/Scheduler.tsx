@@ -81,7 +81,6 @@ import { NumberInput } from '@/components/NumberInput'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { DisabledReason } from '@/components/DisabledReason'
 import { HelpTip } from '@/components/HelpTip'
-import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
 
 const RESTART_WARNING_LOCALES = ['en', 'zh-CN', 'fr', 'de', 'es', 'ht'] as const
@@ -433,8 +432,7 @@ export default function Scheduler() {
   const [broadcastingKey, setBroadcastingKey] = useState<string | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const { toast } = useToast()
-  const { can } = useAuth()
-  const canRestartNow = can('server.control')
+  const canRestartNow = true
 
   const [newTaskName, setNewTaskName] = useState('')
   const [newTaskCron, setNewTaskCron] = useState('')

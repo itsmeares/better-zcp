@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { permissionMiddleware, protectedServerFunctionMiddleware } from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 
@@ -24,8 +24,10 @@ function errorMessage(error: unknown): string {
 }
 
 function throwWorldError(error: unknown, fallbackStatus = 500): never {
-  const details = error && typeof error === 'object' ? (error as ServiceError) : {}
-  const status = typeof details.status === 'number' ? details.status : fallbackStatus
+  const details =
+    error && typeof error === 'object' ? (error as ServiceError) : {}
+  const status =
+    typeof details.status === 'number' ? details.status : fallbackStatus
   throw Object.assign(new Error(errorMessage(error)), {
     status,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
@@ -43,13 +45,6 @@ function invalid(message: string, code?: string, params?: unknown): never {
   )
 }
 
-function capabilityMiddleware(capability: string) {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware(capability),
-  ] as const
-}
-
 async function panelBridge(): Promise<AnyRecord> {
   const { getPanelRuntime } =
     await import('../../../panel-server/utils/panelRuntime.ts')
@@ -63,7 +58,8 @@ async function withBridge<T>(
 ): Promise<T> {
   try {
     const bridge = await panelBridge()
-    const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+    const { ErrorCode } =
+      await import('../../../panel-server/utils/errorCodes.ts')
 
     if (requirePath && !bridge.bridgePath) {
       invalid('Bridge not configured', ErrorCode.BRIDGE_NOT_CONFIGURED)
@@ -87,12 +83,18 @@ async function withBridge<T>(
     const { sanitizeError } =
       await import('../../../panel-server/utils/sanitize.ts')
     throwWorldError(
-      Object.assign(new Error(sanitizeError(errorMessage(error))), { status: 500 }),
+      Object.assign(new Error(sanitizeError(errorMessage(error))), {
+        status: 500,
+      }),
     )
   }
 }
 
-function isNumberInRange(value: unknown, min: number, max: number): value is number {
+function isNumberInRange(
+  value: unknown,
+  min: number,
+  max: number,
+): value is number {
   return (
     typeof value === 'number' &&
     Number.isFinite(value) &&
@@ -101,7 +103,11 @@ function isNumberInRange(value: unknown, min: number, max: number): value is num
   )
 }
 
-function isIntegerInRange(value: unknown, min: number, max: number): value is number {
+function isIntegerInRange(
+  value: unknown,
+  min: number,
+  max: number,
+): value is number {
   return Number.isInteger(value) && isNumberInRange(value, min, max)
 }
 
@@ -150,14 +156,17 @@ async function persistUtilities(
 }
 
 async function executeWorldAction(data: AnyRecord): Promise<unknown> {
-  const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+  const { ErrorCode } =
+    await import('../../../panel-server/utils/errorCodes.ts')
   const action = data.action
   if (typeof action !== 'string' || !action) {
     invalid('action is required', ErrorCode.PANELBRIDGE_ACTION_REQUIRED)
   }
   if (
     data.args !== undefined &&
-    (typeof data.args !== 'object' || data.args === null || Array.isArray(data.args))
+    (typeof data.args !== 'object' ||
+      data.args === null ||
+      Array.isArray(data.args))
   ) {
     invalid('args must be an object', ErrorCode.PANELBRIDGE_ARGS_MUST_BE_OBJECT)
   }
@@ -187,7 +196,11 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
       )) as AnyRecord
       return {
         ...result,
-        ...(await persistUtilities(power, water, action === 'restoreUtilities')),
+        ...(await persistUtilities(
+          power,
+          water,
+          action === 'restoreUtilities',
+        )),
       }
     }
     case 'playWorldSound': {
@@ -198,10 +211,7 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
           ErrorCode.BRIDGE_XY_COORDS_REQUIRED,
         )
       }
-      if (
-        !isNumberInRange(x, 0, 24000) ||
-        !isNumberInRange(y, 0, 24000)
-      ) {
+      if (!isNumberInRange(x, 0, 24000) || !isNumberInRange(y, 0, 24000)) {
         invalid(
           'Coordinates out of range (valid: 0-24000)',
           ErrorCode.PANELBRIDGE_SOUND_COORDS_OUT_OF_RANGE,
@@ -212,7 +222,9 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
       )
     }
     case 'getZombieCount':
-      return withBridge(false, (bridge) => bridge.sendCommand('getZombieCount', {}))
+      return withBridge(false, (bridge) =>
+        bridge.sendCommand('getZombieCount', {}),
+      )
     case 'clearZombiesNearPlayer': {
       const username = requireUsername(
         args,
@@ -245,9 +257,13 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
         ErrorCode.BRIDGE_NOT_RUNNING_BARE,
       )
     case 'triggerBlizzard':
-      return withBridge(false, (bridge) => bridge.triggerBlizzard(args.duration))
+      return withBridge(false, (bridge) =>
+        bridge.triggerBlizzard(args.duration),
+      )
     case 'triggerTropicalStorm':
-      return withBridge(false, (bridge) => bridge.triggerTropicalStorm(args.duration))
+      return withBridge(false, (bridge) =>
+        bridge.triggerTropicalStorm(args.duration),
+      )
     case 'triggerStorm':
       if (
         args.duration !== undefined &&
@@ -310,18 +326,32 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
           ErrorCode.BRIDGE_INTENSITY_MUST_BE_NUMBER_0_1,
         )
       }
-      return withBridge(false, (bridge) => bridge.startRain(args.intensity ?? 0.5))
+      return withBridge(false, (bridge) =>
+        bridge.startRain(args.intensity ?? 0.5),
+      )
     case 'stopRain':
       return withBridge(false, (bridge) => bridge.stopRain())
     case 'triggerLightning':
-      if (args.x !== undefined && !isNumberInRange(args.x, -Infinity, Infinity)) {
+      if (
+        args.x !== undefined &&
+        !isNumberInRange(args.x, -Infinity, Infinity)
+      ) {
         invalid('x must be a number', ErrorCode.PANELBRIDGE_LIGHTNING_X_INVALID)
       }
-      if (args.y !== undefined && !isNumberInRange(args.y, -Infinity, Infinity)) {
+      if (
+        args.y !== undefined &&
+        !isNumberInRange(args.y, -Infinity, Infinity)
+      ) {
         invalid('y must be a number', ErrorCode.PANELBRIDGE_LIGHTNING_Y_INVALID)
       }
       return withBridge(false, (bridge) =>
-        bridge.triggerLightning(args.x, args.y, args.strike, args.light, args.rumble),
+        bridge.triggerLightning(
+          args.x,
+          args.y,
+          args.strike,
+          args.light,
+          args.rumble,
+        ),
       )
     case 'setClimateFloat':
       if (args.floatId === undefined || args.value === undefined) {
@@ -348,10 +378,7 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
     case 'resetClimateOverrides':
       return withBridge(false, (bridge) => bridge.resetClimateOverrides())
     case 'setTemperature':
-      if (
-        args.value !== undefined &&
-        !isNumberInRange(args.value, -50, 50)
-      ) {
+      if (args.value !== undefined && !isNumberInRange(args.value, -50, 50)) {
         invalid(
           'value must be a number -50 to 50',
           ErrorCode.PANELBRIDGE_TEMPERATURE_VALUE_INVALID,
@@ -363,19 +390,14 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
     case 'setWind':
     case 'setFog':
     case 'setClouds':
-      if (
-        args.value !== undefined &&
-        !isNumberInRange(args.value, 0, 1)
-      ) {
+      if (args.value !== undefined && !isNumberInRange(args.value, 0, 1)) {
         invalid(
           'value must be a number 0-1',
           ErrorCode.BRIDGE_VALUE_MUST_BE_NUMBER_0_1,
         )
       }
       return withBridge(false, (bridge) =>
-        bridge[action](
-          args.value ?? (action === 'setWind' ? 0.5 : 0),
-        ),
+        bridge[action](args.value ?? (action === 'setWind' ? 0.5 : 0)),
       )
     case 'setViewDistance':
     case 'setDayLight':
@@ -392,10 +414,7 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
         bridge.sendCommand(action, { value: args.value }),
       )
     case 'setGameTime':
-      if (
-        args.hour !== undefined &&
-        !isIntegerInRange(args.hour, 0, 23)
-      ) {
+      if (args.hour !== undefined && !isIntegerInRange(args.hour, 0, 23)) {
         invalid(
           'hour must be an integer 0-23',
           ErrorCode.PANELBRIDGE_GAMETIME_HOUR_INVALID,
@@ -433,7 +452,7 @@ async function executeWorldAction(data: AnyRecord): Promise<unknown> {
 }
 
 export const sendPanelBridgeWorldCommand = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('server.world_events'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeWorldAction(data)) as any)
 
@@ -452,14 +471,17 @@ async function getServerInfoImplementation(): Promise<any> {
 }
 
 export const getPanelBridgeServerInfo = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('players.view'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(getServerInfoImplementation)
 
 export const savePanelBridgeWorld = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('server.control'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
-  .handler(async () => (await withBridge(false, (bridge) => bridge.saveWorld())) as any)
+  .handler(
+    async () =>
+      (await withBridge(false, (bridge) => bridge.saveWorld())) as any,
+  )
 
 ;(sendPanelBridgeWorldCommand as any).__executeImplementation = (
   data: unknown,

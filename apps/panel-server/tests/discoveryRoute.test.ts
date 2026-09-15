@@ -9,7 +9,10 @@ const readServerIniSettings = vi.fn();
 
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
-vi.mock("../database/init.ts", () => ({ createServer, getRoleByName: mockGetRoleByName }));
+vi.mock("../database/init.ts", () => ({
+  createServer,
+  getRoleByName: mockGetRoleByName,
+}));
 vi.mock("../services/mountDiscovery.ts", () => ({
   discoverMounts,
   discoverMountIssues,
@@ -48,8 +51,7 @@ async function runCreate(body, user = { role: "admin" }) {
 async function runDiscover(user = { role: "admin" }) {
   const layer = router.stack.find(
     (entry) =>
-      entry.route?.path === "/discover-mounts" &&
-      entry.route.methods.get,
+      entry.route?.path === "/discover-mounts" && entry.route.methods.get,
   );
   const handlers = layer.route.stack.map((entry) => entry.handle);
   const response = createResponse();
@@ -112,16 +114,6 @@ describe("POST /api/servers/create-from-discovery", () => {
     expect(createServer).not.toHaveBeenCalled();
   });
 
-  it("requires an administrator", async () => {
-    const response = await runCreate(
-      { installPath: "/pz-server", dataPath: "/zomboid" },
-      { role: "viewer" },
-    );
-
-    expect(response.status).toHaveBeenCalledWith(403);
-    expect(createServer).not.toHaveBeenCalled();
-  });
-
   it("creates from the discovered paths and masks returned credentials", async () => {
     const response = await runCreate({
       installPath: "/pz-server",
@@ -171,13 +163,6 @@ describe("POST /api/servers/create-from-discovery", () => {
 describe("GET /api/servers/discover-mounts", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("requires the servers.discover capability", async () => {
-    const response = await runDiscover({ role: "viewer" });
-
-    expect(response.status).toHaveBeenCalledWith(403);
-    expect(discoverMounts).not.toHaveBeenCalled();
-  });
-
   it("returns discovered mounts to an authorized operator", async () => {
     discoverMounts.mockReturnValue([{ installPath: "/pz-server" }]);
 
@@ -192,7 +177,11 @@ describe("GET /api/servers/discover-mounts", () => {
   it("reports permission-denied candidates separately from missing ones", async () => {
     discoverMounts.mockReturnValue([]);
     discoverMountIssues.mockReturnValue([
-      { path: "/pz-server", source: "common-mount", reason: "permission-denied" },
+      {
+        path: "/pz-server",
+        source: "common-mount",
+        reason: "permission-denied",
+      },
     ]);
 
     const response = await runDiscover();
@@ -200,7 +189,11 @@ describe("GET /api/servers/discover-mounts", () => {
     expect(response.json).toHaveBeenCalledWith({
       mounts: [],
       inaccessible: [
-        { path: "/pz-server", source: "common-mount", reason: "permission-denied" },
+        {
+          path: "/pz-server",
+          source: "common-mount",
+          reason: "permission-denied",
+        },
       ],
     });
   });

@@ -26,7 +26,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { discordApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
 import {
   MessageSquare,
   Bot,
@@ -231,8 +230,7 @@ export default function Discord() {
   const eventLabels = useMemo(() => getEventLabels(), [])
   const SETUP_STEPS = useMemo(() => getSetupSteps(), [])
   const confirm = useConfirm()
-  const { can } = useAuth()
-  const canManageIntegrations = can('integrations.manage')
+  const canManageIntegrations = true
   const [status, setStatus] = useState<DiscordStatus | null>(null)
   const [gatewayIssueDismissed, setGatewayIssueDismissed] = useState<
     string | null
@@ -1301,7 +1299,7 @@ export default function Discord() {
                           {'Right-click a role → '}
                           <strong>{'Copy Role ID'}</strong>
                           {
-                            ". Only Discord members with this role can use bot commands — a separate role from this panel's own Roles & Permissions. Leave blank to allow everyone."
+                            '. Only Discord members with this role can use bot commands. Leave blank to allow everyone.'
                           }
                         </>
                       </p>
@@ -1769,7 +1767,7 @@ export default function Discord() {
               <AlertTitle>{'Not the same roles as this panel'}</AlertTitle>
               <AlertDescription>
                 {
-                  "Admin and Moderator here are Discord roles, set via the Admin/Moderator Role ID fields below — separate from this panel's own Roles & Permissions. A Discord account is not linked to any panel account, so a user's panel role has no effect on what they can run here, and holding a Discord Admin/Moderator role grants nothing inside the panel."
+                  'Admin and Moderator here are Discord roles set with the role IDs below. They only control bot commands and grant no access to the panel.'
                 }
               </AlertDescription>
             </Alert>

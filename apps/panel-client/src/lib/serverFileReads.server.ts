@@ -1,8 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 
@@ -18,10 +15,6 @@ type ServiceError = {
 }
 
 type FileType = 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions'
-
-type FileExecutionContext = {
-  authenticatedUser?: { role?: string }
-}
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -66,10 +59,7 @@ function createFileRead<T>(handler: (data: AnyRecord) => Promise<T> | T) {
 
   return Object.assign(
     createServerFn({ method: 'GET' })
-      .middleware([
-        ...protectedServerFunctionMiddleware,
-        permissionMiddleware('serverfiles.manage'),
-      ] as const)
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) =>
         data && typeof data === 'object' && !Array.isArray(data)
           ? (data as AnyRecord)
@@ -80,18 +70,10 @@ function createFileRead<T>(handler: (data: AnyRecord) => Promise<T> | T) {
   )
 }
 
-function createFileMutation<T>(
-  handler: (
-    data: AnyRecord,
-    context: FileExecutionContext,
-  ) => Promise<T> | T,
-) {
-  const implementation = async (
-    data: AnyRecord,
-    context: FileExecutionContext = {},
-  ): Promise<T> => {
+function createFileMutation<T>(handler: (data: AnyRecord) => Promise<T> | T) {
+  const implementation = async (data: AnyRecord): Promise<T> => {
     try {
-      return await handler(data, context)
+      return await handler(data)
     } catch (error) {
       throwFileError(error)
     }
@@ -99,18 +81,13 @@ function createFileMutation<T>(
 
   return Object.assign(
     createServerFn({ method: 'POST' })
-      .middleware([
-        ...protectedServerFunctionMiddleware,
-        permissionMiddleware('serverfiles.manage'),
-      ] as const)
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) =>
         data && typeof data === 'object' && !Array.isArray(data)
           ? (data as AnyRecord)
           : {},
       )
-      .handler(({ data, context }) =>
-        implementation(data, context as unknown as FileExecutionContext) as any,
-      ),
+      .handler(({ data }) => implementation(data) as any),
     { __executeImplementation: implementation },
   )
 }
@@ -300,10 +277,8 @@ type ResolvedServerFiles = {
 }
 
 async function resolveServerFiles(): Promise<ResolvedServerFiles> {
-  const {
-    getActiveServerContext,
-    ServerNotConfiguredError,
-  } = await import('../../../panel-server/services/sandboxPersistence.ts')
+  const { getActiveServerContext, ServerNotConfiguredError } =
+    await import('../../../panel-server/services/sandboxPersistence.ts')
   const context = await getActiveServerContext()
   if (context.configurationError) {
     throwFileError(
@@ -385,11 +360,8 @@ export async function withWritableServerFiles<T>(
     await import('../../../panel-server/services/sandboxPersistence.ts')
   if (!transport) throwFileError(new RemoteConfigNotConfiguredError(), 400)
 
-  const {
-    acquireMirrorLock,
-    beginRemoteConfigSession,
-    pushRemoteConfigFiles,
-  } = await import('../../../panel-server/services/remoteConfigFiles.ts')
+  const { acquireMirrorLock, beginRemoteConfigSession, pushRemoteConfigFiles } =
+    await import('../../../panel-server/services/remoteConfigFiles.ts')
   const release = await acquireMirrorLock()
   try {
     let session
@@ -443,14 +415,6 @@ const fileName = (serverName: string, type: FileType): string =>
     spawnregions: `${serverName}_spawnregions.lua`,
   })[type]
 
-const INI_KEY_CAPABILITY: Record<string, string> = {
-  RCONPassword: 'server.configure',
-  RCONPort: 'server.configure',
-  DefaultPort: 'server.configure',
-  UDPPort: 'server.configure',
-  UPnP: 'server.configure',
-}
-
 const SERVER_STATE_UNKNOWN_MESSAGE =
   "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection."
 
@@ -476,7 +440,9 @@ async function panelRuntime(): Promise<AnyRecord> {
   return getPanelRuntime()
 }
 
-async function localPathsExist(activeServer: AnyRecord | null): Promise<boolean> {
+async function localPathsExist(
+  activeServer: AnyRecord | null,
+): Promise<boolean> {
   const { existsSync } = await import('node:fs')
   const configuredPath =
     activeServer?.installPath || process.env.PZ_SERVER_PATH || ''
@@ -579,7 +545,9 @@ function toIni(obj: AnyRecord, originalContent = ''): string {
       }
       const safeValue = String(obj[key]).replace(/[\r\n]/g, '')
       const lineEquals = line.indexOf('=')
-      const valueMatch = line.slice(lineEquals + 1).match(/^(\s*)([\s\S]*?)(\s*)$/)
+      const valueMatch = line
+        .slice(lineEquals + 1)
+        .match(/^(\s*)([\s\S]*?)(\s*)$/)
       if (!valueMatch) {
         result.push(line)
         continue
@@ -591,7 +559,12 @@ function toIni(obj: AnyRecord, originalContent = ''): string {
     }
 
     for (const [key, value] of Object.entries(obj)) {
-      if (written.has(key) || value === '' || value === null || value === undefined)
+      if (
+        written.has(key) ||
+        value === '' ||
+        value === null ||
+        value === undefined
+      )
         continue
       if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) continue
       result.push(`${key}=${String(value).replace(/[\r\n]/g, '')}`)
@@ -602,7 +575,9 @@ function toIni(obj: AnyRecord, originalContent = ''): string {
   return Object.entries(obj)
     .filter(
       ([key, value]) =>
-        value !== '' && value !== null && value !== undefined &&
+        value !== '' &&
+        value !== null &&
+        value !== undefined &&
         /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key),
     )
     .map(([key, value]) => `${key}=${String(value).replace(/[\r\n]/g, '')}`)
@@ -623,7 +598,10 @@ function reconcileMaskedIniLines(
   const sensitive = sanitize.SENSITIVE_FIELD_RE as RegExp
   const masked = sanitize.isMaskedSecret as (value: unknown) => boolean
   const indexByKey = (text: string) => {
-    const byKey = new Map<string, Array<{ index: number; line: string; value: string }>>()
+    const byKey = new Map<
+      string,
+      Array<{ index: number; line: string; value: string }>
+    >()
     text.split(/\r?\n/).forEach((line, index) => {
       const trimmed = line.trim()
       if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) return
@@ -652,7 +630,8 @@ function reconcileMaskedIniLines(
     lines[maskedEntries[0].index] = liveEntries[0].line
   }
   for (const [key, entries] of liveByKey) {
-    if (!sensitive.test(key) || entries.length !== 1 || !entries[0].value) continue
+    if (!sensitive.test(key) || entries.length !== 1 || !entries[0].value)
+      continue
     if (!incomingByKey.has(key)) return { ok: false, reason: 'removed', key }
   }
   return { ok: true, content: lines.join('\n') }
@@ -669,8 +648,12 @@ function createSandboxVars(sandbox: AnyRecord): string {
   ]
   const formatValue = (value: unknown): string => {
     if (typeof value === 'boolean') return String(value)
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value)
-    return `"${String(value).replace(/[\\"'\n\r\t\0\[\]]/g, (character) => ({
+    if (typeof value === 'number' && Number.isFinite(value))
+      return String(value)
+    return `"${String(value).replace(
+      /[\\"'\n\r\t\0\[\]]/g,
+      (character) =>
+        ({
       '\\': '\\\\',
       '"': '\\"',
       "'": "\\'",
@@ -680,10 +663,13 @@ function createSandboxVars(sandbox: AnyRecord): string {
       '\0': '\\0',
       '[': '\\[',
       ']': '\\]',
-    })[character] ?? character)}"`
+        })[character] ?? character,
+    )}"`
   }
   const lines = ['SandboxVars = {']
-  lines.push(`    VERSION = ${Number.isInteger(sandbox.VERSION) ? sandbox.VERSION : 4},`)
+  lines.push(
+    `    VERSION = ${Number.isInteger(sandbox.VERSION) ? sandbox.VERSION : 4},`,
+  )
   for (const section of sections) {
     const values = sandbox[section]
     if (!values || typeof values !== 'object' || Array.isArray(values)) continue
@@ -733,7 +719,10 @@ function findUnpersistedSandboxKeys(
   return missing
 }
 
-function checkSandboxBalance(content: string): { balanced: boolean; depth: number } {
+function checkSandboxBalance(content: string): {
+  balanced: boolean
+  depth: number
+} {
   let depth = 0
   let wentNegative = false
   for (const character of content) {
@@ -764,7 +753,10 @@ function repairSandboxSyntax(content: string): {
     const match = lines[index].match(scalarLine)
     if (!match) continue
     let next = index + 1
-    while (next < lines.length && (!lines[next].trim() || /^\s*--/.test(lines[next])))
+    while (
+      next < lines.length &&
+      (!lines[next].trim() || /^\s*--/.test(lines[next]))
+    )
       next += 1
     if (next >= lines.length) continue
     const nextEntry = lines[next].match(entryLine)
@@ -785,12 +777,11 @@ function repairSandboxSyntax(content: string): {
   }
 }
 
-function toSpawnPoints(
-  professions: AnyRecord,
-): string {
+function toSpawnPoints(professions: AnyRecord): string {
   const lines = ['function SpawnPoints()', '\treturn {']
   for (const [profession, points] of Object.entries(professions)) {
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(profession) || !Array.isArray(points)) continue
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(profession) || !Array.isArray(points))
+      continue
     lines.push(`\t\t${profession} = {`)
     for (const point of points as AnyRecord[]) {
       const x = Number.isFinite(Number(point.worldX)) ? Number(point.worldX) : 0
@@ -812,7 +803,10 @@ function toSpawnPoints(
 
 function toSpawnRegions(regions: AnyRecord[]): string {
   const escape = (value: unknown): string =>
-    String(value).replace(/[\\"'\n\r\t\0\[\]]/g, (character) => ({
+    String(value).replace(
+      /[\\"'\n\r\t\0\[\]]/g,
+      (character) =>
+        ({
       '\\': '\\\\',
       '"': '\\"',
       "'": "\\'",
@@ -822,7 +816,8 @@ function toSpawnRegions(regions: AnyRecord[]): string {
       '\0': '\\0',
       '[': '\\[',
       ']': '\\]',
-    })[character] ?? character)
+        })[character] ?? character,
+    )
   const lines = ['function SpawnRegions()', '        return {']
   for (const region of regions) {
     if (!region || typeof region !== 'object') continue
@@ -1104,7 +1099,7 @@ export const getConfigTemplate = createFileRead(async (data) =>
   }),
 )
 
-export const saveServerIni = createFileMutation(async (data, context) =>
+export const saveServerIni = createFileMutation(async (data) =>
   withWritableServerFiles(async (configPath, serverName, activeServer) => {
     const settings = data.settings
     if (!settings || typeof settings !== 'object') {
@@ -1116,24 +1111,21 @@ export const saveServerIni = createFileMutation(async (data, context) =>
 
     const { existsSync, readFileSync } = await import('node:fs')
     const { join } = await import('node:path')
-    const { getRoleByName } =
-      await import('../../../panel-server/database/init.ts')
     const { findDuplicateIniKeys } =
       await import('../../../panel-server/utils/iniDuplicateKeys.ts')
-    const {
-      SENSITIVE_FIELD_RE,
-      isMaskedSecret,
-      maskSensitiveObject,
-    } = await import('../../../panel-server/utils/sanitize.ts')
+    const { SENSITIVE_FIELD_RE, isMaskedSecret, maskSensitiveObject } =
+      await import('../../../panel-server/utils/sanitize.ts')
     const { withFileLock, writeFileAtomic } =
       await import('../../../panel-server/utils/fileWriteQueue.ts')
 
     const filePath = join(configPath, fileName(serverName, 'ini'))
-    const currentContent = existsSync(filePath) ? readFileSync(filePath, 'utf8') : ''
+    const currentContent = existsSync(filePath)
+      ? readFileSync(filePath, 'utf8')
+      : ''
     const duplicateKeys = findDuplicateIniKeys(currentContent)
     if (duplicateKeys.length > 0) {
       fileFailure(
-        'This file has a key duplicated across two config blocks. Saving from the structured editor would permanently discard one copy\'s value. Use the raw editor tab to fix the duplicate first.',
+        "This file has a key duplicated across two config blocks. Saving from the structured editor would permanently discard one copy's value. Use the raw editor tab to fix the duplicate first.",
         409,
         'INI_DUPLICATE_KEY_BLOCKS_STRUCTURED_SAVE',
         { duplicateKeys },
@@ -1144,28 +1136,6 @@ export const saveServerIni = createFileMutation(async (data, context) =>
     for (const [key, value] of Object.entries(settings as AnyRecord)) {
       if (SENSITIVE_FIELD_RE.test(key) && isMaskedSecret(value)) continue
       submitted[key] = value
-    }
-
-    const changedGovernedKeys = Object.keys(submitted).filter(
-      (key) =>
-        key in INI_KEY_CAPABILITY &&
-        String(parseIni(currentContent)[key] ?? '') !==
-          String(submitted[key] ?? ''),
-    )
-    if (changedGovernedKeys.length > 0) {
-      const role = await getRoleByName(context.authenticatedUser?.role ?? '')
-      const capabilities = Array.isArray(role?.capabilities) ? role.capabilities : []
-      const missing = changedGovernedKeys
-        .filter((key) => !capabilities.includes(INI_KEY_CAPABILITY[key]))
-        .map((key) => ({ key, requiredCapability: INI_KEY_CAPABILITY[key] }))
-      if (missing.length > 0) {
-        fileFailure(
-          `Cannot change ${missing.map((item) => `"${item.key}" needs ${item.requiredCapability}`).join(', ')} without holding that capability yourself.`,
-          403,
-          'PERMISSION_DENIED',
-          { missing },
-        )
-      }
     }
 
     const restartRequired = await configEditRestartRequired(activeServer)
@@ -1184,7 +1154,10 @@ export const saveServerIni = createFileMutation(async (data, context) =>
       const saved = parseIni(readFileSync(filePath, 'utf8'))
       const originalValues = parseIni(original)
       for (const [key, value] of Object.entries(submitted)) {
-        const existed = Object.prototype.hasOwnProperty.call(originalValues, key)
+        const existed = Object.prototype.hasOwnProperty.call(
+          originalValues,
+          key,
+        )
         const nonEmpty = value !== '' && value !== null && value !== undefined
         if (
           (existed || nonEmpty) &&
@@ -1220,7 +1193,11 @@ export const saveServerSandbox = createFileMutation(async (data) =>
       fileFailure('Invalid sandbox data', 400, 'SANDBOX_DATA_INVALID')
     }
     if (JSON.stringify(sandbox).length > 1024 * 1024) {
-      fileFailure('Sandbox data too large (max 1MB)', 400, 'SANDBOX_DATA_TOO_LARGE')
+      fileFailure(
+        'Sandbox data too large (max 1MB)',
+        400,
+        'SANDBOX_DATA_TOO_LARGE',
+      )
     }
 
     const { existsSync, readFileSync } = await import('node:fs')
@@ -1245,7 +1222,8 @@ export const saveServerSandbox = createFileMutation(async (data) =>
       } else {
         for (const [section, values] of Object.entries(sandbox as AnyRecord)) {
           if (!SANDBOX_WRITABLE_SECTIONS.includes(section)) continue
-          if (!values || typeof values !== 'object' || Array.isArray(values)) continue
+          if (!values || typeof values !== 'object' || Array.isArray(values))
+            continue
           for (const [key, value] of Object.entries(values)) {
             content = modifySandboxValue(
               content,
@@ -1283,11 +1261,7 @@ export const saveSandboxOption = createFileMutation(async (data) =>
     const name = data.name
     const value = data.value
     if (typeof name !== 'string' || !name) {
-      fileFailure(
-        'Option name required',
-        400,
-        'SANDBOX_OPTION_NAME_REQUIRED',
-      )
+      fileFailure('Option name required', 400, 'SANDBOX_OPTION_NAME_REQUIRED')
     }
     if (!['string', 'number', 'boolean'].includes(typeof value)) {
       fileFailure(
@@ -1301,11 +1275,7 @@ export const saveSandboxOption = createFileMutation(async (data) =>
       parts.length > 2 ||
       !parts.every((part) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(part))
     ) {
-      fileFailure(
-        'Invalid option name',
-        400,
-        'SANDBOX_OPTION_NAME_INVALID',
-      )
+      fileFailure('Invalid option name', 400, 'SANDBOX_OPTION_NAME_INVALID')
     }
 
     const { existsSync, readFileSync } = await import('node:fs')
@@ -1379,17 +1349,19 @@ export const repairServerSandbox = createFileMutation(async () =>
           alreadyValid: false as const,
           repaired: false as const,
           error:
-            "Could not automatically repair this file. Restore a backup or fix it manually.",
+            'Could not automatically repair this file. Restore a backup or fix it manually.',
           code: 'SANDBOX_REPAIR_PATTERN_UNKNOWN',
         }
       }
-      const backup = await createBackup(configPath, fileName(serverName, 'sandbox'))
+      const backup = await createBackup(
+        configPath,
+        fileName(serverName, 'sandbox'),
+      )
       if (!backup.backedUp) {
         return {
           alreadyValid: false as const,
           repaired: false as const,
-          error:
-            `Could not back up SandboxVars.lua before repairing it, so nothing was changed: ${backup.error}.`,
+          error: `Could not back up SandboxVars.lua before repairing it, so nothing was changed: ${backup.error}.`,
           code: 'SANDBOX_REPAIR_BACKUP_FAILED',
           params: { reason: backup.error },
         }
@@ -1545,7 +1517,9 @@ export const saveServerRawFile = createFileMutation(async (data) =>
         )
       } else {
         if (existsSync(filePath)) {
-          backupWarning = backupWarningFor(await createBackup(configPath, filename))
+          backupWarning = backupWarningFor(
+            await createBackup(configPath, filename),
+          )
         }
         writeFileAtomic(filePath, contentToWrite, 'utf8')
       }
@@ -1630,8 +1604,7 @@ export const restoreServerConfigBackup = createFileMutation(async (data) =>
       if (await fileExists(targetPath)) {
         const backup = await createBackup(configPath, originalName)
         if (!backup.backedUp && backup.reason !== 'no-source') {
-          preRestoreBackupWarning =
-            `Could not back up the current ${originalName} before restoring over it: ${backup.error}.`
+          preRestoreBackupWarning = `Could not back up the current ${originalName} before restoring over it: ${backup.error}.`
         }
       }
       writeFileAtomic(targetPath, backupData)
@@ -1639,7 +1612,9 @@ export const restoreServerConfigBackup = createFileMutation(async (data) =>
     return {
       success: true,
       message: `Restored ${originalName} from backup`,
-      ...(preRestoreBackupWarning ? { backupWarning: preRestoreBackupWarning } : {}),
+      ...(preRestoreBackupWarning
+        ? { backupWarning: preRestoreBackupWarning }
+        : {}),
     }
   }),
 )
@@ -1648,7 +1623,11 @@ export const saveServerAndReload = createFileMutation(async () => {
   await resolveServerFiles()
   const runtime = await panelRuntime()
   const rconService = runtime.rconService as AnyRecord | undefined
-  if (!rconService || typeof rconService.isConnected !== 'function' || !rconService.isConnected()) {
+  if (
+    !rconService ||
+    typeof rconService.isConnected !== 'function' ||
+    !rconService.isConnected()
+  ) {
     fileFailure(
       'RCON not connected. Changes saved but not reloaded.',
       400,
@@ -1672,7 +1651,8 @@ function stripSensitiveIniLines(content: string, sanitize: AnyRecord): string {
     .split(/\r?\n/)
     .filter((line) => {
       const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) return true
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';'))
+        return true
       const equals = trimmed.indexOf('=')
       return equals <= 0 || !sensitive.test(trimmed.slice(0, equals).trim())
     })
@@ -1682,7 +1662,8 @@ function stripSensitiveIniLines(content: string, sanitize: AnyRecord): string {
 export const createServerConfigTemplate = createFileMutation(async (data) =>
   withWritableServerFiles(async (configPath, serverName) => {
     const name = data.name
-    if (!name) fileFailure('Template name is required', 400, 'TEMPLATE_NAME_REQUIRED')
+    if (!name)
+      fileFailure('Template name is required', 400, 'TEMPLATE_NAME_REQUIRED')
     const includeIni = data.includeIni === undefined ? true : data.includeIni
     const includeSandbox =
       data.includeSandbox === undefined ? true : data.includeSandbox
@@ -1715,7 +1696,8 @@ export const createServerConfigTemplate = createFileMutation(async (data) =>
     const template: AnyRecord = {
       name,
       description: data.description || '',
-      type: includeIni && includeSandbox ? 'both' : includeIni ? 'ini' : 'sandbox',
+      type:
+        includeIni && includeSandbox ? 'both' : includeIni ? 'ini' : 'sandbox',
       created: new Date().toISOString(),
       serverName,
     }
@@ -1724,14 +1706,19 @@ export const createServerConfigTemplate = createFileMutation(async (data) =>
       const iniContent = readFileSync(iniPath, 'utf8')
       template.ini = omitSensitiveFields(parseIni(iniContent))
       template.iniRaw = stripSensitiveIniLines(iniContent, {
-        SENSITIVE_FIELD_RE: (await import('../../../panel-server/utils/sanitize.ts')).SENSITIVE_FIELD_RE,
+        SENSITIVE_FIELD_RE: (
+          await import('../../../panel-server/utils/sanitize.ts')
+        ).SENSITIVE_FIELD_RE,
       })
     }
     const sandboxPath = join(configPath, fileName(serverName, 'sandbox'))
     if (includeSandbox && existsSync(sandboxPath)) {
       template.sandboxRaw = readFileSync(sandboxPath, 'utf8')
     }
-    writeFileAtomic(join(templatesPath, `${id}.json`), JSON.stringify(template, null, 2))
+    writeFileAtomic(
+      join(templatesPath, `${id}.json`),
+      JSON.stringify(template, null, 2),
+    )
     return {
       success: true,
       id,
@@ -1751,7 +1738,8 @@ export const applyServerConfigTemplate = createFileMutation(async (data) =>
       await import('../../../panel-server/utils/configBackup.ts')
     const id = safeTemplateId(data.id)
     const templatePath = join(await getTemplatesPath(configPath), `${id}.json`)
-    if (!existsSync(templatePath)) fileFailure('Template not found', 404, 'TEMPLATE_NOT_FOUND')
+    if (!existsSync(templatePath))
+      fileFailure('Template not found', 404, 'TEMPLATE_NOT_FOUND')
 
     const template = JSON.parse(readFileSync(templatePath, 'utf8')) as AnyRecord
     await requireConfigServerStopped(activeServer)
@@ -1765,7 +1753,9 @@ export const applyServerConfigTemplate = createFileMutation(async (data) =>
         const filename = fileName(serverName, 'ini')
         const target = join(configPath, filename)
         await withFileLock(target, async () => {
-          const warning = backupWarningFor(await createBackup(configPath, filename))
+          const warning = backupWarningFor(
+            await createBackup(configPath, filename),
+          )
           if (warning) backupWarnings.push(warning)
           writeFileAtomic(target, template.iniRaw)
         })
@@ -1775,7 +1765,9 @@ export const applyServerConfigTemplate = createFileMutation(async (data) =>
         const filename = fileName(serverName, 'sandbox')
         const target = join(configPath, filename)
         await withFileLock(target, async () => {
-          const warning = backupWarningFor(await createBackup(configPath, filename))
+          const warning = backupWarningFor(
+            await createBackup(configPath, filename),
+          )
           if (warning) backupWarnings.push(warning)
           writeFileAtomic(target, template.sandboxRaw)
         })
@@ -1812,7 +1804,8 @@ export const updateServerConfigTemplate = createFileMutation(async (data) =>
       await import('../../../panel-server/utils/fileWriteQueue.ts')
     const id = safeTemplateId(data.id)
     const templatePath = join(await getTemplatesPath(configPath), `${id}.json`)
-    if (!existsSync(templatePath)) fileFailure('Template not found', 404, 'TEMPLATE_NOT_FOUND')
+    if (!existsSync(templatePath))
+      fileFailure('Template not found', 404, 'TEMPLATE_NOT_FOUND')
     const template = JSON.parse(readFileSync(templatePath, 'utf8')) as AnyRecord
     if (data.name) template.name = data.name
     if (data.description !== undefined) template.description = data.description
@@ -1831,7 +1824,8 @@ export const deleteServerConfigTemplate = createFileMutation(async (data) =>
     const { join } = await import('node:path')
     const id = safeTemplateId(data.id)
     const templatePath = join(await getTemplatesPath(configPath), `${id}.json`)
-    if (!existsSync(templatePath)) fileFailure('Template not found', 404, 'TEMPLATE_NOT_FOUND')
+    if (!existsSync(templatePath))
+      fileFailure('Template not found', 404, 'TEMPLATE_NOT_FOUND')
     await unlink(templatePath)
     return { success: true, message: 'Template deleted' }
   }),

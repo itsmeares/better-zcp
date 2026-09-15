@@ -29,7 +29,6 @@ import { useToast } from '@/components/ui/use-toast'
 import { panelBridgeApi, playersApi, configApi } from '@/lib/api'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
 import { DisabledReason } from '@/components/DisabledReason'
 import { EmptyState } from '@/components/EmptyState'
 import { HelpTip } from '@/components/HelpTip'
@@ -78,12 +77,11 @@ export default function Chat() {
   const { toast } = useToast()
   const confirm = useConfirm()
   const socket = useSocket()
-  const { can } = useAuth()
-  const canSendServerChat = can('server.world_events')
-  const canSendTargetedChat = can('players.endanger_or_impersonate')
+  const canSendServerChat = true
+  const canSendTargetedChat = true
   const canSendChat =
     channel === 'server' ? canSendServerChat : canSendTargetedChat
-  const canManagePresets = can('panel.settings')
+  const canManagePresets = true
 
   const [nativeChatAvailable, setNativeChatAvailable] = useState<
     boolean | null

@@ -12,10 +12,7 @@ import {
   writeFileAtomic,
 } from '../../../panel-server/utils/fileWriteQueue.ts'
 import { applyUpnpToIni } from '../../../panel-server/utils/upnpConfig.ts'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 
@@ -62,21 +59,7 @@ function updateCheckerUnavailable(): never {
   )
 }
 
-function capabilityMiddleware(capability: string) {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware(capability),
-  ] as const
-}
-
-function createServerRead<T>(
-  capability: string | null,
-  handler: (data: AnyRecord) => Promise<T> | T,
-) {
-  const serverFn = createServerFn({ method: 'GET' })
-  const secured = capability
-    ? serverFn.middleware(capabilityMiddleware(capability))
-    : serverFn.middleware(protectedServerFunctionMiddleware)
+function createServerRead<T>(handler: (data: AnyRecord) => Promise<T> | T) {
   const implementation = async (data: AnyRecord): Promise<T> => {
     try {
       return await handler(data)
@@ -85,17 +68,15 @@ function createServerRead<T>(
     }
   }
   return Object.assign(
-    secured
+    createServerFn({ method: 'GET' })
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) => record(data))
       .handler(({ data }) => implementation(data) as any),
     { __executeImplementation: implementation },
   )
 }
 
-function createServerAction<T>(
-  capability: string,
-  handler: (data: AnyRecord) => Promise<T> | T,
-) {
+function createServerAction<T>(handler: (data: AnyRecord) => Promise<T> | T) {
   const implementation = async (data: AnyRecord): Promise<T> => {
     try {
       return await handler(data)
@@ -105,7 +86,7 @@ function createServerAction<T>(
   }
   return Object.assign(
     createServerFn({ method: 'POST' })
-      .middleware(capabilityMiddleware(capability))
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) => record(data))
       .handler(({ data }) => implementation(data) as any),
     { __executeImplementation: implementation },
@@ -248,9 +229,7 @@ function filterConsoleLogLines(
   })
 }
 
-export const getConsoleLog = createServerRead(
-  'server.world_events',
-  async (data) => {
+export const getConsoleLog = createServerRead(async (data) => {
     const filePath = await consoleLogPath()
     const result = withOpenReadFile(filePath, (fd, stats) => {
       const filterLevel =
@@ -283,17 +262,14 @@ export const getConsoleLog = createServerRead(
       }
     }
     return result
-  },
-)
+})
 
 let errorCountCache: { at: number; value: AnyRecord | null } = {
   at: 0,
   value: null,
 }
 
-export const getConsoleErrorCount = createServerRead(
-  'server.world_events',
-  async () => {
+export const getConsoleErrorCount = createServerRead(async () => {
     const now = Date.now()
     if (errorCountCache.value && now - errorCountCache.at < 20_000) {
       return errorCountCache.value
@@ -337,12 +313,9 @@ export const getConsoleErrorCount = createServerRead(
     const payload = result
     errorCountCache = { at: now, value: payload }
     return payload
-  },
-)
+})
 
-export const getConsoleLogStream = createServerRead(
-  'server.world_events',
-  async (data) => {
+export const getConsoleLogStream = createServerRead(async (data) => {
     const filePath = await consoleLogPath()
     const result = withOpenReadFile(filePath, (fd, stats) => {
       const filterLevel =
@@ -401,12 +374,9 @@ export const getConsoleLogStream = createServerRead(
       return { success: true, newLines: [], exists: false }
     }
     return result
-  },
-)
+})
 
-export const clearConsoleLog = createServerAction(
-  'server.configure',
-  async () => {
+export const clearConsoleLog = createServerAction(async () => {
     const filePath = await consoleLogPath()
     try {
       const fd = fs.openSync(filePath, 'r+')
@@ -419,8 +389,7 @@ export const clearConsoleLog = createServerAction(
       if (!isMissingFile(error)) throw error
     }
     return { success: true }
-  },
-)
+})
 
 function isValidPath(inputPath: unknown): inputPath is string {
   if (typeof inputPath !== 'string' || !inputPath) return false
@@ -450,9 +419,7 @@ function steamCmdExecutable(steamcmdPath: string): string {
   return primary
 }
 
-export const checkSteamCmd = createServerRead(
-  'server.install',
-  async (data) => {
+export const checkSteamCmd = createServerRead(async (data) => {
     const checkPath = typeof data.path === 'string' ? data.path : null
     if (!checkPath || !isValidPath(checkPath)) {
       return { exists: false, message: 'Invalid path' }
@@ -463,12 +430,9 @@ export const checkSteamCmd = createServerRead(
       exists,
       path: checkPath,
       executable,
-      message: exists
-        ? 'SteamCMD found'
-        : 'SteamCMD not found at this location',
+    message: exists ? 'SteamCMD found' : 'SteamCMD not found at this location',
     }
-  },
-)
+})
 
 async function serverConfig(): Promise<{
   configPath: string | null
@@ -525,9 +489,7 @@ async function requireIniPath(): Promise<string> {
   return iniPath
 }
 
-export const configureRcon = createServerAction(
-  'server.configure',
-  async (data) => {
+export const configureRcon = createServerAction(async (data) => {
     const password = data.rconPassword
     const portCheck = requireIntInRange(
       data.rconPort === undefined ? 27015 : data.rconPort,
@@ -546,11 +508,7 @@ export const configureRcon = createServerAction(
     const iniPath = await requireIniPath()
     await withFileLock(iniPath, async () => {
       let content = fs.readFileSync(iniPath, 'utf-8').replace(/\r\n/g, '\n')
-      content = setIniKeyLine(
-        content,
-        'RCONPassword',
-        sanitizeIniValue(password),
-      )
+    content = setIniKeyLine(content, 'RCONPassword', sanitizeIniValue(password))
       content = setIniKeyLine(content, 'RCONPort', portCheck.value)
       writeFileAtomic(iniPath, content, { encoding: 'utf-8', mode: 0o600 })
     })
@@ -567,12 +525,9 @@ export const configureRcon = createServerAction(
         'RCON configured successfully. Restart the server for changes to take effect.',
       iniPath,
     }
-  },
-)
+})
 
-export const configureNetwork = createServerAction(
-  'server.configure',
-  async (data) => {
+export const configureNetwork = createServerAction(async (data) => {
     const portCheck = requireIntInRange(
       data.serverPort === undefined ? 16261 : data.serverPort,
       1024,
@@ -607,12 +562,9 @@ export const configureNetwork = createServerAction(
         upnp: useUpnp,
       },
     }
-  },
-)
+})
 
-export const getServerUpdate = createServerRead(
-  'server.world_events',
-  async (data) => {
+export const getServerUpdate = createServerRead(async (data) => {
     const updateChecker = (await panelRuntime()).updateChecker
     if (!updateChecker) updateCheckerUnavailable()
     if (data.force === 'true' || data.force === true) {
@@ -624,44 +576,31 @@ export const getServerUpdate = createServerRead(
       )
     }
     return updateChecker.getStatus()
-  },
-)
+})
 
-export const getServerUpdateStatus = createServerRead(
-  'server.world_events',
-  async () => {
+export const getServerUpdateStatus = createServerRead(async () => {
     const updateChecker = (await panelRuntime()).updateChecker
     if (!updateChecker) updateCheckerUnavailable()
     return updateChecker.getStatus()
-  },
-)
+})
 
-export const dismissServerAutoUpdateResult = createServerAction(
-  'server.world_events',
-  async () => {
+export const dismissServerAutoUpdateResult = createServerAction(async () => {
     const updateChecker = (await panelRuntime()).updateChecker
     if (!updateChecker) updateCheckerUnavailable()
     await updateChecker.dismissAutoUpdateResult()
     return updateChecker.getStatus()
-  },
-)
+})
 
-export const setServerUpdateInterval = createServerAction(
-  'server.configure',
-  async (data) => {
+export const setServerUpdateInterval = createServerAction(async (data) => {
     const updateChecker = (await panelRuntime()).updateChecker
     if (!updateChecker) updateCheckerUnavailable()
     const minutes = data.minutes
     if (!minutes || typeof minutes !== 'number') {
-      invalid(
-        'minutes must be a number',
-        ErrorCode.UPDATE_CHECK_INTERVAL_INVALID,
-      )
+    invalid('minutes must be a number', ErrorCode.UPDATE_CHECK_INTERVAL_INVALID)
     }
     await updateChecker.setInterval(minutes)
     return { success: true, intervalMinutes: minutes }
-  },
-)
+})
 
 let persistedVehicleCache: {
   key: string | null
@@ -669,7 +608,7 @@ let persistedVehicleCache: {
   vehicles: Array<{ id: number; x: number; y: number }>
 } = { key: null, expiresAt: 0, vehicles: [] }
 
-export const getMapVehicles = createServerRead(null, async () => {
+export const getMapVehicles = createServerRead(async () => {
   try {
     const { getActiveServer } = await database()
     const activeServer = await getActiveServer()

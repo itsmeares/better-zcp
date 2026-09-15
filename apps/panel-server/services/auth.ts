@@ -1,9 +1,13 @@
-
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import crypto from "crypto";
-import type { NextFunction, Request, RequestHandler, Response } from "../http/startApiRouter.ts";
+import type {
+  NextFunction,
+  Request,
+  RequestHandler,
+  Response,
+} from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getSetting, setSetting, getDb, commitNow } from "../database/init.ts";
 import {
@@ -12,8 +16,6 @@ import {
   regenerateJwtSecretFile,
 } from "../utils/jwtSecret.ts";
 import { readSecret } from "../utils/secrets.ts";
-import { getCapabilitiesForRole } from "./permissions.ts";
-import { ErrorCode } from "../utils/errorCodes.ts";
 
 const log = createLogger("Auth");
 
@@ -28,8 +30,7 @@ type AuthUser = {
   id: string;
   username: string;
   password?: string | null;
-  role: string;
-  roleId?: string | number | null;
+  role?: string;
   tokenGen?: number;
   refreshSessions?: RefreshSession[];
   lockedUntil?: string | null;
@@ -42,7 +43,6 @@ type AuthUser = {
 export type AuthenticatedUser = {
   userId: string | null;
   username: string | null;
-  role: string;
   tokenGen: number | null;
   authDisabled?: boolean;
 };
@@ -58,7 +58,6 @@ type AuthenticatedRequest = Request & {
 type PanelJwtPayload = JwtPayload & {
   userId?: string;
   username?: string;
-  role?: string;
   tokenGen?: number;
   type?: string;
   sessionId?: string;
@@ -67,21 +66,18 @@ type PanelJwtPayload = JwtPayload & {
 type PublicUser = {
   id: string;
   username: string;
-  role: string;
-  roleId?: string | number | null;
   createdAt?: string;
   lastLogin?: string | null;
 };
 
 type AuthSessionResult = {
-  user: PublicUser & { capabilities?: string[] | null };
+  user: PublicUser;
   accessToken: string;
   refreshToken: string | null;
 };
 
 export type SessionRevocationEvent =
-  | { scope: "all" }
-  | { scope: "user"; userId: string };
+  { scope: "all" } | { scope: "user"; userId: string };
 
 type SessionRevocationCallback = (event: SessionRevocationEvent) => void;
 
@@ -117,7 +113,9 @@ function getAdminUser(users: AuthUser[]): AuthUser | null {
 
 const sessionRevocationCallbacks = new Set<SessionRevocationCallback>();
 
-export function onSessionRevoked(callback: SessionRevocationCallback): () => void {
+export function onSessionRevoked(
+  callback: SessionRevocationCallback,
+): () => void {
   sessionRevocationCallbacks.add(callback);
   return () => sessionRevocationCallbacks.delete(callback);
 }
@@ -176,7 +174,10 @@ class AuthService {
 
     const now = Date.now();
     user.refreshSessions = user.refreshSessions
-      .filter((session): session is RefreshSession => session && typeof session.id === "string")
+      .filter(
+        (session): session is RefreshSession =>
+          session && typeof session.id === "string",
+      )
       .filter((session) => {
         const expiresAt = Date.parse(session.expiresAt || "");
         return Number.isNaN(expiresAt) || expiresAt > now;
@@ -219,7 +220,9 @@ class AuthService {
     return user.refreshSessions.length !== initialLength;
   }
 
-  async authenticateAccessToken(token: string): Promise<AuthenticatedUser | null> {
+  async authenticateAccessToken(
+    token: string,
+  ): Promise<AuthenticatedUser | null> {
     try {
       await this.ensureInitialized();
       const payload = jwt.verify(token, this.jwtSecret as string, {
@@ -246,7 +249,6 @@ class AuthService {
       return {
         userId: user.id,
         username: user.username,
-        role: user.role,
         tokenGen: currentGen,
       };
     } catch (error) {
@@ -272,7 +274,6 @@ class AuthService {
         user: {
           userId: null,
           username: null,
-          role: "admin",
           tokenGen: null,
           authDisabled: true,
         },
@@ -418,7 +419,6 @@ class AuthService {
         id: crypto.randomUUID(),
         username,
         password: hashedPassword,
-        role: "admin",
         createdAt: new Date().toISOString(),
         lastLogin: null,
       };
@@ -430,12 +430,15 @@ class AuthService {
       return {
         id: user.id,
         username: user.username,
-        role: user.role,
       };
     });
   }
 
-  async login(username: string, password: string, rememberMe = true): Promise<AuthSessionResult> {
+  async login(
+    username: string,
+    password: string,
+    rememberMe = true,
+  ): Promise<AuthSessionResult> {
     if (!username || !password) {
       throw new Error("Username and password are required");
     }
@@ -500,9 +503,8 @@ class AuthService {
       : null;
 
     log.info(`User logged in: ${username}`);
-    const capabilities = await getCapabilitiesForRole(user.role);
     return {
-      user: { id: user.id, username: user.username, role: user.role, capabilities },
+      user: { id: user.id, username: user.username },
       accessToken,
       refreshToken,
     };
@@ -513,7 +515,6 @@ class AuthService {
       {
         userId: user.id,
         username: user.username,
-        role: user.role,
         tokenGen: user.tokenGen || 0,
       },
       this.jwtSecret as string,
@@ -546,7 +547,9 @@ class AuthService {
     }
   }
 
-  async refreshAccessToken(refreshToken: string): Promise<AuthSessionResult | null> {
+  async refreshAccessToken(
+    refreshToken: string,
+  ): Promise<AuthSessionResult | null> {
     try {
       const payload = jwt.verify(refreshToken, this.jwtSecret as string, {
         algorithms: [JWT_ALGORITHM],
@@ -585,9 +588,8 @@ class AuthService {
 
       const accessToken = this.generateAccessToken(user);
       const newRefreshToken = this.generateRefreshToken(user, newSession.id);
-      const capabilities = await getCapabilitiesForRole(user.role);
       return {
-        user: { id: user.id, username: user.username, role: user.role, capabilities },
+        user: { id: user.id, username: user.username },
         accessToken,
         refreshToken: newRefreshToken,
       };
@@ -596,7 +598,11 @@ class AuthService {
     }
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<boolean> {
     if (!newPassword || newPassword.length < 6) {
       throw new Error("New password must be at least 6 characters");
     }
@@ -611,7 +617,7 @@ class AuthService {
 
     if (!user.password) {
       throw new Error(
-        "This account has no local password set (it signs in via an external provider). Use password reset/recovery to set one instead.",
+        "This account has no local password set. Use the local password reset flow to set one.",
       );
     }
 
@@ -634,14 +640,16 @@ class AuthService {
     const db = await getDb();
     const users = (db.data.users || []) as AuthUser[];
     const user = getAdminUser(users);
-    return user ? [{
+    return user
+      ? [
+          {
       id: user.id,
       username: user.username,
-      role: user.role,
-      roleId: user.roleId || null,
       createdAt: user.createdAt,
       lastLogin: user.lastLogin,
-    }] : [];
+          },
+        ]
+      : [];
   }
 
   async logout(refreshToken: string | null | undefined): Promise<boolean> {
@@ -753,7 +761,9 @@ class AuthService {
           return next();
         }
 
-        const result = await this.authenticateApiRequest(req.headers.authorization);
+        const result = await this.authenticateApiRequest(
+          req.headers.authorization,
+        );
         if (!result.ok) {
           return res.status(result.status).json({
             error: result.error,
@@ -775,18 +785,5 @@ const AUTH_SERVICE_KEY = "__better_zcp_auth_service__";
 const authRuntime = globalThis as typeof globalThis & {
   [AUTH_SERVICE_KEY]?: AuthService;
 };
-const authService = authRuntime[AUTH_SERVICE_KEY] ??= new AuthService();
+const authService = (authRuntime[AUTH_SERVICE_KEY] ??= new AuthService());
 export default authService;
-
-export function requireRole(...roles: string[]): RequestHandler {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const user = (req as AuthenticatedRequest).user;
-    if (!user) {
-      return res
-        .status(401)
-        .json({ error: "Authentication required", code: ErrorCode.AUTH_REQUIRED });
-    }
-    if (roles.includes(user.role)) return next();
-    return res.status(403).json({ error: "Insufficient permissions" });
-  };
-}

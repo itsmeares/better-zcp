@@ -124,7 +124,6 @@ import {
   formatModSettingLabel,
 } from '@/lib/modSettingsLabels'
 import { EmptyState } from '@/components/EmptyState'
-import { useAuth } from '@/contexts/AuthContext'
 import { useSocket } from '@/contexts/SocketContext'
 import { DisabledReason } from '@/components/DisabledReason'
 import {
@@ -1306,8 +1305,7 @@ export default function ServerConfig() {
   const { toast } = useToast()
   const confirm = useConfirm()
   const socket = useSocket()
-  const { can } = useAuth()
-  const canManageServerFiles = can('serverfiles.manage')
+  const canManageServerFiles = true
 
   useEffect(() => {
     if (canManageServerFiles) loadData()

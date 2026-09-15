@@ -1,21 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const ROLES = {
-  automation_only: { name: "automation_only", capabilities: ["automation.manage"] },
-  automation_and_rcon: {
-    name: "automation_and_rcon",
-    capabilities: ["automation.manage", "rcon.execute"],
-  },
-  automation_and_control: {
-    name: "automation_and_control",
-    capabilities: ["automation.manage", "server.control"],
-  },
-  automation_and_world_events: {
-    name: "automation_and_world_events",
-    capabilities: ["automation.manage", "server.world_events"],
-  },
-};
-
 vi.mock("../database/init.ts", () => ({
   getScheduledTasks: vi.fn(),
   createScheduledTask: vi.fn(),
@@ -27,7 +11,6 @@ vi.mock("../database/init.ts", () => ({
   logScheduleExecution: vi.fn().mockResolvedValue(),
   logPlayerAction: vi.fn().mockResolvedValue(),
   recordPlayerSession: vi.fn().mockResolvedValue(),
-  getRoleByName: vi.fn((name) => Promise.resolve(ROLES[name] || null)),
 }));
 
 const { Scheduler } = await import("../services/scheduler.ts");
@@ -58,7 +41,10 @@ describe("Scheduler.runTaskNow command dispatch", () => {
       rconService,
       serverManager: expect.any(Object),
     });
-    expect(rconService.execute).not.toHaveBeenCalledWith("restart", expect.anything());
+    expect(rconService.execute).not.toHaveBeenCalledWith(
+      "restart",
+      expect.anything(),
+    );
   });
 
   it("routes 'save' through rconService.save()", async () => {
@@ -86,7 +72,8 @@ describe("Scheduler.runTaskNow command dispatch", () => {
 
   it("preserves Chinese text when routing a scheduled server message", async () => {
     const { scheduler, rconService } = makeScheduler();
-    const message = "\u670d\u52a1\u5668\u5c06\u5728\u4e94\u5206\u949f\u540e\u91cd\u542f";
+    const message =
+      "\u670d\u52a1\u5668\u5c06\u5728\u4e94\u5206\u949f\u540e\u91cd\u542f";
 
     await scheduler.runTaskNow({
       id: 31,
@@ -127,7 +114,8 @@ describe("Scheduler.runTaskNow command dispatch", () => {
 
 function getRunNowHandler() {
   const layer = router.stack.find(
-    (entry) => entry.route?.path === "/tasks/:id/run" && entry.route.methods.post,
+    (entry) =>
+      entry.route?.path === "/tasks/:id/run" && entry.route.methods.post,
   );
   return layer.route.stack[0].handle;
 }
@@ -215,7 +203,8 @@ describe("scheduler request body validation", () => {
 
   it("returns 400 for a missing cron-preview body", async () => {
     const layer = router.stack.find(
-      (entry) => entry.route?.path === "/validate-cron" && entry.route.methods.post,
+      (entry) =>
+        entry.route?.path === "/validate-cron" && entry.route.methods.post,
     );
     const response = createResponse();
 
@@ -274,7 +263,8 @@ describe("unattended schedule frequency validation", () => {
       scheduler.setupAutoRestart();
       expect(scheduler.autoRestartJob).toBeNull();
     } finally {
-      if (originalEnabled === undefined) delete process.env.AUTO_RESTART_ENABLED;
+      if (originalEnabled === undefined)
+        delete process.env.AUTO_RESTART_ENABLED;
       else process.env.AUTO_RESTART_ENABLED = originalEnabled;
       if (originalCron === undefined) delete process.env.AUTO_RESTART_CRON;
       else process.env.AUTO_RESTART_CRON = originalCron;
@@ -334,493 +324,23 @@ describe("PUT /api/scheduler/tasks/:id", () => {
   });
 });
 
-describe("rcon.execute gate on raw scheduled commands", () => {
-  describe("POST /api/scheduler/tasks", () => {
-    const baseBody = {
-      name: "Suspicious task",
-      cronExpression: "0 * * * *",
-    };
-
-    it("refuses to create a raw-command task for automation.manage alone", async () => {
-      const response = createResponse();
-      await getCreateHandler()(
-        {
-          user: { role: "automation_only" },
-          body: { ...baseBody, command: 'godmod "attacker" true' },
-          app: { get: () => ({ scheduleTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(createScheduledTask).not.toHaveBeenCalled();
-    });
-
-    it("allows creating a raw-command task when the role also holds rcon.execute", async () => {
-      createScheduledTask.mockResolvedValue({ id: 42 });
-      const scheduleTask = vi.fn();
-      const response = createResponse();
-
-      await getCreateHandler()(
-        {
-          user: { role: "automation_and_rcon" },
-          body: { ...baseBody, command: 'godmod "attacker" true' },
-          app: { get: () => ({ scheduleTask }) },
-        },
-        response,
-      );
-
-      expect(createScheduledTask).toHaveBeenCalled();
-      expect(scheduleTask).toHaveBeenCalled();
-      expect(response.status).not.toHaveBeenCalledWith(403);
-    });
-
-    it("does not require rcon.execute for a curated verb like 'restart' -- but DOES require server.control, its own matching capability", async () => {
-      createScheduledTask.mockResolvedValue({ id: 43 });
-      const scheduleTask = vi.fn();
-      const response = createResponse();
-
-      await getCreateHandler()(
-        {
-          user: { role: "automation_and_control" },
-          body: { ...baseBody, command: "restart" },
-          app: { get: () => ({ scheduleTask }) },
-        },
-        response,
-      );
-
-      expect(createScheduledTask).toHaveBeenCalled();
-      expect(response.status).not.toHaveBeenCalledWith(403);
-    });
-
-    it("refuses to create a 'restart' task for automation.manage alone -- server.control is required even though rcon.execute is not", async () => {
-      createScheduledTask.mockClear();
-      const response = createResponse();
-
-      await getCreateHandler()(
-        {
-          user: { role: "automation_only" },
-          body: { ...baseBody, command: "restart" },
-          app: { get: () => ({ scheduleTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(createScheduledTask).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("PUT /api/scheduler/tasks/:id", () => {
-    it("refuses to change a task's command to a raw one for automation.manage alone", async () => {
-      const { updateScheduledTask } = await import("../database/init.ts");
-      updateScheduledTask.mockClear();
-      const response = createResponse();
-
-      await getUpdateHandler()(
-        {
-          user: { role: "automation_only" },
-          params: { id: "8" },
-          body: { command: 'banuser "someone"' },
-          app: { get: () => ({ scheduleTask: vi.fn(), cancelTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(updateScheduledTask).not.toHaveBeenCalled();
-    });
-
-    it("does not require rcon.execute when the update leaves command untouched, even if the task's stored command is raw", async () => {
-      const { updateScheduledTask } = await import("../database/init.ts");
-      updateScheduledTask.mockClear();
-      updateScheduledTask.mockResolvedValue({
-        id: 8,
-        name: "Renamed again",
-        cron_expression: "0 * * * *",
-        command: 'banuser "someone"', // pre-existing raw command, untouched by this request
-        enabled: 1,
-        server_id: null,
-      });
-      const response = createResponse();
-
-      await getUpdateHandler()(
-        {
-          user: { role: "automation_only" },
-          params: { id: "8" },
-          body: { name: "Renamed again" },
-          app: { get: () => ({ scheduleTask: vi.fn(), cancelTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).not.toHaveBeenCalledWith(403);
-      expect(updateScheduledTask).toHaveBeenCalled();
-    });
-
-    it("refuses to enable a disabled stored restart task without server.control", async () => {
-      const { updateScheduledTask } = await import("../database/init.ts");
-      updateScheduledTask.mockClear();
-      getScheduledTasks.mockResolvedValue([
-        { id: 13, name: "Nightly restart", command: "restart", enabled: 0 },
-      ]);
-      const response = createResponse();
-
-      await getUpdateHandler()(
-        {
-          user: { role: "automation_only" },
-          params: { id: "13" },
-          body: { enabled: true },
-          app: { get: () => ({ scheduleTask: vi.fn(), cancelTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(updateScheduledTask).not.toHaveBeenCalled();
-    });
-
-    it("allows enabling that stored restart task when the caller has server.control", async () => {
-      const { updateScheduledTask } = await import("../database/init.ts");
-      updateScheduledTask.mockClear();
-      getScheduledTasks.mockResolvedValue([
-        { id: 14, name: "Nightly restart", command: "restart", enabled: 0 },
-      ]);
-      updateScheduledTask.mockResolvedValue({
-        id: 14,
-        name: "Nightly restart",
-        cron_expression: "0 3 * * *",
-        command: "restart",
-        enabled: 1,
-        server_id: null,
-      });
-      const response = createResponse();
-
-      await getUpdateHandler()(
-        {
-          user: { role: "automation_and_control" },
-          params: { id: "14" },
-          body: { enabled: true },
-          app: { get: () => ({ scheduleTask: vi.fn(), cancelTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).not.toHaveBeenCalledWith(403);
-      expect(updateScheduledTask).toHaveBeenCalled();
-    });
-
-    it("does not gate disabling a stored restart task", async () => {
-      const { updateScheduledTask } = await import("../database/init.ts");
-      updateScheduledTask.mockClear();
-      getScheduledTasks.mockResolvedValue([
-        { id: 15, name: "Nightly restart", command: "restart", enabled: 1 },
-      ]);
-      updateScheduledTask.mockResolvedValue({
-        id: 15,
-        name: "Nightly restart",
-        cron_expression: "0 3 * * *",
-        command: "restart",
-        enabled: 0,
-        server_id: null,
-      });
-      const response = createResponse();
-
-      await getUpdateHandler()(
-        {
-          user: { role: "automation_only" },
-          params: { id: "15" },
-          body: { enabled: false },
-          app: { get: () => ({ scheduleTask: vi.fn(), cancelTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).not.toHaveBeenCalledWith(403);
-      expect(updateScheduledTask).toHaveBeenCalled();
-    });
-  });
-
-  describe("POST /api/scheduler/tasks/:id/run", () => {
-    it("refuses to run a task whose STORED command is raw for automation.manage alone", async () => {
-      const task = { id: 9, name: "Suspicious", command: 'banuser "someone"' };
-      getScheduledTasks.mockResolvedValue([task]);
-      const runTaskNow = vi.fn().mockResolvedValue();
-      const response = createResponse();
-
-      await getRunNowHandler()(
-        {
-          user: { role: "automation_only" },
-          app: { get: () => ({ runTaskNow }) },
-          params: { id: "9" },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(runTaskNow).not.toHaveBeenCalled();
-    });
-
-    it("allows running a raw-command task when the CURRENT caller holds rcon.execute, regardless of who created it", async () => {
-      const task = { id: 10, name: "Suspicious", command: 'banuser "someone"' };
-      getScheduledTasks.mockResolvedValue([task]);
-      const runTaskNow = vi.fn().mockResolvedValue();
-      const response = createResponse();
-
-      await getRunNowHandler()(
-        {
-          user: { role: "automation_and_rcon" },
-          app: { get: () => ({ runTaskNow }) },
-          params: { id: "10" },
-        },
-        response,
-      );
-
-      expect(response.status).not.toHaveBeenCalledWith(403);
-      expect(runTaskNow).toHaveBeenCalledWith(task);
-    });
-
-    it("does not require rcon.execute to run a curated verb like 'save' -- but DOES require server.control", async () => {
-      const task = { id: 11, name: "Nightly save", command: "save" };
-      getScheduledTasks.mockResolvedValue([task]);
-      const runTaskNow = vi.fn().mockResolvedValue();
-      const response = createResponse();
-
-      await getRunNowHandler()(
-        {
-          user: { role: "automation_and_control" },
-          app: { get: () => ({ runTaskNow }) },
-          params: { id: "11" },
-        },
-        response,
-      );
-
-      expect(response.status).not.toHaveBeenCalledWith(403);
-      expect(runTaskNow).toHaveBeenCalledWith(task);
-    });
-
-    it("refuses to run a stored 'save' task for automation.manage alone -- server.control is required even though rcon.execute is not", async () => {
-      const task = { id: 12, name: "Nightly save", command: "save" };
-      getScheduledTasks.mockResolvedValue([task]);
-      const runTaskNow = vi.fn().mockResolvedValue();
-      const response = createResponse();
-
-      await getRunNowHandler()(
-        {
-          user: { role: "automation_only" },
-          app: { get: () => ({ runTaskNow }) },
-          params: { id: "12" },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(runTaskNow).not.toHaveBeenCalled();
-    });
-  });
-});
-
-describe("server.world_events / server.control gate on curated scheduled commands (closes the automation.manage-vs-world_events gap Finding 1 never checked)", () => {
-  const baseBody = {
-    name: "Broadcast task",
-    cronExpression: "0 * * * *",
-  };
-
-  describe("POST /api/scheduler/tasks -- servermsg", () => {
-    it("refuses to create a servermsg task for automation.manage alone", async () => {
-      createScheduledTask.mockClear();
-      const response = createResponse();
-      await getCreateHandler()(
-        {
-          user: { role: "automation_only" },
-          body: { ...baseBody, command: "servermsg Server restarting soon" },
-          app: { get: () => ({ scheduleTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(createScheduledTask).not.toHaveBeenCalled();
-    });
-
-    it("allows creating a servermsg task when the role holds server.world_events", async () => {
-      createScheduledTask.mockResolvedValue({ id: 50 });
-      const scheduleTask = vi.fn();
-      const response = createResponse();
-
-      await getCreateHandler()(
-        {
-          user: { role: "automation_and_world_events" },
-          body: { ...baseBody, command: "servermsg Server restarting soon" },
-          app: { get: () => ({ scheduleTask }) },
-        },
-        response,
-      );
-
-      expect(createScheduledTask).toHaveBeenCalled();
-      expect(response.status).not.toHaveBeenCalledWith(403);
-    });
-  });
-
-  describe("POST /api/scheduler/tasks -- bridge: world-event actions", () => {
-    it("refuses to create a bridge:triggerStorm task for automation.manage alone", async () => {
-      createScheduledTask.mockClear();
-      const response = createResponse();
-      await getCreateHandler()(
-        {
-          user: { role: "automation_only" },
-          body: { ...baseBody, command: "bridge:triggerStorm" },
-          app: { get: () => ({ scheduleTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(createScheduledTask).not.toHaveBeenCalled();
-    });
-
-    it("allows creating a bridge:triggerStorm task when the role holds server.world_events", async () => {
-      createScheduledTask.mockResolvedValue({ id: 51 });
-      const scheduleTask = vi.fn();
-      const response = createResponse();
-
-      await getCreateHandler()(
-        {
-          user: { role: "automation_and_world_events" },
-          body: { ...baseBody, command: "bridge:triggerStorm" },
-          app: { get: () => ({ scheduleTask }) },
-        },
-        response,
-      );
-
-      expect(createScheduledTask).toHaveBeenCalled();
-      expect(response.status).not.toHaveBeenCalledWith(403);
-    });
-  });
-
-  describe("POST /api/scheduler/tasks -- bridge:saveWorld is server.control, not server.world_events", () => {
-    it("refuses to create a bridge:saveWorld task for a role that only holds server.world_events", async () => {
-      createScheduledTask.mockClear();
-      const response = createResponse();
-      await getCreateHandler()(
-        {
-          user: { role: "automation_and_world_events" },
-          body: { ...baseBody, command: "bridge:saveWorld" },
-          app: { get: () => ({ scheduleTask: vi.fn() }) },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(createScheduledTask).not.toHaveBeenCalled();
-    });
-
-    it("allows creating a bridge:saveWorld task when the role holds server.control", async () => {
-      createScheduledTask.mockResolvedValue({ id: 52 });
-      const scheduleTask = vi.fn();
-      const response = createResponse();
-
-      await getCreateHandler()(
-        {
-          user: { role: "automation_and_control" },
-          body: { ...baseBody, command: "bridge:saveWorld" },
-          app: { get: () => ({ scheduleTask }) },
-        },
-        response,
-      );
-
-      expect(createScheduledTask).toHaveBeenCalled();
-      expect(response.status).not.toHaveBeenCalledWith(403);
-    });
-  });
-
-  describe("POST /api/scheduler/tasks/:id/run -- the other half of the escalation", () => {
-    it("refuses to run a stored servermsg task for automation.manage alone -- this is the exact escalation: schedule+Run-now broadcasting without server.world_events", async () => {
-      const task = { id: 60, name: "Broadcast", command: "servermsg Hello everyone" };
-      getScheduledTasks.mockResolvedValue([task]);
-      const runTaskNow = vi.fn().mockResolvedValue();
-      const response = createResponse();
-
-      await getRunNowHandler()(
-        {
-          user: { role: "automation_only" },
-          app: { get: () => ({ runTaskNow }) },
-          params: { id: "60" },
-        },
-        response,
-      );
-
-      expect(response.status).toHaveBeenCalledWith(403);
-      expect(runTaskNow).not.toHaveBeenCalled();
-    });
-
-    it("allows running a stored servermsg task when the CURRENT caller holds server.world_events", async () => {
-      const task = { id: 61, name: "Broadcast", command: "servermsg Hello everyone" };
-      getScheduledTasks.mockResolvedValue([task]);
-      const runTaskNow = vi.fn().mockResolvedValue();
-      const response = createResponse();
-
-      await getRunNowHandler()(
-        {
-          user: { role: "automation_and_world_events" },
-          app: { get: () => ({ runTaskNow }) },
-          params: { id: "61" },
-        },
-        response,
-      );
-
-      expect(response.status).not.toHaveBeenCalledWith(403);
-      expect(runTaskNow).toHaveBeenCalledWith(task);
-    });
-  });
-
-  describe("the cron firing path stays completely unchecked", () => {
-    it("Scheduler.runTaskNow() dispatches a servermsg command with no capability check at all", async () => {
-      const { scheduler, rconService } = makeScheduler();
-
-      const result = await scheduler.runTaskNow({
-        id: 70,
-        name: "Nightly broadcast",
-        command: "servermsg Server restarting soon",
-      });
-
-      expect(rconService.serverMessage).toHaveBeenCalledWith(
-        "Server restarting soon",
-        { skipLog: true },
-      );
-      expect(result.success).toBe(true);
-    });
-
-    it("Scheduler.runTaskNow() dispatches a bridge:saveWorld command with no capability check at all", async () => {
-      const { scheduler } = makeScheduler();
-      scheduler.executeBridgeAction = vi.fn().mockResolvedValue();
-
-      const result = await scheduler.runTaskNow({
-        id: 71,
-        name: "Nightly save",
-        command: "bridge:saveWorld",
-      });
-
-      expect(scheduler.executeBridgeAction).toHaveBeenCalledWith(
-        "bridge:saveWorld",
-      );
-      expect(result.success).toBe(true);
-    });
-  });
-});
-
 describe("performRestart() Schedule History labeling", () => {
   function makeSchedulerForRestart() {
     const rconService = {
       connected: true,
       connect: vi.fn().mockResolvedValue(),
-      execute: vi.fn().mockResolvedValue({ success: false, error: "RCON unavailable" }),
+      execute: vi
+        .fn()
+        .mockResolvedValue({ success: false, error: "RCON unavailable" }),
     };
     const serverManager = {
       _serverId: null,
       checkServerRunning: vi.fn().mockResolvedValue(true), // wasRunning=true -> skips the 10s "wait and start" path
     };
-    return { scheduler: new Scheduler(rconService, serverManager), rconService };
+    return {
+      scheduler: new Scheduler(rconService, serverManager),
+      rconService,
+    };
   }
 
   beforeEach(() => {
@@ -864,7 +384,9 @@ describe("performRestart(): a serverManager without process-detection must refus
     const rconService = {
       connected: false,
       connect: vi.fn().mockResolvedValue(),
-      execute: vi.fn().mockResolvedValue({ success: false, error: "not connected" }),
+      execute: vi
+        .fn()
+        .mockResolvedValue({ success: false, error: "not connected" }),
     };
     const serverManager = {
       _serverId: null,
@@ -887,7 +409,8 @@ describe("performRestart(): a serverManager without process-detection must refus
 describe("POST /api/scheduler/restart-now labels its Schedule History entry as manual", () => {
   function getRestartNowHandler() {
     const layer = router.stack.find(
-      (entry) => entry.route?.path === "/restart-now" && entry.route.methods.post,
+      (entry) =>
+        entry.route?.path === "/restart-now" && entry.route.methods.post,
     );
     return layer.route.stack[0].handle;
   }
@@ -911,57 +434,11 @@ describe("POST /api/scheduler/restart-now labels its Schedule History entry as m
   });
 });
 
-describe("POST /api/scheduler/restart-now requires server.control in addition to automation.manage", () => {
-  function getRestartNowHandler() {
-    const layer = router.stack.find(
-      (entry) => entry.route?.path === "/restart-now" && entry.route.methods.post,
-    );
-    return layer.route.stack[0].handle;
-  }
-
-  it("refuses a caller who holds automation.manage but not server.control", async () => {
-    const { getActiveServer } = await import("../database/init.ts");
-    getActiveServer.mockResolvedValue(null);
-    const performRestart = vi.fn().mockResolvedValue({ success: true });
-    const response = createResponse();
-
-    await getRestartNowHandler()(
-      {
-        user: { role: "automation_only" },
-        body: {},
-        app: { get: () => ({ performRestart }) },
-      },
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(403);
-    expect(performRestart).not.toHaveBeenCalled();
-  });
-
-  it("allows a caller who holds both automation.manage and server.control", async () => {
-    const { getActiveServer } = await import("../database/init.ts");
-    getActiveServer.mockResolvedValue(null);
-    const performRestart = vi.fn().mockResolvedValue({ success: true });
-    const response = createResponse();
-
-    await getRestartNowHandler()(
-      {
-        user: { role: "automation_and_control" },
-        body: {},
-        app: { get: () => ({ performRestart }) },
-      },
-      response,
-    );
-
-    expect(response.status).not.toHaveBeenCalledWith(403);
-    expect(performRestart).toHaveBeenCalled();
-  });
-});
-
 describe("PUT /api/scheduler/restart-warning", () => {
   function getRestartWarningHandler() {
     const layer = router.stack.find(
-      (entry) => entry.route?.path === "/restart-warning" && entry.route.methods.put,
+      (entry) =>
+        entry.route?.path === "/restart-warning" && entry.route.methods.put,
     );
     return layer.route.stack[0].handle;
   }
@@ -987,7 +464,10 @@ describe("PUT /api/scheduler/restart-warning", () => {
     });
     expect(response.json).toHaveBeenCalledWith({
       success: true,
-      restartWarning: { locale: "zh-CN", template: "将在 {count}{unit} 后重启" },
+      restartWarning: {
+        locale: "zh-CN",
+        template: "将在 {count}{unit} 后重启",
+      },
     });
   });
 });

@@ -20,7 +20,6 @@ import { VEHICLES, PERKS, PERK_CATALOG, ACCESS_LEVELS } from '../utils/commands.
 import { sanitizeError } from '../utils/sanitize.ts';
 import bridge from '../services/panelBridge.ts';
 import { listWhitelistAccounts, listServerRoleNames } from '../utils/whitelistDb.ts';
-import { requirePermission } from '../services/permissions.ts';
 import { ErrorCode } from '../utils/errorCodes.ts';
 import {
   deletePlayerExport,
@@ -131,7 +130,7 @@ async function setPlayerMode(
   };
 }
 
-router.get('/activity', requirePermission("players.view"), async (req, res) => {
+router.get('/activity', async (req, res) => {
   try {
     const { player, limit = 100 } = req.query;
     const logs = await readPlayerLogs(
@@ -145,7 +144,7 @@ router.get('/activity', requirePermission("players.view"), async (req, res) => {
   }
 });
 
-router.get('/', requirePermission("players.view"), async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const result = await rconService.getPlayers();
@@ -162,7 +161,7 @@ router.get('/', requirePermission("players.view"), async (req, res) => {
   }
 });
 
-router.post('/kick', requirePermission("players.moderate"), async (req, res) => {
+router.post('/kick', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username, reason } = req.body || {};
@@ -192,7 +191,7 @@ router.post('/kick', requirePermission("players.moderate"), async (req, res) => 
   }
 });
 
-router.post('/ban', requirePermission("players.moderate"), async (req, res) => {
+router.post('/ban', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username, banIp, reason } = req.body || {};
@@ -229,7 +228,7 @@ router.post('/ban', requirePermission("players.moderate"), async (req, res) => {
   }
 });
 
-router.post('/unban', requirePermission("players.moderate"), async (req, res) => {
+router.post('/unban', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username } = req.body || {};
@@ -255,7 +254,7 @@ router.post('/unban', requirePermission("players.moderate"), async (req, res) =>
   }
 });
 
-router.post('/access-level', requirePermission("players.moderate"), async (req, res) => {
+router.post('/access-level', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username, level } = req.body || {};
@@ -298,7 +297,7 @@ router.post('/access-level', requirePermission("players.moderate"), async (req, 
   }
 });
 
-router.post('/whitelist/add', requirePermission("players.moderate"), async (req, res) => {
+router.post('/whitelist/add', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username, password } = req.body || {};
@@ -326,7 +325,7 @@ router.post('/whitelist/add', requirePermission("players.moderate"), async (req,
   }
 });
 
-router.post('/whitelist/remove', requirePermission("players.moderate"), async (req, res) => {
+router.post('/whitelist/remove', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username } = req.body || {};
@@ -351,7 +350,7 @@ router.post('/whitelist/remove', requirePermission("players.moderate"), async (r
   }
 });
 
-router.post('/teleport', requirePermission("players.gm_tools"), async (req, res) => {
+router.post('/teleport', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     let { player1, player2, x, y, z } = req.body || {};
@@ -401,7 +400,7 @@ router.post('/teleport', requirePermission("players.gm_tools"), async (req, res)
   }
 });
 
-router.post('/add-item', requirePermission("players.gm_tools"), async (req, res) => {
+router.post('/add-item', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username, item, count } = req.body || {};
@@ -441,7 +440,7 @@ router.post('/add-item', requirePermission("players.gm_tools"), async (req, res)
   }
 });
 
-router.post('/add-xp', requirePermission("players.gm_tools"), async (req, res) => {
+router.post('/add-xp', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username, perk, amount } = req.body || {};
@@ -479,7 +478,7 @@ router.post('/add-xp', requirePermission("players.gm_tools"), async (req, res) =
   }
 });
 
-router.post('/add-vehicle', requirePermission("players.gm_tools"), async (req, res) => {
+router.post('/add-vehicle', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { vehicle, username } = req.body || {};
@@ -509,7 +508,7 @@ router.post('/add-vehicle', requirePermission("players.gm_tools"), async (req, r
   }
 });
 
-router.post('/add-vehicle-at', requirePermission("players.gm_tools"), async (req, res) => {
+router.post('/add-vehicle-at', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { vehicle, x, y, z = 0 } = req.body || {};
@@ -536,7 +535,7 @@ router.post('/add-vehicle-at', requirePermission("players.gm_tools"), async (req
   }
 });
 
-router.post('/godmode', requirePermission("players.gm_tools"), async (req, res) => {
+router.post('/godmode', async (req, res) => {
   try {
     const { username, enabled } = req.body || {};
 
@@ -563,7 +562,7 @@ router.post('/godmode', requirePermission("players.gm_tools"), async (req, res) 
   }
 });
 
-router.post('/invisible', requirePermission("players.gm_tools"), async (req, res) => {
+router.post('/invisible', async (req, res) => {
   try {
     const { username, enabled } = req.body || {};
 
@@ -590,7 +589,7 @@ router.post('/invisible', requirePermission("players.gm_tools"), async (req, res
   }
 });
 
-router.post('/noclip', requirePermission("players.gm_tools"), async (req, res) => {
+router.post('/noclip', async (req, res) => {
   try {
     const { username, enabled } = req.body || {};
 
@@ -617,15 +616,15 @@ router.post('/noclip', requirePermission("players.gm_tools"), async (req, res) =
   }
 });
 
-router.get('/vehicles', requirePermission("players.view"), (req, res) => {
+router.get('/vehicles', (req, res) => {
   res.json({ vehicles: VEHICLES });
 });
 
-router.get('/perks', requirePermission("players.view"), (req, res) => {
+router.get('/perks', (req, res) => {
   res.json({ perks: PERKS, catalog: PERK_CATALOG });
 });
 
-router.get('/access-levels', requirePermission("players.view"), async (req, res) => {
+router.get('/access-levels', async (req, res) => {
   try {
     const activeServer = await getActiveServer();
     if (!activeServer || activeServer.isRemote) {
@@ -645,7 +644,7 @@ router.get('/access-levels', requirePermission("players.view"), async (req, res)
   }
 });
 
-router.get('/steamid-bans', requirePermission("players.view"), async (req, res) => {
+router.get('/steamid-bans', async (req, res) => {
   try {
     const bans = await getSteamIdBans();
     res.json({ bans });
@@ -655,7 +654,7 @@ router.get('/steamid-bans', requirePermission("players.view"), async (req, res) 
   }
 });
 
-router.post('/banid', requirePermission("players.moderate"), async (req, res) => {
+router.post('/banid', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { steamId, reason } = req.body || {};
@@ -687,7 +686,7 @@ router.post('/banid', requirePermission("players.moderate"), async (req, res) =>
   }
 });
 
-router.post('/unbanid', requirePermission("players.moderate"), async (req, res) => {
+router.post('/unbanid', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { steamId } = req.body || {};
@@ -714,7 +713,7 @@ router.post('/unbanid', requirePermission("players.moderate"), async (req, res) 
   }
 });
 
-router.post('/voiceban', requirePermission("players.moderate"), async (req, res) => {
+router.post('/voiceban', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username, enabled } = req.body || {};
@@ -743,7 +742,7 @@ router.post('/voiceban', requirePermission("players.moderate"), async (req, res)
   }
 });
 
-router.post('/adduser', requirePermission("players.moderate"), async (req, res) => {
+router.post('/adduser', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const { username, password } = req.body || {};
@@ -771,7 +770,7 @@ router.post('/adduser', requirePermission("players.moderate"), async (req, res) 
   }
 });
 
-router.post('/whitelist/addall', requirePermission("players.moderate"), async (req, res) => {
+router.post('/whitelist/addall', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const result = await rconService.addAllToWhitelist();
@@ -783,7 +782,7 @@ router.post('/whitelist/addall', requirePermission("players.moderate"), async (r
   }
 });
 
-router.post('/whitelist/steamid/add', requirePermission("players.moderate"), async (req, res) => {
+router.post('/whitelist/steamid/add', async (req, res) => {
   try {
     const { steamId } = req.body || {};
     if (!/^\d{17}$/.test(String(steamId || ''))) {
@@ -799,7 +798,7 @@ router.post('/whitelist/steamid/add', requirePermission("players.moderate"), asy
   }
 });
 
-router.post('/whitelist/steamid/remove', requirePermission("players.moderate"), async (req, res) => {
+router.post('/whitelist/steamid/remove', async (req, res) => {
   try {
     const { steamId } = req.body || {};
     if (!/^\d{17}$/.test(String(steamId || ''))) {
@@ -815,7 +814,7 @@ router.post('/whitelist/steamid/remove', requirePermission("players.moderate"), 
   }
 });
 
-router.get('/whitelist', requirePermission("players.view"), async (req, res) => {
+router.get('/whitelist', async (req, res) => {
   try {
     const activeServer = await getActiveServer();
     if (!activeServer) {
@@ -848,7 +847,7 @@ router.get('/whitelist', requirePermission("players.view"), async (req, res) => 
 });
 
 
-router.get('/notes', requirePermission("players.view"), async (req, res) => {
+router.get('/notes', async (req, res) => {
   try {
     const notes = await getPlayerNotes();
     res.json({ success: true, notes });
@@ -858,7 +857,7 @@ router.get('/notes', requirePermission("players.view"), async (req, res) => {
   }
 });
 
-router.get('/notes/:playerName', requirePermission("players.view"), async (req, res) => {
+router.get('/notes/:playerName', async (req, res) => {
   try {
     const note = await getPlayerNote(String(req.params.playerName));
     res.json({ success: true, note });
@@ -868,7 +867,7 @@ router.get('/notes/:playerName', requirePermission("players.view"), async (req, 
   }
 });
 
-router.post('/notes', requirePermission("players.moderate"), async (req, res) => {
+router.post('/notes', async (req, res) => {
   try {
     const { playerName, note } = req.body || {};
     const tags = req.body.tags || [];
@@ -902,7 +901,7 @@ router.post('/notes', requirePermission("players.moderate"), async (req, res) =>
   }
 });
 
-router.delete('/notes/:playerName', requirePermission("players.moderate"), async (req, res) => {
+router.delete('/notes/:playerName', async (req, res) => {
   try {
     const success = await deletePlayerNote(String(req.params.playerName));
     if (!success) {
@@ -920,7 +919,7 @@ router.delete('/notes/:playerName', requirePermission("players.moderate"), async
 });
 
 
-router.get('/stats', requirePermission("players.view"), async (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
     const stats = await getPlayerStats();
     res.json({ success: true, stats });
@@ -930,7 +929,7 @@ router.get('/stats', requirePermission("players.view"), async (req, res) => {
   }
 });
 
-router.get('/stats/:playerName', requirePermission("players.view"), async (req, res) => {
+router.get('/stats/:playerName', async (req, res) => {
   try {
     const stat = await getPlayerStat(String(req.params.playerName));
     res.json({ success: true, stat });
@@ -940,7 +939,7 @@ router.get('/stats/:playerName', requirePermission("players.view"), async (req, 
   }
 });
 
-router.get('/exports', requirePermission("players.gm_tools"), async (req, res) => {
+router.get('/exports', async (req, res) => {
   try {
     const username = typeof req.query.username === 'string' ? req.query.username : undefined;
     res.json({ exports: listPlayerExports(username) });
@@ -950,7 +949,7 @@ router.get('/exports', requirePermission("players.gm_tools"), async (req, res) =
   }
 });
 
-router.get('/exports/:username/:filename', requirePermission("players.gm_tools"), async (req, res) => {
+router.get('/exports/:username/:filename', async (req, res) => {
   try {
     res.json(getPlayerExport(String(req.params.username), String(req.params.filename)));
   } catch (error: unknown) {
@@ -963,7 +962,7 @@ router.get('/exports/:username/:filename', requirePermission("players.gm_tools")
   }
 });
 
-router.delete('/exports/:username/:filename', requirePermission("players.gm_tools"), async (req, res) => {
+router.delete('/exports/:username/:filename', async (req, res) => {
   try {
     deletePlayerExport(String(req.params.username), String(req.params.filename));
     res.json({ success: true });

@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { permissionMiddleware, protectedServerFunctionMiddleware } from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 
@@ -21,8 +21,10 @@ function errorMessage(error: unknown): string {
 }
 
 function throwDiagnosticsError(error: unknown, fallbackStatus = 500): never {
-  const details = error && typeof error === 'object' ? (error as ServiceError) : {}
-  const status = typeof details.status === 'number' ? details.status : fallbackStatus
+  const details =
+    error && typeof error === 'object' ? (error as ServiceError) : {}
+  const status =
+    typeof details.status === 'number' ? details.status : fallbackStatus
   throw Object.assign(new Error(errorMessage(error)), {
     status,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
@@ -37,13 +39,6 @@ function invalid(message: string, code?: string): never {
   )
 }
 
-function capabilityMiddleware(capability: string) {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware(capability),
-  ] as const
-}
-
 async function panelBridge(): Promise<AnyRecord> {
   const { getPanelRuntime } =
     await import('../../../panel-server/utils/panelRuntime.ts')
@@ -55,7 +50,8 @@ async function withBridge<T>(
 ): Promise<T> {
   try {
     const bridge = await panelBridge()
-    const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+    const { ErrorCode } =
+      await import('../../../panel-server/utils/errorCodes.ts')
     if (!bridge.isRunning) {
       invalid('Bridge not running', ErrorCode.BRIDGE_NOT_RUNNING_BARE)
     }
@@ -71,20 +67,25 @@ async function withBridge<T>(
     const { sanitizeError } =
       await import('../../../panel-server/utils/sanitize.ts')
     throwDiagnosticsError(
-      Object.assign(new Error(sanitizeError(errorMessage(error))), { status: 500 }),
+      Object.assign(new Error(sanitizeError(errorMessage(error))), {
+        status: 500,
+      }),
     )
   }
 }
 
 async function executeDiagnosticsAction(data: AnyRecord): Promise<unknown> {
-  const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+  const { ErrorCode } =
+    await import('../../../panel-server/utils/errorCodes.ts')
   const action = data.action
   if (typeof action !== 'string' || !action) {
     invalid('action is required', ErrorCode.PANELBRIDGE_ACTION_REQUIRED)
   }
   if (
     data.args !== undefined &&
-    (typeof data.args !== 'object' || data.args === null || Array.isArray(data.args))
+    (typeof data.args !== 'object' ||
+      data.args === null ||
+      Array.isArray(data.args))
   ) {
     invalid('args must be an object', ErrorCode.PANELBRIDGE_ARGS_MUST_BE_OBJECT)
   }
@@ -120,15 +121,23 @@ async function executeDiagnosticsAction(data: AnyRecord): Promise<unknown> {
         object !== undefined &&
         (typeof object !== 'string' || !/^[a-zA-Z0-9_.]{1,100}$/.test(object))
       ) {
-        invalid('Invalid object name', ErrorCode.PANELBRIDGE_INVALID_OBJECT_NAME)
+        invalid(
+          'Invalid object name',
+          ErrorCode.PANELBRIDGE_INVALID_OBJECT_NAME,
+        )
       }
       if (
         method !== undefined &&
         (typeof method !== 'string' || !/^[a-zA-Z0-9_.]{1,100}$/.test(method))
       ) {
-        invalid('Invalid method name', ErrorCode.PANELBRIDGE_INVALID_METHOD_NAME)
+        invalid(
+          'Invalid method name',
+          ErrorCode.PANELBRIDGE_INVALID_METHOD_NAME,
+        )
       }
-      return withBridge((bridge) => bridge.sendCommand('checkAPI', { object, method }))
+      return withBridge((bridge) =>
+        bridge.sendCommand('checkAPI', { object, method }),
+      )
     }
     case 'getAvailableHandlers':
       return withBridge((bridge) =>
@@ -143,8 +152,10 @@ async function executeDiagnosticsAction(data: AnyRecord): Promise<unknown> {
   }
 }
 
-export const sendPanelBridgeDiagnosticsCommand = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('bridge.diagnostics'))
+export const sendPanelBridgeDiagnosticsCommand = createServerFn({
+  method: 'POST',
+})
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeDiagnosticsAction(data)) as any)
 

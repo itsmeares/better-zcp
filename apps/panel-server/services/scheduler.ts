@@ -46,12 +46,8 @@ import {
   classifyScheduledCommand,
   isSchedulableBridgeAction,
   parseBridgeActionName,
-  requiredCapabilityForScheduledCommand,
-} from "../utils/schedulerPermissions.ts";
-export {
-  classifyScheduledCommand,
-  requiredCapabilityForScheduledCommand,
-} from "../utils/schedulerPermissions.ts";
+} from "../utils/schedulerCommands.ts";
+export { classifyScheduledCommand } from "../utils/schedulerCommands.ts";
 
 const SCHEDULER_TIMEZONE_SETTING_KEY = "schedulerTimezone";
 type ScheduledTask = Record<string, any>;

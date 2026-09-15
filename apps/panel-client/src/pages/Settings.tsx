@@ -326,7 +326,7 @@ export default function Settings() {
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false)
   const [applyRiskConfirmed, setApplyRiskConfirmed] = useState(false)
   const { toast } = useToast()
-  const { user, authEnabled, logout, can } = useAuth()
+  const { user, authEnabled, logout } = useAuth()
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -1234,7 +1234,7 @@ export default function Settings() {
     }
   }
 
-  const canViewBridgeStatus = can('bridge.setup') || can('bridge.diagnostics')
+  const canViewBridgeStatus = true
   const fetchBridgeStatus = useCallback(async () => {
     if (!canViewBridgeStatus) return
     try {
@@ -5595,9 +5595,6 @@ export default function Settings() {
                       </div>
                       <div>
                         <p className="font-medium">{user.username}</p>
-                        <p className="text-xs text-muted-foreground capitalize">
-                          {user.role}
-                        </p>
                       </div>
                     </div>
                   </div>

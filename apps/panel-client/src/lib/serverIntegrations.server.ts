@@ -1,8 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 
@@ -19,12 +16,6 @@ type ServiceError = {
   reason?: unknown
 }
 
-type IntegrationContext = {
-  authenticatedUser?: {
-    role?: string
-  }
-}
-
 type DiscordEvent = {
   enabled: boolean
   template: string
@@ -39,18 +30,6 @@ interface ManagedDockerContainer {
 }
 
 const SNOWFLAKE = /^\d{15,21}$/
-
-const DISCORD_COMMAND_CAPABILITY: Record<string, string | null> = {
-  status: null,
-  players: 'players.view',
-  save: 'server.control',
-  broadcast: 'server.world_events',
-  kick: 'players.moderate',
-  start: 'server.control',
-  stop: 'server.control',
-  restart: 'server.control',
-  rcon: 'rcon.execute',
-}
 
 const DEFAULT_DISCORD_EVENTS: Record<string, DiscordEvent> = {
   serverStart: {
@@ -180,13 +159,6 @@ function invalid(message: string, code?: string): never {
   )
 }
 
-function capabilityMiddleware(capability: string) {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware(capability),
-  ] as const
-}
-
 async function panelRuntime(): Promise<AnyRecord> {
   const { getPanelRuntime } =
     await import('../../../panel-server/utils/panelRuntime.ts')
@@ -206,7 +178,6 @@ async function discordBotOrThrow(): Promise<AnyRecord> {
 }
 
 function createIntegrationRead<T>(
-  capability: string,
   handler: (data: AnyRecord, context: unknown) => Promise<T> | T,
 ) {
   const implementation = async (
@@ -221,7 +192,7 @@ function createIntegrationRead<T>(
   }
   return Object.assign(
     createServerFn({ method: 'GET' })
-      .middleware(capabilityMiddleware(capability))
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) => record(data))
       .handler(({ data, context }) => implementation(data, context) as any),
     { __executeImplementation: implementation },
@@ -229,7 +200,6 @@ function createIntegrationRead<T>(
 }
 
 function createIntegrationAction<T>(
-  capability: string,
   handler: (data: AnyRecord, context: unknown) => Promise<T> | T,
 ) {
   const implementation = async (
@@ -244,16 +214,14 @@ function createIntegrationAction<T>(
   }
   return Object.assign(
     createServerFn({ method: 'POST' })
-      .middleware(capabilityMiddleware(capability))
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) => record(data))
       .handler(({ data, context }) => implementation(data, context) as any),
     { __executeImplementation: implementation },
   )
 }
 
-export const getDiscordStatus = createIntegrationRead(
-  'integrations.manage',
-  async () => {
+export const getDiscordStatus = createIntegrationRead(async () => {
     const discordBot = (await panelRuntime()).discordBot
     if (!discordBot) {
       return {
@@ -263,15 +231,11 @@ export const getDiscordStatus = createIntegrationRead(
       }
     }
     return discordBot.getStatus()
-  },
-)
+})
 
-export const getDiscordConfig = createIntegrationRead(
-  'integrations.manage',
-  async () => {
+export const getDiscordConfig = createIntegrationRead(async () => {
     const discordBot = await discordBotOrThrow()
-    const { getSetting } =
-      await import('../../../panel-server/database/init.ts')
+  const { getSetting } = await import('../../../panel-server/database/init.ts')
 
     await discordBot.loadConfig()
     const autoStart = await getSetting('discordAutoStart')
@@ -288,12 +252,9 @@ export const getDiscordConfig = createIntegrationRead(
       chatRelayChannelId: discordBot.chatRelayChannelId || '',
       chatRelayScope: normalizeChatRelayScope(discordBot.chatRelayScope),
     }
-  },
-)
+})
 
-export const updateDiscordConfig = createIntegrationAction(
-  'integrations.manage',
-  async (data) => {
+export const updateDiscordConfig = createIntegrationAction(async (data) => {
     const {
       token,
       guildId,
@@ -348,8 +309,7 @@ export const updateDiscordConfig = createIntegrationAction(
       invalid('Invalid Chat Relay Scope', 'DISCORD_INVALID_CHAT_RELAY_SCOPE')
     }
 
-    const { setSetting } =
-      await import('../../../panel-server/database/init.ts')
+  const { setSetting } = await import('../../../panel-server/database/init.ts')
     const prevToken = discordBot.token
     const prevGuildId = discordBot.guildId
 
@@ -403,12 +363,9 @@ export const updateDiscordConfig = createIntegrationAction(
       success: true,
       message: 'Discord bot configuration updated',
     }
-  },
-)
+})
 
-export const startDiscordBot = createIntegrationAction(
-  'integrations.manage',
-  async () => {
+export const startDiscordBot = createIntegrationAction(async () => {
     const discordBot = await discordBotOrThrow()
     if (discordBot.isRunning) {
       return { success: true, message: 'Bot is already running' }
@@ -425,36 +382,27 @@ export const startDiscordBot = createIntegrationAction(
       }),
       400,
     )
-  },
-)
+})
 
-export const stopDiscordBot = createIntegrationAction(
-  'integrations.manage',
-  async () => {
+export const stopDiscordBot = createIntegrationAction(async () => {
     const discordBot = await discordBotOrThrow()
     if (!discordBot.isRunning) {
       return { success: true, message: 'Bot is not running' }
     }
     await discordBot.stop()
     return { success: true, message: 'Discord bot stopped' }
-  },
-)
+})
 
-export const resetDiscordConfig = createIntegrationAction(
-  'integrations.manage',
-  async () => {
+export const resetDiscordConfig = createIntegrationAction(async () => {
     const discordBot = await discordBotOrThrow()
     await discordBot.resetConfig()
     return {
       success: true,
       message: 'Discord bot settings wiped. Setup can start from scratch.',
     }
-  },
-)
+})
 
-export const testDiscordToken = createIntegrationAction(
-  'integrations.manage',
-  async (data) => {
+export const testDiscordToken = createIntegrationAction(async (data) => {
     const token = data.token
     if (typeof token !== 'string' || token.length === 0 || token.length > 200) {
       invalid(
@@ -535,12 +483,9 @@ export const testDiscordToken = createIntegrationAction(
       },
       inviteUrl,
     }
-  },
-)
+})
 
-export const sendDiscordTestMessage = createIntegrationAction(
-  'integrations.manage',
-  async () => {
+export const sendDiscordTestMessage = createIntegrationAction(async () => {
     const discordBot = (await panelRuntime()).discordBot
     if (!discordBot) {
       invalid('Discord bot not initialized', 'DISCORD_BOT_NOT_INITIALIZED')
@@ -564,12 +509,9 @@ export const sendDiscordTestMessage = createIntegrationAction(
       )
     }
     return { success: true, message: 'Test message sent' }
-  },
-)
+})
 
-export const getDiscordWebhookEvents = createIntegrationRead(
-  'integrations.manage',
-  async () => {
+export const getDiscordWebhookEvents = createIntegrationRead(async () => {
     const discordBot = (await panelRuntime()).discordBot
     if (!discordBot) return { events: {} }
     return {
@@ -578,11 +520,9 @@ export const getDiscordWebhookEvents = createIntegrationRead(
         ...(discordBot.webhookEvents || {}),
       },
     }
-  },
-)
+})
 
 export const updateDiscordWebhookEvents = createIntegrationAction(
-  'integrations.manage',
   async (data) => {
     const discordBot = await discordBotOrThrow()
     const events = data.events
@@ -610,71 +550,19 @@ export const updateDiscordWebhookEvents = createIntegrationAction(
   },
 )
 
-export const getDiscordPermissions = createIntegrationRead(
-  'integrations.manage',
-  async () => {
+export const getDiscordPermissions = createIntegrationRead(async () => {
     const discordBot = await discordBotOrThrow()
     return { permissions: discordBot.getCommandPermissions() }
-  },
-)
+})
 
 export const updateDiscordPermissions = createIntegrationAction(
-  'integrations.manage',
-  async (data, context) => {
+  async (data) => {
     const discordBot = await discordBotOrThrow()
     const permissions = data.permissions
     if (!permissions || typeof permissions !== 'object') {
       invalid(
         'Permissions object required',
         'DISCORD_PERMISSIONS_OBJECT_REQUIRED',
-      )
-    }
-
-    const current = discordBot.getCommandPermissions()
-    const missing: Array<{
-      command: string
-      requiredCapability: string
-    }> = []
-    let callerCapabilities: string[] | null = null
-
-    for (const [command, tier] of Object.entries(permissions)) {
-      const requiredCapability = DISCORD_COMMAND_CAPABILITY[command]
-      if (!requiredCapability) continue
-      if (!(command in current) || current[command] === tier) continue
-      if (callerCapabilities === null) {
-        const user = (context as IntegrationContext).authenticatedUser
-        const { getRoleByName } =
-          await import('../../../panel-server/database/init.ts')
-        const role = user?.role ? await getRoleByName(user.role) : null
-        callerCapabilities = Array.isArray(role?.capabilities)
-          ? role.capabilities
-          : []
-      }
-      if (!callerCapabilities.includes(requiredCapability)) {
-        missing.push({ command, requiredCapability })
-      }
-    }
-
-    if (missing.length > 0) {
-      const detail = missing
-        .map(
-          (item) => '"' + item.command + '" needs ' + item.requiredCapability,
-        )
-        .join(', ')
-      throwIntegrationError(
-        Object.assign(
-          new Error(
-            'Cannot change the Discord tier for ' +
-              detail +
-              ' without holding that capability yourself.',
-          ),
-          {
-            code: 'DISCORD_PERMISSIONS_CAPABILITY_REQUIRED',
-            params: { detail },
-            missing,
-          },
-        ),
-        403,
       )
     }
 
@@ -703,9 +591,7 @@ async function mapWithConcurrency<T, R>(
   return results
 }
 
-export const getDockerStatus = createIntegrationRead(
-  'docker.manage',
-  async () => {
+export const getDockerStatus = createIntegrationRead(async () => {
     const dockerClient = (await panelRuntime()).dockerClient
     if (!dockerClient?.enabled) {
       return { enabled: false, available: false, containers: [] }
@@ -727,12 +613,9 @@ export const getDockerStatus = createIntegrationRead(
         status: container.Status,
       })),
     }
-  },
-)
+})
 
-export const getDockerStats = createIntegrationRead(
-  'docker.manage',
-  async () => {
+export const getDockerStats = createIntegrationRead(async () => {
     const dockerClient = (await panelRuntime()).dockerClient
     if (!dockerClient?.enabled || !dockerClient.available) {
       return { containers: {} }
@@ -756,12 +639,9 @@ export const getDockerStats = createIntegrationRead(
       if (name) result[name] = stats
     }
     return { containers: result }
-  },
-)
+})
 
-export const runDockerAction = createIntegrationAction(
-  'docker.manage',
-  async (data) => {
+export const runDockerAction = createIntegrationAction(async (data) => {
     const { acquireLifecycleLock, lifecycleInProgressResponse } =
       await import('../../../panel-server/services/lifecycleCoordinator.ts')
     const id = String(data.id ?? '')
@@ -783,8 +663,7 @@ export const runDockerAction = createIntegrationAction(
         )
       }
 
-      const { getServer } =
-        await import('../../../panel-server/database/init.ts')
+    const { getServer } = await import('../../../panel-server/database/init.ts')
       const server = await getServer(data.serverId)
       if (!server) {
         throwIntegrationError(
@@ -794,10 +673,7 @@ export const runDockerAction = createIntegrationAction(
           404,
         )
       }
-      if (
-        server.dockerContainerName !== id &&
-        server.dockerContainerId !== id
-      ) {
+    if (server.dockerContainerName !== id && server.dockerContainerId !== id) {
         throwIntegrationError(
           Object.assign(new Error('Container is not mapped to this server'), {
             code: 'CONTAINER_NOT_MAPPED',
@@ -857,5 +733,4 @@ export const runDockerAction = createIntegrationAction(
       }
       lifecycleLock.release()
     }
-  },
-)
+})

@@ -85,7 +85,6 @@ import {
 } from '@/components/ui/tooltip'
 import { useToast } from '@/components/ui/use-toast'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
 import { SocketContext } from '@/contexts/SocketContext'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
@@ -745,36 +744,6 @@ export function getDiagnosticsFixAction(
   }
 }
 
-export function getRequiredCapabilityForCheck(checkId: string): string | null {
-  switch (checkId) {
-    case 'mods.numericInMods':
-    case 'mods.orphanWorkshop':
-    case 'mods.maps':
-    case 'mods.duplicates':
-    case 'modChecker':
-      return 'mods.manage'
-    case 'server.process':
-      return 'server.control'
-    case 'rcon.connected':
-      return 'rcon.execute'
-    case 'db.backup':
-      return 'backups.manage'
-    case 'server.staleLocks':
-    case 'db.writable':
-      return 'diagnostics.manage'
-    case 'bridge.configured':
-    case 'worldmap.bridge.configured':
-      return 'bridge.setup'
-    case 'server.sandboxCorrupt':
-    case 'server.sandboxVars':
-      return 'serverfiles.manage'
-    case 'discord.bot':
-      return 'integrations.manage'
-    default:
-      return null
-  }
-}
-
 const DebugPerformanceCharts = lazy(
   () => import('@/components/DebugPerformanceCharts'),
 )
@@ -926,7 +895,6 @@ export default function Debug() {
   const { toast } = useToast()
   const confirm = useConfirm()
   const socket = useContext(SocketContext)
-  const { can } = useAuth()
 
   const authFetch = useCallback((url: string, options: RequestInit = {}) => {
     const endpoint = url.startsWith('/api') ? url.slice(4) : url
@@ -1054,11 +1022,6 @@ export default function Debug() {
     async (check: DiagCheck) => {
       const action = getDiagnosticsFixAction(check)
       if (!action) return
-
-      if (action.automated) {
-        const requiredCapability = getRequiredCapabilityForCheck(check.id)
-        if (requiredCapability && !can(requiredCapability)) return
-      }
 
       setFixingDiagnosticsCheckId(check.id)
       setDiagnosticsFixErrors((prev) => {
@@ -1365,7 +1328,7 @@ export default function Debug() {
         setFixingDiagnosticsCheckId(null)
       }
     },
-    [fetchDiagnostics, toast, authFetch, confirm, 'en', can],
+    [fetchDiagnostics, toast, authFetch, confirm, 'en'],
   )
 
   const fetchWorldMapDiag = useCallback(async () => {
@@ -3006,11 +2969,7 @@ export default function Debug() {
                                 const fixAction = getDiagnosticsFixAction(check)
                                 const translated =
                                   translateDiagnosticCheck(check)
-                                const requiredCapability = fixAction?.automated
-                                  ? getRequiredCapabilityForCheck(check.id)
-                                  : null
-                                const canRunFix =
-                                  !requiredCapability || can(requiredCapability)
+                                const canRunFix = true
                                 return (
                                   <li
                                     key={check.id}
@@ -6789,19 +6748,10 @@ export default function Debug() {
                                   }
                                 </div>
                               </div>
-                              <DisabledReason
-                                reason={
-                                  !can('bridge.diagnostics')
-                                    ? 'Your role doesn\'t have "PanelBridge diagnostics" permission.'
-                                    : null
-                                }
-                              >
+                              <DisabledReason reason={null}>
                                 <Switch
                                   checked={stats.debugMode === true}
-                                  disabled={
-                                    !can('bridge.diagnostics') ||
-                                    actionLoading === 'bridgeDebugMode'
-                                  }
+                                  disabled={actionLoading === 'bridgeDebugMode'}
                                   onCheckedChange={(checked) =>
                                     toggleBridgeDebugMode(checked)
                                   }
@@ -6818,9 +6768,7 @@ export default function Debug() {
                                 </div>
                                 <DisabledReason
                                   reason={
-                                    !can('bridge.diagnostics')
-                                      ? 'Your role doesn\'t have "PanelBridge diagnostics" permission.'
-                                      : errCount === 0
+                                    errCount === 0
                                         ? 'No errors to clear.'
                                         : null
                                   }
@@ -6830,7 +6778,6 @@ export default function Debug() {
                                     size="sm"
                                     onClick={clearBridgeErrors}
                                     disabled={
-                                      !can('bridge.diagnostics') ||
                                       errCount === 0 ||
                                       actionLoading === 'bridgeClearErrors'
                                     }

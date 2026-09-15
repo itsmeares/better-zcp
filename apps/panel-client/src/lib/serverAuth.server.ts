@@ -22,15 +22,12 @@ export type CurrentUser = {
   user: {
     id: string
     username: string
-    role: string
-    capabilities: string[] | null
   }
 }
 
 export type AuthContextUser = {
   userId: string | null
   username: string | null
-  role: string
   tokenGen: number | null
   authDisabled?: boolean
 }
@@ -104,11 +101,7 @@ function setupData(data: unknown): {
   const body = record(data)
   const rawPort = body.panelPort === undefined ? 3001 : body.panelPort
   const panelPort = typeof rawPort === 'number' ? rawPort : Number(rawPort)
-  if (
-    !Number.isInteger(panelPort) ||
-    panelPort < 1024 ||
-    panelPort > 65535
-  ) {
+  if (!Number.isInteger(panelPort) || panelPort < 1024 || panelPort > 65535) {
     throwAuthError(
       'Panel port must be a whole number between 1024 and 65535',
       400,
@@ -236,129 +229,9 @@ const authRequestMiddleware = createMiddleware({ type: 'request' }).server(
   },
 )
 
-export function permissionMiddleware(capability: string) {
-  return createMiddleware({ type: 'request' }).server(
-    async ({ context, next }) => {
-      const user = (
-        context as unknown as { authenticatedUser?: AuthContextUser }
-      ).authenticatedUser
-      if (!user) {
-        return Response.json(
-          { error: 'Authentication required', code: 'AUTH_REQUIRED' },
-          { status: 401 },
-        )
-      }
-
-      const { getCapabilitiesForRole } =
-        await import('../../../panel-server/services/permissions.ts')
-      const capabilities = await getCapabilitiesForRole(user.role)
-      if (!capabilities?.includes(capability)) {
-        return Response.json(
-          { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
-          { status: 403 },
-        )
-      }
-
-      return next()
-    },
-  )
-}
-
-export function anyPermissionMiddleware(...capabilities: string[]) {
-  return createMiddleware({ type: 'request' }).server(
-    async ({ context, next }) => {
-      const user = (
-        context as unknown as { authenticatedUser?: AuthContextUser }
-      ).authenticatedUser
-      if (!user) {
-        return Response.json(
-          { error: 'Authentication required', code: 'AUTH_REQUIRED' },
-          { status: 401 },
-        )
-      }
-
-      const { getCapabilitiesForRole } =
-        await import('../../../panel-server/services/permissions.ts')
-      const roleCapabilities = await getCapabilitiesForRole(user.role)
-      if (
-        !roleCapabilities?.some((capability) =>
-          capabilities.includes(capability),
-        )
-      ) {
-        return Response.json(
-          { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
-          { status: 403 },
-        )
-      }
-
-      return next()
-    },
-  )
-}
-
-function roleMiddleware(role: string) {
-  return createMiddleware({ type: 'request' }).server(
-    async ({ context, next }) => {
-      const user = (
-        context as unknown as { authenticatedUser?: AuthContextUser }
-      ).authenticatedUser
-      if (!user) {
-        return Response.json(
-          { error: 'Authentication required', code: 'AUTH_REQUIRED' },
-          { status: 401 },
-        )
-      }
-      if (user.role !== role) {
-        return Response.json(
-          { error: 'Insufficient permissions', code: 'PERMISSION_DENIED' },
-          { status: 403 },
-        )
-      }
-
-      return next()
-    },
-  )
-}
-
 export const protectedServerFunctionMiddleware = [
   authClientMiddleware,
   authRequestMiddleware,
-] as const
-
-export const rolesReadMiddleware = [
-  authClientMiddleware,
-  authRequestMiddleware,
-  permissionMiddleware('roles.manage'),
-] as const
-
-export const usersManageMiddleware = [
-  authClientMiddleware,
-  authRequestMiddleware,
-  permissionMiddleware('users.manage'),
-] as const
-
-export const rolesManageMiddleware = [
-  authClientMiddleware,
-  authRequestMiddleware,
-  permissionMiddleware('roles.manage'),
-] as const
-
-export const panelSettingsMiddleware = [
-  authClientMiddleware,
-  authRequestMiddleware,
-  permissionMiddleware('panel.settings'),
-] as const
-
-export const diagnosticsMiddleware = [
-  authClientMiddleware,
-  authRequestMiddleware,
-  permissionMiddleware('diagnostics.manage'),
-] as const
-
-export const adminRoleMiddleware = [
-  authClientMiddleware,
-  authRequestMiddleware,
-  roleMiddleware('admin'),
 ] as const
 
 async function getAuthStatusImplementation() {
@@ -659,14 +532,10 @@ async function getCurrentUserImplementation(context: unknown) {
     })
   }
 
-  const { getCapabilitiesForRole } =
-    await import('../../../panel-server/services/permissions.ts')
   return {
     user: {
       id: user.userId,
       username: user.username,
-      role: user.role,
-      capabilities: await getCapabilitiesForRole(user.role),
     },
   }
 }

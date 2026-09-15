@@ -50,7 +50,6 @@ import {
   listAvailableBrowsers,
   extractSteamCookies,
 } from "../utils/browserCookies.ts";
-import { requirePermission } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { withFileLock } from "../utils/fileWriteQueue.ts";
 import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.ts";
@@ -59,12 +58,6 @@ import { parseBoundedInteger } from "../utils/queryNumbers.ts";
 
 const router = Router();
 type AnyRecord = Record<string, any>;
-
-const requireModsManage = requirePermission("mods.manage");
-router.use((req, res, next) => {
-  if (req.path.startsWith("/thumbnail/")) return next();
-  return requireModsManage(req, res, next);
-});
 
 const activeIniLocks = new Map<string, number>();
 export function withIniLock<T>(

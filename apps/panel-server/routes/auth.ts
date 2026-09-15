@@ -1,4 +1,8 @@
-import { Router, type Request, createRateLimiter as rateLimit } from "../http/startApiRouter.ts";
+import {
+  Router,
+  type Request,
+  createRateLimiter as rateLimit,
+} from "../http/startApiRouter.ts";
 import authService from "../services/auth.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
@@ -24,7 +28,6 @@ type AuthenticatedRequest = Request & {
   user?: {
     userId?: string | null;
     username?: string | null;
-    role?: string;
   } | null;
 };
 

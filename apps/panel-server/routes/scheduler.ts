@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from '../http/startApiRouter.ts';
+import { Router } from '../http/startApiRouter.ts';
 import cron from 'node-cron';
 import { createLogger } from '../utils/logger.ts';
 const log = createLogger('API:Scheduler');
@@ -14,8 +14,6 @@ import {
   getActiveServer,
   getServer
 } from '../database/init.ts';
-import { requirePermission } from '../services/permissions.ts';
-import { requiredCapabilityForScheduledCommand } from '../services/scheduler.ts';
 import {
   hasUnsupportedCronFieldCount,
   isCronTooFrequent,
@@ -53,22 +51,8 @@ export function emitActionResult(
 
 const router = Router();
 
-router.use(requirePermission('automation.manage'));
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-async function requireCapabilityInline(
-  capability: string,
-  req: Request,
-  res: Response,
-): Promise<boolean> {
-  let passed = false;
-  await requirePermission(capability)(req, res, () => {
-    passed = true;
-  });
-  return passed;
 }
 
 router.get('/status', async (req, res) => {
@@ -186,15 +170,6 @@ router.post('/tasks', async (req, res) => {
       return res.status(400).json({ error: 'Invalid cron expression format', code: ErrorCode.SCHEDULER_INVALID_CRON_FORMAT });
     }
 
-    {
-      const allowed = await requireCapabilityInline(
-        requiredCapabilityForScheduledCommand(command),
-        req,
-        res,
-      );
-      if (!allowed) return;
-    }
-
     if (!cron.validate(cronExpression)) {
       return res.status(400).json({ error: 'Invalid cron expression. Use format: minute hour day month weekday (e.g., "0 */6 * * *" for every 6 hours)', code: ErrorCode.SCHEDULER_INVALID_CRON_EXPRESSION });
     }
@@ -272,14 +247,6 @@ router.put('/tasks/:id', async (req, res) => {
     if (command !== undefined && (typeof command !== 'string' || command.length > 2000)) {
       return res.status(400).json({ error: 'Invalid command (max 2000 characters)', code: ErrorCode.SCHEDULER_INVALID_COMMAND });
     }
-    if (command !== undefined) {
-      const allowed = await requireCapabilityInline(
-        requiredCapabilityForScheduledCommand(command),
-        req,
-        res,
-      );
-      if (!allowed) return;
-    }
     if (
       enabled !== undefined &&
       ![true, false, 0, 1].includes(enabled)
@@ -315,15 +282,6 @@ router.put('/tasks/:id', async (req, res) => {
     const previousTask = previousTaskRecord
       ? { ...previousTaskRecord }
       : null;
-
-    if (command === undefined && normalizedEnabled === 1) {
-      const allowed = await requireCapabilityInline(
-        requiredCapabilityForScheduledCommand(previousTaskRecord?.command),
-        req,
-        res,
-      );
-      if (!allowed) return;
-    }
 
     const updated = await updateScheduledTask(taskId, name, cronExpression, command, normalizedEnabled, serverId);
     if (!updated) {
@@ -426,15 +384,6 @@ router.post('/tasks/:id/run', async (req, res) => {
       return res.status(404).json({ error: 'Task not found', code: ErrorCode.SCHEDULER_TASK_NOT_FOUND });
     }
 
-    {
-      const allowed = await requireCapabilityInline(
-        requiredCapabilityForScheduledCommand(task.command),
-        req,
-        res,
-      );
-      if (!allowed) return;
-    }
-
     log.info(`POST /tasks/${taskId}/run: ${task.name}`);
     const io = req.app.get('io');
     scheduler.runTaskNow(task)
@@ -465,9 +414,6 @@ router.post('/tasks/:id/run', async (req, res) => {
 
 router.post('/restart-now', async (req, res) => {
   try {
-    const allowed = await requireCapabilityInline('server.control', req, res);
-    if (!allowed) return;
-
     const activeServer = await getActiveServer();
     if (activeServer?.isRemote) {
       return res.status(400).json({ error: 'Cannot restart a remote server. The process is not managed by this panel.', code: ErrorCode.SCHEDULER_RESTART_REMOTE_NOT_SUPPORTED });

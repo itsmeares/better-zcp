@@ -1,8 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  adminRoleMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 
@@ -11,11 +8,10 @@ function errorMessage(error: unknown): string {
 }
 
 function throwPanelError(error: unknown, fallbackStatus: number): never {
-  const details = error && typeof error === 'object'
-    ? error as AnyRecord
-    : {}
+  const details = error && typeof error === 'object' ? (error as AnyRecord) : {}
   throw Object.assign(new Error(errorMessage(error)), {
-    status: typeof details.status === 'number' ? details.status : fallbackStatus,
+    status:
+      typeof details.status === 'number' ? details.status : fallbackStatus,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
     ...(details.params !== undefined ? { params: details.params } : {}),
     ...(details.success !== undefined ? { success: details.success } : {}),
@@ -98,9 +94,7 @@ export const getPanelUpdateApplyLog = createServerFn({ method: 'GET' })
 ;(getPanelUpdateApplyLog as any).__executeImplementation =
   getPanelUpdateApplyLogImplementation
 
-async function downloadPanelUpdateImplementation(
-  data: { confirm?: unknown },
-) {
+async function downloadPanelUpdateImplementation(data: { confirm?: unknown }) {
     try {
       const runtime = await panelRuntime()
       const checker = runtime.panelUpdateChecker
@@ -187,7 +181,10 @@ async function downloadPanelUpdateImplementation(
       const result = await checker.downloadUpdate()
       if (!result.success) {
         throwPanelError(
-          Object.assign(new Error(result.error || result.message || 'Panel update failed'), result),
+        Object.assign(
+          new Error(result.error || result.message || 'Panel update failed'),
+          result,
+        ),
           result.code === 'already_downloading' ? 409 : 400,
         )
       }
@@ -198,7 +195,7 @@ async function downloadPanelUpdateImplementation(
 }
 
 export const downloadPanelUpdate = createServerFn({ method: 'POST' })
-  .middleware(adminRoleMiddleware)
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: { confirm?: unknown } | undefined) => data ?? {})
   .handler(({ data }) => downloadPanelUpdateImplementation(data))
 ;(downloadPanelUpdate as any).__executeImplementation =
@@ -207,24 +204,19 @@ export const downloadPanelUpdate = createServerFn({ method: 'POST' })
 async function restartPanelImplementation() {
     const runtime = await panelRuntime()
     const checker = runtime.panelUpdateChecker
-    if (!checker) throwPanelError(new Error('Panel update checker not available'), 500)
+  if (!checker)
+    throwPanelError(new Error('Panel update checker not available'), 500)
 
     const fs = await import('node:fs')
     const processModule = await import('node:process')
     const { spawn } = await import('node:child_process')
     const { createUpdateDataBackup } =
       await import('../../../panel-server/services/panelUpdateChecker.ts')
-    const {
-      applyUpdateBundle,
-      recoverInterruptedUpdateBundle,
-    } = await import('../../../panel-server/services/updateBundle.ts')
-    const { getDataPaths } =
-      await import('../../../panel-server/utils/paths.ts')
-    const {
-      getDatabaseFilePath,
-      setSetting,
-      flushWrites,
-    } = await import('../../../panel-server/database/init.ts')
+  const { applyUpdateBundle, recoverInterruptedUpdateBundle } =
+    await import('../../../panel-server/services/updateBundle.ts')
+  const { getDataPaths } = await import('../../../panel-server/utils/paths.ts')
+  const { getDatabaseFilePath, setSetting, flushWrites } =
+    await import('../../../panel-server/database/init.ts')
     const { isLinuxPanelSupervisor } =
       await import('../../../panel-server/utils/restartSupervisor.ts')
 
@@ -302,7 +294,10 @@ async function restartPanelImplementation() {
         try {
           await fs.promises.access(targetPath, fs.constants.X_OK)
         } catch (error) {
-          recoverInterruptedUpdateBundle(staged.journalPath, 'binary_not_executable')
+        recoverInterruptedUpdateBundle(
+          staged.journalPath,
+          'binary_not_executable',
+        )
           checker.isApplying = false
           throwPanelError(
             new Error(`Applied update is not executable: ${errorMessage(error)}`),
@@ -341,7 +336,7 @@ async function restartPanelImplementation() {
 }
 
 export const restartPanel = createServerFn({ method: 'POST' })
-  .middleware(adminRoleMiddleware)
+  .middleware(protectedServerFunctionMiddleware)
   .handler(restartPanelImplementation)
 ;(restartPanel as any).__executeImplementation = restartPanelImplementation
 
@@ -349,8 +344,13 @@ export function classifyStartupProcessState(
   processState: AnyRecord | null | undefined,
   isRemote = false,
 ) {
-  if (isRemote) return { running: Boolean(processState?.running), unknown: false }
-  if (!processState || processState.scanFailed || typeof processState.running !== 'boolean') {
+  if (isRemote)
+    return { running: Boolean(processState?.running), unknown: false }
+  if (
+    !processState ||
+    processState.scanFailed ||
+    typeof processState.running !== 'boolean'
+  ) {
     return { running: false, unknown: true }
   }
   return { running: processState.running, unknown: false }

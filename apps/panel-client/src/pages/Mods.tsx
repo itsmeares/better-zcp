@@ -3,7 +3,6 @@ import { useLocation } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
 import { DisabledReason } from '@/components/DisabledReason'
 import { usePageShortcut } from '../hooks/useKeyboardShortcuts'
 import { copyText } from '@/lib/utils'
@@ -291,9 +290,8 @@ export default function Mods() {
   const [savingWorkshopPath, setSavingWorkshopPath] = useState(false)
   const { toast } = useToast()
   const confirm = useConfirm()
-  const { can } = useAuth()
-  const canManageMods = can('mods.manage')
-  const canManageServers = can('servers.manage')
+  const canManageMods = true
+  const canManageServers = true
 
   const [searchQuery, setSearchQuery] = useState('')
   const [deferredSearchQuery, setDeferredSearchQuery] = useState('')

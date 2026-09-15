@@ -32,7 +32,6 @@ import { HelpTip } from '@/components/HelpTip'
 import { NumberInput } from '@/components/NumberInput'
 import { DisabledReason } from '@/components/DisabledReason'
 import { getInstallProgressMessage } from '@/lib/installProgressMessage'
-import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from '@tanstack/react-router'
 import {
   Card,
@@ -260,14 +259,13 @@ export default function ServerSetup() {
   const installViaSteamCmdRef = useRef(false)
 
   const { toast } = useToast()
-  const { can } = useAuth()
   const socket = useContext(SocketContext)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
-  const canInstall = can('server.install')
-  const canSaveSteamCmdPath = can('panel.settings')
-  const canControlServer = can('server.control')
+  const canInstall = true
+  const canSaveSteamCmdPath = true
+  const canControlServer = true
   const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [startingServer, setStartingServer] = useState(false)
 

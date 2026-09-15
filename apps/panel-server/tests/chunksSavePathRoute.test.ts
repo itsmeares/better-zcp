@@ -4,7 +4,6 @@ import os from "os";
 import path from "path";
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
-
 const getRoleByName = vi.fn(async (name) =>
   name === "chunks_manage_only"
     ? { capabilities: ["chunks.manage"] }
@@ -19,7 +18,8 @@ vi.mock("../database/init.ts", () => ({
   getRoleByName,
 }));
 
-const { getActiveServer, updateServer, setSetting, getSetting } = await import("../database/init.ts");
+const { getActiveServer, updateServer, setSetting, getSetting } =
+  await import("../database/init.ts");
 const { default: router } = await import("../routes/chunks.ts");
 
 function createResponse() {
@@ -43,7 +43,8 @@ function getRouteHandlers(routePath, method) {
   const layer = router.stack.find(
     (entry) => entry.route?.path === routePath && entry.route.methods[method],
   );
-  if (!layer) throw new Error(`No ${method.toUpperCase()} ${routePath} route registered`);
+  if (!layer)
+    throw new Error(`No ${method.toUpperCase()} ${routePath} route registered`);
   return layer.route.stack.map((s) => s.handle);
 }
 
@@ -75,7 +76,9 @@ describe("POST /save-path", () => {
     setSetting.mockReset().mockResolvedValue(undefined);
     getSetting.mockReset().mockResolvedValue(null);
     getRoleByName.mockClear();
-    zomboidDir = fs.mkdtempSync(path.join(os.tmpdir(), "chunks-savepath-Zomboid-"));
+    zomboidDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "chunks-savepath-Zomboid-"),
+    );
     previousEnvValue = process.env[envName];
   });
 
@@ -138,15 +141,21 @@ describe("POST /save-path", () => {
       fs.writeFileSync(filePath, "x");
       const res = await postSavePath({ path: filePath });
       expect(res.getStatusCode()).toBe(400);
-      expect(res.getBody().rejection).toMatchObject({ reason: "not-a-directory" });
+      expect(res.getBody().rejection).toMatchObject({
+        reason: "not-a-directory",
+      });
     });
 
     it("a real directory with no Zomboid markers at all -> 403 (not 400 -- distinct from the filesystem-shape rejections above), rejection.reason 'no-zomboid-markers'", async () => {
-      const plainDir = fs.mkdtempSync(path.join(os.tmpdir(), "not-a-save-folder-"));
+      const plainDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "not-a-save-folder-"),
+      );
       try {
         const res = await postSavePath({ path: plainDir });
         expect(res.getStatusCode()).toBe(403);
-        expect(res.getBody().rejection).toMatchObject({ reason: "no-zomboid-markers" });
+        expect(res.getBody().rejection).toMatchObject({
+          reason: "no-zomboid-markers",
+        });
       } finally {
         fs.rmSync(plainDir, { recursive: true, force: true });
       }
@@ -181,7 +190,10 @@ describe("POST /save-path", () => {
         target: "setting",
         path: path.resolve(zomboidDir),
       });
-      expect(setSetting).toHaveBeenCalledWith("zomboidDataPath", path.resolve(zomboidDir));
+      expect(setSetting).toHaveBeenCalledWith(
+        "zomboidDataPath",
+        path.resolve(zomboidDir),
+      );
       expect(updateServer).not.toHaveBeenCalled();
     });
 
@@ -191,7 +203,10 @@ describe("POST /save-path", () => {
 
       expect(res.getStatusCode()).toBe(200);
       expect(res.getBody()).toMatchObject({ ok: true, target: "setting" });
-      expect(setSetting).toHaveBeenCalledWith("zomboidDataPath", path.resolve(zomboidDir));
+      expect(setSetting).toHaveBeenCalledWith(
+        "zomboidDataPath",
+        path.resolve(zomboidDir),
+      );
       expect(updateServer).not.toHaveBeenCalled();
     });
   });
@@ -210,65 +225,12 @@ describe("POST /save-path", () => {
 
   it("an unexpected error while persisting -> 500 with a sanitized message, not a raw stack leak", async () => {
     getActiveServer.mockResolvedValue({ id: "srv-1" });
-    updateServer.mockRejectedValue(new Error("disk full: /var/lib/panel/data.db"));
+    updateServer.mockRejectedValue(
+      new Error("disk full: /var/lib/panel/data.db"),
+    );
     const res = await postSavePath({ path: zomboidDir });
 
     expect(res.getStatusCode()).toBe(500);
     expect(res.getBody().error).toBeTruthy();
-  });
-
-  describe("server.configure required in addition to chunks.manage, enforced on CHANGE not presence", () => {
-    it("chunks.manage alone is refused when the path would actually change the active server's stored value", async () => {
-      getActiveServer.mockResolvedValue({ id: "srv-1", zomboidDataPath: "/old/path" });
-      const res = await postSavePath({ path: zomboidDir }, "chunks_manage_only");
-
-      expect(res.getStatusCode()).toBe(403);
-      expect(res.getBody()).toMatchObject({
-        code: "CHUNKS_SAVE_PATH_CAPABILITY_REQUIRED",
-      });
-      expect(updateServer).not.toHaveBeenCalled();
-      expect(setSetting).not.toHaveBeenCalled();
-    });
-
-    it("chunks.manage alone is refused when there is no active server and the legacy setting would change", async () => {
-      getActiveServer.mockResolvedValue(null);
-      getSetting.mockResolvedValue("/old/legacy/path");
-      const res = await postSavePath({ path: zomboidDir }, "chunks_manage_only");
-
-      expect(res.getStatusCode()).toBe(403);
-      expect(res.getBody()).toMatchObject({
-        code: "CHUNKS_SAVE_PATH_CAPABILITY_REQUIRED",
-      });
-      expect(setSetting).not.toHaveBeenCalled();
-    });
-
-    it("chunks.manage + server.configure succeeds at repointing the active server", async () => {
-      getActiveServer.mockResolvedValue({ id: "srv-1", zomboidDataPath: "/old/path" });
-      const res = await postSavePath({ path: zomboidDir }, "technician");
-
-      expect(res.getStatusCode()).toBe(200);
-      expect(updateServer).toHaveBeenCalledWith("srv-1", {
-        zomboidDataPath: path.resolve(zomboidDir),
-      });
-    });
-
-    it("re-submitting the path already in effect needs nothing beyond chunks.manage -- no false 403 on an unchanged save", async () => {
-      const resolved = path.resolve(zomboidDir);
-      getActiveServer.mockResolvedValue({ id: "srv-1", zomboidDataPath: resolved });
-      const res = await postSavePath({ path: zomboidDir }, "chunks_manage_only");
-
-      expect(res.getStatusCode()).toBe(200);
-      expect(updateServer).toHaveBeenCalledWith("srv-1", { zomboidDataPath: resolved });
-    });
-
-    it("re-submitting the current legacy-setting value (no active server) also needs nothing beyond chunks.manage", async () => {
-      const resolved = path.resolve(zomboidDir);
-      getActiveServer.mockResolvedValue(null);
-      getSetting.mockResolvedValue(resolved);
-      const res = await postSavePath({ path: zomboidDir }, "chunks_manage_only");
-
-      expect(res.getStatusCode()).toBe(200);
-      expect(setSetting).toHaveBeenCalledWith("zomboidDataPath", resolved);
-    });
   });
 });

@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { permissionMiddleware, protectedServerFunctionMiddleware } from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 
@@ -32,8 +32,10 @@ function errorMessage(error: unknown): string {
 }
 
 function throwBridgeError(error: unknown, fallbackStatus = 500): never {
-  const details = error && typeof error === 'object' ? (error as ServiceError) : {}
-  const status = typeof details.status === 'number' ? details.status : fallbackStatus
+  const details =
+    error && typeof error === 'object' ? (error as ServiceError) : {}
+  const status =
+    typeof details.status === 'number' ? details.status : fallbackStatus
   throw Object.assign(new Error(errorMessage(error)), {
     status,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
@@ -52,13 +54,6 @@ function invalid(message: string, code?: string, params?: unknown): never {
   )
 }
 
-function capabilityMiddleware(capability: string) {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware(capability),
-  ] as const
-}
-
 async function panelRuntime(): Promise<AnyRecord> {
   const { getPanelRuntime } =
     await import('../../../panel-server/utils/panelRuntime.ts')
@@ -72,7 +67,8 @@ async function withBridge<T>(
   try {
     const bridge = (await panelRuntime()).panelBridge as AnyRecord
     if (!bridge.isRunning) {
-      const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+      const { ErrorCode } =
+        await import('../../../panel-server/utils/errorCodes.ts')
       invalid(
         'Bridge not running. Start it first.',
         notRunningCode ?? ErrorCode.BRIDGE_NOT_RUNNING,
@@ -107,7 +103,9 @@ async function withBridge<T>(
 function validateArgs(data: AnyRecord): AnyRecord {
   if (
     data.args !== undefined &&
-    (typeof data.args !== 'object' || data.args === null || Array.isArray(data.args))
+    (typeof data.args !== 'object' ||
+      data.args === null ||
+      Array.isArray(data.args))
   ) {
     invalid('args must be an object', 'PANELBRIDGE_ARGS_MUST_BE_OBJECT')
   }
@@ -115,7 +113,8 @@ function validateArgs(data: AnyRecord): AnyRecord {
 }
 
 async function executePlayerAction(data: AnyRecord): Promise<unknown> {
-  const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+  const { ErrorCode } =
+    await import('../../../panel-server/utils/errorCodes.ts')
   const action = data.action
   if (typeof action !== 'string' || !action) {
     invalid('action is required', ErrorCode.PANELBRIDGE_ACTION_REQUIRED)
@@ -123,8 +122,14 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
   const args = validateArgs(data)
 
   function username(): string {
-    if (typeof args.username !== 'string' || !BRIDGE_USERNAME_REGEX.test(args.username)) {
-      invalid('Invalid username format', ErrorCode.BRIDGE_INVALID_USERNAME_FORMAT)
+    if (
+      typeof args.username !== 'string' ||
+      !BRIDGE_USERNAME_REGEX.test(args.username)
+    ) {
+      invalid(
+        'Invalid username format',
+        ErrorCode.BRIDGE_INVALID_USERNAME_FORMAT,
+      )
     }
     return args.username
   }
@@ -161,8 +166,7 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
         typeof y !== 'number' ||
         !Number.isFinite(x) ||
         !Number.isFinite(y) ||
-        (z !== undefined &&
-          (typeof z !== 'number' || !Number.isFinite(z)))
+        (z !== undefined && (typeof z !== 'number' || !Number.isFinite(z)))
       ) {
         invalid(
           'Coordinates must be numbers',
@@ -198,8 +202,8 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
     }
     case 'killPlayer': {
       const player = username()
-      return withBridge((bridge) =>
-        bridge.sendCommand('killPlayer', { username: player }),
+      return withBridge(
+        (bridge) => bridge.sendCommand('killPlayer', { username: player }),
         ErrorCode.BRIDGE_NOT_RUNNING_BARE,
       )
     }
@@ -217,27 +221,33 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
         typeof itemType !== 'string' ||
         !/^[a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z][a-zA-Z0-9_]*$/.test(itemType)
       ) {
-        invalid(
-          'itemType must be in Module.ItemName format (e.g., "Base.Axe")',
-        )
+        invalid('itemType must be in Module.ItemName format (e.g., "Base.Axe")')
       }
-      if (typeof count !== 'number' || !Number.isFinite(count) || count < 1 || count > 100) {
+      if (
+        typeof count !== 'number' ||
+        !Number.isFinite(count) ||
+        count < 1 ||
+        count > 100
+      ) {
         invalid(
           'count must be 1-100',
           ErrorCode.PANELBRIDGE_HORDE_COUNT_INVALID,
         )
       }
       return withBridge(
-        (bridge) => bridge.sendCommand('giveItem', { username: player, itemType, count }),
+        (bridge) =>
+          bridge.sendCommand('giveItem', { username: player, itemType, count }),
         ErrorCode.BRIDGE_NOT_RUNNING_BARE,
       )
     }
     case 'setGodMode':
     case 'setInvisible': {
       const player = username()
-      if (typeof args.enabled !== 'boolean') invalid('enabled must be a boolean')
+      if (typeof args.enabled !== 'boolean')
+        invalid('enabled must be a boolean')
       return withBridge(
-        (bridge) => bridge.sendCommand(action, {
+        (bridge) =>
+          bridge.sendCommand(action, {
           username: player,
           enabled: args.enabled === true,
         }),
@@ -247,7 +257,8 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
     case 'exportPlayerData': {
       const player = username()
       return withBridge(
-        (bridge) => bridge.sendCommand('exportPlayerData', { username: player }),
+        (bridge) =>
+          bridge.sendCommand('exportPlayerData', { username: player }),
         ErrorCode.BRIDGE_NOT_RUNNING,
       )
     }
@@ -260,10 +271,7 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
           ErrorCode.PANELBRIDGE_CHARACTER_DATA_REQUIRED,
         )
       }
-      if (
-        typeof characterData !== 'object' ||
-        Array.isArray(characterData)
-      ) {
+      if (typeof characterData !== 'object' || Array.isArray(characterData)) {
         invalid(
           'Character data must be an object',
           ErrorCode.PANELBRIDGE_CHARACTER_DATA_NOT_OBJECT,
@@ -279,7 +287,9 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
         'inventory',
         'wornItems',
       ]
-      if (!validSections.some((section) => characterData[section] !== undefined)) {
+      if (
+        !validSections.some((section) => characterData[section] !== undefined)
+      ) {
         invalid(
           `Character data must contain at least one of: ${validSections.join(', ')}`,
           ErrorCode.PANELBRIDGE_CHARACTER_DATA_NO_VALID_SECTION,
@@ -287,8 +297,8 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
         )
       }
 
-      const snapshot = (await withBridge(
-        (bridge) => bridge.sendCommand('exportPlayerData', { username: player }),
+      const snapshot = (await withBridge((bridge) =>
+        bridge.sendCommand('exportPlayerData', { username: player }),
       ).catch((error) => {
         throwBridgeError(
           Object.assign(
@@ -302,20 +312,32 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
       })) as AnyRecord
       const fs = await import('node:fs')
       const path = await import('node:path')
-      const { getDataPaths } = await import('../../../panel-server/utils/paths.ts')
+      const { getDataPaths } =
+        await import('../../../panel-server/utils/paths.ts')
       const safeUsername = path.basename(player.replace(/[^a-zA-Z0-9_-]/g, '_'))
-      const exportDir = path.join(getDataPaths().dataDir, 'exports', safeUsername)
+      const exportDir = path.join(
+        getDataPaths().dataDir,
+        'exports',
+        safeUsername,
+      )
       fs.mkdirSync(exportDir, { recursive: true })
       const snapshotBaseName = `${safeUsername}_pre-import_${new Date()
         .toISOString()
         .replace(/[:.]/g, '-')}`
-      const snapshotContents = JSON.stringify(snapshot.data ?? snapshot, null, 2)
+      const snapshotContents = JSON.stringify(
+        snapshot.data ?? snapshot,
+        null,
+        2,
+      )
       let snapshotFile = ''
       for (let collision = 1; ; collision += 1) {
         const suffix = collision === 1 ? '' : `-${collision}`
         snapshotFile = `${snapshotBaseName}${suffix}.json`
         try {
-          const descriptor = fs.openSync(path.join(exportDir, snapshotFile), 'wx')
+          const descriptor = fs.openSync(
+            path.join(exportDir, snapshotFile),
+            'wx',
+          )
           try {
             fs.writeFileSync(descriptor, snapshotContents)
           } finally {
@@ -326,8 +348,8 @@ async function executePlayerAction(data: AnyRecord): Promise<unknown> {
           if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
         }
       }
-      const result = await withBridge(
-        (bridge) => bridge.sendCommand('importPlayerData', {
+      const result = await withBridge((bridge) =>
+        bridge.sendCommand('importPlayerData', {
           username: player,
           data: characterData,
           options: args.options,
@@ -346,10 +368,7 @@ function requiredMessage(data: AnyRecord): string {
     !data.message ||
     data.message.length > 2000
   ) {
-    invalid(
-      'message is required (max 2000 chars)',
-      'BRIDGE_MESSAGE_REQUIRED',
-    )
+    invalid('message is required (max 2000 chars)', 'BRIDGE_MESSAGE_REQUIRED')
   }
   return data.message
 }
@@ -376,7 +395,8 @@ async function trySendViaRconSafely(
 }
 
 async function executeAdminChat(data: AnyRecord): Promise<unknown> {
-  const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+  const { ErrorCode } =
+    await import('../../../panel-server/utils/errorCodes.ts')
   const message = requiredMessage(data)
   const runtime = await panelRuntime()
   const bridge = runtime.panelBridge as AnyRecord
@@ -384,7 +404,8 @@ async function executeAdminChat(data: AnyRecord): Promise<unknown> {
   try {
     if (bridge.isRunning) {
       const result = await bridge.sendCommand('sendToAdminChat', { message })
-      if (result?.success && result?.data?.method !== 'player:Say') return result
+      if (result?.success && result?.data?.method !== 'player:Say')
+        return result
     }
     const rconResult = await trySendViaRcon(runtime, `[ADMIN] ${message}`)
     if (rconResult) {
@@ -425,7 +446,8 @@ async function executeAdminChat(data: AnyRecord): Promise<unknown> {
 }
 
 async function executeGeneralChat(data: AnyRecord): Promise<unknown> {
-  const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+  const { ErrorCode } =
+    await import('../../../panel-server/utils/errorCodes.ts')
   const message = requiredMessage(data)
   const author =
     typeof data.author === 'string'
@@ -440,7 +462,8 @@ async function executeGeneralChat(data: AnyRecord): Promise<unknown> {
         message,
         author,
       })
-      if (result?.success && result?.data?.method !== 'player:Say') return result
+      if (result?.success && result?.data?.method !== 'player:Say')
+        return result
     }
     const rconResult = await trySendViaRcon(runtime, `[${author}] ${message}`)
     if (rconResult) {
@@ -470,15 +493,19 @@ async function executeGeneralChat(data: AnyRecord): Promise<unknown> {
   }
 
   throwBridgeError(
-    Object.assign(new Error('Neither PanelBridge nor RCON available for chat'), {
+    Object.assign(
+      new Error('Neither PanelBridge nor RCON available for chat'),
+      {
       code: ErrorCode.PANELBRIDGE_CHAT_UNAVAILABLE,
-    }),
+      },
+    ),
     400,
   )
 }
 
 async function executeChatAlert(data: AnyRecord): Promise<unknown> {
-  const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+  const { ErrorCode } =
+    await import('../../../panel-server/utils/errorCodes.ts')
   const message = requiredMessage(data)
   const alert = data.alert === undefined ? true : data.alert
 
@@ -490,7 +517,8 @@ async function executeChatAlert(data: AnyRecord): Promise<unknown> {
         message,
         alert: true,
       })
-      if (result?.success && result?.data?.method !== 'player:Say') return result
+      if (result?.success && result?.data?.method !== 'player:Say')
+        return result
     }
 
     const rconResult = await trySendViaRcon(runtime, message)
@@ -530,7 +558,9 @@ async function executeChatAlert(data: AnyRecord): Promise<unknown> {
   )
 }
 
-async function sendServerMessageImplementation(data: AnyRecord): Promise<unknown> {
+async function sendServerMessageImplementation(
+  data: AnyRecord,
+): Promise<unknown> {
   const message = requiredMessage(data)
   return withBridge((bridge) =>
     bridge.sendCommand('sendToServerChat', { message, isAlert: true }),
@@ -542,37 +572,40 @@ async function getChatInfoImplementation(): Promise<unknown> {
 }
 
 export const sendPanelBridgePlayerCommand = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('players.gm_tools'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executePlayerAction(data)) as any)
 
 export const sendPanelBridgeServerMessage = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('server.world_events'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
-  .handler(async ({ data }) => (await sendServerMessageImplementation(data)) as any)
+  .handler(
+    async ({ data }) => (await sendServerMessageImplementation(data)) as any,
+  )
 
 export const getPanelBridgeChatInfo = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('server.world_events'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async () => (await getChatInfoImplementation()) as any)
 
 export const sendPanelBridgeAdminChat = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('players.endanger_or_impersonate'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeAdminChat(data)) as any)
 
 export const sendPanelBridgeGeneralChat = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('players.endanger_or_impersonate'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeGeneralChat(data)) as any)
 
 export const sendPanelBridgeChatAlert = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('server.world_events'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeChatAlert(data)) as any)
 
-;(sendPanelBridgePlayerCommand as any).__executeImplementation = (data: unknown) =>
-  executePlayerAction(record(data))
+;(sendPanelBridgePlayerCommand as any).__executeImplementation = (
+  data: unknown,
+) => executePlayerAction(record(data))
 ;(sendPanelBridgeServerMessage as any).__executeImplementation = (
   data: unknown,
 ) => sendServerMessageImplementation(record(data))
@@ -580,7 +613,8 @@ export const sendPanelBridgeChatAlert = createServerFn({ method: 'POST' })
   getChatInfoImplementation
 ;(sendPanelBridgeAdminChat as any).__executeImplementation = (data: unknown) =>
   executeAdminChat(record(data))
-;(sendPanelBridgeGeneralChat as any).__executeImplementation = (data: unknown) =>
-  executeGeneralChat(record(data))
+;(sendPanelBridgeGeneralChat as any).__executeImplementation = (
+  data: unknown,
+) => executeGeneralChat(record(data))
 ;(sendPanelBridgeChatAlert as any).__executeImplementation = (data: unknown) =>
   executeChatAlert(record(data))

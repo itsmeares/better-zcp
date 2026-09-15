@@ -60,7 +60,6 @@ import { cn } from '@/lib/utils'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
-import { useAuth } from '@/contexts/AuthContext'
 import { EmptyState } from '@/components/EmptyState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { panelQueryKeys } from '@/lib/queryClient'
@@ -79,11 +78,10 @@ const EMPTY_BACKUPS: ServerBackupArchive[] = []
 export default function Backups() {
   const { toast } = useToast()
   const socket = useSocket()
-  const { can } = useAuth()
   const queryClient = useQueryClient()
-  const canManageBackups = can('backups.manage')
-  const canRestoreBackups = can('backups.restore')
-  const canDownloadBackups = can('backups.download')
+  const canManageBackups = true
+  const canRestoreBackups = true
+  const canDownloadBackups = true
 
   const progressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ownBackupInFlightRef = useRef(false)

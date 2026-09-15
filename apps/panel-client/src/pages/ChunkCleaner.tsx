@@ -73,7 +73,6 @@ import { buildTileQuery } from './worldMapTileUrl'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useSocket } from '@/contexts/SocketContext'
-import { useAuth } from '@/contexts/AuthContext'
 import { DisabledReason } from '@/components/DisabledReason'
 import { useRuntimeInfo } from '@/hooks/useRuntimeInfo'
 
@@ -287,8 +286,7 @@ export default function ChunkCleaner() {
   const runtimeInfo = useRuntimeInfo()
   const { theme } = useTheme()
   const socket = useSocket()
-  const { can } = useAuth()
-  const canManageChunks = can('chunks.manage')
+  const canManageChunks = true
   const [permissionDenied, setPermissionDenied] = useState(false)
   const [saves, setSaves] = useState<SaveInfo[]>([])
   const [selectedSave, setSelectedSave] = useState<string>('')
@@ -1882,7 +1880,7 @@ export default function ChunkCleaner() {
                 toast({
                   title: 'Live Vehicle Cleanup Skipped',
                   description:
-                    "Chunks and their vehicle records were deleted. Removing already-loaded vehicles from the live server needs the bridge.command permission, which this role doesn't have -- an admin can grant it, or a stale vehicle will disappear on its own next time the area reloads.",
+                    'Chunks and their vehicle records were deleted. Any stale vehicle will disappear when the area reloads.',
                 })
                 break
               }

@@ -41,7 +41,6 @@ import {
 } from '@/lib/api'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
@@ -348,8 +347,7 @@ export default function Console() {
   const { toast } = useToast()
   const socket = useSocket()
   const confirm = useConfirm()
-  const { can } = useAuth()
-  const canExecuteRcon = can('rcon.execute')
+  const canExecuteRcon = true
 
   const [serverLogLines, setServerLogLines] = useState<string[]>([])
   const [_serverLogSize, setServerLogSize] = useState(0)

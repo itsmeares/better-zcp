@@ -73,53 +73,17 @@ describe("Debug.tsx fix-action switches only reference real check ids (self-enfo
     const caseIds = extractSwitchCaseIds(
       debugTsxSource,
       "export function getDiagnosticsFixAction",
-      "export function getRequiredCapabilityForCheck",
+      "const DebugPerformanceCharts",
     );
     const stale = [...caseIds].filter(
-      (id) => !diagnosticsCheckIds.has(id) && !KNOWN_NON_DIAGNOSTICS_IDS.has(id),
+      (id) =>
+        !diagnosticsCheckIds.has(id) && !KNOWN_NON_DIAGNOSTICS_IDS.has(id),
     );
     expect(
       stale,
       stale.length
         ? `getDiagnosticsFixAction has a case for an id GET /api/debug/diagnostics never emits: ${stale.join(", ")}. ` +
             `Renamed, removed, or typo'd -- fix the case, or if it's a real id owned by a different endpoint, add it to KNOWN_NON_DIAGNOSTICS_IDS with a comment explaining why.`
-        : "",
-    ).toEqual([]);
-  });
-
-  it("every case in getRequiredCapabilityForCheck references a real check id (or a documented non-/diagnostics one)", () => {
-    const caseIds = extractSwitchCaseIds(
-      debugTsxSource,
-      "export function getRequiredCapabilityForCheck",
-      "const DebugPerformanceCharts",
-    );
-    const stale = [...caseIds].filter(
-      (id) => !diagnosticsCheckIds.has(id) && !KNOWN_NON_DIAGNOSTICS_IDS.has(id),
-    );
-    expect(
-      stale,
-      stale.length
-        ? `getRequiredCapabilityForCheck has a case for an id GET /api/debug/diagnostics never emits: ${stale.join(", ")}.`
-        : "",
-    ).toEqual([]);
-  });
-
-  it("every case id in getRequiredCapabilityForCheck is also a case in getDiagnosticsFixAction (no orphaned capability entry)", () => {
-    const fixActionIds = extractSwitchCaseIds(
-      debugTsxSource,
-      "export function getDiagnosticsFixAction",
-      "export function getRequiredCapabilityForCheck",
-    );
-    const capabilityIds = extractSwitchCaseIds(
-      debugTsxSource,
-      "export function getRequiredCapabilityForCheck",
-      "const DebugPerformanceCharts",
-    );
-    const orphaned = [...capabilityIds].filter((id) => !fixActionIds.has(id));
-    expect(
-      orphaned,
-      orphaned.length
-        ? `getRequiredCapabilityForCheck names a capability for an id with no matching case in getDiagnosticsFixAction: ${orphaned.join(", ")}.`
         : "",
     ).toEqual([]);
   });

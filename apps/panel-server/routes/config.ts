@@ -1,9 +1,8 @@
-import { Router, type Request } from "../http/startApiRouter.ts";
+import { Router } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Config");
 import { getAllSettings } from "../database/init.ts";
 import { sanitizeError, maskSensitiveObject } from "../utils/sanitize.ts";
-import { requirePermission } from "../services/permissions.ts";
 import {
   checkTcpReachable,
   RCON_UNREACHABLE_DETAIL,
@@ -11,16 +10,9 @@ import {
   RCON_USER_ACTION_TIMEOUT_MS,
 } from "../services/rcon.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
-import {
-  AppSettingsError,
-  saveAppSettings,
-} from "../services/appSettings.ts";
+import { AppSettingsError, saveAppSettings } from "../services/appSettings.ts";
 
 const router = Router();
-
-type ConfigRequest = Request & {
-  user?: { role?: string } | null;
-};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -38,20 +30,18 @@ router.get("/app-settings", async (_req, res) => {
   }
 });
 
-router.put(
-  "/app-settings",
-  requirePermission("panel.settings"),
-  async (req: ConfigRequest, res) => {
+router.put("/app-settings", async (req, res) => {
     try {
       const settings = req.body?.settings;
       const settingCount =
-        settings && typeof settings === "object" ? Object.keys(settings).length : 0;
+      settings && typeof settings === "object"
+        ? Object.keys(settings).length
+        : 0;
       log.info(
         `PUT /app-settings — updating ${settingCount} keys: [${settings && typeof settings === "object" ? Object.keys(settings).join(", ") : ""}]`,
       );
 
       const result = await saveAppSettings(settings, {
-        userRole: req.user?.role,
         runtime: {
           modChecker: req.app.get("modChecker"),
           serverManager: req.app.get("serverManager"),
@@ -72,16 +62,18 @@ router.put(
       log.error(`Failed to save app settings: ${errorMessage(error)}`);
       res.status(500).json({ error: sanitizeError(errorMessage(error)) });
     }
-  },
-);
+});
 
-router.get("/cors-debug", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/cors-debug", async (req, res) => {
   try {
     const getCorsDebugSnapshot = req.app.get("getCorsDebugSnapshot");
     if (typeof getCorsDebugSnapshot !== "function") {
       return res
         .status(500)
-        .json({ error: "CORS diagnostics are not available", code: ErrorCode.CONFIG_CORS_DIAGNOSTICS_UNAVAILABLE });
+        .json({
+          error: "CORS diagnostics are not available",
+          code: ErrorCode.CONFIG_CORS_DIAGNOSTICS_UNAVAILABLE,
+        });
     }
     res.json({ diagnostics: getCorsDebugSnapshot() });
   } catch (error: unknown) {
@@ -90,13 +82,16 @@ router.get("/cors-debug", requirePermission("diagnostics.manage"), async (req, r
   }
 });
 
-router.post("/cors-debug/reload", requirePermission("diagnostics.manage"), async (req, res) => {
+router.post("/cors-debug/reload", async (req, res) => {
   try {
     const refreshCorsConfig = req.app.get("refreshCorsConfig");
     if (typeof refreshCorsConfig !== "function") {
       return res
         .status(500)
-        .json({ error: "CORS config reload is not available", code: ErrorCode.CONFIG_CORS_RELOAD_UNAVAILABLE });
+        .json({
+          error: "CORS config reload is not available",
+          code: ErrorCode.CONFIG_CORS_RELOAD_UNAVAILABLE,
+        });
     }
     const diagnostics = await refreshCorsConfig();
     res.json({ success: true, diagnostics });
@@ -106,7 +101,7 @@ router.post("/cors-debug/reload", requirePermission("diagnostics.manage"), async
   }
 });
 
-router.delete("/cors-debug/blocked", requirePermission("diagnostics.manage"), async (req, res) => {
+router.delete("/cors-debug/blocked", async (req, res) => {
   try {
     const clearCorsBlockedOrigins = req.app.get("clearCorsBlockedOrigins");
     const getCorsDebugSnapshot = req.app.get("getCorsDebugSnapshot");
@@ -116,7 +111,10 @@ router.delete("/cors-debug/blocked", requirePermission("diagnostics.manage"), as
     ) {
       return res
         .status(500)
-        .json({ error: "CORS diagnostics are not available", code: ErrorCode.CONFIG_CORS_DIAGNOSTICS_UNAVAILABLE });
+        .json({
+          error: "CORS diagnostics are not available",
+          code: ErrorCode.CONFIG_CORS_DIAGNOSTICS_UNAVAILABLE,
+        });
     }
 
     clearCorsBlockedOrigins();
@@ -127,7 +125,7 @@ router.delete("/cors-debug/blocked", requirePermission("diagnostics.manage"), as
   }
 });
 
-router.post("/test-rcon", requirePermission("server.configure"), async (req, res) => {
+router.post("/test-rcon", async (req, res) => {
   try {
     const rconService = req.app.get("rconService");
 
@@ -155,7 +153,8 @@ router.post("/test-rcon", requirePermission("server.configure"), async (req, res
         res.json({
           success: true,
           message:
-            "Connected but command failed: " + sanitizeError(errorMessage(cmdError)),
+            "Connected but command failed: " +
+            sanitizeError(errorMessage(cmdError)),
           connected: true,
           warning: true,
         });

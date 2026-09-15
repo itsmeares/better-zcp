@@ -77,7 +77,6 @@ import {
 } from '@/lib/serverStatus'
 import type { LifecycleState } from '@/lib/serverStatus'
 import { useSocket } from '@/contexts/SocketContext'
-import { useAuth } from '@/contexts/AuthContext'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { Progress } from '@/components/ui/progress'
@@ -486,9 +485,8 @@ export default function Dashboard() {
   const { toast } = useToast()
   const socket = useSocket()
   const navigate = useNavigate()
-  const { can } = useAuth()
-  const canControlServer = can('server.control')
-  const canWipeServer = can('server.wipe')
+  const canControlServer = true
+  const canWipeServer = true
 
   const { data: activeServerData, refetch: refetchActiveServer } = useQuery({
     queryKey: panelQueryKeys.activeServer,

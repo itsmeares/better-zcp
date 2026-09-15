@@ -5,7 +5,6 @@ import fs from "fs";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getActiveServer } from "../database/init.ts";
-import { requireAnyPermission, requirePermission } from "../services/permissions.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
 import {
   acquireLifecycleLock,
@@ -26,12 +25,6 @@ import { parseClampedInteger } from "../utils/queryNumbers.ts";
 const log = createLogger("API:Backup");
 
 const router = Router();
-const requireAnyBackupCapability = requireAnyPermission(
-  "backups.manage",
-  "backups.download",
-  "backups.restore",
-);
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -55,7 +48,7 @@ function parseBackupMaxCount(value: unknown): number | undefined {
     : undefined;
 }
 
-router.get("/status", requireAnyBackupCapability, async (req, res) => {
+router.get("/status", async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
     const status = await backupService.getStatus();
@@ -77,7 +70,7 @@ router.get("/info", async (req, res) => {
   }
 });
 
-router.get("/list", requireAnyBackupCapability, async (req, res) => {
+router.get("/list", async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
     const backups = await backupService.listBackups();
@@ -88,7 +81,7 @@ router.get("/list", requireAnyBackupCapability, async (req, res) => {
   }
 });
 
-router.get("/history", requireAnyBackupCapability, async (req, res) => {
+router.get("/history", async (req, res) => {
   try {
     const limit =
       req.query.limit === undefined
@@ -101,7 +94,9 @@ router.get("/history", requireAnyBackupCapability, async (req, res) => {
       serverId:
         typeof req.query.serverId === "string" ? req.query.serverId : undefined,
       limit:
-        typeof limit === "number" ? Math.min(Math.max(limit, 1), 500) : undefined,
+        typeof limit === "number"
+          ? Math.min(Math.max(limit, 1), 500)
+          : undefined,
     });
     res.json({ records });
   } catch (error) {
@@ -110,7 +105,7 @@ router.get("/history", requireAnyBackupCapability, async (req, res) => {
   }
 });
 
-router.get("/:name/snapshot", requirePermission("backups.manage"), async (req, res) => {
+router.get("/:name/snapshot", async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
     const result = await backupService.getBackupSnapshot(req.params.name);
@@ -122,7 +117,7 @@ router.get("/:name/snapshot", requirePermission("backups.manage"), async (req, r
   }
 });
 
-router.post("/settings", requirePermission("backups.manage"), async (req, res) => {
+router.post("/settings", async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
     const scheduler = req.app.get("scheduler");
@@ -192,14 +187,12 @@ router.post("/settings", requirePermission("backups.manage"), async (req, res) =
   }
 });
 
-router.post("/create", requirePermission("backups.manage"), async (req, res) => {
+router.post("/create", async (req, res) => {
   try {
     log.info("POST /create — creating manual backup");
     const activeServer = await getActiveServer();
     if (activeServer?.isRemote) {
-      return res
-        .status(400)
-        .json({
+      return res.status(400).json({
           error:
             "Backups are not available for remote servers. The server filesystem is not accessible from this panel.",
           code: ErrorCode.BACKUP_REMOTE_NOT_AVAILABLE,
@@ -231,7 +224,7 @@ router.post("/create", requirePermission("backups.manage"), async (req, res) => 
   }
 });
 
-router.delete("/:name", requirePermission("backups.manage"), async (req, res) => {
+router.delete("/:name", async (req, res) => {
   try {
     log.info(`DELETE /${req.params.name}`);
     const backupService = req.app.get("backupService");
@@ -248,24 +241,36 @@ router.delete("/:name", requirePermission("backups.manage"), async (req, res) =>
   }
 });
 
-router.get("/download/:name", requirePermission("backups.download"), async (req, res) => {
+router.get("/download/:name", async (req, res) => {
   try {
     const backupService = req.app.get("backupService");
     const backupsPath = await backupService.getBackupsPath();
 
     if (!backupsPath) {
-      return res.status(404).json({ error: "Backups folder not found", code: ErrorCode.BACKUPS_FOLDER_NOT_FOUND });
+      return res
+        .status(404)
+        .json({
+          error: "Backups folder not found",
+          code: ErrorCode.BACKUPS_FOLDER_NOT_FOUND,
+        });
     }
 
     const safeName = path.basename(req.params.name as string);
     if (!safeName.endsWith(".zip")) {
-      return res.status(400).json({ error: "Invalid backup file", code: ErrorCode.BACKUP_INVALID_FILE });
+      return res
+        .status(400)
+        .json({
+          error: "Invalid backup file",
+          code: ErrorCode.BACKUP_INVALID_FILE,
+        });
     }
 
     const backupPath = path.join(backupsPath, safeName);
 
     if (!fs.existsSync(backupPath)) {
-      return res.status(404).json({ error: "Backup not found", code: ErrorCode.BACKUP_NOT_FOUND });
+      return res
+        .status(404)
+        .json({ error: "Backup not found", code: ErrorCode.BACKUP_NOT_FOUND });
     }
 
     res.download(backupPath, safeName);
@@ -275,7 +280,7 @@ router.get("/download/:name", requirePermission("backups.download"), async (req,
   }
 });
 
-router.post("/restore/:name", requirePermission("backups.restore"), async (req, res) => {
+router.post("/restore/:name", async (req, res) => {
   const activeServerForLock = await getActiveServer();
   const lifecycleLock = acquireLifecycleLock(
     "restore",
@@ -287,9 +292,7 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
   try {
     const activeServer = activeServerForLock;
     if (activeServer?.isRemote) {
-      return res
-        .status(400)
-        .json({
+      return res.status(400).json({
           error:
             "Backup restore is not available for remote servers. The server filesystem is not accessible from this panel.",
           code: ErrorCode.BACKUP_RESTORE_REMOTE_NOT_AVAILABLE,
@@ -301,7 +304,12 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
 
     const safeName = path.basename(req.params.name as string);
     if (!safeName.endsWith(".zip")) {
-      return res.status(400).json({ error: "Invalid backup file", code: ErrorCode.BACKUP_INVALID_FILE });
+      return res
+        .status(400)
+        .json({
+          error: "Invalid backup file",
+          code: ErrorCode.BACKUP_INVALID_FILE,
+        });
     }
 
     if (activeServer?.installPath) {
@@ -321,7 +329,8 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
     if (processDetails.scanFailed) {
       return res.status(503).json({
         success: false,
-        error: "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
+        error:
+          "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
         code: ErrorCode.SERVER_STATE_UNKNOWN,
       });
     }
@@ -335,7 +344,10 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
     }
 
     const io = req.app.get("io");
-    const result = await backupService.restoreBackup(safeName, { ...req.body, io });
+    const result = await backupService.restoreBackup(safeName, {
+      ...req.body,
+      io,
+    });
 
     if (result.success) {
       res.json(result);
@@ -345,7 +357,9 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
         result.message.startsWith(
           "Restore failed and the previous save could not be put back automatically.",
         );
-      res.status(400).json(
+      res
+        .status(400)
+        .json(
         isRollbackFailureMessage
           ? result
           : { ...result, message: sanitizeError(result.message) },
@@ -359,15 +373,11 @@ router.post("/restore/:name", requirePermission("backups.restore"), async (req, 
   }
 });
 
-router.post("/delete-older-than", requirePermission("backups.manage"), async (req, res) => {
+router.post("/delete-older-than", async (req, res) => {
   try {
     const days = req.body?.days;
 
-    if (
-      typeof days !== "number" ||
-      !Number.isInteger(days) ||
-      days < 1
-    ) {
+    if (typeof days !== "number" || !Number.isInteger(days) || days < 1) {
       return res.status(400).json({
         error: "Invalid days parameter. Must be a whole number >= 1",
         code: ErrorCode.BACKUP_INVALID_DAYS_PARAMETER,
@@ -385,17 +395,12 @@ router.post("/delete-older-than", requirePermission("backups.manage"), async (re
 });
 
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024;
-router.post(
-  "/upload",
-  requirePermission("backups.manage"),
-  async (req, res) => {
+router.post("/upload", async (req, res) => {
     let tmpPath: string | null = null;
     try {
       const activeServer = await getActiveServer();
       if (activeServer?.isRemote) {
-        return res
-          .status(400)
-          .json({
+      return res.status(400).json({
             error: "Backup upload is not available for remote servers.",
             code: ErrorCode.BACKUP_UPLOAD_REMOTE_NOT_AVAILABLE,
           });
@@ -406,9 +411,7 @@ router.post(
         .trim()
         .toLowerCase();
       if (contentType !== "application/zip") {
-        return res
-          .status(400)
-          .json({
+      return res.status(400).json({
             error:
               "No file uploaded. Send the zip body with Content-Type: application/zip.",
             code: ErrorCode.BACKUP_UPLOAD_NO_FILE,
@@ -425,15 +428,16 @@ router.post(
       if (!baseName.toLowerCase().endsWith(".zip")) {
         return res
           .status(400)
-          .json({ error: "Only .zip backups are accepted.", code: ErrorCode.BACKUP_UPLOAD_INVALID_EXTENSION });
+        .json({
+          error: "Only .zip backups are accepted.",
+          code: ErrorCode.BACKUP_UPLOAD_INVALID_EXTENSION,
+        });
       }
 
       const backupService = req.app.get("backupService");
       const backupsPath = await backupService.getBackupsPath();
       if (!backupsPath) {
-        return res
-          .status(500)
-          .json({
+      return res.status(500).json({
             error: "Backups folder not available. Configure the server first.",
             code: ErrorCode.BACKUPS_FOLDER_UNAVAILABLE,
           });
@@ -448,9 +452,7 @@ router.post(
       const targetPath = path.join(backupsPath, finalName);
 
       if (fs.existsSync(targetPath)) {
-        return res
-          .status(409)
-          .json({
+      return res.status(409).json({
             error: `A backup named "${finalName}" already exists. Delete it first or rename the upload.`,
             code: ErrorCode.BACKUP_UPLOAD_NAME_CONFLICT,
             params: sanitizeErrorParams({ name: finalName }),
@@ -461,9 +463,7 @@ router.post(
       const totalBytes = await streamUploadToFile(req, tmpPath, MAX_UPLOAD_BYTES);
 
       if (totalBytes === 0) {
-        return res
-          .status(400)
-          .json({
+      return res.status(400).json({
             error:
               "No file uploaded. Send the zip body with Content-Type: application/zip.",
             code: ErrorCode.BACKUP_UPLOAD_NO_FILE,
@@ -474,9 +474,7 @@ router.post(
         fs.linkSync(tmpPath, targetPath);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-          return res
-            .status(409)
-            .json({
+        return res.status(409).json({
               error: `A backup named "${finalName}" already exists. Delete it first or rename the upload.`,
               code: ErrorCode.BACKUP_UPLOAD_NAME_CONFLICT,
               params: sanitizeErrorParams({ name: finalName }),
@@ -522,7 +520,6 @@ router.post(
         }
       }
     }
-  },
-);
+});
 
 export default router;

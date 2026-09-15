@@ -116,7 +116,6 @@ import { getInstallProgressMessage } from '@/lib/installProgressMessage'
 import { ServerStatusBadge } from '@/components/ServerStatusBadge'
 import { SocketContext } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from '@tanstack/react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { PasswordInput } from '@/components/PasswordInput'
@@ -263,13 +262,12 @@ export function resolveDockerCardHostStatus(
 export default function Servers() {
   const runtimeInfo = useRuntimeInfo()
   const confirm = useConfirm()
-  const { can } = useAuth()
-  const canDockerManage = can('docker.manage')
-  const canServersManage = can('servers.manage')
-  const canServerControl = can('server.control')
-  const canServerWipe = can('server.wipe')
-  const canServerInstall = can('server.install')
-  const canServersDiscover = can('servers.discover')
+  const canDockerManage = true
+  const canServersManage = true
+  const canServerControl = true
+  const canServerWipe = true
+  const canServerInstall = true
+  const canServersDiscover = true
   const canInlineStartStop = canServersManage && canServerControl
   const { toast } = useToast()
   const socket = useContext(SocketContext)

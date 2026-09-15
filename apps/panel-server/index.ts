@@ -96,7 +96,6 @@ import authService, {
   onSessionRevoked,
   type SessionRevocationEvent,
 } from "./services/auth.ts";
-import { getRoleByName } from "./services/permissions.ts";
 import {
   createPanelRequestHandler,
 } from "./http/panelWeb.ts";
@@ -1060,7 +1059,6 @@ io.use(async (socket: AuthenticatedSocket, next) => {
       socket.user = {
         userId: null,
         username: null,
-        role: "admin",
         tokenGen: null,
         authDisabled: true,
       };
@@ -1084,20 +1082,6 @@ io.use(async (socket: AuthenticatedSocket, next) => {
   }
 });
 
-export async function socketHasCapability(
-  socket: AuthenticatedSocket,
-  capability: string,
-): Promise<boolean> {
-  if (!socket.user) return false;
-  try {
-    const role = await getRoleByName(socket.user.role);
-    return Array.isArray(role?.capabilities) && role.capabilities.includes(capability);
-  } catch (error: any) {
-    log.warn(`Could not resolve socket capability "${capability}": ${error.message}`);
-    return false;
-  }
-}
-
 io.on("connection", (socket: AuthenticatedSocket) => {
   log.debug(
     `Client connected: ${socket.id}${socket.user ? ` (${socket.user.username})` : ""}`,
@@ -1116,17 +1100,17 @@ io.on("connection", (socket: AuthenticatedSocket) => {
   });
 
   socket.on("subscribe:players", async () => {
-    if (!(await socketHasCapability(socket, "players.view"))) return;
+    if (!socket.user) return;
     socket.join("players");
   });
 
   socket.on("subscribe:logs", async () => {
-    if (!(await socketHasCapability(socket, "diagnostics.manage"))) return;
+    if (!socket.user) return;
     socket.join("logs");
   });
 
   socket.on("subscribe:perf", async () => {
-    if (!(await socketHasCapability(socket, "diagnostics.manage"))) return;
+    if (!socket.user) return;
     socket.join("perf");
   });
   socket.on("unsubscribe:perf", () => {
@@ -1134,7 +1118,7 @@ io.on("connection", (socket: AuthenticatedSocket) => {
   });
 
   socket.on("subscribe:rcon", async () => {
-    if (!(await socketHasCapability(socket, "rcon.execute"))) return;
+    if (!socket.user) return;
     socket.join("rcon-live");
   });
 });

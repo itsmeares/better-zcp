@@ -94,7 +94,6 @@ import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
 import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
-import { useAuth } from '@/contexts/AuthContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { useSocket } from '@/contexts/SocketContext'
 import { cn, copyText } from '@/lib/utils'
@@ -352,12 +351,11 @@ function VitalBar({
 
 export default function Players() {
   const accessLevelLabels = useMemo(() => getAccessLevelLabels(), [])
-  const { can } = useAuth()
   const { searchStr } = useLocation()
   const searchParams = new URLSearchParams(searchStr)
   const requestedPlayer = searchParams.get('player')?.trim() || ''
-  const canModerate = can('players.moderate')
-  const canGmTools = can('players.gm_tools')
+  const canModerate = true
+  const canGmTools = true
   const [players, setPlayers] = useState<Player[]>([])
   const [perks, setPerks] = useState<PerkChoice[]>([])
   const [selectedPlayer, setSelectedPlayer] = useState<string>('')
