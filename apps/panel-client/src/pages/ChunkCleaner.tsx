@@ -21,7 +21,6 @@ import {
   CheckCircle2,
   XCircle,
   HelpCircle,
-  ShieldAlert,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/PageHeader'
@@ -286,8 +285,6 @@ export default function ChunkCleaner() {
   const runtimeInfo = useRuntimeInfo()
   const { theme } = useTheme()
   const socket = useSocket()
-  const canManageChunks = true
-  const [permissionDenied, setPermissionDenied] = useState(false)
   const [saves, setSaves] = useState<SaveInfo[]>([])
   const [selectedSave, setSelectedSave] = useState<string>('')
   const [chunks, setChunks] = useState<ChunkInfo[]>([])
@@ -454,7 +451,6 @@ export default function ChunkCleaner() {
       try {
         const pathToUse = pathOverride ?? (customPath || undefined)
         const result = await chunksApi.getSaves(pathToUse)
-        setPermissionDenied(false)
         setSaves(result.saves || [])
         setDebugInfo(result.debug ?? null)
         if (
@@ -466,10 +462,6 @@ export default function ChunkCleaner() {
         return result.saves || []
       } catch (error) {
         const apiErr = error instanceof ApiError ? error : null
-        if (apiErr?.status === 403) {
-          setPermissionDenied(true)
-          return []
-        }
         const payload = (apiErr?.data ?? null) as {
           debug?: NonNullable<typeof debugInfo>
         } | null
@@ -569,7 +561,7 @@ export default function ChunkCleaner() {
   const persistCurrentPath = useCallback(
     async (pathToSave: string) => {
       if (!pathToSave) return
-      if (!canManageChunks) return
+
       setSavingPath(true)
       try {
         const result = await chunksApi.savePath(pathToSave)
@@ -595,7 +587,7 @@ export default function ChunkCleaner() {
         setSavingPath(false)
       }
     },
-    [fetchSaves, toast, canManageChunks],
+    [fetchSaves, toast],
   )
 
   const loadChunks = useCallback(async () => {
@@ -1563,7 +1555,7 @@ export default function ChunkCleaner() {
           setSelectedChunks(new Set())
           break
         case 'Delete':
-          if (selectedChunks.size > 0 && canManageChunks) {
+          if (selectedChunks.size > 0) {
             setDeleteVehicles(true)
             setDeleteDialogOpen(true)
           }
@@ -1579,7 +1571,7 @@ export default function ChunkCleaner() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectedChunks.size, deleteDialogOpen, selectedSave, canManageChunks])
+  }, [selectedChunks.size, deleteDialogOpen, selectedSave])
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1842,7 +1834,6 @@ export default function ChunkCleaner() {
 
   const handleDelete = async () => {
     if (selectedChunks.size === 0) return
-    if (!canManageChunks) return
 
     setDeleting(true)
     try {
@@ -2017,18 +2008,7 @@ export default function ChunkCleaner() {
           </p>
         </div>
 
-        {permissionDenied ? (
-          <EmptyState
-            type="accessDenied"
-            icon={
-              <ShieldAlert className="h-14 w-14 text-muted-foreground/40" />
-            }
-            title={"You can't view Map Cleanup"}
-            description={
-              'Your account\'s role doesn\'t include "Manage map chunks". Ask an administrator to grant it if you need access to this page.'
-            }
-          />
-        ) : (
+        {
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
             <div className="space-y-3 order-2 lg:order-1">
               <Card>
@@ -2168,32 +2148,21 @@ export default function ChunkCleaner() {
                       </p>
                       {customPath && (
                         <div className="flex gap-1.5">
-                          <DisabledReason
-                            reason={
-                              !canManageChunks
-                                ? "Cleaning up map chunks requires the chunks.manage permission, which this role doesn't have."
-                                : null
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 h-6 text-[10px]"
+                            onClick={() => void persistCurrentPath(customPath)}
+                            disabled={savingPath || loadingSaves}
+                            // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                            title={
+                              "Make this the panel's default Zomboid data folder so you don't have to re-enter it."
                             }
                           >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex-1 h-6 text-[10px]"
-                              onClick={() =>
-                                void persistCurrentPath(customPath)
-                              }
-                              disabled={
-                                savingPath || loadingSaves || !canManageChunks
-                              }
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint describing what the button does; the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={
-                                "Make this the panel's default Zomboid data folder so you don't have to re-enter it."
-                              }
-                            >
-                              <Save className="w-3 h-3 me-1" />
-                              {savingPath ? 'Saving...' : 'Save as default'}
-                            </Button>
-                          </DisabledReason>
+                            <Save className="w-3 h-3 me-1" />
+                            {savingPath ? 'Saving...' : 'Save as default'}
+                          </Button>
+
                           <Button
                             variant="ghost"
                             size="sm"
@@ -2218,26 +2187,19 @@ export default function ChunkCleaner() {
                               }
                             </span>
                           </div>
-                          <DisabledReason
-                            reason={
-                              !canManageChunks
-                                ? "Cleaning up map chunks requires the chunks.manage permission, which this role doesn't have."
-                                : null
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-6 text-[10px]"
+                            onClick={() =>
+                              void persistCurrentPath(debugInfo.autoPicked!)
                             }
+                            disabled={savingPath}
                           >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full h-6 text-[10px]"
-                              onClick={() =>
-                                void persistCurrentPath(debugInfo.autoPicked!)
-                              }
-                              disabled={savingPath || !canManageChunks}
-                            >
-                              <Save className="w-3 h-3 me-1" />
-                              {savingPath ? 'Saving...' : 'Save as default'}
-                            </Button>
-                          </DisabledReason>
+                            <Save className="w-3 h-3 me-1" />
+                            {savingPath ? 'Saving...' : 'Save as default'}
+                          </Button>
                         </div>
                       )}
                     </CollapsibleContent>
@@ -2535,29 +2497,20 @@ export default function ChunkCleaner() {
               </Card>
 
               {selectedChunks.size > 0 && (
-                <DisabledReason
-                  reason={
-                    !canManageChunks
-                      ? "Cleaning up map chunks requires the chunks.manage permission, which this role doesn't have."
-                      : null
-                  }
-                  className="w-full"
+                <Button
+                  variant="destructive"
+                  className="w-full h-9 text-sm"
+
+                  onClick={() => {
+                    setDeleteVehicles(true)
+                    setDeleteDialogOpen(true)
+                  }}
                 >
-                  <Button
-                    variant="destructive"
-                    className="w-full h-9 text-sm"
-                    disabled={!canManageChunks}
-                    onClick={() => {
-                      setDeleteVehicles(true)
-                      setDeleteDialogOpen(true)
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4 me-2" />
-                    {Number(selectedChunks.size) === 1
-                      ? 'Delete ' + String(selectedChunks.size) + ' Chunk'
-                      : 'Delete ' + String(selectedChunks.size) + ' Chunks'}
-                  </Button>
-                </DisabledReason>
+                  <Trash2 className="w-4 h-4 me-2" />
+                  {Number(selectedChunks.size) === 1
+                    ? 'Delete ' + String(selectedChunks.size) + ' Chunk'
+                    : 'Delete ' + String(selectedChunks.size) + ' Chunks'}
+                </Button>
               )}
             </div>
 
@@ -2747,7 +2700,7 @@ export default function ChunkCleaner() {
                                           }
                                           disabled={!s.exists || loadingSaves}
                                           className="flex-1 text-start text-[11px] font-mono px-2 py-1 rounded border border-border/40 bg-background hover:bg-accent/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors break-all"
-                                          // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27 (rule's own shape-2 guidance): the disabled-reason branch (folder missing) now lives in the DisabledReason wrapper above; this title carries only the enabled-state status hint and is correctly absent, not dead, when the wrapper's reason covers the disable.
+                                          // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
                                           title={
                                             s.exists
                                               ? s.hasSaves
@@ -2954,7 +2907,7 @@ export default function ChunkCleaner() {
               </Card>
             </div>
           </div>
-        )}
+        }
 
         <Collapsible open={showHelp} onOpenChange={setShowHelp}>
           <CollapsibleTrigger asChild>

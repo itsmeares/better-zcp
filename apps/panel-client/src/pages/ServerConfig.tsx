@@ -1305,10 +1305,9 @@ export default function ServerConfig() {
   const { toast } = useToast()
   const confirm = useConfirm()
   const socket = useSocket()
-  const canManageServerFiles = true
 
   useEffect(() => {
-    if (canManageServerFiles) loadData()
+    loadData()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only init
 
   useEffect(() => {
@@ -2590,20 +2589,6 @@ export default function ServerConfig() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activeTab, hasIniChanges, hasSandboxChanges])
-
-  if (!canManageServerFiles) {
-    return (
-      <div className="space-y-4 page-transition">
-        <EmptyState
-          type="noData"
-          title={"You don't have access to Server Configuration"}
-          description={
-            'This page requires the "Manage server files" permission. Ask an administrator to grant it to your role if you need to edit server settings here.'
-          }
-        />
-      </div>
-    )
-  }
 
   if (loading) {
     return (
@@ -4753,7 +4738,7 @@ export default function ServerConfig() {
                       }
                       className="shrink-0 h-9 gap-1.5 text-xs font-medium"
                       aria-pressed={modSettingsModifiedOnly}
-                      // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27: the disabled-reason branch (no modified options) now lives in the DisabledReason wrapper above; this title carries only the enabled-state hint.
+                      // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
                       title={'Show only options changed from default'}
                     >
                       <Filter className="w-3.5 h-3.5" />

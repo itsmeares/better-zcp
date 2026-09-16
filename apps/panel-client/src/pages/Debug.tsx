@@ -830,8 +830,6 @@ export default function Debug() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null)
   const [refreshingDiagnostics, setRefreshingDiagnostics] = useState(false)
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null)
-  const [diagnosticsPermissionDenied, setDiagnosticsPermissionDenied] =
-    useState(false)
   const [diagnosticsHideOk, setDiagnosticsHideOk] = useState(false)
   const [fixingDiagnosticsCheckId, setFixingDiagnosticsCheckId] = useState<
     string | null
@@ -878,8 +876,6 @@ export default function Debug() {
   const [bridgeDiagHealthy, setBridgeDiagHealthy] = useState(false)
   const [bridgeDiagRunning, setBridgeDiagRunning] = useState(false)
   const [bridgeDiagStatusLoading, setBridgeDiagStatusLoading] = useState(true)
-  const [bridgeDiagPermissionDenied, setBridgeDiagPermissionDenied] =
-    useState(false)
   const [checkApiObject, setCheckApiObject] = useState('ClimateManager')
   const [checkApiMethod, setCheckApiMethod] = useState('')
   const [handlerSearchQuery, setHandlerSearchQuery] = useState('')
@@ -981,13 +977,8 @@ export default function Debug() {
     setRefreshingDiagnostics(true)
     try {
       const res = await authFetch('/api/debug/diagnostics')
-      if (res.status === 403) {
-        setDiagnosticsPermissionDenied(true)
-        return
-      }
       if (!res.ok)
         throw new Error(await parseDownloadError(res, `HTTP ${res.status}`))
-      setDiagnosticsPermissionDenied(false)
       const data = await res.json()
       if (data?.checks) {
         setDiagnostics(data)
@@ -1606,22 +1597,6 @@ export default function Debug() {
     [toast],
   )
 
-  const bridgeDiagCall = useCallback(
-    async <T,>(operation: () => Promise<T>) => {
-      try {
-        const result = await operation()
-        setBridgeDiagPermissionDenied(false)
-        return result
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 403) {
-          setBridgeDiagPermissionDenied(true)
-        }
-        throw error
-      }
-    },
-    [],
-  )
-
   const checkBridgeDiagStatus = useCallback(async () => {
     setBridgeDiagStatusLoading(true)
     try {
@@ -1646,13 +1621,13 @@ export default function Debug() {
     () =>
       runProbe(
         'bridgeStats',
-        () => bridgeDiagCall(() => panelBridgeApi.getBridgeDebugStats()),
+        () => panelBridgeApi.getBridgeDebugStats(),
         (r: unknown) => {
           const data = (r as { data?: unknown })?.data
           return { count: null, sample: data ?? null }
         },
       ),
-    [runProbe, bridgeDiagCall],
+    [runProbe],
   )
 
   const probeCheckApi = useCallback(
@@ -1660,25 +1635,23 @@ export default function Debug() {
       runProbe(
         'checkApi',
         () =>
-          bridgeDiagCall(() =>
-            panelBridgeApi.checkBridgeApi(
-              checkApiObject,
-              checkApiMethod.trim() || undefined,
-            ),
+          panelBridgeApi.checkBridgeApi(
+            checkApiObject,
+            checkApiMethod.trim() || undefined,
           ),
         (r: unknown) => {
           const data = (r as { data?: unknown })?.data
           return { count: null, sample: data ?? null }
         },
       ),
-    [runProbe, bridgeDiagCall, checkApiObject, checkApiMethod],
+    [runProbe, checkApiObject, checkApiMethod],
   )
 
   const probeAvailableHandlers = useCallback(
     () =>
       runProbe(
         'availableHandlers',
-        () => bridgeDiagCall(() => panelBridgeApi.getBridgeAvailableHandlers()),
+        () => panelBridgeApi.getBridgeAvailableHandlers(),
         (r: unknown) => {
           const data = (
             r as {
@@ -1691,17 +1664,14 @@ export default function Debug() {
           }
         },
       ),
-    [runProbe, bridgeDiagCall],
+    [runProbe],
   )
 
   const probeDebugLog = useCallback(
     () =>
       runProbe(
         'debugLog',
-        () =>
-          bridgeDiagCall(() =>
-            panelBridgeApi.getBridgeDebugLog(debugLogLimit, debugLogMinLevel),
-          ),
+        () => panelBridgeApi.getBridgeDebugLog(debugLogLimit, debugLogMinLevel),
         (r: unknown) => {
           const data = (
             r as {
@@ -1714,21 +1684,21 @@ export default function Debug() {
           }
         },
       ),
-    [runProbe, bridgeDiagCall, debugLogLimit, debugLogMinLevel],
+    [runProbe, debugLogLimit, debugLogMinLevel],
   )
 
   const probeSelfTest = useCallback(
     () =>
       runProbe(
         'selfTest',
-        () => bridgeDiagCall(() => panelBridgeApi.runBridgeDebugItemScript()),
+        () => panelBridgeApi.runBridgeDebugItemScript(),
         (r: unknown) => {
           const data = (r as { data?: { probes?: unknown[] } })?.data
           const probes = Array.isArray(data?.probes) ? data.probes : []
           return { count: probes.length, sample: probes }
         },
       ),
-    [runProbe, bridgeDiagCall],
+    [runProbe],
   )
 
   const toggleBridgeDebugMode = useCallback(
@@ -1736,16 +1706,14 @@ export default function Debug() {
       runAction(
         'bridgeDebugMode',
         async () => {
-          await bridgeDiagCall(() =>
-            panelBridgeApi.setBridgeDebugMode(nextEnabled),
-          )
+          await panelBridgeApi.setBridgeDebugMode(nextEnabled)
           await probeBridgeStats()
         },
         nextEnabled
           ? 'Bridge debug mode enabled'
           : 'Bridge debug mode disabled',
       ),
-    [runAction, bridgeDiagCall, probeBridgeStats],
+    [runAction, probeBridgeStats],
   )
 
   const clearBridgeErrors = useCallback(async () => {
@@ -1760,15 +1728,13 @@ export default function Debug() {
     await runAction(
       'bridgeClearErrors',
       async () => {
-        const result = await bridgeDiagCall(() =>
-          panelBridgeApi.clearBridgeErrors(),
-        )
+        const result = await panelBridgeApi.clearBridgeErrors()
         await probeBridgeStats()
         return result
       },
       'Error log cleared',
     )
-  }, [confirm, runAction, bridgeDiagCall, probeBridgeStats])
+  }, [confirm, runAction, probeBridgeStats])
 
   const fetchLogFiles = async () => {
     try {
@@ -2606,16 +2572,7 @@ export default function Debug() {
         }
       />
 
-      {diagnosticsPermissionDenied ? (
-        <EmptyState
-          type="accessDenied"
-          icon={<ShieldAlert className="h-14 w-14 text-muted-foreground/40" />}
-          title={"You can't view debug diagnostics"}
-          description={
-            'Your account\'s role doesn\'t include "View panel diagnostics". Ask an administrator to grant it if you need access to this page.'
-          }
-        />
-      ) : (
+      {
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
@@ -2969,7 +2926,6 @@ export default function Debug() {
                                 const fixAction = getDiagnosticsFixAction(check)
                                 const translated =
                                   translateDiagnosticCheck(check)
-                                const canRunFix = true
                                 return (
                                   <li
                                     key={check.id}
@@ -3016,38 +2972,30 @@ export default function Debug() {
                                       )}
                                       {fixAction && (
                                         <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                                          <DisabledReason
-                                            reason={
-                                              !canRunFix
-                                                ? "Your role doesn't have permission to apply this fix."
-                                                : null
+                                          <Button
+                                            size="sm"
+                                            className="h-7 px-2 text-[11px]"
+                                            variant={
+                                              fixAction.automated
+                                                ? 'default'
+                                                : 'outline'
+                                            }
+                                            onClick={() => {
+                                              void handleDiagnosticsFix(check)
+                                            }}
+                                            disabled={
+                                              !!fixingDiagnosticsCheckId &&
+                                              fixingDiagnosticsCheckId !==
+                                                check.id
                                             }
                                           >
-                                            <Button
-                                              size="sm"
-                                              className="h-7 px-2 text-[11px]"
-                                              variant={
-                                                fixAction.automated
-                                                  ? 'default'
-                                                  : 'outline'
-                                              }
-                                              onClick={() => {
-                                                void handleDiagnosticsFix(check)
-                                              }}
-                                              disabled={
-                                                (!!fixingDiagnosticsCheckId &&
-                                                  fixingDiagnosticsCheckId !==
-                                                    check.id) ||
-                                                !canRunFix
-                                              }
-                                            >
-                                              {fixingDiagnosticsCheckId ===
-                                                check.id && (
-                                                <Loader2 className="w-3 h-3 me-1 animate-spin" />
-                                              )}
-                                              {fixAction.label}
-                                            </Button>
-                                          </DisabledReason>
+                                            {fixingDiagnosticsCheckId ===
+                                              check.id && (
+                                              <Loader2 className="w-3 h-3 me-1 animate-spin" />
+                                            )}
+                                            {fixAction.label}
+                                          </Button>
+
                                           {fixAction.openServerConfig && (
                                             <Button
                                               asChild
@@ -6544,18 +6492,7 @@ export default function Debug() {
           </TabsContent>
 
           <TabsContent value="bridge" className="space-y-4">
-            {bridgeDiagPermissionDenied ? (
-              <EmptyState
-                type="accessDenied"
-                icon={
-                  <ShieldAlert className="h-14 w-14 text-muted-foreground/40" />
-                }
-                title={"You can't view bridge diagnostics"}
-                description={
-                  'Your account\'s role doesn\'t include "PanelBridge diagnostics". Ask an administrator to grant it if you need access to this tab.'
-                }
-              />
-            ) : (
+            {
               <>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div>
@@ -6748,15 +6685,14 @@ export default function Debug() {
                                   }
                                 </div>
                               </div>
-                              <DisabledReason reason={null}>
-                                <Switch
-                                  checked={stats.debugMode === true}
-                                  disabled={actionLoading === 'bridgeDebugMode'}
-                                  onCheckedChange={(checked) =>
-                                    toggleBridgeDebugMode(checked)
-                                  }
-                                />
-                              </DisabledReason>
+
+                              <Switch
+                                checked={stats.debugMode === true}
+                                disabled={actionLoading === 'bridgeDebugMode'}
+                                onCheckedChange={(checked) =>
+                                  toggleBridgeDebugMode(checked)
+                                }
+                              />
                             </div>
 
                             <div className="p-2 rounded border bg-card">
@@ -6769,8 +6705,8 @@ export default function Debug() {
                                 <DisabledReason
                                   reason={
                                     errCount === 0
-                                        ? 'No errors to clear.'
-                                        : null
+                                      ? 'No errors to clear.'
+                                      : null
                                   }
                                 >
                                   <Button
@@ -7273,10 +7209,10 @@ export default function Debug() {
                   </CardContent>
                 </Card>
               </>
-            )}
+            }
           </TabsContent>
         </Tabs>
-      )}
+      }
     </div>
   )
 }

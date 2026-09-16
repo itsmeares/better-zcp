@@ -17,7 +17,6 @@ import { panelQueryKeys } from '@/lib/queryClient'
 export default function Templates() {
   const { toast } = useToast()
   const confirm = useConfirm()
-  const canManage = true
 
   const {
     data: templatesData,
@@ -34,7 +33,7 @@ export default function Templates() {
     useQuery({
       queryKey: panelQueryKeys.hiddenTemplates,
       queryFn: templatesApi.listHidden,
-      enabled: canManage,
+      enabled: true,
       retry: false,
       staleTime: 30_000,
     })
@@ -61,8 +60,8 @@ export default function Templates() {
   }, [refetchTemplates])
 
   const fetchHiddenTemplates = useCallback(async () => {
-    if (canManage) await refetchHiddenTemplates()
-  }, [canManage, refetchHiddenTemplates])
+    await refetchHiddenTemplates()
+  }, [refetchHiddenTemplates])
 
   const handleRestore = async (template: SimTemplate) => {
     setRestoringId(template.meta.id)
@@ -153,18 +152,16 @@ export default function Templates() {
         icon={<LayoutTemplate className="h-6 w-6" />}
         tone="config"
         actions={
-          canManage ? (
-            <>
-              <Button variant="outline" onClick={() => setImportOpen(true)}>
-                <Upload className="h-4 w-4" />
-                {'Import'}
-              </Button>
-              <Button onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4" />
-                {'Save Current Config'}
-              </Button>
-            </>
-          ) : undefined
+          <>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" />
+              {'Import'}
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {'Save Current Config'}
+            </Button>
+          </>
         }
       />
 
@@ -186,14 +183,10 @@ export default function Templates() {
           description={
             'Save your current server configuration as a template, or import one from a file.'
           }
-          action={
-            canManage
-              ? {
-                  label: 'Save Current Config',
-                  onClick: () => setCreateOpen(true),
-                }
-              : undefined
-          }
+          action={{
+            label: 'Save Current Config',
+            onClick: () => setCreateOpen(true),
+          }}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -204,13 +197,12 @@ export default function Templates() {
               onPreview={setPreviewTemplate}
               onExport={handleExport}
               onDelete={handleDelete}
-              canManage={canManage}
             />
           ))}
         </div>
       )}
 
-      {canManage && hiddenTemplates.length > 0 && (
+      {hiddenTemplates.length > 0 && (
         <div className="space-y-3 rounded-lg border border-border/70 bg-muted/15 p-4">
           <div>
             <h2 className="text-sm font-semibold text-foreground">
@@ -253,11 +245,10 @@ export default function Templates() {
 
       <TemplatePreviewDialog
         template={previewTemplate}
-        canManage={canManage}
         onClose={() => setPreviewTemplate(null)}
         onApplied={() => setPreviewTemplate(null)}
       />
-      {canManage && (
+      {
         <>
           <CreateTemplateDialog
             open={createOpen}
@@ -276,7 +267,7 @@ export default function Templates() {
             }}
           />
         </>
-      )}
+      }
     </div>
   )
 }

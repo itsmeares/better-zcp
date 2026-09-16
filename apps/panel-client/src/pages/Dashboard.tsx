@@ -485,8 +485,6 @@ export default function Dashboard() {
   const { toast } = useToast()
   const socket = useSocket()
   const navigate = useNavigate()
-  const canControlServer = true
-  const canWipeServer = true
 
   const { data: activeServerData, refetch: refetchActiveServer } = useQuery({
     queryKey: panelQueryKeys.activeServer,
@@ -1164,11 +1162,9 @@ export default function Dashboard() {
     }
   }
   const startServer = () => {
-    if (!canControlServer) return
     void handleAction('Start server', serverApi.start)
   }
   const saveWorld = () => {
-    if (!canControlServer) return
     void handleAction('Save world', serverApi.save)
   }
   const handleConnect = async () => {
@@ -1273,7 +1269,7 @@ export default function Dashboard() {
         level: hostUnknown ? 'warning' : 'critical',
         headline: hostUnknown ? 'Server status unknown' : 'Server stopped',
         action:
-          hostUnknown || activeServer?.isRemote || !canControlServer
+          hostUnknown || activeServer?.isRemote
             ? undefined
             : {
                 label: 'Start',
@@ -1672,9 +1668,7 @@ export default function Dashboard() {
                     ? 'Add or select a server first'
                     : activeServer?.isRemote
                       ? 'Not available for remote (RCON-only) servers'
-                      : !canControlServer
-                        ? "Your role doesn't have permission to control the server."
-                        : null
+                      : null
                 }
               >
                 <Button
@@ -1683,8 +1677,7 @@ export default function Dashboard() {
                     !hasServer ||
                     hostUnknown ||
                     loading !== null ||
-                    activeServer?.isRemote ||
-                    !canControlServer
+                    activeServer?.isRemote
                   }
                   variant="ghost"
                   size="sm"
@@ -1700,44 +1693,35 @@ export default function Dashboard() {
               </DisabledReason>
             ) : (
               <>
-                <DisabledReason
-                  reason={
-                    !canControlServer
-                      ? "Your role doesn't have permission to control the server."
-                      : null
+                <Button
+                  onClick={() =>
+                    setConfirmAction({
+                      actionId: 'Stop server',
+                      title: 'Stop server',
+                      description:
+                        'Are you sure you want to stop the server? All connected players will be disconnected.',
+                      action: serverApi.stop,
+                      variant: 'warning',
+                    })
                   }
+                  disabled={loading !== null || !online}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1.5 rounded-md border border-red-500/30 px-2.5 text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 disabled:border-border/50 disabled:text-muted-foreground"
                 >
-                  <Button
-                    onClick={() =>
-                      setConfirmAction({
-                        actionId: 'Stop server',
-                        title: 'Stop server',
-                        description:
-                          'Are you sure you want to stop the server? All connected players will be disconnected.',
-                        action: serverApi.stop,
-                        variant: 'warning',
-                      })
-                    }
-                    disabled={loading !== null || !online || !canControlServer}
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-1.5 rounded-md border border-red-500/30 px-2.5 text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 disabled:border-border/50 disabled:text-muted-foreground"
-                  >
-                    {loading === 'Stop server' ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Square className="h-3.5 w-3.5" />
-                    )}
-                    {'Stop'}
-                  </Button>
-                </DisabledReason>
+                  {loading === 'Stop server' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Square className="h-3.5 w-3.5" />
+                  )}
+                  {'Stop'}
+                </Button>
+
                 <DisabledReason
                   reason={
                     activeServer?.isRemote
                       ? 'Not available for remote (RCON-only) servers'
-                      : !canControlServer
-                        ? "Your role doesn't have permission to control the server."
-                        : null
+                      : null
                   }
                 >
                   <Button
@@ -1757,10 +1741,7 @@ export default function Dashboard() {
                       })
                     }
                     disabled={
-                      loading !== null ||
-                      !online ||
-                      activeServer?.isRemote ||
-                      !canControlServer
+                      loading !== null || !online || activeServer?.isRemote
                     }
                     variant="ghost"
                     size="sm"
@@ -1783,9 +1764,7 @@ export default function Dashboard() {
                   reason={
                     activeServer?.isRemote
                       ? 'Not available for remote (RCON-only) servers'
-                      : !canControlServer
-                        ? "Your role doesn't have permission to control the server."
-                        : null
+                      : null
                   }
                 >
                   <Button
@@ -1800,10 +1779,7 @@ export default function Dashboard() {
                       })
                     }
                     disabled={
-                      loading !== null ||
-                      !online ||
-                      activeServer?.isRemote ||
-                      !canControlServer
+                      loading !== null || !online || activeServer?.isRemote
                     }
                     variant="ghost"
                     size="sm"
@@ -1812,25 +1788,16 @@ export default function Dashboard() {
                     <RotateCcw className="h-3.5 w-3.5" /> {'Restart'}
                   </Button>
                 </DisabledReason>
-                <DisabledReason
-                  reason={
-                    !canControlServer
-                      ? "Your role doesn't have permission to control the server."
-                      : null
-                  }
+
+                <Button
+                  onClick={saveWorld}
+                  disabled={loading !== null || !rconConnected}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1.5 rounded-md border border-sky-500/30 px-2.5 text-xs text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 disabled:border-border/50 disabled:text-muted-foreground"
                 >
-                  <Button
-                    onClick={saveWorld}
-                    disabled={
-                      loading !== null || !rconConnected || !canControlServer
-                    }
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-1.5 rounded-md border border-sky-500/30 px-2.5 text-xs text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 disabled:border-border/50 disabled:text-muted-foreground"
-                  >
-                    <Save className="h-3.5 w-3.5" /> {'Save'}
-                  </Button>
-                </DisabledReason>
+                  <Save className="h-3.5 w-3.5" /> {'Save'}
+                </Button>
               </>
             )}
             <DropdownMenu>
@@ -1896,14 +1863,11 @@ export default function Dashboard() {
                   reason={
                     activeServer?.isRemote
                       ? 'Not available for remote (RCON-only) servers'
-                      : !canControlServer
-                        ? "Your role doesn't have permission to control the server."
-                        : null
+                      : null
                   }
                 >
                   <DropdownMenuItem
                     onClick={() => {
-                      if (!canControlServer) return
                       setConfirmAction({
                         actionId: 'Restart server now',
                         title: 'Restart server now',
@@ -1922,8 +1886,7 @@ export default function Dashboard() {
                       !hasServer ||
                       !online ||
                       loading !== null ||
-                      activeServer?.isRemote ||
-                      !canControlServer
+                      activeServer?.isRemote
                     }
                     className="text-destructive focus:text-destructive"
                   >
@@ -1937,16 +1900,13 @@ export default function Dashboard() {
                       ? 'Add or select a server first'
                       : activeServer?.isRemote
                         ? 'Not available for remote (RCON-only) servers'
-                        : !canWipeServer
-                          ? "Your role doesn't have permission to wipe the world."
-                          : online
-                            ? 'Stop the server before wiping.'
-                            : null
+                        : online
+                          ? 'Stop the server before wiping.'
+                          : null
                   }
                 >
                   <DropdownMenuItem
                     onClick={() => {
-                      if (!canWipeServer) return
                       setWipePreview(null)
                       setWipeDialog(true)
                     }}
@@ -1954,8 +1914,7 @@ export default function Dashboard() {
                       !hasServer ||
                       online ||
                       loading !== null ||
-                      activeServer?.isRemote ||
-                      !canWipeServer
+                      activeServer?.isRemote
                     }
                     className="text-destructive focus:text-destructive"
                   >
@@ -2472,13 +2431,7 @@ export default function Dashboard() {
                 </Button>
                 <DisabledReason
                   className="w-full"
-                  reason={
-                    !canWipeServer
-                      ? "Your role doesn't have permission to wipe the world."
-                      : online
-                        ? 'Stop the server before wiping'
-                        : null
-                  }
+                  reason={online ? 'Stop the server before wiping' : null}
                 >
                   <Button
                     size="sm"
@@ -2488,11 +2441,9 @@ export default function Dashboard() {
                       !hasServer ||
                       online ||
                       loading !== null ||
-                      activeServer?.isRemote ||
-                      !canWipeServer
+                      activeServer?.isRemote
                     }
                     onClick={() => {
-                      if (!canWipeServer) return
                       setWipePreview(null)
                       setWipeDialog(true)
                     }}
@@ -2576,10 +2527,7 @@ export default function Dashboard() {
               onClick={async (e) => {
                 e.preventDefault()
                 if (!confirmAction) return
-                if (!canControlServer) {
-                  setConfirmAction(null)
-                  return
-                }
+
                 await handleAction(confirmAction.actionId, confirmAction.action)
                 setConfirmAction(null)
               }}
@@ -2802,12 +2750,10 @@ export default function Dashboard() {
               <Button
                 variant="warning"
                 disabled={
-                  !Object.values(wipeTargets).some(Boolean) ||
-                  wipeLoading ||
-                  !canWipeServer
+                  !Object.values(wipeTargets).some(Boolean) || wipeLoading
                 }
                 onClick={async () => {
-                  if (wipeLoading || !canWipeServer) return
+                  if (wipeLoading) return
                   setWipeLoading(true)
                   try {
                     const targets = Object.entries(wipeTargets)
@@ -2837,11 +2783,9 @@ export default function Dashboard() {
             ) : (
               <Button
                 variant="destructive"
-                disabled={
-                  wipeLoading || wipePreview.totalFiles === 0 || !canWipeServer
-                }
+                disabled={wipeLoading || wipePreview.totalFiles === 0}
                 onClick={async () => {
-                  if (wipeLoading || !canWipeServer) return
+                  if (wipeLoading) return
                   setWipeLoading(true)
                   setWipeBackupProgress(
                     wipeCreateBackup

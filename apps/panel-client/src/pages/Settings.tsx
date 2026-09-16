@@ -1234,9 +1234,7 @@ export default function Settings() {
     }
   }
 
-  const canViewBridgeStatus = true
   const fetchBridgeStatus = useCallback(async () => {
-    if (!canViewBridgeStatus) return
     try {
       const status = await panelBridgeApi.getStatus()
       setBridgeStatus(status)
@@ -1250,7 +1248,7 @@ export default function Settings() {
         ),
       )
     }
-  }, [canViewBridgeStatus])
+  }, [])
 
   const fetchServers = useCallback(async () => {
     try {
@@ -7127,7 +7125,7 @@ function WorkshopCollectionSyncCard({
                 size="sm"
                 onClick={handleTest}
                 disabled={!collectionIdValid || !credsConfigured || testing}
-                // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27: the disabled-reason branch (needs cookies) now lives in the DisabledReason wrapper above; this title carries only the enabled-state hint.
+                // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
                 title={
                   !credsConfigured
                     ? undefined
@@ -7434,7 +7432,7 @@ function WorkshopCollectionSyncCard({
                                         !credsConfigured ||
                                         tokenExpired
                                       }
-                                      // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27 (real bug: this ternary correctly selected "Steam session expired"/"Need Steam cookies" but a native title is never shown on a disabled element -- Chromium confirmed empirically). The disabled-reason now lives in the DisabledReason wrapper above; this title carries only the enabled-state hint.
+                                      // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
                                       title={
                                         tokenExpired || !credsConfigured
                                           ? undefined

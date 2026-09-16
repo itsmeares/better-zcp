@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useSocket } from '@/contexts/SocketContext'
-import { DisabledReason } from '@/components/DisabledReason'
 import { HelpTip } from '@/components/HelpTip'
 import {
   Map as MapIcon,
@@ -533,9 +532,6 @@ const PZ_LANDMARKS = [
 export default function WorldMap() {
   const { theme } = useTheme()
   const socket = useSocket()
-  const canRunBridgeCommand = true
-  const canWorldEvents = true
-  const canGmTools = true
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const mapWrapperRef = useRef<HTMLDivElement>(null)
@@ -2448,7 +2444,6 @@ export default function WorldMap() {
 
   const triggerLightningAt = useCallback(
     async (x: number, y: number) => {
-      if (!canWorldEvents) return
       setActionLoading('lightning')
       try {
         const res = await panelBridgeApi.triggerLightning(
@@ -2475,12 +2470,11 @@ export default function WorldMap() {
         setContextMenu(null)
       }
     },
-    [toast, canWorldEvents],
+    [toast],
   )
 
   const createNoiseAt = useCallback(
     async (x: number, y: number) => {
-      if (!canWorldEvents) return
       setActionLoading('noise')
       try {
         const res = await panelBridgeApi.playWorldSound(x, y, 0, 200, 100)
@@ -2506,7 +2500,7 @@ export default function WorldMap() {
         setContextMenu(null)
       }
     },
-    [toast, canWorldEvents],
+    [toast],
   )
 
   const callAirdrop = useCallback(
@@ -2516,7 +2510,7 @@ export default function WorldMap() {
       preset: (typeof AIRDROP_PRESETS)[number]['id'],
     ) => {
       if (actionLoadingRef.current) return
-      if (!canRunBridgeCommand) return
+
       actionLoadingRef.current = 'airdrop'
       setActionLoading('airdrop')
       try {
@@ -2565,7 +2559,7 @@ export default function WorldMap() {
         }
       }
     },
-    [toast, presetLabel, canRunBridgeCommand],
+    [toast, presetLabel],
   )
 
   useEffect(() => {
@@ -2591,7 +2585,7 @@ export default function WorldMap() {
       label?: string
     }) => {
       if (actionLoadingRef.current) return
-      if (!canRunBridgeCommand) return
+
       const cleaned = opts.items
         .map((it) => ({
           itemType: (it.itemType || '').trim(),
@@ -2694,12 +2688,11 @@ export default function WorldMap() {
         }
       }
     },
-    [toast, canRunBridgeCommand],
+    [toast],
   )
 
   const teleportPlayerTo = useCallback(
     async (username: string, x: number, y: number, z: number) => {
-      if (!canRunBridgeCommand) return
       setActionLoading('teleport')
       try {
         const response = await panelBridgeApi.sendCommand('teleportPlayer', {
@@ -2753,7 +2746,7 @@ export default function WorldMap() {
         if (mountedRef.current) setActionLoading(null)
       }
     },
-    [toast, fetchPlayerPositions, canRunBridgeCommand],
+    [toast, fetchPlayerPositions],
   )
 
   const copyCoords = useCallback(
@@ -3378,32 +3371,71 @@ export default function WorldMap() {
               </div>
               <div className="space-y-1 border-t border-border/40 bg-muted/20 px-2 py-1.5">
                 <div className="grid grid-cols-2 gap-1">
-                  <DisabledReason
-                    reason={
-                      !canGmTools
-                        ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                        : null
-                    }
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 min-w-0 w-full px-1.5 text-xs gap-1"
+                    disabled={actionLoading !== null}
+                    onClick={() => {
+                      setActionLoading('heal-card')
+                      panelBridgeApi
+                        .sendCommand('healPlayer', {
+                          username: selectedPlayer.username,
+                        })
+                        .then(() => {
+                          toast({
+                            title: 'Healed',
+                            description:
+                              String(selectedPlayer.username) + ' healed',
+                          })
+                          fetchPlayerPositions()
+                        })
+                        .catch(() =>
+                          toast({ title: 'Error', variant: 'destructive' }),
+                        )
+                        .finally(() => setActionLoading(null))
+                    }}
                   >
+                    <Heart className="w-3 h-3" /> {'Heal'}
+                  </Button>
+
+                  <div className="flex min-w-0 items-center gap-1">
                     <Button
                       size="sm"
                       variant="ghost"
                       className="h-7 min-w-0 w-full px-1.5 text-xs gap-1"
-                      disabled={actionLoading !== null || !canGmTools}
+                      disabled={actionLoading !== null}
                       onClick={() => {
-                        if (!canGmTools) return
-                        setActionLoading('heal-card')
+                        setActionLoading('god-card')
                         panelBridgeApi
-                          .sendCommand('healPlayer', {
+                          .sendCommand('setGodMode', {
                             username: selectedPlayer.username,
+                            enabled: true,
                           })
-                          .then(() => {
-                            toast({
-                              title: 'Healed',
-                              description:
-                                String(selectedPlayer.username) + ' healed',
-                            })
-                            fetchPlayerPositions()
+                          .then((response) => {
+                            const state = getBridgeVerifiedState(
+                              'setGodMode',
+                              response?.data,
+                            )
+                            if (state === 'unverifiable') {
+                              toast({
+                                title: 'God mode enabled',
+                                description:
+                                  String('God') +
+                                  ' was sent, but the mod could not confirm it took effect.',
+                                variant: 'default',
+                              })
+                            } else if (state === 'old-bridge') {
+                              toast({
+                                title: 'God mode enabled',
+                                description:
+                                  String('God') +
+                                  " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
+                                variant: 'default',
+                              })
+                            } else {
+                              toast({ title: 'God mode enabled' })
+                            }
                           })
                           .catch(() =>
                             toast({ title: 'Error', variant: 'destructive' }),
@@ -3411,65 +3443,9 @@ export default function WorldMap() {
                           .finally(() => setActionLoading(null))
                       }}
                     >
-                      <Heart className="w-3 h-3" /> {'Heal'}
+                      <Shield className="w-3 h-3" /> {'God'}
                     </Button>
-                  </DisabledReason>
-                  <div className="flex min-w-0 items-center gap-1">
-                    <DisabledReason
-                      reason={
-                        !canGmTools
-                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                          : null
-                      }
-                      className="min-w-0 flex-1"
-                    >
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 min-w-0 w-full px-1.5 text-xs gap-1"
-                        disabled={actionLoading !== null || !canGmTools}
-                        onClick={() => {
-                          if (!canGmTools) return
-                          setActionLoading('god-card')
-                          panelBridgeApi
-                            .sendCommand('setGodMode', {
-                              username: selectedPlayer.username,
-                              enabled: true,
-                            })
-                            .then((response) => {
-                              const state = getBridgeVerifiedState(
-                                'setGodMode',
-                                response?.data,
-                              )
-                              if (state === 'unverifiable') {
-                                toast({
-                                  title: 'God mode enabled',
-                                  description:
-                                    String('God') +
-                                    ' was sent, but the mod could not confirm it took effect.',
-                                  variant: 'default',
-                                })
-                              } else if (state === 'old-bridge') {
-                                toast({
-                                  title: 'God mode enabled',
-                                  description:
-                                    String('God') +
-                                    " may have worked, but this PanelBridge mod version doesn't report back whether it did. Update the mod to confirm results.",
-                                  variant: 'default',
-                                })
-                              } else {
-                                toast({ title: 'God mode enabled' })
-                              }
-                            })
-                            .catch(() =>
-                              toast({ title: 'Error', variant: 'destructive' }),
-                            )
-                            .finally(() => setActionLoading(null))
-                        }}
-                      >
-                        <Shield className="w-3 h-3" /> {'God'}
-                      </Button>
-                    </DisabledReason>
+
                     <HelpTip label={'God'} className="shrink-0">
                       {
                         "Always turns God Mode on for this player — it doesn't toggle. Turn it back off from Players instead."
@@ -3604,15 +3580,10 @@ export default function WorldMap() {
                 <ContextMenuItem
                   icon={<Heart className="w-3.5 h-3.5 text-emerald-400" />}
                   label={'Heal player'}
-                  description={
-                    !canGmTools
-                      ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                      : undefined
-                  }
+                  description={undefined}
                   tone="success"
-                  disabled={!canGmTools}
+
                   onClick={() => {
-                    if (!canGmTools) return
                     panelBridgeApi
                       .sendCommand('healPlayer', {
                         username: contextMenu.player!.username,
@@ -3719,16 +3690,11 @@ export default function WorldMap() {
                     <ContextMenuItem
                       icon={<Wrench className="w-3.5 h-3.5 text-info" />}
                       label={'Repair vehicle'}
-                      description={
-                        !canRunBridgeCommand
-                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                          : undefined
-                      }
+                      description={undefined}
                       tone="info"
                       loading={actionLoading === 'vehicle-repair'}
-                      disabled={!canRunBridgeCommand}
+
                       onClick={() => {
-                        if (!canRunBridgeCommand) return
                         setActionLoading('vehicle-repair')
                         panelBridgeApi
                           .sendCommand('vehicleRepair', {
@@ -3757,16 +3723,11 @@ export default function WorldMap() {
                     <ContextMenuItem
                       icon={<Fuel className="w-3.5 h-3.5 text-info" />}
                       label={'Fill fuel'}
-                      description={
-                        !canRunBridgeCommand
-                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                          : undefined
-                      }
+                      description={undefined}
                       tone="info"
                       loading={actionLoading === 'vehicle-fuel'}
-                      disabled={!canRunBridgeCommand}
+
                       onClick={() => {
-                        if (!canRunBridgeCommand) return
                         setActionLoading('vehicle-fuel')
                         panelBridgeApi
                           .sendCommand('vehicleSetFuel', {
@@ -3818,16 +3779,11 @@ export default function WorldMap() {
                     <ContextMenuItem
                       icon={<Battery className="w-3.5 h-3.5 text-info" />}
                       label={'Charge battery'}
-                      description={
-                        !canRunBridgeCommand
-                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                          : undefined
-                      }
+                      description={undefined}
                       tone="info"
                       loading={actionLoading === 'vehicle-battery'}
-                      disabled={!canRunBridgeCommand}
+
                       onClick={() => {
-                        if (!canRunBridgeCommand) return
                         setActionLoading('vehicle-battery')
                         panelBridgeApi
                           .sendCommand('vehicleSetBattery', {
@@ -3879,13 +3835,9 @@ export default function WorldMap() {
                     <ContextMenuItem
                       icon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
                       label={'Remove vehicle'}
-                      description={
-                        !canRunBridgeCommand
-                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                          : undefined
-                      }
+                      description={undefined}
                       tone="danger"
-                      disabled={!canRunBridgeCommand}
+
                       onClick={() => {
                         const v = contextMenu.vehicle!
                         setRemoveVehicleTarget({
@@ -3903,16 +3855,11 @@ export default function WorldMap() {
                     <ContextMenuItem
                       icon={<Zap className="w-3.5 h-3.5 text-amber-400" />}
                       label={'Hotwire & start engine'}
-                      description={
-                        !canRunBridgeCommand
-                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                          : undefined
-                      }
+                      description={undefined}
                       tone="warning"
                       loading={actionLoading === 'vehicle-hotwire'}
-                      disabled={!canRunBridgeCommand}
+
                       onClick={() => {
-                        if (!canRunBridgeCommand) return
                         setActionLoading('vehicle-hotwire')
                         panelBridgeApi
                           .sendCommand('vehicleHotwire', {
@@ -3967,19 +3914,17 @@ export default function WorldMap() {
                       icon={<Users className={cn('w-3.5 h-3.5', pColor)} />}
                       label={pl.displayName || pl.username}
                       description={
-                        !canRunBridgeCommand
-                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                          : String(Math.round(pl.x)) +
-                            ', ' +
-                            String(Math.round(pl.y)) +
-                            ' → ' +
-                            String(Math.round(contextMenu.worldX)) +
-                            ', ' +
-                            String(Math.round(contextMenu.worldY))
+                        String(Math.round(pl.x)) +
+                        ', ' +
+                        String(Math.round(pl.y)) +
+                        ' → ' +
+                        String(Math.round(contextMenu.worldX)) +
+                        ', ' +
+                        String(Math.round(contextMenu.worldY))
                       }
                       tone="primary"
                       loading={actionLoading === 'teleport'}
-                      disabled={!bridgeConnected || !canRunBridgeCommand}
+                      disabled={!bridgeConnected}
                       onClick={() => {
                         teleportPlayerTo(
                           pl.username,
@@ -4011,14 +3956,10 @@ export default function WorldMap() {
               <ContextMenuItem
                 icon={<CloudLightning className="w-3.5 h-3.5 text-info" />}
                 label={'Lightning strike'}
-                description={
-                  !canWorldEvents
-                    ? "Triggering world events requires the server.world_events permission, which this role doesn't have."
-                    : 'Single bolt + thunder'
-                }
+                description={'Single bolt + thunder'}
                 tone="info"
                 loading={actionLoading === 'lightning'}
-                disabled={!canWorldEvents}
+
                 onClick={() =>
                   triggerLightningAt(contextMenu.worldX, contextMenu.worldY)
                 }
@@ -4026,14 +3967,10 @@ export default function WorldMap() {
               <ContextMenuItem
                 icon={<Volume2 className="w-3.5 h-3.5 text-amber-400" />}
                 label={'Create noise'}
-                description={
-                  !canWorldEvents
-                    ? "Triggering world events requires the server.world_events permission, which this role doesn't have."
-                    : 'Pull zombies this way'
-                }
+                description={'Pull zombies this way'}
                 tone="warning"
                 loading={actionLoading === 'noise'}
-                disabled={!canWorldEvents}
+
                 onClick={() =>
                   createNoiseAt(contextMenu.worldX, contextMenu.worldY)
                 }
@@ -4041,12 +3978,8 @@ export default function WorldMap() {
               <ContextMenuItem
                 icon={<Car className="w-3.5 h-3.5 text-muted-foreground" />}
                 label={'Spawn vehicle here'}
-                description={
-                  !canGmTools
-                    ? "Spawning a vehicle requires the players.gm_tools permission, which this role doesn't have."
-                    : 'Pick a vehicle to spawn'
-                }
-                disabled={!bridgeConnected || !canGmTools}
+                description={'Pick a vehicle to spawn'}
+                disabled={!bridgeConnected}
                 onClick={() => {
                   setSpawnDialog({
                     x: Math.round(contextMenu.worldX),
@@ -4068,13 +4001,9 @@ export default function WorldMap() {
               <ContextMenuItem
                 icon={<Package className="w-3.5 h-3.5 text-amber-400" />}
                 label={'Custom drop…'}
-                description={
-                  !canRunBridgeCommand
-                    ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                    : 'Build a package — items, quantities, templates'
-                }
+                description={'Build a package — items, quantities, templates'}
                 tone="warning"
-                disabled={!bridgeConnected || !canRunBridgeCommand}
+                disabled={!bridgeConnected}
                 onClick={() => {
                   setDropDialog({
                     x: Math.round(contextMenu.worldX),
@@ -4099,14 +4028,10 @@ export default function WorldMap() {
                 <ContextMenuItem
                   icon={<RefreshCw className="w-3.5 h-3.5 text-amber-400/80" />}
                   label={'Repeat last drop'}
-                  description={
-                    !canRunBridgeCommand
-                      ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                      : lastDrop.label
-                  }
+                  description={lastDrop.label}
                   tone="warning"
                   loading={actionLoading === 'drop'}
-                  disabled={!bridgeConnected || !canRunBridgeCommand}
+                  disabled={!bridgeConnected}
                   onClick={() => {
                     callCustomDrop({
                       x: contextMenu.worldX,
@@ -4136,15 +4061,13 @@ export default function WorldMap() {
                       }
                       label={tpl.name}
                       description={
-                        !canRunBridgeCommand
-                          ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                          : Number(tpl.items.length) === 1
-                            ? String(tpl.items.length) + ' item'
-                            : String(tpl.items.length) + ' items'
+                        Number(tpl.items.length) === 1
+                          ? String(tpl.items.length) + ' item'
+                          : String(tpl.items.length) + ' items'
                       }
                       tone="warning"
                       loading={actionLoading === 'drop'}
-                      disabled={!bridgeConnected || !canRunBridgeCommand}
+                      disabled={!bridgeConnected}
                       onClick={() => {
                         callCustomDrop({
                           x: contextMenu.worldX,
@@ -4173,14 +4096,10 @@ export default function WorldMap() {
                     <preset.icon className="w-3.5 h-3.5 text-amber-400/80" />
                   }
                   label={presetLabel(preset.id)}
-                  description={
-                    !canRunBridgeCommand
-                      ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                      : presetDesc(preset.id)
-                  }
+                  description={presetDesc(preset.id)}
                   tone="warning"
                   loading={actionLoading === 'airdrop'}
-                  disabled={!bridgeConnected || !canRunBridgeCommand}
+                  disabled={!bridgeConnected}
                   onClick={() =>
                     callAirdrop(
                       contextMenu.worldX,
@@ -4271,61 +4190,50 @@ export default function WorldMap() {
             <Button variant="outline" onClick={() => setSpawnDialog(null)}>
               {'Cancel'}
             </Button>
-            <DisabledReason
-              reason={
-                !canGmTools
-                  ? "Spawning a vehicle requires the players.gm_tools permission, which this role doesn't have."
-                  : null
-              }
-            >
-              <Button
-                disabled={
-                  !spawnVehicleId ||
-                  actionLoading === 'spawn-vehicle' ||
-                  !canGmTools
-                }
-                onClick={() => {
-                  if (!spawnDialog || !spawnVehicleId) return
-                  if (!canGmTools) return
-                  setActionLoading('spawn-vehicle')
-                  playersApi
-                    .addVehicleAt(
-                      spawnVehicleId,
-                      spawnDialog.x,
-                      spawnDialog.y,
-                      spawnDialog.z,
-                    )
-                    .then(() => {
-                      toast({
-                        title: 'Vehicle spawned',
-                        description:
-                          String(spawnVehicleId.split('.').pop()) +
-                          ' at ' +
-                          String(spawnDialog.x) +
-                          ', ' +
-                          String(spawnDialog.y),
-                      })
-                      fetchOverlays()
-                      setSpawnDialog(null)
+
+            <Button
+              disabled={!spawnVehicleId || actionLoading === 'spawn-vehicle'}
+              onClick={() => {
+                if (!spawnDialog || !spawnVehicleId) return
+
+                setActionLoading('spawn-vehicle')
+                playersApi
+                  .addVehicleAt(
+                    spawnVehicleId,
+                    spawnDialog.x,
+                    spawnDialog.y,
+                    spawnDialog.z,
+                  )
+                  .then(() => {
+                    toast({
+                      title: 'Vehicle spawned',
+                      description:
+                        String(spawnVehicleId.split('.').pop()) +
+                        ' at ' +
+                        String(spawnDialog.x) +
+                        ', ' +
+                        String(spawnDialog.y),
                     })
-                    .catch((err) =>
-                      toast({
-                        title: 'Spawn failed',
-                        description: getUserErrorMessage(err, 'Unknown error'),
-                        variant: 'destructive',
-                      }),
-                    )
-                    .finally(() => setActionLoading(null))
-                }}
-              >
-                {actionLoading === 'spawn-vehicle' ? (
-                  <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4 me-2" />
-                )}
-                {'Spawn'}
-              </Button>
-            </DisabledReason>
+                    fetchOverlays()
+                    setSpawnDialog(null)
+                  })
+                  .catch((err) =>
+                    toast({
+                      title: 'Spawn failed',
+                      description: getUserErrorMessage(err, 'Unknown error'),
+                      variant: 'destructive',
+                    }),
+                  )
+                  .finally(() => setActionLoading(null))
+              }}
+            >
+              {actionLoading === 'spawn-vehicle' ? (
+                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4 me-2" />
+              )}
+              {'Spawn'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -4689,60 +4597,52 @@ export default function WorldMap() {
             <Button variant="outline" onClick={() => setDropDialog(null)}>
               {'Cancel'}
             </Button>
-            <DisabledReason
-              reason={
-                !canRunBridgeCommand
-                  ? "This in-game action requires the bridge.command permission, which this role doesn't have."
-                  : null
+
+            <Button
+              disabled={
+                dropItems.filter((it) => it.itemType.trim()).length === 0 ||
+                actionLoading === 'drop'
               }
+              onClick={async () => {
+                if (!dropDialog) return
+                const valid = dropItems.filter((it) => it.itemType.trim())
+                if (valid.length === 0) return
+                const label = activeTemplateId
+                  ? dropTemplates.find((tpl) => tpl.id === activeTemplateId)
+                      ?.name
+                  : valid.length === 1
+                    ? valid[0].itemType.replace(/^[^.]+\./, '')
+                    : String(valid.length) + '-item package'
+                await callCustomDrop({
+                  x: dropDialog.x,
+                  y: dropDialog.y,
+                  items: valid,
+                  announce: dropAnnounce,
+                  attractZombies: dropAttractZombies,
+                  soundRadius: dropSoundRadius,
+                  label,
+                })
+                if (mountedRef.current) setDropDialog(null)
+              }}
             >
-              <Button
-                disabled={
-                  dropItems.filter((it) => it.itemType.trim()).length === 0 ||
-                  actionLoading === 'drop' ||
-                  !canRunBridgeCommand
-                }
-                onClick={async () => {
-                  if (!dropDialog) return
-                  const valid = dropItems.filter((it) => it.itemType.trim())
-                  if (valid.length === 0) return
-                  const label = activeTemplateId
-                    ? dropTemplates.find((tpl) => tpl.id === activeTemplateId)
-                        ?.name
-                    : valid.length === 1
-                      ? valid[0].itemType.replace(/^[^.]+\./, '')
-                      : String(valid.length) + '-item package'
-                  await callCustomDrop({
-                    x: dropDialog.x,
-                    y: dropDialog.y,
-                    items: valid,
-                    announce: dropAnnounce,
-                    attractZombies: dropAttractZombies,
-                    soundRadius: dropSoundRadius,
-                    label,
-                  })
-                  if (mountedRef.current) setDropDialog(null)
-                }}
-              >
-                {actionLoading === 'drop' ? (
-                  <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                ) : (
-                  <Flame className="w-4 h-4 me-2" />
-                )}
-                {(() => {
-                  const validCount = dropItems.filter((it) =>
-                    it.itemType.trim(),
-                  ).length
-                  const totalQty = dropItems
-                    .filter((it) => it.itemType.trim())
-                    .reduce((s, it) => s + it.count, 0)
-                  if (validCount === 0) return 'Drop'
-                  if (validCount === 1)
-                    return totalQty > 1 ? 'Drop × ' + String(totalQty) : 'Drop'
-                  return 'Drop ' + String(validCount) + ' items'
-                })()}
-              </Button>
-            </DisabledReason>
+              {actionLoading === 'drop' ? (
+                <Loader2 className="w-4 h-4 me-2 animate-spin" />
+              ) : (
+                <Flame className="w-4 h-4 me-2" />
+              )}
+              {(() => {
+                const validCount = dropItems.filter((it) =>
+                  it.itemType.trim(),
+                ).length
+                const totalQty = dropItems
+                  .filter((it) => it.itemType.trim())
+                  .reduce((s, it) => s + it.count, 0)
+                if (validCount === 0) return 'Drop'
+                if (validCount === 1)
+                  return totalQty > 1 ? 'Drop × ' + String(totalQty) : 'Drop'
+                return 'Drop ' + String(validCount) + ' items'
+              })()}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -4820,13 +4720,11 @@ export default function WorldMap() {
               {'Cancel'}
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={
-                actionLoading === 'vehicle-remove' || !canRunBridgeCommand
-              }
+              disabled={actionLoading === 'vehicle-remove'}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={(e) => {
                 e.preventDefault()
-                if (!canRunBridgeCommand) return
+
                 const target = removeVehicleTarget
                 if (!target) return
                 setActionLoading('vehicle-remove')
