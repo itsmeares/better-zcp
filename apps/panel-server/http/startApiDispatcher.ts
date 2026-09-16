@@ -39,7 +39,6 @@ function loadRouteModule(path: string): () => Promise<StartApiRouter> {
 }
 
 const routeModules: RouteModule[] = [
-  { base: "/api/auth/oidc", load: loadRouteModule("../routes/oidc.ts") },
   { base: "/api/auth", load: loadRouteModule("../routes/auth.ts") },
   { base: "/api/rcon", load: loadRouteModule("../routes/rcon.ts") },
   { base: "/api/server", load: loadRouteModule("../routes/server.ts") },
@@ -54,7 +53,6 @@ const routeModules: RouteModule[] = [
   { base: "/api/config", load: loadRouteModule("../routes/config.ts") },
   { base: "/api/docker", load: loadRouteModule("../routes/docker.ts") },
   { base: "/api/discovery", load: loadRouteModule("../routes/discovery.ts") },
-  { base: "/api/permissions", load: loadRouteModule("../routes/permissions.ts") },
   { base: "/api/scheduler", load: loadRouteModule("../routes/scheduler.ts") },
   { base: "/api/system", load: loadRouteModule("../routes/system.ts") },
   { base: "/api/templates", load: loadRouteModule("../routes/templates.ts") },
@@ -79,11 +77,6 @@ const PUBLIC_API_PATHS = new Set([
   "/api/auth/reset-status",
   "/api/auth/reset-token/local",
   "/api/auth/reset-password",
-  "/api/auth/recovery-status",
-  "/api/auth/recover-with-code",
-  "/api/auth/oidc/status",
-  "/api/auth/oidc/login",
-  "/api/auth/oidc/callback",
   "/api/health",
 ]);
 

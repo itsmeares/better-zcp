@@ -41,7 +41,6 @@ import {
 } from '@/lib/api'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
@@ -348,8 +347,6 @@ export default function Console() {
   const { toast } = useToast()
   const socket = useSocket()
   const confirm = useConfirm()
-  const { can } = useAuth()
-  const canExecuteRcon = can('rcon.execute')
 
   const [serverLogLines, setServerLogLines] = useState<string[]>([])
   const [_serverLogSize, setServerLogSize] = useState(0)
@@ -662,7 +659,7 @@ export default function Console() {
       socket.on('rcon:response', handleRconResponse)
 
       const subscribeRcon = () => socket.emit('subscribe:rcon')
-      if (canExecuteRcon) {
+      {
         if (socket.connected) subscribeRcon()
         socket.on('connect', subscribeRcon)
       }
@@ -672,7 +669,7 @@ export default function Console() {
         socket.off('connect', subscribeRcon)
       }
     }
-  }, [socket, canExecuteRcon])
+  }, [socket])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -685,7 +682,6 @@ export default function Console() {
 
   const executeCommand = async () => {
     if (!command.trim()) return
-    if (!canExecuteRcon) return
 
     setLoading(true)
     try {
@@ -775,7 +771,6 @@ export default function Console() {
 
   const sendAnnouncement = async () => {
     if (!announcement.trim()) return
-    if (!canExecuteRcon) return
 
     setSendingAnnouncement(true)
     try {
@@ -1459,23 +1454,16 @@ export default function Console() {
                 onKeyDown={handleKeyDown}
                 placeholder={'type a command…'}
                 className="ps-[5.5rem] font-mono bg-card/70 border-border/55 focus-visible:border-primary/60"
-                disabled={
-                  loading ||
-                  !hasRconConfig ||
-                  rconConnected === false ||
-                  !canExecuteRcon
-                }
+                disabled={loading || !hasRconConfig || rconConnected === false}
                 maxLength={2000}
                 aria-label={'RCON command input'}
               />
             </div>
             <DisabledReason
               reason={
-                !canExecuteRcon
-                  ? "Your role doesn't have permission to run RCON commands."
-                  : rconConnected === false
-                    ? 'RCON is currently unreachable -- select Recheck above before trying again.'
-                    : null
+                rconConnected === false
+                  ? 'RCON is currently unreachable -- select Recheck above before trying again.'
+                  : null
               }
             >
               <Button
@@ -1484,8 +1472,7 @@ export default function Console() {
                   loading ||
                   !command.trim() ||
                   !hasRconConfig ||
-                  rconConnected === false ||
-                  !canExecuteRcon
+                  rconConnected === false
                 }
                 aria-label={'Execute command'}
                 className="font-mono text-[11px] uppercase tracking-[0.18em]"
@@ -1598,31 +1585,23 @@ export default function Console() {
                       }
                     </>
                   </p>
-                  <DisabledReason
-                    reason={
-                      !canExecuteRcon
-                        ? "Your role doesn't have permission to run RCON commands."
-                        : null
+
+                  <Button
+                    onClick={sendAnnouncement}
+                    disabled={
+                      sendingAnnouncement ||
+                      !announcement.trim() ||
+                      !hasRconConfig ||
+                      rconConnected === false
                     }
                   >
-                    <Button
-                      onClick={sendAnnouncement}
-                      disabled={
-                        sendingAnnouncement ||
-                        !announcement.trim() ||
-                        !hasRconConfig ||
-                        rconConnected === false ||
-                        !canExecuteRcon
-                      }
-                    >
-                      {sendingAnnouncement ? (
-                        <Loader2 className="w-4 h-4 animate-spin me-2" />
-                      ) : (
-                        <Send className="w-4 h-4 me-2" />
-                      )}
-                      {'Send'}
-                    </Button>
-                  </DisabledReason>
+                    {sendingAnnouncement ? (
+                      <Loader2 className="w-4 h-4 animate-spin me-2" />
+                    ) : (
+                      <Send className="w-4 h-4 me-2" />
+                    )}
+                    {'Send'}
+                  </Button>
                 </div>
               </div>
             )}

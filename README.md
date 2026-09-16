@@ -159,7 +159,7 @@ Visual map selector for reclaiming disk space from an aging save. Delete individ
 - **Scheduling** — Recurring restarts, saves, broadcasts with countdown warnings.
 - **Backups** — Manual or scheduled world backups with configurable retention, snapshot preview, and download/upload of the raw archive. Restore takes an automatic safety backup first and warns it can't be undone.
 - **Roles & permissions** — Capability-based access control: three built-in roles (admin, technician, moderator) plus fully custom ones, each granting an explicit subset of the panel's 28 individual capabilities across 12 areas (server lifecycle, RCON, backups, mods, and more).
-- **Account recovery** — Single-use recovery codes, generated in advance from an authenticated admin session, let the admin reset their own password later if they get locked out. Two more paths cover losing access to the panel entirely: a local-only token file, or the `--reset-password` CLI flag run directly on the server.
+- **Account recovery** — Reset the admin password with a local-only token file or the `--reset-password` CLI flag run directly on the server.
 
 ### Observe
 - **Players** — Online list, activity history, kick/ban/unban, access levels, notes and tags.

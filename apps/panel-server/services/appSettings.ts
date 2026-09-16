@@ -1,11 +1,6 @@
 import fs from "fs";
 import net from "net";
-import {
-  getAllSettings,
-  getRoleByName,
-  getSetting,
-  setSetting,
-} from "../database/init.ts";
+import { getSetting, setSetting } from "../database/init.ts";
 import {
   sanitizeErrorParams,
   SENSITIVE_FIELD_RE,
@@ -91,32 +86,6 @@ const VALID_SETTINGS_KEYS = [
   "panelBridgeSftpLogPath",
   "panelBridgeSftpConfigPath",
 ] as const;
-
-const SETTINGS_KEY_CAPABILITY: Record<string, string> = {
-  rconHost: "server.configure",
-  rconPort: "server.configure",
-  rconPassword: "server.configure",
-  serverPath: "servers.manage",
-  serverConfigPath: "servers.manage",
-  zomboidDataPath: "servers.manage",
-  steamApiKey: "server.install",
-  steamUpdateAccount: "server.install",
-  steamcmdPath: "server.install",
-  panelBridgeSftpEnabled: "bridge.setup",
-  panelBridgeSftpHost: "bridge.setup",
-  panelBridgeSftpPort: "bridge.setup",
-  panelBridgeSftpUsername: "bridge.setup",
-  panelBridgeSftpPassword: "bridge.setup",
-  panelBridgeSftpBridgePath: "bridge.setup",
-  panelBridgeSftpPollIntervalSeconds: "bridge.setup",
-  panelBridgeSftpLogPath: "bridge.setup",
-  panelBridgeSftpConfigPath: "bridge.setup",
-  discordGuildId: "integrations.manage",
-  workshopCollectionId: "mods.manage",
-  workshopCollectionAutoSync: "mods.manage",
-  steamSessionId: "mods.manage",
-  steamLoginSecure: "mods.manage",
-};
 
 const FEATURE_GATED_FIELDS: Record<string, string> = {
   panelBridgeSftpPort: "panelBridgeSftpEnabled",
@@ -265,7 +234,7 @@ function validateCorsAllowedOrigins(value: unknown): string | null {
 
 export async function saveAppSettings(
   input: unknown,
-  options: { userRole?: string; runtime?: AppSettingsRuntime } = {},
+  options: { runtime?: AppSettingsRuntime } = {},
 ): Promise<{ success: true; message: string; warnings?: string[] }> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new AppSettingsError(
@@ -555,45 +524,6 @@ export async function saveAppSettings(
     }
     return true;
   });
-
-  const touchesGovernedKey = filtered.some(
-    ([key]) => key in SETTINGS_KEY_CAPABILITY,
-  );
-  const currentSettings = touchesGovernedKey ? await getAllSettings() : null;
-  const missingCapabilities: Array<{
-    key: string;
-    requiredCapability: string;
-  }> = [];
-  let callerCapabilities: string[] | null = null;
-  for (const [key, value] of filtered) {
-    const requiredCapability = SETTINGS_KEY_CAPABILITY[key];
-    if (!requiredCapability) continue;
-    if (JSON.stringify(currentSettings?.[key]) === JSON.stringify(value))
-      continue;
-    if (callerCapabilities === null) {
-      const role = await getRoleByName(options.userRole ?? "");
-      callerCapabilities = Array.isArray(role?.capabilities)
-        ? role.capabilities
-        : [];
-    }
-    if (!callerCapabilities.includes(requiredCapability)) {
-      missingCapabilities.push({ key, requiredCapability });
-    }
-  }
-  if (missingCapabilities.length > 0) {
-    const detail = missingCapabilities
-      .map((item) => `"${item.key}" needs ${item.requiredCapability}`)
-      .join(", ");
-    throw new AppSettingsError(
-      `Cannot change ${detail} without holding that capability yourself.`,
-      ErrorCode.CONFIG_APP_SETTINGS_CAPABILITY_REQUIRED,
-      {
-        status: 403,
-        params: sanitizeErrorParams({ detail }),
-        missing: missingCapabilities,
-      },
-    );
-  }
 
   const steamSessionIdEntry = filtered.find(
     ([key]) => key === "steamSessionId",

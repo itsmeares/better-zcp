@@ -1,12 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 import {
-  type AuthContextUser,
-  protectedServerFunctionMiddleware,
-} from './serverAuth.server'
-import {
-  BRIDGE_ACTION_CAPABILITY,
-  ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS,
-  GM_TOOLS_ONLY_ACTIONS,
   ITEM_TYPE_REGEX,
   VALID_ACTIONS,
   VEHICLE_SCRIPT_REGEX,
@@ -66,57 +60,10 @@ function invalid(message: string, code?: string, params?: unknown): never {
   )
 }
 
-function getUser(context: unknown): AuthContextUser {
-  const user = (context as { authenticatedUser?: AuthContextUser } | undefined)
-    ?.authenticatedUser
-  if (!user) invalid('Authentication required', 'AUTH_REQUIRED')
-  return user
-}
-
 async function panelRuntime(): Promise<AnyRecord> {
   const { getPanelRuntime } =
     await import('../../../panel-server/utils/panelRuntime.ts')
   return getPanelRuntime()
-}
-
-async function assertCommandPermissions(
-  action: string,
-  context: unknown,
-  getRoleByName: (name: unknown) => Promise<AnyRecord | null>,
-): Promise<void> {
-  const user = getUser(context)
-  const role = await getRoleByName(user.role)
-  const capabilities = Array.isArray(role?.capabilities)
-    ? role.capabilities
-    : []
-  const bridgeCommandExempt =
-    GM_TOOLS_ONLY_ACTIONS.has(action) ||
-    ENDANGER_OR_IMPERSONATE_ONLY_ACTIONS.has(action)
-
-  if (!bridgeCommandExempt && !capabilities.includes('bridge.command')) {
-    throwBridgeError(
-      Object.assign(new Error('Insufficient permissions'), {
-        status: 403,
-        code: 'PERMISSION_DENIED',
-      }),
-      403,
-    )
-  }
-
-  const requiredCapability = BRIDGE_ACTION_CAPABILITY[action]
-  if (requiredCapability && !capabilities.includes(requiredCapability)) {
-    throwBridgeError(
-      Object.assign(
-        new Error(
-          bridgeCommandExempt
-            ? `"${action}" requires ${requiredCapability}.`
-            : `"${action}" also requires ${requiredCapability}.`,
-        ),
-        { status: 403, code: 'PANELBRIDGE_ACTION_CAPABILITY_REQUIRED' },
-      ),
-      403,
-    )
-  }
 }
 
 const VALID_PRESETS = [
@@ -128,12 +75,9 @@ const VALID_PRESETS = [
   'tools',
 ]
 
-async function executePanelBridgeCommand(
-  data: AnyRecord,
-  context: unknown,
-): Promise<any> {
+async function executePanelBridgeCommand(data: AnyRecord): Promise<any> {
   const [
-    { getActiveServer, getRoleByName, logBridgeCommand },
+    { getActiveServer, logBridgeCommand },
     { ErrorCode },
     { sanitizeError, sanitizeErrorParams },
   ] = await Promise.all([
@@ -164,8 +108,6 @@ async function executePanelBridgeCommand(
   ) {
     invalid('args must be an object', ErrorCode.PANELBRIDGE_ARGS_MUST_BE_OBJECT)
   }
-
-  await assertCommandPermissions(action, context, getRoleByName)
 
   if (action === 'spawnVehicleAt') {
     const vehicle = args?.vehicle ?? args?.scriptName
@@ -358,9 +300,9 @@ async function getPanelBridgeCommandsImplementation(): Promise<AnyRecord> {
 export const sendPanelBridgeCommand = createServerFn({ method: 'POST' })
   .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
     try {
-      return await executePanelBridgeCommand(data, context)
+      return await executePanelBridgeCommand(data)
     } catch (error) {
       if (
         error &&

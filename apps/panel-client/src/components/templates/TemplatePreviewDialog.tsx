@@ -25,14 +25,12 @@ import { TemplateApplyPanel } from './TemplateApplyPanel'
 
 interface TemplatePreviewDialogProps {
   template: SimTemplate | null
-  canManage: boolean
   onClose: () => void
   onApplied: () => void
 }
 
 export function TemplatePreviewDialog({
   template,
-  canManage,
   onClose,
   onApplied,
 }: TemplatePreviewDialogProps) {
@@ -180,7 +178,6 @@ export function TemplatePreviewDialog({
               applying={applying}
               applyError={applyError}
               applyResult={applyResult}
-              canManage={canManage}
               canApply={diff.summary.totalChanges > 0}
               onApply={handleApply}
               onClose={onClose}

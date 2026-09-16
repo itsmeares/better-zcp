@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { permissionMiddleware, protectedServerFunctionMiddleware } from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 
@@ -32,8 +32,10 @@ function errorMessage(error: unknown): string {
 }
 
 function throwBridgeError(error: unknown, fallbackStatus = 500): never {
-  const details = error && typeof error === 'object' ? (error as ServiceError) : {}
-  const status = typeof details.status === 'number' ? details.status : fallbackStatus
+  const details =
+    error && typeof error === 'object' ? (error as ServiceError) : {}
+  const status =
+    typeof details.status === 'number' ? details.status : fallbackStatus
   throw Object.assign(new Error(errorMessage(error)), {
     status,
     ...(typeof details.code === 'string' ? { code: details.code } : {}),
@@ -52,13 +54,6 @@ function invalid(message: string, code?: string, params?: unknown): never {
   )
 }
 
-function capabilityMiddleware(capability: string) {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware(capability),
-  ] as const
-}
-
 async function panelRuntime(): Promise<AnyRecord> {
   const { getPanelRuntime } =
     await import('../../../panel-server/utils/panelRuntime.ts')
@@ -72,7 +67,8 @@ async function withBridge<T>(
   try {
     const runtime = await panelRuntime()
     const bridge = runtime.panelBridge as AnyRecord
-    const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+    const { ErrorCode } =
+      await import('../../../panel-server/utils/errorCodes.ts')
     if (!bridge.isRunning) {
       invalid(
         'Bridge not running. Start it first.',
@@ -108,7 +104,9 @@ async function withBridge<T>(
 function argsFor(data: AnyRecord): AnyRecord {
   if (
     data.args !== undefined &&
-    (typeof data.args !== 'object' || data.args === null || Array.isArray(data.args))
+    (typeof data.args !== 'object' ||
+      data.args === null ||
+      Array.isArray(data.args))
   ) {
     invalid('args must be an object', 'PANELBRIDGE_ARGS_MUST_BE_OBJECT')
   }
@@ -139,7 +137,8 @@ function optionalUsername(args: AnyRecord, code: string): string | undefined {
 }
 
 async function executeEndangerAction(data: AnyRecord): Promise<unknown> {
-  const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+  const { ErrorCode } =
+    await import('../../../panel-server/utils/errorCodes.ts')
   const action = data.action
   if (typeof action !== 'string' || !action) {
     invalid('action is required', ErrorCode.PANELBRIDGE_ACTION_REQUIRED)
@@ -154,7 +153,11 @@ async function executeEndangerAction(data: AnyRecord): Promise<unknown> {
       )
       return withBridge(async (bridge) => {
         try {
-          return await bridge.playSoundNearPlayer(username, args.radius, args.volume)
+          return await bridge.playSoundNearPlayer(
+            username,
+            args.radius,
+            args.volume,
+          )
         } catch {
           throwBridgeError(
             Object.assign(new Error('Failed to play sound'), {
@@ -224,7 +227,10 @@ async function executeEndangerAction(data: AnyRecord): Promise<unknown> {
         args,
         ErrorCode.BRIDGE_VALID_USERNAME_REQUIRED,
       )
-      const count = Math.min(Math.max(Math.floor(Number(args.count) || 50), 1), 500)
+      const count = Math.min(
+        Math.max(Math.floor(Number(args.count) || 50), 1),
+        500,
+      )
       return withBridge(
         (bridge) =>
           bridge.sendCommand(action, {
@@ -240,7 +246,8 @@ async function executeEndangerAction(data: AnyRecord): Promise<unknown> {
 }
 
 async function executeCatalogRead(data: AnyRecord): Promise<unknown> {
-  const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+  const { ErrorCode } =
+    await import('../../../panel-server/utils/errorCodes.ts')
   const kind = data.kind
   if (kind !== 'items' && kind !== 'vehicles') {
     invalid('Unknown or invalid catalog', ErrorCode.PANELBRIDGE_UNKNOWN_ACTION)
@@ -249,7 +256,8 @@ async function executeCatalogRead(data: AnyRecord): Promise<unknown> {
   try {
     const { getDb } = await import('../../../panel-server/database/init.ts')
     const db = await getDb()
-    const catalog = db.data[kind === 'items' ? 'itemCatalog' : 'vehicleCatalog'] || null
+    const catalog =
+      db.data[kind === 'items' ? 'itemCatalog' : 'vehicleCatalog'] || null
     return (
       catalog ??
       (kind === 'items'
@@ -268,7 +276,8 @@ async function executeCatalogRead(data: AnyRecord): Promise<unknown> {
 }
 
 async function executeCatalogScan(data: AnyRecord): Promise<unknown> {
-  const { ErrorCode } = await import('../../../panel-server/utils/errorCodes.ts')
+  const { ErrorCode } =
+    await import('../../../panel-server/utils/errorCodes.ts')
   const kind = data.kind
   if (kind !== 'items' && kind !== 'vehicles') {
     invalid('Unknown or invalid catalog', ErrorCode.PANELBRIDGE_UNKNOWN_ACTION)
@@ -331,17 +340,17 @@ async function executeCatalogScan(data: AnyRecord): Promise<unknown> {
 }
 
 export const sendPanelBridgeEndangerCommand = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('players.endanger_or_impersonate'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeEndangerAction(data)) as any)
 
 export const getPanelBridgeCatalog = createServerFn({ method: 'GET' })
-  .middleware(capabilityMiddleware('players.gm_tools'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeCatalogRead(data)) as any)
 
 export const scanPanelBridgeCatalog = createServerFn({ method: 'POST' })
-  .middleware(capabilityMiddleware('bridge.diagnostics'))
+  .middleware(protectedServerFunctionMiddleware)
   .validator((data: unknown) => record(data))
   .handler(async ({ data }) => (await executeCatalogScan(data)) as any)
 

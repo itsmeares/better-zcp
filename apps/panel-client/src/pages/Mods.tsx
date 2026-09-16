@@ -3,8 +3,6 @@ import { useLocation } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
-import { DisabledReason } from '@/components/DisabledReason'
 import { usePageShortcut } from '../hooks/useKeyboardShortcuts'
 import { copyText } from '@/lib/utils'
 import {
@@ -40,7 +38,6 @@ import {
   Eye,
   ArrowRight,
   Wand2,
-  ShieldAlert,
   CloudOff,
 } from 'lucide-react'
 import {
@@ -114,7 +111,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/components/ui/use-toast'
-import { modsApi, serversApi, ApiError } from '@/lib/api'
+import { modsApi, serversApi } from '@/lib/api'
 import { FolderBrowser } from '@/components/FolderBrowser'
 import {
   buildRequiresMap,
@@ -291,9 +288,6 @@ export default function Mods() {
   const [savingWorkshopPath, setSavingWorkshopPath] = useState(false)
   const { toast } = useToast()
   const confirm = useConfirm()
-  const { can } = useAuth()
-  const canManageMods = can('mods.manage')
-  const canManageServers = can('servers.manage')
 
   const [searchQuery, setSearchQuery] = useState('')
   const [deferredSearchQuery, setDeferredSearchQuery] = useState('')
@@ -496,7 +490,6 @@ export default function Mods() {
   const [presets, setPresets] = useState<ModPreset[]>([])
   const [presetsLoading, setPresetsLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
-  const [permissionDenied, setPermissionDenied] = useState(false)
   const [savePresetOpen, setSavePresetOpen] = useState(false)
   const [presetName, setPresetName] = useState('')
   const [presetDescription, setPresetDescription] = useState('')
@@ -607,18 +600,6 @@ export default function Mods() {
         modsApi.getIgnoredMods(),
         modsApi.getIgnoredModPairs(),
       ])
-
-      const allRejected403 = results.every(
-        (r) =>
-          r.status === 'rejected' &&
-          r.reason instanceof ApiError &&
-          r.reason.status === 403,
-      )
-      if (allRejected403) {
-        setPermissionDenied(true)
-        return
-      }
-      setPermissionDenied(false)
 
       if (results[0].status === 'fulfilled') {
         setMods(results[0].value.mods || [])
@@ -735,8 +716,7 @@ export default function Mods() {
 
   const handleWorkshopFolderSelected = useCallback(
     async (selectedPath: string) => {
-      if (savingWorkshopPath || !selectedPath.trim() || !canManageServers)
-        return
+      if (savingWorkshopPath || !selectedPath.trim()) return
       setSavingWorkshopPath(true)
       try {
         const { server } = await serversApi.getActive()
@@ -759,7 +739,7 @@ export default function Mods() {
         setSavingWorkshopPath(false)
       }
     },
-    [fetchData, savingWorkshopPath, toast, canManageServers],
+    [fetchData, savingWorkshopPath, toast],
   )
 
   const fetchDisabled = useCallback(async () => {
@@ -781,7 +761,7 @@ export default function Mods() {
 
   const handleEnableDiskMod = useCallback(
     async (workshopId: string) => {
-      if (enablingId || !canManageMods) return
+      if (enablingId) return
       setEnablingId(workshopId)
       try {
         const r = await modsApi.enableDiskMod(workshopId)
@@ -807,12 +787,12 @@ export default function Mods() {
         setEnablingId(null)
       }
     },
-    [enablingId, toast, fetchData, fetchDisabled, canManageMods],
+    [enablingId, toast, fetchData, fetchDisabled],
   )
 
   const handleDeleteDiskMod = useCallback(
     async (workshopId: string, modName?: string) => {
-      if (deletingId || !canManageMods) return
+      if (deletingId) return
       const label = modName ? `"${modName}" (${workshopId})` : workshopId
       const ok = await confirm({
         title: 'Delete mod from disk?',
@@ -851,11 +831,11 @@ export default function Mods() {
         setDeletingId(null)
       }
     },
-    [deletingId, toast, fetchData, fetchDisabled, canManageMods, confirm],
+    [deletingId, toast, fetchData, fetchDisabled, confirm],
   )
 
   const handleDeleteAllDisabled = useCallback(async () => {
-    if (deletingId || disabledMods.length === 0 || !canManageMods) return
+    if (deletingId || disabledMods.length === 0) return
     const ok = await confirm({
       title: 'Delete disabled mods from disk?',
       description:
@@ -904,18 +884,10 @@ export default function Mods() {
     } finally {
       setDeletingId(null)
     }
-  }, [
-    deletingId,
-    disabledMods,
-    toast,
-    fetchData,
-    fetchDisabled,
-    canManageMods,
-    confirm,
-  ])
+  }, [deletingId, disabledMods, toast, fetchData, fetchDisabled, confirm])
 
   const handleDeleteAllIgnoredFromDisk = useCallback(async () => {
-    if (deletingId || ignoredMods.length === 0 || !canManageMods) return
+    if (deletingId || ignoredMods.length === 0) return
     const ok = await confirm({
       title: 'Delete ignored mods from disk?',
       description:
@@ -964,15 +936,7 @@ export default function Mods() {
     } finally {
       setDeletingId(null)
     }
-  }, [
-    deletingId,
-    ignoredMods,
-    toast,
-    fetchData,
-    fetchDisabled,
-    canManageMods,
-    confirm,
-  ])
+  }, [deletingId, ignoredMods, toast, fetchData, fetchDisabled, confirm])
 
   const fetchCollectionStatusRef = useRef<() => Promise<void>>(async () => {})
   const collectionEverConfiguredRef = useRef(true)
@@ -1020,7 +984,7 @@ export default function Mods() {
   }, [])
 
   const handleCollectionSyncNow = useCallback(async () => {
-    if (collectionSyncing || !canManageMods) return
+    if (collectionSyncing) return
     setCollectionSyncing(true)
     try {
       const r = await modsApi.collectionSync()
@@ -1039,7 +1003,7 @@ export default function Mods() {
     } finally {
       setCollectionSyncing(false)
     }
-  }, [collectionSyncing, fetchCollectionStatus, toast, canManageMods])
+  }, [collectionSyncing, fetchCollectionStatus, toast])
 
   const fetchPresets = useCallback(async () => {
     setPresetsLoading(true)
@@ -1115,7 +1079,7 @@ export default function Mods() {
   }, [fetchData, fetchPresets, fetchCollectionStatus])
 
   const handleSavePreset = async () => {
-    if (!presetName.trim() || !canManageMods) return
+    if (!presetName.trim()) return
     setSavingPreset(true)
     try {
       await modsApi.createPreset(presetName.trim(), presetDescription.trim())
@@ -1140,7 +1104,6 @@ export default function Mods() {
   }
 
   const handleApplyPreset = async (id: number, _name: string) => {
-    if (!canManageMods) return
     setApplyingPreset(id)
     try {
       const result = await modsApi.applyPreset(id)
@@ -1162,7 +1125,6 @@ export default function Mods() {
   }
 
   const handleDeletePreset = async (id: number, name: string) => {
-    if (!canManageMods) return
     try {
       await modsApi.deletePreset(id)
       toast({
@@ -1267,7 +1229,7 @@ export default function Mods() {
   }, [groupedMods, deferredSearchQuery])
 
   const handleCheckUpdates = async () => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setChecking(true)
     try {
@@ -1312,7 +1274,7 @@ export default function Mods() {
 
   const discoverWorkshopMod = useCallback(
     async (workshopId: string) => {
-      if (discoveringMod || !canManageMods) return
+      if (discoveringMod) return
 
       discoverAbortRef.current?.abort()
       const controller = new AbortController()
@@ -1408,13 +1370,7 @@ export default function Mods() {
         setDiscoveringMod(false)
       }
     },
-    [
-      discoveringMod,
-      iniConfig?.modIds,
-      iniConfig?.workshopIds,
-      toast,
-      canManageMods,
-    ],
+    [discoveringMod, iniConfig?.modIds, iniConfig?.workshopIds, toast],
   )
 
   const handleModInputChange = useCallback(
@@ -1438,7 +1394,6 @@ export default function Mods() {
   )
 
   const handleDiscoverMod = async () => {
-    if (!canManageMods) return
     const workshopId = parseWorkshopId(advancedModInput)
 
     if (!workshopId) {
@@ -1454,7 +1409,7 @@ export default function Mods() {
   }
 
   const handleAddModAdvanced = async () => {
-    if (!discoveredMod || busyRef.current || !canManageMods) return
+    if (!discoveredMod || busyRef.current) return
     busyRef.current = true
 
     setLoading(true)
@@ -1527,7 +1482,7 @@ export default function Mods() {
     })
   }
   const handleRemoveMod = async (workshopId: string) => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
     try {
@@ -1550,7 +1505,7 @@ export default function Mods() {
   }
 
   const handleEnableMod = async (workshopId: string) => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
     try {
@@ -1575,7 +1530,7 @@ export default function Mods() {
   }
 
   const handleBulkEnable = async (workshopIds: string[]) => {
-    if (workshopIds.length === 0 || busyRef.current || !canManageMods) return
+    if (workshopIds.length === 0 || busyRef.current) return
     busyRef.current = true
     setLoading(true)
     let ok = 0
@@ -1614,7 +1569,7 @@ export default function Mods() {
   }
 
   const handleRefreshNames = async (workshopIds?: string[]) => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
     try {
@@ -1666,7 +1621,7 @@ export default function Mods() {
 
   const handleBulkRemove = async (workshopIdsOverride?: string[]) => {
     const workshopIds = workshopIdsOverride ?? Array.from(selectedMods)
-    if (workshopIds.length === 0 || busyRef.current || !canManageMods) return
+    if (workshopIds.length === 0 || busyRef.current) return
     busyRef.current = true
 
     setLoading(true)
@@ -1732,7 +1687,7 @@ export default function Mods() {
   }
 
   const handleUnignoreMod = async (workshopId: string) => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
     try {
@@ -1755,7 +1710,7 @@ export default function Mods() {
   }
 
   const handleClearAllIgnored = async () => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
     try {
@@ -1778,7 +1733,7 @@ export default function Mods() {
   }
 
   const handleToggleAutoRestart = async () => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
     try {
@@ -1802,7 +1757,7 @@ export default function Mods() {
   }
 
   const handleSyncFromServer = async () => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
     try {
@@ -1833,7 +1788,6 @@ export default function Mods() {
   }
 
   const handleImportCollection = async () => {
-    if (!canManageMods) return
     if (!collectionUrl) {
       toast({
         title: 'No URL Entered',
@@ -1931,7 +1885,6 @@ export default function Mods() {
   }
 
   const handleAddCollectionMods = async () => {
-    if (!canManageMods) return
     const selectedModsList = collectionMods.filter((m) => m.selected)
 
     if (selectedModsList.length === 0) {
@@ -2001,7 +1954,6 @@ export default function Mods() {
   }
 
   const handleWriteToIni = async () => {
-    if (!canManageMods) return
     if (modsToInstall.length === 0) {
       toast({
         title: 'Nothing to Write',
@@ -2062,7 +2014,6 @@ export default function Mods() {
   }
 
   const handleSyncModIds = async () => {
-    if (!canManageMods) return
     setSyncing(true)
     try {
       const result = await modsApi.syncModIds()
@@ -2206,7 +2157,7 @@ export default function Mods() {
   }
 
   const handleSaveModOrder = async () => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     if (serverChangedSinceLoad) {
       toast({
         title: 'Active server changed',
@@ -2249,7 +2200,7 @@ export default function Mods() {
     loserModId: string,
     loserName: string,
   ) => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     if (serverChangedSinceLoad) {
       toast({
         title: 'Active server changed',
@@ -2373,7 +2324,7 @@ export default function Mods() {
   }
 
   const handleSaveRestartSettings = async () => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
     try {
@@ -2401,7 +2352,7 @@ export default function Mods() {
   }
 
   const handleCancelPendingRestart = async () => {
-    if (busyRef.current || !canManageMods) return
+    if (busyRef.current) return
     busyRef.current = true
     setLoading(true)
     try {
@@ -2979,18 +2930,7 @@ export default function Mods() {
           }
         />
 
-        {permissionDenied ? (
-          <EmptyState
-            type="accessDenied"
-            icon={
-              <ShieldAlert className="h-14 w-14 text-muted-foreground/40" />
-            }
-            title={"You can't view mods"}
-            description={
-              'Your account\'s role doesn\'t include "Manage mods". Ask an administrator to grant it if you need access to this page.'
-            }
-          />
-        ) : (
+        {
           <>
             {(status?.totalModsTracked || 0) > 0 && (
               <div className="flex items-center gap-4 rounded-lg border border-border/50 bg-card/60 px-3 py-2 flex-wrap">
@@ -3045,24 +2985,17 @@ export default function Mods() {
                     >
                       <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                       <span className="text-xs">{'Workshop path missing'}</span>
-                      <DisabledReason
-                        reason={
-                          !canManageServers
-                            ? 'Your role does not have permission to manage servers.'
-                            : null
-                        }
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 border-destructive/30 px-2 text-xs text-foreground hover:bg-destructive/10"
+                        onClick={handleOpenWorkshopBrowser}
+                        disabled={savingWorkshopPath}
                       >
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 border-destructive/30 px-2 text-xs text-foreground hover:bg-destructive/10"
-                          onClick={handleOpenWorkshopBrowser}
-                          disabled={savingWorkshopPath || !canManageServers}
-                        >
-                          <FolderOpen className="me-1.5 h-3.5 w-3.5" />
-                          {'Fix path'}
-                        </Button>
-                      </DisabledReason>
+                        <FolderOpen className="me-1.5 h-3.5 w-3.5" />
+                        {'Fix path'}
+                      </Button>
                     </div>
                   </>
                 )}
@@ -3075,7 +3008,7 @@ export default function Mods() {
                         size="sm"
                         className="min-h-[44px] sm:min-h-0"
                         onClick={handleSyncFromServer}
-                        disabled={loading || !canManageMods}
+                        disabled={loading}
                       >
                         <Download className="w-3.5 h-3.5 me-1.5" />
                         {'Sync'}
@@ -3092,7 +3025,7 @@ export default function Mods() {
                         size="sm"
                         className="min-h-[44px] sm:min-h-0"
                         onClick={handleCheckUpdates}
-                        disabled={checking || !canManageMods}
+                        disabled={checking}
                       >
                         <RefreshCw
                           className={`w-3.5 h-3.5 me-1.5 ${checking ? 'animate-spin' : ''}`}
@@ -3142,62 +3075,35 @@ export default function Mods() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DisabledReason
-                        reason={
-                          !canManageMods
-                            ? 'Your role does not have permission to manage mods.'
-                            : null
-                        }
-                        className="w-full"
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setCollectionDialogOpen(true)
+                        }}
                       >
-                        <DropdownMenuItem
-                          onClick={() => {
-                            if (!canManageMods) return
-                            setCollectionDialogOpen(true)
-                          }}
-                          disabled={!canManageMods}
-                        >
-                          <Library className="w-4 h-4 me-2" />
-                          {'Import Collection'}
-                        </DropdownMenuItem>
-                      </DisabledReason>
-                      <DisabledReason
-                        reason={
-                          !canManageMods
-                            ? 'Your role does not have permission to manage mods.'
-                            : null
-                        }
-                        className="w-full"
+                        <Library className="w-4 h-4 me-2" />
+                        {'Import Collection'}
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setRestartSettingsOpen(true)
+                        }}
                       >
-                        <DropdownMenuItem
-                          onClick={() => {
-                            if (!canManageMods) return
-                            setRestartSettingsOpen(true)
-                          }}
-                          disabled={!canManageMods}
-                        >
-                          <Settings2 className="w-4 h-4 me-2" />
-                          {'Auto-Restart Settings'}
-                        </DropdownMenuItem>
-                      </DisabledReason>
+                        <Settings2 className="w-4 h-4 me-2" />
+                        {'Auto-Restart Settings'}
+                      </DropdownMenuItem>
+
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild>
                         <div className="flex items-center justify-between gap-4">
                           <span className="text-sm">{'Auto-restart'}</span>
-                          <DisabledReason
-                            reason={
-                              !canManageMods
-                                ? 'Your role does not have permission to manage mods.'
-                                : null
-                            }
-                          >
-                            <Switch
-                              checked={status?.autoRestartEnabled || false}
-                              onCheckedChange={handleToggleAutoRestart}
-                              disabled={loading || !canManageMods}
-                              aria-label={'Toggle auto-restart on mod update'}
-                            />
-                          </DisabledReason>
+
+                          <Switch
+                            checked={status?.autoRestartEnabled || false}
+                            onCheckedChange={handleToggleAutoRestart}
+                            disabled={loading}
+                            aria-label={'Toggle auto-restart on mod update'}
+                          />
                         </div>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -3233,7 +3139,7 @@ export default function Mods() {
                   variant="outline"
                   size="sm"
                   onClick={handleCancelPendingRestart}
-                  disabled={loading || !canManageMods}
+                  disabled={loading}
                   aria-label={'Cancel pending restart'}
                 >
                   {'Cancel'}
@@ -3267,7 +3173,7 @@ export default function Mods() {
                     variant="warning"
                     size="sm"
                     onClick={handleCheckUpdates}
-                    disabled={loading || checking || !canManageMods}
+                    disabled={loading || checking}
                   >
                     <RefreshCw
                       className={`w-4 h-4 me-2 ${checking ? 'animate-spin' : ''}`}
@@ -3306,27 +3212,20 @@ export default function Mods() {
                           >
                             {m.name || m.workshopId}
                           </span>
-                          <DisabledReason
-                            reason={
-                              !canManageMods
-                                ? 'Your role does not have permission to manage mods.'
-                                : null
+
+                          <button
+                            type="button"
+                            onClick={() => setConfirmRemoveMod(m.workshopId)}
+                            disabled={loading}
+                            aria-label={
+                              'Remove ' +
+                              String(m.name || m.workshopId) +
+                              ' from the server'
                             }
+                            className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:pointer-events-none disabled:opacity-50"
                           >
-                            <button
-                              type="button"
-                              onClick={() => setConfirmRemoveMod(m.workshopId)}
-                              disabled={loading || !canManageMods}
-                              aria-label={
-                                'Remove ' +
-                                String(m.name || m.workshopId) +
-                                ' from the server'
-                              }
-                              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:pointer-events-none disabled:opacity-50"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </DisabledReason>
+                            <X className="h-3 w-3" />
+                          </button>
                         </span>
                       ))}
                     </div>
@@ -3573,25 +3472,18 @@ export default function Mods() {
                               maxLength={200}
                               autoFocus
                             />
-                            <DisabledReason
-                              reason={
-                                !canManageMods
-                                  ? 'Your role does not have permission to manage mods.'
-                                  : null
-                              }
+
+                            <Button
+                              onClick={handleImportCollection}
+                              disabled={importingCollection}
+                              className="w-full sm:w-auto"
                             >
-                              <Button
-                                onClick={handleImportCollection}
-                                disabled={importingCollection || !canManageMods}
-                                className="w-full sm:w-auto"
-                              >
-                                {importingCollection ? (
-                                  <RefreshCw className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Download className="w-4 h-4" />
-                                )}
-                              </Button>
-                            </DisabledReason>
+                              {importingCollection ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Download className="w-4 h-4" />
+                              )}
+                            </Button>
                           </div>
                         </div>
 
@@ -3785,28 +3677,17 @@ export default function Mods() {
                         >
                           {'Cancel'}
                         </Button>
-                        <DisabledReason
-                          reason={
-                            !canManageMods
-                              ? 'Your role does not have permission to manage mods.'
-                              : null
-                          }
+
+                        <Button
+                          onClick={handleAddCollectionMods}
+                          disabled={loading || selectedCollectionCount === 0}
                         >
-                          <Button
-                            onClick={handleAddCollectionMods}
-                            disabled={
-                              loading ||
-                              selectedCollectionCount === 0 ||
-                              !canManageMods
-                            }
-                          >
-                            {loading
-                              ? 'Adding...'
-                              : 'Add ' +
-                                String(selectedCollectionCount) +
-                                ' Mods to Server'}
-                          </Button>
-                        </DisabledReason>
+                          {loading
+                            ? 'Adding...'
+                            : 'Add ' +
+                              String(selectedCollectionCount) +
+                              ' Mods to Server'}
+                        </Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
@@ -3874,9 +3755,7 @@ export default function Mods() {
                               id="discover-mod-btn"
                               onClick={handleDiscoverMod}
                               disabled={
-                                discoveringMod ||
-                                !advancedModInput.trim() ||
-                                !canManageMods
+                                discoveringMod || !advancedModInput.trim()
                               }
                               variant="secondary"
                               className="w-full shrink-0 sm:w-auto"
@@ -4195,12 +4074,7 @@ export default function Mods() {
                         </Button>
                         <Button
                           onClick={handleAddModAdvanced}
-                          disabled={
-                            loading ||
-                            !discoveredMod ||
-                            discoveringMod ||
-                            !canManageMods
-                          }
+                          disabled={loading || !discoveredMod || discoveringMod}
                           className="w-full sm:order-2 sm:w-auto"
                         >
                           {loading ? (
@@ -4331,7 +4205,7 @@ export default function Mods() {
                         </Button>
                         <Button
                           onClick={handleSaveRestartSettings}
-                          disabled={loading || !canManageMods}
+                          disabled={loading}
                           className="w-full sm:w-auto"
                         >
                           {loading ? 'Saving...' : 'Save Settings'}
@@ -4455,7 +4329,7 @@ export default function Mods() {
                                 size="sm"
                                 variant="ghost"
                                 onClick={handleCollectionSyncNow}
-                                disabled={collectionSyncing || !canManageMods}
+                                disabled={collectionSyncing}
                                 className="h-6 px-2 ms-1 text-xs hover:bg-warning/20"
                                 // eslint-disable-next-line local/no-dead-disabled-title -- pure hint describing what the button does ("Sync tracked mods → Steam Workshop collection"), not why it's disabled; unconditional, no permission text to lose. Triaged 2026-08-27.
                                 title={
@@ -4564,7 +4438,7 @@ export default function Mods() {
                                   <button
                                     type="button"
                                     onClick={handleSyncFromServer}
-                                    disabled={loading || !canManageMods}
+                                    disabled={loading}
                                     className="group text-start rounded-lg border border-border/50 hover:border-primary/40 hover:bg-primary/[0.04] bg-muted/15 px-3 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                                   >
                                     <div className="flex items-center gap-2 mb-1.5">
@@ -4830,11 +4704,7 @@ export default function Mods() {
                                 size="sm"
                                 className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                                 onClick={handleDeleteAllDisabled}
-                                disabled={
-                                  deletingId !== null ||
-                                  loading ||
-                                  !canManageMods
-                                }
+                                disabled={deletingId !== null || loading}
                               >
                                 {deletingId === '__batch_disabled__' ? (
                                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -4903,8 +4773,7 @@ export default function Mods() {
                                     disabled={
                                       enablingId === mod.workshop_id ||
                                       deletingId !== null ||
-                                      loading ||
-                                      !canManageMods
+                                      loading
                                     }
                                   >
                                     {enablingId === mod.workshop_id ? (
@@ -4931,8 +4800,7 @@ export default function Mods() {
                                         disabled={
                                           deletingId !== null ||
                                           enablingId === mod.workshop_id ||
-                                          loading ||
-                                          !canManageMods
+                                          loading
                                         }
                                       >
                                         {deletingId === mod.workshop_id ? (
@@ -4999,11 +4867,7 @@ export default function Mods() {
                                     onClick={() =>
                                       handleUnignoreMod(mod.workshop_id)
                                     }
-                                    disabled={
-                                      loading ||
-                                      deletingId !== null ||
-                                      !canManageMods
-                                    }
+                                    disabled={loading || deletingId !== null}
                                   >
                                     {'Re-track'}
                                   </Button>
@@ -5020,9 +4884,7 @@ export default function Mods() {
                                           )
                                         }
                                         disabled={
-                                          deletingId !== null ||
-                                          loading ||
-                                          !canManageMods
+                                          deletingId !== null || loading
                                         }
                                       >
                                         {deletingId === mod.workshop_id ? (
@@ -5045,11 +4907,7 @@ export default function Mods() {
                                 size="sm"
                                 className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                                 onClick={handleDeleteAllIgnoredFromDisk}
-                                disabled={
-                                  loading ||
-                                  deletingId !== null ||
-                                  !canManageMods
-                                }
+                                disabled={loading || deletingId !== null}
                               >
                                 {deletingId === '__batch_ignored__' ? (
                                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -5065,11 +4923,7 @@ export default function Mods() {
                                 size="sm"
                                 className="h-7 px-2 text-xs text-destructive hover:text-destructive"
                                 onClick={handleClearAllIgnored}
-                                disabled={
-                                  loading ||
-                                  deletingId !== null ||
-                                  !canManageMods
-                                }
+                                disabled={loading || deletingId !== null}
                               >
                                 {'Clear all ignored'}
                               </Button>
@@ -5183,7 +5037,7 @@ export default function Mods() {
                               mod: ModEntry,
                               wsId: string,
                             ) => {
-                              if (busyRef.current || !canManageMods) return
+                              if (busyRef.current) return
                               const on = !mod.enabled
                               busyRef.current = true
                               try {
@@ -5235,7 +5089,6 @@ export default function Mods() {
                               a: string,
                               b: string,
                             ) => {
-                              if (!canManageMods) return
                               try {
                                 await modsApi.addIgnoredModPair(a, b)
                                 setIgnoredPairs((prev) => {
@@ -5274,7 +5127,6 @@ export default function Mods() {
                               a: string,
                               b: string,
                             ) => {
-                              if (!canManageMods) return
                               try {
                                 await modsApi.removeIgnoredModPair(a, b)
                                 setIgnoredPairs((prev) =>
@@ -5296,7 +5148,7 @@ export default function Mods() {
                             }
 
                             const toggleAllInGroup = async (g: WsGroup) => {
-                              if (busyRef.current || !canManageMods) return
+                              if (busyRef.current) return
                               const on = !g.allEnabled
                               const modsToToggle = g.mods.filter(
                                 (mod) => mod.enabled !== on,
@@ -5366,7 +5218,6 @@ export default function Mods() {
                               wsId: string,
                               knownModIds?: string[],
                             ) => {
-                              if (!canManageMods) return
                               try {
                                 await modsApi.removeFromIni(
                                   wsId,
@@ -5436,7 +5287,6 @@ export default function Mods() {
                               dep: string,
                               force = false,
                             ) => {
-                              if (!canManageMods) return
                               const key = getInspectorDepKey(g, dep)
                               if (
                                 !force &&
@@ -5508,7 +5358,7 @@ export default function Mods() {
                               dep: string,
                               key: string,
                             ) => {
-                              if (busyRef.current || !canManageMods) return
+                              if (busyRef.current) return
                               busyRef.current = true
                               setDepAdding((prev) => [...prev, key])
                               try {
@@ -5589,68 +5439,53 @@ export default function Mods() {
                                           </span>
                                         </span>
                                         {conflict.type === 'duplicate' && (
-                                          <DisabledReason
-                                            reason={
-                                              !canManageMods
-                                                ? 'Your role does not have permission to manage mods.'
-                                                : null
-                                            }
-                                          >
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              className="shrink-0 h-8 text-xs border-warning/40 text-warning hover:bg-warning/20"
-                                              disabled={
-                                                deduplicating || !canManageMods
-                                              }
-                                              onClick={async () => {
-                                                if (!canManageMods) return
-                                                setDeduplicating(true)
-                                                setDeduplicateResult(null)
-                                                try {
-                                                  const result =
-                                                    await modsApi.deduplicateModIds()
-                                                  setDeduplicateResult(
-                                                    result.message,
-                                                  )
-                                                  if (
-                                                    result.removed.length > 0
-                                                  ) {
-                                                    const updated =
-                                                      await modsApi.getCurrentConfig()
-                                                    setIniConfig(updated)
-                                                    if (updated?.modIds)
-                                                      setOrderedModIds(
-                                                        updated.modIds,
-                                                      )
-                                                  }
-                                                } catch (err: unknown) {
-                                                  const errMsg =
-                                                    getUserErrorMessage(
-                                                      err,
-                                                      'Failed to deduplicate',
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="shrink-0 h-8 text-xs border-warning/40 text-warning hover:bg-warning/20"
+                                            disabled={deduplicating}
+                                            onClick={async () => {
+                                              setDeduplicating(true)
+                                              setDeduplicateResult(null)
+                                              try {
+                                                const result =
+                                                  await modsApi.deduplicateModIds()
+                                                setDeduplicateResult(
+                                                  result.message,
+                                                )
+                                                if (result.removed.length > 0) {
+                                                  const updated =
+                                                    await modsApi.getCurrentConfig()
+                                                  setIniConfig(updated)
+                                                  if (updated?.modIds)
+                                                    setOrderedModIds(
+                                                      updated.modIds,
                                                     )
-                                                  const msg = errMsg.includes(
-                                                    '<',
-                                                  )
-                                                    ? 'Failed to deduplicate — server endpoint not available'
-                                                    : errMsg
-                                                  setDeduplicateResult(
-                                                    'Error: ' + String(msg),
-                                                  )
-                                                } finally {
-                                                  setDeduplicating(false)
                                                 }
-                                              }}
-                                            >
-                                              {deduplicating ? (
-                                                <Loader2 className="w-3 h-3 animate-spin me-1" />
-                                              ) : (
-                                                <Wrench className="w-3 h-3 me-1" />
-                                              )}
-                                              {'Fix'}
-                                            </Button>
-                                          </DisabledReason>
+                                              } catch (err: unknown) {
+                                                const errMsg =
+                                                  getUserErrorMessage(
+                                                    err,
+                                                    'Failed to deduplicate',
+                                                  )
+                                                const msg = errMsg.includes('<')
+                                                  ? 'Failed to deduplicate — server endpoint not available'
+                                                  : errMsg
+                                                setDeduplicateResult(
+                                                  'Error: ' + String(msg),
+                                                )
+                                              } finally {
+                                                setDeduplicating(false)
+                                              }
+                                            }}
+                                          >
+                                            {deduplicating ? (
+                                              <Loader2 className="w-3 h-3 animate-spin me-1" />
+                                            ) : (
+                                              <Wrench className="w-3 h-3 me-1" />
+                                            )}
+                                            {'Fix'}
+                                          </Button>
                                         )}
                                       </div>
                                     ))}
@@ -5938,67 +5773,43 @@ export default function Mods() {
                                                     {'Copy Workshop ID'}
                                                   </DropdownMenuItem>
                                                   <DropdownMenuSeparator />
-                                                  <DisabledReason
-                                                    reason={
-                                                      !canManageMods
-                                                        ? 'Your role does not have permission to manage mods.'
-                                                        : null
+
+                                                  <DropdownMenuItem
+                                                    className="text-destructive focus:text-destructive"
+
+                                                    title={
+                                                      "Stops this mod loading by removing its workshop and mod IDs from the server INI. Keeps it in the panel's tracked list."
                                                     }
-                                                    className="w-full"
+                                                    onClick={() => {
+                                                      setConfirmRemoveWorkshop({
+                                                        wsId: g.wsId,
+                                                        knownModIds: g.mods.map(
+                                                          (m) => m.id,
+                                                        ),
+                                                      })
+                                                    }}
                                                   >
-                                                    <DropdownMenuItem
-                                                      className="text-destructive focus:text-destructive"
-                                                      // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27 (rule's own shape-2 guidance): the disabled-reason branch (mods.manage) now lives in the DisabledReason wrapper above; this title carries only the always-relevant "what removing does" hint, correctly absent (via DisabledReason's own tooltip taking over) rather than dead when actually disabled.
-                                                      title={
-                                                        "Stops this mod loading by removing its workshop and mod IDs from the server INI. Keeps it in the panel's tracked list."
-                                                      }
-                                                      onClick={() => {
-                                                        if (!canManageMods)
-                                                          return
-                                                        setConfirmRemoveWorkshop(
-                                                          {
-                                                            wsId: g.wsId,
-                                                            knownModIds:
-                                                              g.mods.map(
-                                                                (m) => m.id,
-                                                              ),
-                                                          },
-                                                        )
-                                                      }}
-                                                      disabled={!canManageMods}
-                                                    >
-                                                      <Trash2 className="me-2 h-4 w-4" />
-                                                      {'Remove from server INI'}
-                                                    </DropdownMenuItem>
-                                                  </DisabledReason>
+                                                    <Trash2 className="me-2 h-4 w-4" />
+                                                    {'Remove from server INI'}
+                                                  </DropdownMenuItem>
+
                                                   <DropdownMenuSeparator />
-                                                  <DisabledReason
-                                                    reason={
-                                                      !canManageMods
-                                                        ? 'Your role does not have permission to manage mods.'
-                                                        : null
+
+                                                  <DropdownMenuItem
+                                                    className="text-destructive focus:text-destructive"
+
+                                                    title={
+                                                      "Stops this mod loading and removes it from the panel's tracked list. Workshop files remain on disk."
                                                     }
-                                                    className="w-full"
+                                                    onClick={() => {
+                                                      setConfirmRemoveMod(
+                                                        g.wsId,
+                                                      )
+                                                    }}
                                                   >
-                                                    <DropdownMenuItem
-                                                      className="text-destructive focus:text-destructive"
-                                                      // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27 (rule's own shape-2 guidance): the disabled-reason branch (mods.manage) now lives in the DisabledReason wrapper above; this title carries only the always-relevant "what removing does" hint, correctly absent (via DisabledReason's own tooltip taking over) rather than dead when actually disabled.
-                                                      title={
-                                                        "Stops this mod loading and removes it from the panel's tracked list. Workshop files remain on disk."
-                                                      }
-                                                      onClick={() => {
-                                                        if (!canManageMods)
-                                                          return
-                                                        setConfirmRemoveMod(
-                                                          g.wsId,
-                                                        )
-                                                      }}
-                                                      disabled={!canManageMods}
-                                                    >
-                                                      <Trash2 className="me-2 h-4 w-4" />
-                                                      {'Remove from server'}
-                                                    </DropdownMenuItem>
-                                                  </DisabledReason>
+                                                    <Trash2 className="me-2 h-4 w-4" />
+                                                    {'Remove from server'}
+                                                  </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                               </DropdownMenu>
                                             )
@@ -6386,45 +6197,33 @@ export default function Mods() {
                                                                         ? 'bg-success/15 text-success hover:bg-success/25'
                                                                         : 'bg-muted/15 text-muted-foreground/75 hover:text-muted-foreground hover:bg-muted/25'
                                                               return (
-                                                                <DisabledReason
-                                                                  key={mod.id}
-                                                                  reason={
-                                                                    !canManageMods
-                                                                      ? 'Your role does not have permission to manage mods.'
-                                                                      : null
+                                                                <button
+                                                                  onClick={(
+                                                                    e,
+                                                                  ) => {
+                                                                    e.stopPropagation()
+                                                                    toggleMod(
+                                                                      mod,
+                                                                      g.wsId,
+                                                                    )
+                                                                  }}
+
+                                                                  title={
+                                                                    tooltipBits
                                                                   }
+                                                                  className={`mod-toggle-pill inline-flex max-w-[200px] items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 ${'cursor-pointer'} ${styleClass}`}
                                                                 >
-                                                                  <button
-                                                                    onClick={(
-                                                                      e,
-                                                                    ) => {
-                                                                      e.stopPropagation()
-                                                                      toggleMod(
-                                                                        mod,
-                                                                        g.wsId,
-                                                                      )
-                                                                    }}
-                                                                    disabled={
-                                                                      !canManageMods
-                                                                    }
-                                                                    // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27 (rule's own shape-2 guidance): the disabled-reason branch (mods.manage) now lives in the DisabledReason wrapper above; this title carries only the always-relevant chip tooltip (id/name, dupe/clash/overlap warnings, click hint), correctly absent rather than dead when actually disabled.
-                                                                    title={
-                                                                      tooltipBits
-                                                                    }
-                                                                    className={`mod-toggle-pill inline-flex max-w-[200px] items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 ${canManageMods ? 'cursor-pointer' : ''} ${styleClass}`}
-                                                                  >
-                                                                    {isScanClashing && (
-                                                                      <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-destructive" />
+                                                                  {isScanClashing && (
+                                                                    <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-destructive" />
+                                                                  )}
+                                                                  {!isScanClashing &&
+                                                                    hasScanOverlap && (
+                                                                      <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-warning/70" />
                                                                     )}
-                                                                    {!isScanClashing &&
-                                                                      hasScanOverlap && (
-                                                                        <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-warning/70" />
-                                                                      )}
-                                                                    <span className="truncate">
-                                                                      {mod.id}
-                                                                    </span>
-                                                                  </button>
-                                                                </DisabledReason>
+                                                                  <span className="truncate">
+                                                                    {mod.id}
+                                                                  </span>
+                                                                </button>
                                                               )
                                                             },
                                                           )
@@ -6521,57 +6320,43 @@ export default function Mods() {
                                                                 'Two variants of this mod are enabled and share files. One will overwrite the other — disable one.'
                                                               }
                                                             </span>
-                                                            <DisabledReason
-                                                              reason={
-                                                                !canManageMods
-                                                                  ? 'Your role does not have permission to manage mods.'
-                                                                  : null
-                                                              }
-                                                            >
-                                                              <button
-                                                                type="button"
-                                                                onClick={(
-                                                                  e,
-                                                                ) => {
-                                                                  e.stopPropagation()
-                                                                  for (const [
+
+                                                            <button
+                                                              type="button"
+                                                              onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                for (const [
+                                                                  a,
+                                                                  b,
+                                                                ] of scanClashingPairs)
+                                                                  dismissPair(
                                                                     a,
                                                                     b,
-                                                                  ] of scanClashingPairs)
-                                                                    dismissPair(
-                                                                      a,
-                                                                      b,
-                                                                    )
-                                                                }}
-                                                                disabled={
-                                                                  !canManageMods
-                                                                }
-                                                                // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27 (rule's own shape-2 guidance): the disabled-reason branch (mods.manage) now lives in the DisabledReason wrapper above; this title carries only the always-relevant dismiss-pair hint, correctly absent rather than dead when actually disabled.
-                                                                title={
-                                                                  scanClashingPairs.length ===
-                                                                  1
-                                                                    ? 'Mark "' +
-                                                                      String(
-                                                                        scanClashingPairs[0][0],
-                                                                      ) +
-                                                                      ' ↔ ' +
-                                                                      String(
-                                                                        scanClashingPairs[0][1],
-                                                                      ) +
-                                                                      '" as a false positive — useful when one ID is a shared library required by the other (e.g. a Common dependency).'
-                                                                    : 'Mark all ' +
-                                                                      String(
-                                                                        scanClashingPairs.length,
-                                                                      ) +
-                                                                      ' flagged pairs in this workshop item as false positives.'
-                                                                }
-                                                                className="ms-auto inline-flex items-center gap-1 rounded border border-border/50 bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
-                                                              >
-                                                                {
-                                                                  'Not a conflict'
-                                                                }
-                                                              </button>
-                                                            </DisabledReason>
+                                                                  )
+                                                              }}
+
+                                                              title={
+                                                                scanClashingPairs.length ===
+                                                                1
+                                                                  ? 'Mark "' +
+                                                                    String(
+                                                                      scanClashingPairs[0][0],
+                                                                    ) +
+                                                                    ' ↔ ' +
+                                                                    String(
+                                                                      scanClashingPairs[0][1],
+                                                                    ) +
+                                                                    '" as a false positive — useful when one ID is a shared library required by the other (e.g. a Common dependency).'
+                                                                  : 'Mark all ' +
+                                                                    String(
+                                                                      scanClashingPairs.length,
+                                                                    ) +
+                                                                    ' flagged pairs in this workshop item as false positives.'
+                                                              }
+                                                              className="ms-auto inline-flex items-center gap-1 rounded border border-border/50 bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                                                            >
+                                                              {'Not a conflict'}
+                                                            </button>
                                                           </div>
                                                         )
                                                       }
@@ -6635,53 +6420,42 @@ export default function Mods() {
                                                             </span>
                                                             {dismissedHere.length >
                                                               0 && (
-                                                              <DisabledReason
-                                                                reason={
-                                                                  !canManageMods
-                                                                    ? 'Your role does not have permission to manage mods.'
-                                                                    : null
+                                                              <button
+                                                                type="button"
+                                                                onClick={(
+                                                                  e,
+                                                                ) => {
+                                                                  e.stopPropagation()
+                                                                  for (const p of dismissedHere)
+                                                                    restorePair(
+                                                                      p.mod_a,
+                                                                      p.mod_b,
+                                                                    )
+                                                                }}
+
+                                                                title={
+                                                                  Number(
+                                                                    dismissedHere.length,
+                                                                  ) === 1
+                                                                    ? 'Restore ' +
+                                                                      String(
+                                                                        dismissedHere.length,
+                                                                      ) +
+                                                                      ' dismissed conflict pair for this workshop item'
+                                                                    : 'Restore ' +
+                                                                      String(
+                                                                        dismissedHere.length,
+                                                                      ) +
+                                                                      ' dismissed conflict pairs for this workshop item'
                                                                 }
+                                                                className="ms-auto text-[10px] text-muted-foreground/60 underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                                                               >
-                                                                <button
-                                                                  type="button"
-                                                                  onClick={(
-                                                                    e,
-                                                                  ) => {
-                                                                    e.stopPropagation()
-                                                                    for (const p of dismissedHere)
-                                                                      restorePair(
-                                                                        p.mod_a,
-                                                                        p.mod_b,
-                                                                      )
-                                                                  }}
-                                                                  disabled={
-                                                                    !canManageMods
-                                                                  }
-                                                                  // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27 (rule's own shape-2 guidance): the disabled-reason branch (mods.manage) now lives in the DisabledReason wrapper above; this title carries only the always-relevant restore-dismissed hint, correctly absent rather than dead when actually disabled.
-                                                                  title={
-                                                                    Number(
-                                                                      dismissedHere.length,
-                                                                    ) === 1
-                                                                      ? 'Restore ' +
-                                                                        String(
-                                                                          dismissedHere.length,
-                                                                        ) +
-                                                                        ' dismissed conflict pair for this workshop item'
-                                                                      : 'Restore ' +
-                                                                        String(
-                                                                          dismissedHere.length,
-                                                                        ) +
-                                                                        ' dismissed conflict pairs for this workshop item'
-                                                                  }
-                                                                  className="ms-auto text-[10px] text-muted-foreground/60 underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                                                                >
-                                                                  {'Restore ' +
-                                                                    String(
-                                                                      dismissedHere.length,
-                                                                    ) +
-                                                                    ' dismissed'}
-                                                                </button>
-                                                              </DisabledReason>
+                                                                {'Restore ' +
+                                                                  String(
+                                                                    dismissedHere.length,
+                                                                  ) +
+                                                                  ' dismissed'}
+                                                              </button>
                                                             )}
                                                           </div>
                                                         )
@@ -6704,33 +6478,22 @@ export default function Mods() {
                                                                   ) +
                                                                   ' dismissed conflicts'}
                                                             </span>
-                                                            <DisabledReason
-                                                              reason={
-                                                                !canManageMods
-                                                                  ? 'Your role does not have permission to manage mods.'
-                                                                  : null
-                                                              }
+
+                                                            <button
+                                                              type="button"
+                                                              onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                for (const p of dismissedHere)
+                                                                  restorePair(
+                                                                    p.mod_a,
+                                                                    p.mod_b,
+                                                                  )
+                                                              }}
+
+                                                              className="underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                                                             >
-                                                              <button
-                                                                type="button"
-                                                                onClick={(
-                                                                  e,
-                                                                ) => {
-                                                                  e.stopPropagation()
-                                                                  for (const p of dismissedHere)
-                                                                    restorePair(
-                                                                      p.mod_a,
-                                                                      p.mod_b,
-                                                                    )
-                                                                }}
-                                                                disabled={
-                                                                  !canManageMods
-                                                                }
-                                                                className="underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                                                              >
-                                                                {'restore'}
-                                                              </button>
-                                                            </DisabledReason>
+                                                              {'restore'}
+                                                            </button>
                                                           </div>
                                                         )
                                                       }
@@ -6763,62 +6526,52 @@ export default function Mods() {
                                                   <span className="text-[11px] text-warning/50">
                                                     {'not on disk'}
                                                   </span>
-                                                  <DisabledReason
-                                                    reason={
-                                                      !canManageMods
-                                                        ? 'Your role does not have permission to manage mods.'
-                                                        : null
+
+                                                  <button
+                                                    onClick={async () => {
+                                                      if (busyRef.current)
+                                                        return
+                                                      busyRef.current = true
+                                                      try {
+                                                        await modsApi.toggleModId(
+                                                          id,
+                                                          false,
+                                                        )
+                                                        const updated =
+                                                          await modsApi.getCurrentConfig()
+                                                        setIniConfig(updated)
+                                                        if (updated?.modIds)
+                                                          setOrderedModIds(
+                                                            updated.modIds,
+                                                          )
+                                                      } catch (e) {
+                                                        reportClientError(
+                                                          'Failed to remove orphaned mod',
+                                                          e,
+                                                        )
+                                                        toast({
+                                                          variant:
+                                                            'destructive',
+                                                          title:
+                                                            'Failed to remove orphaned mod',
+                                                        })
+                                                      } finally {
+                                                        busyRef.current = false
+                                                      }
+                                                    }}
+
+                                                    className="text-destructive/80 hover:text-destructive hover:bg-destructive/15 rounded p-1.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/50 disabled:opacity-40 disabled:cursor-not-allowed"
+
+                                                    title={
+                                                      'Remove orphaned mod ID ' +
+                                                      String(id)
+                                                    }
+                                                    aria-label={
+                                                      'Remove ' + String(id)
                                                     }
                                                   >
-                                                    <button
-                                                      onClick={async () => {
-                                                        if (
-                                                          busyRef.current ||
-                                                          !canManageMods
-                                                        )
-                                                          return
-                                                        busyRef.current = true
-                                                        try {
-                                                          await modsApi.toggleModId(
-                                                            id,
-                                                            false,
-                                                          )
-                                                          const updated =
-                                                            await modsApi.getCurrentConfig()
-                                                          setIniConfig(updated)
-                                                          if (updated?.modIds)
-                                                            setOrderedModIds(
-                                                              updated.modIds,
-                                                            )
-                                                        } catch (e) {
-                                                          reportClientError(
-                                                            'Failed to remove orphaned mod',
-                                                            e,
-                                                          )
-                                                          toast({
-                                                            variant:
-                                                              'destructive',
-                                                            title:
-                                                              'Failed to remove orphaned mod',
-                                                          })
-                                                        } finally {
-                                                          busyRef.current = false
-                                                        }
-                                                      }}
-                                                      disabled={!canManageMods}
-                                                      className="text-destructive/80 hover:text-destructive hover:bg-destructive/15 rounded p-1.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                      // eslint-disable-next-line local/no-dead-disabled-title -- pure hint (what removing this orphan does); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                                                      title={
-                                                        'Remove orphaned mod ID ' +
-                                                        String(id)
-                                                      }
-                                                      aria-label={
-                                                        'Remove ' + String(id)
-                                                      }
-                                                    >
-                                                      <X className="w-4 h-4" />
-                                                    </button>
-                                                  </DisabledReason>
+                                                    <X className="w-4 h-4" />
+                                                  </button>
                                                 </div>
                                               ))}
                                         </div>
@@ -6940,28 +6693,19 @@ export default function Mods() {
                                             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/75">
                                               {'Loaded IDs'}
                                             </p>
-                                            <DisabledReason
-                                              reason={
-                                                !canManageMods
-                                                  ? 'Your role does not have permission to manage mods.'
-                                                  : null
+
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                toggleAllInGroup(inspectedGroup)
                                               }
+
+                                              className="rounded border border-border/45 bg-muted/25 px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50"
                                             >
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  toggleAllInGroup(
-                                                    inspectedGroup,
-                                                  )
-                                                }
-                                                disabled={!canManageMods}
-                                                className="rounded border border-border/45 bg-muted/25 px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50"
-                                              >
-                                                {inspectedGroup.allEnabled
-                                                  ? 'Disable all'
-                                                  : 'Enable all'}
-                                              </button>
-                                            </DisabledReason>
+                                              {inspectedGroup.allEnabled
+                                                ? 'Disable all'
+                                                : 'Enable all'}
+                                            </button>
                                           </div>
                                           <div className="space-y-1.5">
                                             {inspectedGroup.mods.map((mod) => {
@@ -6970,49 +6714,40 @@ export default function Mods() {
                                               const isDupe =
                                                 duplicateModIds.has(mod.id)
                                               return (
-                                                <DisabledReason
-                                                  key={mod.id}
-                                                  reason={
-                                                    !canManageMods
-                                                      ? 'Your role does not have permission to manage mods.'
-                                                      : null
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    toggleMod(
+                                                      mod,
+                                                      inspectedGroup.wsId,
+                                                    )
                                                   }
+
+                                                  className={`flex w-full items-center gap-2 rounded border px-2 py-1.5 text-start text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50 ${mod.enabled ? 'border-success/25 bg-success/10 text-success' : 'border-border/45 bg-muted/20 text-muted-foreground hover:text-foreground'}`}
+
+                                                  title={`${mod.enabled ? 'Click to disable' : 'Click to enable'} ${mod.id}`}
                                                 >
-                                                  <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                      toggleMod(
-                                                        mod,
-                                                        inspectedGroup.wsId,
-                                                      )
-                                                    }
-                                                    disabled={!canManageMods}
-                                                    className={`flex w-full items-center gap-2 rounded border px-2 py-1.5 text-start text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-50 ${mod.enabled ? 'border-success/25 bg-success/10 text-success' : 'border-border/45 bg-muted/20 text-muted-foreground hover:text-foreground'}`}
-                                                    // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27 (rule's own shape-2 guidance): the disabled-reason branch (mods.manage) now lives in the DisabledReason wrapper above; this title carries only the always-relevant click-to-toggle hint, correctly absent rather than dead when actually disabled.
-                                                    title={`${mod.enabled ? 'Click to disable' : 'Click to enable'} ${mod.id}`}
-                                                  >
-                                                    <span
-                                                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${mod.enabled ? 'bg-success' : 'bg-muted-foreground/45'}`}
-                                                      aria-hidden="true"
+                                                  <span
+                                                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${mod.enabled ? 'bg-success' : 'bg-muted-foreground/45'}`}
+                                                    aria-hidden="true"
+                                                  />
+                                                  <span className="min-w-0 flex-1 truncate font-mono">
+                                                    {mod.id}
+                                                  </span>
+                                                  {missing.length > 0 && (
+                                                    <AlertTriangle
+                                                      className="h-3 w-3 shrink-0 text-destructive"
+                                                      aria-label={
+                                                        'Missing dependency'
+                                                      }
                                                     />
-                                                    <span className="min-w-0 flex-1 truncate font-mono">
-                                                      {mod.id}
+                                                  )}
+                                                  {isDupe && (
+                                                    <span className="shrink-0 rounded border border-warning/35 bg-warning/10 px-1 py-0 text-[9px] uppercase tracking-wide text-warning">
+                                                      dup
                                                     </span>
-                                                    {missing.length > 0 && (
-                                                      <AlertTriangle
-                                                        className="h-3 w-3 shrink-0 text-destructive"
-                                                        aria-label={
-                                                          'Missing dependency'
-                                                        }
-                                                      />
-                                                    )}
-                                                    {isDupe && (
-                                                      <span className="shrink-0 rounded border border-warning/35 bg-warning/10 px-1 py-0 text-[9px] uppercase tracking-wide text-warning">
-                                                        dup
-                                                      </span>
-                                                    )}
-                                                  </button>
-                                                </DisabledReason>
+                                                  )}
+                                                </button>
                                               )
                                             })}
                                           </div>
@@ -7284,8 +7019,7 @@ export default function Mods() {
                                                                             }
                                                                             disabled={
                                                                               adding ||
-                                                                              added ||
-                                                                              !canManageMods
+                                                                              added
                                                                             }
                                                                           >
                                                                             {adding ? (
@@ -7367,7 +7101,6 @@ export default function Mods() {
                                                   ),
                                               })
                                             }
-                                            disabled={!canManageMods}
                                           >
                                             <Trash2 className="me-2 h-3.5 w-3.5" />
                                             {'Remove from server INI'}
@@ -7424,7 +7157,6 @@ export default function Mods() {
                                       <AlertDialogAction
                                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                         onClick={handleConfirmedRemoveWorkshop}
-                                        disabled={!canManageMods}
                                       >
                                         {'Remove'}
                                       </AlertDialogAction>
@@ -7735,7 +7467,6 @@ export default function Mods() {
                                               onClick={handleSaveModOrder}
                                               disabled={
                                                 savingModOrder ||
-                                                !canManageMods ||
                                                 serverChangedSinceLoad
                                               }
                                             >
@@ -7771,7 +7502,7 @@ export default function Mods() {
                               </div>
                               <Button
                                 onClick={handleSyncModIds}
-                                disabled={syncing || !canManageMods}
+                                disabled={syncing}
                                 size="sm"
                                 variant="outline"
                               >
@@ -7835,7 +7566,7 @@ export default function Mods() {
                                 </div>
                                 <Button
                                   onClick={handleWriteToIni}
-                                  disabled={loading || !canManageMods}
+                                  disabled={loading}
                                   size="sm"
                                 >
                                   <FileText className="w-4 h-4 me-2" />
@@ -7864,113 +7595,101 @@ export default function Mods() {
                               <p className="text-xs text-muted-foreground">
                                 {'Save and restore mod configurations.'}
                               </p>
-                              <DisabledReason
-                                reason={
-                                  !canManageMods
-                                    ? 'Your role does not have permission to manage mods.'
-                                    : null
-                                }
+
+                              <Dialog
+                                open={savePresetOpen}
+                                onOpenChange={setSavePresetOpen}
                               >
-                                <Dialog
-                                  open={savePresetOpen}
-                                  onOpenChange={setSavePresetOpen}
-                                >
-                                  <DialogTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      disabled={
-                                        !iniConfig?.configured || !canManageMods
+                                <DialogTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    disabled={!iniConfig?.configured}
+                                  >
+                                    <Save className="w-4 h-4 me-2" />
+                                    {'Save Current'}
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>
+                                      {'Save Mod Preset'}
+                                    </DialogTitle>
+                                    <DialogDescription>
+                                      {
+                                        'Save the current mod configuration as a preset for easy switching later.'
                                       }
-                                    >
-                                      <Save className="w-4 h-4 me-2" />
-                                      {'Save Current'}
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent>
-                                    <DialogHeader>
-                                      <DialogTitle>
-                                        {'Save Mod Preset'}
-                                      </DialogTitle>
-                                      <DialogDescription>
-                                        {
-                                          'Save the current mod configuration as a preset for easy switching later.'
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label htmlFor="presetName">
+                                        {'Preset Name'}
+                                      </Label>
+                                      <Input
+                                        id="presetName"
+                                        value={presetName}
+                                        onChange={(e) =>
+                                          setPresetName(e.target.value)
                                         }
-                                      </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="space-y-4">
-                                      <div className="space-y-2">
-                                        <Label htmlFor="presetName">
-                                          {'Preset Name'}
-                                        </Label>
-                                        <Input
-                                          id="presetName"
-                                          value={presetName}
-                                          onChange={(e) =>
-                                            setPresetName(e.target.value)
-                                          }
-                                          placeholder={
-                                            'e.g., Vanilla+ Light, Hardcore, RP Server'
-                                          }
-                                          maxLength={100}
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="presetDesc">
-                                          {'Description (optional)'}
-                                        </Label>
-                                        <Input
-                                          id="presetDesc"
-                                          value={presetDescription}
-                                          onChange={(e) =>
-                                            setPresetDescription(e.target.value)
-                                          }
-                                          placeholder={
-                                            'Brief description of this preset...'
-                                          }
-                                          maxLength={500}
-                                        />
-                                      </div>
-                                      {iniConfig?.configured && (
-                                        <div className="rounded-lg border border-border/70 bg-secondary p-3 text-sm text-muted-foreground">
-                                          {'This will save ' +
-                                            String(
-                                              iniConfig.workshopIds?.length ||
-                                                0,
-                                            ) +
-                                            ' workshop items and ' +
-                                            String(
-                                              iniConfig.modIds?.length || 0,
-                                            ) +
-                                            ' mod IDs.'}
-                                        </div>
-                                      )}
+                                        placeholder={
+                                          'e.g., Vanilla+ Light, Hardcore, RP Server'
+                                        }
+                                        maxLength={100}
+                                      />
                                     </div>
-                                    <DialogFooter className="flex-col sm:flex-row gap-2">
-                                      <Button
-                                        variant="outline"
-                                        onClick={() => setSavePresetOpen(false)}
-                                        className="w-full sm:w-auto"
-                                      >
-                                        {'Cancel'}
-                                      </Button>
-                                      <Button
-                                        onClick={handleSavePreset}
-                                        disabled={
-                                          savingPreset ||
-                                          !presetName.trim() ||
-                                          !canManageMods
+                                    <div className="space-y-2">
+                                      <Label htmlFor="presetDesc">
+                                        {'Description (optional)'}
+                                      </Label>
+                                      <Input
+                                        id="presetDesc"
+                                        value={presetDescription}
+                                        onChange={(e) =>
+                                          setPresetDescription(e.target.value)
                                         }
-                                        className="w-full sm:w-auto"
-                                      >
-                                        {savingPreset && (
-                                          <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                                        )}
-                                        {'Save Preset'}
-                                      </Button>
-                                    </DialogFooter>
-                                  </DialogContent>
-                                </Dialog>
-                              </DisabledReason>
+                                        placeholder={
+                                          'Brief description of this preset...'
+                                        }
+                                        maxLength={500}
+                                      />
+                                    </div>
+                                    {iniConfig?.configured && (
+                                      <div className="rounded-lg border border-border/70 bg-secondary p-3 text-sm text-muted-foreground">
+                                        {'This will save ' +
+                                          String(
+                                            iniConfig.workshopIds?.length || 0,
+                                          ) +
+                                          ' workshop items and ' +
+                                          String(
+                                            iniConfig.modIds?.length || 0,
+                                          ) +
+                                          ' mod IDs.'}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <DialogFooter className="flex-col sm:flex-row gap-2">
+                                    <Button
+                                      variant="outline"
+                                      onClick={() => setSavePresetOpen(false)}
+                                      className="w-full sm:w-auto"
+                                    >
+                                      {'Cancel'}
+                                    </Button>
+                                    <Button
+                                      onClick={handleSavePreset}
+                                      disabled={
+                                        savingPreset || !presetName.trim()
+                                      }
+                                      className="w-full sm:w-auto"
+                                    >
+                                      {savingPreset && (
+                                        <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                                      )}
+                                      {'Save Preset'}
+                                    </Button>
+                                  </DialogFooter>
+                                </DialogContent>
+                              </Dialog>
                             </div>
 
                             {presetsLoading ? (
@@ -8096,7 +7815,6 @@ export default function Mods() {
                                         setConfirmApplyPreset(null)
                                       }
                                     }}
-                                    disabled={!canManageMods}
                                   >
                                     {'Apply Preset'}
                                   </AlertDialogAction>
@@ -8138,7 +7856,6 @@ export default function Mods() {
                                         setConfirmDeletePreset(null)
                                       }
                                     }}
-                                    disabled={!canManageMods}
                                   >
                                     {'Delete Preset'}
                                   </AlertDialogAction>
@@ -8158,51 +7875,43 @@ export default function Mods() {
                                     String(iniConfig?.maps?.length || 0) +
                                     ')'}
                                 </div>
-                                <DisabledReason
-                                  reason={
-                                    !canManageMods
-                                      ? 'Your role does not have permission to manage mods.'
-                                      : null
+
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      setRepairingMaps(true)
+                                      const result =
+                                        await modsApi.repairMapEntries()
+                                      setMapRepairResult(result)
+                                    } catch (err) {
+                                      reportClientError(
+                                        'Map repair failed.',
+                                        err,
+                                      )
+                                      setMapRepairResult({
+                                        removed: [],
+                                        remaining: iniConfig?.maps || [],
+                                        message:
+                                          'Map repair failed — check server connection',
+                                      })
+                                    } finally {
+                                      setRepairingMaps(false)
+                                    }
+                                  }}
+                                  disabled={repairingMaps}
+                                  className="flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-muted hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors disabled:opacity-50"
+                                  // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                                  title={
+                                    'Validate and remove invalid map entries'
                                   }
                                 >
-                                  <button
-                                    onClick={async () => {
-                                      if (!canManageMods) return
-                                      try {
-                                        setRepairingMaps(true)
-                                        const result =
-                                          await modsApi.repairMapEntries()
-                                        setMapRepairResult(result)
-                                      } catch (err) {
-                                        reportClientError(
-                                          'Map repair failed.',
-                                          err,
-                                        )
-                                        setMapRepairResult({
-                                          removed: [],
-                                          remaining: iniConfig?.maps || [],
-                                          message:
-                                            'Map repair failed — check server connection',
-                                        })
-                                      } finally {
-                                        setRepairingMaps(false)
-                                      }
-                                    }}
-                                    disabled={repairingMaps || !canManageMods}
-                                    className="flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-muted hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors disabled:opacity-50"
-                                    // eslint-disable-next-line local/no-dead-disabled-title -- pure hint describing what the button does; the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                                    title={
-                                      'Validate and remove invalid map entries'
-                                    }
-                                  >
-                                    {repairingMaps ? (
-                                      <Loader2 className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <Wrench className="w-3 h-3" />
-                                    )}
-                                    {'Repair'}
-                                  </button>
-                                </DisabledReason>
+                                  {repairingMaps ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Wrench className="w-3 h-3" />
+                                  )}
+                                  {'Repair'}
+                                </button>
                               </div>
                               {mapRepairResult && (
                                 <div
@@ -8452,11 +8161,7 @@ export default function Mods() {
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        disabled={
-                                          !someSelected ||
-                                          loading ||
-                                          !canManageMods
-                                        }
+                                        disabled={!someSelected || loading}
                                         onClick={() =>
                                           handleBulkEnable(selectedDeactivated)
                                         }
@@ -8489,65 +8194,53 @@ export default function Mods() {
                                           'Delete only removes panel tracking. Workshop files stay on disk, but you will need to add the mod manually later.'
                                         }
                                       </p>
-                                      <DisabledReason
-                                        reason={
-                                          !canManageMods
-                                            ? 'Your role does not have permission to manage mods.'
-                                            : null
+
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="self-start sm:self-auto"
+                                        disabled={
+                                          loading || deactivatedIds.length === 0
                                         }
+                                        onClick={async () => {
+                                          const ids = someSelected
+                                            ? selectedDeactivated
+                                            : deactivatedIds
+                                          const label = someSelected
+                                            ? ids.length === 1
+                                              ? 'Remove ' +
+                                                String(ids.length) +
+                                                ' selected deactivated mod from tracking? The workshop files stay on disk -- you can re-add it later.'
+                                              : 'Remove ' +
+                                                String(ids.length) +
+                                                ' selected deactivated mods from tracking? The workshop files stay on disk -- you can re-add them later.'
+                                            : ids.length === 1
+                                              ? 'Remove ALL ' +
+                                                String(ids.length) +
+                                                ' deactivated mod from tracking? The workshop files stay on disk -- you can re-add it later.'
+                                              : 'Remove ALL ' +
+                                                String(ids.length) +
+                                                ' deactivated mods from tracking? The workshop files stay on disk -- you can re-add them later.'
+                                          const ok = await confirm({
+                                            title: 'Delete from tracking?',
+                                            description: label,
+                                            confirmLabel: 'Delete',
+                                            destructive: false,
+                                          })
+                                          if (!ok) return
+                                          setSelectedMods(new Set(ids))
+                                          handleBulkRemove(ids)
+                                        }}
                                       >
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="self-start sm:self-auto"
-                                          disabled={
-                                            loading ||
-                                            deactivatedIds.length === 0 ||
-                                            !canManageMods
-                                          }
-                                          onClick={async () => {
-                                            if (!canManageMods) return
-                                            const ids = someSelected
-                                              ? selectedDeactivated
-                                              : deactivatedIds
-                                            const label = someSelected
-                                              ? ids.length === 1
-                                                ? 'Remove ' +
-                                                  String(ids.length) +
-                                                  ' selected deactivated mod from tracking? The workshop files stay on disk -- you can re-add it later.'
-                                                : 'Remove ' +
-                                                  String(ids.length) +
-                                                  ' selected deactivated mods from tracking? The workshop files stay on disk -- you can re-add them later.'
-                                              : ids.length === 1
-                                                ? 'Remove ALL ' +
-                                                  String(ids.length) +
-                                                  ' deactivated mod from tracking? The workshop files stay on disk -- you can re-add it later.'
-                                                : 'Remove ALL ' +
-                                                  String(ids.length) +
-                                                  ' deactivated mods from tracking? The workshop files stay on disk -- you can re-add them later.'
-                                            const ok = await confirm({
-                                              title: 'Delete from tracking?',
-                                              description: label,
-                                              confirmLabel: 'Delete',
-                                              destructive: false,
-                                            })
-                                            if (!ok) return
-                                            setSelectedMods(new Set(ids))
-                                            handleBulkRemove(ids)
-                                          }}
-                                        >
-                                          <Trash2 className="w-4 h-4 me-1.5" />
-                                          {someSelected
-                                            ? 'Delete selected (' +
-                                              String(
-                                                selectedDeactivated.length,
-                                              ) +
-                                              ')'
-                                            : 'Delete all (' +
-                                              String(deactivatedIds.length) +
-                                              ')'}
-                                        </Button>
-                                      </DisabledReason>
+                                        <Trash2 className="w-4 h-4 me-1.5" />
+                                        {someSelected
+                                          ? 'Delete selected (' +
+                                            String(selectedDeactivated.length) +
+                                            ')'
+                                          : 'Delete all (' +
+                                            String(deactivatedIds.length) +
+                                            ')'}
+                                      </Button>
                                     </div>
                                   </details>
                                   {missingNameCount > 0 && (
@@ -8583,7 +8276,7 @@ export default function Mods() {
                                           variant="outline"
                                           size="sm"
                                           className="h-6 px-2 text-[11px]"
-                                          disabled={loading || !canManageMods}
+                                          disabled={loading}
                                           onClick={() => {
                                             const targets =
                                               groupedMods.deactivated
@@ -8748,7 +8441,7 @@ export default function Mods() {
                                             onClick={() =>
                                               handleEnableMod(mod.workshop_id)
                                             }
-                                            disabled={loading || !canManageMods}
+                                            disabled={loading}
                                             aria-label={
                                               'Re-enable ' +
                                               String(
@@ -8776,7 +8469,7 @@ export default function Mods() {
                                                 mod.workshop_id,
                                               )
                                             }
-                                            disabled={loading || !canManageMods}
+                                            disabled={loading}
                                             aria-label={
                                               'Delete ' +
                                               String(
@@ -8806,7 +8499,7 @@ export default function Mods() {
               </div>
             </div>
           </>
-        )}
+        }
       </div>
 
       <AlertDialog
@@ -8834,7 +8527,6 @@ export default function Mods() {
                 if (confirmRemoveMod) handleRemoveMod(confirmRemoveMod)
                 setConfirmRemoveMod(null)
               }}
-              disabled={!canManageMods}
             >
               {'Remove'}
             </AlertDialogAction>
@@ -8868,7 +8560,6 @@ export default function Mods() {
                 handleBulkRemove()
                 setConfirmBulkRemove(false)
               }}
-              disabled={!canManageMods}
             >
               {selectedMods.size === 1
                 ? 'Remove ' + String(selectedMods.size) + ' mod'

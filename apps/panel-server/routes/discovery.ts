@@ -1,7 +1,6 @@
 import { Router, type Response } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeServerResponse } from "../utils/sanitize.ts";
-import { requirePermission } from "../services/permissions.ts";
 import {
   createServerFromDiscovery,
   discoverMountsForServer,
@@ -25,10 +24,7 @@ function sendProfileError(error: unknown, res: Response): boolean {
   return true;
 }
 
-router.get(
-  "/discover-mounts",
-  requirePermission("servers.discover"),
-  async (_req, res) => {
+router.get("/discover-mounts", async (_req, res) => {
     try {
       res.json(await discoverMountsForServer());
     } catch (error: unknown) {
@@ -37,13 +33,9 @@ router.get(
       log.error(`Mount discovery failed: ${message}`);
       res.status(500).json({ error: sanitizeError(message) });
     }
-  },
-);
+});
 
-router.post(
-  "/create-from-discovery",
-  requirePermission("servers.discover"),
-  async (req, res) => {
+router.post("/create-from-discovery", async (req, res) => {
     try {
       const server = await createServerFromDiscovery(req.body);
       res.status(201).json({
@@ -56,7 +48,6 @@ router.post(
       log.error(`create-from-discovery failed: ${message}`);
       res.status(500).json({ error: sanitizeError(message) });
     }
-  },
-);
+});
 
 export default router;

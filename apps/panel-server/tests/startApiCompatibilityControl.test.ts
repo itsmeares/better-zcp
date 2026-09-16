@@ -127,16 +127,7 @@ const mocks = vi.hoisted(() => {
       "getDebugRam",
       "getPerformanceHistory",
       "changePassword",
-      "getManagedUsers",
-      "createManagedUser",
-      "assignManagedUserRole",
-      "removeManagedUser",
       "regenerateJwtSecret",
-      "getRecoveryCodes",
-      "generateRecoveryCodes",
-      "getOidcSettings",
-      "updateOidcSettings",
-      "testOidcConnection",
     ].map((name) => [name, serverFunction(name)]),
   );
   const auth = Object.fromEntries(
@@ -149,10 +140,7 @@ const mocks = vi.hoisted(() => {
       "resetStatus",
       "createLocalResetToken",
       "resetPassword",
-      "recoverWithCode",
       "getCurrentUser",
-      "getRecoveryStatus",
-      "getOidcStatus",
     ].map((name) => [name, serverFunction(name)]),
   );
   const mods = Object.fromEntries(
@@ -286,7 +274,6 @@ const mocks = vi.hoisted(() => {
 
   return {
     authenticate: vi.fn(),
-    getCapabilities: vi.fn(),
     control,
     resources,
     admin,
@@ -310,10 +297,10 @@ const mocks = vi.hoisted(() => {
 vi.mock("../services/auth.ts", () => ({
   default: { authenticateApiRequest: mocks.authenticate },
 }));
-vi.mock("../services/permissions.ts", () => ({
-  getCapabilitiesForRole: mocks.getCapabilities,
-}));
-vi.mock("../../panel-client/src/lib/serverGameControl.server.ts", () => mocks.control);
+vi.mock(
+  "../../panel-client/src/lib/serverGameControl.server.ts",
+  () => mocks.control,
+);
 vi.mock(
   "../../panel-client/src/lib/serverResourceReads.server.ts",
   () => mocks.resources,
@@ -325,13 +312,22 @@ vi.mock(
   () => mocks.resourceActions,
 );
 vi.mock("../../panel-client/src/lib/serverMods.server.ts", () => mocks.mods);
-vi.mock("../../panel-client/src/lib/serverSystem.server.ts", () => mocks.system);
-vi.mock("../../panel-client/src/lib/serverFileReads.server.ts", () => mocks.fileReads);
+vi.mock(
+  "../../panel-client/src/lib/serverSystem.server.ts",
+  () => mocks.system,
+);
+vi.mock(
+  "../../panel-client/src/lib/serverFileReads.server.ts",
+  () => mocks.fileReads,
+);
 vi.mock(
   "../../panel-client/src/lib/serverServerApi.server.ts",
   () => mocks.serverServer,
 );
-vi.mock("../../panel-client/src/lib/serverPanelBridge.server.ts", () => mocks.bridge);
+vi.mock(
+  "../../panel-client/src/lib/serverPanelBridge.server.ts",
+  () => mocks.bridge,
+);
 vi.mock(
   "../../panel-client/src/lib/serverPanelBridgeSetup.server.ts",
   () => mocks.bridgeSetup,
@@ -352,7 +348,10 @@ vi.mock(
   "../../panel-client/src/lib/serverPanelBridgeDiagnostics.server.ts",
   () => mocks.bridgeDiagnostics,
 );
-vi.mock("../../panel-client/src/lib/serverPanelUpdate.server.ts", () => mocks.panel);
+vi.mock(
+  "../../panel-client/src/lib/serverPanelUpdate.server.ts",
+  () => mocks.panel,
+);
 
 const { handleStartApiCompatibilityRequest } =
   await import("../../panel-client/src/lib/startApiCompatibility.ts");
@@ -467,8 +466,18 @@ const SERVER_FILE_WRITE_ROUTES = [
     { name: "DayLength", value: 1 },
   ],
   ["POST", "/api/server-files/sandbox/repair", "repairServerSandbox", {}],
-  ["PUT", "/api/server-files/spawnpoints", "saveServerSpawnPoints", { spawnpoints: {} }],
-  ["PUT", "/api/server-files/spawnregions", "saveServerSpawnRegions", { spawnregions: [] }],
+  [
+    "PUT",
+    "/api/server-files/spawnpoints",
+    "saveServerSpawnPoints",
+    { spawnpoints: {} },
+  ],
+  [
+    "PUT",
+    "/api/server-files/spawnregions",
+    "saveServerSpawnRegions",
+    { spawnregions: [] },
+  ],
   [
     "PUT",
     "/api/server-files/raw/ini",
@@ -551,13 +560,7 @@ const LEGACY_SERVER_ROUTES = [
     undefined,
     { lastSize: "10", filter: "important" },
   ],
-  [
-    "POST",
-    "/api/server/console-log/clear",
-    "clearConsoleLog",
-    {},
-    {},
-  ],
+  ["POST", "/api/server/console-log/clear", "clearConsoleLog", {}, {}],
   [
     "GET",
     "/api/server/update-check?force=true",
@@ -615,13 +618,6 @@ const PUBLIC_AUTH_ROUTES = [
     { token: "token", newPassword: "password" },
     200,
   ],
-  [
-    "POST",
-    "/api/auth/recover-with-code",
-    "recoverWithCode",
-    { code: "code", newPassword: "password" },
-    200,
-  ],
 ];
 
 const CREATED_ROUTES = [
@@ -632,7 +628,11 @@ const CREATED_ROUTES = [
 const PANEL_BRIDGE_ROUTES = [
   ["GET", "/api/panel-bridge/status", "getPanelBridgeStatus"],
   ["POST", "/api/panel-bridge/auto-configure", "sendPanelBridgeSetupCommand"],
-  ["GET", "/api/panel-bridge/scan-server/server-1", "sendPanelBridgeSetupCommand"],
+  [
+    "GET",
+    "/api/panel-bridge/scan-server/server-1",
+    "sendPanelBridgeSetupCommand",
+  ],
   ["POST", "/api/panel-bridge/auto-detect", "sendPanelBridgeSetupCommand"],
   ["POST", "/api/panel-bridge/configure", "sendPanelBridgeSetupCommand"],
   ["POST", "/api/panel-bridge/configure-direct", "sendPanelBridgeSetupCommand"],
@@ -650,18 +650,38 @@ const PANEL_BRIDGE_ROUTES = [
   ["GET", "/api/panel-bridge/weather", "sendPanelBridgeWorldCommand"],
   ["GET", "/api/panel-bridge/server-info", "getPanelBridgeServerInfo"],
   ["POST", "/api/panel-bridge/weather/blizzard", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/weather/tropical-storm", "sendPanelBridgeWorldCommand"],
+  [
+    "POST",
+    "/api/panel-bridge/weather/tropical-storm",
+    "sendPanelBridgeWorldCommand",
+  ],
   ["POST", "/api/panel-bridge/weather/storm", "sendPanelBridgeWorldCommand"],
   ["POST", "/api/panel-bridge/weather/stop", "sendPanelBridgeWorldCommand"],
   ["POST", "/api/panel-bridge/weather/generate", "sendPanelBridgeWorldCommand"],
   ["POST", "/api/panel-bridge/weather/snow", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/weather/rain/start", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/weather/rain/stop", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/weather/lightning", "sendPanelBridgeWorldCommand"],
+  [
+    "POST",
+    "/api/panel-bridge/weather/rain/start",
+    "sendPanelBridgeWorldCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/weather/rain/stop",
+    "sendPanelBridgeWorldCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/weather/lightning",
+    "sendPanelBridgeWorldCommand",
+  ],
   ["GET", "/api/panel-bridge/climate/floats", "sendPanelBridgeWorldCommand"],
   ["POST", "/api/panel-bridge/climate/float", "sendPanelBridgeWorldCommand"],
   ["POST", "/api/panel-bridge/climate/reset", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/climate/temperature", "sendPanelBridgeWorldCommand"],
+  [
+    "POST",
+    "/api/panel-bridge/climate/temperature",
+    "sendPanelBridgeWorldCommand",
+  ],
   ["POST", "/api/panel-bridge/climate/wind", "sendPanelBridgeWorldCommand"],
   ["POST", "/api/panel-bridge/climate/fog", "sendPanelBridgeWorldCommand"],
   ["POST", "/api/panel-bridge/climate/clouds", "sendPanelBridgeWorldCommand"],
@@ -671,7 +691,11 @@ const PANEL_BRIDGE_ROUTES = [
   ["POST", "/api/panel-bridge/world/save", "savePanelBridgeWorld"],
   ["GET", "/api/panel-bridge/players", "sendPanelBridgePlayerCommand"],
   ["GET", "/api/panel-bridge/players/Alice", "sendPanelBridgePlayerCommand"],
-  ["POST", "/api/panel-bridge/players/Alice/teleport", "sendPanelBridgePlayerCommand"],
+  [
+    "POST",
+    "/api/panel-bridge/players/Alice/teleport",
+    "sendPanelBridgePlayerCommand",
+  ],
   ["POST", "/api/panel-bridge/message", "sendPanelBridgeServerMessage"],
   ["GET", "/api/panel-bridge/sandbox", "sendPanelBridgeWorldCommand"],
   ["GET", "/api/panel-bridge/commands", "getPanelBridgeCommands"],
@@ -680,29 +704,97 @@ const PANEL_BRIDGE_ROUTES = [
   ["POST", "/api/panel-bridge/install-mod-auto", "sendPanelBridgeSetupCommand"],
   ["POST", "/api/panel-bridge/install-mod", "sendPanelBridgeSetupCommand"],
   ["POST", "/api/panel-bridge/sound/world", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/sound/near-player", "sendPanelBridgeEndangerCommand"],
+  [
+    "POST",
+    "/api/panel-bridge/sound/near-player",
+    "sendPanelBridgeEndangerCommand",
+  ],
   ["POST", "/api/panel-bridge/sound/gunshot", "sendPanelBridgeEndangerCommand"],
   ["POST", "/api/panel-bridge/sound/alarm", "sendPanelBridgeEndangerCommand"],
   ["POST", "/api/panel-bridge/sound/noise", "sendPanelBridgeEndangerCommand"],
   ["GET", "/api/panel-bridge/utilities/status", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/utilities/restore", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/utilities/shutoff", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/character/export", "sendPanelBridgePlayerCommand"],
-  ["POST", "/api/panel-bridge/character/import", "sendPanelBridgePlayerCommand"],
-  ["POST", "/api/panel-bridge/players/Alice/give-item", "sendPanelBridgePlayerCommand"],
-  ["POST", "/api/panel-bridge/players/Alice/heal", "sendPanelBridgePlayerCommand"],
-  ["POST", "/api/panel-bridge/players/Alice/kill", "sendPanelBridgePlayerCommand"],
-  ["POST", "/api/panel-bridge/players/Alice/godmode", "sendPanelBridgePlayerCommand"],
-  ["POST", "/api/panel-bridge/players/Alice/invisible", "sendPanelBridgePlayerCommand"],
+  [
+    "POST",
+    "/api/panel-bridge/utilities/restore",
+    "sendPanelBridgeWorldCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/utilities/shutoff",
+    "sendPanelBridgeWorldCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/character/export",
+    "sendPanelBridgePlayerCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/character/import",
+    "sendPanelBridgePlayerCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/players/Alice/give-item",
+    "sendPanelBridgePlayerCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/players/Alice/heal",
+    "sendPanelBridgePlayerCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/players/Alice/kill",
+    "sendPanelBridgePlayerCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/players/Alice/godmode",
+    "sendPanelBridgePlayerCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/players/Alice/invisible",
+    "sendPanelBridgePlayerCommand",
+  ],
   ["GET", "/api/panel-bridge/zombies/count", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/zombies/clear-near-player", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/zombies/clear-all", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/zombies/spawn-near", "sendPanelBridgeEndangerCommand"],
-  ["POST", "/api/panel-bridge/zombies/spawn-behind", "sendPanelBridgeEndangerCommand"],
-  ["POST", "/api/panel-bridge/visual/view-distance", "sendPanelBridgeWorldCommand"],
+  [
+    "POST",
+    "/api/panel-bridge/zombies/clear-near-player",
+    "sendPanelBridgeWorldCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/zombies/clear-all",
+    "sendPanelBridgeWorldCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/zombies/spawn-near",
+    "sendPanelBridgeEndangerCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/zombies/spawn-behind",
+    "sendPanelBridgeEndangerCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/visual/view-distance",
+    "sendPanelBridgeWorldCommand",
+  ],
   ["POST", "/api/panel-bridge/visual/daylight", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/visual/night-strength", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/visual/desaturation", "sendPanelBridgeWorldCommand"],
+  [
+    "POST",
+    "/api/panel-bridge/visual/night-strength",
+    "sendPanelBridgeWorldCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/visual/desaturation",
+    "sendPanelBridgeWorldCommand",
+  ],
   ["POST", "/api/panel-bridge/visual/ambient", "sendPanelBridgeWorldCommand"],
   ["GET", "/api/panel-bridge/chat/info", "getPanelBridgeChatInfo"],
   ["POST", "/api/panel-bridge/chat/admin", "sendPanelBridgeAdminChat"],
@@ -712,13 +804,25 @@ const PANEL_BRIDGE_ROUTES = [
   ["GET", "/api/panel-bridge/debug/stats", "sendPanelBridgeDiagnosticsCommand"],
   ["POST", "/api/panel-bridge/debug/mode", "sendPanelBridgeDiagnosticsCommand"],
   ["GET", "/api/panel-bridge/debug/api", "sendPanelBridgeDiagnosticsCommand"],
-  ["GET", "/api/panel-bridge/debug/handlers", "sendPanelBridgeDiagnosticsCommand"],
-  ["POST", "/api/panel-bridge/debug/clear-errors", "sendPanelBridgeDiagnosticsCommand"],
+  [
+    "GET",
+    "/api/panel-bridge/debug/handlers",
+    "sendPanelBridgeDiagnosticsCommand",
+  ],
+  [
+    "POST",
+    "/api/panel-bridge/debug/clear-errors",
+    "sendPanelBridgeDiagnosticsCommand",
+  ],
   ["GET", "/api/panel-bridge/catalog/items", "getPanelBridgeCatalog"],
   ["GET", "/api/panel-bridge/catalog/vehicles", "getPanelBridgeCatalog"],
   ["POST", "/api/panel-bridge/catalog/scan-items", "scanPanelBridgeCatalog"],
   ["POST", "/api/panel-bridge/catalog/scan-vehicles", "scanPanelBridgeCatalog"],
-  ["POST", "/api/panel-bridge/catalog/debug-item-script", "sendPanelBridgeDiagnosticsCommand"],
+  [
+    "POST",
+    "/api/panel-bridge/catalog/debug-item-script",
+    "sendPanelBridgeDiagnosticsCommand",
+  ],
 ];
 
 beforeEach(() => {
@@ -731,26 +835,6 @@ beforeEach(() => {
       tokenGen: 0,
     },
   });
-  mocks.getCapabilities
-    .mockReset()
-    .mockResolvedValue([
-      "server.control",
-      "server.world_events",
-      "server.configure",
-      "server.install",
-      "servers.manage",
-      "servers.discover",
-      "panel.settings",
-      "diagnostics.manage",
-      "mods.manage",
-      "serverfiles.manage",
-      "players.view",
-      "players.moderate",
-      "players.gm_tools",
-    "players.endanger_or_impersonate",
-    "bridge.setup",
-    "bridge.diagnostics",
-  ]);
   for (const fn of [
     ...Object.values(mocks.control),
     ...Object.values(mocks.resources),
@@ -969,9 +1053,7 @@ describe("Start compatibility server and player routes", () => {
     });
   });
 
-  it("keeps the legacy PanelBridge ping and command catalog outside the capability matrix", async () => {
-    mocks.getCapabilities.mockResolvedValue([]);
-
+  it("keeps the legacy PanelBridge ping and command catalog authenticated", async () => {
     const ping = await handleStartApiCompatibilityRequest(
       makeRequest("GET", "/api/panel-bridge/ping"),
     );
@@ -982,7 +1064,6 @@ describe("Start compatibility server and player routes", () => {
     expect(ping.status).toBe(200);
     expect(commands.status).toBe(200);
     expect(mocks.authenticate).toHaveBeenCalledTimes(2);
-    expect(mocks.getCapabilities).not.toHaveBeenCalled();
   });
 
   it("preserves query and JSON body data for legacy callers", async () => {
@@ -1022,21 +1103,6 @@ describe("Start compatibility server and player routes", () => {
     });
   });
 
-  it("enforces the route capability before invoking the implementation", async () => {
-    mocks.getCapabilities.mockResolvedValue([]);
-
-    const response = await handleStartApiCompatibilityRequest(
-      makeRequest("POST", "/api/players/kick", { username: "Alice" }),
-    );
-
-    expect(response.status).toBe(403);
-    expect(await responseBody(response)).toEqual({
-      error: "Insufficient permissions",
-      code: "PERMISSION_DENIED",
-    });
-    expect(mocks.control.kickPlayer).not.toHaveBeenCalled();
-  });
-
   it("keeps public status endpoints public", async () => {
     mocks.authenticate.mockRejectedValue(new Error("must not authenticate"));
 
@@ -1074,9 +1140,7 @@ describe("Start compatibility server and player routes", () => {
     },
   );
 
-  it("accepts any permitted backup capability", async () => {
-    mocks.getCapabilities.mockResolvedValue(["backups.download"]);
-
+  it("forwards authenticated backup history requests", async () => {
     const response = await handleStartApiCompatibilityRequest(
       makeRequest("GET", "/api/backup/history?limit=25&serverId=server-1"),
     );
@@ -1099,33 +1163,6 @@ describe("Start compatibility server and player routes", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.authenticate).toHaveBeenCalledWith("Bearer query-token");
-  });
-
-  it.each([
-    ["POST", "/api/auth/regenerate-jwt-secret", "regenerateJwtSecret"],
-    ["GET", "/api/auth/recovery-codes", "getRecoveryCodes"],
-    ["POST", "/api/auth/recovery-codes", "generateRecoveryCodes"],
-  ])("keeps %s %s admin-only", async (method, path, functionName) => {
-    mocks.authenticate.mockResolvedValue({
-      ok: true,
-      user: {
-        userId: "user-1",
-        username: "operator",
-        role: "operator",
-        tokenGen: 0,
-      },
-    });
-
-    const response = await handleStartApiCompatibilityRequest(
-      makeRequest(method, path),
-    );
-
-    expect(response.status).toBe(403);
-    expect(await responseBody(response)).toEqual({
-      error: "Insufficient permissions",
-      code: "PERMISSION_DENIED",
-    });
-    expect(mocks.admin[functionName]).not.toHaveBeenCalled();
   });
 
   it.each([

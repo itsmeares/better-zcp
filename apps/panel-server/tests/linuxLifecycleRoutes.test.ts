@@ -19,10 +19,6 @@ vi.mock("../database/init.ts", () => ({
   setSetting: vi.fn(),
 }));
 
-vi.mock("../services/permissions.ts", () => ({
-  requirePermission: () => (_req, _res, next) => next(),
-}));
-
 vi.mock("../services/serverManager.ts", () => ({
   resolveLaunchMode: () => ({ mode: "managed" }),
   ServerManager: class {
@@ -164,7 +160,9 @@ describe("Linux lifecycle migration routes", () => {
       lifecycleProvider: "systemd",
     });
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "Lifecycle provider changed to systemd" }),
+      expect.objectContaining({
+        message: "Lifecycle provider changed to systemd",
+      }),
     );
   });
 

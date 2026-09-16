@@ -1,5 +1,17 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
-import { clearAccessToken, getAccessToken, setAccessToken } from '../lib/authToken'
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from 'react'
+import {
+  clearAccessToken,
+  getAccessToken,
+  setAccessToken,
+} from '../lib/authToken'
 import { ApiError } from '../lib/api'
 import { getUserErrorMessage } from '../lib/errorMessage'
 import { getAuthStatusWithFallback, getCurrentUser } from '../lib/serverAuth'
@@ -7,8 +19,6 @@ import { getAuthStatusWithFallback, getCurrentUser } from '../lib/serverAuth'
 interface User {
   id: string
   username: string
-  role: string
-  capabilities: string[] | null
 }
 
 interface AuthState {
@@ -20,36 +30,58 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>
-  setup: (username: string, password: string, rememberMe?: boolean, panelPort?: string, setupToken?: string) => Promise<void>
+  login: (
+    username: string,
+    password: string,
+    rememberMe?: boolean,
+  ) => Promise<void>
+  setup: (
+    username: string,
+    password: string,
+    rememberMe?: boolean,
+    panelPort?: string,
+    setupToken?: string,
+  ) => Promise<void>
   logout: () => Promise<void>
   getToken: () => string | null
-  can: (capability: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-const CORS_LOGIN_MESSAGE = 'Connection blocked by browser origin policy. For first-time reverse-proxy setup, set CORS_ORIGINS to this URL in the panel environment and restart it. Otherwise open the panel from a local/LAN address; after setup, manage origins in Settings > Remote Access.'
+const CORS_LOGIN_MESSAGE =
+  'Connection blocked by browser origin policy. For first-time reverse-proxy setup, set CORS_ORIGINS to this URL in the panel environment and restart it. Otherwise open the panel from a local/LAN address; after setup, manage origins in Settings > Remote Access.'
 
-async function getErrorPayload(response: Response): Promise<{ error?: string; code?: string } | null> {
+async function getErrorPayload(
+  response: Response,
+): Promise<{ error?: string; code?: string } | null> {
   try {
     const data = await response.json()
-    return data && typeof data === 'object' ? (data as { error?: string; code?: string }) : null
+    return data && typeof data === 'object'
+      ? (data as { error?: string; code?: string })
+      : null
   } catch {
     return null
   }
 }
 
-export const LOGIN_FAILED_MESSAGE = "We couldn't sign you in. Check your username and password and try again."
+export const LOGIN_FAILED_MESSAGE =
+  "We couldn't sign you in. Check your username and password and try again."
 
 export function getLoginErrorMessage(error: unknown): string {
   if (error instanceof TypeError) {
     return CORS_LOGIN_MESSAGE
   }
-  if (error instanceof Error && /cors|origin policy|failed to fetch/i.test(error.message)) {
+  if (
+    error instanceof Error &&
+    /cors|origin policy|failed to fetch/i.test(error.message)
+  ) {
     return CORS_LOGIN_MESSAGE
   }
-  if (error instanceof ApiError && typeof error.status === 'number' && error.status >= 500) {
+  if (
+    error instanceof ApiError &&
+    typeof error.status === 'number' &&
+    error.status >= 500
+  ) {
     return getUserErrorMessage(error, LOGIN_FAILED_MESSAGE)
   }
   if (error instanceof ApiError && error.status === 429) {
@@ -76,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const status = await getAuthStatusWithFallback()
 
       if (status.needsSetup) {
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           isLoading: false,
           needsSetup: true,
@@ -86,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (!status.authEnabled) {
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           isLoading: false,
           isAuthenticated: true,
@@ -112,7 +144,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const refreshRes = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
+      const refreshRes = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      })
       if (refreshRes.ok) {
         const data = await refreshRes.json()
         setAccessToken(data.accessToken)
@@ -126,14 +161,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isLoading: false,
         isAuthenticated: false,
         authEnabled: true,
       }))
     } catch {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isLoading: false,
         isAuthenticated: false,
@@ -147,7 +182,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth()
   }, [checkAuth])
 
-  const login = useCallback(async (username: string, password: string, rememberMe = true) => {
+  const login = useCallback(
+    async (username: string, password: string, rememberMe = true) => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -158,7 +194,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!res.ok) {
         const data = await getErrorPayload(res)
-        throw new ApiError(data?.error || LOGIN_FAILED_MESSAGE, { status: res.status, code: data?.code })
+          throw new ApiError(data?.error || LOGIN_FAILED_MESSAGE, {
+            status: res.status,
+            code: data?.code,
+          })
       }
 
       const data = await res.json()
@@ -175,14 +214,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         status: error instanceof ApiError ? error.status : undefined,
       })
     }
-  }, [])
+    },
+    [],
+  )
 
-  const setup = useCallback(async (username: string, password: string, rememberMe = true, panelPort = '3001', setupToken = '') => {
+  const setup = useCallback(
+    async (
+      username: string,
+      password: string,
+      rememberMe = true,
+      panelPort = '3001',
+      setupToken = '',
+    ) => {
     const res = await fetch('/api/auth/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ username, password, rememberMe, panelPort, setupToken }),
+        body: JSON.stringify({
+          username,
+          password,
+          rememberMe,
+          panelPort,
+          setupToken,
+        }),
     })
 
     if (!res.ok) {
@@ -190,10 +244,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.code === 'SETUP_TOKEN_REQUIRED') {
         throw new Error('SETUP_TOKEN_REQUIRED')
       }
-      throw new ApiError(data.error || "We couldn't create the admin account. Try again.", {
+        throw new ApiError(
+          data.error || "We couldn't create the admin account. Try again.",
+          {
         status: res.status,
         code: data.code,
-      })
+          },
+        )
     }
 
     const data = await res.json()
@@ -205,33 +262,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       needsSetup: false,
       authEnabled: true,
     })
-  }, [])
+    },
+    [],
+  )
 
   const logout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
     } catch {
       // Ignore logout errors
     }
     clearAccessToken()
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       user: null,
       isAuthenticated: false,
     }))
   }, [])
 
-  const can = useCallback(
-    (capability: string) => {
-      const capabilities = state.user?.capabilities
-      if (capabilities == null) return true
-      return capabilities.includes(capability)
-    },
-    [state.user],
-  )
-
   return (
-    <AuthContext.Provider value={useMemo(() => ({ ...state, login, setup, logout, getToken, can }), [state, login, setup, logout, getToken, can])}>
+    <AuthContext.Provider
+      value={useMemo(
+        () => ({ ...state, login, setup, logout, getToken }),
+        [state, login, setup, logout, getToken],
+      )}
+    >
       {children}
     </AuthContext.Provider>
   )

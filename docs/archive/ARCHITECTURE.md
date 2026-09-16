@@ -40,7 +40,7 @@ Configuration and bridge installation writes use atomic temp-file replacement. `
 
 ## Authentication
 
-Authentication uses bcrypt password hashing, JWT access tokens, refresh cookies, timing-safe comparisons, recovery codes, and role middleware. Privileged routes use `requireRole("admin")`; the client should hide mutation controls from authenticated non-admin users while the server remains the enforcement boundary.
+Authentication uses bcrypt password hashing, JWT access tokens, refresh cookies, timing-safe comparisons, and local password reset tokens. Route authorization remains enforced on the server.
 
 ## Deferred work
 

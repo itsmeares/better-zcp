@@ -8,32 +8,16 @@ import {
   getStorageHealth,
 } from "./serverSystem";
 import {
-  getCapabilities,
-  getRoles,
-} from "./serverPermissions";
-import {
-  assignManagedUserRole,
   changePassword,
-  createManagedRole,
-  createManagedUser,
-  deleteManagedRole,
-  generateRecoveryCodes,
   getAppSettings,
   getDebugRam,
-  getManagedUsers,
-  getOidcSettings,
   getPerformanceHistory,
-  getRecoveryCodes,
   regenerateJwtSecret,
-  removeManagedUser,
   clearCorsBlockedOrigins,
   getCorsDiagnostics,
   reloadCorsDiagnostics,
   testAppRconConnection,
-  testOidcConnection,
   updateAppSettings,
-  updateManagedRole,
-  updateOidcSettings,
 } from "./serverAdmin";
 import {
   getBackupSnapshot,
@@ -3402,19 +3386,6 @@ export const authApi = {
       changePassword({ data: { currentPassword, newPassword } }),
     ),
 
-  getRecoveryCodes: (): Promise<{
-    configured: boolean;
-    remaining: number;
-    total: number;
-    createdAt: string | null;
-  }> => serverCall(() => getRecoveryCodes()),
-
-  generateRecoveryCodes: (): Promise<{
-    success: boolean;
-    codes: string[];
-    createdAt: string;
-  }> => serverCall(() => generateRecoveryCodes()),
-
   regenerateJwtSecret: (): Promise<{ success: boolean; message?: string }> =>
     serverCall(() => regenerateJwtSecret()),
 };
@@ -3650,137 +3621,4 @@ export const systemApi = {
   getStorageHealth: (): Promise<StorageHealth> =>
     getStorageHealth(),
   getRuntime: (): Promise<RuntimeInfo> => getRuntimeInfo(),
-};
-
-
-export interface CapabilityInfo {
-  key: string;
-  label: string;
-  description: string;
-}
-
-export interface CapabilityGroup {
-  group: string;
-  capabilities: CapabilityInfo[];
-}
-
-export interface RoleInfo {
-  id: string;
-  name: string;
-  capabilities: string[];
-  isSeeded: boolean;
-  createdAt: string;
-  updatedAt?: string;
-  memberCount: number;
-}
-
-export const permissionsApi = {
-  getCapabilities: (): Promise<{ groups: CapabilityGroup[] }> =>
-    getCapabilities(),
-
-  getRoles: (): Promise<{ roles: RoleInfo[] }> => getRoles(),
-
-  createRole: (data: {
-    name: string;
-    capabilities: string[];
-  }): Promise<{ success: boolean; role: RoleInfo }> =>
-    serverCall(() => createManagedRole({ data })),
-
-  updateRole: (
-    id: string,
-    data: {
-      name?: string;
-      capabilities?: string[];
-      confirmSelfCapabilityLoss?: boolean;
-    },
-  ): Promise<{ success: boolean; role: RoleInfo }> =>
-    serverCall(() => updateManagedRole({ data: { id, ...data } })),
-
-  deleteRole: (
-    id: string,
-    reassignTo?: string,
-  ): Promise<{
-    success: boolean;
-    deleted: boolean;
-    reassigned: number;
-    reassignedTo: string | null;
-  }> => serverCall(() => deleteManagedRole({ data: { id, reassignTo } })),
-};
-
-export interface ManagedUserAccount {
-  id: string;
-  username: string;
-  role: string;
-  roleId: string | null;
-  createdAt: string;
-  lastLogin: string | null;
-}
-
-export const usersApi = {
-  list: (): Promise<{ users: ManagedUserAccount[] }> =>
-    serverCall(() => getManagedUsers()),
-
-  create: (data: {
-    username: string;
-    password: string;
-    role?: "admin" | "technician" | "moderator";
-    roleId?: string;
-  }): Promise<{ success: boolean; user: ManagedUserAccount }> =>
-    serverCall(() => createManagedUser({ data })),
-
-  assignRole: (
-    userId: string,
-    roleId: string,
-  ): Promise<{ success: boolean; user: ManagedUserAccount }> =>
-    serverCall(() => assignManagedUserRole({ data: { userId, roleId } })),
-
-  remove: (
-    userId: string,
-  ): Promise<{ success: boolean; user: { id: string; username: string } }> =>
-    serverCall(() => removeManagedUser({ data: { userId } })),
-};
-
-export interface OidcSettingsFields {
-  issuerUrl: string;
-  clientId: string;
-  redirectUri: string;
-  scope: string;
-  providerName: string;
-  allowInsecureHttp: boolean;
-}
-
-export interface OidcSettings extends OidcSettingsFields {
-  clientSecretConfigured: boolean;
-  configured: boolean;
-}
-
-export interface OidcSettingsWithEnv extends OidcSettings {
-  envOverrides: Record<keyof OidcSettingsFields | "clientSecret", boolean>;
-  suggestedRedirectUri: string;
-}
-
-export type OidcSettingsUpdate = Partial<OidcSettingsFields> & { clientSecret?: string };
-
-export interface OidcDiscoveredMetadata {
-  issuer: string;
-  authorizationEndpoint: string | null;
-  tokenEndpoint: string | null;
-  userinfoEndpoint: string | null;
-  jwksUri: string | null;
-  scopesSupported: string[];
-}
-
-export const oidcSettingsApi = {
-  get: (): Promise<OidcSettingsWithEnv> =>
-    serverCall(() => getOidcSettings()),
-
-  update: (
-    updates: OidcSettingsUpdate,
-  ): Promise<{ success: boolean } & OidcSettings> =>
-    serverCall(() => updateOidcSettings({ data: updates })),
-
-  testConnection: (
-    updates: OidcSettingsUpdate,
-  ): Promise<{ success: true; metadata: OidcDiscoveredMetadata }> =>
-    serverCall(() => testOidcConnection({ data: updates })),
 };

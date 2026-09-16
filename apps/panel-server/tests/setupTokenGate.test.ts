@@ -117,7 +117,6 @@ describe("authService.middleware() — the pre-setup gate", () => {
     );
   });
 });
-
 describe("POST /api/auth/setup — the setup-token gate", () => {
   beforeEach(async () => {
     settings.clear();
@@ -199,58 +198,6 @@ describe("POST /api/auth/setup — the setup-token gate", () => {
     const secondRes = createResponse();
     await runRoute("/setup", "post", secondReq, secondRes);
     expect(secondRes.status).toHaveBeenCalledWith(400);
-    expect(db.data.users.length).toBe(1);
-  });
-});
-
-describe("authService.bootstrapAdminFromExternalIdentity() — the OIDC bootstrap door", () => {
-  beforeEach(() => {
-    settings.clear();
-    db.data.users = [];
-  });
-
-  const identity = {
-    issuer: "https://idp.example.com",
-    subject: "sub-123",
-    email: "op@example.com",
-    username: "opidc",
-  };
-
-  it("refuses a missing setup token", async () => {
-    await expect(
-      authService.bootstrapAdminFromExternalIdentity({ ...identity }),
-    ).rejects.toThrow(/setup token/i);
-    expect(db.data.users.length).toBe(0);
-  });
-
-  it("refuses a wrong setup token", async () => {
-    await getOrCreateSetupToken();
-    await expect(
-      authService.bootstrapAdminFromExternalIdentity({
-        ...identity,
-        setupToken: "wrong",
-      }),
-    ).rejects.toThrow(/setup token/i);
-    expect(db.data.users.length).toBe(0);
-  });
-
-  it("accepts the correct token exactly once, and a second call (even with the same identity) fails once a user exists", async () => {
-    const token = await getOrCreateSetupToken();
-
-    const created = await authService.bootstrapAdminFromExternalIdentity({
-      ...identity,
-      setupToken: token,
-    });
-    expect(created.role).toBe("admin");
-    expect(db.data.users.length).toBe(1);
-    expect(settings.get("setupToken")).toBeNull();
-
-    await expect(
-      authService.bootstrapAdminFromExternalIdentity({
-        ...identity,
-        setupToken: token,
-      }),
-    ).rejects.toThrow(/Setup already completed/i);
     expect(db.data.users.length).toBe(1);
   });
 });

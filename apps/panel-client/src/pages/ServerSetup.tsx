@@ -30,9 +30,7 @@ import { configApi, serverApi, serversApi, debugApi } from '@/lib/api'
 import { useRuntimeInfo } from '@/hooks/useRuntimeInfo'
 import { HelpTip } from '@/components/HelpTip'
 import { NumberInput } from '@/components/NumberInput'
-import { DisabledReason } from '@/components/DisabledReason'
 import { getInstallProgressMessage } from '@/lib/installProgressMessage'
-import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from '@tanstack/react-router'
 import {
   Card,
@@ -260,14 +258,10 @@ export default function ServerSetup() {
   const installViaSteamCmdRef = useRef(false)
 
   const { toast } = useToast()
-  const { can } = useAuth()
   const socket = useContext(SocketContext)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
-  const canInstall = can('server.install')
-  const canSaveSteamCmdPath = can('panel.settings')
-  const canControlServer = can('server.control')
   const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [startingServer, setStartingServer] = useState(false)
 
@@ -712,7 +706,6 @@ export default function ServerSetup() {
   }
 
   const handleAutoDownloadSteamCmd = async () => {
-    if (!canInstall) return
     setDownloadingSteamCmd(true)
     setSteamCmdStatus('Starting download...')
     try {
@@ -794,7 +787,6 @@ export default function ServerSetup() {
   }
 
   const handleInstall = async () => {
-    if (!canInstall) return
     if (!adminPassword) {
       toast({
         title: 'Admin Password Required',
@@ -860,7 +852,6 @@ export default function ServerSetup() {
   }
 
   const handleQuickSetup = async () => {
-    if (!canInstall) return
     if (!adminPassword) {
       toast({
         title: 'Admin Password Required',
@@ -997,7 +988,6 @@ export default function ServerSetup() {
   }
 
   const handleSaveSteamCmdPath = async () => {
-    if (!canSaveSteamCmdPath) return
     try {
       await configApi.updateAppSettings({ steamcmdPath: steamCmdPath })
       setHasSteamCmd(true)
@@ -1015,7 +1005,6 @@ export default function ServerSetup() {
   }
 
   const handleStartServerNow = async () => {
-    if (!canControlServer) return
     setStartingServer(true)
     try {
       await serverApi.start()
@@ -1393,32 +1382,24 @@ export default function ServerSetup() {
                     </TooltipProvider>
                   </div>
 
-                  <DisabledReason
-                    reason={
-                      !canInstall
-                        ? "Installing a server requires the server.install permission, which this role doesn't have."
-                        : null
-                    }
+                  <Button
+                    onClick={handleAutoDownloadSteamCmd}
+                    disabled={downloadingSteamCmd}
+                    className="w-full"
+                    size="lg"
                   >
-                    <Button
-                      onClick={handleAutoDownloadSteamCmd}
-                      disabled={downloadingSteamCmd || !canInstall}
-                      className="w-full"
-                      size="lg"
-                    >
-                      {downloadingSteamCmd ? (
-                        <>
-                          <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                          {steamCmdStatus || 'Installing SteamCMD...'}
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-4 h-4 me-2" />
-                          {'Install SteamCMD Automatically'}
-                        </>
-                      )}
-                    </Button>
-                  </DisabledReason>
+                    {downloadingSteamCmd ? (
+                      <>
+                        <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                        {steamCmdStatus || 'Installing SteamCMD...'}
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4 me-2" />
+                        {'Install SteamCMD Automatically'}
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -1498,20 +1479,10 @@ export default function ServerSetup() {
                     >
                       <FolderOpen className="w-4 h-4" />
                     </Button>
-                    <DisabledReason
-                      reason={
-                        !canSaveSteamCmdPath
-                          ? "Saving this setting requires the panel.settings permission, which this role doesn't have."
-                          : null
-                      }
-                    >
-                      <Button
-                        onClick={handleSaveSteamCmdPath}
-                        disabled={!canSaveSteamCmdPath}
-                      >
-                        {'Save Path'}
-                      </Button>
-                    </DisabledReason>
+
+                    <Button onClick={handleSaveSteamCmdPath}>
+                      {'Save Path'}
+                    </Button>
                   </div>
                 </div>
               </AccordionContent>
@@ -2192,32 +2163,24 @@ export default function ServerSetup() {
         </ul>
       </div>
 
-      <DisabledReason
-        reason={
-          !canInstall
-            ? "Installing a server requires the server.install permission, which this role doesn't have."
-            : null
-        }
+      <Button
+        onClick={handleInstall}
+        disabled={installing || missingAdminPassword}
+        className="w-full"
+        size="lg"
       >
-        <Button
-          onClick={handleInstall}
-          disabled={installing || missingAdminPassword || !canInstall}
-          className="w-full"
-          size="lg"
-        >
-          {installing ? (
-            <>
-              <Loader2 className="w-4 h-4 me-2 animate-spin" />
-              {'Installing server... check the log below'}
-            </>
-          ) : (
-            <>
-              <Download className="w-4 h-4 me-2" />
-              {'Install Project Zomboid Server'}
-            </>
-          )}
-        </Button>
-      </DisabledReason>
+        {installing ? (
+          <>
+            <Loader2 className="w-4 h-4 me-2 animate-spin" />
+            {'Installing server... check the log below'}
+          </>
+        ) : (
+          <>
+            <Download className="w-4 h-4 me-2" />
+            {'Install Project Zomboid Server'}
+          </>
+        )}
+      </Button>
 
       {missingAdminPassword && (
         <p className="text-sm text-warning">
@@ -2300,30 +2263,23 @@ export default function ServerSetup() {
             </div>
 
             <div className="flex gap-3">
-              <DisabledReason
-                reason={
-                  !canControlServer
-                    ? "Starting the server requires the server.control permission, which this role doesn't have."
-                    : null
-                }
+              <Button
+                onClick={handleStartServerNow}
+                disabled={startingServer}
+                className="flex-1"
               >
-                <Button
-                  onClick={handleStartServerNow}
-                  disabled={startingServer || !canControlServer}
-                  className="flex-1"
-                >
-                  {startingServer ? (
-                    <>
-                      <Loader2 className="w-4 h-4 me-2 animate-spin" />{' '}
-                      {'Starting...'}
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 me-2" /> {'Start Server'}
-                    </>
-                  )}
-                </Button>
-              </DisabledReason>
+                {startingServer ? (
+                  <>
+                    <Loader2 className="w-4 h-4 me-2 animate-spin" />{' '}
+                    {'Starting...'}
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 me-2" /> {'Start Server'}
+                  </>
+                )}
+              </Button>
+
               <Button
                 variant="outline"
                 onClick={() => void navigate({ to: '/' })}
@@ -2868,32 +2824,24 @@ export default function ServerSetup() {
         </CardContent>
       </Card>
 
-      <DisabledReason
-        reason={
-          !canInstall
-            ? "Installing a server requires the server.install permission, which this role doesn't have."
-            : null
-        }
+      <Button
+        onClick={handleQuickSetup}
+        disabled={installing || missingAdminPassword}
+        className="w-full"
+        size="lg"
       >
-        <Button
-          onClick={handleQuickSetup}
-          disabled={installing || missingAdminPassword || !canInstall}
-          className="w-full"
-          size="lg"
-        >
-          {installing ? (
-            <>
-              <Loader2 className="w-4 h-4 me-2 animate-spin" />
-              {'Creating server...'}
-            </>
-          ) : (
-            <>
-              <Plus className="w-4 h-4 me-2" />
-              {'Create Server'}
-            </>
-          )}
-        </Button>
-      </DisabledReason>
+        {installing ? (
+          <>
+            <Loader2 className="w-4 h-4 me-2 animate-spin" />
+            {'Creating server...'}
+          </>
+        ) : (
+          <>
+            <Plus className="w-4 h-4 me-2" />
+            {'Create Server'}
+          </>
+        )}
+      </Button>
 
       {missingAdminPassword && (
         <p className="text-sm text-warning">
@@ -2942,30 +2890,23 @@ export default function ServerSetup() {
             </div>
 
             <div className="flex gap-3">
-              <DisabledReason
-                reason={
-                  !canControlServer
-                    ? "Starting the server requires the server.control permission, which this role doesn't have."
-                    : null
-                }
+              <Button
+                onClick={handleStartServerNow}
+                disabled={startingServer}
+                className="flex-1"
               >
-                <Button
-                  onClick={handleStartServerNow}
-                  disabled={startingServer || !canControlServer}
-                  className="flex-1"
-                >
-                  {startingServer ? (
-                    <>
-                      <Loader2 className="w-4 h-4 me-2 animate-spin" />{' '}
-                      {'Starting...'}
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 me-2" /> {'Start Server'}
-                    </>
-                  )}
-                </Button>
-              </DisabledReason>
+                {startingServer ? (
+                  <>
+                    <Loader2 className="w-4 h-4 me-2 animate-spin" />{' '}
+                    {'Starting...'}
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 me-2" /> {'Start Server'}
+                  </>
+                )}
+              </Button>
+
               <Button
                 variant="outline"
                 onClick={() => void navigate({ to: '/' })}

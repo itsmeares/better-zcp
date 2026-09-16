@@ -79,9 +79,7 @@ import {
 import { EmptyState } from '@/components/EmptyState'
 import { NumberInput } from '@/components/NumberInput'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { DisabledReason } from '@/components/DisabledReason'
 import { HelpTip } from '@/components/HelpTip'
-import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
 
 const RESTART_WARNING_LOCALES = ['en', 'zh-CN', 'fr', 'de', 'es', 'ht'] as const
@@ -433,8 +431,6 @@ export default function Scheduler() {
   const [broadcastingKey, setBroadcastingKey] = useState<string | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const { toast } = useToast()
-  const { can } = useAuth()
-  const canRestartNow = can('server.control')
 
   const [newTaskName, setNewTaskName] = useState('')
   const [newTaskCron, setNewTaskCron] = useState('')
@@ -1596,108 +1592,79 @@ export default function Scheduler() {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <div className="flex flex-wrap gap-2">
-              <DisabledReason
-                reason={
-                  !canRestartNow
-                    ? "Restarting the server requires the server.control permission, which this role doesn't have."
-                    : null
-                }
+              <Button
+                onClick={() => handleRestartWithWarning(15)}
+                disabled={loading || !serverRunning}
+                variant="outline"
+                size="sm"
+                // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                title={'Restart in 15 minutes with countdown warnings'}
               >
-                <Button
-                  onClick={() => handleRestartWithWarning(15)}
-                  disabled={loading || !serverRunning || !canRestartNow}
-                  variant="outline"
-                  size="sm"
-                  // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Restart in 15 minutes with countdown warnings"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                  title={'Restart in 15 minutes with countdown warnings'}
-                >
-                  <Clock className="w-4 h-4 me-2" />
-                  {'Restart in 15m'}
-                </Button>
-              </DisabledReason>
-              <DisabledReason
-                reason={
-                  !canRestartNow
-                    ? "Restarting the server requires the server.control permission, which this role doesn't have."
-                    : null
-                }
+                <Clock className="w-4 h-4 me-2" />
+                {'Restart in 15m'}
+              </Button>
+
+              <Button
+                onClick={() => handleRestartWithWarning(10)}
+                disabled={loading || !serverRunning}
+                variant="outline"
+                size="sm"
+                // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                title={'Restart in 10 minutes with countdown warnings'}
               >
-                <Button
-                  onClick={() => handleRestartWithWarning(10)}
-                  disabled={loading || !serverRunning || !canRestartNow}
-                  variant="outline"
-                  size="sm"
-                  // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Restart in 10 minutes with countdown warnings"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                  title={'Restart in 10 minutes with countdown warnings'}
-                >
-                  <Clock className="w-4 h-4 me-2" />
-                  {'Restart in 10m'}
-                </Button>
-              </DisabledReason>
-              <DisabledReason
-                reason={
-                  !canRestartNow
-                    ? "Restarting the server requires the server.control permission, which this role doesn't have."
-                    : null
-                }
+                <Clock className="w-4 h-4 me-2" />
+                {'Restart in 10m'}
+              </Button>
+
+              <Button
+                onClick={() => handleRestartWithWarning(5)}
+                disabled={loading || !serverRunning}
+                variant="outline"
+                size="sm"
+                // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                title={'Restart in 5 minutes with countdown warnings'}
               >
-                <Button
-                  onClick={() => handleRestartWithWarning(5)}
-                  disabled={loading || !serverRunning || !canRestartNow}
-                  variant="outline"
-                  size="sm"
-                  // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Restart in 5 minutes with countdown warnings"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                  title={'Restart in 5 minutes with countdown warnings'}
-                >
-                  <Clock className="w-4 h-4 me-2" />
-                  {'Restart in 5m'}
-                </Button>
-              </DisabledReason>
-              <DisabledReason
-                reason={
-                  !canRestartNow
-                    ? "Restarting the server requires the server.control permission, which this role doesn't have."
-                    : null
-                }
-              >
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      disabled={loading || !serverRunning || !canRestartNow}
-                      variant="warning"
-                      size="sm"
-                      // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Restart in 1 minute — short warning, requires confirmation", describing the action's own confirm-dialog behavior, not why it's disabled); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                      title={
-                        'Restart in 1 minute — short warning, requires confirmation'
+                <Clock className="w-4 h-4 me-2" />
+                {'Restart in 5m'}
+              </Button>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    disabled={loading || !serverRunning}
+                    variant="warning"
+                    size="sm"
+                    // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                    title={
+                      'Restart in 1 minute — short warning, requires confirmation'
+                    }
+                  >
+                    <Clock className="w-4 h-4 me-2" />
+                    {'Restart in 1m'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {'Restart server in 1 minute?'}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {
+                        'Players get a single 1-minute warning before the server goes down. Use longer countdowns if anyone is mid-fight or driving.'
                       }
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{'Cancel'}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleRestartWithWarning(1)}
+                      className="bg-warning text-warning-foreground hover:bg-warning/90"
                     >
-                      <Clock className="w-4 h-4 me-2" />
                       {'Restart in 1m'}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        {'Restart server in 1 minute?'}
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {
-                          'Players get a single 1-minute warning before the server goes down. Use longer countdowns if anyone is mid-fight or driving.'
-                        }
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>{'Cancel'}</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => handleRestartWithWarning(1)}
-                        className="bg-warning text-warning-foreground hover:bg-warning/90"
-                      >
-                        {'Restart in 1m'}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </DisabledReason>
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
 
             <div className="flex items-end gap-4">
@@ -1711,79 +1678,59 @@ export default function Scheduler() {
                 />
               </div>
               {restartMinutes < 5 ? (
-                <DisabledReason
-                  reason={
-                    !canRestartNow
-                      ? "Restarting the server requires the server.control permission, which this role doesn't have."
-                      : null
-                  }
-                >
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        disabled={
-                          loading ||
-                          !serverRunning ||
-                          !Number.isFinite(restartMinutes) ||
-                          !canRestartNow
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      disabled={
+                        loading ||
+                        !serverRunning ||
+                        !Number.isFinite(restartMinutes)
+                      }
+                      variant="warning"
+                    >
+                      <RotateCcw className="w-4 h-4 me-2" />
+                      {'Restart Now'}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {Number(restartMinutes) === 1
+                          ? 'Restart in ' + String(restartMinutes) + ' minute?'
+                          : 'Restart in ' +
+                            String(restartMinutes) +
+                            ' minutes?'}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {
+                          'Short countdowns can catch players mid-action. Confirm if you really want to restart this fast.'
                         }
-                        variant="warning"
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{'Cancel'}</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleRestartNow}
+                        className="bg-warning text-warning-foreground hover:bg-warning/90"
                       >
-                        <RotateCcw className="w-4 h-4 me-2" />
-                        {'Restart Now'}
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {Number(restartMinutes) === 1
-                            ? 'Restart in ' +
-                              String(restartMinutes) +
-                              ' minute?'
-                            : 'Restart in ' +
-                              String(restartMinutes) +
-                              ' minutes?'}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {
-                            'Short countdowns can catch players mid-action. Confirm if you really want to restart this fast.'
-                          }
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{'Cancel'}</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleRestartNow}
-                          className="bg-warning text-warning-foreground hover:bg-warning/90"
-                        >
-                          {'Restart in ' + String(restartMinutes) + 'm'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </DisabledReason>
+                        {'Restart in ' + String(restartMinutes) + 'm'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               ) : (
-                <DisabledReason
-                  reason={
-                    !canRestartNow
-                      ? "Restarting the server requires the server.control permission, which this role doesn't have."
-                      : null
+                <Button
+                  onClick={handleRestartNow}
+                  disabled={
+                    loading ||
+                    !serverRunning ||
+                    !Number.isFinite(restartMinutes)
                   }
+                  variant="warning"
                 >
-                  <Button
-                    onClick={handleRestartNow}
-                    disabled={
-                      loading ||
-                      !serverRunning ||
-                      !Number.isFinite(restartMinutes) ||
-                      !canRestartNow
-                    }
-                    variant="warning"
-                  >
-                    <RotateCcw className="w-4 h-4 me-2" />
-                    {'Restart Now'}
-                  </Button>
-                </DisabledReason>
+                  <RotateCcw className="w-4 h-4 me-2" />
+                  {'Restart Now'}
+                </Button>
               )}
             </div>
             <p className="text-sm text-muted-foreground">

@@ -26,7 +26,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { discordApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
 import {
   MessageSquare,
   Bot,
@@ -231,8 +230,6 @@ export default function Discord() {
   const eventLabels = useMemo(() => getEventLabels(), [])
   const SETUP_STEPS = useMemo(() => getSetupSteps(), [])
   const confirm = useConfirm()
-  const { can } = useAuth()
-  const canManageIntegrations = can('integrations.manage')
   const [status, setStatus] = useState<DiscordStatus | null>(null)
   const [gatewayIssueDismissed, setGatewayIssueDismissed] = useState<
     string | null
@@ -399,7 +396,6 @@ export default function Discord() {
   )
 
   const handleSaveConfig = async (andStart = false) => {
-    if (!canManageIntegrations) return
     try {
       setSaving(true)
       setConfigMessage(null)
@@ -495,7 +491,6 @@ export default function Discord() {
   }
 
   const handleTestToken = async () => {
-    if (!canManageIntegrations) return
     try {
       setTesting(true)
       setConfigMessage(null)
@@ -528,7 +523,7 @@ export default function Discord() {
   const [resetting, setResetting] = useState(false)
 
   const handleStart = async () => {
-    if (starting || !canManageIntegrations) return
+    if (starting) return
     try {
       setStarting(true)
       setConfigMessage(null)
@@ -544,7 +539,7 @@ export default function Discord() {
   }
 
   const handleStop = async () => {
-    if (stopping || !canManageIntegrations) return
+    if (stopping) return
     try {
       setStopping(true)
       setConfigMessage(null)
@@ -560,7 +555,7 @@ export default function Discord() {
   }
 
   const handleSendTestMessage = async () => {
-    if (sendingTest || !canManageIntegrations) return
+    if (sendingTest) return
     try {
       setSendingTest(true)
       setConfigMessage(null)
@@ -578,7 +573,7 @@ export default function Discord() {
   }
 
   const handleResetConfig = async () => {
-    if (resetting || !canManageIntegrations) return
+    if (resetting) return
 
     const confirmed = await confirm({
       title: 'Wipe Discord bot settings?',
@@ -638,7 +633,6 @@ export default function Discord() {
   }
 
   const handleSaveWebhookEvents = async () => {
-    if (!canManageIntegrations) return
     try {
       setSavingEvents(true)
       await discordApi.updateWebhookEvents(webhookEvents)
@@ -885,27 +879,20 @@ export default function Discord() {
                         )}
                       </Button>
                     </div>
-                    <DisabledReason
-                      reason={
-                        !canManageIntegrations
-                          ? "You don't have permission to manage the Discord integration."
-                          : null
-                      }
+
+                    <Button
+                      onClick={handleTestToken}
+                      disabled={testing || !token}
+                      className="min-w-[100px]"
                     >
-                      <Button
-                        onClick={handleTestToken}
-                        disabled={testing || !token || !canManageIntegrations}
-                        className="min-w-[100px]"
-                      >
-                        {testing ? (
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Zap className="w-4 h-4 me-1.5" /> {'Verify'}
-                          </>
-                        )}
-                      </Button>
-                    </DisabledReason>
+                      {testing ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 me-1.5" /> {'Verify'}
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
 
@@ -1301,7 +1288,7 @@ export default function Discord() {
                           {'Right-click a role → '}
                           <strong>{'Copy Role ID'}</strong>
                           {
-                            ". Only Discord members with this role can use bot commands — a separate role from this panel's own Roles & Permissions. Leave blank to allow everyone."
+                            '. Only Discord members with this role can use bot commands. Leave blank to allow everyone.'
                           }
                         </>
                       </p>
@@ -1423,49 +1410,30 @@ export default function Discord() {
                     <ChevronLeft className="w-4 h-4 me-1" /> {'Back'}
                   </Button>
                   <div className="flex gap-2">
-                    <DisabledReason
-                      reason={
-                        !canManageIntegrations
-                          ? "You don't have permission to manage the Discord integration."
-                          : null
-                      }
+                    <Button
+                      variant="outline"
+                      onClick={() => handleSaveConfig(false)}
+                      disabled={saving || !canSaveConfig}
                     >
-                      <Button
-                        variant="outline"
-                        onClick={() => handleSaveConfig(false)}
-                        disabled={
-                          saving || !canSaveConfig || !canManageIntegrations
-                        }
-                      >
-                        {saving ? (
-                          <RefreshCw className="w-4 h-4 me-2 animate-spin" />
-                        ) : (
-                          <Settings className="w-4 h-4 me-2" />
-                        )}
-                        {'Save Draft'}
-                      </Button>
-                    </DisabledReason>
-                    <DisabledReason
-                      reason={
-                        !canManageIntegrations
-                          ? "You don't have permission to manage the Discord integration."
-                          : null
-                      }
+                      {saving ? (
+                        <RefreshCw className="w-4 h-4 me-2 animate-spin" />
+                      ) : (
+                        <Settings className="w-4 h-4 me-2" />
+                      )}
+                      {'Save Draft'}
+                    </Button>
+
+                    <Button
+                      onClick={() => handleSaveConfig(true)}
+                      disabled={saving || !canSaveConfig}
                     >
-                      <Button
-                        onClick={() => handleSaveConfig(true)}
-                        disabled={
-                          saving || !canSaveConfig || !canManageIntegrations
-                        }
-                      >
-                        {saving ? (
-                          <RefreshCw className="w-4 h-4 me-2 animate-spin" />
-                        ) : (
-                          <Play className="w-4 h-4 me-2" />
-                        )}
-                        {'Save & Start Bot'}
-                      </Button>
-                    </DisabledReason>
+                      {saving ? (
+                        <RefreshCw className="w-4 h-4 me-2 animate-spin" />
+                      ) : (
+                        <Play className="w-4 h-4 me-2" />
+                      )}
+                      {'Save & Start Bot'}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1679,73 +1647,47 @@ export default function Discord() {
 
             <div className="flex gap-2">
               {status?.running ? (
-                <DisabledReason
-                  reason={
-                    !canManageIntegrations
-                      ? "You don't have permission to manage the Discord integration."
-                      : null
-                  }
+                <Button
+                  variant="outline"
+                  onClick={handleStop}
                   className="flex-1"
+                  disabled={stopping}
                 >
-                  <Button
-                    variant="outline"
-                    onClick={handleStop}
-                    className="flex-1"
-                    disabled={stopping || !canManageIntegrations}
-                  >
-                    {stopping ? (
-                      <RefreshCw className="w-4 h-4 me-2 animate-spin" />
-                    ) : (
-                      <Square className="w-4 h-4 me-2" />
-                    )}
-                    {stopping ? 'Stopping...' : 'Stop Bot'}
-                  </Button>
-                </DisabledReason>
+                  {stopping ? (
+                    <RefreshCw className="w-4 h-4 me-2 animate-spin" />
+                  ) : (
+                    <Square className="w-4 h-4 me-2" />
+                  )}
+                  {stopping ? 'Stopping...' : 'Stop Bot'}
+                </Button>
               ) : (
-                <DisabledReason
-                  reason={
-                    !canManageIntegrations
-                      ? "You don't have permission to manage the Discord integration."
-                      : null
-                  }
+                <Button
+                  onClick={handleStart}
                   className="flex-1"
+                  disabled={starting}
                 >
-                  <Button
-                    onClick={handleStart}
-                    className="flex-1"
-                    disabled={starting || !canManageIntegrations}
-                  >
-                    {starting ? (
-                      <RefreshCw className="w-4 h-4 me-2 animate-spin" />
-                    ) : (
-                      <Play className="w-4 h-4 me-2" />
-                    )}
-                    {starting ? 'Starting...' : 'Start Bot'}
-                  </Button>
-                </DisabledReason>
+                  {starting ? (
+                    <RefreshCw className="w-4 h-4 me-2 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4 me-2" />
+                  )}
+                  {starting ? 'Starting...' : 'Start Bot'}
+                </Button>
               )}
 
               {status?.running && config?.channelId && (
-                <DisabledReason
-                  reason={
-                    !canManageIntegrations
-                      ? "You don't have permission to manage the Discord integration."
-                      : null
-                  }
+                <Button
+                  variant="outline"
+                  onClick={handleSendTestMessage}
+                  disabled={sendingTest}
                 >
-                  <Button
-                    variant="outline"
-                    onClick={handleSendTestMessage}
-                    disabled={sendingTest || !canManageIntegrations}
-                  >
-                    {sendingTest ? (
-                      <RefreshCw className="w-4 h-4 me-2 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4 me-2" />
-                    )}
-                    {sendingTest ? 'Sending...' : 'Send Test'}
-                  </Button>
-                </DisabledReason>
+                  {sendingTest ? (
+                    <RefreshCw className="w-4 h-4 me-2 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4 me-2" />
+                  )}
+                  {sendingTest ? 'Sending...' : 'Send Test'}
+                </Button>
               )}
             </div>
           </CardContent>
@@ -1769,7 +1711,7 @@ export default function Discord() {
               <AlertTitle>{'Not the same roles as this panel'}</AlertTitle>
               <AlertDescription>
                 {
-                  "Admin and Moderator here are Discord roles, set via the Admin/Moderator Role ID fields below — separate from this panel's own Roles & Permissions. A Discord account is not linked to any panel account, so a user's panel role has no effect on what they can run here, and holding a Discord Admin/Moderator role grants nothing inside the panel."
+                  'Admin and Moderator here are Discord roles set with the role IDs below. They only control bot commands and grant no access to the panel.'
                 }
               </AlertDescription>
             </Alert>
@@ -1883,45 +1825,36 @@ export default function Discord() {
             </div>
 
             <div className="flex justify-end pt-2">
-              <DisabledReason
-                reason={
-                  !canManageIntegrations
-                    ? "You don't have permission to manage the Discord integration."
-                    : null
-                }
+              <Button
+                onClick={async () => {
+                  try {
+                    setSavingPermissions(true)
+                    await discordApi.updatePermissions(commandPermissions)
+                    setPermissionsMessage({
+                      type: 'success',
+                      text: 'Command permissions saved. Slash commands re-registered.',
+                    })
+                  } catch (error: unknown) {
+                    const msg = getUserErrorMessage(
+                      error,
+                      'Failed to save permissions',
+                    )
+                    setPermissionsMessage({ type: 'error', text: msg })
+                  } finally {
+                    setSavingPermissions(false)
+                  }
+                }}
+                disabled={savingPermissions}
               >
-                <Button
-                  onClick={async () => {
-                    if (!canManageIntegrations) return
-                    try {
-                      setSavingPermissions(true)
-                      await discordApi.updatePermissions(commandPermissions)
-                      setPermissionsMessage({
-                        type: 'success',
-                        text: 'Command permissions saved. Slash commands re-registered.',
-                      })
-                    } catch (error: unknown) {
-                      const msg = getUserErrorMessage(
-                        error,
-                        'Failed to save permissions',
-                      )
-                      setPermissionsMessage({ type: 'error', text: msg })
-                    } finally {
-                      setSavingPermissions(false)
-                    }
-                  }}
-                  disabled={savingPermissions || !canManageIntegrations}
-                >
-                  {savingPermissions ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 me-2 animate-spin" />{' '}
-                      {'Saving...'}
-                    </>
-                  ) : (
-                    'Save Permissions'
-                  )}
-                </Button>
-              </DisabledReason>
+                {savingPermissions ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 me-2 animate-spin" />{' '}
+                    {'Saving...'}
+                  </>
+                ) : (
+                  'Save Permissions'
+                )}
+              </Button>
             </div>
             <InlineFeedback message={permissionsMessage} className="mt-3" />
           </CardContent>
@@ -1983,27 +1916,20 @@ export default function Discord() {
                   )}
                 </Button>
               </div>
-              <DisabledReason
-                reason={
-                  !canManageIntegrations
-                    ? "You don't have permission to manage the Discord integration."
-                    : null
-                }
+
+              <Button
+                variant="outline"
+                onClick={handleTestToken}
+                disabled={testing || !token}
               >
-                <Button
-                  variant="outline"
-                  onClick={handleTestToken}
-                  disabled={testing || !token || !canManageIntegrations}
-                >
-                  {testing ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4 me-1.5" /> {'Verify Token'}
-                    </>
-                  )}
-                </Button>
-              </DisabledReason>
+                {testing ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 me-1.5" /> {'Verify Token'}
+                  </>
+                )}
+              </Button>
             </div>
             {botInfo && (
               <div className="flex items-center gap-2 text-sm text-primary">
@@ -2220,54 +2146,40 @@ export default function Discord() {
               }
             </div>
             <div className="flex justify-end gap-2">
-              <DisabledReason
-                reason={
-                  !canManageIntegrations
-                    ? "You don't have permission to manage the Discord integration."
-                    : null
-                }
+              <Button
+                variant="destructive"
+                onClick={handleResetConfig}
+                disabled={resetting}
               >
-                <Button
-                  variant="destructive"
-                  onClick={handleResetConfig}
-                  disabled={resetting || !canManageIntegrations}
-                >
-                  {resetting ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 me-2 animate-spin" />{' '}
-                      {'Wiping...'}
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-4 h-4 me-2" /> {'Wipe Discord Setup'}
-                    </>
-                  )}
-                </Button>
-              </DisabledReason>
+                {resetting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 me-2 animate-spin" />{' '}
+                    {'Wiping...'}
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 me-2" /> {'Wipe Discord Setup'}
+                  </>
+                )}
+              </Button>
+
               <Button variant="outline" onClick={loadData}>
                 {'Cancel'}
               </Button>
-              <DisabledReason
-                reason={
-                  !canManageIntegrations
-                    ? "You don't have permission to manage the Discord integration."
-                    : null
-                }
+
+              <Button
+                onClick={() => handleSaveConfig(false)}
+                disabled={saving || !canSaveConfig}
               >
-                <Button
-                  onClick={() => handleSaveConfig(false)}
-                  disabled={saving || !canSaveConfig || !canManageIntegrations}
-                >
-                  {saving ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 me-2 animate-spin" />{' '}
-                      {'Saving...'}
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
-                </Button>
-              </DisabledReason>
+                {saving ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 me-2 animate-spin" />{' '}
+                    {'Saving...'}
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -2335,27 +2247,16 @@ export default function Discord() {
             },
           )}
           <div className="flex justify-end">
-            <DisabledReason
-              reason={
-                !canManageIntegrations
-                  ? "You don't have permission to manage the Discord integration."
-                  : null
-              }
-            >
-              <Button
-                onClick={handleSaveWebhookEvents}
-                disabled={savingEvents || !canManageIntegrations}
-              >
-                {savingEvents ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 me-2 animate-spin" />{' '}
-                    {'Saving...'}
-                  </>
-                ) : (
-                  'Save Events'
-                )}
-              </Button>
-            </DisabledReason>
+            <Button onClick={handleSaveWebhookEvents} disabled={savingEvents}>
+              {savingEvents ? (
+                <>
+                  <RefreshCw className="w-4 h-4 me-2 animate-spin" />{' '}
+                  {'Saving...'}
+                </>
+              ) : (
+                'Save Events'
+              )}
+            </Button>
           </div>
           <InlineFeedback message={eventsMessage} className="mt-3" />
         </CardContent>

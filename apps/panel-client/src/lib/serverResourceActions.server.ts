@@ -1,8 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 type ServiceError = {
@@ -56,19 +53,7 @@ function invalid(message: string, code?: string): never {
   )
 }
 
-function capabilityMiddleware(capability?: string) {
-  return capability
-    ? ([
-        ...protectedServerFunctionMiddleware,
-        permissionMiddleware(capability),
-      ] as const)
-    : protectedServerFunctionMiddleware
-}
-
-function createResourceAction<T>(
-  capability: string | undefined,
-  handler: (data: AnyRecord) => Promise<T> | T,
-) {
+function createResourceAction<T>(handler: (data: AnyRecord) => Promise<T> | T) {
   const implementation = async (data: AnyRecord): Promise<T> => {
     try {
       return (await handler(data)) as T
@@ -78,7 +63,7 @@ function createResourceAction<T>(
   }
   return Object.assign(
     createServerFn({ method: 'POST' })
-      .middleware(capabilityMiddleware(capability))
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) => record(data))
       .handler(({ data }) => implementation(data) as any),
     { __executeImplementation: implementation },
@@ -101,9 +86,7 @@ function validPlayerName(value: unknown): value is string {
   )
 }
 
-export const upsertPlayerNote = createResourceAction(
-  'players.moderate',
-  async (data) => {
+export const upsertPlayerNote = createResourceAction(async (data) => {
     const playerName = data.playerName
     if (!playerName) {
       invalid('Player name is required', 'PLAYERS_NOTE_PLAYER_NAME_REQUIRED')
@@ -134,12 +117,9 @@ export const upsertPlayerNote = createResourceAction(
       success: true,
       note: await upsertPlayerNote(String(playerName), note, tags),
     }
-  },
-)
+})
 
-export const deletePlayerNote = createResourceAction(
-  'players.moderate',
-  async (data) => {
+export const deletePlayerNote = createResourceAction(async (data) => {
     const { deletePlayerNote } =
       await import('../../../panel-server/database/init.ts')
     const success = await deletePlayerNote(String(data.playerName ?? ''))
@@ -154,42 +134,32 @@ export const deletePlayerNote = createResourceAction(
       )
     }
     return { success }
-  },
-)
+})
 
-export const deletePlayerExport = createResourceAction(
-  'players.gm_tools',
-  async (data) => {
+export const deletePlayerExport = createResourceAction(async (data) => {
     const { deletePlayerExport: removePlayerExport } =
       await import('../../../panel-server/services/playerExports.ts')
     removePlayerExport(String(data.username ?? ''), String(data.filename ?? ''))
     return { success: true }
-  },
-)
+})
 
-export const createTemplate = createResourceAction(
-  'templates.manage',
-  async (data) => {
+export const createTemplate = createResourceAction(async (data) => {
     const { saveTemplate } =
       await import('../../../panel-server/services/templateService.ts')
     const result = await saveTemplate(data)
     if (!result.success) throwResourceError(result, 400)
     return result
-  },
-)
+})
 
-export const importTemplate = createResourceAction(
-  'templates.manage',
-  async (data) => {
+export const importTemplate = createResourceAction(async (data) => {
     const { importTemplate: importTemplateService } =
       await import('../../../panel-server/services/templateService.ts')
     const result = await importTemplateService(data.template ?? data)
     if (!result.success) throwResourceError(result, 400)
     return result
-  },
-)
+})
 
-export const previewTemplate = createResourceAction(undefined, async (data) => {
+export const previewTemplate = createResourceAction(async (data) => {
   if (!data.serverId)
     invalid('serverId is required', 'SIM_TEMPLATE_SERVER_ID_REQUIRED')
   const { previewTemplate: previewTemplateService } =
@@ -202,9 +172,7 @@ export const previewTemplate = createResourceAction(undefined, async (data) => {
   return result
 })
 
-export const applyTemplate = createResourceAction(
-  'templates.manage',
-  async (data) => {
+export const applyTemplate = createResourceAction(async (data) => {
     const [
       { getActiveServer },
       { ErrorCode },
@@ -302,30 +270,23 @@ export const applyTemplate = createResourceAction(
     } finally {
       lifecycleLock.release()
     }
-  },
-)
+})
 
-export const deleteTemplate = createResourceAction(
-  'templates.manage',
-  async (data) => {
+export const deleteTemplate = createResourceAction(async (data) => {
     const { deleteTemplate: deleteTemplateService } =
       await import('../../../panel-server/services/templateService.ts')
     const result = await deleteTemplateService(String(data.id ?? ''))
     if (!result.success) throwResourceError(result, 400)
     return result
-  },
-)
+})
 
-export const unhideTemplate = createResourceAction(
-  'templates.manage',
-  async (data) => {
+export const unhideTemplate = createResourceAction(async (data) => {
     const { unhideTemplate: unhideTemplateService } =
       await import('../../../panel-server/services/templateService.ts')
     const result = await unhideTemplateService(String(data.id ?? ''))
     if (!result.success) throwResourceError(result, 400)
     return result
-  },
-)
+})
 
 function parseBackupBoolean(value: unknown): boolean | undefined {
   if (typeof value === 'boolean') return value
@@ -346,9 +307,7 @@ function parseBackupMaxCount(value: unknown): number | undefined {
     : undefined
 }
 
-export const updateBackupSettings = createResourceAction(
-  'backups.manage',
-  async (data) => {
+export const updateBackupSettings = createResourceAction(async (data) => {
     const { isCronTooFrequent, isSupportedFiveFieldCron } =
       await import('../../../panel-server/utils/cronValidation.ts')
     const allowed: AnyRecord = {}
@@ -386,24 +345,18 @@ export const updateBackupSettings = createResourceAction(
     if (runtime.scheduler?.setupBackupSchedule)
       await runtime.scheduler.setupBackupSchedule()
     return { success: true, settings }
-  },
-)
+})
 
-export const deleteBackup = createResourceAction(
-  'backups.manage',
-  async (data) => {
+export const deleteBackup = createResourceAction(async (data) => {
     const runtime = await panelRuntime()
     const result = await runtime.backupService.deleteBackup(
       String(data.name ?? ''),
     )
     if (!result.success) throwResourceError(result, 400)
     return result
-  },
-)
+})
 
-export const deleteBackupsOlderThan = createResourceAction(
-  'backups.manage',
-  async (data) => {
+export const deleteBackupsOlderThan = createResourceAction(async (data) => {
     if (
       typeof data.days !== 'number' ||
       !Number.isInteger(data.days) ||
@@ -415,12 +368,9 @@ export const deleteBackupsOlderThan = createResourceAction(
       )
     const runtime = await panelRuntime()
     return runtime.backupService.deleteBackupsOlderThan(data.days)
-  },
-)
+})
 
-export const createBackup = createResourceAction(
-  'backups.manage',
-  async (data) => {
+export const createBackup = createResourceAction(async (data) => {
     const { getActiveServer } =
       await import('../../../panel-server/database/init.ts')
     const { ErrorCode } =
@@ -453,12 +403,9 @@ export const createBackup = createResourceAction(
       }
     }
     return result
-  },
-)
+})
 
-export const restoreBackup = createResourceAction(
-  'backups.restore',
-  async (data) => {
+export const restoreBackup = createResourceAction(async (data) => {
     const [
       { getActiveServer },
       { acquireLifecycleLock, lifecycleInProgressResponse },
@@ -522,8 +469,7 @@ export const restoreBackup = createResourceAction(
         )
       }
 
-      const processDetails =
-        await runtime.serverManager.getServerProcessDetails()
+    const processDetails = await runtime.serverManager.getServerProcessDetails()
       if (processDetails.scanFailed) {
         throwResourceError(
           Object.assign(
@@ -566,12 +512,11 @@ export const restoreBackup = createResourceAction(
         )
       const message = isRollbackFailureMessage
         ? result.message
-        : (
-            await import('../../../panel-server/utils/sanitize.ts')
-          ).sanitizeError(result.message)
+      : (await import('../../../panel-server/utils/sanitize.ts')).sanitizeError(
+          result.message,
+        )
       throwResourceError(new Error(message || 'Backup restore failed'), 400)
     } finally {
       lifecycleLock.release()
     }
-  },
-)
+})

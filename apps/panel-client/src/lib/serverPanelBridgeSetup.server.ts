@@ -1,9 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  anyPermissionMiddleware,
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 import type { SftpBridgeConfig } from '../../../panel-server/services/panelBridgeSftp.ts'
 
 type AnyRecord = Record<string, any>
@@ -79,10 +75,7 @@ function invalid(message: string, code?: string, params?: unknown): never {
 }
 
 function setupMiddleware() {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware('bridge.setup'),
-  ] as const
+  return protectedServerFunctionMiddleware
 }
 
 function argsFor(data: AnyRecord): AnyRecord {
@@ -986,9 +979,7 @@ async function getModPathBridge(): Promise<AnyRecord> {
   const sourcePath = resolveSourcePath()
   const candidates: string[] = []
   if (sourcePath) {
-    candidates.push(
-      path.join(path.dirname(sourcePath), '..', '..', '..'),
-    )
+    candidates.push(path.join(path.dirname(sourcePath), '..', '..', '..'))
   }
   candidates.push(
     path.join(process.cwd(), 'integrations', 'panelbridge', 'PanelBridge'),
@@ -1061,7 +1052,10 @@ async function installLocalBridge(errorCodes: AnyRecord): Promise<AnyRecord> {
     }
     const result = installBridge(server)
     if (!result.success) {
-      throwSetupError(Object.assign(new Error(result.error), { status: 500 }), 500)
+      throwSetupError(
+        Object.assign(new Error(result.error), { status: 500 }),
+        500,
+      )
     }
     return {
       ...result,
@@ -1164,7 +1158,9 @@ async function installModBridge(
   if (!sourceContent) {
     throwSetupError(
       Object.assign(
-        new Error('Source mod not found (no embedded Lua and no on-disk pz-mod).'),
+        new Error(
+          'Source mod not found (no embedded Lua and no on-disk pz-mod).',
+        ),
         { status: 404, code: errorCodes.PANELBRIDGE_SOURCE_MOD_NOT_FOUND },
       ),
       404,
@@ -1350,10 +1346,7 @@ async function ping(): Promise<unknown> {
 }
 
 export const getPanelBridgeStatus = createServerFn({ method: 'GET' })
-  .middleware([
-    ...protectedServerFunctionMiddleware,
-    anyPermissionMiddleware('bridge.setup', 'bridge.diagnostics'),
-  ] as const)
+  .middleware(protectedServerFunctionMiddleware)
   .handler(getStatus)
 
 export const pingPanelBridge = createServerFn({ method: 'GET' })

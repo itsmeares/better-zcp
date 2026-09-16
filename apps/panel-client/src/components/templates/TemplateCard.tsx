@@ -16,7 +16,6 @@ interface TemplateCardProps {
   onPreview: (template: SimTemplate) => void
   onExport: (template: SimTemplate) => void
   onDelete: (template: SimTemplate) => void
-  canManage: boolean
 }
 
 export function TemplateCard({
@@ -24,7 +23,6 @@ export function TemplateCard({
   onPreview,
   onExport,
   onDelete,
-  canManage,
 }: TemplateCardProps) {
   const changeCount =
     Object.keys(template.serverIni || {}).length +
@@ -91,16 +89,14 @@ export function TemplateCard({
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
-          {canManage && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onDelete(template)}
-              title={'Delete template'}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onDelete(template)}
+            title={'Delete template'}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </CardContent>
     </Card>

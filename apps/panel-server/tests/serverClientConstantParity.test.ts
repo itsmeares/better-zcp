@@ -3,7 +3,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_INI_EXCLUSIONS } from "../utils/templateSchema.ts";
-import { USER_ROLES } from "../services/auth.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..", "..");
@@ -35,23 +34,6 @@ describe("TEMPLATE_INI_EXCLUSIONS (client) vs DEFAULT_INI_EXCLUSIONS (server): p
     ).toEqual(DEFAULT_INI_EXCLUSIONS);
   });
 });
-
-describe("LEGACY_USER_ROLES (client) vs USER_ROLES (server): parity", () => {
-  const CLIENT_PATH = "apps/panel-client/src/pages/Users.tsx";
-
-  it(`${CLIENT_PATH}'s LEGACY_USER_ROLES matches server's USER_ROLES exactly`, () => {
-    const clientList = extractArrayLiteral(CLIENT_PATH, "LEGACY_USER_ROLES");
-    expect(
-      clientList,
-      `could not find "const LEGACY_USER_ROLES = [...]" in ${CLIENT_PATH} -- the extraction regex needs updating, not this test relaxing`,
-    ).not.toBeNull();
-    expect(
-      clientList,
-      "client and server legacy-role lists have drifted apart -- POST /api/auth/users would reject a role the client dropdown still offers, or the dropdown would be missing one the server accepts",
-    ).toEqual(USER_ROLES);
-  });
-});
-
 
 describe("AIRDROP_PRESETS (client) vs airdrop's VALID_PRESETS (server): parity", () => {
   const CLIENT_PATH = "apps/panel-client/src/pages/WorldMap.tsx";

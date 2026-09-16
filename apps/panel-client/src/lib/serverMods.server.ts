@@ -1,8 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type AnyRecord = Record<string, any>
 type ServiceError = {
@@ -45,13 +42,6 @@ function invalid(message: string, code?: string): never {
   throwModsError(Object.assign(new Error(message), code ? { code } : {}), 400)
 }
 
-function capabilityMiddleware() {
-  return [
-    ...protectedServerFunctionMiddleware,
-    permissionMiddleware('mods.manage'),
-  ] as const
-}
-
 async function panelRuntime(): Promise<AnyRecord> {
   const { getPanelRuntime } =
     await import('../../../panel-server/utils/panelRuntime.ts')
@@ -68,7 +58,7 @@ function createModRead<T>(handler: (data: AnyRecord) => Promise<T> | T) {
   }
   return Object.assign(
     createServerFn({ method: 'GET' })
-      .middleware(capabilityMiddleware())
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) => record(data))
       .handler(({ data }) => implementation(data) as any),
     { __executeImplementation: implementation },
@@ -85,7 +75,7 @@ function createModAction<T>(handler: (data: AnyRecord) => Promise<T> | T) {
   }
   return Object.assign(
     createServerFn({ method: 'POST' })
-      .middleware(capabilityMiddleware())
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) => record(data))
       .handler(({ data }) => implementation(data) as any),
     { __executeImplementation: implementation },

@@ -29,8 +29,6 @@ import { useToast } from '@/components/ui/use-toast'
 import { panelBridgeApi, playersApi, configApi } from '@/lib/api'
 import { useSocket } from '@/contexts/SocketContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { useAuth } from '@/contexts/AuthContext'
-import { DisabledReason } from '@/components/DisabledReason'
 import { EmptyState } from '@/components/EmptyState'
 import { HelpTip } from '@/components/HelpTip'
 import { cn } from '@/lib/utils'
@@ -78,18 +76,11 @@ export default function Chat() {
   const { toast } = useToast()
   const confirm = useConfirm()
   const socket = useSocket()
-  const { can } = useAuth()
-  const canSendServerChat = can('server.world_events')
-  const canSendTargetedChat = can('players.endanger_or_impersonate')
-  const canSendChat =
-    channel === 'server' ? canSendServerChat : canSendTargetedChat
-  const canManagePresets = can('panel.settings')
 
   const [nativeChatAvailable, setNativeChatAvailable] = useState<
     boolean | null
   >(null)
   useEffect(() => {
-    if (!canSendServerChat) return
     let active = true
     panelBridgeApi
       .getChatInfo()
@@ -101,7 +92,7 @@ export default function Chat() {
     return () => {
       active = false
     }
-  }, [canSendServerChat])
+  }, [])
 
   const handleScroll = useCallback(() => {
     const el = scrollViewportRef.current
@@ -213,7 +204,7 @@ export default function Chat() {
   }, [socket])
 
   const sendMessage = async () => {
-    if (!message.trim() || sendingRef.current || !canSendChat) return
+    if (!message.trim() || sendingRef.current) return
     sendingRef.current = true
     setSending(true)
     try {
@@ -297,7 +288,6 @@ export default function Chat() {
 
   const persistPresets = useCallback(
     async (next: string[]) => {
-      if (!canManagePresets) return
       let previous: string[] = []
       setPresets((prev) => {
         previous = prev
@@ -315,7 +305,7 @@ export default function Chat() {
         })
       }
     },
-    [toast, canManagePresets],
+    [toast],
   )
 
   const handleAddPreset = useCallback(() => {
@@ -578,28 +568,21 @@ export default function Chat() {
                     maxLength={500}
                     className="h-10 flex-1 bg-card/70 border-border/55 focus-visible:border-primary/60 placeholder:text-sm"
                   />
-                  <DisabledReason
-                    reason={
-                      !canSendChat
-                        ? "You don't have permission to send chat messages."
-                        : null
-                    }
+
+                  <Button
+                    onClick={sendMessage}
+                    disabled={sending || !message.trim()}
+                    className="h-10 min-w-20 sm:min-w-24 gap-1.5 font-mono text-[11px] uppercase tracking-[0.18em] disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
                   >
-                    <Button
-                      onClick={sendMessage}
-                      disabled={sending || !message.trim() || !canSendChat}
-                      className="h-10 min-w-20 sm:min-w-24 gap-1.5 font-mono text-[11px] uppercase tracking-[0.18em] disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
-                    >
-                      {sending ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <>
-                          <Send className="w-3.5 h-3.5" />
-                          {'send'}
-                        </>
-                      )}
-                    </Button>
-                  </DisabledReason>
+                    {sending ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        {'send'}
+                      </>
+                    )}
+                  </Button>
                 </div>
                 <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/65">
                   <span>
@@ -730,24 +713,18 @@ export default function Chat() {
                         autoFocus
                         className="h-9 flex-1 text-sm"
                       />
-                      <DisabledReason
-                        reason={
-                          !canManagePresets
-                            ? "You don't have permission to manage quick broadcast presets."
-                            : null
-                        }
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={handleSaveEdit}
+
+                        aria-label={'Save'}
                       >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9"
-                          onClick={handleSaveEdit}
-                          disabled={!canManagePresets}
-                          aria-label={'Save'}
-                        >
-                          <Check className="w-4 h-4" />
-                        </Button>
-                      </DisabledReason>
+                        <Check className="w-4 h-4" />
+                      </Button>
+
                       <Button
                         variant="ghost"
                         size="icon"
@@ -784,24 +761,16 @@ export default function Chat() {
                       {quickMsg}
                     </button>
                     {presetsEditing && (
-                      <DisabledReason
-                        reason={
-                          !canManagePresets
-                            ? "You don't have permission to manage quick broadcast presets."
-                            : null
-                        }
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-destructive hover:text-destructive"
+                        onClick={() => handleDeletePreset(idx)}
+
+                        aria-label={'Delete preset ' + String(idx + 1)}
                       >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 text-destructive hover:text-destructive"
-                          onClick={() => handleDeletePreset(idx)}
-                          disabled={!canManagePresets}
-                          aria-label={'Delete preset ' + String(idx + 1)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </DisabledReason>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     )}
                   </div>
                 )
@@ -821,24 +790,17 @@ export default function Chat() {
                     maxLength={500}
                     className="h-9 flex-1 text-sm bg-card/70 border-border/55"
                   />
-                  <DisabledReason
-                    reason={
-                      !canManagePresets
-                        ? "You don't have permission to manage quick broadcast presets."
-                        : null
-                    }
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9"
+                    onClick={handleAddPreset}
+                    disabled={!newPresetDraft.trim()}
+                    aria-label={'Add preset'}
                   >
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-9 w-9"
-                      onClick={handleAddPreset}
-                      disabled={!newPresetDraft.trim() || !canManagePresets}
-                      aria-label={'Add preset'}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </DisabledReason>
+                    <Plus className="w-4 h-4" />
+                  </Button>
                 </div>
               )}
             </div>

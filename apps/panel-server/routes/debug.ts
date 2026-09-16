@@ -29,7 +29,6 @@ import {
   getTrackedMods,
   getAllSettings,
   getCircuitBreakerStatus,
-  getRoleByName,
   getDatabaseFilePath,
 } from "../database/init.ts";
 import { sanitizeError, sanitizeErrorParams, SENSITIVE_FIELD_RE } from "../utils/sanitize.ts";
@@ -38,11 +37,6 @@ import { checkSandboxBraceBalance } from "./serverFiles.ts";
 import panelBridgeService from "../services/panelBridge.ts";
 import authService from "../services/auth.ts";
 import { listBackupRecords } from "../services/backupRecords.ts";
-import {
-  getOidcSettings,
-  getOidcEnvOverrides,
-  isOidcConfigured,
-} from "../services/oidc.ts";
 import {
   PZ_TILES_ROOT,
   getB42Dir,
@@ -54,7 +48,6 @@ import {
   getCandidateZomboidPaths,
   inspectZomboidPath,
 } from "../utils/zomboidPaths.ts";
-import { requirePermission, listRolesWithMemberCounts } from "../services/permissions.ts";
 import { getDockerClient } from "../services/managedContainer.ts";
 import { resolveProvider } from "../utils/serverStatusModel.ts";
 import {
@@ -86,7 +79,7 @@ const MAX_BUFFER_SIZE = 500;
 
 export { addLogToBuffer, logBuffer };
 
-router.get("/ram", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/ram", async (req, res) => {
   try {
     const totalMemBytes = os.totalmem();
     const freeMemBytes = os.freemem();
@@ -109,7 +102,7 @@ router.get("/ram", requirePermission("diagnostics.manage"), async (req, res) => 
   }
 });
 
-router.get("/system", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/system", async (req, res) => {
   try {
     const paths = getDataPaths();
     const databasePath = getDatabaseFilePath();
@@ -147,7 +140,7 @@ router.get("/system", requirePermission("diagnostics.manage"), async (req, res) 
   }
 });
 
-router.get("/logs", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/logs", async (req, res) => {
   try {
     const limit = parseClampedInteger(req.query.limit, 200, 1, 2000);
     res.json({
@@ -1175,46 +1168,6 @@ async function buildNetworkInterfaces() {
   }
 }
 
-async function buildOidcStatus() {
-  try {
-    const settings = await getOidcSettings();
-    return {
-      configured: isOidcConfigured(settings),
-      issuerUrl: settings.issuerUrl || null,
-      clientId: settings.clientId || null,
-      clientSecretSet: Boolean(settings.clientSecret),
-      redirectUri: settings.redirectUri || null,
-      scope: settings.scope || null,
-      providerName: settings.providerName || null,
-      allowInsecureHttp: settings.allowInsecureHttp,
-      envOverrides: getOidcEnvOverrides(),
-    };
-  } catch (e: any) {
-    return { _error: e.message };
-  }
-}
-
-async function buildRolesAndPermissions() {
-  try {
-    const [roles, users] = await Promise.all([
-      listRolesWithMemberCounts(),
-      authService.getUsers(),
-    ]);
-    return sanitizeForBundle({
-      roles: roles.map((r) => ({
-        id: r.id,
-        name: r.name,
-        isSeeded: Boolean(r.isSeeded),
-        capabilities: r.capabilities || [],
-        memberCount: r.memberCount,
-      })),
-      users: users.map((u) => ({ username: u.username, role: u.role, roleId: u.roleId })),
-    });
-  } catch (e: any) {
-    return { _error: e.message };
-  }
-}
-
 function checkCurlAvailable() {
   return new Promise((resolve) => {
     execFile("curl", ["--version"], { timeout: 3000 }, (err, stdout) => {
@@ -1382,12 +1335,10 @@ function buildBundleReadme() {
     "13. `server-config-summary.json` — sanitized effective server settings, mod/map lists, sandbox integrity, and whether the Mods/WorkshopItems lists are the same length (a mismatch is a cheap signal of an unresolved mod).",
     "14. `sandbox-options-diagnostics.json` — PZ/PanelBridge versions, sandbox-option exception signatures and excerpts, triggering action counts, configured mods, and installed mod.info/sandbox-option metadata.",
     "15. `pz-build-info.json` — installed Project Zomboid branch and Steam build ID.",
-    "16. `oidc-status.json` — whether SSO is configured, issuer/client/redirect/scope, which fields are pinned by an env var, and whether a client secret is set (never its value). No live IdP check — see the file's own notes.",
-    "17. `roles-and-permissions.json` — every role, what it grants, how many/which local users hold it. Start here for \"why can't this person see X\".",
-    "18. `world-map-diagnostics.json` — whether `curl` is present on this host (a missing one is the most likely new World Map support ticket this release) and the resolved B42 tile-build source/directory/reason.",
-    "19. `db-write-health.json` — the database write circuit-breaker state and retry count. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
-    "20. `backups-summary.json` — the last 20 backup runs. Only successful runs are recorded; a failed scheduled backup shows up in `admin-panel/error.log` instead, not here.",
-    "21. `discord-bot-status.json` — connected or not, which guild/channel/mod-role it's wired to, and the last start failure if any (token presence only, never the value).",
+    "17. `world-map-diagnostics.json` — whether `curl` is present on this host (a missing one is the most likely new World Map support ticket this release) and the resolved B42 tile-build source/directory/reason.",
+    "18. `db-write-health.json` — the database write circuit-breaker state and retry count. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
+    "19. `backups-summary.json` — the last 20 backup runs. Only successful runs are recorded; a failed scheduled backup shows up in `admin-panel/error.log` instead, not here.",
+    "20. `discord-bot-status.json` — connected or not, which guild/channel/mod-role it's wired to, and the last start failure if any (token presence only, never the value).",
     "",
     "## Then the raw logs",
     "",
@@ -1406,13 +1357,12 @@ function buildBundleReadme() {
     "",
     "## What is NOT in this bundle",
     "",
-    "- Plaintext RCON / Discord / Steam / OIDC client secret credentials (masked or presence-only).",
+    "- Plaintext RCON / Discord / Steam credentials (masked or presence-only).",
     "- Full environment variable values (only allow-listed keys show values).",
     "- MAC addresses (network interfaces list IPs only).",
     "- The panel database itself — only sanitized excerpts.",
     "- A guarantee that the raw logs contain nothing sensitive beyond the credential shapes described above — see the warning in that section.",
     "- Whether a config edit is still waiting on a restart to take effect. The panel computes that live per-request and never stores it — `system-info.json`'s `serverProcess` (was the server running right now) is the closest fact actually available.",
-    "- A record of the OIDC \"Test connection\" button's last result, or a live check against the identity provider run while building this bundle — `oidc-status.json` reports configuration only.",
     "- Failed backup attempts as structured data (only successful runs are recorded) — check `admin-panel/error.log` for those.",
     "- Retry/failure counters for config-file (INI/Lua) writes specifically — only the database's own write health is tracked today.",
     "- OpenRC service output (`managed-service-logs.txt` reports this explicitly rather than guessing at a log path).",
@@ -1454,8 +1404,6 @@ async function buildBundleDiagnostics(
       buildSandboxOptionsDiagnostics(activeServer, knownSecrets),
     ),
     wrap("pz-build-info.json", () => buildPzBuildInfo(activeServer)),
-    wrap("oidc-status.json", () => buildOidcStatus()),
-    wrap("roles-and-permissions.json", () => buildRolesAndPermissions()),
     wrap("world-map-diagnostics.json", () => buildWorldMapDiagnostics()),
     wrap("db-write-health.json", async () => buildDbWriteHealth()),
     wrap("backups-summary.json", () => buildBackupsSummary(req)),
@@ -1652,7 +1600,7 @@ async function getSupportBundleEntries() {
   };
 }
 
-router.get("/logs/files", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/logs/files", async (req, res) => {
   try {
     const paths = getDataPaths();
     const logsDir = paths.logsDir;
@@ -1673,7 +1621,7 @@ router.get("/logs/files", requirePermission("diagnostics.manage"), async (req, r
   }
 });
 
-router.get("/logs/download", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/logs/download", async (req, res) => {
   try {
     const paths = getDataPaths();
     const logsPath = path.join(paths.logsDir, "combined.log");
@@ -1699,7 +1647,7 @@ router.get("/logs/download", requirePermission("diagnostics.manage"), async (req
   }
 });
 
-router.get("/logs/download-zip", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/logs/download-zip", async (req, res) => {
   try {
     log.info("GET /logs/download-zip");
 
@@ -1804,7 +1752,7 @@ router.get("/logs/download-zip", requirePermission("diagnostics.manage"), async 
   }
 });
 
-router.get("/logs/download/:filename", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/logs/download/:filename", async (req, res) => {
   try {
     const paths = getDataPaths();
     const filename = String(req.params.filename);
@@ -1845,7 +1793,7 @@ router.get("/logs/download/:filename", requirePermission("diagnostics.manage"), 
   }
 });
 
-router.post("/logs/clear", requirePermission("diagnostics.manage"), async (req, res) => {
+router.post("/logs/clear", async (req, res) => {
   try {
     log.info("POST /logs/clear");
     logBuffer.length = 0;
@@ -1855,7 +1803,7 @@ router.post("/logs/clear", requirePermission("diagnostics.manage"), async (req, 
   }
 });
 
-router.post("/paths", requirePermission("diagnostics.manage"), async (req, res) => {
+router.post("/paths", async (req, res) => {
   try {
     const { dataDir, logsDir, moveFiles } = req.body;
 
@@ -1904,7 +1852,7 @@ router.post("/paths", requirePermission("diagnostics.manage"), async (req, res) 
   }
 });
 
-router.get("/health", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/health", async (req, res) => {
   try {
     const rconService = req.app.get("rconService");
     const serverManager = req.app.get("serverManager");
@@ -2718,7 +2666,7 @@ function buildRconCommandRejectionsCheck(summary: any) {
   );
 }
 
-router.get("/diagnostics", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/diagnostics", async (req, res) => {
   const t0 = Date.now();
   try {
     const rconService = req.app.get("rconService");
@@ -4862,7 +4810,7 @@ function buildStaleLocksCheck(saveStats: any, saveDirUsed: string | null) {
   return null;
 }
 
-router.get("/worldmap", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/worldmap", async (req, res) => {
   const t0 = Date.now();
   const checks: AnyRecord[] = [];
 
@@ -5300,7 +5248,7 @@ router.get("/worldmap", requirePermission("diagnostics.manage"), async (req, res
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
-router.get("/performance-history", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/performance-history", async (req, res) => {
   try {
     const limit = parseClampedInteger(req.query.limit, 60, 1, 1440);
     const history = await getPerformanceHistory(limit);
@@ -5311,7 +5259,7 @@ router.get("/performance-history", requirePermission("diagnostics.manage"), asyn
   }
 });
 
-router.post("/performance-snapshot", requirePermission("diagnostics.manage"), async (req, res) => {
+router.post("/performance-snapshot", async (req, res) => {
   try {
     const { memoryUsed, memoryTotal, cpuUsage, playerCount, serverRunning } =
       req.body || {};
@@ -5343,7 +5291,7 @@ router.post("/performance-snapshot", requirePermission("diagnostics.manage"), as
   }
 });
 
-router.get("/database", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/database", async (req, res) => {
   try {
     const stats = await getDatabaseStats();
     res.json(stats);
@@ -5353,7 +5301,7 @@ router.get("/database", requirePermission("diagnostics.manage"), async (req, res
   }
 });
 
-router.post("/database/backup", requirePermission("diagnostics.manage"), async (req, res) => {
+router.post("/database/backup", async (req, res) => {
   try {
     log.info("POST /database/backup");
     const result = await createDatabaseBackup();
@@ -5364,7 +5312,7 @@ router.post("/database/backup", requirePermission("diagnostics.manage"), async (
   }
 });
 
-router.post("/database/compact", requirePermission("diagnostics.manage"), async (req, res) => {
+router.post("/database/compact", async (req, res) => {
   try {
     log.info("POST /database/compact");
     const result = await compactDatabase();
@@ -5375,7 +5323,7 @@ router.post("/database/compact", requirePermission("diagnostics.manage"), async 
   }
 });
 
-router.post("/clear-stale-locks", requirePermission("diagnostics.manage"), async (req, res) => {
+router.post("/clear-stale-locks", async (req, res) => {
   const lifecycleLock = acquireLifecycleLock("clear-stale-locks");
   if (!lifecycleLock) {
     return res.status(409).json(lifecycleInProgressResponse());
@@ -5537,7 +5485,7 @@ function isCrashLogFilename(filename: unknown): filename is string {
   );
 }
 
-router.get("/crash-logs", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/crash-logs", async (req, res) => {
   try {
     const serverManager = req.app.get("serverManager");
     const serverPath = serverManager?.serverPath || "";
@@ -5604,7 +5552,7 @@ router.get("/crash-logs", requirePermission("diagnostics.manage"), async (req, r
   }
 });
 
-router.get("/crash-logs/:filename", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/crash-logs/:filename", async (req, res) => {
   try {
     const filename = String(req.params.filename);
     const serverManager = req.app.get("serverManager");
@@ -5709,23 +5657,11 @@ router.post("/client-errors", (req, res) => {
 });
 
 
-router.get("/activity", requirePermission("diagnostics.manage"), async (req, res) => {
+router.get("/activity", async (req, res) => {
   try {
     const limit = parseClampedInteger(req.query.limit, 200, 1, 500);
     const source =
       typeof req.query.source === "string" ? req.query.source : "all";
-
-    let canViewPlayers = true;
-    if (source === "all" || source === "player") {
-      const role = req.user ? await getRoleByName(req.user.role) : null;
-      canViewPlayers = Array.isArray(role?.capabilities) && role.capabilities.includes("players.view");
-    }
-
-    if (source === "player" && !canViewPlayers) {
-      return res.status(403).json({
-        error: "Viewing player activity history also requires players.view.",
-      });
-    }
 
   const entries: any[] = [];
 
@@ -5765,7 +5701,7 @@ router.get("/activity", requirePermission("diagnostics.manage"), async (req, res
       }
     }
 
-    if ((source === "all" || source === "player") && canViewPlayers) {
+    if (source === "all" || source === "player") {
       const playerLogs = await getPlayerLogs(null, limit);
       for (const log of playerLogs) {
         entries.push({
@@ -5809,7 +5745,6 @@ router.get("/activity", requirePermission("diagnostics.manage"), async (req, res
 
 router.post(
   "/fix-writability",
-  requirePermission("diagnostics.manage"),
   async (req, res) => {
     try {
       const { target } = req.body || {};
@@ -5867,8 +5802,6 @@ export {
   buildSystemInfo,
   buildServerConfigSummary,
   buildSandboxOptionsDiagnostics,
-  buildOidcStatus,
-  buildRolesAndPermissions,
   checkCurlAvailable,
   buildWorldMapDiagnostics,
   buildDbWriteHealth,

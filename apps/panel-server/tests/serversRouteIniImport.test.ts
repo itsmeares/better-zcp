@@ -3,7 +3,6 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-
 const createServer = vi.fn();
 const getServers = vi.fn();
 const getAllSettings = vi.fn();
@@ -218,25 +217,6 @@ describe("POST / config.importIniFrom", () => {
     );
   });
 
-  it("requires servers.discover in addition to the route's servers.manage gate", async () => {
-    writeIni(
-      tmpRoot,
-      "servertest",
-      "RCONPassword=import-me\nRCONPort=27015\nDefaultPort=16261\n",
-    );
-    const response = createResponse();
-
-    await runRoute(
-      "/",
-      "post",
-      { body: importBody(), user: { role: "technician" } },
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(403);
-    expect(createServer).not.toHaveBeenCalled();
-  });
-
   it("rejects a non-absolute importIniFrom.dataPath", async () => {
     const response = createResponse();
 
@@ -245,7 +225,10 @@ describe("POST / config.importIniFrom", () => {
       "post",
       {
         body: importBody({
-          importIniFrom: { dataPath: "relative/path", serverName: "servertest" },
+          importIniFrom: {
+            dataPath: "relative/path",
+            serverName: "servertest",
+          },
         }),
         user: { role: "admin" },
       },

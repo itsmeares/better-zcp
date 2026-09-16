@@ -9,7 +9,10 @@ const unhideTemplate = vi.fn();
 
 import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
-vi.mock("../database/init.ts", () => ({ getActiveServer, getRoleByName: mockGetRoleByName }));
+vi.mock("../database/init.ts", () => ({
+  getActiveServer,
+  getRoleByName: mockGetRoleByName,
+}));
 vi.mock("../services/templateService.ts", () => ({
   listTemplates: vi.fn(),
   listHiddenBuiltinTemplates,
@@ -56,20 +59,6 @@ describe("template mutation routes", () => {
     unhideTemplate.mockReset();
   });
 
-  it("rejects template creation by a non-admin user", async () => {
-    const response = createResponse();
-
-    await runRoute(
-      "/",
-      "post",
-      { body: {}, user: { role: "viewer" } },
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(403);
-    expect(saveTemplate).not.toHaveBeenCalled();
-  });
-
   it("rejects applying a template while the active server is running", async () => {
     getActiveServer.mockResolvedValue({ id: "server-1" });
     const response = createResponse();
@@ -84,7 +73,10 @@ describe("template mutation routes", () => {
         app: {
           get: () => ({
             reloadConfig: vi.fn(async () => {}),
-            getServerProcessDetails: vi.fn(async () => ({ running: true, scanFailed: false })),
+            getServerProcessDetails: vi.fn(async () => ({
+              running: true,
+              scanFailed: false,
+            })),
           }),
         },
       },
@@ -137,7 +129,10 @@ describe("template mutation routes", () => {
           get: () => ({
             checkServerRunning: vi.fn(async () => false),
             reloadConfig: vi.fn(async () => {}),
-            getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: true })),
+            getServerProcessDetails: vi.fn(async () => ({
+              running: false,
+              scanFailed: true,
+            })),
           }),
         },
       },
@@ -162,7 +157,10 @@ describe("template mutation routes", () => {
         app: {
           get: () => ({
             reloadConfig: vi.fn(async () => {}),
-            getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })),
+            getServerProcessDetails: vi.fn(async () => ({
+              running: false,
+              scanFailed: false,
+            })),
           }),
         },
       },
@@ -208,7 +206,10 @@ describe("template mutation routes", () => {
         app: {
           get: () => ({
             reloadConfig: vi.fn(async () => {}),
-            getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })),
+            getServerProcessDetails: vi.fn(async () => ({
+              running: false,
+              scanFailed: false,
+            })),
           }),
         },
       },
@@ -246,7 +247,10 @@ describe("template mutation routes", () => {
         app: {
           get: () => ({
             reloadConfig: vi.fn(async () => {}),
-            getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })),
+            getServerProcessDetails: vi.fn(async () => ({
+              running: false,
+              scanFailed: false,
+            })),
           }),
         },
       },
@@ -263,17 +267,10 @@ describe("template mutation routes", () => {
     afterApply?.release();
   });
 
-  it("rejects listing hidden templates by a non-admin user", async () => {
-    const response = createResponse();
-
-    await runRoute("/hidden", "get", { user: { role: "viewer" } }, response);
-
-    expect(response.status).toHaveBeenCalledWith(403);
-    expect(listHiddenBuiltinTemplates).not.toHaveBeenCalled();
-  });
-
   it("lists hidden templates for an admin", async () => {
-    listHiddenBuiltinTemplates.mockResolvedValue([{ meta: { id: "vanilla-apocalypse" } }]);
+    listHiddenBuiltinTemplates.mockResolvedValue([
+      { meta: { id: "vanilla-apocalypse" } },
+    ]);
     const response = createResponse();
 
     await runRoute("/hidden", "get", { user: { role: "admin" } }, response);
@@ -282,20 +279,6 @@ describe("template mutation routes", () => {
     expect(response.json).toHaveBeenCalledWith({
       templates: [{ meta: { id: "vanilla-apocalypse" } }],
     });
-  });
-
-  it("rejects unhiding a template by a non-admin user", async () => {
-    const response = createResponse();
-
-    await runRoute(
-      "/:id/unhide",
-      "post",
-      { params: { id: "vanilla-apocalypse" }, user: { role: "viewer" } },
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(403);
-    expect(unhideTemplate).not.toHaveBeenCalled();
   });
 
   it("unhides a template for an admin", async () => {
@@ -314,7 +297,10 @@ describe("template mutation routes", () => {
   });
 
   it("reports a 400 when unhiding an id that isn't actually hidden", async () => {
-    unhideTemplate.mockResolvedValue({ success: false, error: "Template not found" });
+    unhideTemplate.mockResolvedValue({
+      success: false,
+      error: "Template not found",
+    });
     const response = createResponse();
 
     await runRoute(

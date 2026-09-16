@@ -1,4 +1,5 @@
-import { Router,
+import {
+  Router,
   type NextFunction,
   type Request,
   type Response,
@@ -8,7 +9,7 @@ import path from "path";
 import os from "os";
 import { createLogger } from "../utils/logger.ts";
 const log = createLogger("API:Files");
-import { getAllSettings, getRoleByName } from "../database/init.ts";
+import { getAllSettings } from "../database/init.ts";
 import {
   sanitizeError,
   sanitizeErrorParams,
@@ -48,7 +49,6 @@ import {
   RemoteConfigNotConfiguredError,
   ServerNotConfiguredError,
 } from "../services/sandboxPersistence.ts";
-import { requirePermission } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 export {
@@ -80,10 +80,20 @@ type MaskedIniResult =
   | { ok: false; reason: "unresolvable" | "removed"; key: string };
 type SandboxRepairResult =
   | { alreadyValid: true }
-  | { alreadyValid: false; repaired: false; error: string; code: string; params?: JsonRecord }
-  | { alreadyValid: false; repaired: true; changes: string[]; backupName?: string };
+  | {
+      alreadyValid: false;
+      repaired: false;
+      error: string;
+      code: string;
+      params?: JsonRecord;
+    }
+  | {
+      alreadyValid: false;
+      repaired: true;
+      changes: string[];
+      backupName?: string;
+    };
 type ServerFilesRequest = Request & {
-  user?: { role?: string } | null;
   configEditRestartWarning?: boolean;
   activeServerContext?: ActiveServerContext;
 };
@@ -91,17 +101,6 @@ type ServerFilesRequest = Request & {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-
-router.use(requirePermission("serverfiles.manage"));
-
-const INI_KEY_CAPABILITY: Record<string, string> = {
-  RCONPassword: "server.configure",
-  RCONPort: "server.configure",
-  DefaultPort: "server.configure",
-  UDPPort: "server.configure",
-  UPnP: "server.configure",
-};
-
 const LOCAL_ONLY_PATHS = new Set(["/browse-files", "/image-preview"]);
 
 async function getRequestServerContext(
@@ -129,24 +128,31 @@ async function getRequestServerValues(req: ServerFilesRequest) {
   return { configPath: await getRequestServerConfigPath(req), serverName };
 }
 
-router.use(async (req: ServerFilesRequest, res: Response, next: NextFunction) => {
+router.use(
+  async (req: ServerFilesRequest, res: Response, next: NextFunction) => {
   try {
     const context = await getActiveServerContext();
     if (context.configurationError) throw context.configurationError;
     req.activeServerContext = context;
   } catch (err: unknown) {
     if (err instanceof ServerNotConfiguredError) {
-      return res.status(404).json({ error: errorMessage(err), code: err.code });
+        return res
+          .status(404)
+          .json({ error: errorMessage(err), code: err.code });
     }
     if (err instanceof RemoteConfigNotConfiguredError) {
-      return res.status(400).json({ error: errorMessage(err), code: err.code });
+        return res
+          .status(400)
+          .json({ error: errorMessage(err), code: err.code });
     }
     return next(err);
   }
   next();
-});
+  },
+);
 
-router.use(async (req: ServerFilesRequest, res: Response, next: NextFunction) => {
+router.use(
+  async (req: ServerFilesRequest, res: Response, next: NextFunction) => {
   let activeServer: ActiveServerContext["activeServer"];
   try {
     ({ activeServer } = await getRequestServerContext(req));
@@ -214,7 +220,8 @@ router.use(async (req: ServerFilesRequest, res: Response, next: NextFunction) =>
   res.on("finish", finish);
   res.on("close", finish);
   next();
-});
+  },
+);
 
 const LOCAL_CONFIG_MUTATIONS = new Set([
   "PUT /ini",
@@ -346,7 +353,8 @@ export function reconcileMaskedIniLines(
     const byKey = new Map();
     lines.forEach((line: string, index: number) => {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";")) return;
+      if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith(";"))
+        return;
       const eqIndex = trimmed.indexOf("=");
       if (eqIndex <= 0) return;
       const key = trimmed.substring(0, eqIndex).trim();
@@ -363,7 +371,9 @@ export function reconcileMaskedIniLines(
 
   for (const [key, entries] of incomingByKey) {
     if (!SENSITIVE_FIELD_RE.test(key)) continue;
-    const maskedEntries = entries.filter((e: { value: string }) => isMaskedSecret(e.value));
+    const maskedEntries = entries.filter((e: { value: string }) =>
+      isMaskedSecret(e.value),
+    );
     if (maskedEntries.length === 0) continue;
 
     const liveEntries = liveByKey.get(key) || [];
@@ -545,7 +555,10 @@ export function parseSandboxVars(content: string): JsonRecord {
   return result;
 }
 
-export function checkSandboxBraceBalance(content: string): { balanced: boolean; depth: number } {
+export function checkSandboxBraceBalance(content: string): {
+  balanced: boolean;
+  depth: number;
+} {
   let depth = 0;
   let wentNegative = false;
   for (const ch of content) {
@@ -676,7 +689,9 @@ export function findUnpersistedSandboxKeys(
       section === "settings" ? persisted.settings : persisted[section];
     for (const [key, value] of Object.entries(submittedSection)) {
       if ((persistedSection || {})[key] !== value) {
-        unpersistedKeys.push(section === "settings" ? key : `${section}.${key}`);
+        unpersistedKeys.push(
+          section === "settings" ? key : `${section}.${key}`,
+        );
       }
     }
   }
@@ -698,7 +713,8 @@ function createSandboxVars(sandbox: JsonRecord): string {
 
   const formatValue = (value: unknown): string => {
     if (typeof value === "boolean") return String(value);
-    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+    if (typeof value === "number" && Number.isFinite(value))
+      return String(value);
     return `"${escapeLuaString(String(value))}"`;
   };
 
@@ -853,7 +869,6 @@ function toSpawnRegions(regions: SpawnRegion[], serverName: string): string {
   return lines.join("\n");
 }
 
-
 router.get("/paths", async (req, res) => {
   try {
     log.info("GET /paths");
@@ -912,7 +927,8 @@ router.get("/ini", async (req, res) => {
 router.put("/ini", async (req, res) => {
   try {
     const { configPath, serverName } = await getRequestServerValues(req);
-    const body = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+    const body =
+      req.body && typeof req.body === "object" && !Array.isArray(req.body)
       ? req.body
       : {};
     log.info(
@@ -955,40 +971,12 @@ router.put("/ini", async (req, res) => {
     const submittedSettings: JsonRecord = {};
     for (const [key, value] of Object.entries(settings)) {
       if (SENSITIVE_FIELD_RE.test(key) && isMaskedSecret(value)) {
-        log.info(`Preserving stored value for sensitive key "${key}" (masked input ignored)`);
+        log.info(
+          `Preserving stored value for sensitive key "${key}" (masked input ignored)`,
+        );
         continue;
       }
       submittedSettings[key] = value;
-    }
-
-    const touchesGovernedIniKey = Object.keys(submittedSettings).some(
-      (key) => key in INI_KEY_CAPABILITY,
-    );
-    if (touchesGovernedIniKey) {
-      const currentIni = parseIni(currentIniContent);
-      const missingCapabilities = [];
-      let callerCapabilities = null;
-      for (const [key, value] of Object.entries(submittedSettings)) {
-        const requiredCapability = INI_KEY_CAPABILITY[key];
-        if (!requiredCapability) continue;
-        if (String(currentIni[key] ?? "") === String(value ?? "")) continue;
-        if (callerCapabilities === null) {
-          const role = req.user ? await getRoleByName(req.user.role ?? "") : null;
-          callerCapabilities = Array.isArray(role?.capabilities) ? role.capabilities : [];
-        }
-        if (!callerCapabilities.includes(requiredCapability)) {
-          missingCapabilities.push({ key, requiredCapability });
-        }
-      }
-      if (missingCapabilities.length > 0) {
-        const detail = missingCapabilities
-          .map((m) => `"${m.key}" needs ${m.requiredCapability}`)
-          .join(", ");
-        return res.status(403).json({
-          error: `Cannot change ${detail} without holding that capability yourself.`,
-          missing: missingCapabilities,
-        });
-      }
     }
 
     let backupWarning = null;
@@ -996,7 +984,9 @@ router.put("/ini", async (req, res) => {
       let originalContent = "";
       if (fs.existsSync(filePath)) {
         originalContent = fs.readFileSync(filePath, "utf-8");
-        backupWarning = backupWarningFor(await createBackup(configPath, `${serverName}.ini`));
+        backupWarning = backupWarningFor(
+          await createBackup(configPath, `${serverName}.ini`),
+        );
       }
 
       const content = toIni(submittedSettings, originalContent);
@@ -1004,9 +994,16 @@ router.put("/ini", async (req, res) => {
       const persisted = parseIni(fs.readFileSync(filePath, "utf-8"));
       const original = parseIni(originalContent);
       for (const [key, value] of Object.entries(submittedSettings)) {
-        const isExistingKey = Object.prototype.hasOwnProperty.call(original, key);
-        const isNewNonEmptyKey = value !== "" && value !== null && value !== undefined;
-        if ((isExistingKey || isNewNonEmptyKey) && persisted[key] !== String(value).replace(/[\r\n]/g, "")) {
+        const isExistingKey = Object.prototype.hasOwnProperty.call(
+          original,
+          key,
+        );
+        const isNewNonEmptyKey =
+          value !== "" && value !== null && value !== undefined;
+        if (
+          (isExistingKey || isNewNonEmptyKey) &&
+          persisted[key] !== String(value).replace(/[\r\n]/g, "")
+        ) {
           throw new Error(`INI write verification failed for ${key}`);
         }
       }
@@ -1126,7 +1123,9 @@ router.put("/sandbox", async (req, res) => {
     res.json({
       success: true,
       created: !fileExists,
-      message: fileExists ? "Sandbox settings saved" : "SandboxVars file created",
+      message: fileExists
+        ? "Sandbox settings saved"
+        : "SandboxVars file created",
       path: filePath,
       ...(unpersistedKeys.length > 0 ? { unpersistedKeys } : {}),
       ...(backupWarning ? { backupWarning } : {}),
@@ -1156,7 +1155,8 @@ router.put("/sandbox-option", async (req, res) => {
     }
 
     const parts = name.split(".");
-    const isIdentifier = (p: string): boolean => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(p);
+    const isIdentifier = (p: string): boolean =>
+      /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(p);
     if (parts.length > 2 || !parts.every(isIdentifier)) {
       return res.status(400).json({
         error: "Invalid option name",
@@ -1236,7 +1236,9 @@ router.post("/sandbox/repair", async (req, res) => {
       });
     }
 
-    const result: SandboxRepairResult = await withFileLock(filePath, async () => {
+    const result: SandboxRepairResult = await withFileLock(
+      filePath,
+      async () => {
       const originalContent = fs.readFileSync(filePath, "utf-8");
       const before = checkSandboxBraceBalance(originalContent);
       if (before.balanced) {
@@ -1258,7 +1260,10 @@ router.post("/sandbox/repair", async (req, res) => {
         };
       }
 
-      const backup = await createBackup(configPath, `${serverName}_SandboxVars.lua`);
+        const backup = await createBackup(
+          configPath,
+          `${serverName}_SandboxVars.lua`,
+        );
       if (!backup.backedUp) {
         return {
           alreadyValid: false,
@@ -1272,8 +1277,14 @@ router.post("/sandbox/repair", async (req, res) => {
       }
 
       writeFileAtomic(filePath, repaired, "utf-8");
-      return { alreadyValid: false, repaired: true, changes, backupName: backup.name };
-    });
+        return {
+          alreadyValid: false,
+          repaired: true,
+          changes,
+          backupName: backup.name,
+        };
+      },
+    );
 
     if (result.alreadyValid) {
       return res.json({
@@ -1283,7 +1294,11 @@ router.post("/sandbox/repair", async (req, res) => {
       });
     }
     if (!result.repaired) {
-      const body: JsonRecord = { success: false, error: result.error, code: result.code };
+      const body: JsonRecord = {
+        success: false,
+        error: result.error,
+        code: result.code,
+      };
       if (result.params) body.params = sanitizeErrorParams(result.params);
       return res.status(422).json(body);
     }
@@ -1520,10 +1535,14 @@ router.put("/raw/:type", async (req, res) => {
       }
 
       if (type === "ini") {
-        backupWarning = backupWarningFor(await writeIniWithBackup(filePath, contentToWrite));
+        backupWarning = backupWarningFor(
+          await writeIniWithBackup(filePath, contentToWrite),
+        );
       } else {
         if (fs.existsSync(filePath)) {
-          backupWarning = backupWarningFor(await createBackup(configPath, fileMap[type]));
+          backupWarning = backupWarningFor(
+            await createBackup(configPath, fileMap[type]),
+          );
         }
         writeFileAtomic(filePath, contentToWrite, "utf-8");
       }
@@ -1674,7 +1693,9 @@ router.post("/restore/:filename", async (req, res) => {
     res.json({
       success: true,
       message: `Restored ${originalName} from backup`,
-      ...(preRestoreBackupWarning ? { backupWarning: preRestoreBackupWarning } : {}),
+      ...(preRestoreBackupWarning
+        ? { backupWarning: preRestoreBackupWarning }
+        : {}),
     });
   } catch (error: unknown) {
     log.error("Failed to restore backup:", error);
@@ -1708,7 +1729,6 @@ router.post("/save-and-reload", async (req, res) => {
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
-
 
 async function getTemplatesPath(req: ServerFilesRequest) {
   const configPath = await getRequestServerConfigPath(req);
@@ -1751,7 +1771,10 @@ router.get("/templates", async (req, res) => {
         }
       })
       .filter(Boolean)
-      .sort((a: any, b: any) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.modified).getTime() - new Date(a.modified).getTime(),
+      );
 
     res.json({ templates: files });
   } catch (error: unknown) {
@@ -1947,7 +1970,9 @@ router.post("/templates/:id/apply", async (req, res) => {
     log.error("Failed to apply template:", error);
     res.status(500).json({
       error: sanitizeError(errorMessage(error)),
-      ...(applied.length > 0 ? { success: false, partiallyApplied: applied } : {}),
+      ...(applied.length > 0
+        ? { success: false, partiallyApplied: applied }
+        : {}),
     });
   }
 });
@@ -2019,7 +2044,6 @@ router.delete("/templates/:id", async (req, res) => {
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
-
 
 const IMAGE_EXTENSIONS = new Set([
   ".png",

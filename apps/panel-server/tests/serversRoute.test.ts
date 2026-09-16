@@ -35,14 +35,12 @@ const {
   parseDiscoveredPort,
   parseServerId,
 } = await import("../routes/servers.ts");
-const { getServer, getActiveServer, deleteServer, setActiveServer } = await import("../database/init.ts");
-const {
-  getSteamLoginArgs,
-  hasSteamManifestAccessDeniedState,
-} = await import(
-  "../routes/server.ts"
-);
-const { isSteamOperationIdle } = await import("../services/activeSteamOperations.ts");
+const { getServer, getActiveServer, deleteServer, setActiveServer } =
+  await import("../database/init.ts");
+const { getSteamLoginArgs, hasSteamManifestAccessDeniedState } =
+  await import("../routes/server.ts");
+const { isSteamOperationIdle } =
+  await import("../services/activeSteamOperations.ts");
 
 function createResponse() {
   const response = {
@@ -160,7 +158,8 @@ describe("POST /api/servers", () => {
   it("rejects an unsafe Docker container mapping on creation", async () => {
     const response = createResponse();
 
-    await getCreateHandler()({
+    await getCreateHandler()(
+      {
       body: {
         name: "Test Server",
         installPath: "C:\\PZ",
@@ -169,7 +168,9 @@ describe("POST /api/servers", () => {
         rconPassword: "rcon-password",
         dockerContainerName: "../other-container",
       },
-    }, response);
+      },
+      response,
+    );
 
     expect(createServer).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(400);
@@ -287,14 +288,22 @@ describe("server discovery port parsing", () => {
   it("agrees with mountDiscovery.ts's readServerIniSettings on a signed port -- the real bug this proves", async () => {
     expect(parseDiscoveredPort("+27015", 27015)).toBeNull();
 
-    const { readServerIniSettings } = await import("../services/mountDiscovery.ts");
-    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "auto-scan-port-sign-"));
+    const { readServerIniSettings } =
+      await import("../services/mountDiscovery.ts");
+    const tmpRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "auto-scan-port-sign-"),
+    );
     try {
       const serverDir = path.join(tmpRoot, "Server");
       fs.mkdirSync(serverDir, { recursive: true });
       fs.writeFileSync(
         path.join(serverDir, "signedport.ini"),
-        ["RCONPort=+27015", "RCONPassword=secret", "DefaultPort=16261", "PublicName=Test"].join("\n"),
+        [
+          "RCONPort=+27015",
+          "RCONPassword=secret",
+          "DefaultPort=16261",
+          "PublicName=Test",
+        ].join("\n"),
       );
       expect(readServerIniSettings(tmpRoot, "signedport")).toBeNull();
     } finally {
@@ -382,7 +391,11 @@ describe("PUT /api/servers/:id", () => {
   });
 
   it("reports when an active server profile was saved but its live manager could not reload", async () => {
-    updateServer.mockResolvedValue({ id: 1, name: "Test Server", isActive: true });
+    updateServer.mockResolvedValue({
+      id: 1,
+      name: "Test Server",
+      isActive: true,
+    });
     const response = createResponse();
     const serverManager = {
       reloadConfig: vi.fn(async () => {
@@ -394,7 +407,9 @@ describe("PUT /api/servers/:id", () => {
       {
         params: { id: "1" },
         body: { serverPort: 16262 },
-        app: { get: (key) => (key === "serverManager" ? serverManager : undefined) },
+        app: {
+          get: (key) => (key === "serverManager" ? serverManager : undefined),
+        },
       },
       response,
     );
@@ -408,7 +423,11 @@ describe("PUT /api/servers/:id", () => {
   });
 
   it("reports when an active server profile reconnect returns false", async () => {
-    updateServer.mockResolvedValue({ id: 1, name: "Test Server", isActive: true });
+    updateServer.mockResolvedValue({
+      id: 1,
+      name: "Test Server",
+      isActive: true,
+    });
     const response = createResponse();
     const rconService = {
       isConnected: vi.fn(() => false),
@@ -420,7 +439,9 @@ describe("PUT /api/servers/:id", () => {
       {
         params: { id: "1" },
         body: { rconPort: 27016 },
-        app: { get: (key) => (key === "rconService" ? rconService : undefined) },
+        app: {
+          get: (key) => (key === "rconService" ? rconService : undefined),
+        },
       },
       response,
     );
@@ -474,7 +495,9 @@ describe("PUT /api/servers/:id", () => {
 
       const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-savepath-"));
       realDataDir = path.join(root, "RealZomboidData");
-      fs.mkdirSync(path.join(realDataDir, "Saves", "Multiplayer"), { recursive: true });
+      fs.mkdirSync(path.join(realDataDir, "Saves", "Multiplayer"), {
+        recursive: true,
+      });
 
       installLikeDir = path.join(root, "ServerInstall");
       fs.mkdirSync(installLikeDir, { recursive: true });
@@ -486,7 +509,10 @@ describe("PUT /api/servers/:id", () => {
 
     it("rejects a nonexistent zomboidDataPath instead of persisting it", async () => {
       const response = createResponse();
-      const missing = path.join(os.tmpdir(), "zcp-savepath-does-not-exist-12345");
+      const missing = path.join(
+        os.tmpdir(),
+        "zcp-savepath-does-not-exist-12345",
+      );
 
       await getUpdateHandler()(
         { params: { id: "1" }, body: { zomboidDataPath: missing } },
@@ -520,7 +546,9 @@ describe("PUT /api/servers/:id", () => {
       expect(response.status).toHaveBeenCalledWith(400);
       expect(updateServer).not.toHaveBeenCalled();
       expect(response.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: expect.stringMatching(/server install/i) }),
+        expect.objectContaining({
+          error: expect.stringMatching(/server install/i),
+        }),
       );
     });
 
@@ -552,7 +580,10 @@ describe("PUT /api/servers/:id", () => {
 
       expect(updateServer).toHaveBeenCalledWith(
         1,
-        expect.objectContaining({ zomboidDataPath: remotePath, isRemote: true }),
+        expect.objectContaining({
+          zomboidDataPath: remotePath,
+          isRemote: true,
+        }),
       );
     });
 
@@ -592,8 +623,12 @@ describe("Steam operation watchdog", () => {
   it("recognizes an operation that has stopped producing output", () => {
     const now = Date.now();
 
-    expect(isSteamOperationIdle({ lastOutputAt: now - 9 * 60 * 1000 }, now)).toBe(false);
-    expect(isSteamOperationIdle({ lastOutputAt: now - 10 * 60 * 1000 }, now)).toBe(true);
+    expect(
+      isSteamOperationIdle({ lastOutputAt: now - 9 * 60 * 1000 }, now),
+    ).toBe(false);
+    expect(
+      isSteamOperationIdle({ lastOutputAt: now - 10 * 60 * 1000 }, now),
+    ).toBe(true);
   });
 });
 
@@ -607,12 +642,8 @@ describe("SteamCMD update login", () => {
 
 describe("SteamCMD manifest recovery", () => {
   it("recognizes Steam's access-denied manifest state", () => {
-    expect(
-      hasSteamManifestAccessDeniedState('"StateFlags" "6"'),
-    ).toBe(true);
-    expect(
-      hasSteamManifestAccessDeniedState('"StateFlags" "4"'),
-    ).toBe(false);
+    expect(hasSteamManifestAccessDeniedState('"StateFlags" "6"')).toBe(true);
+    expect(hasSteamManifestAccessDeniedState('"StateFlags" "4"')).toBe(false);
   });
 });
 
@@ -624,8 +655,18 @@ describe("GET /api/servers/rcon-status", () => {
 
   it("reports per-server RCON status without exposing credentials", async () => {
     getServers.mockResolvedValue([
-      { id: "one", rconHost: " 127.0.0.1 ", rconPort: 27015, rconPassword: "secret" },
-      { id: "two", rconHost: "example.test", rconPort: 27016, rconPassword: "other" },
+      {
+        id: "one",
+        rconHost: " 127.0.0.1 ",
+        rconPort: 27015,
+        rconPassword: "secret",
+      },
+      {
+        id: "two",
+        rconHost: "example.test",
+        rconPort: 27016,
+        rconPassword: "other",
+      },
       { id: "three" },
     ]);
     testRconConnection
@@ -635,11 +676,13 @@ describe("GET /api/servers/rcon-status", () => {
 
     await runRoute("/rcon-status", "get", {}, response);
 
-    expect(testRconConnection).toHaveBeenCalledWith(expect.objectContaining({
+    expect(testRconConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
       host: "127.0.0.1",
       port: 27015,
       timeoutMs: 3000,
-    }));
+      }),
+    );
     expect(response.json).toHaveBeenCalledWith({
       servers: [
         { id: "one", status: "connected" },
@@ -647,7 +690,9 @@ describe("GET /api/servers/rcon-status", () => {
         { id: "three", status: "unconfigured" },
       ],
     });
-    expect(JSON.stringify(response.json.mock.calls[0][0])).not.toMatch(/secret|other/);
+    expect(JSON.stringify(response.json.mock.calls[0][0])).not.toMatch(
+      /secret|other/,
+    );
   });
 
   it("marks a malformed persisted port unavailable without failing every server status", async () => {
@@ -696,9 +741,7 @@ describe("GET /api/servers", () => {
       panelBridgeSftpHost: "192.168.1.50",
       panelBridgeSftpConfigPath: "/home/pz/Server",
     });
-    getServers.mockResolvedValue([
-      { id: 1, name: "Remote", isRemote: true },
-    ]);
+    getServers.mockResolvedValue([{ id: 1, name: "Remote", isRemote: true }]);
     const response = createResponse();
     const layer = getLayer("/", "get");
 
@@ -709,9 +752,7 @@ describe("GET /api/servers", () => {
   });
 
   it("does NOT mark a remote server as remoteConfigConfigured when SFTP is not set up", async () => {
-    getServers.mockResolvedValue([
-      { id: 1, name: "Remote", isRemote: true },
-    ]);
+    getServers.mockResolvedValue([{ id: 1, name: "Remote", isRemote: true }]);
     const response = createResponse();
     const layer = getLayer("/", "get");
 
@@ -726,9 +767,7 @@ describe("GET /api/servers", () => {
       panelBridgeSftpHost: "192.168.1.50",
       panelBridgeSftpConfigPath: "/home/pz/Server",
     });
-    getServers.mockResolvedValue([
-      { id: 1, name: "Local", isRemote: false },
-    ]);
+    getServers.mockResolvedValue([{ id: 1, name: "Local", isRemote: false }]);
     const response = createResponse();
     const layer = getLayer("/", "get");
 
@@ -736,30 +775,6 @@ describe("GET /api/servers", () => {
 
     const payload = response.json.mock.calls[0][0];
     expect(payload.servers[0].remoteConfigConfigured).toBe(false);
-  });
-});
-
-describe("Admin-gated server discovery routes", () => {
-  it("rejects POST /auto-scan for a non-admin authenticated user", async () => {
-    const response = createResponse();
-    await runRoute(
-      "/auto-scan",
-      "post",
-      { body: {}, user: { role: "viewer" } },
-      response,
-    );
-    expect(response.status).toHaveBeenCalledWith(403);
-  });
-
-  it("rejects POST /detect for a non-admin authenticated user", async () => {
-    const response = createResponse();
-    await runRoute(
-      "/detect",
-      "post",
-      { body: {}, user: { role: "viewer" } },
-      response,
-    );
-    expect(response.status).toHaveBeenCalledWith(403);
   });
 });
 
@@ -774,7 +789,10 @@ describe("DELETE /api/servers/:id: deleting the active server must reload live s
       params: { id },
       user: { role: "admin" },
       app: {
-        get: (key) => ({ serverManager, rconService, logTailer, io, modChecker: null })[key],
+        get: (key) =>
+          ({ serverManager, rconService, logTailer, io, modChecker: null })[
+            key
+          ],
       },
       ...overrides,
     };
@@ -796,7 +814,11 @@ describe("DELETE /api/servers/:id: deleting the active server must reload live s
   });
 
   it("reloads serverManager and RCON for the newly-active server after deleting the active one", async () => {
-    getServer.mockResolvedValue({ id: "deleted-1", name: "Deleted", isActive: true });
+    getServer.mockResolvedValue({
+      id: "deleted-1",
+      name: "Deleted",
+      isActive: true,
+    });
     deleteServer.mockResolvedValue(true);
     getActiveServer.mockResolvedValue({
       id: "promoted-2",
@@ -814,12 +836,18 @@ describe("DELETE /api/servers/:id: deleting the active server must reload live s
     expect(logTailer.reloadConfig).toHaveBeenCalled();
     expect(io.emit).toHaveBeenCalledWith(
       "activeServerChanged",
-      expect.objectContaining({ server: expect.objectContaining({ id: "promoted-2" }) }),
+      expect.objectContaining({
+        server: expect.objectContaining({ id: "promoted-2" }),
+      }),
     );
   });
 
   it("does NOT reload services when the deleted server was not the active one", async () => {
-    getServer.mockResolvedValue({ id: "deleted-1", name: "Deleted", isActive: false });
+    getServer.mockResolvedValue({
+      id: "deleted-1",
+      name: "Deleted",
+      isActive: false,
+    });
     deleteServer.mockResolvedValue(true);
 
     const response = createResponse();
@@ -827,11 +855,17 @@ describe("DELETE /api/servers/:id: deleting the active server must reload live s
 
     expect(serverManager.reloadConfig).not.toHaveBeenCalled();
     expect(rconService.reloadConfig).not.toHaveBeenCalled();
-    expect(io.emit).toHaveBeenCalledWith("activeServerChanged", { deleted: "deleted-1" });
+    expect(io.emit).toHaveBeenCalledWith("activeServerChanged", {
+      deleted: "deleted-1",
+    });
   });
 
   it("still succeeds (no reload attempted) when deleting the last remaining server leaves nothing active", async () => {
-    getServer.mockResolvedValue({ id: "deleted-1", name: "Deleted", isActive: true });
+    getServer.mockResolvedValue({
+      id: "deleted-1",
+      name: "Deleted",
+      isActive: true,
+    });
     deleteServer.mockResolvedValue(true);
     getActiveServer.mockResolvedValue(null);
 
@@ -892,7 +926,8 @@ describe("POST /api/servers/:id/activate: a live-service reload failure must not
       params: { id },
       user: { role: "admin" },
       app: {
-        get: (key) => ({ serverManager, rconService, io, modChecker: null })[key],
+        get: (key) =>
+          ({ serverManager, rconService, io, modChecker: null })[key],
       },
     };
   }
@@ -927,7 +962,9 @@ describe("POST /api/servers/:id/activate: a live-service reload failure must not
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({
         server: expect.objectContaining({ id: "1" }),
-        warnings: expect.arrayContaining([expect.stringMatching(/could not be fully reloaded/i)]),
+        warnings: expect.arrayContaining([
+          expect.stringMatching(/could not be fully reloaded/i),
+        ]),
       }),
     );
     expect(io.emit).toHaveBeenCalledWith(

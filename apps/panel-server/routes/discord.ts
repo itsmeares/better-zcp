@@ -1,4 +1,4 @@
-import { Router, type Request } from "../http/startApiRouter.ts";
+import { Router } from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import {
@@ -6,15 +6,10 @@ import {
   START_ALREADY_IN_PROGRESS,
 } from "../services/discordBot.ts";
 import { describeStartFailure } from "../services/discordStartFailure.ts";
-import { requirePermission, getRoleByName } from "../services/permissions.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 const log = createLogger("API:Discord");
 
 const router = Router();
-
-type AuthenticatedRequest = Request & {
-  user?: { role?: string } | null;
-};
 
 type DiscordEvent = {
   enabled: boolean;
@@ -24,20 +19,6 @@ type DiscordEvent = {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-
-const DISCORD_COMMAND_CAPABILITY: Record<string, string | null> = {
-  status: null,
-  players: "players.view",
-  save: "server.control",
-  broadcast: "server.world_events",
-  kick: "players.moderate",
-  start: "server.control",
-  stop: "server.control",
-  restart: "server.control",
-  rcon: "rcon.execute",
-};
-
-router.use(requirePermission("integrations.manage"));
 
 router.get("/status", async (req, res) => {
   try {
@@ -120,7 +101,9 @@ router.put("/config", async (req, res) => {
     await discordBot.loadConfig();
 
     const finalToken =
-      token === "KEEP_EXISTING" && discordBot.token ? discordBot.token : token;
+        token === "KEEP_EXISTING" && discordBot.token
+          ? discordBot.token
+          : token;
 
     if (!finalToken || !guildId) {
       return res.status(400).json({
@@ -214,14 +197,16 @@ router.put("/config", async (req, res) => {
       if (started === START_ALREADY_IN_PROGRESS) {
         return res.json({
           success: true,
-          message: "Discord bot configuration saved; reconnect is already in progress.",
+            message:
+              "Discord bot configuration saved; reconnect is already in progress.",
           botStarted: null,
         });
       }
       if (!started) {
         return res.json({
           success: true,
-          message: "Discord bot configuration saved, but the bot failed to reconnect.",
+            message:
+              "Discord bot configuration saved, but the bot failed to reconnect.",
           botStarted: false,
           botStartError: describeStartFailure(discordBot.lastStartError),
         });
@@ -342,7 +327,8 @@ router.post("/test", async (req, res) => {
     if (!response.ok) {
       if (response.status === 429) {
         return res.status(429).json({
-          error: "Discord is rate-limiting this request. Wait a moment and try again.",
+          error:
+            "Discord is rate-limiting this request. Wait a moment and try again.",
           code: ErrorCode.DISCORD_TEST_RATE_LIMITED,
         });
       }
@@ -516,7 +502,10 @@ router.put("/webhook-events", async (req, res) => {
     }
 
     await discordBot.withConfigMutex(async () => {
-      const merged = { ...(discordBot.webhookEvents || {}), ...sanitizedEvents };
+      const merged = {
+        ...(discordBot.webhookEvents || {}),
+        ...sanitizedEvents,
+      };
       await discordBot.saveWebhookEvents(merged);
     });
 
@@ -563,36 +552,6 @@ router.put("/permissions", async (req, res) => {
     }
 
     await discordBot.withConfigMutex(async () => {
-      const current = discordBot.getCommandPermissions();
-      const missing = [];
-      let callerCapabilities = null;
-      for (const [command, tier] of Object.entries(permissions)) {
-        const requiredCapability = DISCORD_COMMAND_CAPABILITY[command];
-        if (!requiredCapability) continue;
-        if (!(command in current) || current[command] === tier) continue;
-        if (callerCapabilities === null) {
-          const user = (req as AuthenticatedRequest).user;
-          const role = user?.role ? await getRoleByName(user.role) : null;
-          callerCapabilities = Array.isArray(role?.capabilities)
-            ? role.capabilities
-            : [];
-        }
-        if (!callerCapabilities.includes(requiredCapability)) {
-          missing.push({ command, requiredCapability });
-        }
-      }
-      if (missing.length > 0) {
-        const detail = missing
-          .map((m) => `"${m.command}" needs ${m.requiredCapability}`)
-          .join(", ");
-        return res.status(403).json({
-          error: `Cannot change the Discord tier for ${detail} without holding that capability yourself.`,
-          code: ErrorCode.DISCORD_PERMISSIONS_CAPABILITY_REQUIRED,
-          params: sanitizeErrorParams({ detail }),
-          missing,
-        });
-      }
-
       const updated = await discordBot.updateCommandPermissions(permissions);
       res.json({ success: true, permissions: updated });
     });

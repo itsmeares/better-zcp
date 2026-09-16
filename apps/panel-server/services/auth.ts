@@ -1,26 +1,21 @@
-
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import crypto from "crypto";
-import type { NextFunction, Request, RequestHandler, Response } from "../http/startApiRouter.ts";
+import type {
+  NextFunction,
+  Request,
+  RequestHandler,
+  Response,
+} from "../http/startApiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getSetting, setSetting, getDb, commitNow } from "../database/init.ts";
-import { verifySetupToken, clearSetupToken } from "../utils/setupToken.ts";
 import {
   loadOrCreateJwtSecret,
   getJwtSecretPath,
   regenerateJwtSecretFile,
 } from "../utils/jwtSecret.ts";
 import { readSecret } from "../utils/secrets.ts";
-import { getCapabilitiesForRole } from "./permissions.ts";
-import {
-  getRoleById,
-  getRoleByName,
-  getRoles,
-  RECOVERY_CAPABILITIES,
-} from "./permissions.ts";
-import { ErrorCode } from "../utils/errorCodes.ts";
 
 const log = createLogger("Auth");
 
@@ -31,22 +26,13 @@ type RefreshSession = {
   expiresAt: string;
 };
 
-type ExternalIdentity = {
-  issuer: string;
-  subject: string;
-  email: string | null;
-  linkedAt: string;
-};
-
 type AuthUser = {
   id: string;
   username: string;
   password?: string | null;
-  role: string;
-  roleId?: string | number | null;
+  role?: string;
   tokenGen?: number;
   refreshSessions?: RefreshSession[];
-  externalIdentities?: ExternalIdentity[];
   lockedUntil?: string | null;
   failedLoginCount?: number;
   lastLogin?: string | null;
@@ -54,17 +40,9 @@ type AuthUser = {
   [key: string]: any;
 };
 
-type AuthRole = {
-  id: string | number;
-  name: string;
-  capabilities: string[];
-  isSeeded?: boolean;
-};
-
 export type AuthenticatedUser = {
   userId: string | null;
   username: string | null;
-  role: string;
   tokenGen: number | null;
   authDisabled?: boolean;
 };
@@ -80,49 +58,26 @@ type AuthenticatedRequest = Request & {
 type PanelJwtPayload = JwtPayload & {
   userId?: string;
   username?: string;
-  role?: string;
   tokenGen?: number;
   type?: string;
   sessionId?: string;
 };
 
-type RoleServiceError = Error & {
-  code: string;
-  status: number;
-  params?: unknown;
-};
-
 type PublicUser = {
   id: string;
   username: string;
-  role: string;
-  roleId?: string | number | null;
+  createdAt?: string;
+  lastLogin?: string | null;
 };
 
 type AuthSessionResult = {
-  user: PublicUser & { capabilities?: string[] | null };
+  user: PublicUser;
   accessToken: string;
   refreshToken: string | null;
 };
 
-type ExternalLoginResult =
-  | { linked: false; canBootstrapAdmin: boolean }
-  | {
-      linked: true;
-      user: PublicUser;
-      accessToken: string;
-      refreshToken: string | null;
-    };
-
-type ExternalIdentityInput = {
-  issuer?: string;
-  subject?: string;
-  email?: string;
-};
-
 export type SessionRevocationEvent =
-  | { scope: "all" }
-  | { scope: "user"; userId: string };
+  { scope: "all" } | { scope: "user"; userId: string };
 
 type SessionRevocationCallback = (event: SessionRevocationEvent) => void;
 
@@ -139,14 +94,7 @@ const PUBLIC_AUTH_PATHS = new Set([
   "/api/auth/reset-status",
   "/api/auth/reset-token/local",
   "/api/auth/reset-password",
-  "/api/auth/recovery-status",
-  "/api/auth/recover-with-code",
-  "/api/auth/oidc/status",
-  "/api/auth/oidc/login",
-  "/api/auth/oidc/callback",
 ]);
-
-export const USER_ROLES = ["admin", "technician", "moderator"];
 
 const BCRYPT_ROUNDS = 12;
 export const ACCESS_TOKEN_EXPIRY = "15m";
@@ -159,97 +107,15 @@ const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 const DUMMY_BCRYPT_HASH =
   "$2a$12$CwTycUXWue0Thq9StjUM0uJ8u2H8ekjqOGWjF/9JMlSlL5C.tZgqe";
 
-function makeRoleError(
-  code: string,
-  message: string,
-  status = 400,
-  params?: unknown,
-): RoleServiceError {
-  const err = new Error(message) as RoleServiceError;
-  err.code = code;
-  err.status = status;
-  if (params) err.params = params;
-  return err;
-}
-
-async function countOtherUsersWithCapability(
-  capability: string,
-  excludingUserId: string,
-): Promise<number> {
-  const db = await getDb();
-  const users = (db.data.users || []) as AuthUser[];
-  const roles = await getRoles() as AuthRole[];
-  const roleById = new Map(roles.map((r) => [String(r.id), r]));
-  const roleByName = new Map(roles.map((r) => [r.name, r]));
-
-  let count = 0;
-  for (const u of users) {
-    if (String(u.id) === String(excludingUserId)) continue;
-    const role = u.roleId ? roleById.get(String(u.roleId)) : roleByName.get(u.role);
-    if (role?.capabilities?.includes(capability)) count++;
-  }
-  return count;
-}
-
-async function assertNoRecoveryLockout(
-  userId: string,
-  currentCapabilities: string[],
-  nextCapabilities: string[],
-): Promise<void> {
-  for (const capability of RECOVERY_CAPABILITIES) {
-    const currentlyGrants = currentCapabilities.includes(capability);
-    const willStillGrant = nextCapabilities.includes(capability);
-    if (!currentlyGrants || willStillGrant) continue;
-
-    const others = await countOtherUsersWithCapability(capability, userId);
-    if (others === 0) {
-      throw makeRoleError(
-        ErrorCode.ROLE_LOCKOUT_LAST_MANAGER,
-        `This change would leave no user able to ${
-          capability === "roles.manage" ? "manage roles" : "manage user accounts"
-        }.`,
-        409,
-        { action: capability },
-      );
-    }
-  }
-}
-
-async function assertNoCapabilityEscalation(
-  actingUserId: string | number | null | undefined,
-  targetCapabilities: string[],
-): Promise<void> {
-  if (!actingUserId) return;
-
-  const db = await getDb();
-  const actingUser = ((db.data.users || []) as AuthUser[]).find(
-    (user) => String(user.id) === String(actingUserId),
-  );
-  if (!actingUser) return;
-
-  const actingRole = actingUser.roleId
-    ? await getRoleById(actingUser.roleId)
-    : await getRoleByName(actingUser.role);
-  const actingCapabilities = actingRole?.capabilities || [];
-  const missing = targetCapabilities.filter(
-    (capability) => !actingCapabilities.includes(capability),
-  );
-  if (missing.length > 0) {
-    const detail = missing.join(", ");
-    throw makeRoleError(
-      ErrorCode.ROLE_GRANT_EXCEEDS_CALLER_CAPABILITIES,
-      `Cannot grant a role that holds ${detail} without already holding ${
-        missing.length === 1 ? "it" : "them"
-      } yourself.`,
-      403,
-      { detail, missing },
-    );
-  }
+function getAdminUser(users: AuthUser[]): AuthUser | null {
+  return users.find((user) => user.role === "admin") || users[0] || null;
 }
 
 const sessionRevocationCallbacks = new Set<SessionRevocationCallback>();
 
-export function onSessionRevoked(callback: SessionRevocationCallback): () => void {
+export function onSessionRevoked(
+  callback: SessionRevocationCallback,
+): () => void {
   sessionRevocationCallbacks.add(callback);
   return () => sessionRevocationCallbacks.delete(callback);
 }
@@ -308,7 +174,10 @@ class AuthService {
 
     const now = Date.now();
     user.refreshSessions = user.refreshSessions
-      .filter((session): session is RefreshSession => session && typeof session.id === "string")
+      .filter(
+        (session): session is RefreshSession =>
+          session && typeof session.id === "string",
+      )
       .filter((session) => {
         const expiresAt = Date.parse(session.expiresAt || "");
         return Number.isNaN(expiresAt) || expiresAt > now;
@@ -351,7 +220,9 @@ class AuthService {
     return user.refreshSessions.length !== initialLength;
   }
 
-  async authenticateAccessToken(token: string): Promise<AuthenticatedUser | null> {
+  async authenticateAccessToken(
+    token: string,
+  ): Promise<AuthenticatedUser | null> {
     try {
       await this.ensureInitialized();
       const payload = jwt.verify(token, this.jwtSecret as string, {
@@ -363,8 +234,8 @@ class AuthService {
 
       const db = await getDb();
       const users = (db.data.users || []) as AuthUser[];
-      const user = users.find((entry) => entry.id === payload.userId);
-      if (!user) {
+      const user = getAdminUser(users);
+      if (!user || user.id !== payload.userId) {
         return null;
       }
 
@@ -378,7 +249,6 @@ class AuthService {
       return {
         userId: user.id,
         username: user.username,
-        role: user.role,
         tokenGen: currentGen,
       };
     } catch (error) {
@@ -404,7 +274,6 @@ class AuthService {
         user: {
           userId: null,
           username: null,
-          role: "admin",
           tokenGen: null,
           authDisabled: true,
         },
@@ -504,18 +373,7 @@ class AuthService {
     return authEnabled !== false;
   }
 
-  async createUser(
-    username: string,
-    password: string,
-    role?: string,
-    {
-      actingUserId,
-      roleId,
-    }: {
-      actingUserId?: string | number | null;
-      roleId?: string | number | null;
-    } = {},
-  ): Promise<PublicUser> {
+  async createAdmin(username: string, password: string): Promise<PublicUser> {
     return this._withMutex(async () => {
       if (!username || !password) {
         throw new Error("Username and password are required");
@@ -545,33 +403,8 @@ class AuthService {
       }
 
       const users = db.data.users as AuthUser[];
-      const isFirstUser = users.length === 0;
-      const hasExplicitRoleId =
-        roleId !== undefined && roleId !== null && String(roleId).trim().length > 0;
-      let resolvedRole: string;
-      let targetRole: AuthRole | null = null;
-      if (isFirstUser) {
-        resolvedRole = "admin";
-      } else if (hasExplicitRoleId) {
-        targetRole = (await getRoleById(roleId)) as AuthRole | null;
-        if (!targetRole) {
-          throw makeRoleError(
-            ErrorCode.ROLE_NOT_FOUND,
-            "That role does not exist.",
-            404,
-          );
-        }
-        resolvedRole = targetRole.name;
-      } else {
-        if (!role || !USER_ROLES.includes(role)) {
-          throw new Error(`role must be one of: ${USER_ROLES.join(", ")}`);
-        }
-        resolvedRole = role;
-      }
-
-      if (!isFirstUser) {
-        targetRole ??= (await getRoleByName(resolvedRole)) as AuthRole | null;
-        await assertNoCapabilityEscalation(actingUserId, targetRole?.capabilities || []);
+      if (users.length > 0) {
+        throw new Error("Setup already completed");
       }
 
       const existing = users.find(
@@ -586,10 +419,6 @@ class AuthService {
         id: crypto.randomUUID(),
         username,
         password: hashedPassword,
-        role: resolvedRole,
-        ...(hasExplicitRoleId && targetRole
-          ? { roleId: targetRole.id }
-          : {}),
         createdAt: new Date().toISOString(),
         lastLogin: null,
       };
@@ -597,137 +426,28 @@ class AuthService {
       users.push(user);
       await commitNow();
 
-      log.info(`User created: ${username} (role: ${resolvedRole})`);
+      log.info(`Admin account created: ${username}`);
       return {
         id: user.id,
         username: user.username,
-        role: user.role,
-        ...(hasExplicitRoleId && targetRole ? { roleId: targetRole.id } : {}),
       };
     });
   }
 
-  async changeUserRole(
-    userId: string,
-    newRole: string,
-    { actingUserId }: { actingUserId?: string | number | null } = {},
-  ): Promise<PublicUser> {
-    if (!USER_ROLES.includes(newRole)) {
-      throw new Error(`role must be one of: ${USER_ROLES.join(", ")}`);
-    }
-
-    const targetRole = await getRoleByName(newRole);
-    if (!targetRole) {
-      throw new Error(
-        `Role "${newRole}" is not configured on this panel. Contact an administrator.`,
-      );
-    }
-
-    return this.changeUserRoleById(userId, targetRole.id, { actingUserId });
-  }
-
-  async changeUserRoleById(
-    userId: string,
-    roleId: string | number,
-    { actingUserId }: { actingUserId?: string | number | null } = {},
-  ): Promise<PublicUser> {
-    return this._withMutex(async () => {
-      if (actingUserId && String(actingUserId) === String(userId)) {
-        throw makeRoleError(
-          ErrorCode.USER_SELF_ROLE_CHANGE_REFUSED,
-          "You cannot change your own role. Ask another administrator to do it instead.",
-          400,
-        );
-      }
-
-      const targetRole = await getRoleById(roleId);
-      if (!targetRole) {
-        throw makeRoleError(
-          ErrorCode.ROLE_NOT_FOUND,
-          "That role does not exist.",
-          404,
-        );
-      }
-
-      const db = await getDb();
-      const users = (db.data.users || []) as AuthUser[];
-      const user = users.find((u) => u.id === userId);
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      const currentRole = user.roleId
-        ? await getRoleById(user.roleId)
-        : await getRoleByName(user.role);
-      const currentCapabilities = currentRole?.capabilities || [];
-      const nextCapabilities = targetRole.capabilities || [];
-
-      await assertNoRecoveryLockout(userId, currentCapabilities, nextCapabilities);
-      await assertNoCapabilityEscalation(actingUserId, nextCapabilities);
-
-      user.role = targetRole.name;
-      user.roleId = targetRole.id;
-      await commitNow();
-
-      log.info(
-        `Role changed for user ${user.username}: ${user.role} (roleId: ${user.roleId})`,
-      );
-      emitSessionRevoked({ scope: "user", userId: user.id });
-      return {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        roleId: user.roleId,
-      };
-    });
-  }
-
-  async deleteUser(
-    userId: string,
-    { actingUserId }: { actingUserId?: string | number | null } = {},
-  ): Promise<{ id: string; username: string }> {
-    return this._withMutex(async () => {
-      if (actingUserId && String(actingUserId) === String(userId)) {
-        throw makeRoleError(
-          ErrorCode.USER_SELF_DELETE_REFUSED,
-          "You cannot delete your own account. Ask another administrator to do it instead.",
-          400,
-        );
-      }
-
-      const db = await getDb();
-      const users = (db.data.users || []) as AuthUser[];
-      const user = users.find((u) => u.id === userId);
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      const currentRole = user.roleId
-        ? await getRoleById(user.roleId)
-        : await getRoleByName(user.role);
-      const currentCapabilities = currentRole?.capabilities || [];
-
-      await assertNoRecoveryLockout(userId, currentCapabilities, []);
-
-      db.data.users = users.filter((u) => u.id !== userId);
-      await commitNow();
-
-      log.info(`Deleted user: ${user.username} (${user.id})`);
-      emitSessionRevoked({ scope: "user", userId: user.id });
-      return { id: user.id, username: user.username };
-    });
-  }
-
-  async login(username: string, password: string, rememberMe = true): Promise<AuthSessionResult> {
+  async login(
+    username: string,
+    password: string,
+    rememberMe = true,
+  ): Promise<AuthSessionResult> {
     if (!username || !password) {
       throw new Error("Username and password are required");
     }
 
     const db = await getDb();
     const users = (db.data.users || []) as AuthUser[];
-    const user = users.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase(),
-    );
+    const admin = getAdminUser(users);
+    const user =
+      admin?.username.toLowerCase() === username.toLowerCase() ? admin : null;
 
     if (!user) {
       await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
@@ -783,9 +503,8 @@ class AuthService {
       : null;
 
     log.info(`User logged in: ${username}`);
-    const capabilities = await getCapabilitiesForRole(user.role);
     return {
-      user: { id: user.id, username: user.username, role: user.role, capabilities },
+      user: { id: user.id, username: user.username },
       accessToken,
       refreshToken,
     };
@@ -796,7 +515,6 @@ class AuthService {
       {
         userId: user.id,
         username: user.username,
-        role: user.role,
         tokenGen: user.tokenGen || 0,
       },
       this.jwtSecret as string,
@@ -829,7 +547,9 @@ class AuthService {
     }
   }
 
-  async refreshAccessToken(refreshToken: string): Promise<AuthSessionResult | null> {
+  async refreshAccessToken(
+    refreshToken: string,
+  ): Promise<AuthSessionResult | null> {
     try {
       const payload = jwt.verify(refreshToken, this.jwtSecret as string, {
         algorithms: [JWT_ALGORITHM],
@@ -840,9 +560,9 @@ class AuthService {
 
       const db = await getDb();
       const users = (db.data.users || []) as AuthUser[];
-      const user = users.find((u) => u.id === payload.userId);
+      const user = getAdminUser(users);
 
-      if (!user) {
+      if (!user || user.id !== payload.userId) {
         throw new Error("User not found");
       }
 
@@ -868,9 +588,8 @@ class AuthService {
 
       const accessToken = this.generateAccessToken(user);
       const newRefreshToken = this.generateRefreshToken(user, newSession.id);
-      const capabilities = await getCapabilitiesForRole(user.role);
       return {
-        user: { id: user.id, username: user.username, role: user.role, capabilities },
+        user: { id: user.id, username: user.username },
         accessToken,
         refreshToken: newRefreshToken,
       };
@@ -879,22 +598,26 @@ class AuthService {
     }
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<boolean> {
     if (!newPassword || newPassword.length < 6) {
       throw new Error("New password must be at least 6 characters");
     }
 
     const db = await getDb();
     const users = (db.data.users || []) as AuthUser[];
-    const user = users.find((u) => u.id === userId);
+    const user = getAdminUser(users);
 
-    if (!user) {
+    if (!user || user.id !== userId) {
       throw new Error("User not found");
     }
 
     if (!user.password) {
       throw new Error(
-        "This account has no local password set (it signs in via an external provider). Use password reset/recovery to set one instead.",
+        "This account has no local password set. Use the local password reset flow to set one.",
       );
     }
 
@@ -916,169 +639,17 @@ class AuthService {
   async getUsers(): Promise<PublicUser[]> {
     const db = await getDb();
     const users = (db.data.users || []) as AuthUser[];
-    return users.map((u) => ({
-      id: u.id,
-      username: u.username,
-      role: u.role,
-      roleId: u.roleId || null,
-      createdAt: u.createdAt,
-      lastLogin: u.lastLogin,
-    }));
-  }
-
-
-  async loginWithExternalIdentity(
-    { issuer, subject }: ExternalIdentityInput = {},
-    rememberMe = true,
-  ): Promise<ExternalLoginResult> {
-    if (!issuer || !subject) {
-      throw new Error("issuer and subject are required");
-    }
-
-    const db = await getDb();
-    const users = (db.data.users || []) as AuthUser[];
-    const existing = users.find(
-      (u) =>
-        Array.isArray(u.externalIdentities) &&
-        u.externalIdentities.some(
-          (ext) => ext.issuer === issuer && ext.subject === subject,
-        ),
-    );
-
-    if (!existing) {
-      return { linked: false, canBootstrapAdmin: users.length === 0 };
-    }
-
-    this.ensureUserAuthState(existing);
-    existing.lastLogin = new Date().toISOString();
-    const refreshSession = rememberMe
-      ? this.createRefreshSession(existing)
-      : null;
-    await commitNow();
-
-    const accessToken = this.generateAccessToken(existing);
-    const refreshToken = refreshSession
-      ? this.generateRefreshToken(existing, refreshSession.id)
-      : null;
-
-    log.info(`User logged in via OIDC: ${existing.username}`);
-    return {
-      linked: true,
-      user: { id: existing.id, username: existing.username, role: existing.role },
-      accessToken,
-      refreshToken,
-    };
-  }
-
-  async bootstrapAdminFromExternalIdentity({
-    issuer,
-    subject,
-    email,
-    username,
-    setupToken,
-  }: ExternalIdentityInput & { username?: string; setupToken?: unknown } = {}): Promise<PublicUser> {
-    return this._withMutex(async () => {
-      const db = await getDb();
-      if (!db.data.users) {
-        db.data.users = [];
-      }
-      if (db.data.users.length > 0) {
-        throw new Error(
-          "Setup already completed. An admin must link this identity instead.",
-        );
-      }
-
-      if (!(await verifySetupToken(setupToken))) {
-        throw new Error("Invalid or missing setup token");
-      }
-      if (!issuer || !subject) {
-        throw new Error("issuer and subject are required");
-      }
-      if (!username || typeof username !== "string") {
-        throw new Error("username is required");
-      }
-      if (username.length < 3 || username.length > 32) {
-        throw new Error("Username must be 3-32 characters");
-      }
-      if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
-        throw new Error(
-          "Username can only contain letters, numbers, underscores and hyphens",
-        );
-      }
-
-      const user: AuthUser = {
-        id: crypto.randomUUID(),
-        username,
-        password: null, // OIDC-only account — no local password set
-        role: "admin",
-        externalIdentities: [
+    const user = getAdminUser(users);
+    return user
+      ? [
           {
-            issuer,
-            subject,
-            email: email || null,
-            linkedAt: new Date().toISOString(),
+      id: user.id,
+      username: user.username,
+      createdAt: user.createdAt,
+      lastLogin: user.lastLogin,
           },
-        ],
-        createdAt: new Date().toISOString(),
-        lastLogin: null,
-      };
-
-      db.data.users.push(user);
-      await commitNow();
-      await clearSetupToken();
-
-      log.info(`First admin account bootstrapped via OIDC: ${username}`);
-      return { id: user.id, username: user.username, role: user.role };
-    });
-  }
-
-  async linkExternalIdentity(
-    userId: string,
-    { issuer, subject, email }: ExternalIdentityInput = {},
-  ): Promise<PublicUser> {
-    if (!issuer || !subject) {
-      throw new Error("issuer and subject are required");
-    }
-
-    const db = await getDb();
-    const users = (db.data.users || []) as AuthUser[];
-    const user = users.find((u) => u.id === userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    const claimedElsewhere = users.some(
-      (u) =>
-        u.id !== userId &&
-        Array.isArray(u.externalIdentities) &&
-        u.externalIdentities.some(
-          (ext) => ext.issuer === issuer && ext.subject === subject,
-        ),
-    );
-    if (claimedElsewhere) {
-      throw new Error(
-        "This external identity is already linked to a different account",
-      );
-    }
-
-    if (!Array.isArray(user.externalIdentities)) {
-      user.externalIdentities = [];
-    }
-    const alreadyLinked = user.externalIdentities.some(
-      (ext) => ext.issuer === issuer && ext.subject === subject,
-    );
-    if (!alreadyLinked) {
-      user.externalIdentities.push({
-        issuer,
-        subject,
-        email: email || null,
-        linkedAt: new Date().toISOString(),
-      });
-      await commitNow();
-    }
-
-    log.info(`Linked external identity to user: ${user.username}`);
-    return { id: user.id, username: user.username, role: user.role };
+        ]
+      : [];
   }
 
   async logout(refreshToken: string | null | undefined): Promise<boolean> {
@@ -1102,8 +673,8 @@ class AuthService {
 
       const db = await getDb();
       const users = (db.data.users || []) as AuthUser[];
-      const user = users.find((entry) => entry.id === payload.userId);
-      if (!user) {
+      const user = getAdminUser(users);
+      if (!user || user.id !== payload.userId) {
         return false;
       }
 
@@ -1147,7 +718,7 @@ class AuthService {
       throw new Error("No user accounts exist. Use setup instead.");
     }
 
-    const user = users.find((u) => u.role === "admin") || users[0];
+    const user = getAdminUser(users)!;
     user.password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     user.tokenGen = (user.tokenGen || 0) + 1;
     user.refreshSessions = [];
@@ -1158,88 +729,7 @@ class AuthService {
     return { username: user.username };
   }
 
-  async generateRecoveryCodes(count = 10): Promise<{ codes: string[]; createdAt: string }> {
-    const db = await getDb();
-    const users = (db.data.users || []) as AuthUser[];
-    const user = users.find((u) => u.role === "admin") || users[0];
-    if (!user) throw new Error("No user accounts exist. Use setup instead.");
-
-    const codes: string[] = [];
-    const hashes: Array<{ hash: string; usedAt: string | null }> = [];
-    for (let i = 0; i < count; i++) {
-      const raw = crypto.randomBytes(15).toString("base64url").slice(0, 20).toUpperCase();
-      const code = `${raw.slice(0, 5)}-${raw.slice(5, 10)}-${raw.slice(10, 15)}`;
-      codes.push(code);
-      hashes.push({
-        hash: crypto.createHash("sha256").update(code, "utf8").digest("hex"),
-        usedAt: null,
-      });
-    }
-
-    await setSetting("authRecoveryCodes", JSON.stringify(hashes));
-    await setSetting("authRecoveryCodesCreatedAt", new Date().toISOString());
-    log.info(`Generated ${count} recovery codes for user: ${user.username}`);
-    return { codes, createdAt: new Date().toISOString() };
-  }
-
-  async getRecoveryCodeStatus(): Promise<{
-    configured: boolean;
-    remaining: number;
-    total: number;
-    createdAt: string | null;
-  }> {
-    const stored = await getSetting("authRecoveryCodes");
-    const createdAt = await getSetting("authRecoveryCodesCreatedAt");
-    let entries: Array<{ hash: string; usedAt: string | null }> = [];
-    try {
-      entries = (stored ? JSON.parse(stored) : []) as Array<{ hash: string; usedAt: string | null }>;
-    } catch {
-      entries = [];
-    }
-    const remaining = entries.filter((entry) => !entry.usedAt).length;
-    return { configured: entries.length > 0, remaining, total: entries.length, createdAt: createdAt || null };
-  }
-
-  async redeemRecoveryCode(code: string, newPassword: string): Promise<{ username: string; remaining: number }> {
-    return this._withMutex(async () => {
-      if (typeof code !== "string" || !code.trim()) {
-        throw new Error("A recovery code is required");
-      }
-      const stored = await getSetting("authRecoveryCodes");
-      let entries: Array<{ hash: string; usedAt: string | null }> = [];
-      try {
-        entries = (stored ? JSON.parse(stored) : []) as Array<{ hash: string; usedAt: string | null }>;
-      } catch {
-        entries = [];
-      }
-      if (entries.length === 0) {
-        throw new Error("No recovery codes have been generated for this panel.");
-      }
-
-      const candidate = crypto
-        .createHash("sha256")
-        .update(code.trim().toUpperCase(), "utf8")
-        .digest();
-      const match = entries.find((entry) => {
-        if (entry.usedAt) return false;
-        const storedDigest = Buffer.from(entry.hash, "hex");
-        if (storedDigest.length !== candidate.length) return false;
-        return crypto.timingSafeEqual(storedDigest, candidate);
-      });
-      if (!match) {
-        throw new Error("That recovery code is not valid or has already been used.");
-      }
-
-      const result = await this.resetPassword(newPassword);
-      match.usedAt = new Date().toISOString();
-      await setSetting("authRecoveryCodes", JSON.stringify(entries));
-      const remaining = entries.filter((entry) => !entry.usedAt).length;
-      log.info(`Recovery code redeemed for ${result.username}; ${remaining} remaining`);
-      return { ...result, remaining };
-    });
-  }
-
-  middleware(): RequestHandler {
+    middleware(): RequestHandler {
     return async (req: Request, res: Response, next: NextFunction) => {
       const authenticatedRequest = req as AuthenticatedRequest;
       try {
@@ -1271,7 +761,9 @@ class AuthService {
           return next();
         }
 
-        const result = await this.authenticateApiRequest(req.headers.authorization);
+        const result = await this.authenticateApiRequest(
+          req.headers.authorization,
+        );
         if (!result.ok) {
           return res.status(result.status).json({
             error: result.error,
@@ -1293,18 +785,5 @@ const AUTH_SERVICE_KEY = "__better_zcp_auth_service__";
 const authRuntime = globalThis as typeof globalThis & {
   [AUTH_SERVICE_KEY]?: AuthService;
 };
-const authService = authRuntime[AUTH_SERVICE_KEY] ??= new AuthService();
+const authService = (authRuntime[AUTH_SERVICE_KEY] ??= new AuthService());
 export default authService;
-
-export function requireRole(...roles: string[]): RequestHandler {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const user = (req as AuthenticatedRequest).user;
-    if (!user) {
-      return res
-        .status(401)
-        .json({ error: "Authentication required", code: ErrorCode.AUTH_REQUIRED });
-    }
-    if (roles.includes(user.role)) return next();
-    return res.status(403).json({ error: "Insufficient permissions" });
-  };
-}

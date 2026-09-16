@@ -32,7 +32,7 @@ function createResponse() {
 
 function getGateMiddleware() {
   const nonRouteLayers = router.stack.filter((entry) => !entry.route);
-  return nonRouteLayers[1].handle;
+  return nonRouteLayers[0].handle;
 }
 
 function getRouteHandler(method, routePath) {
@@ -52,7 +52,11 @@ describe("server-files router: unconfigured-server gate", () => {
     const response = createResponse();
     const next = vi.fn();
 
-    await getGateMiddleware()({ path: "/paths", method: "GET" }, response, next);
+    await getGateMiddleware()(
+      { path: "/paths", method: "GET" },
+      response,
+      next,
+    );
 
     expect(response.status).toHaveBeenCalledWith(404);
     expect(response.json).toHaveBeenCalledWith({
@@ -67,7 +71,11 @@ describe("server-files router: unconfigured-server gate", () => {
     const response = createResponse();
     const next = vi.fn();
 
-    await getGateMiddleware()({ path: "/paths", method: "GET" }, response, next);
+    await getGateMiddleware()(
+      { path: "/paths", method: "GET" },
+      response,
+      next,
+    );
 
     expect(next).toHaveBeenCalledWith();
     expect(response.status).not.toHaveBeenCalled();
@@ -78,7 +86,11 @@ describe("server-files router: unconfigured-server gate", () => {
     const response = createResponse();
     const next = vi.fn();
 
-    await getGateMiddleware()({ path: "/paths", method: "GET" }, response, next);
+    await getGateMiddleware()(
+      { path: "/paths", method: "GET" },
+      response,
+      next,
+    );
 
     expect(response.json).not.toHaveBeenCalledWith(
       expect.objectContaining({ serverName: "servertest" }),
@@ -91,7 +103,9 @@ describe("server-files router: a configured server still resolves and reads real
 
   beforeEach(() => {
     getActiveServer.mockReset();
-    configDir = fs.mkdtempSync(path.join(os.tmpdir(), "serverfiles-configured-"));
+    configDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "serverfiles-configured-"),
+    );
     fs.writeFileSync(
       path.join(configDir, "RealServer_spawnpoints.lua"),
       "-- real file",

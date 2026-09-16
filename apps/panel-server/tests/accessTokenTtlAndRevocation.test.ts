@@ -123,6 +123,22 @@ describe("JWT verification accepts only the configured signing algorithm", () =>
   });
 });
 
+describe("Single-admin sessions", () => {
+  it("rejects a valid token belonging to a legacy secondary user", async () => {
+    resetWith({
+      roles: [ADMIN_ROLE, TECHNICIAN_ROLE],
+      users: [
+        { id: "u-admin", username: "admin", role: "admin", tokenGen: 0 },
+        { id: "u-tech", username: "tech", role: "technician", tokenGen: 0 },
+      ],
+    });
+    authService.jwtSecret = "test-ttl-secret";
+    const token = authService.generateAccessToken(db.data.users[1]);
+
+    await expect(authService.authenticateAccessToken(token)).resolves.toBeNull();
+  });
+});
+
 describe("The residual window is real and bounded (15m), not zero and not unbounded", () => {
   beforeEach(() => {
     resetWith({
@@ -178,31 +194,4 @@ describe("The server-side refresh contract apps/panel-client/src/lib/api.ts's tr
     const authAfterRefresh = await authService.authenticateAccessToken(refreshResult.accessToken);
     expect(authAfterRefresh?.userId).toBe("u-tech");
   });
-});
-
-describe("Admin-initiated revocation already takes effect immediately, not at token expiry -- stated explicitly per the follow-up question", () => {
-  beforeEach(() => {
-    resetWith({
-      roles: [ADMIN_ROLE, TECHNICIAN_ROLE],
-      users: [{ id: "u-tech", username: "tech", role: "technician", roleId: "role-technician", tokenGen: 0 }],
-    });
-    authService.jwtSecret = "test-ttl-secret";
-  });
-
-  it("a demoted/promoted user's ALREADY-ISSUED access token reflects the NEW role on its very next use -- no re-login, no waiting for the old token to expire", async () => {
-    const user = db.data.users[0];
-    const accessToken = authService.generateAccessToken(user);
-
-    const before = await authService.authenticateAccessToken(accessToken);
-    expect(before.role).toBe("technician");
-
-    await authService.changeUserRoleById("u-tech", "role-admin");
-
-    const after = await authService.authenticateAccessToken(accessToken);
-    expect(after.role).toBe("admin");
-  });
-
-  // Deletion's immediate-effect property already has its own dedicated
-  // coverage in deleteUser.test.ts ("sessions stop working immediately,
-  // not at token expiry") -- not duplicated here.
 });

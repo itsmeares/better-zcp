@@ -5,10 +5,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { setResponseStatus } from '@tanstack/react-start/server'
 import type { ScheduleHistoryEntry, SchedulerStatus } from './api'
-import {
-  permissionMiddleware,
-  protectedServerFunctionMiddleware,
-} from './serverAuth.server'
+import { protectedServerFunctionMiddleware } from './serverAuth.server'
 
 type ServiceError = {
   error?: unknown
@@ -73,14 +70,6 @@ function invalid(message: string, code?: string, params?: unknown): never {
     }),
     400,
   )
-}
-
-function capabilityMiddleware(capability: string | string[]) {
-  const capabilities = Array.isArray(capability) ? capability : [capability]
-  return [
-    ...protectedServerFunctionMiddleware,
-    ...capabilities.map(permissionMiddleware),
-  ] as const
 }
 
 function record(data: unknown): AnyRecord {
@@ -149,32 +138,7 @@ function legacyIntegerOrDefault(
     : parsed
 }
 
-async function assertCapability(
-  context: AnyRecord,
-  capability: string,
-): Promise<void> {
-  const user = context.authenticatedUser
-  const { getCapabilitiesForRole } =
-    await import('../../../panel-server/services/permissions.ts')
-  const capabilities = await getCapabilitiesForRole(user.role)
-  if (!capabilities?.includes(capability)) {
-    throwControlError(
-      Object.assign(new Error('Insufficient permissions'), {
-        code: 'PERMISSION_DENIED',
-      }),
-      403,
-    )
-  }
-}
-
-function createControlRead<T>(
-  capability: string | null,
-  handler: (data: AnyRecord) => Promise<T> | T,
-) {
-  const serverFn = createServerFn({ method: 'GET' })
-  const secured = capability
-    ? serverFn.middleware(capabilityMiddleware(capability))
-    : serverFn.middleware(protectedServerFunctionMiddleware)
+function createControlRead<T>(handler: (data: AnyRecord) => Promise<T> | T) {
   const implementation = async (data: AnyRecord): Promise<T> => {
     try {
       return (await handler(data)) as T
@@ -183,7 +147,8 @@ function createControlRead<T>(
     }
   }
   return Object.assign(
-    secured
+    createServerFn({ method: 'GET' })
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) => record(data))
       .handler(({ data }) => implementation(data) as any),
     { __executeImplementation: implementation },
@@ -191,7 +156,6 @@ function createControlRead<T>(
 }
 
 function createControlAction<T>(
-  capability: string | string[],
   handler: (
     runtime: AnyRecord,
     data: AnyRecord,
@@ -210,16 +174,17 @@ function createControlAction<T>(
   }
   return Object.assign(
     createServerFn({ method: 'POST' })
-      .middleware(capabilityMiddleware(capability))
+      .middleware(protectedServerFunctionMiddleware)
       .validator((data: unknown) => record(data))
-      .handler(({ data, context }) =>
+      .handler(
+        ({ data, context }) =>
         implementation(data, context as unknown as AnyRecord) as any,
       ),
     { __executeImplementation: implementation },
   )
 }
 
-export const getGameServerStatus = createControlRead(null, async () => {
+export const getGameServerStatus = createControlRead(async () => {
   const runtime = await panelRuntime()
   const [
     { buildServerSignal, resolveLifecycleState },
@@ -251,12 +216,12 @@ export const getGameServerStatus = createControlRead(null, async () => {
   }
 })
 
-export const getNetworkInterfaces = createControlRead(null, async () => {
+export const getNetworkInterfaces = createControlRead(async () => {
   const runtime = await panelRuntime()
   return { interfaces: runtime.serverManager.listNetworkInterfaces() }
 })
 
-export const getManagedServers = createControlRead(null, async () => {
+export const getManagedServers = createControlRead(async () => {
   const { getServers, getAllSettings } =
     await import('../../../panel-server/database/init.ts')
   const { withRemoteConfigState } =
@@ -276,7 +241,7 @@ export const getManagedServers = createControlRead(null, async () => {
   }
 })
 
-export const getActiveManagedServer = createControlRead(null, async () => {
+export const getActiveManagedServer = createControlRead(async () => {
   const { getActiveServer, getAllSettings } =
     await import('../../../panel-server/database/init.ts')
   const { withRemoteConfigState } =
@@ -295,7 +260,7 @@ export const getActiveManagedServer = createControlRead(null, async () => {
   }
 })
 
-export const getManagedServer = createControlRead(null, async (data) => {
+export const getManagedServer = createControlRead(async (data) => {
   const id = requiredString(data, 'id', 'Invalid server ID')
   const [{ getServer }, { parseServerId }] = await Promise.all([
     import('../../../panel-server/database/init.ts'),
@@ -334,7 +299,7 @@ async function mapWithConcurrency<T, R>(
   return results
 }
 
-export const getManagedServersStatus = createControlRead(null, async () => {
+export const getManagedServersStatus = createControlRead(async () => {
   const [
     { getServers, getActiveServer },
     { createLinuxServiceLifecycle, isManagedLifecycleProvider },
@@ -426,7 +391,7 @@ export const getManagedServersStatus = createControlRead(null, async () => {
   }
 })
 
-export const getManagedServersRconStatus = createControlRead(null, async () => {
+export const getManagedServersRconStatus = createControlRead(async () => {
   const [{ getServers }, { testRconConnection }, { parseBoundedInteger }] =
     await Promise.all([
       import('../../../panel-server/database/init.ts'),
@@ -461,7 +426,7 @@ export const getManagedServersRconStatus = createControlRead(null, async () => {
   return { servers: statuses }
 })
 
-export const getActiveComposedStatus = createControlRead(null, async () => {
+export const getActiveComposedStatus = createControlRead(async () => {
   const [
     { getActiveServer },
     { composeServerStatus, resolveProvider },
@@ -525,11 +490,7 @@ export const getActiveComposedStatus = createControlRead(null, async () => {
 })
 
 export const createManagedServer = createControlAction(
-  'servers.manage',
-  async (_runtime, data, context) => {
-    const allowIniImport =
-      data.importIniFrom && typeof data.importIniFrom === 'object'
-    if (allowIniImport) await assertCapability(context, 'servers.discover')
+  async (_runtime, data) => {
     const { createServerProfile } =
       await import('../../../panel-server/services/serverProfiles.ts')
     const { sanitizeServerResponse } =
@@ -544,7 +505,6 @@ export const createManagedServer = createControlAction(
 )
 
 export const updateManagedServer = createControlAction(
-  'servers.manage',
   async (runtime, data) => {
     const { updateServerProfile } =
       await import('../../../panel-server/services/serverProfiles.ts')
@@ -559,7 +519,6 @@ export const updateManagedServer = createControlAction(
 )
 
 export const deleteManagedServer = createControlAction(
-  'servers.manage',
   async (runtime, data) => {
     const { deleteServerProfile } =
       await import('../../../panel-server/services/serverProfiles.ts')
@@ -568,7 +527,6 @@ export const deleteManagedServer = createControlAction(
 )
 
 export const activateManagedServer = createControlAction(
-  'servers.manage',
   async (runtime, data) => {
     const { activateServerProfile } =
       await import('../../../panel-server/services/serverProfiles.ts')
@@ -582,21 +540,13 @@ export const activateManagedServer = createControlAction(
   },
 )
 
-export const getLifecycleTemplate = createControlRead(
-  'servers.manage',
-  async (data) => {
+export const getLifecycleTemplate = createControlRead(async (data) => {
     const { getLifecycleTemplateForServer } =
       await import('../../../panel-server/services/serverProfiles.ts')
-    return getLifecycleTemplateForServer(
-      data.id,
-      data.provider,
-      data.serviceUser,
-    )
-  },
-)
+  return getLifecycleTemplateForServer(data.id, data.provider, data.serviceUser)
+})
 
 export const activateManagedLifecycleProvider = createControlAction(
-  'servers.manage',
   async (runtime, data) => {
     const { activateLifecycleProvider } =
       await import('../../../panel-server/services/serverProfiles.ts')
@@ -615,17 +565,13 @@ export const activateManagedLifecycleProvider = createControlAction(
   },
 )
 
-export const getDiscoveredMounts = createControlRead(
-  'servers.discover',
-  async () => {
+export const getDiscoveredMounts = createControlRead(async () => {
     const { discoverMountsForServer } =
       await import('../../../panel-server/services/serverProfiles.ts')
     return discoverMountsForServer()
-  },
-)
+})
 
 export const createServerFromDiscovery = createControlAction(
-  'servers.discover',
   async (_runtime, data) => {
     const { createServerFromDiscovery: createFromDiscovery } =
       await import('../../../panel-server/services/serverProfiles.ts')
@@ -640,48 +586,34 @@ export const createServerFromDiscovery = createControlAction(
   },
 )
 
-export const saveGameWorld = createControlAction('server.control', (runtime) =>
+export const saveGameWorld = createControlAction((runtime) =>
   runtime.rconService.save(),
 )
-export const startServer = createControlAction(
-  'server.control',
-  async (runtime, data) => {
+export const startServer = createControlAction(async (runtime, data) => {
     const { startServerAction } =
       await import('../../../panel-server/services/serverLifecycleActions.ts')
     return startServerAction(runtime, data)
-  },
-)
+})
 
-export const stopServer = createControlAction(
-  'server.control',
-  async (runtime, data) => {
+export const stopServer = createControlAction(async (runtime, data) => {
     const { stopServerAction } =
       await import('../../../panel-server/services/serverLifecycleActions.ts')
     return stopServerAction(runtime, data)
-  },
-)
+})
 
-export const forceStopServer = createControlAction(
-  'server.control',
-  async (runtime, data) => {
+export const forceStopServer = createControlAction(async (runtime, data) => {
     const { forceStopServerAction } =
       await import('../../../panel-server/services/serverLifecycleActions.ts')
     return forceStopServerAction(runtime, data)
-  },
-)
+})
 
-export const restartServer = createControlAction(
-  'server.control',
-  async (runtime, data) => {
+export const restartServer = createControlAction(async (runtime, data) => {
     const { restartServerAction } =
       await import('../../../panel-server/services/serverLifecycleActions.ts')
     return restartServerAction(runtime, data)
-  },
-)
+})
 
-export const sendServerMessage = createControlAction(
-  'server.world_events',
-  (runtime, data) => {
+export const sendServerMessage = createControlAction((runtime, data) => {
     const message = data.message
     if (!message) invalid('Message is required', 'SERVER_MESSAGE_REQUIRED')
     if (typeof message !== 'string' || message.length > 1000) {
@@ -691,60 +623,45 @@ export const sendServerMessage = createControlAction(
       )
     }
     return runtime.rconService.serverMessage(message.replace(/[\r\n]/g, ' '))
-  },
-)
+})
 
-export const startRain = createControlAction(
-  'server.world_events',
-  (runtime, data) => runtime.rconService.startRain(data.intensity),
+export const startRain = createControlAction((runtime, data) =>
+  runtime.rconService.startRain(data.intensity),
 )
-export const stopRain = createControlAction('server.world_events', (runtime) =>
+export const stopRain = createControlAction((runtime) =>
   runtime.rconService.stopRain(),
 )
-export const startStorm = createControlAction(
-  'server.world_events',
-  (runtime, data) => runtime.rconService.startStorm(data.duration),
+export const startStorm = createControlAction((runtime, data) =>
+  runtime.rconService.startStorm(data.duration),
 )
-export const stopWeather = createControlAction(
-  'server.world_events',
-  (runtime) => runtime.rconService.stopWeather(),
+export const stopWeather = createControlAction((runtime) =>
+  runtime.rconService.stopWeather(),
 )
-export const triggerChopper = createControlAction(
-  'server.world_events',
-  (runtime) => runtime.rconService.triggerChopper(),
+export const triggerChopper = createControlAction((runtime) =>
+  runtime.rconService.triggerChopper(),
 )
-export const triggerGunshot = createControlAction(
-  'server.world_events',
-  (runtime) => runtime.rconService.triggerGunshot(),
+export const triggerGunshot = createControlAction((runtime) =>
+  runtime.rconService.triggerGunshot(),
 )
-export const triggerLightning = createControlAction(
-  'players.endanger_or_impersonate',
-  (runtime, data) =>
+export const triggerLightning = createControlAction((runtime, data) =>
     runtime.rconService.triggerLightning(optionalEventUsername(data)),
 )
-export const triggerThunder = createControlAction(
-  'players.endanger_or_impersonate',
-  (runtime, data) =>
+export const triggerThunder = createControlAction((runtime, data) =>
     runtime.rconService.triggerThunder(optionalEventUsername(data)),
 )
-export const createHorde = createControlAction(
-  'players.endanger_or_impersonate',
-  (runtime, data) =>
+export const createHorde = createControlAction((runtime, data) =>
     runtime.rconService.createHorde(
       legacyIntegerOrDefault(data.count, 1, 500, 50),
       optionalEventUsername(data),
     ),
 )
-export const alarm = createControlAction('server.world_events', (runtime) =>
+export const alarm = createControlAction((runtime) =>
   runtime.rconService.alarm(),
 )
-export const removeZombies = createControlAction(
-  'server.world_events',
-  (runtime) => runtime.rconService.removeZombies(),
+export const removeZombies = createControlAction((runtime) =>
+  runtime.rconService.removeZombies(),
 )
-export const reloadLua = createControlAction(
-  'server.configure',
-  (runtime, data) => {
+export const reloadLua = createControlAction((runtime, data) => {
     const filename = requiredString(
       data,
       'filename',
@@ -755,11 +672,8 @@ export const reloadLua = createControlAction(
       invalid('Invalid filename format', 'RELOAD_LUA_INVALID_FILENAME')
     }
     return runtime.rconService.reloadLua(filename)
-  },
-)
-export const setLogLevel = createControlAction(
-  'server.configure',
-  (runtime, data) => {
+})
+export const setLogLevel = createControlAction((runtime, data) => {
     const type = requiredString(
       data,
       'type',
@@ -820,11 +734,8 @@ export const setLogLevel = createControlAction(
       )
     }
     return runtime.rconService.setLogLevel(type, level)
-  },
-)
-export const setServerStats = createControlAction(
-  'server.configure',
-  (runtime, data) => {
+})
+export const setServerStats = createControlAction((runtime, data) => {
     const mode = requiredString(
       data,
       'mode',
@@ -843,14 +754,12 @@ export const setServerStats = createControlAction(
       ? legacyIntegerOrDefault(data.period, 1, 3600, null)
       : null
     return runtime.rconService.setStats(normalizedMode, period)
-  },
-)
-export const releaseSafehouse = createControlAction(
-  'server.world_events',
-  (runtime) => runtime.rconService.releaseSafehouse(),
+})
+export const releaseSafehouse = createControlAction((runtime) =>
+  runtime.rconService.releaseSafehouse(),
 )
 
-export const getPlayers = createControlRead('players.view', async () => {
+export const getPlayers = createControlRead(async () => {
   const runtime = await panelRuntime()
   const result = await runtime.rconService.getPlayers()
   if (result?.success)
@@ -858,7 +767,7 @@ export const getPlayers = createControlRead('players.view', async () => {
   return result
 })
 
-export const getWhitelist = createControlRead('players.view', async () => {
+export const getWhitelist = createControlRead(async () => {
   const { getActiveServer } =
     await import('../../../panel-server/database/init.ts')
   const { listWhitelistAccounts } =
@@ -896,9 +805,7 @@ async function logPlayerAction(
   await writePlayerAction(player, action, details)
 }
 
-export const kickPlayer = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const kickPlayer = createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -912,12 +819,9 @@ export const kickPlayer = createControlAction(
     const result = await runtime.rconService.kickPlayer(username, data.reason)
     if (result?.success) await logPlayerAction(username, 'kick', data.reason)
     return result
-  },
-)
+})
 
-export const banPlayer = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const banPlayer = createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -943,12 +847,9 @@ export const banPlayer = createControlAction(
         `IP: ${data.banIp}, Reason: ${sentReason}`,
       )
     return result
-  },
-)
+})
 
-export const unbanPlayer = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const unbanPlayer = createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -960,12 +861,9 @@ export const unbanPlayer = createControlAction(
     const result = await runtime.rconService.unbanPlayer(username)
     if (result?.success) await logPlayerAction(username, 'unban', null)
     return result
-  },
-)
+})
 
-export const setAccessLevel = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const setAccessLevel = createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -1007,12 +905,9 @@ export const setAccessLevel = createControlAction(
     const result = await runtime.rconService.setAccessLevel(username, level)
     if (result?.success) await logPlayerAction(username, 'access_level', level)
     return result
-  },
-)
+})
 
-export const addToWhitelist = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const addToWhitelist = createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -1035,19 +930,14 @@ export const addToWhitelist = createControlAction(
     )
     if (!result?.success)
       throwControlError(
-        Object.assign(
-          new Error(result?.error || 'Whitelist add failed'),
-          result,
-        ),
+      Object.assign(new Error(result?.error || 'Whitelist add failed'), result),
         400,
       )
     await logPlayerAction(username, 'whitelist_add', null)
     return result
-  },
-)
+})
 
 export const removeFromWhitelist = createControlAction(
-  'players.moderate',
   async (runtime, data) => {
     const username = requiredString(
       data,
@@ -1071,9 +961,7 @@ export const removeFromWhitelist = createControlAction(
   },
 )
 
-export const addAllowedSteamId = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const addAllowedSteamId = createControlAction(async (runtime, data) => {
     const steamId = requiredString(
       data,
       'steamId',
@@ -1096,11 +984,9 @@ export const addAllowedSteamId = createControlAction(
       )
     await logPlayerAction(steamId, 'whitelist_steamid_add', null)
     return result
-  },
-)
+})
 
 export const removeAllowedSteamId = createControlAction(
-  'players.moderate',
   async (runtime, data) => {
     const steamId = requiredString(
       data,
@@ -1127,9 +1013,7 @@ export const removeAllowedSteamId = createControlAction(
   },
 )
 
-export const teleportPlayer = createControlAction(
-  'players.gm_tools',
-  async (runtime, data) => {
+export const teleportPlayer = createControlAction(async (runtime, data) => {
     const player1 = data.player1
     const player2 = data.player2
     let { x, y, z } = data
@@ -1195,12 +1079,9 @@ export const teleportPlayer = createControlAction(
         'PLAYERS_TELEPORT_INVALID_PLAYER2',
       )
     return runtime.rconService.teleportPlayer(player1, player2)
-  },
-)
+})
 
-export const addPlayerItem = createControlAction(
-  'players.gm_tools',
-  async (runtime, data) => {
+export const addPlayerItem = createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -1220,19 +1101,14 @@ export const addPlayerItem = createControlAction(
     if (data.count !== undefined && !validNumber(data.count, 1, 100))
       invalid('Invalid count (1-100)', 'PLAYERS_INVALID_ITEM_COUNT')
     const count =
-      data.count === undefined
-        ? 1
-        : Math.min(Math.floor(Number(data.count)), 100)
+    data.count === undefined ? 1 : Math.min(Math.floor(Number(data.count)), 100)
     const result = await runtime.rconService.addItem(username, item, count)
     if (result?.success)
       await logPlayerAction(username, 'add_item', `${item} x${count}`)
     return result
-  },
-)
+})
 
-export const addPlayerXp = createControlAction(
-  'players.gm_tools',
-  async (runtime, data) => {
+export const addPlayerXp = createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -1265,12 +1141,9 @@ export const addPlayerXp = createControlAction(
     if (result?.success)
       await logPlayerAction(username, 'add_xp', `${perk}=${data.amount}`)
     return result
-  },
-)
+})
 
-export const addPlayerVehicle = createControlAction(
-  'players.gm_tools',
-  async (runtime, data) => {
+export const addPlayerVehicle = createControlAction(async (runtime, data) => {
     const vehicle = requiredString(
       data,
       'vehicle',
@@ -1285,12 +1158,9 @@ export const addPlayerVehicle = createControlAction(
     if (data.username && result?.success)
       await logPlayerAction(data.username, 'add_vehicle', vehicle)
     return result
-  },
-)
+})
 
-export const addPlayerVehicleAt = createControlAction(
-  'players.gm_tools',
-  async (runtime, data) => {
+export const addPlayerVehicleAt = createControlAction(async (runtime, data) => {
     const vehicle = requiredString(
       data,
       'vehicle',
@@ -1312,8 +1182,7 @@ export const addPlayerVehicleAt = createControlAction(
       Number(data.y),
       Number(z),
     )
-  },
-)
+})
 
 async function setPlayerMode(
   runtime: AnyRecord,
@@ -1342,7 +1211,7 @@ function playerModeAction(
   method: 'setGodMode' | 'setInvisible' | 'setNoclip',
   action: string,
 ) {
-  return createControlAction('players.gm_tools', async (runtime, data) => {
+  return createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -1374,20 +1243,18 @@ export const setGodMode = playerModeAction('setGodMode', 'setGodMode')
 export const setInvisible = playerModeAction('setInvisible', 'setInvisible')
 export const setNoclip = playerModeAction('setNoclip', 'setNoclip')
 
-export const getPlayerVehicles = createControlRead('players.view', async () => {
+export const getPlayerVehicles = createControlRead(async () => {
   const { VEHICLES } = await import('../../../panel-server/utils/commands.ts')
   return { vehicles: VEHICLES }
 })
 
-export const getPlayerPerks = createControlRead('players.view', async () => {
+export const getPlayerPerks = createControlRead(async () => {
   const { PERKS, PERK_CATALOG } =
     await import('../../../panel-server/utils/commands.ts')
   return { perks: PERKS, catalog: PERK_CATALOG }
 })
 
-export const getPlayerAccessLevels = createControlRead(
-  'players.view',
-  async () => {
+export const getPlayerAccessLevels = createControlRead(async () => {
     const { ACCESS_LEVELS } =
       await import('../../../panel-server/utils/commands.ts')
     const { getActiveServer } =
@@ -1406,12 +1273,9 @@ export const getPlayerAccessLevels = createControlRead(
       available: result.available,
       ...(result.reason ? { reason: result.reason } : {}),
     }
-  },
-)
+})
 
-export const banSteamId = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const banSteamId = createControlAction(async (runtime, data) => {
     const steamId = requiredString(
       data,
       'steamId',
@@ -1434,12 +1298,9 @@ export const banSteamId = createControlAction(
       await logPlayerAction(steamId, 'banid', reason || null)
     }
     return result
-  },
-)
+})
 
-export const unbanSteamId = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const unbanSteamId = createControlAction(async (runtime, data) => {
     const steamId = requiredString(
       data,
       'steamId',
@@ -1459,18 +1320,15 @@ export const unbanSteamId = createControlAction(
       await logPlayerAction(steamId, 'unbanid', null)
     }
     return result
-  },
-)
+})
 
-export const getSteamIdBans = createControlRead('players.view', async () => {
+export const getSteamIdBans = createControlRead(async () => {
   const { getSteamIdBans: readBans } =
     await import('../../../panel-server/database/init.ts')
   return { bans: await readBans() }
 })
 
-export const setVoiceBan = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const setVoiceBan = createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -1489,12 +1347,9 @@ export const setVoiceBan = createControlAction(
         data.enabled ? 'enabled' : 'disabled',
       )
     return result
-  },
-)
+})
 
-export const addRconUser = createControlAction(
-  'players.moderate',
-  async (runtime, data) => {
+export const addRconUser = createControlAction(async (runtime, data) => {
     const username = requiredString(
       data,
       'username',
@@ -1518,22 +1373,18 @@ export const addRconUser = createControlAction(
       )
     await logPlayerAction(username, 'adduser', null)
     return result
-  },
+})
+
+export const addAllToWhitelist = createControlAction((runtime) =>
+  runtime.rconService.addAllToWhitelist(),
 )
 
-export const addAllToWhitelist = createControlAction(
-  'players.moderate',
-  (runtime) => runtime.rconService.addAllToWhitelist(),
-)
-
-export const getRconStatus = createControlRead(null, async () => {
+export const getRconStatus = createControlRead(async () => {
   const runtime = await panelRuntime()
   return runtime.rconService.getConfig()
 })
 
-export const executeRcon = createControlAction(
-  'rcon.execute',
-  async (runtime, data) => {
+export const executeRcon = createControlAction(async (runtime, data) => {
     const command = data.command
     if (!command) invalid('Command is required', 'RCON_COMMAND_REQUIRED')
     if (typeof command !== 'string' || command.length > 2000) {
@@ -1549,12 +1400,9 @@ export const executeRcon = createControlAction(
       timestamp: new Date().toISOString(),
     })
     return result
-  },
-)
+})
 
-export const connectRcon = createControlAction(
-  'rcon.execute',
-  async (runtime, data, context) => {
+export const connectRcon = createControlAction(async (runtime, data) => {
     const host = data.host
     const port = data.port
     const password = data.password
@@ -1583,7 +1431,6 @@ export const connectRcon = createControlAction(
       invalid('Invalid password format', 'RCON_INVALID_PASSWORD')
     }
     if (host !== undefined || port !== undefined || password !== undefined) {
-      await assertCapability(context, 'servers.manage')
       await runtime.rconService.updateConfig(host, normalizedPort, password)
     }
     let connected = false
@@ -1618,29 +1465,25 @@ export const connectRcon = createControlAction(
       ),
       503,
     )
-  },
-)
+})
 
-export const disconnectRcon = createControlAction('rcon.execute', (runtime) =>
+export const disconnectRcon = createControlAction((runtime) =>
   runtime.rconService.disconnect().then(() => ({
     success: true,
     message: 'Disconnected from RCON',
   })),
 )
 
-export const getRconHistory = createControlRead(
-  'rcon.execute',
-  async (data) => {
+export const getRconHistory = createControlRead(async (data) => {
     const [{ getCommandHistory }, { parseClampedInteger }] = await Promise.all([
       import('../../../panel-server/database/init.ts'),
       import('../../../panel-server/utils/queryNumbers.ts'),
     ])
     const limit = parseClampedInteger(data.limit, 100, 1, 1000)
     return { history: await getCommandHistory(limit) }
-  },
-)
+})
 
-export const getRconCommands = createControlRead(null, async (data) => {
+export const getRconCommands = createControlRead(async (data) => {
   const { PZ_COMMANDS } =
     await import('../../../panel-server/utils/commands.ts')
   const category = typeof data.category === 'string' ? data.category : ''
@@ -1654,7 +1497,7 @@ export const getRconCommands = createControlRead(null, async (data) => {
   return { commands }
 })
 
-export const getRconHealth = createControlRead(null, async () => {
+export const getRconHealth = createControlRead(async () => {
   try {
     const health = await (await panelRuntime()).rconService.healthCheck()
     if (!health.healthy) setResponseStatus(503)
@@ -1671,7 +1514,6 @@ export const getRconHealth = createControlRead(null, async () => {
 })
 
 export const testRconConnection = createControlAction(
-  ['rcon.execute', 'servers.manage'],
   async (_runtime, data) => {
     const host = data.host
     const { parseBoundedInteger } =
@@ -1765,21 +1607,16 @@ function emitSchedulerAction(runtime: AnyRecord, payload: AnyRecord): void {
 }
 
 export const getSchedulerStatus = createControlRead(
-  'automation.manage',
   async () => (await panelRuntime()).scheduler.getStatus() as SchedulerStatus,
 )
 
-export const getSchedulerTasks = createControlRead(
-  'automation.manage',
-  async () => {
+export const getSchedulerTasks = createControlRead(async () => {
     const { getScheduledTasks } =
       await import('../../../panel-server/database/init.ts')
     return { tasks: await getScheduledTasks() }
-  },
-)
+})
 
 export const validateSchedulerCron = createControlAction(
-  'automation.manage',
   async (_runtime, data) => {
     const expression = data.cronExpression
     if (typeof expression !== 'string' || !expression) {
@@ -1796,8 +1633,7 @@ export const validateSchedulerCron = createControlAction(
 )
 
 export const createScheduledTaskAction = createControlAction(
-  'automation.manage',
-  async (runtime, data, context) => {
+  async (runtime, data) => {
     if (!data.name || !data.cronExpression || !data.command)
       invalid(
         'Name, cronExpression, and command are required',
@@ -1816,12 +1652,6 @@ export const createScheduledTaskAction = createControlAction(
     )
       invalid('Invalid cron expression format', 'SCHEDULER_INVALID_CRON_FORMAT')
 
-    const { requiredCapabilityForScheduledCommand } =
-      await import('../../../panel-server/utils/schedulerPermissions.ts')
-    await assertCapability(
-      context,
-      requiredCapabilityForScheduledCommand(data.command),
-    )
     assertCronCheck(await checkCronExpression(data.cronExpression))
 
     const {
@@ -1879,8 +1709,7 @@ export const createScheduledTaskAction = createControlAction(
 )
 
 export const updateScheduledTaskAction = createControlAction(
-  'automation.manage',
-  async (runtime, data, context) => {
+  async (runtime, data) => {
     const id = taskId(data.id)
     if (id === null) invalid('Invalid task ID', 'SCHEDULER_INVALID_TASK_ID')
     if (
@@ -1899,14 +1728,6 @@ export const updateScheduledTaskAction = createControlAction(
         'Invalid command (max 2000 characters)',
         'SCHEDULER_INVALID_COMMAND',
       )
-    if (data.command !== undefined) {
-      const { requiredCapabilityForScheduledCommand } =
-        await import('../../../panel-server/utils/schedulerPermissions.ts')
-      await assertCapability(
-        context,
-        requiredCapabilityForScheduledCommand(data.command),
-      )
-    }
     if (
       data.enabled !== undefined &&
       ![true, false, 0, 1].includes(data.enabled)
@@ -2007,9 +1828,7 @@ export const updateScheduledTaskAction = createControlAction(
   },
 )
 
-export const runScheduledTask = createControlAction(
-  'automation.manage',
-  async (runtime, data, context) => {
+export const runScheduledTask = createControlAction(async (runtime, data) => {
     const id = taskId(data.id)
     if (id === null) invalid('Invalid task ID', 'SCHEDULER_INVALID_TASK_ID')
     const { getScheduledTasks } =
@@ -2025,12 +1844,6 @@ export const runScheduledTask = createControlAction(
         404,
       )
 
-    const { requiredCapabilityForScheduledCommand } =
-      await import('../../../panel-server/utils/schedulerPermissions.ts')
-    await assertCapability(
-      context,
-      requiredCapabilityForScheduledCommand(task.command),
-    )
     void runtime.scheduler
       .runTaskNow(task)
       .then((result: AnyRecord) =>
@@ -2052,11 +1865,9 @@ export const runScheduledTask = createControlAction(
         }),
       )
     return { success: true, message: 'Task triggered' }
-  },
-)
+})
 
 export const deleteScheduledTask = createControlAction(
-  'automation.manage',
   async (runtime, data) => {
     const id = taskId(data.id)
     if (id === null) invalid('Invalid task ID', 'SCHEDULER_INVALID_TASK_ID')
@@ -2076,9 +1887,7 @@ export const deleteScheduledTask = createControlAction(
 )
 
 export const restartScheduledServer = createControlAction(
-  'automation.manage',
-  async (runtime, data, context) => {
-    await assertCapability(context, 'server.control')
+  async (runtime, data) => {
     const { getActiveServer } =
       await import('../../../panel-server/database/init.ts')
     const activeServer = await getActiveServer()
@@ -2120,15 +1929,11 @@ export const restartScheduledServer = createControlAction(
   },
 )
 
-export const getSchedulerHistory = createControlRead(
-  'automation.manage',
-  async (data) => {
-    const [{ getScheduleHistory }, { parseClampedInteger }] = await Promise.all(
-      [
+export const getSchedulerHistory = createControlRead(async (data) => {
+  const [{ getScheduleHistory }, { parseClampedInteger }] = await Promise.all([
         import('../../../panel-server/database/init.ts'),
         import('../../../panel-server/utils/queryNumbers.ts'),
-      ],
-    )
+  ])
     const limit = parseClampedInteger(data.limit, 100, 1, 500)
     const taskIdValue = data.taskId === undefined ? null : taskId(data.taskId)
     if (data.taskId !== undefined && taskIdValue === null)
@@ -2139,21 +1944,16 @@ export const getSchedulerHistory = createControlRead(
         taskIdValue,
       )) as ScheduleHistoryEntry[],
     }
-  },
-)
+})
 
-export const clearSchedulerHistory = createControlAction(
-  'automation.manage',
-  async () => {
+export const clearSchedulerHistory = createControlAction(async () => {
     const { clearScheduleHistory } =
       await import('../../../panel-server/database/init.ts')
     await clearScheduleHistory()
     return { success: true, message: 'History cleared' }
-  },
-)
+})
 
 export const setSchedulerTimezone = createControlAction(
-  'automation.manage',
   async (runtime, data) => {
     const timezone = requiredString(
       data,
@@ -2174,7 +1974,6 @@ export const setSchedulerTimezone = createControlAction(
 )
 
 export const setSchedulerRestartWarning = createControlAction(
-  'automation.manage',
   async (runtime, data) => {
     try {
       return {
@@ -2187,9 +1986,7 @@ export const setSchedulerRestartWarning = createControlAction(
   },
 )
 
-export const getSchedulerPresets = createControlRead(
-  'automation.manage',
-  async () => ({
+export const getSchedulerPresets = createControlRead(async () => ({
     presets: [
       { name: 'Every hour', cron: '0 * * * *' },
       { name: 'Every 2 hours', cron: '0 */2 * * *' },
@@ -2203,5 +2000,4 @@ export const getSchedulerPresets = createControlRead(
       { name: 'Every 30 minutes', cron: '*/30 * * * *' },
       { name: 'Every 15 minutes', cron: '*/15 * * * *' },
     ],
-  }),
-)
+}))

@@ -16,7 +16,6 @@ import {
   RCON_AUTH_FAILED_DETAIL,
   RCON_USER_ACTION_TIMEOUT_MS,
 } from '../services/rcon.ts';
-import { requirePermission } from '../services/permissions.ts';
 import { ErrorCode } from '../utils/errorCodes.ts';
 
 const router = Router();
@@ -43,7 +42,7 @@ function validateTestInput(
   return null;
 }
 
-router.post('/execute', requirePermission('rcon.execute'), async (req, res) => {
+router.post('/execute', async (req, res) => {
   try {
     const rconService = req.app.get('rconService');
     const command = req.body?.command;
@@ -85,7 +84,7 @@ router.get('/status', async (req, res) => {
   }
 });
 
-router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
+router.post('/connect', async (req, res) => {
   try {
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       return res.status(400).json({ success: false, error: 'Request body must be an object' });
@@ -93,14 +92,6 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
     const rconService = req.app.get('rconService');
     const { host, port, password } = req.body;
     log.info(`POST /connect (host=${host || 'default'}, port=${port || 'default'}, password=${password ? '***' : 'none'})`);
-
-    if (host !== undefined || port !== undefined || password !== undefined) {
-      let canOverrideTarget = false;
-      await requirePermission('servers.manage')(req, res, () => {
-        canOverrideTarget = true;
-      });
-      if (!canOverrideTarget) return;
-    }
 
     if (host !== undefined) {
       if (typeof host !== 'string' || host.length > 255 || !/^[a-zA-Z0-9.-]+$/.test(host)) {
@@ -161,7 +152,7 @@ router.post('/connect', requirePermission('rcon.execute'), async (req, res) => {
   }
 });
 
-router.post('/test', requirePermission('rcon.execute'), requirePermission('servers.manage'), async (req, res) => {
+router.post('/test', async (req, res) => {
   try {
     const { host, port, password } = req.body || {};
     log.info(redactRconCommandSecrets(`POST /test (host=${host || 'none'}, port=${port || 'none'})`));
@@ -198,7 +189,7 @@ router.get('/health', async (req, res) => {
   }
 });
 
-router.post('/disconnect', requirePermission('rcon.execute'), async (req, res) => {
+router.post('/disconnect', async (req, res) => {
   try {
     log.info('POST /disconnect');
     const rconService = req.app.get('rconService');
@@ -209,7 +200,7 @@ router.post('/disconnect', requirePermission('rcon.execute'), async (req, res) =
   }
 });
 
-router.get('/history', requirePermission('rcon.execute'), async (req, res) => {
+router.get('/history', async (req, res) => {
   try {
     const limit = parseClampedInteger(req.query.limit, 100, 1, 1000);
     const history = await getCommandHistory(limit);

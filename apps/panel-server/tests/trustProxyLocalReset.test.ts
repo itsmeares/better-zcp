@@ -47,7 +47,7 @@ describe("POST /auth/reset-token/local: fails closed behind a reverse proxy", ()
     const body = res.json.mock.calls[0][0];
     expect(body.code).toBe("LOCAL_RESET_BEHIND_PROXY");
     expect(body.error).toMatch(/reverse proxy/i);
-    expect(body.error).toMatch(/reset-token\.txt|recovery code/i);
+    expect(body.error).toMatch(/reset-token\.txt/i);
   });
 });
 

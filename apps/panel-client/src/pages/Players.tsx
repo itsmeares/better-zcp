@@ -94,7 +94,6 @@ import { playersApi, panelBridgeApi, configApi } from '@/lib/api'
 import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
-import { useAuth } from '@/contexts/AuthContext'
 import { useConfirm } from '@/contexts/ConfirmContext'
 import { useSocket } from '@/contexts/SocketContext'
 import { cn, copyText } from '@/lib/utils'
@@ -352,12 +351,9 @@ function VitalBar({
 
 export default function Players() {
   const accessLevelLabels = useMemo(() => getAccessLevelLabels(), [])
-  const { can } = useAuth()
   const { searchStr } = useLocation()
   const searchParams = new URLSearchParams(searchStr)
   const requestedPlayer = searchParams.get('player')?.trim() || ''
-  const canModerate = can('players.moderate')
-  const canGmTools = can('players.gm_tools')
   const [players, setPlayers] = useState<Player[]>([])
   const [perks, setPerks] = useState<PerkChoice[]>([])
   const [selectedPlayer, setSelectedPlayer] = useState<string>('')
@@ -873,11 +869,11 @@ export default function Players() {
         if (isMounted && response?.exports) setSavedExports(response.exports)
       })
       .catch(() => {})
-    if (canGmTools) fetchRosterVitals()
+    fetchRosterVitals()
     const interval = setInterval(() => {
       if (document.visibilityState === 'hidden') return
       fetchPlayers()
-      if (canGmTools) fetchRosterVitals()
+      fetchRosterVitals()
     }, 15000)
     return () => {
       isMounted = false
@@ -891,7 +887,6 @@ export default function Players() {
     fetchWhitelist,
     fetchAccessLevels,
     fetchRosterVitals,
-    canGmTools,
   ])
 
   useEffect(() => {
@@ -902,7 +897,7 @@ export default function Players() {
       fetchBannedSteamIds()
       fetchWhitelist()
       fetchAccessLevels()
-      if (canGmTools) fetchRosterVitals()
+      fetchRosterVitals()
     }
     socket.on('activeServerChanged', handleActiveServerChanged)
     return () => {
@@ -916,7 +911,6 @@ export default function Players() {
     fetchWhitelist,
     fetchAccessLevels,
     fetchRosterVitals,
-    canGmTools,
   ])
 
   const requestedPlayerAppliedRef = useRef(false)
@@ -1511,45 +1505,36 @@ export default function Players() {
           }
         />
         {bannedSteamIds.length > 0 && (
-          <DisabledReason
-            className="flex-1"
-            reason={
-              !canModerate
-                ? "This action requires the players.moderate permission, which this role doesn't have."
-                : null
+          <button
+            type="button"
+            onClick={() => setUnbanSteamIdDialogOpen(true)}
+
+            className="group relative flex flex-1 items-center gap-3 overflow-hidden rounded-md border border-border/55 bg-card/70 px-4 py-3 text-start shadow-sm transition-colors hover:border-destructive/45 hover:bg-destructive/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label={
+              'View ' + String(bannedSteamIds.length) + ' banned SteamIDs'
             }
           >
-            <button
-              type="button"
-              onClick={() => setUnbanSteamIdDialogOpen(true)}
-              disabled={!canModerate}
-              className="group relative flex flex-1 items-center gap-3 overflow-hidden rounded-md border border-border/55 bg-card/70 px-4 py-3 text-start shadow-sm transition-colors hover:border-destructive/45 hover:bg-destructive/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label={
-                'View ' + String(bannedSteamIds.length) + ' banned SteamIDs'
-              }
-            >
-              <span
-                aria-hidden="true"
-                className="absolute inset-y-0 left-0 w-[2px] bg-destructive/60"
-              />
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-destructive/30 bg-destructive/10 text-destructive">
-                <Ban className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-1.5">
-                  <p className="text-xl font-semibold tabular-nums leading-none tracking-tight">
-                    {bannedSteamIds.length}
-                  </p>
-                  <span className="text-xs font-medium text-muted-foreground/70">
-                    {'manage'}
-                  </span>
-                </div>
-                <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.22em] text-destructive/80">
-                  {'Banned SteamIDs'}
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-0 left-0 w-[2px] bg-destructive/60"
+            />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-destructive/30 bg-destructive/10 text-destructive">
+              <Ban className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <p className="text-xl font-semibold tabular-nums leading-none tracking-tight">
+                  {bannedSteamIds.length}
                 </p>
+                <span className="text-xs font-medium text-muted-foreground/70">
+                  {'manage'}
+                </span>
               </div>
-            </button>
-          </DisabledReason>
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.22em] text-destructive/80">
+                {'Banned SteamIDs'}
+              </p>
+            </div>
+          </button>
         )}
       </div>
 
@@ -1977,28 +1962,21 @@ export default function Players() {
                               </p>
                             )}
                           </div>
-                          <DisabledReason
-                            reason={
-                              !canModerate
-                                ? "This action requires the players.moderate permission, which this role doesn't have."
-                                : null
-                            }
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+
+                            onClick={() => {
+                              setUnbanSteamId(ban.steamId)
+                              setUnbanSteamIdDialogOpen(true)
+                            }}
+
+                            title={'Unban ' + String(ban.steamId)}
                           >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="shrink-0"
-                              disabled={!canModerate}
-                              onClick={() => {
-                                setUnbanSteamId(ban.steamId)
-                                setUnbanSteamIdDialogOpen(true)
-                              }}
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Unban {steamId}"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={'Unban ' + String(ban.steamId)}
-                            >
-                              {'Unban'}
-                            </Button>
-                          </DisabledReason>
+                            {'Unban'}
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -2086,41 +2064,34 @@ export default function Players() {
                                 <span>{online ? 'online' : 'offline'}</span>
                               </div>
                             </div>
-                            <DisabledReason
-                              reason={
-                                !canModerate
-                                  ? "This action requires the players.moderate permission, which this role doesn't have."
-                                  : null
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() =>
+                                handleAction(
+                                  'Remove from whitelist',
+                                  () =>
+                                    playersApi.removeFromWhitelist(
+                                      account.username,
+                                    ),
+                                  () => {
+                                    void fetchWhitelist()
+                                  },
+                                )
+                              }
+                              disabled={loading}
+                              // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                              title={
+                                'Remove ' +
+                                String(account.username) +
+                                ' from whitelist'
                               }
                             >
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="shrink-0"
-                                onClick={() =>
-                                  handleAction(
-                                    'Remove from whitelist',
-                                    () =>
-                                      playersApi.removeFromWhitelist(
-                                        account.username,
-                                      ),
-                                    () => {
-                                      void fetchWhitelist()
-                                    },
-                                  )
-                                }
-                                disabled={loading || !canModerate}
-                                // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Remove {username} from whitelist"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                                title={
-                                  'Remove ' +
-                                  String(account.username) +
-                                  ' from whitelist'
-                                }
-                              >
-                                <UserMinus className="me-1.5 h-3.5 w-3.5" />
-                                {'Remove'}
-                              </Button>
-                            </DisabledReason>
+                              <UserMinus className="me-1.5 h-3.5 w-3.5" />
+                              {'Remove'}
+                            </Button>
                           </div>
                         </div>
                       )
@@ -2153,26 +2124,15 @@ export default function Players() {
                         className="h-8 font-mono text-xs"
                         aria-label={'Allowed Steam ID'}
                       />
-                      <DisabledReason
-                        reason={
-                          !canModerate
-                            ? "This action requires the players.moderate permission, which this role doesn't have."
-                            : null
-                        }
+
+                      <Button
+                        onClick={handleAddAllowedSteamId}
+                        disabled={loading || allowedSteamIdInput.length !== 17}
+                        size="sm"
+                        className="shrink-0"
                       >
-                        <Button
-                          onClick={handleAddAllowedSteamId}
-                          disabled={
-                            loading ||
-                            !canModerate ||
-                            allowedSteamIdInput.length !== 17
-                          }
-                          size="sm"
-                          className="shrink-0"
-                        >
-                          <Plus className="me-1.5 h-3.5 w-3.5" /> {'Add'}
-                        </Button>
-                      </DisabledReason>
+                        <Plus className="me-1.5 h-3.5 w-3.5" /> {'Add'}
+                      </Button>
                     </div>
                     {allowedSteamIds
                       .filter(
@@ -2186,36 +2146,26 @@ export default function Players() {
                           className="flex items-center justify-between gap-2 rounded-md border border-transparent px-2 py-1.5 hover:border-border hover:bg-muted/30"
                         >
                           <span className="font-mono text-xs">{steamId}</span>
-                          <DisabledReason
-                            reason={
-                              !canModerate
-                                ? "This action requires the players.moderate permission, which this role doesn't have."
-                                : null
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                            onClick={() =>
+                              handleAction(
+                                'Remove allowed Steam ID',
+                                () => playersApi.removeAllowedSteamId(steamId),
+                                () => {
+                                  void fetchWhitelist()
+                                },
+                              )
                             }
+                            disabled={loading}
+                            // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                            title={'Remove allowed Steam ID ' + String(steamId)}
                           >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                              onClick={() =>
-                                handleAction(
-                                  'Remove allowed Steam ID',
-                                  () =>
-                                    playersApi.removeAllowedSteamId(steamId),
-                                  () => {
-                                    void fetchWhitelist()
-                                  },
-                                )
-                              }
-                              disabled={loading || !canModerate}
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Remove allowed Steam ID {steamId}"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={
-                                'Remove allowed Steam ID ' + String(steamId)
-                              }
-                            >
-                              <Trash2 className="me-1 h-3.5 w-3.5" /> {'Remove'}
-                            </Button>
-                          </DisabledReason>
+                            <Trash2 className="me-1 h-3.5 w-3.5" /> {'Remove'}
+                          </Button>
                         </div>
                       ))}
                   </div>
@@ -2397,46 +2347,32 @@ export default function Players() {
                         </div>
 
                         <div className="flex shrink-0 items-center gap-1.5">
-                          <DisabledReason
-                            reason={
-                              !canModerate
-                                ? "This action requires the players.moderate permission, which this role doesn't have."
-                                : null
-                            }
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setKickDialogOpen(true)}
+
+                            className="h-8 gap-1.5 border-amber-500/40 text-xs font-medium text-amber-300 hover:border-amber-500/60 hover:bg-amber-500/10 hover:text-amber-200"
+
+                            title={'Kick player'}
                           >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setKickDialogOpen(true)}
-                              disabled={!canModerate}
-                              className="h-8 gap-1.5 border-amber-500/40 text-xs font-medium text-amber-300 hover:border-amber-500/60 hover:bg-amber-500/10 hover:text-amber-200"
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Kick player"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={'Kick player'}
-                            >
-                              <UserX className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">{'Kick'}</span>
-                            </Button>
-                          </DisabledReason>
-                          <DisabledReason
-                            reason={
-                              !canModerate
-                                ? "This action requires the players.moderate permission, which this role doesn't have."
-                                : null
-                            }
+                            <UserX className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">{'Kick'}</span>
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setBanDialogOpen(true)}
+
+                            className="h-8 gap-1.5 border-destructive/45 text-xs font-medium text-destructive hover:border-destructive/65 hover:bg-destructive/10"
+
+                            title={'Ban player'}
                           >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setBanDialogOpen(true)}
-                              disabled={!canModerate}
-                              className="h-8 gap-1.5 border-destructive/45 text-xs font-medium text-destructive hover:border-destructive/65 hover:bg-destructive/10"
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Ban player"); the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={'Ban player'}
-                            >
-                              <Ban className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">{'Ban'}</span>
-                            </Button>
-                          </DisabledReason>
+                            <Ban className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">{'Ban'}</span>
+                          </Button>
+
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -2452,23 +2388,18 @@ export default function Players() {
                               <DisabledReason
                                 className="w-full"
                                 reason={
-                                  !canGmTools
-                                    ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                                    : !bridgeConnected
-                                      ? 'Requires PanelBridge to be connected'
-                                      : null
+                                  !bridgeConnected
+                                    ? 'Requires PanelBridge to be connected'
+                                    : null
                                 }
                               >
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    if (!canGmTools) return
                                     handleGodMode(
                                       !selectedPlayerPowers?.godMode,
                                     )
                                   }}
-                                  disabled={
-                                    loading || !bridgeConnected || !canGmTools
-                                  }
+                                  disabled={loading || !bridgeConnected}
                                 >
                                   <Ghost className="w-4 h-4 me-2" />
                                   {selectedPlayerPowers?.godMode
@@ -2479,23 +2410,18 @@ export default function Players() {
                               <DisabledReason
                                 className="w-full"
                                 reason={
-                                  !canGmTools
-                                    ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                                    : !bridgeConnected
-                                      ? 'Requires PanelBridge to be connected'
-                                      : null
+                                  !bridgeConnected
+                                    ? 'Requires PanelBridge to be connected'
+                                    : null
                                 }
                               >
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    if (!canGmTools) return
                                     handleInvisible(
                                       !selectedPlayerPowers?.invisible,
                                     )
                                   }}
-                                  disabled={
-                                    loading || !bridgeConnected || !canGmTools
-                                  }
+                                  disabled={loading || !bridgeConnected}
                                 >
                                   <Eye className="w-4 h-4 me-2" />
                                   {selectedPlayerPowers?.invisible
@@ -2506,21 +2432,16 @@ export default function Players() {
                               <DisabledReason
                                 className="w-full"
                                 reason={
-                                  !canGmTools
-                                    ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                                    : !bridgeConnected
-                                      ? 'Requires PanelBridge to be connected'
-                                      : null
+                                  !bridgeConnected
+                                    ? 'Requires PanelBridge to be connected'
+                                    : null
                                 }
                               >
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    if (!canGmTools) return
                                     handleNoclip(!selectedPlayerPowers?.noclip)
                                   }}
-                                  disabled={
-                                    loading || !bridgeConnected || !canGmTools
-                                  }
+                                  disabled={loading || !bridgeConnected}
                                 >
                                   <Layers className="w-4 h-4 me-2" />
                                   {selectedPlayerPowers?.noclip
@@ -2529,76 +2450,55 @@ export default function Players() {
                                 </DropdownMenuItem>
                               </DisabledReason>
                               <DropdownMenuSeparator />
-                              <DisabledReason
-                                className="w-full"
-                                reason={
-                                  !canModerate
-                                    ? "This action requires the players.moderate permission, which this role doesn't have."
-                                    : null
+
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setAddUserUsername(selectedPlayer)
+                                  setAddUserPassword('')
+                                  setAddUserDialogOpen(true)
+                                }}
+                                disabled={loading}
+                              >
+                                <UserPlus className="w-4 h-4 me-2" />
+                                {'Add to Whitelist'}
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  handleAction(
+                                    'Remove from whitelist',
+                                    () =>
+                                      playersApi.removeFromWhitelist(
+                                        selectedPlayer,
+                                      ),
+                                    () => {
+                                      void fetchWhitelist()
+                                    },
+                                  )
+                                }}
+                                disabled={
+                                  loading ||
+                                  selectedPlayerConfirmedNotWhitelisted
                                 }
                               >
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    if (!canModerate) return
-                                    setAddUserUsername(selectedPlayer)
-                                    setAddUserPassword('')
-                                    setAddUserDialogOpen(true)
-                                  }}
-                                  disabled={loading || !canModerate}
-                                >
-                                  <UserPlus className="w-4 h-4 me-2" />
-                                  {'Add to Whitelist'}
-                                </DropdownMenuItem>
-                              </DisabledReason>
-                              <DisabledReason
-                                className="w-full"
-                                reason={
-                                  !canModerate
-                                    ? "This action requires the players.moderate permission, which this role doesn't have."
-                                    : null
-                                }
-                              >
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    if (!canModerate) return
-                                    handleAction(
-                                      'Remove from whitelist',
-                                      () =>
-                                        playersApi.removeFromWhitelist(
-                                          selectedPlayer,
-                                        ),
-                                      () => {
-                                        void fetchWhitelist()
-                                      },
-                                    )
-                                  }}
-                                  disabled={
-                                    loading ||
-                                    !canModerate ||
-                                    selectedPlayerConfirmedNotWhitelisted
-                                  }
-                                >
-                                  <UserMinus className="w-4 h-4 me-2" />
-                                  {'Remove from Whitelist'}
-                                </DropdownMenuItem>
-                              </DisabledReason>
+                                <UserMinus className="w-4 h-4 me-2" />
+                                {'Remove from Whitelist'}
+                              </DropdownMenuItem>
+
                               <DropdownMenuSeparator />
                               <DisabledReason
                                 className="w-full"
                                 reason={
-                                  !canGmTools
-                                    ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                                    : !bridgeConnected
-                                      ? 'Requires PanelBridge to be connected'
-                                      : null
+                                  !bridgeConnected
+                                    ? 'Requires PanelBridge to be connected'
+                                    : null
                                 }
                               >
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    if (!canGmTools) return
                                     setImportExportOpen(true)
                                   }}
-                                  disabled={!bridgeConnected || !canGmTools}
+                                  disabled={!bridgeConnected}
                                 >
                                   <Download className="w-4 h-4 me-2" />
                                   {'Import/Export Character'}
@@ -2897,157 +2797,139 @@ export default function Players() {
               <TabsContent value="moderation" className="space-y-4 mt-4">
                 {selectedPlayer ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    <DisabledReason
-                      className="w-full"
-                      reason={
-                        selectedPlayer && !canModerate
-                          ? "This action requires the players.moderate permission, which this role doesn't have."
-                          : null
-                      }
+                    <Dialog
+                      open={kickDialogOpen}
+                      onOpenChange={setKickDialogOpen}
                     >
-                      <Dialog
-                        open={kickDialogOpen}
-                        onOpenChange={setKickDialogOpen}
-                      >
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!selectedPlayer || !canModerate}
-                            className="block h-auto w-full p-0 text-start"
-                          >
-                            <ActionTile
-                              icon={<UserX className="w-4 h-4" />}
-                              label={'Kick'}
-                              description={'Boot player with reason'}
-                              disabled={!selectedPlayer || !canModerate}
-                              emphasis="warning"
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={!selectedPlayer}
+                          className="block h-auto w-full p-0 text-start"
+                        >
+                          <ActionTile
+                            icon={<UserX className="w-4 h-4" />}
+                            label={'Kick'}
+                            description={'Boot player with reason'}
+                            disabled={!selectedPlayer}
+                            emphasis="warning"
+                          />
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{'Kick Player'}</DialogTitle>
+                          <DialogDescription>
+                            {'Kick ' +
+                              String(selectedPlayer) +
+                              ' from the server'}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="kick-reason">
+                              {'Reason (optional)'}
+                            </Label>
+                            <Input
+                              id="kick-reason"
+                              value={kickReason}
+                              onChange={(e) => setKickReason(e.target.value)}
+                              placeholder={'Enter reason...'}
                             />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>{'Kick Player'}</DialogTitle>
-                            <DialogDescription>
-                              {'Kick ' +
-                                String(selectedPlayer) +
-                                ' from the server'}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label htmlFor="kick-reason">
-                                {'Reason (optional)'}
-                              </Label>
-                              <Input
-                                id="kick-reason"
-                                value={kickReason}
-                                onChange={(e) => setKickReason(e.target.value)}
-                                placeholder={'Enter reason...'}
-                              />
-                            </div>
                           </div>
-                          <DialogFooter>
-                            <Button
-                              variant="destructive"
-                              onClick={handleKick}
-                              disabled={loading}
-                            >
-                              {loading ? (
-                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                              ) : null}
-                              {'Kick Player'}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </DisabledReason>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            variant="destructive"
+                            onClick={handleKick}
+                            disabled={loading}
+                          >
+                            {loading ? (
+                              <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            ) : null}
+                            {'Kick Player'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
 
-                    <DisabledReason
-                      className="w-full"
-                      reason={
-                        selectedPlayer && !canModerate
-                          ? "This action requires the players.moderate permission, which this role doesn't have."
-                          : null
-                      }
+                    <Dialog
+                      open={banDialogOpen}
+                      onOpenChange={setBanDialogOpen}
                     >
-                      <Dialog
-                        open={banDialogOpen}
-                        onOpenChange={setBanDialogOpen}
-                      >
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!selectedPlayer || !canModerate}
-                            className="block h-auto w-full p-0 text-start"
-                          >
-                            <ActionTile
-                              icon={<Ban className="w-4 h-4" />}
-                              label={'Ban'}
-                              description={'Permanent · two-step'}
-                              disabled={!selectedPlayer || !canModerate}
-                              emphasis="danger"
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={!selectedPlayer}
+                          className="block h-auto w-full p-0 text-start"
+                        >
+                          <ActionTile
+                            icon={<Ban className="w-4 h-4" />}
+                            label={'Ban'}
+                            description={'Permanent · two-step'}
+                            disabled={!selectedPlayer}
+                            emphasis="danger"
+                          />
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-destructive" />
+                            {'Ban Player'}
+                          </DialogTitle>
+                          <DialogDescription>
+                            {'Ban ' +
+                              String(selectedPlayer) +
+                              ' from the server'}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="ban-reason">
+                              {'Reason (optional)'}
+                            </Label>
+                            <Input
+                              id="ban-reason"
+                              value={banReason}
+                              onChange={(e) => setBanReason(e.target.value)}
+                              placeholder={'Enter reason...'}
                             />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
-                              <AlertTriangle className="w-5 h-5 text-destructive" />
-                              {'Ban Player'}
-                            </DialogTitle>
-                            <DialogDescription>
-                              {'Ban ' +
-                                String(selectedPlayer) +
-                                ' from the server'}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label htmlFor="ban-reason">
-                                {'Reason (optional)'}
-                              </Label>
-                              <Input
-                                id="ban-reason"
-                                value={banReason}
-                                onChange={(e) => setBanReason(e.target.value)}
-                                placeholder={'Enter reason...'}
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Checkbox
-                                id="banIp"
-                                checked={banIp}
-                                onCheckedChange={(checked) =>
-                                  setBanIp(checked === true)
-                                }
-                              />
-                              <Label htmlFor="banIp">
-                                {'Also ban IP address'}
-                              </Label>
-                              <HelpTip label={'Also ban IP address'}>
-                                {
-                                  'Also blocks the IP, not just the account — can affect others on the same network, and this panel has no way to review or lift IP bans separately.'
-                                }
-                              </HelpTip>
-                            </div>
                           </div>
-                          <DialogFooter>
-                            <Button
-                              variant="outline"
-                              onClick={() => setBanDialogOpen(false)}
-                            >
-                              {'Cancel'}
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              onClick={() => setBanConfirmOpen(true)}
-                            >
-                              {'Continue to Ban'}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </DisabledReason>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id="banIp"
+                              checked={banIp}
+                              onCheckedChange={(checked) =>
+                                setBanIp(checked === true)
+                              }
+                            />
+                            <Label htmlFor="banIp">
+                              {'Also ban IP address'}
+                            </Label>
+                            <HelpTip label={'Also ban IP address'}>
+                              {
+                                'Also blocks the IP, not just the account — can affect others on the same network, and this panel has no way to review or lift IP bans separately.'
+                              }
+                            </HelpTip>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            variant="outline"
+                            onClick={() => setBanDialogOpen(false)}
+                          >
+                            {'Cancel'}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() => setBanConfirmOpen(true)}
+                          >
+                            {'Continue to Ban'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
 
                     <AlertDialog
                       open={banConfirmOpen}
@@ -3099,217 +2981,195 @@ export default function Players() {
                       </AlertDialogContent>
                     </AlertDialog>
 
-                    <DisabledReason
-                      className="w-full"
-                      reason={
-                        selectedPlayer && !canModerate
-                          ? "This action requires the players.moderate permission, which this role doesn't have."
-                          : null
-                      }
-                    >
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!selectedPlayer || !canModerate}
-                            className="block h-auto w-full p-0 text-start"
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+                          disabled={!selectedPlayer}
+                          className="block h-auto w-full p-0 text-start"
+                        >
+                          <ActionTile
+                            icon={<Shield className="w-4 h-4" />}
+                            label={'Access Level'}
+                            description={'Admin · Mod · User'}
+                            disabled={!selectedPlayer}
+                            emphasis="primary"
+                          />
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{'Set Access Level'}</DialogTitle>
+                          <DialogDescription>
+                            {'Change access level for ' +
+                              String(selectedPlayer)}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div>
+                          <Label htmlFor="access-level">{'Access Level'}</Label>
+                          <Select
+                            value={accessLevel}
+                            onValueChange={setAccessLevel}
                           >
-                            <ActionTile
-                              icon={<Shield className="w-4 h-4" />}
-                              label={'Access Level'}
-                              description={'Admin · Mod · User'}
-                              disabled={!selectedPlayer || !canModerate}
-                              emphasis="primary"
-                            />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>{'Set Access Level'}</DialogTitle>
-                            <DialogDescription>
-                              {'Change access level for ' +
-                                String(selectedPlayer)}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div>
-                            <Label htmlFor="access-level">
-                              {'Access Level'}
-                            </Label>
-                            <Select
-                              value={accessLevel}
-                              onValueChange={setAccessLevel}
-                            >
-                              <SelectTrigger id="access-level">
-                                <SelectValue placeholder={'Select level...'} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {accessLevelOptions.map((level) => (
-                                  <SelectItem key={level} value={level}>
-                                    {accessLevelLabels[level] ||
-                                      level.charAt(0).toUpperCase() +
-                                        level.slice(1)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <DialogFooter>
-                            <Button
-                              onClick={handleSetAccessLevel}
-                              disabled={loading || !accessLevel}
-                            >
-                              {'Set Level'}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </DisabledReason>
+                            <SelectTrigger id="access-level">
+                              <SelectValue placeholder={'Select level...'} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {accessLevelOptions.map((level) => (
+                                <SelectItem key={level} value={level}>
+                                  {accessLevelLabels[level] ||
+                                    level.charAt(0).toUpperCase() +
+                                      level.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            onClick={handleSetAccessLevel}
+                            disabled={loading || !accessLevel}
+                          >
+                            {'Set Level'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
 
-                    <DisabledReason
-                      className="w-full"
-                      reason={
-                        !canGmTools
-                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                          : null
-                      }
+                    <Dialog
+                      open={teleportDialogOpen}
+                      onOpenChange={(open) => {
+                        setTeleportDialogOpen(open)
+                        if (open && !teleportTarget)
+                          setTeleportTarget(selectedPlayer)
+                      }}
                     >
-                      <Dialog
-                        open={teleportDialogOpen}
-                        onOpenChange={(open) => {
-                          setTeleportDialogOpen(open)
-                          if (open && !teleportTarget)
-                            setTeleportTarget(selectedPlayer)
-                        }}
-                      >
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!canGmTools}
-                            className="block h-auto w-full p-0 text-start"
-                          >
-                            <ActionTile
-                              icon={<MapPin className="w-4 h-4" />}
-                              label={'Teleport'}
-                              description={
-                                'Build 42 multiplayer · may not sync'
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+
+                          className="block h-auto w-full p-0 text-start"
+                        >
+                          <ActionTile
+                            icon={<MapPin className="w-4 h-4" />}
+                            label={'Teleport'}
+                            description={'Build 42 multiplayer · may not sync'}
+                          />
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>{'Teleport Player'}</DialogTitle>
+                          <DialogDescription>
+                            {'Teleport ' +
+                              String(selectedPlayer) +
+                              ' to coordinates'}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="teleport-target">
+                              {'Target Player'}
+                            </Label>
+                            <Input
+                              id="teleport-target"
+                              value={teleportTarget || selectedPlayer}
+                              onChange={(e) =>
+                                setTeleportTarget(e.target.value)
                               }
+                              placeholder={'Player to teleport'}
                             />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-md">
-                          <DialogHeader>
-                            <DialogTitle>{'Teleport Player'}</DialogTitle>
-                            <DialogDescription>
-                              {'Teleport ' +
-                                String(selectedPlayer) +
-                                ' to coordinates'}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
+                          </div>
+
+                          <div>
+                            <Label className="text-xs text-muted-foreground mb-2 block">
+                              {'Quick Locations'}
+                            </Label>
+                            <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+                              {TELEPORT_PRESETS.map((preset) => (
+                                <Button
+                                  key={preset.name}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 min-w-0 text-xs"
+                                  onClick={() => {
+                                    setTeleportX(preset.x)
+                                    setTeleportY(preset.y)
+                                    setTeleportZ(preset.z)
+                                  }}
+                                >
+                                  {preset.name}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
                             <div>
-                              <Label htmlFor="teleport-target">
-                                {'Target Player'}
-                              </Label>
+                              <Label htmlFor="teleport-x">{'X'}</Label>
                               <Input
-                                id="teleport-target"
-                                value={teleportTarget || selectedPlayer}
-                                onChange={(e) =>
-                                  setTeleportTarget(e.target.value)
-                                }
-                                placeholder={'Player to teleport'}
+                                id="teleport-x"
+                                type="number"
+                                value={teleportX}
+                                onChange={(e) => setTeleportX(e.target.value)}
+                                placeholder="10500"
+                                min={0}
+                                max={24000}
                               />
                             </div>
-
                             <div>
-                              <Label className="text-xs text-muted-foreground mb-2 block">
-                                {'Quick Locations'}
-                              </Label>
-                              <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
-                                {TELEPORT_PRESETS.map((preset) => (
-                                  <Button
-                                    key={preset.name}
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 min-w-0 text-xs"
-                                    onClick={() => {
-                                      setTeleportX(preset.x)
-                                      setTeleportY(preset.y)
-                                      setTeleportZ(preset.z)
-                                    }}
-                                  >
-                                    {preset.name}
-                                  </Button>
-                                ))}
-                              </div>
+                              <Label htmlFor="teleport-y">{'Y'}</Label>
+                              <Input
+                                id="teleport-y"
+                                type="number"
+                                value={teleportY}
+                                onChange={(e) => setTeleportY(e.target.value)}
+                                placeholder="9700"
+                                min={0}
+                                max={24000}
+                              />
                             </div>
-
-                            <div className="grid grid-cols-3 gap-2">
-                              <div>
-                                <Label htmlFor="teleport-x">{'X'}</Label>
-                                <Input
-                                  id="teleport-x"
-                                  type="number"
-                                  value={teleportX}
-                                  onChange={(e) => setTeleportX(e.target.value)}
-                                  placeholder="10500"
-                                  min={0}
-                                  max={24000}
-                                />
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <Label htmlFor="teleport-z">{'Z'}</Label>
+                                <HelpTip label={'Z'}>
+                                  {
+                                    'The building floor, not a height — 0 is ground level, higher is an upper floor.'
+                                  }
+                                </HelpTip>
                               </div>
-                              <div>
-                                <Label htmlFor="teleport-y">{'Y'}</Label>
-                                <Input
-                                  id="teleport-y"
-                                  type="number"
-                                  value={teleportY}
-                                  onChange={(e) => setTeleportY(e.target.value)}
-                                  placeholder="9700"
-                                  min={0}
-                                  max={24000}
-                                />
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <Label htmlFor="teleport-z">{'Z'}</Label>
-                                  <HelpTip label={'Z'}>
-                                    {
-                                      'The building floor, not a height — 0 is ground level, higher is an upper floor.'
-                                    }
-                                  </HelpTip>
-                                </div>
-                                <Input
-                                  id="teleport-z"
-                                  type="number"
-                                  value={teleportZ}
-                                  onChange={(e) => setTeleportZ(e.target.value)}
-                                  placeholder="0"
-                                  min={0}
-                                  max={8}
-                                />
-                              </div>
+                              <Input
+                                id="teleport-z"
+                                type="number"
+                                value={teleportZ}
+                                onChange={(e) => setTeleportZ(e.target.value)}
+                                placeholder="0"
+                                min={0}
+                                max={8}
+                              />
                             </div>
                           </div>
-                          <DialogFooter>
-                            <Button
-                              onClick={() =>
-                                handleTeleport(teleportTarget || selectedPlayer)
-                              }
-                              disabled={
-                                loading ||
-                                !teleportX ||
-                                !teleportY ||
-                                !(teleportTarget || selectedPlayer)
-                              }
-                            >
-                              {loading ? (
-                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                              ) : null}
-                              {'Teleport'}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </DisabledReason>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            onClick={() =>
+                              handleTeleport(teleportTarget || selectedPlayer)
+                            }
+                            disabled={
+                              loading ||
+                              !teleportX ||
+                              !teleportY ||
+                              !(teleportTarget || selectedPlayer)
+                            }
+                          >
+                            {loading ? (
+                              <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            ) : null}
+                            {'Teleport'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 ) : null}
 
@@ -3323,589 +3183,519 @@ export default function Players() {
                     />
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                    <DisabledReason
-                      className="w-full"
-                      reason={
-                        !canModerate
-                          ? "This action requires the players.moderate permission, which this role doesn't have."
-                          : null
-                      }
+                    <Dialog
+                      open={voiceBanDialogOpen}
+                      onOpenChange={setVoiceBanDialogOpen}
                     >
-                      <Dialog
-                        open={voiceBanDialogOpen}
-                        onOpenChange={setVoiceBanDialogOpen}
-                      >
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!canModerate}
-                            title={
-                              "Mute or unmute a player from in-game voice chat. They stay connected, but can't talk in proximity voice."
-                            }
-                            className="block h-auto w-full p-0 text-start"
-                          >
-                            <ActionTile
-                              icon={<MicOff className="w-4 h-4" />}
-                              label={'Voice Ban'}
-                              compact
-                            />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>{'Voice Ban'}</DialogTitle>
-                            <DialogDescription>
-                              {"Mute or unmute a player's voice chat"}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label>{'Username'}</Label>
-                              <Input
-                                value={voiceBanUsername || selectedPlayer}
-                                onChange={(e) =>
-                                  setVoiceBanUsername(e.target.value)
-                                }
-                                placeholder={'Enter username...'}
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Checkbox
-                                id="voiceBanEnabled"
-                                checked={voiceBanEnabled}
-                                onCheckedChange={(checked) =>
-                                  setVoiceBanEnabled(checked === true)
-                                }
-                              />
-                              <Label htmlFor="voiceBanEnabled">
-                                {voiceBanEnabled
-                                  ? 'Ban from voice chat'
-                                  : 'Unban from voice chat'}
-                              </Label>
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button
-                              onClick={() => {
-                                const target =
-                                  voiceBanUsername || selectedPlayer
-                                if (!target) return
-                                setVoiceBanUsername(target)
-                                handleAction(
-                                  voiceBanEnabled ? 'Voice ban' : 'Voice unban',
-                                  () =>
-                                    playersApi.voiceBan(
-                                      target,
-                                      voiceBanEnabled,
-                                    ),
-                                  () => {
-                                    setVoiceBanDialogOpen(false)
-                                    setVoiceBanUsername('')
-                                  },
-                                )
-                              }}
-                              disabled={
-                                loading ||
-                                (!voiceBanUsername && !selectedPlayer)
-                              }
-                            >
-                              {loading ? (
-                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                              ) : null}
-                              {voiceBanEnabled ? (
-                                <>
-                                  <MicOff className="w-4 h-4 me-2" /> {'Mute'}
-                                </>
-                              ) : (
-                                <>
-                                  <Mic className="w-4 h-4 me-2" /> {'Unmute'}
-                                </>
-                              )}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </DisabledReason>
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
 
-                    <DisabledReason
-                      className="w-full"
-                      reason={
-                        !canModerate
-                          ? "This action requires the players.moderate permission, which this role doesn't have."
-                          : null
-                      }
-                    >
-                      <Dialog
-                        open={steamIdBanDialogOpen}
-                        onOpenChange={setSteamIdBanDialogOpen}
-                      >
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!canModerate}
-                            title={
-                              "Ban a player by their Steam ID, even when they're offline. Works without needing them to be connected."
-                            }
-                            className="block h-auto w-full p-0 text-start"
-                          >
-                            <ActionTile
-                              icon={<Ban className="w-4 h-4" />}
-                              label={'SteamID Ban'}
-                              emphasis="danger"
-                              compact
-                            />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
-                              <AlertTriangle className="w-5 h-5 text-destructive" />
-                              {'Ban by SteamID'}
-                            </DialogTitle>
-                            <DialogDescription>
-                              {
-                                'Ban a player by their Steam ID (useful for offline bans)'
-                              }
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label>{'Steam ID'}</Label>
-                              <Input
-                                value={banSteamId}
-                                onChange={(e) =>
-                                  setBanSteamId(sanitizeSteamId(e.target.value))
-                                }
-                                placeholder="76561198XXXXXXXXX"
-                              />
-                            </div>
-                            <div>
-                              <Label>{'Reason (optional)'}</Label>
-                              <Input
-                                value={steamBanReason}
-                                onChange={(e) =>
-                                  setSteamBanReason(e.target.value)
-                                }
-                                placeholder={'Enter ban reason...'}
-                              />
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button
-                              variant="outline"
-                              onClick={() => setSteamIdBanDialogOpen(false)}
-                            >
-                              {'Cancel'}
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              onClick={handleSteamIdBan}
-                              disabled={loading || banSteamId.length !== 17}
-                            >
-                              {loading ? (
-                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                              ) : null}
-                              {'Ban SteamID'}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </DisabledReason>
-
-                    <DisabledReason
-                      className="w-full"
-                      reason={
-                        !canModerate
-                          ? "This action requires the players.moderate permission, which this role doesn't have."
-                          : null
-                      }
-                    >
-                      <Dialog
-                        open={addUserDialogOpen}
-                        onOpenChange={setAddUserDialogOpen}
-                      >
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!canModerate}
-                            title={
-                              'Create a new account on the server (username + password). Mostly used for whitelist-only servers.'
-                            }
-                            className="block h-auto w-full p-0 text-start"
-                          >
-                            <ActionTile
-                              icon={<UserPlus className="w-4 h-4" />}
-                              label={'Add User'}
-                              compact
-                            />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>{'Add User'}</DialogTitle>
-                            <DialogDescription>
-                              {
-                                'Create a new user account for whitelist servers. Build 42 allows an empty password.'
-                              }
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <Label>{'Username'}</Label>
-                              <Input
-                                value={addUserUsername}
-                                onChange={(e) =>
-                                  setAddUserUsername(e.target.value)
-                                }
-                                placeholder={'Enter username...'}
-                                maxLength={64}
-                              />
-                            </div>
-                            <div>
-                              <Label>{'Password (optional)'}</Label>
-                              <Input
-                                type="password"
-                                value={addUserPassword}
-                                onChange={(e) =>
-                                  setAddUserPassword(e.target.value)
-                                }
-                                placeholder={
-                                  'Optional password (min 4 characters)...'
-                                }
-                                maxLength={128}
-                              />
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button
-                              variant="outline"
-                              onClick={() => setAddUserDialogOpen(false)}
-                            >
-                              {'Cancel'}
-                            </Button>
-                            <Button
-                              onClick={handleAddUser}
-                              disabled={
-                                loading ||
-                                !addUserUsername.trim() ||
-                                (addUserPassword.length > 0 &&
-                                  addUserPassword.length < 4)
-                              }
-                            >
-                              {loading ? (
-                                <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                              ) : null}
-                              {'Add User'}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </DisabledReason>
-
-                    <DisabledReason
-                      className="w-full"
-                      reason={
-                        !canModerate
-                          ? "This action requires the players.moderate permission, which this role doesn't have."
-                          : null
-                      }
-                    >
-                      <Dialog
-                        open={unbanDialogOpen}
-                        onOpenChange={setUnbanDialogOpen}
-                      >
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!canModerate}
-                            title={
-                              'Lift a ban by username so the player can rejoin.'
-                            }
-                            className="block h-auto w-full p-0 text-start"
-                          >
-                            <ActionTile
-                              icon={<UserPlus className="w-4 h-4" />}
-                              label={'Unban'}
-                              compact
-                            />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>{'Unban Player'}</DialogTitle>
-                          </DialogHeader>
+                          title={
+                            "Mute or unmute a player from in-game voice chat. They stay connected, but can't talk in proximity voice."
+                          }
+                          className="block h-auto w-full p-0 text-start"
+                        >
+                          <ActionTile
+                            icon={<MicOff className="w-4 h-4" />}
+                            label={'Voice Ban'}
+                            compact
+                          />
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{'Voice Ban'}</DialogTitle>
+                          <DialogDescription>
+                            {"Mute or unmute a player's voice chat"}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
                           <div>
-                            <Label htmlFor="unban-username">{'Username'}</Label>
+                            <Label>{'Username'}</Label>
                             <Input
-                              id="unban-username"
-                              value={unbanUsername}
-                              onChange={(e) => setUnbanUsername(e.target.value)}
-                              placeholder={'Enter username to unban...'}
+                              value={voiceBanUsername || selectedPlayer}
+                              onChange={(e) =>
+                                setVoiceBanUsername(e.target.value)
+                              }
+                              placeholder={'Enter username...'}
                             />
                           </div>
-                          <DialogFooter>
-                            <Button
-                              onClick={handleUnban}
-                              disabled={loading || !unbanUsername}
-                            >
-                              {'Unban Player'}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </DisabledReason>
-
-                    <DisabledReason
-                      className="w-full"
-                      reason={
-                        !canModerate
-                          ? "This action requires the players.moderate permission, which this role doesn't have."
-                          : null
-                      }
-                    >
-                      <Dialog
-                        open={unbanSteamIdDialogOpen}
-                        onOpenChange={(open) => {
-                          setUnbanSteamIdDialogOpen(open)
-                          if (open) fetchBannedSteamIds()
-                          else setUnbanSteamId('')
-                        }}
-                      >
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            disabled={!canModerate}
-                            title={
-                              'Lift a SteamID ban. Pick from the list of banned IDs or paste one manually.'
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id="voiceBanEnabled"
+                              checked={voiceBanEnabled}
+                              onCheckedChange={(checked) =>
+                                setVoiceBanEnabled(checked === true)
+                              }
+                            />
+                            <Label htmlFor="voiceBanEnabled">
+                              {voiceBanEnabled
+                                ? 'Ban from voice chat'
+                                : 'Unban from voice chat'}
+                            </Label>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            onClick={() => {
+                              const target = voiceBanUsername || selectedPlayer
+                              if (!target) return
+                              setVoiceBanUsername(target)
+                              handleAction(
+                                voiceBanEnabled ? 'Voice ban' : 'Voice unban',
+                                () =>
+                                  playersApi.voiceBan(target, voiceBanEnabled),
+                                () => {
+                                  setVoiceBanDialogOpen(false)
+                                  setVoiceBanUsername('')
+                                },
+                              )
+                            }}
+                            disabled={
+                              loading || (!voiceBanUsername && !selectedPlayer)
                             }
-                            className="block h-auto w-full p-0 text-start"
                           >
-                            <ActionTile
-                              icon={<UserPlus className="w-4 h-4" />}
-                              label={'Unban SteamID'}
-                              compact
-                            />
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>{'Unban SteamID'}</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-3">
-                            {bannedSteamIds.length > 0 && (
-                              <div>
-                                <Label>{'Select banned SteamID'}</Label>
-                                <Select
-                                  value={unbanSteamId}
-                                  onValueChange={setUnbanSteamId}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue
-                                      placeholder={
-                                        loadingBans
-                                          ? 'Loading...'
-                                          : 'Select a banned SteamID...'
-                                      }
-                                    />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {bannedSteamIds.map((ban) => (
-                                      <SelectItem
-                                        key={ban.steamId}
-                                        value={ban.steamId}
-                                      >
-                                        {ban.steamId}
-                                        {ban.banned_at && (
-                                          <span className="ms-2 text-xs text-muted-foreground">
-                                            {new Date(
-                                              ban.banned_at,
-                                            ).toLocaleDateString('en')}
-                                          </span>
-                                        )}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                            {loading ? (
+                              <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            ) : null}
+                            {voiceBanEnabled ? (
+                              <>
+                                <MicOff className="w-4 h-4 me-2" /> {'Mute'}
+                              </>
+                            ) : (
+                              <>
+                                <Mic className="w-4 h-4 me-2" /> {'Unmute'}
+                              </>
                             )}
-                            <div>
-                              <Label htmlFor="unban-steamid">
-                                {bannedSteamIds.length > 0
-                                  ? 'Or enter manually'
-                                  : 'Steam ID'}
-                              </Label>
-                              <Input
-                                id="unban-steamid"
-                                value={unbanSteamId}
-                                onChange={(e) =>
-                                  setUnbanSteamId(
-                                    sanitizeSteamId(e.target.value),
-                                  )
-                                }
-                                placeholder={'Enter Steam ID to unban...'}
-                              />
-                            </div>
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Dialog
+                      open={steamIdBanDialogOpen}
+                      onOpenChange={setSteamIdBanDialogOpen}
+                    >
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+
+                          title={
+                            "Ban a player by their Steam ID, even when they're offline. Works without needing them to be connected."
+                          }
+                          className="block h-auto w-full p-0 text-start"
+                        >
+                          <ActionTile
+                            icon={<Ban className="w-4 h-4" />}
+                            label={'SteamID Ban'}
+                            emphasis="danger"
+                            compact
+                          />
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-destructive" />
+                            {'Ban by SteamID'}
+                          </DialogTitle>
+                          <DialogDescription>
+                            {
+                              'Ban a player by their Steam ID (useful for offline bans)'
+                            }
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label>{'Steam ID'}</Label>
+                            <Input
+                              value={banSteamId}
+                              onChange={(e) =>
+                                setBanSteamId(sanitizeSteamId(e.target.value))
+                              }
+                              placeholder="76561198XXXXXXXXX"
+                            />
                           </div>
-                          <DialogFooter>
-                            <Button
-                              onClick={handleUnbanSteamId}
-                              disabled={loading || unbanSteamId.length !== 17}
-                            >
-                              {'Unban SteamID'}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </DisabledReason>
+                          <div>
+                            <Label>{'Reason (optional)'}</Label>
+                            <Input
+                              value={steamBanReason}
+                              onChange={(e) =>
+                                setSteamBanReason(e.target.value)
+                              }
+                              placeholder={'Enter ban reason...'}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            variant="outline"
+                            onClick={() => setSteamIdBanDialogOpen(false)}
+                          >
+                            {'Cancel'}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={handleSteamIdBan}
+                            disabled={loading || banSteamId.length !== 17}
+                          >
+                            {loading ? (
+                              <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            ) : null}
+                            {'Ban SteamID'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Dialog
+                      open={addUserDialogOpen}
+                      onOpenChange={setAddUserDialogOpen}
+                    >
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+
+                          title={
+                            'Create a new account on the server (username + password). Mostly used for whitelist-only servers.'
+                          }
+                          className="block h-auto w-full p-0 text-start"
+                        >
+                          <ActionTile
+                            icon={<UserPlus className="w-4 h-4" />}
+                            label={'Add User'}
+                            compact
+                          />
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{'Add User'}</DialogTitle>
+                          <DialogDescription>
+                            {
+                              'Create a new user account for whitelist servers. Build 42 allows an empty password.'
+                            }
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label>{'Username'}</Label>
+                            <Input
+                              value={addUserUsername}
+                              onChange={(e) =>
+                                setAddUserUsername(e.target.value)
+                              }
+                              placeholder={'Enter username...'}
+                              maxLength={64}
+                            />
+                          </div>
+                          <div>
+                            <Label>{'Password (optional)'}</Label>
+                            <Input
+                              type="password"
+                              value={addUserPassword}
+                              onChange={(e) =>
+                                setAddUserPassword(e.target.value)
+                              }
+                              placeholder={
+                                'Optional password (min 4 characters)...'
+                              }
+                              maxLength={128}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            variant="outline"
+                            onClick={() => setAddUserDialogOpen(false)}
+                          >
+                            {'Cancel'}
+                          </Button>
+                          <Button
+                            onClick={handleAddUser}
+                            disabled={
+                              loading ||
+                              !addUserUsername.trim() ||
+                              (addUserPassword.length > 0 &&
+                                addUserPassword.length < 4)
+                            }
+                          >
+                            {loading ? (
+                              <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                            ) : null}
+                            {'Add User'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Dialog
+                      open={unbanDialogOpen}
+                      onOpenChange={setUnbanDialogOpen}
+                    >
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+
+                          title={
+                            'Lift a ban by username so the player can rejoin.'
+                          }
+                          className="block h-auto w-full p-0 text-start"
+                        >
+                          <ActionTile
+                            icon={<UserPlus className="w-4 h-4" />}
+                            label={'Unban'}
+                            compact
+                          />
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{'Unban Player'}</DialogTitle>
+                        </DialogHeader>
+                        <div>
+                          <Label htmlFor="unban-username">{'Username'}</Label>
+                          <Input
+                            id="unban-username"
+                            value={unbanUsername}
+                            onChange={(e) => setUnbanUsername(e.target.value)}
+                            placeholder={'Enter username to unban...'}
+                          />
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            onClick={handleUnban}
+                            disabled={loading || !unbanUsername}
+                          >
+                            {'Unban Player'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Dialog
+                      open={unbanSteamIdDialogOpen}
+                      onOpenChange={(open) => {
+                        setUnbanSteamIdDialogOpen(open)
+                        if (open) fetchBannedSteamIds()
+                        else setUnbanSteamId('')
+                      }}
+                    >
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+
+                          title={
+                            'Lift a SteamID ban. Pick from the list of banned IDs or paste one manually.'
+                          }
+                          className="block h-auto w-full p-0 text-start"
+                        >
+                          <ActionTile
+                            icon={<UserPlus className="w-4 h-4" />}
+                            label={'Unban SteamID'}
+                            compact
+                          />
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{'Unban SteamID'}</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                          {bannedSteamIds.length > 0 && (
+                            <div>
+                              <Label>{'Select banned SteamID'}</Label>
+                              <Select
+                                value={unbanSteamId}
+                                onValueChange={setUnbanSteamId}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={
+                                      loadingBans
+                                        ? 'Loading...'
+                                        : 'Select a banned SteamID...'
+                                    }
+                                  />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {bannedSteamIds.map((ban) => (
+                                    <SelectItem
+                                      key={ban.steamId}
+                                      value={ban.steamId}
+                                    >
+                                      {ban.steamId}
+                                      {ban.banned_at && (
+                                        <span className="ms-2 text-xs text-muted-foreground">
+                                          {new Date(
+                                            ban.banned_at,
+                                          ).toLocaleDateString('en')}
+                                        </span>
+                                      )}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                          <div>
+                            <Label htmlFor="unban-steamid">
+                              {bannedSteamIds.length > 0
+                                ? 'Or enter manually'
+                                : 'Steam ID'}
+                            </Label>
+                            <Input
+                              id="unban-steamid"
+                              value={unbanSteamId}
+                              onChange={(e) =>
+                                setUnbanSteamId(sanitizeSteamId(e.target.value))
+                              }
+                              placeholder={'Enter Steam ID to unban...'}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            onClick={handleUnbanSteamId}
+                            disabled={loading || unbanSteamId.length !== 17}
+                          >
+                            {'Unban SteamID'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </div>
               </TabsContent>
               <TabsContent value="spawn" className="space-y-3 mt-4">
-                <DisabledReason
-                  className="w-full"
-                  reason={
-                    selectedPlayer && !canGmTools
-                      ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                      : null
-                  }
-                >
-                  <button
-                    type="button"
-                    onClick={() => setItemBrowserOpen(true)}
-                    disabled={!selectedPlayer || loading || !canGmTools}
-                    className={cn(
-                      'group w-full rounded-xl border bg-card/50 p-4 text-start',
-                      'motion-safe:transition-all duration-150',
-                      'border-border/60',
-                      selectedPlayer &&
-                        !loading &&
-                        'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
-                      (!selectedPlayer || loading) &&
-                        'opacity-60 cursor-not-allowed',
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          'rounded-lg border p-2.5 shrink-0',
-                          'motion-safe:transition-colors duration-150',
-                          selectedPlayer && !loading
-                            ? 'border-primary/20 bg-primary/10 text-primary group-hover:bg-primary/15 group-hover:border-primary/30'
-                            : 'border-border/40 bg-muted/30 text-muted-foreground',
-                        )}
-                      >
-                        <Package className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground flex items-center gap-2">
-                          {'Give items'}
-                          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">
-                            {'browser'}
-                          </span>
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                          {selectedPlayer ? (
-                            <>
-                              {
-                                'Weapons, food, medical, tools — give as many items as you want to '
-                              }
-                              {selectedPlayer}
-                              {' without closing the dialog.'}
-                            </>
-                          ) : (
-                            'Pick a player first, then browse the full item catalog to fill their inventory.'
-                          )}
-                        </p>
-                      </div>
-                      <div
-                        className={cn(
-                          'flex items-center gap-1 text-xs shrink-0',
-                          'motion-safe:transition-all duration-150',
-                          selectedPlayer && !loading
-                            ? 'text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5'
-                            : 'text-muted-foreground/30',
-                        )}
-                      >
-                        <span className="uppercase tracking-wider text-[10px] font-semibold">
-                          {'Browse'}
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </div>
-                    </div>
-                  </button>
-                </DisabledReason>
-
-                <DisabledReason
-                  className="w-full"
-                  reason={
-                    !canGmTools
-                      ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                      : null
-                  }
-                >
-                  <button
-                    type="button"
-                    onClick={() => setVehicleBrowserOpen(true)}
-                    disabled={loading || !canGmTools}
-                    className={cn(
-                      'group w-full rounded-xl border bg-card/50 p-4 text-start',
-                      'motion-safe:transition-all duration-150',
-                      'border-border/60',
+                <button
+                  type="button"
+                  onClick={() => setItemBrowserOpen(true)}
+                  disabled={!selectedPlayer || loading}
+                  className={cn(
+                    'group w-full rounded-xl border bg-card/50 p-4 text-start',
+                    'motion-safe:transition-all duration-150',
+                    'border-border/60',
+                    selectedPlayer &&
                       !loading &&
-                        'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
-                      loading && 'opacity-60 cursor-not-allowed',
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          'rounded-lg border p-2.5 shrink-0',
-                          'motion-safe:transition-colors duration-150',
-                          !loading
-                            ? 'border-primary/20 bg-primary/10 text-primary group-hover:bg-primary/15 group-hover:border-primary/30'
-                            : 'border-border/40 bg-muted/30 text-muted-foreground',
-                        )}
-                      >
-                        <Car className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground flex items-center gap-2">
-                          {'Spawn vehicles'}
-                          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">
-                            {'browser'}
-                          </span>
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                          {selectedPlayer ? (
-                            <>
-                              {
-                                'Sedans, trucks, emergency, military — spawn one after another near '
-                              }
-                              {selectedPlayer}
-                              {'.'}
-                            </>
-                          ) : (
-                            "Spawns at the caller's position — select a player to spawn vehicles near them instead."
-                          )}
-                        </p>
-                      </div>
-                      <div
-                        className={cn(
-                          'flex items-center gap-1 text-xs shrink-0',
-                          'motion-safe:transition-all duration-150',
-                          !loading
-                            ? 'text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5'
-                            : 'text-muted-foreground/30',
-                        )}
-                      >
-                        <span className="uppercase tracking-wider text-[10px] font-semibold">
-                          {'Browse'}
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </div>
+                      'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
+                    (!selectedPlayer || loading) &&
+                      'opacity-60 cursor-not-allowed',
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        'rounded-lg border p-2.5 shrink-0',
+                        'motion-safe:transition-colors duration-150',
+                        selectedPlayer && !loading
+                          ? 'border-primary/20 bg-primary/10 text-primary group-hover:bg-primary/15 group-hover:border-primary/30'
+                          : 'border-border/40 bg-muted/30 text-muted-foreground',
+                      )}
+                    >
+                      <Package className="w-5 h-5" />
                     </div>
-                  </button>
-                </DisabledReason>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground flex items-center gap-2">
+                        {'Give items'}
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">
+                          {'browser'}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        {selectedPlayer ? (
+                          <>
+                            {
+                              'Weapons, food, medical, tools — give as many items as you want to '
+                            }
+                            {selectedPlayer}
+                            {' without closing the dialog.'}
+                          </>
+                        ) : (
+                          'Pick a player first, then browse the full item catalog to fill their inventory.'
+                        )}
+                      </p>
+                    </div>
+                    <div
+                      className={cn(
+                        'flex items-center gap-1 text-xs shrink-0',
+                        'motion-safe:transition-all duration-150',
+                        selectedPlayer && !loading
+                          ? 'text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5'
+                          : 'text-muted-foreground/30',
+                      )}
+                    >
+                      <span className="uppercase tracking-wider text-[10px] font-semibold">
+                        {'Browse'}
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVehicleBrowserOpen(true)}
+                  disabled={loading}
+                  className={cn(
+                    'group w-full rounded-xl border bg-card/50 p-4 text-start',
+                    'motion-safe:transition-all duration-150',
+                    'border-border/60',
+                    !loading &&
+                      'hover:border-primary/50 hover:bg-card/80 hover:shadow-sm',
+                    loading && 'opacity-60 cursor-not-allowed',
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        'rounded-lg border p-2.5 shrink-0',
+                        'motion-safe:transition-colors duration-150',
+                        !loading
+                          ? 'border-primary/20 bg-primary/10 text-primary group-hover:bg-primary/15 group-hover:border-primary/30'
+                          : 'border-border/40 bg-muted/30 text-muted-foreground',
+                      )}
+                    >
+                      <Car className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground flex items-center gap-2">
+                        {'Spawn vehicles'}
+                        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 font-semibold">
+                          {'browser'}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        {selectedPlayer ? (
+                          <>
+                            {
+                              'Sedans, trucks, emergency, military — spawn one after another near '
+                            }
+                            {selectedPlayer}
+                            {'.'}
+                          </>
+                        ) : (
+                          "Spawns at the caller's position — select a player to spawn vehicles near them instead."
+                        )}
+                      </p>
+                    </div>
+                    <div
+                      className={cn(
+                        'flex items-center gap-1 text-xs shrink-0',
+                        'motion-safe:transition-all duration-150',
+                        !loading
+                          ? 'text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5'
+                          : 'text-muted-foreground/30',
+                      )}
+                    >
+                      <span className="uppercase tracking-wider text-[10px] font-semibold">
+                        {'Browse'}
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                </button>
 
                 <div className="rounded-xl border border-border/60 bg-card/50 p-4 transition-colors">
                   <div className="flex items-center gap-3 mb-3">
@@ -3960,29 +3750,21 @@ export default function Players() {
                         max={10000}
                       />
                     </div>
-                    <DisabledReason
-                      reason={
-                        !canGmTools
-                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                          : null
+
+                    <Button
+                      onClick={handleAddXp}
+                      disabled={
+                        loading ||
+                        !selectedPlayer ||
+                        !selectedPerk ||
+                        !Number.isFinite(xpAmount)
                       }
+                      size="sm"
+                      className="shrink-0 sm:min-w-[100px]"
                     >
-                      <Button
-                        onClick={handleAddXp}
-                        disabled={
-                          loading ||
-                          !canGmTools ||
-                          !selectedPlayer ||
-                          !selectedPerk ||
-                          !Number.isFinite(xpAmount)
-                        }
-                        size="sm"
-                        className="shrink-0 sm:min-w-[100px]"
-                      >
-                        <TrendingUp className="w-4 h-4 me-2" />
-                        {'Give XP'}
-                      </Button>
-                    </DisabledReason>
+                      <TrendingUp className="w-4 h-4 me-2" />
+                      {'Give XP'}
+                    </Button>
                   </div>
                 </div>
               </TabsContent>
@@ -4033,11 +3815,9 @@ export default function Players() {
                       )}
                       <DisabledReason
                         reason={
-                          !canGmTools
-                            ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                            : selectedPlayer && !bridgeConnected
-                              ? 'Requires PanelBridge to be connected'
-                              : null
+                          selectedPlayer && !bridgeConnected
+                            ? 'Requires PanelBridge to be connected'
+                            : null
                         }
                       >
                         {selectedPlayerPowers?.godMode === undefined ? (
@@ -4046,10 +3826,7 @@ export default function Players() {
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer ||
-                                loading ||
-                                !bridgeConnected ||
-                                !canGmTools
+                                !selectedPlayer || loading || !bridgeConnected
                               }
                               onClick={() => handleGodMode(true)}
                             >
@@ -4059,10 +3836,7 @@ export default function Players() {
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer ||
-                                loading ||
-                                !bridgeConnected ||
-                                !canGmTools
+                                !selectedPlayer || loading || !bridgeConnected
                               }
                               onClick={() => handleGodMode(false)}
                             >
@@ -4078,10 +3852,7 @@ export default function Players() {
                             }
                             size="sm"
                             disabled={
-                              !selectedPlayer ||
-                              loading ||
-                              !bridgeConnected ||
-                              !canGmTools
+                              !selectedPlayer || loading || !bridgeConnected
                             }
                             onClick={() =>
                               handleGodMode(!selectedPlayerPowers.godMode)
@@ -4133,11 +3904,9 @@ export default function Players() {
                       )}
                       <DisabledReason
                         reason={
-                          !canGmTools
-                            ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                            : selectedPlayer && !bridgeConnected
-                              ? 'Requires PanelBridge to be connected'
-                              : null
+                          selectedPlayer && !bridgeConnected
+                            ? 'Requires PanelBridge to be connected'
+                            : null
                         }
                       >
                         {selectedPlayerPowers?.invisible === undefined ? (
@@ -4146,10 +3915,7 @@ export default function Players() {
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer ||
-                                loading ||
-                                !bridgeConnected ||
-                                !canGmTools
+                                !selectedPlayer || loading || !bridgeConnected
                               }
                               onClick={() => handleInvisible(true)}
                             >
@@ -4159,10 +3925,7 @@ export default function Players() {
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer ||
-                                loading ||
-                                !bridgeConnected ||
-                                !canGmTools
+                                !selectedPlayer || loading || !bridgeConnected
                               }
                               onClick={() => handleInvisible(false)}
                             >
@@ -4178,10 +3941,7 @@ export default function Players() {
                             }
                             size="sm"
                             disabled={
-                              !selectedPlayer ||
-                              loading ||
-                              !bridgeConnected ||
-                              !canGmTools
+                              !selectedPlayer || loading || !bridgeConnected
                             }
                             onClick={() =>
                               handleInvisible(!selectedPlayerPowers.invisible)
@@ -4233,11 +3993,9 @@ export default function Players() {
                       )}
                       <DisabledReason
                         reason={
-                          !canGmTools
-                            ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                            : selectedPlayer && !bridgeConnected
-                              ? 'Requires PanelBridge to be connected'
-                              : null
+                          selectedPlayer && !bridgeConnected
+                            ? 'Requires PanelBridge to be connected'
+                            : null
                         }
                       >
                         {selectedPlayerPowers?.noclip === undefined ? (
@@ -4246,10 +4004,7 @@ export default function Players() {
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer ||
-                                loading ||
-                                !bridgeConnected ||
-                                !canGmTools
+                                !selectedPlayer || loading || !bridgeConnected
                               }
                               onClick={() => handleNoclip(true)}
                             >
@@ -4259,10 +4014,7 @@ export default function Players() {
                               variant="outline"
                               size="sm"
                               disabled={
-                                !selectedPlayer ||
-                                loading ||
-                                !bridgeConnected ||
-                                !canGmTools
+                                !selectedPlayer || loading || !bridgeConnected
                               }
                               onClick={() => handleNoclip(false)}
                             >
@@ -4278,10 +4030,7 @@ export default function Players() {
                             }
                             size="sm"
                             disabled={
-                              !selectedPlayer ||
-                              loading ||
-                              !bridgeConnected ||
-                              !canGmTools
+                              !selectedPlayer || loading || !bridgeConnected
                             }
                             onClick={() =>
                               handleNoclip(!selectedPlayerPowers.noclip)
@@ -4308,21 +4057,16 @@ export default function Players() {
                     </div>
                     <DisabledReason
                       reason={
-                        !canGmTools
-                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                          : selectedPlayer && !bridgeConnected
-                            ? 'Requires PanelBridge to be connected'
-                            : null
+                        selectedPlayer && !bridgeConnected
+                          ? 'Requires PanelBridge to be connected'
+                          : null
                       }
                     >
                       <Button
                         variant="outline"
                         size="sm"
                         disabled={
-                          !selectedPlayer ||
-                          loading ||
-                          !bridgeConnected ||
-                          !canGmTools
+                          !selectedPlayer || loading || !bridgeConnected
                         }
                         onClick={handleHealPlayer}
                       >
@@ -4352,21 +4096,16 @@ export default function Players() {
                     </div>
                     <DisabledReason
                       reason={
-                        !canGmTools
-                          ? "This action requires the players.gm_tools permission, which this role doesn't have."
-                          : selectedPlayer && !bridgeConnected
-                            ? 'Requires PanelBridge to be connected'
-                            : null
+                        selectedPlayer && !bridgeConnected
+                          ? 'Requires PanelBridge to be connected'
+                          : null
                       }
                     >
                       <Button
                         variant="destructive"
                         size="sm"
                         disabled={
-                          !selectedPlayer ||
-                          loading ||
-                          !bridgeConnected ||
-                          !canGmTools
+                          !selectedPlayer || loading || !bridgeConnected
                         }
                         onClick={handleKillPlayer}
                       >
@@ -4553,24 +4292,16 @@ export default function Players() {
                       </div>
                       <div className="flex gap-2">
                         {playerNotes[selectedPlayer] && (
-                          <DisabledReason
-                            reason={
-                              !canModerate
-                                ? "This action requires the players.moderate permission, which this role doesn't have."
-                                : null
-                            }
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDeleteNoteConfirmOpen(true)}
+                            disabled={savingNote}
+                            className="text-destructive hover:text-destructive"
                           >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setDeleteNoteConfirmOpen(true)}
-                              disabled={savingNote || !canModerate}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="w-4 h-4 me-1" />
-                              {'Delete'}
-                            </Button>
-                          </DisabledReason>
+                            <Trash2 className="w-4 h-4 me-1" />
+                            {'Delete'}
+                          </Button>
                         )}
                         <AlertDialog
                           open={deleteNoteConfirmOpen}
@@ -4607,30 +4338,22 @@ export default function Players() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-                        <DisabledReason
-                          reason={
-                            !canModerate
-                              ? "This action requires the players.moderate permission, which this role doesn't have."
-                              : null
+
+                        <Button
+                          size="sm"
+                          onClick={handleSaveNote}
+                          disabled={
+                            savingNote ||
+                            (!currentNote.trim() && currentTags.length === 0)
                           }
                         >
-                          <Button
-                            size="sm"
-                            onClick={handleSaveNote}
-                            disabled={
-                              savingNote ||
-                              !canModerate ||
-                              (!currentNote.trim() && currentTags.length === 0)
-                            }
-                          >
-                            {savingNote ? (
-                              <Loader2 className="w-4 h-4 me-1 animate-spin" />
-                            ) : (
-                              <Save className="w-4 h-4 me-1" />
-                            )}
-                            {'Save Note'}
-                          </Button>
-                        </DisabledReason>
+                          {savingNote ? (
+                            <Loader2 className="w-4 h-4 me-1 animate-spin" />
+                          ) : (
+                            <Save className="w-4 h-4 me-1" />
+                          )}
+                          {'Save Note'}
+                        </Button>
                       </div>
                     </div>
                   </div>

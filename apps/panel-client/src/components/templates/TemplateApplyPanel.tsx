@@ -14,7 +14,6 @@ interface TemplateApplyPanelProps {
   applying: boolean
   applyError: string | null
   applyResult: SimTemplateApplyResult | null
-  canManage: boolean
   canApply: boolean
   onApply: () => void
   onClose: () => void
@@ -29,13 +28,10 @@ export function TemplateApplyPanel({
   applying,
   applyError,
   applyResult,
-  canManage,
   canApply,
   onApply,
   onClose,
 }: TemplateApplyPanelProps) {
-  if (!canManage) return null
-
   if (applyResult) {
     return (
       <Alert variant="success">

@@ -55,7 +55,12 @@ describe("GET /api/config/app-settings", () => {
     });
     const response = createResponse();
 
-    await runRoute("/app-settings", "get", { app: { get: () => null } }, response);
+    await runRoute(
+      "/app-settings",
+      "get",
+      { app: { get: () => null } },
+      response,
+    );
 
     const payload = response.json.mock.calls[0][0];
     expect(payload.settings.jwtSecret).not.toBe("top-secret-jwt-signing-key");
@@ -74,7 +79,12 @@ describe("PUT /api/config/app-settings", () => {
   });
 
   function makeApp(overrides = {}) {
-    const values = { modChecker: null, serverManager: null, rconService: null, ...overrides };
+    const values = {
+      modChecker: null,
+      serverManager: null,
+      rconService: null,
+      ...overrides,
+    };
     return { get: (key) => values[key] };
   }
 
@@ -107,8 +117,14 @@ describe("PUT /api/config/app-settings", () => {
       "new-session",
       "new-login",
     );
-    expect(setSetting).not.toHaveBeenCalledWith("steamSessionId", expect.anything());
-    expect(setSetting).not.toHaveBeenCalledWith("steamLoginSecure", expect.anything());
+    expect(setSetting).not.toHaveBeenCalledWith(
+      "steamSessionId",
+      expect.anything(),
+    );
+    expect(setSetting).not.toHaveBeenCalledWith(
+      "steamLoginSecure",
+      expect.anything(),
+    );
   });
 
   it("passes an omitted or masked Steam cookie as unchanged during a partial update", async () => {
@@ -139,20 +155,6 @@ describe("PUT /api/config/app-settings", () => {
     );
   });
 
-  it("is rejected for a non-admin authenticated user (Finding 5)", async () => {
-    const response = createResponse();
-
-    await runRoute(
-      "/app-settings",
-      "put",
-      { body: { settings: { corsAllowAll: true } }, user: { role: "viewer" }, app: makeApp() },
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(403);
-    expect(setSetting).not.toHaveBeenCalled();
-  });
-
   it("allows an admin to write corsAllowAll", async () => {
     setSetting.mockReset();
     const response = createResponse();
@@ -172,21 +174,6 @@ describe("PUT /api/config/app-settings", () => {
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true }),
     );
-  });
-
-  it("rejects with no req.user at all — requirePermission fails closed now, this is no longer a pass-through case (2026-08-22 fix)", async () => {
-    setSetting.mockReset();
-    const response = createResponse();
-
-    await runRoute(
-      "/app-settings",
-      "put",
-      { body: { settings: { corsAllowAll: true } }, app: makeApp() },
-      response,
-    );
-
-    expect(response.status).toHaveBeenCalledWith(401);
-    expect(setSetting).not.toHaveBeenCalled();
   });
 
   it("auth explicitly disabled: authService.middleware() now sets an explicit synthetic admin req.user (not an absent one), which still works here", async () => {

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-
 const authenticateAccessToken = vi.fn();
 const changePassword = vi.fn();
 
@@ -9,8 +8,6 @@ vi.mock("../services/auth.ts", () => ({
     authenticateAccessToken,
     changePassword,
   },
-  USER_ROLES: ["admin", "technician", "moderator"],
-  requireRole: () => (req, res, next) => next(),
 }));
 
 const { default: router } = await import("../routes/auth.ts");
@@ -44,7 +41,9 @@ async function postChangePassword(body) {
 
 describe("POST /auth/change-password: newPassword must be capped at 128 characters, same as its siblings", () => {
   beforeEach(() => {
-    authenticateAccessToken.mockReset().mockResolvedValue({ userId: "u1", username: "admin" });
+    authenticateAccessToken
+      .mockReset()
+      .mockResolvedValue({ userId: "u1", username: "admin" });
     changePassword.mockReset().mockResolvedValue(undefined);
   });
 
@@ -59,7 +58,9 @@ describe("POST /auth/change-password: newPassword must be capped at 128 characte
   });
 
   it("accepts a newPassword right at the 128-character boundary", async () => {
-    authenticateAccessToken.mockReset().mockResolvedValue({ userId: "u1", username: "admin" });
+    authenticateAccessToken
+      .mockReset()
+      .mockResolvedValue({ userId: "u1", username: "admin" });
     changePassword.mockReset().mockResolvedValue(undefined);
 
     const res = await postChangePassword({
@@ -67,12 +68,18 @@ describe("POST /auth/change-password: newPassword must be capped at 128 characte
       newPassword: "a".repeat(128),
     });
 
-    expect(changePassword).toHaveBeenCalledWith("u1", "correct-horse", "a".repeat(128));
+    expect(changePassword).toHaveBeenCalledWith(
+      "u1",
+      "correct-horse",
+      "a".repeat(128),
+    );
     expect(res.status).not.toHaveBeenCalledWith(400);
   });
 
   it("still accepts an ordinary short newPassword (regression, unaffected by the new check)", async () => {
-    authenticateAccessToken.mockReset().mockResolvedValue({ userId: "u1", username: "admin" });
+    authenticateAccessToken
+      .mockReset()
+      .mockResolvedValue({ userId: "u1", username: "admin" });
     changePassword.mockReset().mockResolvedValue(undefined);
 
     const res = await postChangePassword({
@@ -80,7 +87,11 @@ describe("POST /auth/change-password: newPassword must be capped at 128 characte
       newPassword: "newpassword123",
     });
 
-    expect(changePassword).toHaveBeenCalledWith("u1", "correct-horse", "newpassword123");
+    expect(changePassword).toHaveBeenCalledWith(
+      "u1",
+      "correct-horse",
+      "newpassword123",
+    );
     expect(res.status).not.toHaveBeenCalledWith(400);
   });
 });

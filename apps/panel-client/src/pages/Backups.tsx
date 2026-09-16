@@ -60,7 +60,6 @@ import { cn } from '@/lib/utils'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { PageHeader } from '@/components/PageHeader'
 import { DisabledReason } from '@/components/DisabledReason'
-import { useAuth } from '@/contexts/AuthContext'
 import { EmptyState } from '@/components/EmptyState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { panelQueryKeys } from '@/lib/queryClient'
@@ -79,11 +78,7 @@ const EMPTY_BACKUPS: ServerBackupArchive[] = []
 export default function Backups() {
   const { toast } = useToast()
   const socket = useSocket()
-  const { can } = useAuth()
   const queryClient = useQueryClient()
-  const canManageBackups = can('backups.manage')
-  const canRestoreBackups = can('backups.restore')
-  const canDownloadBackups = can('backups.download')
 
   const progressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ownBackupInFlightRef = useRef(false)
@@ -292,7 +287,6 @@ export default function Backups() {
   }, [socket, refreshAll])
 
   const handleCreateBackup = async () => {
-    if (!canManageBackups) return
     if (serverChangedSinceLoad) {
       toast({
         title: 'Active server changed',
@@ -356,7 +350,6 @@ export default function Backups() {
   }
 
   const handleUploadFile = async (file: File) => {
-    if (!canManageBackups) return
     if (serverChangedSinceLoad) {
       toast({
         title: 'Active server changed',
@@ -437,7 +430,6 @@ export default function Backups() {
   }
 
   const handleRestoreBackup = async (name: string) => {
-    if (!canRestoreBackups) return
     if (serverChangedSinceLoad) {
       toast({
         title: 'Active server changed',
@@ -476,7 +468,6 @@ export default function Backups() {
   }
 
   const handleViewSnapshot = async (name: string) => {
-    if (!canManageBackups) return
     try {
       const result = await backupApi.getSnapshot(name)
       if (!result.success || !result.snapshot)
@@ -495,7 +486,6 @@ export default function Backups() {
   }
 
   const handleDeleteBackups = async (names: string[]) => {
-    if (!canManageBackups) return
     if (serverChangedSinceLoad) {
       toast({
         title: 'Active server changed',
@@ -555,7 +545,6 @@ export default function Backups() {
   }
 
   const handleDeleteOlderThan = async () => {
-    if (!canManageBackups) return
     setDeleteOlderDialog(false)
     setDeletingOlder(true)
     try {
@@ -582,7 +571,6 @@ export default function Backups() {
   }
 
   const handleSaveSettings = async () => {
-    if (!canManageBackups) return
     setSavingSettings(true)
     try {
       await backupApi.updateSettings({
@@ -608,7 +596,6 @@ export default function Backups() {
   }
 
   const toggleBackupEnabled = async (enabled: boolean) => {
-    if (!canManageBackups) return
     try {
       await backupApi.updateSettings({ enabled })
       await fetchBackupStatus()
@@ -719,11 +706,9 @@ export default function Backups() {
           <>
             <DisabledReason
               reason={
-                !canManageBackups
-                  ? "Managing backups requires the backups.manage permission, which this role doesn't have."
-                  : activeServerRemote
-                    ? 'Backups are not available for remote servers'
-                    : null
+                activeServerRemote
+                  ? 'Backups are not available for remote servers'
+                  : null
               }
             >
               <Button
@@ -734,7 +719,6 @@ export default function Backups() {
                   restoreInProgressElsewhere ||
                   !backupStatus?.savesExists ||
                   activeServerRemote ||
-                  !canManageBackups ||
                   serverChangedSinceLoad
                 }
                 className="gap-2"
@@ -759,11 +743,9 @@ export default function Backups() {
             />
             <DisabledReason
               reason={
-                !canManageBackups
-                  ? "Managing backups requires the backups.manage permission, which this role doesn't have."
-                  : activeServerRemote
-                    ? 'Backups are not available for remote servers'
-                    : null
+                activeServerRemote
+                  ? 'Backups are not available for remote servers'
+                  : null
               }
             >
               <Button
@@ -774,11 +756,10 @@ export default function Backups() {
                   restoringBackup !== null ||
                   restoreInProgressElsewhere ||
                   activeServerRemote ||
-                  !canManageBackups ||
                   serverChangedSinceLoad
                 }
                 className="gap-2"
-                // eslint-disable-next-line local/no-dead-disabled-title -- pure hint ("Upload an existing world_backup_*.zip from another machine"); the actual disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
+                // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
                 title={
                   'Upload an existing world_backup_*.zip from another machine'
                 }
@@ -986,20 +967,13 @@ export default function Backups() {
                   </p>
                 )}
               </div>
-              <DisabledReason
-                reason={
-                  !canManageBackups
-                    ? "Managing backups requires the backups.manage permission, which this role doesn't have."
-                    : null
-                }
-              >
-                <Switch
-                  checked={backupStatus?.enabled || false}
-                  onCheckedChange={toggleBackupEnabled}
-                  disabled={!canManageBackups}
-                  aria-label={'Toggle scheduled backups'}
-                />
-              </DisabledReason>
+
+              <Switch
+                checked={backupStatus?.enabled || false}
+                onCheckedChange={toggleBackupEnabled}
+
+                aria-label={'Toggle scheduled backups'}
+              />
             </CardContent>
           </Card>
         </div>
@@ -1091,25 +1065,18 @@ export default function Backups() {
                   </span>
                 )}
               </div>
-              <DisabledReason
-                reason={
-                  !canManageBackups
-                    ? "Managing backups requires the backups.manage permission, which this role doesn't have."
-                    : null
-                }
+
+              <Button
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                size="sm"
+                className="h-10 gap-2 self-start sm:self-auto"
               >
-                <Button
-                  onClick={handleSaveSettings}
-                  disabled={savingSettings || !canManageBackups}
-                  size="sm"
-                  className="h-10 gap-2 self-start sm:self-auto"
-                >
-                  {savingSettings && (
-                    <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                  )}
-                  {'Save Settings'}
-                </Button>
-              </DisabledReason>
+                {savingSettings && (
+                  <Loader2 className="w-4 h-4 me-2 animate-spin" />
+                )}
+                {'Save Settings'}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -1181,58 +1148,37 @@ export default function Backups() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {isAnySelected && (
-                <DisabledReason
-                  reason={
-                    !canManageBackups
-                      ? "Managing backups requires the backups.manage permission, which this role doesn't have."
-                      : null
-                  }
-                >
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() =>
-                      setDeleteDialog({
-                        open: true,
-                        names: Array.from(selectedBackups),
-                      })
-                    }
-                    disabled={
-                      deletingBackups ||
-                      !canManageBackups ||
-                      serverChangedSinceLoad
-                    }
-                    className="h-10 gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    {'Delete (' + String(selectedBackups.size) + ')'}
-                  </Button>
-                </DisabledReason>
-              )}
-              <DisabledReason
-                reason={
-                  !canManageBackups
-                    ? "Managing backups requires the backups.manage permission, which this role doesn't have."
-                    : null
-                }
-              >
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => setDeleteOlderDialog(true)}
-                  disabled={
-                    deletingOlder || backups.length === 0 || !canManageBackups
+                  onClick={() =>
+                    setDeleteDialog({
+                      open: true,
+                      names: Array.from(selectedBackups),
+                    })
                   }
+                  disabled={deletingBackups || serverChangedSinceLoad}
                   className="h-10 gap-2"
                 >
-                  {deletingOlder ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Clock className="w-4 h-4" />
-                  )}
-                  {'Delete Older'}
+                  <Trash2 className="w-4 h-4" />
+                  {'Delete (' + String(selectedBackups.size) + ')'}
                 </Button>
-              </DisabledReason>
+              )}
+
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteOlderDialog(true)}
+                disabled={deletingOlder || backups.length === 0}
+                className="h-10 gap-2"
+              >
+                {deletingOlder ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Clock className="w-4 h-4" />
+                )}
+                {'Delete Older'}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -1260,15 +1206,11 @@ export default function Backups() {
               description={
                 'Create a backup before changing saves, mods, or server settings — one bad update away from lost progress.'
               }
-              action={
-                canManageBackups
-                  ? {
-                      label: 'Create Backup',
-                      onClick: handleCreateBackup,
-                      variant: 'default',
-                    }
-                  : undefined
-              }
+              action={{
+                label: 'Create Backup',
+                onClick: handleCreateBackup,
+                variant: 'default',
+              }}
             />
           ) : (
             <div className="space-y-2">
@@ -1370,111 +1312,76 @@ export default function Backups() {
                         </div>
 
                         <div className="flex items-center gap-1">
-                          <DisabledReason
-                            reason={
-                              !canManageBackups
-                                ? "Managing backups requires the backups.manage permission, which this role doesn't have."
-                                : null
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewSnapshot(backup.name)}
+
+                            className="h-9 w-9"
+                            aria-label={
+                              'View snapshot for ' + String(backup.name)
                             }
+
+                            title={'View server snapshot'}
                           >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewSnapshot(backup.name)}
-                              disabled={!canManageBackups}
-                              className="h-9 w-9"
-                              aria-label={
-                                'View snapshot for ' + String(backup.name)
-                              }
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint, same text as the aria-label; the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={'View server snapshot'}
-                            >
-                              <FileText className="w-4 h-4" />
-                            </Button>
-                          </DisabledReason>
-                          <DisabledReason
-                            reason={
-                              !canRestoreBackups
-                                ? "Restoring a backup requires the backups.restore permission, which this role doesn't have."
-                                : null
+                            <FileText className="w-4 h-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openRestoreDialog(backup.name)}
+                            disabled={
+                              isRestoring ||
+                              restoringBackup !== null ||
+                              restoreInProgressElsewhere ||
+                              creatingBackup ||
+                              serverChangedSinceLoad
                             }
+                            className="h-9 w-9 text-warning hover:text-warning hover:bg-warning/10"
+                            aria-label={'Restore ' + String(backup.name)}
+                            // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                            title={'Restore this backup'}
                           >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openRestoreDialog(backup.name)}
-                              disabled={
-                                isRestoring ||
-                                restoringBackup !== null ||
-                                restoreInProgressElsewhere ||
-                                creatingBackup ||
-                                !canRestoreBackups ||
-                                serverChangedSinceLoad
-                              }
-                              className="h-9 w-9 text-warning hover:text-warning hover:bg-warning/10"
-                              aria-label={'Restore ' + String(backup.name)}
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint, same text as the aria-label; the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={'Restore this backup'}
-                            >
-                              {isRestoring ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <RotateCcw className="w-4 h-4" />
-                              )}
-                            </Button>
-                          </DisabledReason>
-                          <DisabledReason
-                            reason={
-                              !canDownloadBackups
-                                ? "Downloading a backup requires the backups.download permission, which this role doesn't have."
-                                : null
+                            {isRestoring ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RotateCcw className="w-4 h-4" />
+                            )}
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              backupApi.downloadBackup(backup.name)
+                            }}
+
+                            className="h-9 w-9"
+                            aria-label={'Download ' + String(backup.name)}
+
+                            title={'Download backup'}
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setDeleteDialog({
+                                open: true,
+                                names: [backup.name],
+                              })
                             }
+                            disabled={deletingBackups || serverChangedSinceLoad}
+                            className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            aria-label={'Delete ' + String(backup.name)}
+                            // eslint-disable-next-line local/no-dead-disabled-title -- This title describes the action, not why it is disabled.
+                            title={'Delete backup'}
                           >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                if (canDownloadBackups)
-                                  backupApi.downloadBackup(backup.name)
-                              }}
-                              disabled={!canDownloadBackups}
-                              className="h-9 w-9"
-                              aria-label={'Download ' + String(backup.name)}
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint, same text as the aria-label; the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={'Download backup'}
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          </DisabledReason>
-                          <DisabledReason
-                            reason={
-                              !canManageBackups
-                                ? "Managing backups requires the backups.manage permission, which this role doesn't have."
-                                : null
-                            }
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setDeleteDialog({
-                                  open: true,
-                                  names: [backup.name],
-                                })
-                              }
-                              disabled={
-                                deletingBackups ||
-                                !canManageBackups ||
-                                serverChangedSinceLoad
-                              }
-                              className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              aria-label={'Delete ' + String(backup.name)}
-                              // eslint-disable-next-line local/no-dead-disabled-title -- pure hint, same text as the aria-label; the disabled-reason is already covered by the wrapping <DisabledReason> above. Triaged 2026-08-27.
-                              title={'Delete backup'}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </DisabledReason>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     )
