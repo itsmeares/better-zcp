@@ -137,6 +137,7 @@ export class LogTailer extends EventEmitter {
   }
 
   async checkUserLog(): Promise<void> {
+    if (!this.logsDir) await this.findLogPath();
     if (this.logsDir) this.findLatestUserLog();
     if (!this.userLogPath) return;
 

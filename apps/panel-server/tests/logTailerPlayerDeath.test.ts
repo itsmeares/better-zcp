@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LogTailer } from "../services/logTailer.ts";
 
 describe("LogTailer player deaths", () => {
@@ -20,5 +20,20 @@ describe("LogTailer player deaths", () => {
         location: "10,-20,0",
       }),
     ]);
+  });
+
+  it("retries log-path discovery before looking for the latest user log", async () => {
+    const tailer = new LogTailer();
+    const findLogPath = vi.spyOn(tailer, "findLogPath").mockImplementation(async () => {
+      tailer.logsDir = "/tmp/zomboid-logs";
+    });
+    const findLatestUserLog = vi
+      .spyOn(tailer as any, "findLatestUserLog")
+      .mockImplementation(() => {});
+
+    await tailer.checkUserLog();
+
+    expect(findLogPath).toHaveBeenCalledOnce();
+    expect(findLatestUserLog).toHaveBeenCalledOnce();
   });
 });
