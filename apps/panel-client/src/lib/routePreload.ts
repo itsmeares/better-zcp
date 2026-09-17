@@ -5,7 +5,6 @@ const routeLoaders: Record<string, () => Promise<unknown>> = {
   '/scheduler': () => import('../pages/Scheduler'),
   '/mods': () => import('../pages/Mods'),
   '/chunks': () => import('../pages/ChunkCleaner'),
-  '/discord': () => import('../pages/Discord'),
   '/settings': () => import('../pages/Settings'),
   '/server-setup': () => import('../pages/ServerSetup'),
   '/servers': () => import('../pages/Servers'),
@@ -13,7 +12,6 @@ const routeLoaders: Record<string, () => Promise<unknown>> = {
   '/debug': () => import('../pages/Debug'),
   '/events': () => import('../pages/Events'),
   '/world-map': () => import('../pages/WorldMap'),
-  '/chat': () => import('../pages/Chat'),
   '/backups': () => import('../pages/Backups'),
   '/templates': () => import('../pages/Templates'),
 }

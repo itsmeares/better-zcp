@@ -35,7 +35,6 @@ function makeApp(overrides = {}) {
     rconService: { connected: true, save: vi.fn().mockResolvedValue({ success: true }) },
     serverManager: { markServerStopped: vi.fn() },
     io: { emit: vi.fn() },
-    discordBot: { sendEventNotification: vi.fn().mockResolvedValue() },
     checkServerStatusNow: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -129,7 +128,7 @@ describe("POST /stop -- graceful RCON path reports a transition until confirmed"
 });
 
 describe("POST /stop -- managed (Docker) path is confirmed before returning success", () => {
-  it("marks stopped, asks the watchdog to publish the state, and notifies Discord immediately", async () => {
+  it("marks stopped and asks the watchdog to publish the state", async () => {
     runManagedLifecycleMock.mockResolvedValueOnce({
       handled: true,
       success: true,
@@ -138,16 +137,14 @@ describe("POST /stop -- managed (Docker) path is confirmed before returning succ
     const rconService = { connected: true, save: vi.fn().mockResolvedValue({ success: true }) };
     const serverManager = { markServerStopped: vi.fn() };
     const io = { emit: vi.fn() };
-    const discordBot = { sendEventNotification: vi.fn().mockResolvedValue() };
     const checkServerStatusNow = vi.fn();
-    const app = makeApp({ rconService, serverManager, io, discordBot, checkServerStatusNow });
+    const app = makeApp({ rconService, serverManager, io, checkServerStatusNow });
     const response = createResponse();
 
     await getHandler("/stop", "post")({ app, body: {} }, response);
 
     expect(serverManager.markServerStopped).toHaveBeenCalledTimes(1);
     expect(checkServerStatusNow).toHaveBeenCalledWith("managed-stop");
-    expect(discordBot.sendEventNotification).toHaveBeenCalledWith("serverStop", {});
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true, message: "Container stopping" }),
     );

@@ -75,21 +75,9 @@ import {
   updateBackupSettings,
 } from "./serverResourceActionsRpc";
 import {
-  getDiscordConfig,
-  getDiscordPermissions,
-  getDiscordStatus,
-  getDiscordWebhookEvents,
   getDockerStats,
   getDockerStatus,
-  resetDiscordConfig,
   runDockerAction,
-  sendDiscordTestMessage,
-  startDiscordBot,
-  stopDiscordBot,
-  testDiscordToken,
-  updateDiscordConfig,
-  updateDiscordPermissions,
-  updateDiscordWebhookEvents,
 } from "./serverIntegrationsRpc";
 import {
   addAllToWhitelist,
@@ -181,10 +169,6 @@ import {
   sendPanelBridgeWorldCommand,
 } from "./serverPanelBridgeWorldRpc";
 import {
-  getPanelBridgeChatInfo,
-  sendPanelBridgeAdminChat,
-  sendPanelBridgeChatAlert,
-  sendPanelBridgeGeneralChat,
   sendPanelBridgePlayerCommand,
   sendPanelBridgeServerMessage,
 } from "./serverPanelBridgePlayerChatRpc";
@@ -1675,61 +1659,6 @@ export interface ConfigTestRconResult {
   detail?: string;
 }
 
-export const discordApi = {
-  getStatus: () => serverCall(() => getDiscordStatus()),
-  getConfig: () => serverCall(() => getDiscordConfig()),
-  updateConfig: (
-    token: string,
-    guildId: string,
-    adminRoleId?: string,
-    channelId?: string,
-    autoStart?: boolean,
-    modRoleId?: string,
-    chatRelayEnabled?: boolean,
-    chatRelayChannelId?: string,
-    chatRelayScope?: "public" | "no-yell" | "general",
-  ) =>
-    serverCall(() =>
-        updateDiscordConfig({
-          data: {
-            token,
-            guildId,
-            adminRoleId,
-            modRoleId,
-            channelId,
-            autoStart,
-            chatRelayEnabled,
-            chatRelayChannelId,
-            chatRelayScope,
-          },
-        })),
-  resetConfig: () =>
-    serverCall(() => resetDiscordConfig()),
-  start: () =>
-    serverCall(() => startDiscordBot()),
-  stop: () =>
-    serverCall(() => stopDiscordBot()),
-  testToken: (token: string) =>
-    serverCall(() => testDiscordToken({ data: { token } })),
-  sendTestMessage: () =>
-    serverCall(() => sendDiscordTestMessage()),
-  getWebhookEvents: () =>
-    serverCall(() => getDiscordWebhookEvents()),
-  updateWebhookEvents: (
-    events: Record<string, { enabled: boolean; template: string }>,
-  ) =>
-    serverCall(() => updateDiscordWebhookEvents({ data: { events } })),
-  getPermissions: () =>
-    serverCall(() => getDiscordPermissions()) as Promise<{
-      permissions: Record<string, string>;
-    }>,
-  updatePermissions: (permissions: Record<string, string>) =>
-    serverCall(() => updateDiscordPermissions({ data: { permissions } })) as Promise<{
-      success: boolean;
-      permissions: Record<string, string>;
-    }>,
-};
-
 export interface ServerInstance {
   id: string | number;
   name: string;
@@ -2832,27 +2761,6 @@ export const panelBridgeApi = {
 
   sendServerMessage: (message: string, color?: string) =>
     serverCall(() => sendPanelBridgeServerMessage({ data: { message, color } })),
-
-  sendToServerChat: (message: string, alert?: boolean) =>
-    serverCall(() =>
-        sendPanelBridgeChatAlert({
-          data: { message, alert: alert ?? false },
-        })),
-
-  sendToAdminChat: (message: string) =>
-    serverCall(() => sendPanelBridgeAdminChat({ data: { message } })),
-
-  sendToGeneralChat: (message: string, author?: string) =>
-    serverCall(() =>
-        sendPanelBridgeGeneralChat({
-          data: { message, author: author?.trim() || "Server" },
-        })),
-
-  getChatInfo: () =>
-    serverCall(() => getPanelBridgeChatInfo()) as Promise<{
-      success: boolean;
-      data: { chatServerAvailable: boolean; rconFallback: boolean };
-    }>,
 
   getBridgeDebugStats: () =>
     serverCall(() =>

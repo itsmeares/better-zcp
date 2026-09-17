@@ -23,31 +23,31 @@ describe("readUiSecretFile / writeUiSecretFile", () => {
   });
 
   it("returns null when the file does not exist", () => {
-    expect(readUiSecretFile("discordBotToken")).toBeNull();
+    expect(readUiSecretFile("testToken")).toBeNull();
   });
 
   it("writes then reads back the same value", () => {
-    writeUiSecretFile("discordBotToken", "a-real-bot-token");
-    expect(readUiSecretFile("discordBotToken")).toBe("a-real-bot-token");
+    writeUiSecretFile("testToken", "a-real-token");
+    expect(readUiSecretFile("testToken")).toBe("a-real-token");
   });
 
   it("writing an empty/null value removes the file instead of leaving an empty one", () => {
-    writeUiSecretFile("discordBotToken", "something");
-    expect(fs.existsSync(path.join(tmpDir, "discordBotToken.secret"))).toBe(
+    writeUiSecretFile("testToken", "something");
+    expect(fs.existsSync(path.join(tmpDir, "testToken.secret"))).toBe(
       true,
     );
-    writeUiSecretFile("discordBotToken", "");
-    expect(fs.existsSync(path.join(tmpDir, "discordBotToken.secret"))).toBe(
+    writeUiSecretFile("testToken", "");
+    expect(fs.existsSync(path.join(tmpDir, "testToken.secret"))).toBe(
       false,
     );
-    expect(readUiSecretFile("discordBotToken")).toBeNull();
+    expect(readUiSecretFile("testToken")).toBeNull();
   });
 
   it("does NOT crash on an unreadable file (a directory at the path) — proportionate, not fail-loud like jwt.secret", () => {
-    const filePath = path.join(tmpDir, "discordBotToken.secret");
+    const filePath = path.join(tmpDir, "testToken.secret");
     fs.mkdirSync(filePath);
     const log = { warn: vi.fn() };
-    expect(readUiSecretFile("discordBotToken", log)).toBeNull();
+    expect(readUiSecretFile("testToken", log)).toBeNull();
     expect(log.warn).toHaveBeenCalledWith(
       expect.stringContaining("not configured"),
     );
@@ -64,32 +64,32 @@ describe("loadUiSecret — migration from a legacy db.json value", () => {
   });
 
   it("no file, no legacy value -> returns null, writes nothing", async () => {
-    const result = await loadUiSecret("discordBotToken", {
+    const result = await loadUiSecret("testToken", {
       legacyValue: null,
     });
     expect(result).toBeNull();
     expect(
-      fs.existsSync(path.join(tmpDir, "discordBotToken.secret")),
+      fs.existsSync(path.join(tmpDir, "testToken.secret")),
     ).toBe(false);
   });
 
   it("no file, a legacy value exists -> migrates verbatim and clears the legacy value", async () => {
     const clearLegacy = vi.fn().mockResolvedValue(undefined);
-    const result = await loadUiSecret("discordBotToken", {
+    const result = await loadUiSecret("testToken", {
       legacyValue: "legacy-token-from-db-json",
       clearLegacy,
     });
     expect(result).toBe("legacy-token-from-db-json");
-    expect(readUiSecretFile("discordBotToken")).toBe(
+    expect(readUiSecretFile("testToken")).toBe(
       "legacy-token-from-db-json",
     );
     expect(clearLegacy).toHaveBeenCalledTimes(1);
   });
 
   it("file already exists -> loads it and ignores any legacy value passed in (steady-state restart)", async () => {
-    writeUiSecretFile("discordBotToken", "current-file-value");
+    writeUiSecretFile("testToken", "current-file-value");
     const clearLegacy = vi.fn();
-    const result = await loadUiSecret("discordBotToken", {
+    const result = await loadUiSecret("testToken", {
       legacyValue: "stale-legacy-value",
       clearLegacy,
     });
@@ -98,11 +98,11 @@ describe("loadUiSecret — migration from a legacy db.json value", () => {
   });
 
   it("a migration-write failure (directory at the path) falls back to the legacy value for this run instead of crashing or losing it", async () => {
-    const filePath = path.join(tmpDir, "discordBotToken.secret");
+    const filePath = path.join(tmpDir, "testToken.secret");
     fs.mkdirSync(filePath);
     const clearLegacy = vi.fn();
     const log = { warn: vi.fn() };
-    const result = await loadUiSecret("discordBotToken", {
+    const result = await loadUiSecret("testToken", {
       legacyValue: "legacy-value",
       clearLegacy,
       log,

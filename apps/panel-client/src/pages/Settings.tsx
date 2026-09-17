@@ -6067,12 +6067,6 @@ export default function Settings() {
                         'Install paths, RCON host and password, memory, and SteamCMD.',
                     },
                     {
-                      href: '/discord',
-                      label: 'Discord bot',
-                      detail:
-                        'Bot token, channels, event notifications, and the chat bridge.',
-                    },
-                    {
                       href: '/scheduler',
                       label: 'Scheduled tasks',
                       detail:
@@ -6082,11 +6076,6 @@ export default function Settings() {
                       href: '/server-config',
                       label: 'Game server config',
                       detail: 'Server INI options and sandbox rules.',
-                    },
-                    {
-                      href: '/chat',
-                      label: 'Chat quick messages',
-                      detail: 'Preset messages shown above the chat input.',
                     },
                   ].map((item) => (
                     <li key={item.href}>
@@ -6164,7 +6153,7 @@ export default function Settings() {
 
                 <p className="text-sm text-muted-foreground">
                   {
-                    'A web-based management panel for Project Zomboid dedicated servers. Includes RCON, player management, mod update detection, scheduled restarts, world backups, Discord integration, and the PanelBridge Lua mod for in-world actions.'
+                    'A web-based management panel for Project Zomboid dedicated servers. Includes RCON, player management, mod update detection, scheduled restarts, world backups, and the PanelBridge Lua mod for in-world actions.'
                   }
                 </p>
 

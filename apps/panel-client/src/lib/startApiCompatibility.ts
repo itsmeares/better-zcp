@@ -647,30 +647,6 @@ const panelBridgeRoutes: RouteSpec[] = [
   },
   {
     method: 'GET',
-    pattern: '/api/panel-bridge/chat/info',
-    source: 'bridgePlayer',
-    functionName: 'getPanelBridgeChatInfo',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/panel-bridge/chat/admin',
-    source: 'bridgePlayer',
-    functionName: 'sendPanelBridgeAdminChat',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/panel-bridge/chat/general',
-    source: 'bridgePlayer',
-    functionName: 'sendPanelBridgeGeneralChat',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/panel-bridge/chat/alert',
-    source: 'bridgePlayer',
-    functionName: 'sendPanelBridgeChatAlert',
-  },
-  {
-    method: 'GET',
     pattern: '/api/panel-bridge/debug/log',
     source: 'bridgeDiagnostics',
     functionName: 'sendPanelBridgeDiagnosticsCommand',
@@ -1531,79 +1507,6 @@ const routes: RouteSpec[] = [
     pattern: '/api/scheduler/history',
     source: 'control',
     functionName: 'clearSchedulerHistory',
-  },
-
-  {
-    method: 'GET',
-    pattern: '/api/discord/status',
-    source: 'integrations',
-    functionName: 'getDiscordStatus',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/discord/config',
-    source: 'integrations',
-    functionName: 'getDiscordConfig',
-  },
-  {
-    method: 'PUT',
-    pattern: '/api/discord/config',
-    source: 'integrations',
-    functionName: 'updateDiscordConfig',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/discord/start',
-    source: 'integrations',
-    functionName: 'startDiscordBot',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/discord/stop',
-    source: 'integrations',
-    functionName: 'stopDiscordBot',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/discord/reset',
-    source: 'integrations',
-    functionName: 'resetDiscordConfig',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/discord/test',
-    source: 'integrations',
-    functionName: 'testDiscordToken',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/discord/test-message',
-    source: 'integrations',
-    functionName: 'sendDiscordTestMessage',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/discord/webhook-events',
-    source: 'integrations',
-    functionName: 'getDiscordWebhookEvents',
-  },
-  {
-    method: 'PUT',
-    pattern: '/api/discord/webhook-events',
-    source: 'integrations',
-    functionName: 'updateDiscordWebhookEvents',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/discord/permissions',
-    source: 'integrations',
-    functionName: 'getDiscordPermissions',
-  },
-  {
-    method: 'PUT',
-    pattern: '/api/discord/permissions',
-    source: 'integrations',
-    functionName: 'updateDiscordPermissions',
   },
 
   {

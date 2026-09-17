@@ -249,10 +249,6 @@ const mocks = vi.hoisted(() => {
     [
       "sendPanelBridgePlayerCommand",
       "sendPanelBridgeServerMessage",
-      "getPanelBridgeChatInfo",
-      "sendPanelBridgeAdminChat",
-      "sendPanelBridgeGeneralChat",
-      "sendPanelBridgeChatAlert",
     ].map((name) => [name, serverFunction(name)]),
   );
   const bridgeDiagnostics = {
@@ -796,10 +792,6 @@ const PANEL_BRIDGE_ROUTES = [
     "sendPanelBridgeWorldCommand",
   ],
   ["POST", "/api/panel-bridge/visual/ambient", "sendPanelBridgeWorldCommand"],
-  ["GET", "/api/panel-bridge/chat/info", "getPanelBridgeChatInfo"],
-  ["POST", "/api/panel-bridge/chat/admin", "sendPanelBridgeAdminChat"],
-  ["POST", "/api/panel-bridge/chat/general", "sendPanelBridgeGeneralChat"],
-  ["POST", "/api/panel-bridge/chat/alert", "sendPanelBridgeChatAlert"],
   ["GET", "/api/panel-bridge/debug/log", "sendPanelBridgeDiagnosticsCommand"],
   ["GET", "/api/panel-bridge/debug/stats", "sendPanelBridgeDiagnosticsCommand"],
   ["POST", "/api/panel-bridge/debug/mode", "sendPanelBridgeDiagnosticsCommand"],

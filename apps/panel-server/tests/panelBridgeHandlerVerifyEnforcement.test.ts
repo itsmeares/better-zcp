@@ -20,7 +20,7 @@ const LUA_PATH = path.join(
 
 const GETTERS = new Set([
   'checkAPI', 'debugItemScript', 'exportPlayerData', 'getAllPlayerDetails',
-  'getAllSandboxOptions', 'getAvailableHandlers', 'getChatInfo',
+  'getAllSandboxOptions', 'getAvailableHandlers',
   'getClimateFloats', 'getDebugLog', 'getFactions', 'getGameTime',
   'getInfrastructureSnapshot', 'getItemCatalog', 'getPlayerDetails',
   'getSafehouses', 'getSandboxOptions', 'getServerInfo', 'getStats',
@@ -61,8 +61,6 @@ const CANNOT_VERIFY_OR_EQUIVALENT = {
   triggerAlarmSound: 'Same ceiling as playWorldSound.',
   createNoise: 'Same ceiling as playWorldSound.',
   sendToServerChat: 'No delivery receipt exists; already falls through to a useRCON routing signal when neither ChatServer nor player:Say worked -- pcall-not-throwing is the ceiling.',
-  sendToAdminChat: 'Same ceiling as sendToServerChat.',
-  sendToGeneralChat: 'Same ceiling as sendToServerChat.',
   triggerHelicopterEvent: 'No observable state confirms a helicopter spawned; pcall-not-throwing on the single real API (testHelicopter(), zero-arg, void return -- the four prior fallback tiers were all fabricated and removed 2026-08-30) is the ceiling.',
   stopHelicopterEvent: 'Same ceiling as triggerHelicopterEvent, same reason: no exposed query for helicopter-event state exists anywhere in the confirmed jar, so pcall-not-throwing on the single real API (endHelicopter(), zero-arg, void return, confirmed 2026-08-30 via javap against the real B42 jar) is the ceiling.',
   triggerLightning: 'Genuinely unverifiable, confirmed via javap -c against the real jar (ThunderStorm.triggerThunderEvent): when GameServer.server is true it only writes to an internal networkThunderEvent struct and transmits a packet -- no ThunderCloud is created synchronously (that only happens client-side on packet receipt), no boolean or count changes, nothing to read back. Same ceiling class as playWorldSound/triggerGunshot -- pcall-not-throwing is the real ceiling. Was PROVISIONAL; now a confirmed, permanent limit, not a follow-up.',

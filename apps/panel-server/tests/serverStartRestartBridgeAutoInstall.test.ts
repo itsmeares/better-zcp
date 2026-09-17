@@ -50,7 +50,6 @@ function makeStartApp(overrides = {}) {
       forceResetConnectionState: vi.fn(),
     },
     io: { emit: vi.fn() },
-    discordBot: { sendEventNotification: vi.fn().mockResolvedValue() },
     ...overrides,
   };
   return { get: (key) => values[key], _values: values };

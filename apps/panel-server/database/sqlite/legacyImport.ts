@@ -23,7 +23,6 @@ const EXPECTED_TOP_LEVEL_KEYS = new Set([
   "steamid_bans",
   "performance_history",
   "bridge_logs",
-  "discord_webhooks",
   "users",
   "roles",
   "settings",
@@ -36,7 +35,6 @@ const SECRET_SETTING_FILES = {
   panelBridgeSftpPassword: "panelBridgeSftpPassword.secret",
   steamSessionId: "steamSessionId.secret",
   steamLoginSecure: "steamLoginSecure.secret",
-  discordBotToken: "discordBotToken.secret",
 };
 
 const SECRET_SETTINGS_REQUIRING_MANUAL_REENTRY = new Set(["steamApiKey"]);

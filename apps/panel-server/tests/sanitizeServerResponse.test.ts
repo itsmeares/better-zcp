@@ -12,12 +12,12 @@ describe("SENSITIVE_FIELD_RE / maskSensitiveObject", () => {
     const settings = {
       rconPassword: "rcon-secret-1234",
       jwtSecret: "super-secret-jwt-signing-key",
-      discordBotToken: "discord-bot-token-abcd",
+      serviceToken: "service-token-abcd",
       steamApiKey: "steam-key-abcd",
       steamSessionId: "session-id-abcd",
       steamLoginSecure: "login-secure-abcd",
       panelBridgeSftpPassword: "sftp-pass-abcd",
-      discordWebhookUrl: "webhook-abcd",
+      alertWebhookUrl: "webhook-abcd",
       darkMode: true,
       serverName: "MyServer",
     };
@@ -27,12 +27,12 @@ describe("SENSITIVE_FIELD_RE / maskSensitiveObject", () => {
     for (const key of [
       "rconPassword",
       "jwtSecret",
-      "discordBotToken",
+      "serviceToken",
       "steamApiKey",
       "steamSessionId",
       "steamLoginSecure",
       "panelBridgeSftpPassword",
-      "discordWebhookUrl",
+      "alertWebhookUrl",
     ]) {
       expect(masked[key]).toMatch(/^••••••••/);
       expect(masked[key]).not.toBe(settings[key]);

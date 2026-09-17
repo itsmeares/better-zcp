@@ -78,7 +78,6 @@ import { DockerClient } from "./services/dockerClient.ts";
 import { setDockerClient } from "./services/managedContainer.ts";
 import { ModChecker, refreshWorkshopChecker } from "./services/modChecker.ts";
 import { Scheduler } from "./services/scheduler.ts";
-import { DiscordBot } from "./services/discordBot.ts";
 import { BackupService } from "./services/backupService.ts";
 import { UpdateChecker } from "./services/updateChecker.ts";
 import {
@@ -627,20 +626,12 @@ setDockerClient(dockerClient);
 const modChecker = new ModChecker();
 const logTailer = new LogTailer();
 const scheduler = new Scheduler(rconService, serverManager);
-const discordBot = new DiscordBot(
-  rconService,
-  serverManager,
-  scheduler,
-  logTailer,
-);
 const backupService = new BackupService();
 
 rconService.setServerManager(serverManager);
 scheduler.setBackupService(backupService);
 
-scheduler.setDiscordBot(discordBot);
 scheduler.setIo(io);
-backupService.setDiscordBot(discordBot);
 
 rconService.startAutoReconnect();
 
@@ -905,11 +896,6 @@ panelBridge.on("configured", ({ path }) => {
 });
 
 panelBridge.on("playerConnect", (playerName) => {
-  discordBot
-    .sendEventNotification("playerJoin", { player: playerName })
-    .catch((err) =>
-      log.debug(`Discord playerJoin notification failed: ${err.message}`),
-    );
   getSetting("autoExportOnLogin")
     .then((autoExport) => {
       if (autoExport === true || autoExport === "true") {
@@ -917,14 +903,6 @@ panelBridge.on("playerConnect", (playerName) => {
       }
     })
     .catch(() => {});
-});
-
-panelBridge.on("playerDisconnect", (playerName) => {
-  discordBot
-    .sendEventNotification("playerLeave", { player: playerName })
-    .catch((err) =>
-      log.debug(`Discord playerLeave notification failed: ${err.message}`),
-    );
 });
 
 backupService.setServerManager(serverManager);
@@ -944,7 +922,6 @@ setPanelRuntime({
   autoInstallBridgeIfNeeded,
   backupService,
   scheduler,
-  discordBot,
   panelBridge,
   io,
   checkServerStatusNow,
@@ -1246,25 +1223,6 @@ function startPlayerPolling() {
           );
 
           if (baselineWasReady && !panelBridge.modStatus?.alive) {
-            for (const p of joined) {
-              discordBot
-                .sendEventNotification("playerJoin", { player: p.name })
-                .catch((err) =>
-                  log.debug(
-                    `Discord playerJoin notification failed: ${err.message}`,
-                  ),
-                );
-            }
-            for (const p of left) {
-              discordBot
-                .sendEventNotification("playerLeave", { player: p.name })
-                .catch((err) =>
-                  log.debug(
-                    `Discord playerLeave notification failed: ${err.message}`,
-                  ),
-                );
-            }
-
             const autoExport = await getSetting("autoExportOnLogin");
             if (autoExport === true || autoExport === "true") {
               for (const p of joined) {
@@ -1496,21 +1454,6 @@ export async function checkServerStatusNow(
           "server_stop",
           `Server process exited (detected by ${detectionReason})`,
         );
-        discordBot
-          .sendEventNotification("serverStop", {})
-          .catch((err) =>
-            log.debug(
-              `Discord serverStop notification failed: ${err.message}`,
-            ),
-          );
-      } else {
-        discordBot
-          .sendEventNotification("serverStart", {})
-          .catch((err) =>
-            log.debug(
-              `Discord serverStart notification failed: ${err.message}`,
-            ),
-          );
       }
     }
     lastKnownRunning = running;
@@ -1728,17 +1671,6 @@ async function start(): Promise<void> {
 
     await logTailer.init();
 
-    let chatMessageSeq = 0;
-    logTailer.on("chatMessage", (data) => {
-      io.emit("chat:message", {
-        id: `${Date.now()}-${chatMessageSeq++}`,
-        type: data.type || "general",
-        author: data.author,
-        message: data.message,
-        timestamp: data.timestamp,
-      });
-    });
-
     logTailer.on("playerDeath", async (data) => {
       try {
         const { logPlayerAction } = await import("./database/init.ts");
@@ -1752,18 +1684,6 @@ async function start(): Promise<void> {
       } catch (err: any) {
         log.debug(`playerDeath DB log failed: ${err.message}`);
       }
-      discordBot
-        .sendEventNotification("playerDeath", {
-          player: data.player,
-          x: String(data.x),
-          y: String(data.y),
-          z: String(data.z),
-          location: data.location,
-          pvp: data.pvp ? "PvP" : "non-pvp",
-        })
-        .catch((err) =>
-          log.debug(`Discord playerDeath notification failed: ${err.message}`),
-        );
       io.emit("player:death", data);
     });
 
@@ -1777,18 +1697,6 @@ async function start(): Promise<void> {
       log.info(
         "Mod checker: Workshop ACF not found — configure server install path",
       );
-    }
-
-    await discordBot.loadConfig();
-    const discordAutoStart = await getSetting("discordAutoStart");
-    if (discordBot.token && discordBot.guildId && discordAutoStart !== false) {
-      await discordBot.start();
-    } else if (
-      discordBot.token &&
-      discordBot.guildId &&
-      discordAutoStart === false
-    ) {
-      log.info("Discord bot configured but auto-start is disabled");
     }
 
     logSection("Server Detection");

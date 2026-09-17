@@ -645,7 +645,6 @@ function lifecycleRuntime(req: any) {
     serverManager: req.app.get("serverManager"),
     rconService: req.app.get("rconService"),
     scheduler: req.app.get("scheduler"),
-    discordBot: req.app.get("discordBot"),
     io: req.app.get("io"),
     checkServerStatusNow: req.app.get("checkServerStatusNow"),
   };

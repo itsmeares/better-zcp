@@ -71,7 +71,6 @@ function makeSyntheticV1Db() {
       { timestamp: "2026-08-20T12:00:00.000Z", cpu: 12.5, ramMb: 2048 },
     ],
     bridge_logs: [],
-    discord_webhooks: [],
     users: [
       { id: "u-admin", username: "admin1", role: "admin" },
       { id: "u-tech", username: "tech1", role: "technician" },
@@ -80,9 +79,6 @@ function makeSyntheticV1Db() {
     active_server_id: "srv-main",
     settings: {
       panel_password: "$2b$10$fakeHashForTestingPurposesOnly",
-      discord_token: "fake-discord-token",
-      discord_channel_id: "123456789",
-      discord_enabled: true,
       auto_restart_on_mod_update: true,
       mod_check_interval: 300000,
       steam_api_key: "FAKE_STEAM_API_KEY",

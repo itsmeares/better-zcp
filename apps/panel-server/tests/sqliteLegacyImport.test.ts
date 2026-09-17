@@ -84,7 +84,6 @@ describe("legacy database import", () => {
         settings: {
           jwtSecret: "jwt-secret",
           rconPassword: "global-rcon",
-          discordBotToken: "discord-token",
           steamApiKey: "steam-api-key",
           panelPort: 3001,
         },
@@ -109,7 +108,6 @@ describe("legacy database import", () => {
     expect(applied.applied).toBe(true);
     expect(fs.readFileSync(path.join(directory, "new", "jwt.secret"), "utf8")).toBe("jwt-secret");
     expect(fs.readFileSync(path.join(directory, "new", "rconPassword.secret"), "utf8")).toBe("global-rcon");
-    expect(fs.readFileSync(path.join(directory, "new", "discordBotToken.secret"), "utf8")).toBe("discord-token");
     expect(fs.readFileSync(path.join(directory, "new", "server-secrets", "srv_one.secret"), "utf8")).toBe("server-rcon");
 
     const store = createSqliteSnapshotStore(targetPath);

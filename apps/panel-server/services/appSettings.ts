@@ -55,7 +55,6 @@ const VALID_SETTINGS_KEYS = [
   "darkMode",
   "autoReconnect",
   "reconnectInterval",
-  "discordGuildId",
   "autoStartServer",
   "panelPort",
   "httpsEnabled",
@@ -74,7 +73,6 @@ const VALID_SETTINGS_KEYS = [
   "workshopCollectionAutoSync",
   "steamSessionId",
   "steamLoginSecure",
-  "chatPresets",
   "lanIpAddress",
   "panelBridgeSftpEnabled",
   "panelBridgeSftpHost",
@@ -483,31 +481,6 @@ export async function saveAppSettings(
           message,
           ErrorCode.CONFIG_INVALID_NUMERIC_FIELD,
           sanitizeErrorParams({ message }),
-        );
-      }
-    }
-
-    if (key === "chatPresets") {
-      if (!Array.isArray(value)) {
-        invalid(
-          "chatPresets must be an array",
-          ErrorCode.CONFIG_CHAT_PRESETS_NOT_ARRAY,
-        );
-      }
-      if (value.length > 50) {
-        invalid(
-          "chatPresets supports up to 50 entries",
-          ErrorCode.CONFIG_CHAT_PRESETS_TOO_MANY,
-        );
-      }
-      if (
-        !value.every(
-          (entry) => typeof entry === "string" && entry.length <= 500,
-        )
-      ) {
-        invalid(
-          "chatPresets entries must be strings up to 500 characters",
-          ErrorCode.CONFIG_CHAT_PRESETS_INVALID_ENTRY,
         );
       }
     }

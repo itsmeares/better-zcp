@@ -264,7 +264,6 @@ export class BackupService {
   restoreInProgress: boolean;
   lastBackup: BackupSummary | null;
   backupHistory: unknown[];
-  discordBot: any;
   serverManager: any;
 
   constructor() {
@@ -272,14 +271,9 @@ export class BackupService {
     this.restoreInProgress = false;
     this.lastBackup = null;
     this.backupHistory = [];
-    this.discordBot = null;
     this.serverManager = null;
   }
 
-
-  setDiscordBot(discordBot: any): void {
-    this.discordBot = discordBot;
-  }
 
   setServerManager(serverManager: any): void {
     this.serverManager = serverManager;
@@ -648,16 +642,6 @@ export class BackupService {
           100,
           `Backup complete! (${sizeMB} MB in ${duration}s)`,
         );
-
-        if (this.discordBot) {
-          this.discordBot
-            .sendEventNotification("backupComplete", {})
-            .catch((err: unknown) =>
-              log.debug(
-                `Discord backupComplete notification failed: ${errorMessage(err)}`,
-              ),
-            );
-        }
 
         resolve({
           success: true,

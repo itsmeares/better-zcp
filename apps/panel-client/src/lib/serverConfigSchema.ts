@@ -77,7 +77,6 @@ export const INI_CATEGORIES: Array<{ id: string; label: string; icon: string; gr
   { id: 'general', label: 'General', icon: 'Settings', group: 'identity' },
   { id: 'network', label: 'Network & Ports', icon: 'Globe', group: 'connectivity' },
   { id: 'steam', label: 'Steam Integration', icon: 'Cloud', group: 'connectivity' },
-  { id: 'discord', label: 'Discord', icon: 'MessageCircle', group: 'connectivity' },
   { id: 'rcon', label: 'RCON', icon: 'Terminal', group: 'connectivity' },
   { id: 'voice', label: 'Voice Chat', icon: 'Mic', group: 'connectivity' },
   { id: 'players', label: 'Players & Accounts', icon: 'Users', group: 'players' },
@@ -755,39 +754,6 @@ export const INI_SCHEMA: IniSetting[] = [
   },
 
   {
-    key: 'DiscordEnable',
-    label: 'Enable Discord',
-    description: 'Enable built-in Discord integration.',
-    type: 'boolean',
-    default: false,
-    category: 'discord'
-  },
-  {
-    key: 'DiscordToken',
-    label: 'Discord Token',
-    description: 'Discord bot token.',
-    type: 'string',
-    default: '',
-    category: 'discord'
-  },
-  {
-    key: 'DiscordChannel',
-    label: 'Discord Channel',
-    description: 'Discord channel name.',
-    type: 'string',
-    default: '',
-    category: 'discord'
-  },
-  {
-    key: 'DiscordChannelID',
-    label: 'Discord Channel ID',
-    description: 'Discord channel ID.',
-    type: 'string',
-    default: '',
-    category: 'discord'
-  },
-
-  {
     key: 'RCONPort',
     label: 'RCON Port',
     description: 'Port for RCON connections.',
@@ -1100,39 +1066,6 @@ export const INI_SCHEMA: IniSetting[] = [
     type: 'boolean',
     default: false,
     category: 'loot'
-  },
-
-  {
-    key: 'DiscordChatChannel',
-    label: 'Discord Chat Channel',
-    description: 'The Discord channel name for game chat.',
-    type: 'string',
-    default: '',
-    category: 'discord'
-  },
-  {
-    key: 'DiscordLogChannel',
-    label: 'Discord Log Channel',
-    description: 'The Discord channel name for server logs.',
-    type: 'string',
-    default: '',
-    category: 'discord'
-  },
-  {
-    key: 'DiscordCommandChannel',
-    label: 'Discord Command Channel',
-    description: 'The Discord channel name for commands.',
-    type: 'string',
-    default: '',
-    category: 'discord'
-  },
-  {
-    key: 'WebhookAddress',
-    label: 'Webhook URL',
-    description: 'Slack/Discord incoming webhook URL for notifications.',
-    type: 'string',
-    default: '',
-    category: 'discord'
   },
 
   {

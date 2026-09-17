@@ -12,11 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as BackupsRouteImport } from './routes/backups'
-import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ChunksRouteImport } from './routes/chunks'
 import { Route as ConsoleRouteImport } from './routes/console'
 import { Route as DebugRouteImport } from './routes/debug'
-import { Route as DiscordRouteImport } from './routes/discord'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as ModsRouteImport } from './routes/mods'
 import { Route as PlayersRouteImport } from './routes/players'
@@ -48,11 +46,6 @@ const BackupsRoute = BackupsRouteImport.update({
   path: '/backups',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ChatRoute = ChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ChunksRoute = ChunksRouteImport.update({
   id: '/chunks',
   path: '/chunks',
@@ -66,11 +59,6 @@ const ConsoleRoute = ConsoleRouteImport.update({
 const DebugRoute = DebugRouteImport.update({
   id: '/debug',
   path: '/debug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DiscordRoute = DiscordRouteImport.update({
-  id: '/discord',
-  path: '/discord',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EventsRoute = EventsRouteImport.update({
@@ -153,11 +141,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/backups': typeof BackupsRoute
-  '/chat': typeof ChatRoute
   '/chunks': typeof ChunksRoute
   '/console': typeof ConsoleRoute
   '/debug': typeof DebugRoute
-  '/discord': typeof DiscordRoute
   '/events': typeof EventsRoute
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
@@ -178,11 +164,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/backups': typeof BackupsRoute
-  '/chat': typeof ChatRoute
   '/chunks': typeof ChunksRoute
   '/console': typeof ConsoleRoute
   '/debug': typeof DebugRoute
-  '/discord': typeof DiscordRoute
   '/events': typeof EventsRoute
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
@@ -204,11 +188,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/backups': typeof BackupsRoute
-  '/chat': typeof ChatRoute
   '/chunks': typeof ChunksRoute
   '/console': typeof ConsoleRoute
   '/debug': typeof DebugRoute
-  '/discord': typeof DiscordRoute
   '/events': typeof EventsRoute
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
@@ -231,11 +213,9 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/backups'
-    | '/chat'
     | '/chunks'
     | '/console'
     | '/debug'
-    | '/discord'
     | '/events'
     | '/mods'
     | '/players'
@@ -256,11 +236,9 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/backups'
-    | '/chat'
     | '/chunks'
     | '/console'
     | '/debug'
-    | '/discord'
     | '/events'
     | '/mods'
     | '/players'
@@ -281,11 +259,9 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/backups'
-    | '/chat'
     | '/chunks'
     | '/console'
     | '/debug'
-    | '/discord'
     | '/events'
     | '/mods'
     | '/players'
@@ -307,11 +283,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   BackupsRoute: typeof BackupsRoute
-  ChatRoute: typeof ChatRoute
   ChunksRoute: typeof ChunksRoute
   ConsoleRoute: typeof ConsoleRoute
   DebugRoute: typeof DebugRoute
-  DiscordRoute: typeof DiscordRoute
   EventsRoute: typeof EventsRoute
   ModsRoute: typeof ModsRoute
   PlayersRoute: typeof PlayersRoute
@@ -352,13 +326,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackupsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/chat': {
-      id: '/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/chunks': {
       id: '/chunks'
       path: '/chunks'
@@ -378,13 +345,6 @@ declare module '@tanstack/react-router' {
       path: '/debug'
       fullPath: '/debug'
       preLoaderRoute: typeof DebugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/discord': {
-      id: '/discord'
-      path: '/discord'
-      fullPath: '/discord'
-      preLoaderRoute: typeof DiscordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/events': {
@@ -499,11 +459,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   BackupsRoute: BackupsRoute,
-  ChatRoute: ChatRoute,
   ChunksRoute: ChunksRoute,
   ConsoleRoute: ConsoleRoute,
   DebugRoute: DebugRoute,
-  DiscordRoute: DiscordRoute,
   EventsRoute: EventsRoute,
   ModsRoute: ModsRoute,
   PlayersRoute: PlayersRoute,

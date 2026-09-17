@@ -54,13 +54,6 @@ const ROUTE_LOADERS: Record<string, RouteLoaderMeta> = {
     variant: 'console',
     metrics: ['rcon', 'history', 'stream'],
   },
-  '/chat': {
-    title: 'In-Game Chat',
-    description: 'Loading bridge chat channels and recent server messages.',
-    eyebrow: '// LIVE · CHAT',
-    variant: 'console',
-    metrics: ['bridge', 'messages', 'send'],
-  },
   '/events': {
     title: 'Events & Weather',
     description:
@@ -135,13 +128,6 @@ const ROUTE_LOADERS: Record<string, RouteLoaderMeta> = {
     eyebrow: '// SERVERS · SETUP',
     variant: 'form',
     metrics: ['install', 'ports', 'start'],
-  },
-  '/discord': {
-    title: 'Discord Integration',
-    description: 'Loading bot status, channel wiring, and message controls.',
-    eyebrow: '// SYSTEM · DISCORD',
-    variant: 'form',
-    metrics: ['bot', 'channels', 'alerts'],
   },
   '/settings': {
     title: 'Panel Settings',

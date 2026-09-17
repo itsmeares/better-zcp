@@ -58,7 +58,7 @@ import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
 import {
   collectKnownSecretValues,
   redactKnownSecrets,
-} from "../utils/discordMessageRedaction.ts";
+} from "../utils/secretRedaction.ts";
 import { getSteamApiKey } from "../services/steamApiKey.ts";
 import { hasActiveSteamOperation } from "../services/activeSteamOperations.ts";
 import {
@@ -294,7 +294,6 @@ const ENV_PRESENCE_ONLY = [
   "LOCALAPPDATA",
   "JWT_SECRET",
   "RCON_PASSWORD",
-  "DISCORD_TOKEN",
   "STEAM_API_KEY",
   "PANEL_PASSWORD",
   "ADMIN_PASSWORD",
@@ -314,12 +313,6 @@ function sanitizeForBundle(value: any, depth = 0): any {
   for (const [k, v] of Object.entries(value)) {
     if (SECRET_FIELD_RE.test(k) && typeof v === "string" && v.length > 0) {
       out[k] = maskValue(v);
-    } else if (
-      k === "discordWebhookUrl" &&
-      typeof v === "string" &&
-      v.includes("/webhooks/")
-    ) {
-      out[k] = v.replace(/\/webhooks\/(\d+)\/[^/?#]+/i, "/webhooks/$1/••••");
     } else {
       out[k] = sanitizeForBundle(v, depth + 1);
     }
@@ -328,10 +321,9 @@ function sanitizeForBundle(value: any, depth = 0): any {
 }
 
 
-const RAW_LOG_DISCORD_TOKEN_RE =
-  /\b[A-Za-z0-9_-]{23,28}\.[A-Za-z0-9_-]{6,7}\.[A-Za-z0-9_-]{27,40}\b/g;
-
 const RAW_LOG_STEAM_KEY_QUERY_RE = /([?&]key=)[0-9A-Za-z]{16,64}/g;
+const RAW_LOG_THREE_PART_BOT_TOKEN_RE =
+  /\b[A-Za-z0-9_-]{23,28}\.[A-Za-z0-9_-]{6,7}\.[A-Za-z0-9_-]{27,40}\b/g;
 
 async function collectBundleKnownSecrets() {
   const values = new Set(await collectKnownSecretValues().catch(() => []));
@@ -349,7 +341,7 @@ function redactRawLogText(text: any, knownSecrets: any[]): string {
   if (typeof text !== "string" || !text) return text;
   let out = String(redactKnownSecrets(text, knownSecrets));
   out = String(redactRconCommandSecrets(out));
-  out = out.replace(RAW_LOG_DISCORD_TOKEN_RE, "[REDACTED-DISCORD-TOKEN]");
+  out = out.replace(RAW_LOG_THREE_PART_BOT_TOKEN_RE, "[REDACTED-BOT-TOKEN]");
   out = out.replace(RAW_LOG_STEAM_KEY_QUERY_RE, "$1[REDACTED]");
   return out;
 }
@@ -1304,16 +1296,6 @@ async function buildManagedServiceLogsText(activeServer: any) {
   return `Managed service logs\n=====================\nUnit: ${unit} (systemd --user)\nLast ${SUPPORT_BUNDLE_LOG_TAIL_LINES} lines.\n\n${result.stdout}`;
 }
 
-async function buildDiscordBotStatus(req: any) {
-  try {
-    const discordBot = req?.app?.get?.("discordBot");
-    if (!discordBot?.getStatus) return { available: false };
-    return sanitizeForBundle(discordBot.getStatus());
-  } catch (e: any) {
-    return { _error: e.message };
-  }
-}
-
 function buildBundleReadme() {
   return [
     "# Project Zomboid Control Panel — Support Bundle",
@@ -1338,8 +1320,6 @@ function buildBundleReadme() {
     "17. `world-map-diagnostics.json` — whether `curl` is present on this host (a missing one is the most likely new World Map support ticket this release) and the resolved B42 tile-build source/directory/reason.",
     "18. `db-write-health.json` — the database write circuit-breaker state and retry count. Does NOT cover config-file (INI/Lua) writes — see the file's own notes for why.",
     "19. `backups-summary.json` — the last 20 backup runs. Only successful runs are recorded; a failed scheduled backup shows up in `admin-panel/error.log` instead, not here.",
-    "20. `discord-bot-status.json` — connected or not, which guild/channel/mod-role it's wired to, and the last start failure if any (token presence only, never the value).",
-    "",
     "## Then the raw logs",
     "",
     "- `admin-panel/` — `combined.log`, `error.log` from the panel itself.",
@@ -1351,13 +1331,13 @@ function buildBundleReadme() {
     "- `docker-container-logs.txt` — last 500 lines of the mapped Docker container's own stdout/stderr (only if the active server is Docker-managed and Docker control is on). This is the ONLY place an early startup crash from a container's own entrypoint script, or a JVM that died before writing its own log file, ever shows up -- none of the filesystem-scanning logs above can see it. Says why it's missing when it is (not mapped, Docker control off, socket unavailable, fetch failed).",
     "- `managed-service-logs.txt` — last 500 lines from `journalctl --user` for a systemd-managed server (same reasoning as the Docker file, for a systemd `--user` unit instead of a container). OpenRC-managed servers are a known, reported gap here -- supervise-daemon's log destination is not currently tracked by this panel.",
     "",
-    "**Every raw log above is now scanned for known credential shapes before it's zipped**, uniformly -- `admin-panel/`, `zomboid-server/`, `zomboid-install/`, `crash-logs/`, `docker-container-logs.txt`, and `managed-service-logs.txt` all go through the same scrub, not a subset of them. It catches: RCON/join passwords and the PanelBridge SFTP password (exact match against this panel's own current values), the Discord bot token (exact match, plus a shape check that also catches a token that's since been rotated), and the Steam Web API key (exact match, plus the one query-string shape this panel's own code ever puts it in).",
+    "**Every raw log above is now scanned for known credential shapes before it's zipped**, uniformly -- `admin-panel/`, `zomboid-server/`, `zomboid-install/`, `crash-logs/`, `docker-container-logs.txt`, and `managed-service-logs.txt` all go through the same scrub, not a subset of them. It catches: RCON/join passwords and the PanelBridge SFTP password (exact match against this panel's own current values), and the Steam Web API key (exact match, plus the one query-string shape this panel's own code ever puts it in).",
     "",
     "**REDACTION IS NOT A PROMISE OF SAFETY.** These are still real, mostly-unstructured logs written by the panel, the game server, or (for the two files above) a container/service supervisor this panel doesn't control the output of. The scrub above only catches secrets that are exact-known-current-values or match one of a short, verified list of shapes -- it cannot catch every way a credential, a player's real name, an IP address, or anything else sensitive might show up in free text. **Review this bundle yourself before forwarding it to anyone outside your team.** Only the JSON files (`panel-config.json`, `sftp-diagnostics.json`, `environment.txt`, etc.) go through the separate field-based redaction described above, which is a stricter, schema-aware guarantee that the raw-log scrub can't offer.",
     "",
     "## What is NOT in this bundle",
     "",
-    "- Plaintext RCON / Discord / Steam credentials (masked or presence-only).",
+    "- Plaintext RCON or Steam credentials (masked or presence-only).",
     "- Full environment variable values (only allow-listed keys show values).",
     "- MAC addresses (network interfaces list IPs only).",
     "- The panel database itself — only sanitized excerpts.",
@@ -1407,7 +1387,6 @@ async function buildBundleDiagnostics(
     wrap("world-map-diagnostics.json", () => buildWorldMapDiagnostics()),
     wrap("db-write-health.json", async () => buildDbWriteHealth()),
     wrap("backups-summary.json", () => buildBackupsSummary(req)),
-    wrap("discord-bot-status.json", () => buildDiscordBotStatus(req)),
     wrap("in-memory-log-buffer.json", async () => ({
       total: logBuffer.length,
       entries: logBuffer.slice(-MAX_BUFFER_SIZE),
@@ -1698,8 +1677,8 @@ router.get("/logs/download-zip", async (req, res) => {
       `Scanned Roots: ${collectionReports.filter((report) => report.root).length}`,
       "",
       "WARNING: This bundle contains real logs. Known credential shapes",
-      "(RCON/join/SFTP passwords, the Discord bot token, the Steam Web API",
-      "key) are redacted, but that is not a promise of safety -- review the",
+      "(RCON/join/SFTP passwords and the Steam Web API key) are redacted,",
+      "but that is not a promise of safety -- review the",
       "contents yourself before sharing this bundle outside your team. See",
       "README.md for exactly what is and isn't scrubbed.",
       "",
@@ -2673,7 +2652,6 @@ router.get("/diagnostics", async (req, res) => {
     const serverManager = req.app.get("serverManager");
     const modChecker = req.app.get("modChecker");
     const scheduler = req.app.get("scheduler");
-    const discordBot = req.app.get("discordBot");
     const panelUpdateChecker = req.app.get("panelUpdateChecker");
 
     const checks: AnyRecord[] = [];
@@ -2903,35 +2881,6 @@ router.get("/diagnostics", async (req, res) => {
             ),
           );
         }
-      }
-
-      if (discordBot?.token || settings?.discordBotToken) {
-        if (discordBot?.isRunning && discordBot?.client?.user) {
-          const botTag = discordBot.client.user.tag;
-          checks.push(
-            diagOk(
-              "discord.bot",
-              "Discord bot connected",
-              `Logged in as ${botTag}.`,
-              { category: "services", params: { tag: botTag } },
-            ),
-          );
-        } else {
-          checks.push(
-            diagFail(
-              "discord.bot",
-              "Discord bot offline",
-              "Bot token configured but not connected. Token may be invalid.",
-              { category: "services", hint: "Settings → Discord" },
-            ),
-          );
-        }
-      } else {
-        checks.push(
-          diagSkip("discord.bot", "Discord bot", "Not configured (optional).", {
-            category: "services",
-          }),
-        );
       }
 
       try {
@@ -5806,7 +5755,6 @@ export {
   buildWorldMapDiagnostics,
   buildDbWriteHealth,
   buildBackupsSummary,
-  buildDiscordBotStatus,
   buildDockerContainerLogsText,
   buildManagedServiceLogsText,
 };

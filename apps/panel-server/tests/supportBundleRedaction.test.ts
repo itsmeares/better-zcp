@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Readable } from "stream";
 import { createServer, setSetting } from "../database/init.ts";
-import { writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import {
   redactRawLogText,
   collectBundleKnownSecrets,
@@ -45,10 +44,10 @@ describe("redactRawLogText() -- known-secret-value exact match", () => {
 
   it("redacts every known secret independently in the same line", () => {
     const result = redactRawLogText(
-      "rcon=alpha discord=beta sftp=gamma",
+      "rcon=alpha session=beta sftp=gamma",
       ["alpha", "beta", "gamma"],
     );
-    expect(result).toBe("rcon=[REDACTED] discord=[REDACTED] sftp=[REDACTED]");
+    expect(result).toBe("rcon=[REDACTED] session=[REDACTED] sftp=[REDACTED]");
   });
 
   it("is a no-op when no known secrets are supplied", () => {
@@ -65,12 +64,12 @@ describe("redactRawLogText() -- shape-based patterns for what a known-value scru
     expect(result).toBe('executing: adduser "bob" "[REDACTED]"');
   });
 
-  it("redacts a Discord-bot-token-shaped string even when it is not in the known-secrets list (e.g. a rotated token)", () => {
-    const line =
-      "Discord login failed for token xxxxxxxxxxxxxxxxxxxxxxxx.yyyyyy.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz";
-    const result = redactRawLogText(line, []);
-    expect(result).not.toContain("xxxxxxxxxxxxxxxxxxxxxxxx.yyyyyy.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");
-    expect(result).toContain("[REDACTED-DISCORD-TOKEN]");
+  it("redacts three-part bot tokens left in old logs", () => {
+    const token =
+      "xxxxxxxxxxxxxxxxxxxxxxxx.yyyyyy.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz";
+    expect(redactRawLogText(`login failed for token ${token}`, [])).toBe(
+      "login failed for token [REDACTED-BOT-TOKEN]",
+    );
   });
 
   it("redacts the Steam Web API key out of a GetServerList request URL, keeping the rest of the URL readable", () => {
@@ -89,7 +88,7 @@ describe("redactRawLogText() -- shape-based patterns for what a known-value scru
 });
 
 describe("collectBundleKnownSecrets() -- assembles the real secret superset for this bundle", () => {
-  it("includes a per-server RCON password, a Discord bot token, and a Steam API key together", async () => {
+  it("includes per-server RCON and Steam API secrets", async () => {
     await createServer({
       name: "RedactionTestServer",
       serverName: "RedactionTestServer",
@@ -99,13 +98,11 @@ describe("collectBundleKnownSecrets() -- assembles the real secret superset for 
       rconPassword: "bundle-rcon-secret",
       serverPort: 16261,
     });
-    writeUiSecretFile("discordBotToken", "bundle-discord-secret");
     await setSetting("steamApiKey", "bundle-steam-api-secret");
 
     const secrets = await collectBundleKnownSecrets();
 
     expect(secrets).toContain("bundle-rcon-secret");
-    expect(secrets).toContain("bundle-discord-secret");
     expect(secrets).toContain("bundle-steam-api-secret");
   });
 

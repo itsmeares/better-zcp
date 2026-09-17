@@ -152,7 +152,7 @@ describe("resolveLifecycleState", () => {
   it.each([
     ["start", "starting"],
     ["restart", "starting"],
-    ["discord-stop", "stopping"],
+    ["manual-stop", "stopping"],
   ])("maps an active %s operation to %s", (operation, expected) => {
     expect(
       resolveLifecycleState({

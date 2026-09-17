@@ -158,7 +158,6 @@ export async function startServerAction(
       lifecycleLockTransferred = true;
       void waitForRconAfterStart({
         rconService: runtime.rconService,
-        discordBot: runtime.discordBot,
         io: runtime.io,
       })
         .catch((error) =>
@@ -200,7 +199,6 @@ export async function startServerAction(
           log.info("Server detected as running");
           await waitForRconAfterStart({
             rconService: runtime.rconService,
-            discordBot: runtime.discordBot,
             io: runtime.io,
           });
           releaseLifecycleLock();
@@ -328,13 +326,6 @@ export async function stopServerAction(
         serviceManaged
           ? `Server stopped through ${runtime.serverManager.lifecycleProvider}`
           : "Server stopped via web UI",
-      );
-      void Promise.resolve(
-        runtime.discordBot?.sendEventNotification?.("serverStop", {}),
-      ).catch((error) =>
-        log.debug(
-          `Discord serverStop notification failed: ${errorMessage(error)}`,
-        ),
       );
     } else {
       if (typeof runtime.checkServerStatusNow === "function") {
