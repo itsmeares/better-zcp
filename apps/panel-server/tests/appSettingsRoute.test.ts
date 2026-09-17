@@ -46,10 +46,9 @@ describe("GET /api/config/app-settings", () => {
     getAllSettings.mockReset();
   });
 
-  it("masks jwtSecret and discordBotToken (Findings 1 and 3/4)", async () => {
+  it("masks stored secrets", async () => {
     getAllSettings.mockResolvedValue({
       jwtSecret: "top-secret-jwt-signing-key",
-      discordBotToken: "top-secret-discord-token",
       rconPassword: "top-secret-rcon",
       darkMode: true,
     });
@@ -64,9 +63,6 @@ describe("GET /api/config/app-settings", () => {
 
     const payload = response.json.mock.calls[0][0];
     expect(payload.settings.jwtSecret).not.toBe("top-secret-jwt-signing-key");
-    expect(payload.settings.discordBotToken).not.toBe(
-      "top-secret-discord-token",
-    );
     expect(payload.settings.rconPassword).not.toBe("top-secret-rcon");
     expect(payload.settings.darkMode).toBe(true);
   });

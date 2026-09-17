@@ -117,7 +117,6 @@ export class Scheduler {
   rconService: any;
   serverManager: any;
   backupService: any;
-  discordBot: any;
   io: any;
   jobs: Map<any, any>;
   jobLabels: Map<any, string>;
@@ -136,7 +135,6 @@ export class Scheduler {
     this.rconService = rconService;
     this.serverManager = serverManager;
     this.backupService = null;
-    this.discordBot = null;
     this.io = null;
     this.jobs = new Map();
     this.jobLabels = new Map();
@@ -154,10 +152,6 @@ export class Scheduler {
 
   setBackupService(backupService: any): void {
     this.backupService = backupService;
-  }
-
-  setDiscordBot(discordBot: any): void {
-    this.discordBot = discordBot;
   }
 
   setIo(io: any): void {
@@ -830,17 +824,6 @@ export class Scheduler {
     }
   }
 
-  async _notifyRestartCancelled(): Promise<void> {
-    if (!this.discordBot) return;
-    try {
-      await this.discordBot.sendNotification(
-        "✅ **Scheduled restart cancelled** — the server is staying up.",
-      );
-    } catch (err: unknown) {
-      log.debug(`Discord restart-cancelled notification failed: ${errorMessage(err)}`);
-    }
-  }
-
   async performRestart(
     warningMinutesParam: number | null = null,
     {
@@ -1022,18 +1005,6 @@ export class Scheduler {
 
       log.info("Auto-restart: RCON verified, sending warnings...");
 
-      if (this.discordBot) {
-        this.discordBot
-          .sendEventNotification("scheduledRestart", {
-            minutes: warningMinutes,
-          })
-          .catch((err: unknown) =>
-            log.debug(
-              `Discord scheduledRestart notification failed: ${errorMessage(err)}`,
-            ),
-          );
-      }
-
       if (warningMinutes > 0) {
         for (let i = warningMinutes; i > 0; i--) {
           if (this.restartCancelled) {
@@ -1042,7 +1013,6 @@ export class Scheduler {
               getRestartWarningNotice(restartWarning, "cancelled"),
               rconService,
             );
-            await this._notifyRestartCancelled();
             return { success: false, message: "Restart cancelled" };
           }
           await this._broadcastRestartMessage(
@@ -1072,7 +1042,6 @@ export class Scheduler {
               getRestartWarningNotice(restartWarning, "cancelled"),
               rconService,
             );
-            await this._notifyRestartCancelled();
             return { success: false, message: "Restart cancelled" };
           }
           await this._broadcastRestartMessage(

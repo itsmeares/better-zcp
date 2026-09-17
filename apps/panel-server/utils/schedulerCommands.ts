@@ -13,7 +13,6 @@ const SCHEDULABLE_BRIDGE_ACTIONS = new Set([
   "shutOffUtilities",
   "saveWorld",
   "sendToServerChat",
-  "sendToAdminChat",
 ]);
 
 export function classifyScheduledCommand(command: unknown): string {

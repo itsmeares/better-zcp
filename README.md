@@ -9,7 +9,7 @@
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/jHsWJDNmSg)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-green.svg?style=for-the-badge)](LICENSE)
 
-Project Zomboid is a zombie survival game; playing it with friends means running a **dedicated server** somewhere. Zomboid Control Panel is the web app that sets up and manages that server for you — no command line required — with a live world map, Workshop mod management, scheduled restarts, backups, and Discord integration built in.
+Project Zomboid is a zombie survival game; playing it with friends means running a **dedicated server** somewhere. Zomboid Control Panel is the web app that sets up and manages that server for you — no command line required — with a live world map, Workshop mod management, scheduled restarts, and backups built in.
 
 [**🚀 Download**](https://github.com/itsmeares/better-zcp/releases/latest) ·
 [**👁️ Live demo**](https://itsmeares.github.io/better-zcp/) ·
@@ -90,16 +90,6 @@ Spin up a fresh PZ server in minutes. SteamCMD install, port config, RCON setup,
 <img src="docs/assets/screenshots/screenshot-server-setup.png" alt="Server Setup" />
 
 </td>
-<td width="50%" valign="top">
-
-### 🤖 Discord Bot Setup
-Guided wizard for creating the Discord app, getting tokens, and inviting the bot. Slash commands + two-way chat relay + event notifications ship turnkey.
-
-**The step that trips people up:** in the Discord Developer Portal, under your application's **Bot** page, turn on the **Server Members** and **Message Content** privileged intents. Both are off by default and have nothing to do with your token — a correct token and correct IDs will still fail to connect without them. Check both before you click Start; the panel names the exact problem if you hit it anyway, instead of a generic "check configuration."
-
-<img src="docs/assets/screenshots/screenshot-discord-setup.png" alt="Discord Setup" />
-
-</td>
 </tr>
 <tr>
 <td width="50%" valign="top">
@@ -170,7 +160,6 @@ Visual map selector for reclaiming disk space from an aging save. Delete individ
 ### Extend
 - **Events & weather** — Rain, storms, blizzards, climate control, time control, sound triggers, zombie management.
 - **PanelBridge** — Server-side Lua mod for actions RCON can't reach: teleport, heal, god mode, character export/import, inventory.
-- **Discord bot** — Slash commands and two-way chat relay.
 - **Single sign-on (SSO)** — OpenID Connect login, with ready-made presets for Google, Authentik, Keycloak, Azure AD, Okta, and Auth0, or any other compliant provider entered by hand. Full discovery + PKCE + state/nonce flow, with a one-click credential test before you commit to it.
 - **Multi-server** — Manage multiple PZ servers from one panel.
 - **Chunk cleaner** — Visual map selector for reclaiming disk space from an aging save: delete individual chunks or drag out a rectangular region, with per-save stats before you commit.

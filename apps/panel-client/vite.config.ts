@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => {
     ],
     ssr: {
       noExternal: true,
-      external: ['ssh2-sftp-client', 'unzipper', 'discord.js'],
+      external: ['ssh2-sftp-client', 'unzipper'],
     },
     environments: {
       client: {

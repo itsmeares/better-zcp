@@ -15,28 +15,19 @@ interface ServerLike {
 
 function readServerJoinPassword(server: ServerLike | null | undefined): string | null {
   try {
-    const serverName =
-      typeof server?.serverName === "string" ? server.serverName : null;
-    const configPath =
-      typeof server?.serverConfigPath === "string"
-        ? server.serverConfigPath
-        : typeof server?.zomboidDataPath === "string"
-          ? path.join(server.zomboidDataPath, "Server")
-          : null;
-    if (
-      !configPath ||
-      !serverName ||
-      path.basename(serverName) !== serverName ||
-      serverName.includes("..")
-    ) {
+    const serverName = typeof server?.serverName === "string" ? server.serverName : null;
+    const configPath = typeof server?.serverConfigPath === "string"
+      ? server.serverConfigPath
+      : typeof server?.zomboidDataPath === "string"
+        ? path.join(server.zomboidDataPath, "Server")
+        : null;
+    if (!configPath || !serverName || path.basename(serverName) !== serverName || serverName.includes("..")) {
       return null;
     }
     const iniPath = path.join(configPath, `${serverName}.ini`);
     if (!fs.existsSync(iniPath)) return null;
     const content = fs.readFileSync(iniPath, "utf8");
-    const value = (readIniValues(content, ["Password"]) as { Password?: string })
-      .Password;
-    return value || null;
+    return (readIniValues(content, ["Password"]) as { Password?: string }).Password || null;
   } catch {
     return null;
   }
@@ -46,21 +37,20 @@ export async function collectKnownSecretValues(): Promise<string[]> {
   const values = new Set<string>();
 
   try {
-    const servers = (await getServers()) as ServerLike[];
-    for (const server of servers) {
+    for (const server of (await getServers()) as ServerLike[]) {
       if (server?.rconPassword) values.add(String(server.rconPassword));
       const joinPassword = readServerJoinPassword(server);
       if (joinPassword) values.add(joinPassword);
     }
   } catch {
-    /* best-effort: a database read failure here must not block sending */
+    // A database read failure must not block support-bundle generation.
   }
 
   try {
     const legacyRconPassword = await getSetting("rconPassword");
     if (legacyRconPassword) values.add(String(legacyRconPassword));
   } catch {
-    /* best-effort */
+    // Best effort.
   }
 
   for (const secretFileName of [
@@ -73,7 +63,7 @@ export async function collectKnownSecretValues(): Promise<string[]> {
       const value = readUiSecretFile(secretFileName);
       if (value) values.add(value);
     } catch {
-      /* best-effort */
+      // Best effort.
     }
   }
 

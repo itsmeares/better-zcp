@@ -237,25 +237,6 @@ export const PANEL_BRIDGE_COMMANDS = [
         },
       },
       {
-        action: "sendToAdminChat",
-        description: "Send message to admin-only chat",
-        args: { message: "string (required)" },
-      },
-      {
-        action: "sendToGeneralChat",
-        description: "Send message to general chat with custom author",
-        args: {
-          message: "string (required)",
-          author: 'string (default: "[Panel]")',
-        },
-      },
-      {
-        action: "getChatInfo",
-        description: "Get available chat types",
-        args: {},
-      },
-
-      {
         action: "playWorldSound",
         description: "Create zombie-attracting sound at coordinates",
         args: {

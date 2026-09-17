@@ -529,11 +529,9 @@ export async function refreshLaunchTargetBeforeStart(
 
 export async function waitForRconAfterStart({
   rconService,
-  discordBot,
   io,
 }: {
   rconService: any;
-  discordBot: any;
   io?: { emit?: (event: string, payload: unknown) => void };
 }) {
   log.info("Waiting for RCON to be ready - starting port polling...");
@@ -603,11 +601,6 @@ export async function waitForRconAfterStart({
   if (rconConnected) {
     log.info("RCON startup sequence completed - connected");
     io?.emit?.("server:status", { running: true, state: "ready" });
-    discordBot
-      ?.sendEventNotification?.("serverStart", {})
-      ?.catch((error: any) =>
-        log.debug(`Discord serverStart notification failed: ${error.message}`),
-      );
   } else {
     log.warn(
       "RCON startup sequence completed - NOT connected (auto-reconnect will keep trying every 30s)",

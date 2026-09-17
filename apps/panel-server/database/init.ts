@@ -48,7 +48,6 @@ type DatabaseData = {
   steamid_bans: Collection;
   performance_history: Collection;
   bridge_logs: Collection;
-  discord_webhooks: Collection;
   users: Collection;
   roles: Collection;
   settings: AnyRecord;
@@ -202,7 +201,6 @@ const defaultData: DatabaseData = {
   steamid_bans: [],
   performance_history: [],
   bridge_logs: [],
-  discord_webhooks: [],
   users: [],
   roles: [],
   settings: {},
@@ -978,7 +976,6 @@ function getDatabaseStatsSync() {
       user_templates: data.user_templates?.length ?? 0,
       performance_history: data.performance_history?.length ?? 0,
       bridge_logs: data.bridge_logs?.length ?? 0,
-      discord_webhooks: data.discord_webhooks?.length ?? 0,
     },
     totalRecords: Object.values(data).reduce(
       (sum, v) => sum + (Array.isArray(v) ? v.length : 0),

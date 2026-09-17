@@ -17,7 +17,6 @@ const {
   buildWorldMapDiagnostics,
   buildDbWriteHealth,
   buildBackupsSummary,
-  buildDiscordBotStatus,
   buildDockerContainerLogsText,
   buildManagedServiceLogsText,
   collectBundleFilesFromDir,
@@ -141,35 +140,6 @@ describe("support bundle: backups summary", () => {
     };
     const result = await buildBackupsSummary(req);
     expect(result._error).toContain("boom-backup-service");
-  });
-});
-
-describe("support bundle: Discord bot status", () => {
-  it("passes through connection/guild/channel info and masks a token-shaped field", async () => {
-    const req = fakeReq({
-      discordBot: {
-        getStatus: () => ({
-          running: true,
-          configured: true,
-          username: "PZBot#1234",
-          guildId: "111",
-          channelId: "222",
-          modRoleId: null,
-          lastStartError: null,
-          token: "should-never-survive",
-        }),
-      },
-    });
-    const result = await buildDiscordBotStatus(req);
-    expect(result.running).toBe(true);
-    expect(result.guildId).toBe("111");
-    expect(result.token).toBe("••••");
-  });
-
-  it("reports unavailable rather than throwing when no Discord bot is registered", async () => {
-    const req = fakeReq({});
-    const result = await buildDiscordBotStatus(req);
-    expect(result).toEqual({ available: false });
   });
 });
 
@@ -415,7 +385,6 @@ describe("support bundle assembly: one collector throwing never breaks the rest"
     for (const name of [
       "world-map-diagnostics.json",
       "db-write-health.json",
-      "discord-bot-status.json",
       "system-info.json",
     ]) {
       expect(byName[name]).toBeDefined();

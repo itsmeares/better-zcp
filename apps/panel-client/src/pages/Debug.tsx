@@ -101,7 +101,6 @@ import {
   rconApi,
   backupApi,
   serverFilesApi,
-  discordApi,
 } from '@/lib/api'
 
 interface LogEntry {
@@ -351,7 +350,6 @@ export function getDiagnosticsFixAction(
         openSettings: 'Open Settings',
         openChunkCleaner: 'Open Chunk Cleaner',
         openBackups: 'Open Backups',
-        openDiscord: 'Open Discord',
         openBridgeSettings: 'Open Bridge settings',
         openDependencyReview: 'Open dependency review',
         openWorldMap: 'Open World Map',
@@ -594,14 +592,6 @@ export function getDiagnosticsFixAction(
         manualRoute: '/settings',
         note: 'Restarting the panel usually clears stuck services.',
       }
-    case 'discord.bot':
-      return {
-        label: 'Reconnect bot',
-        automated: true,
-        links: [{ to: '/discord', label: L('openDiscord') }],
-        note: 'Retries the connection using the saved bot token. If it still fails, check the token and intents in Discord settings.',
-      }
-
     case 'bridge.configured':
     case 'worldmap.bridge.configured':
       return {
@@ -1293,15 +1283,6 @@ export default function Debug() {
           toast({
             title: 'Mod checker started',
             description: result?.message || 'Workshop update polling resumed.',
-          })
-        } else if (check.id === 'discord.bot') {
-          const result = (await discordApi.start()) as {
-            success?: boolean
-            message?: string
-          }
-          toast({
-            title: 'Discord bot reconnected',
-            description: result?.message || 'Bot connection re-established.',
           })
         }
 

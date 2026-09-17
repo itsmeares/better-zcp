@@ -3621,101 +3621,6 @@ handlers.sendToServerChat = function(args)
     return false, nil, "useRCON"
 end
 
-handlers.sendToAdminChat = function(args)
-    local message = normalizeMessage(args.message, 1000)
-
-    if not message then
-        return false, nil, "Message required"
-    end
-
-    local chat = getChatSystem()
-
-    if chat and chat.server then
-        local ok, err = pcall(function()
-            chat.server:sendMessageToAdminChat(message)
-        end)
-        if ok then
-            return true, { message = "Message sent to admin chat", method = "ChatServer" }
-        end
-    end
-
-    local ok3, sent3 = pcall(function()
-        local players = getOnlinePlayers()
-        if players and players:size() > 0 then
-            for i = 0, players:size() - 1 do
-                local p = players:get(i)
-                if p and p.accessLevel and p:getAccessLevel() ~= "" then
-                    p:Say("[ADMIN] " .. message)
-                end
-            end
-            return true
-        end
-        return false
-    end)
-    if ok3 and sent3 then
-        return true, { message = "Message sent via player:Say (admin, overhead text only)", method = "player:Say" }
-    end
-
-    return false, nil, "useRCON"
-end
-
-handlers.sendToGeneralChat = function(args)
-    local message = normalizeMessage(args.message, 1000)
-    local author = normalizeMessage(args.author, 80) or "[Panel]"
-    if author then
-        author = author:gsub("[%c]", " ")
-        if author == "" then author = "[Panel]" end
-    end
-
-    if not message then
-        return false, nil, "Message required"
-    end
-
-    local chat = getChatSystem()
-
-    if chat and chat.server then
-        local ok, err = pcall(function()
-            chat.server:sendMessageFromDiscordToGeneralChat(author, message)
-        end)
-        if ok then
-            return true, { message = "Message sent to general chat", author = author, method = "ChatServer" }
-        end
-    end
-
-    local ok3, sent3 = pcall(function()
-        local players = getOnlinePlayers()
-        if players and players:size() > 0 then
-            for i = 0, players:size() - 1 do
-                local p = players:get(i)
-                if p then p:Say("[" .. author .. "] " .. message) end
-            end
-            return true
-        end
-        return false
-    end)
-    if ok3 and sent3 then
-        return true, { message = "Message sent via player:Say (overhead text only)", author = author, method = "player:Say" }
-    end
-
-    return false, nil, "useRCON"
-end
-
-handlers.getChatInfo = function(args)
-    local chat = getChatSystem()
-    local info = {
-        availableChats = {
-            "serverChat - Messages from server to all players",
-            "adminChat - Messages visible only to admins",
-            "generalChat - General chat with custom author name"
-        },
-        note = "Chat handlers try native ChatServer API first, then player:Say, then signal backend to use RCON",
-        chatServerAvailable = chat ~= nil and chat.server ~= nil,
-        rconFallback = chat == nil or chat.server == nil
-    }
-
-    return true, info
-end
-
 handlers.saveWorld = function(args)
     local success, err = pcall(function()
         saveGame()
@@ -6224,11 +6129,6 @@ handlers.runEventSequence = function(args)
                 if kind == "chat" then
                     local msg = normalizeMessage(step.message, 1000)
                     if not msg then error("chat.message required") end
-                    if step.channel == "admin" then
-                        return handlers.sendToAdminChat({ message = msg })
-                    elseif step.channel == "general" then
-                        return handlers.sendToGeneralChat({ message = msg, author = step.author })
-                    end
                     return handlers.sendToServerChat({ message = msg, isAlert = step.alert == true })
                 elseif kind == "swarm" then
                     return handlers.triggerSwarmEvent(step)

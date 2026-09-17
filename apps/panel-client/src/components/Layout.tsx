@@ -14,7 +14,6 @@ import {
   Bug,
   Map,
   Eraser,
-  MessageSquare,
   Layers,
   ChevronDown,
   FileCog,
@@ -22,7 +21,6 @@ import {
   Menu,
   X,
   Zap,
-  MessagesSquare,
   Archive,
   AlertCircle,
   RefreshCw,
@@ -111,11 +109,6 @@ const navSections: NavSection[] = [
         to: '/players',
         icon: Users,
         label: 'Online Players',
-      },
-      {
-        to: '/chat',
-        icon: MessagesSquare,
-        label: 'In-Game Chat',
       },
     ],
   },
@@ -217,11 +210,6 @@ const navSections: NavSection[] = [
     icon: Settings,
     color: 'slate',
     items: [
-      {
-        to: '/discord',
-        icon: MessageSquare,
-        label: 'Discord',
-      },
       {
         to: '/settings',
         icon: Settings,
