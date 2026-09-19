@@ -1103,25 +1103,6 @@ function buildBridgeStatus() {
   }
 }
 
-async function buildSftpDiagnostics() {
-  try {
-    const settings = (await getAllSettings()) as AnyRecord;
-    const status: AnyRecord = panelBridgeService?.getStatus?.() || {};
-    return sanitizeForBundle({
-      configured: Boolean(settings?.panelBridgeSftpEnabled),
-      host: settings?.panelBridgeSftpHost || null,
-      port: settings?.panelBridgeSftpPort || null,
-      username: settings?.panelBridgeSftpUsername || null,
-      remotePath: settings?.panelBridgeSftpBridgePath || null,
-      activeTransport: status.transport || null,
-      lastSftpTransport: status.lastSftpTransport || null,
-      fellBackToLocal: status.transport?.type !== "sftp" && Boolean(status.lastSftpTransport),
-    });
-  } catch (e: any) {
-    return { _error: e.message };
-  }
-}
-
 async function buildProcessSnapshot() {
   return {
     title: process.title,
@@ -1307,7 +1288,6 @@ function buildBundleReadme() {
     "3. `panel-config.json` — sanitized settings + servers list (passwords/tokens masked). Also where backup schedule/retention and scheduled-task configuration live (`settings.backupSchedule`, `settings.backupMaxCount`, `scheduledTasks`).",
     "4. `zomboid-paths.tson` — what the panel thinks the data/install paths are, all probed candidates, and dir listings of `Saves/`, `Saves/Multiplayer/`, `Server/`, `Logs/`, etc.",
     "5. `bridge-status.json` — PanelBridge connection, IPC file ages, and active transport.",
-    "6. `sftp-diagnostics.json` — sanitized remote SFTP configuration and the last SFTP attempt, including failures after local fallback.",
     "7. `recent-events.json` — last server starts/stops, RCON commands, player join/leave, scheduled task runs (`scheduleHistory` is the last-result history for scheduler entries).",
     "8. `db-stats.json` — record counts per collection.",
     "9. `performance-history.json` — recent CPU/RAM samples.",
@@ -1331,9 +1311,9 @@ function buildBundleReadme() {
     "- `docker-container-logs.txt` — last 500 lines of the mapped Docker container's own stdout/stderr (only if the active server is Docker-managed and Docker control is on). This is the ONLY place an early startup crash from a container's own entrypoint script, or a JVM that died before writing its own log file, ever shows up -- none of the filesystem-scanning logs above can see it. Says why it's missing when it is (not mapped, Docker control off, socket unavailable, fetch failed).",
     "- `managed-service-logs.txt` — last 500 lines from `journalctl --user` for a systemd-managed server (same reasoning as the Docker file, for a systemd `--user` unit instead of a container). OpenRC-managed servers are a known, reported gap here -- supervise-daemon's log destination is not currently tracked by this panel.",
     "",
-    "**Every raw log above is now scanned for known credential shapes before it's zipped**, uniformly -- `admin-panel/`, `zomboid-server/`, `zomboid-install/`, `crash-logs/`, `docker-container-logs.txt`, and `managed-service-logs.txt` all go through the same scrub, not a subset of them. It catches: RCON/join passwords and the PanelBridge SFTP password (exact match against this panel's own current values), three-part bot tokens (a shape check that also catches tokens that have since been rotated), and the Steam Web API key (exact match, plus the one query-string shape this panel's own code ever puts it in).",
+    "**Every raw log above is now scanned for known credential shapes before it's zipped**, uniformly -- `admin-panel/`, `zomboid-server/`, `zomboid-install/`, `crash-logs/`, `docker-container-logs.txt`, and `managed-service-logs.txt` all go through the same scrub, not a subset of them. It catches RCON/join passwords, three-part bot tokens, and the Steam Web API key.",
     "",
-    "**REDACTION IS NOT A PROMISE OF SAFETY.** These are still real, mostly-unstructured logs written by the panel, the game server, or (for the two files above) a container/service supervisor this panel doesn't control the output of. The scrub above only catches secrets that are exact-known-current-values or match one of a short, verified list of shapes -- it cannot catch every way a credential, a player's real name, an IP address, or anything else sensitive might show up in free text. **Review this bundle yourself before forwarding it to anyone outside your team.** Only the JSON files (`panel-config.json`, `sftp-diagnostics.json`, `environment.txt`, etc.) go through the separate field-based redaction described above, which is a stricter, schema-aware guarantee that the raw-log scrub can't offer.",
+    "**REDACTION IS NOT A PROMISE OF SAFETY.** These are still real, mostly-unstructured logs written by the panel, the game server, or (for the two files above) a container/service supervisor this panel doesn't control the output of. The scrub above only catches secrets that are exact-known-current-values or match one of a short, verified list of shapes -- it cannot catch every way a credential, a player's real name, an IP address, or anything else sensitive might show up in free text. **Review this bundle yourself before forwarding it to anyone outside your team.** JSON files go through separate field-based redaction, which is stricter than the raw-log scrub.",
     "",
     "## What is NOT in this bundle",
     "",
@@ -1376,7 +1356,6 @@ async function buildBundleDiagnostics(
     wrap("performance-history.json", () => buildPerformanceHistory()),
     wrap("db-stats.json", () => buildDbStats()),
     wrap("bridge-status.json", async () => buildBridgeStatus()),
-    wrap("sftp-diagnostics.json", () => buildSftpDiagnostics()),
     wrap("process.json", () => buildProcessSnapshot()),
     wrap("network-interfaces.json", () => buildNetworkInterfaces()),
     wrap("server-config-summary.json", () => buildServerConfigSummary(activeServer)),
@@ -1677,7 +1656,7 @@ router.get("/logs/download-zip", async (req, res) => {
       `Scanned Roots: ${collectionReports.filter((report) => report.root).length}`,
       "",
       "WARNING: This bundle contains real logs. Known credential shapes",
-      "(RCON/join/SFTP passwords, three-part bot tokens, and the Steam Web API",
+      "(RCON/join passwords, three-part bot tokens, and the Steam Web API",
       "key) are redacted, but that is not a promise of safety -- review the",
       "contents yourself before sharing this bundle outside your team. See",
       "README.md for exactly what is and isn't scrubbed.",
@@ -1904,11 +1883,9 @@ function diagSkip(id: any, label: any, message: any, extras: AnyRecord = {}) {
 }
 
 export function resolveServerProcessCheckMode({
-  remoteRconOnly,
   dockerManagedProvider,
   serverRunning,
 }: AnyRecord) {
-  if (remoteRconOnly) return "remote";
   if (dockerManagedProvider) return "docker";
   if (serverRunning === null) return "unknown";
   return serverRunning ? "running" : "stopped";
@@ -2704,31 +2681,15 @@ router.get("/diagnostics", async (req, res) => {
     const serverRunning = serverState.running;
 
     try {
-      const remoteRconOnly =
-        !activeServer?.installPath &&
-        !activeServer?.serverPath &&
-        !activeServer?.zomboidDataPath &&
-        Boolean(activeServer?.rconHost || rconService?.config?.host);
-
       const dockerManagedProvider = ["docker-local", "docker-managed"].includes(
         resolveProvider(activeServer),
       );
 
       const serverProcessMode = resolveServerProcessCheckMode({
-        remoteRconOnly,
         dockerManagedProvider,
         serverRunning,
       });
-      if (serverProcessMode === "remote") {
-        checks.push(
-          diagSkip(
-            "server.process",
-            "Remote server process",
-            "Managed by the hosting provider; local process monitoring is unavailable. RCON controls remain available.",
-            { category: "services" },
-          ),
-        );
-      } else if (serverProcessMode === "docker") {
+      if (serverProcessMode === "docker") {
         checks.push(
           diagSkip(
             "server.process",

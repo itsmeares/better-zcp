@@ -1,13 +1,11 @@
-
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import { v4 as uuidv4 } from 'uuid';
-import { EventEmitter } from 'events';
-import { logPlayerAction, recordPlayerSession } from '../database/init.ts';
-import { createLogger } from '../utils/logger.ts';
-import { PanelBridgeSftpTransport } from './panelBridgeSftp.ts';
-const log = createLogger('Bridge');
+import fs from "fs";
+import path from "path";
+import os from "os";
+import { v4 as uuidv4 } from "uuid";
+import { EventEmitter } from "events";
+import { logPlayerAction, recordPlayerSession } from "../database/init.ts";
+import { createLogger } from "../utils/logger.ts";
+const log = createLogger("Bridge");
 
 type AnyRecord = Record<string, any>;
 type PendingCommand = {
@@ -49,8 +47,6 @@ class PanelBridge extends EventEmitter {
   pollInterval: ReturnType<typeof setInterval> | null;
   statusInterval: ReturnType<typeof setInterval> | null;
   fileWatcher: fs.FSWatcher | null;
-  sftpTransport: PanelBridgeSftpTransport | null;
-  lastSftpStatus: AnyRecord | null;
   pendingCommands: Map<string, PendingCommand>;
   processedResults: Map<string, number>;
   protocolVersion: string;
@@ -78,8 +74,6 @@ class PanelBridge extends EventEmitter {
     this.pollInterval = null;
     this.statusInterval = null;
     this.fileWatcher = null;
-    this.sftpTransport = null;
-    this.lastSftpStatus = null;
     this.pendingCommands = new Map();
     this.processedResults = new Map();
     this.protocolVersion = 'queue-v1';
@@ -135,48 +129,6 @@ class PanelBridge extends EventEmitter {
     this.emit('configured', { path: this.bridgePath });
 
     return this.bridgePath;
-  }
-
-  async configureSftp(config: AnyRecord, cachePath: string) {
-    const transport = new PanelBridgeSftpTransport();
-    try {
-      await transport.start(config, cachePath);
-    } catch (error: any) {
-      this.lastSftpStatus = transport.getStatus();
-      await transport.stop();
-      this.lastSftpStatus = transport.getStatus();
-      throw error;
-    }
-
-    const previousTransport = this.sftpTransport;
-    try {
-      if (this.isRunning) this.stop();
-      if (previousTransport) await previousTransport.stop();
-      this.configure(cachePath, true);
-      this.config.commandTimeoutMs = 60000;
-      this.sftpTransport = transport;
-      this.lastSftpStatus = transport.getStatus();
-      this.start();
-    } catch (error: any) {
-      this.sftpTransport = null;
-      await transport.stop();
-      this.lastSftpStatus = transport.getStatus();
-      throw error;
-    }
-    return this.bridgePath;
-  }
-
-  async stopSftp() {
-    if (this.sftpTransport) {
-      await this.sftpTransport.stop();
-      this.lastSftpStatus = this.sftpTransport.getStatus();
-    }
-    this.sftpTransport = null;
-    this.config.commandTimeoutMs = 15000;
-  }
-
-  isSftpRunning() {
-    return Boolean(this.sftpTransport?.running);
   }
 
   autoDetect(serverName: string, zomboidUserFolder: string | null = null) {
@@ -1303,12 +1255,11 @@ class PanelBridge extends EventEmitter {
       config: {
         statusStaleMs: this.config.statusStaleMs,
         pollIntervalMs: this.config.pollIntervalMs,
-        statusCheckMs: this.config.statusCheckMs
+        statusCheckMs: this.config.statusCheckMs,
       },
       statusFile: fileInfo,
       hasFileWatcher: !!this.fileWatcher,
-      transport: this.sftpTransport?.getStatus() || { type: 'local', running: this.isRunning },
-      lastSftpTransport: this.lastSftpStatus
+      transport: { type: "local", running: this.isRunning },
     };
   }
 

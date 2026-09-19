@@ -92,7 +92,7 @@ describe("dead isAbsolute(resolve(x)) checks now reject a relative path before r
     const { default: panelBridgeRouter } = await import("../routes/panelBridge.ts");
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "panelbridge-allowlist-"));
     try {
-      getServers.mockResolvedValue([{ installPath: root, isRemote: false }]);
+      getServers.mockResolvedValue([{ installPath: root }]);
       const target = path.join(root, "media", "lua", "server");
       const res = await runRoute(panelBridgeRouter, "/install-mod", "post", {
         body: { serverLuaPath: target },

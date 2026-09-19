@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from "vitest";
-import os from "os";
 
 const { normalizeServerMemory } = await import("../database/init.ts");
 
@@ -40,74 +39,5 @@ describe("normalizeServerMemory env-var fallback", () => {
 
     expect(result.installPath).toBe("/db/pz-server");
     expect(result.zomboidDataPath).toBe("/db/zomboid-data");
-  });
-
-  it("keeps a stored isRemote:true even when the resolved path exists locally", () => {
-    delete process.env.PZ_SERVER_PATH;
-    delete process.env.PZ_SAVE_PATH;
-
-    const result = normalizeServerMemory({
-      installPath: os.tmpdir(),
-      zomboidDataPath: null,
-      isRemote: true,
-    });
-
-    expect(result.isRemote).toBe(true);
-  });
-
-  it("keeps a stored isRemote:false even when configured paths don't exist locally yet (e.g. install hasn't run)", () => {
-    delete process.env.PZ_SERVER_PATH;
-    delete process.env.PZ_SAVE_PATH;
-
-    const result = normalizeServerMemory({
-      installPath: "/definitely/not/a/real/path/pz-cp-test",
-      zomboidDataPath: null,
-      isRemote: false,
-    });
-
-    expect(result.isRemote).toBe(false);
-  });
-
-  it("leaves isRemote untouched when no paths are configured at all", () => {
-    delete process.env.PZ_SERVER_PATH;
-    delete process.env.PZ_SAVE_PATH;
-
-    const result = normalizeServerMemory({
-      installPath: "",
-      zomboidDataPath: null,
-      isRemote: true,
-    });
-
-    expect(result.isRemote).toBe(true);
-  });
-
-  it("infers isRemote from path existence only for legacy records with no isRemote field at all", () => {
-    delete process.env.PZ_SERVER_PATH;
-    delete process.env.PZ_SAVE_PATH;
-
-    const existsLocally = normalizeServerMemory({
-      installPath: os.tmpdir(),
-      zomboidDataPath: null,
-    });
-    expect(existsLocally.isRemote).toBe(false);
-
-    const doesNotExistLocally = normalizeServerMemory({
-      installPath: "/definitely/not/a/real/path/pz-cp-test",
-      zomboidDataPath: null,
-    });
-    expect(doesNotExistLocally.isRemote).toBe(true);
-  });
-
-  it("does not reclassify a local server as remote just because its install path doesn't exist yet", () => {
-    delete process.env.PZ_SERVER_PATH;
-    delete process.env.PZ_SAVE_PATH;
-
-    const result = normalizeServerMemory({
-      installPath: "/srv/pz/not-installed-yet",
-      zomboidDataPath: null,
-      isRemote: false,
-    });
-
-    expect(result.isRemote).toBe(false);
   });
 });

@@ -55,7 +55,6 @@ export async function collectKnownSecretValues(): Promise<string[]> {
 
   for (const secretFileName of [
     "discordBotToken",
-    "panelBridgeSftpPassword",
     "steamSessionId",
     "steamLoginSecure",
   ]) {

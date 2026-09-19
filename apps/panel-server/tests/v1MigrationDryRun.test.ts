@@ -92,9 +92,9 @@ function makeSyntheticV1Db() {
 }
 
 describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cleanly with no data loss", () => {
-  it("a db with NO _schemaVersion at all migrates cleanly to the current schema version (v3)", () => {
+  it("a db with NO _schemaVersion at all migrates cleanly to the current schema version", () => {
     const data = runMigrations(makeSyntheticV1Db());
-    expect(data._schemaVersion).toBe(3);
+    expect(data._schemaVersion).toBe(4);
   });
 
   it("every migration is genuinely idempotent: running it a second time is a no-op", () => {
@@ -104,7 +104,7 @@ describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cl
     const replayed = { ...once, _schemaVersion: 1 };
     const twice = runMigrations(replayed);
 
-    expect(twice._schemaVersion).toBe(3);
+    expect(twice._schemaVersion).toBe(4);
     expect(twice.roles.map((r) => r.id).sort()).toEqual(
       once.roles.map((r) => r.id).sort(),
     );
@@ -114,6 +114,20 @@ describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cl
     }
     const stillCurrent = runMigrations(once);
     expect(JSON.stringify(stillCurrent)).toBe(onceJson);
+  });
+
+  it("removes retired remote-server fields and settings", () => {
+    const data = makeSyntheticV1Db();
+    data._schemaVersion = 3;
+    data.servers[0].isRemote = true;
+    data.servers[0].remoteConfigConfigured = true;
+    data.settings.panelBridgeSftpHost = "example.test";
+
+    const migrated = runMigrations(data);
+
+    expect(migrated.servers[0].isRemote).toBeUndefined();
+    expect(migrated.servers[0].remoteConfigConfigured).toBeUndefined();
+    expect(migrated.settings.panelBridgeSftpHost).toBeUndefined();
   });
 
   it("no data is lost: every non-migration-owned collection survives with its actual contents intact, not merely present as a key", () => {

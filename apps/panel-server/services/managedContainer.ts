@@ -28,7 +28,6 @@ export interface DockerControl {
 
 interface ServerProfile {
   id?: string | number;
-  isRemote?: boolean;
   dockerContainerName?: unknown;
   dockerContainerId?: unknown;
 }

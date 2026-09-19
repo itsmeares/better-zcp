@@ -15,7 +15,6 @@ const forbiddenMarkers = [
   'panel-server/services',
   'process.pkg',
   'node:sqlite',
-  'ssh2-sftp-client',
 ];
 
 function javascriptFiles(directory) {

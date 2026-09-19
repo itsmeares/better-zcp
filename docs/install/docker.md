@@ -9,13 +9,12 @@ assumes you've read the others.
 
 ## Which path is mine?
 
-| What you already have | Use this path |
-| --- | --- |
-| Nothing running yet. You want one container that installs and runs Project Zomboid **and** the panel. | [All-in-one](#path-a-all-in-one) — the flagship, most-complete path |
-| Project Zomboid already running on **this same host** (systemd, screen, tmux, another container) and you want the panel to edit its config files, take local backups, or use PanelBridge. | [docker-compose.yml](#path-b-docker-composeyml-bind-mounts) — bind mounts, full file access |
-| Project Zomboid running **somewhere else** (another machine, a separate container, or a hosting provider) and you just want the panel talking to it over RCON — no shared filesystem needed. | [docker-compose.install.yml](#path-c-docker-composeinstallyml-panel-only) — fastest, named volumes only |
-| **Unraid**, with Project Zomboid already running in its own container/template (for example an Indifferent Broccoli or community PZ template). | [Unraid template](#path-d-unraid) — panel only, points at your existing PZ container |
-| macOS | There's no native macOS binary. Use [Path C](#path-c-docker-composeinstallyml-panel-only) with Docker Desktop or OrbStack. |
+| What you already have                                                                                                                                                                     | Use this path                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Nothing running yet. You want one container that installs and runs Project Zomboid **and** the panel.                                                                                     | [All-in-one](#path-a-all-in-one) — the flagship, most-complete path                               |
+| Project Zomboid already running on **this same host** (systemd, screen, tmux, another container) and you want the panel to edit its config files, take local backups, or use PanelBridge. | [docker-compose.yml](#path-b-docker-composeyml-bind-mounts) — bind mounts, full file access       |
+| **Unraid**, with Project Zomboid already running in its own container/template.                                                                                                           | [Unraid template](#path-c-unraid) — panel with the PZ folders mounted                             |
+| macOS                                                                                                                                                                                     | There's no native macOS binary. Use [Path A](#path-a-all-in-one) with Docker Desktop or OrbStack. |
 
 Every path ends with the same web UI at `http://localhost:3001` — only how
 Project Zomboid gets there differs.
@@ -296,50 +295,7 @@ RCON shows connected.
 
 ---
 
-## Path C: docker-compose.install.yml (panel only)
-
-**What it is:** the fastest path to a running panel — named volumes only, no
-bind mounts, no `PUID`/`PGID` to figure out. Use this when Project Zomboid
-runs somewhere the panel doesn't need file access to (another machine, a
-separate container, a hosting provider), or you just want to look at the
-panel before committing to a full setup.
-
-### Phase 1 — Prerequisites
-
-1. Docker Engine and the Docker Compose plugin.
-
-### Phase 2 — Start it
-
-2. ```sh
-   curl -O https://raw.githubusercontent.com/itsmeares/better-zcp/main/docker-compose.install.yml
-   docker compose -f docker-compose.install.yml up -d
-   ```
-   `pull_policy: always` means every `up -d` you run later fetches the
-   newest published image — this file has no version pinning of its own.
-
-**You know it worked when:** `docker compose -f docker-compose.install.yml
-ps` shows `zomboid-panel` as `Up`.
-
-### Phase 3 — First login
-
-3. Open `http://localhost:3001`. You'll see a setup screen asking for a
-   **Setup Token** — get it from the container's logs:
-   ```sh
-   docker compose -f docker-compose.install.yml logs zomboid-panel | grep "SETUP TOKEN"
-   ```
-   Copy the long string after `SETUP TOKEN required to complete first-run
-   setup:` and paste it into the setup screen, then choose a username and
-   password and submit.
-4. Open **Servers** and add your Project Zomboid server as a **remote
-   server** using its RCON host, port, and password — this path has no
-   shared filesystem, so PanelBridge needs SFTP (Settings → PanelBridge →
-   Remote connection) if you want it, rather than a shared folder.
-
-**You know it worked when:** the server shows as connected in **Servers**.
-
----
-
-## Path D: Unraid
+## Path C: Unraid
 
 **What it is:** a Community Applications template that runs the panel
 **only**, alongside a Project Zomboid container you already have (for
@@ -391,14 +347,10 @@ configured.
    password and submit.
 8. In **Settings**, set the paths to the **container-side** values —
    `/pz-server` and `/zomboid` — never the `/mnt/...` host paths from step 3.
-9. If your PZ container doesn't expose `/zomboid` to the panel at all, use
-   **Settings → PanelBridge → Remote server via SFTP** instead of a shared
-   folder.
-
-**You know it worked when:** the dashboard shows the server status card and
-RCON shows connected. By default, the panel can monitor and administer the
-game through RCON, but it does not start, stop, or auto-update a PZ container
-owned by Unraid.
+   **You know it worked when:** the dashboard shows the server status card and
+   RCON shows connected. By default, the panel can monitor and administer the
+   game through RCON, but it does not start, stop, or auto-update a PZ container
+   owned by Unraid.
 
 ### Optional: let the panel control the Unraid PZ container
 
@@ -426,11 +378,10 @@ the supplementary group first.
 
 ### PUID/PGID on bind-mounted PZ folders
 
-This applies to **Path B** and **Path D** — anywhere the panel bind-mounts a
+This applies to **Path B** and **Path C** — anywhere the panel bind-mounts a
 PZ folder that already exists on the host, owned by a specific Linux
 user/group. It does **not** apply to **Path A** (all-in-one uses named
-volumes it owns itself, always as UID/GID `1000` internally) or **Path C**
-(no PZ mounts at all).
+volumes it owns itself, always as UID/GID `1000` internally).
 
 The container image runs as root by default and re-owns exactly two
 directories to a numeric UID/GID: `/app/data` and `/app/logs` (its own
@@ -487,7 +438,7 @@ Access** instead — the environment variable exists specifically to solve the
 chicken-and-egg problem of not being able to reach Settings if CORS is
 already blocking you. **Where you set it, and how you apply it, is different
 per path** — the variable name is the same everywhere, but only Path A and
-Path D actually wire it up out of the box:
+Path C wire it up out of the box:
 
 - **Path A (all-in-one):** already wired. It lives in a different file —
   `<state dir>/build/ctx/.env` (default:
@@ -509,26 +460,11 @@ Path D actually wire it up out of the box:
   ```sh
   docker compose up -d
   ```
-- **Path C (docker-compose.install.yml):** **no wiring for this at all** —
-  there's no `CORS_ORIGINS` line, commented or otherwise, anywhere in the
-  file. If you need the panel reachable through a reverse proxy or public
-  hostname on this path, add the line yourself before starting the stack:
-  ```yaml
-  environment:
-    NODE_ENV: production
-    TRUST_PROXY: ${TRUST_PROXY:-false}
-    CORS_ORIGINS: https://panel.example.com
-  ```
-  This works — the panel reads `CORS_ORIGINS` from its process environment
-  regardless of which compose file set it — but you're editing in a value
-  the file doesn't otherwise expose. If you'd rather not hand-edit the
-  compose file, use [Path B](#path-b-docker-composeyml-bind-mounts) instead,
-  which has the field ready to uncomment.
-- **Path D (Unraid):** already wired — it's the **CORS origins** field under
+- **Path C (Unraid):** already wired — it's the **CORS origins** field under
   the template's advanced settings (blank by default, LAN-only). Expand
   "Show more settings" if you don't see it.
 
-Restart (or recreate, for Path B/C) the panel container for the change to
+Restart or recreate the panel container for the change to
 take effect.
 
 ## Automating first-run setup

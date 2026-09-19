@@ -1,4 +1,4 @@
-export type ServerProvider = 'native' | 'docker-local' | 'remote-sftp'
+export type ServerProvider = 'native' | 'docker-local'
 
 export type LifecycleState =
   | 'stopped'
@@ -24,7 +24,6 @@ export function toClientRunState(
 export function resolveClientProvider(
   server:
     | {
-        isRemote?: boolean
         dockerContainerName?: string | null
         dockerContainerId?: string | null
       }
@@ -32,7 +31,6 @@ export function resolveClientProvider(
     | undefined,
 ): ServerProvider | null {
   if (!server) return null
-  if (server.isRemote) return 'remote-sftp'
   if (server.dockerContainerName || server.dockerContainerId)
     return 'docker-local'
   return 'native'
@@ -48,7 +46,6 @@ export function resolveServerCardRunning(
   server:
     | {
         isActive?: boolean
-        isRemote?: boolean
         dockerContainerName?: string | null
         dockerContainerId?: string | null
       }
@@ -152,10 +149,7 @@ export function deriveDashboardStatus({
 }
 
 export async function resolveServerRunning(
-  server:
-    | { isRemote?: boolean; dockerContainerName?: string | null }
-    | null
-    | undefined,
+  server: { dockerContainerName?: string | null } | null | undefined,
   fetchNativeStatus: () => Promise<{ running?: boolean; scanFailed?: boolean }>,
   fetchComposedStatus: () => Promise<ComposedStatusSignals>,
 ): Promise<boolean | null> {

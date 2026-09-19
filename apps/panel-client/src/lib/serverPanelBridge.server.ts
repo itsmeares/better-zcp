@@ -77,7 +77,7 @@ const VALID_PRESETS = [
 
 async function executePanelBridgeCommand(data: AnyRecord): Promise<any> {
   const [
-    { getActiveServer, logBridgeCommand },
+    { logBridgeCommand },
     { ErrorCode },
     { sanitizeError, sanitizeErrorParams },
   ] = await Promise.all([
@@ -87,15 +87,6 @@ async function executePanelBridgeCommand(data: AnyRecord): Promise<any> {
   ])
   const runtime = await panelRuntime()
   const bridge = runtime.panelBridge
-  const activeServer = await getActiveServer()
-
-  if (activeServer?.isRemote && !bridge.isSftpRunning() && !bridge.isRunning) {
-    invalid(
-      'PanelBridge requires a configured mapped drive or a running SFTP bridge transport for remote servers.',
-      ErrorCode.PANELBRIDGE_COMMAND_REMOTE_TRANSPORT_UNAVAILABLE,
-    )
-  }
-
   const { action, args } = data
   if (!action)
     invalid('action is required', ErrorCode.PANELBRIDGE_ACTION_REQUIRED)

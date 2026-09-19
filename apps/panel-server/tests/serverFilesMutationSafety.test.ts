@@ -9,16 +9,6 @@ vi.mock("../database/init.ts", () => ({
   getAllSettings: vi.fn(async () => ({})),
 }));
 
-vi.mock("../services/remoteConfigFiles.ts", () => ({
-  SFTP_CONFIG_PATH_KEY: "panelBridgeSftpConfigPath",
-  acquireMirrorLock: vi.fn(),
-  beginRemoteConfigSession: vi.fn(),
-  getMirrorPath: vi.fn(),
-  isRemoteConfigConfigured: vi.fn(() => false),
-  pushRemoteConfigFiles: vi.fn(),
-  validateRemoteConfigTransport: vi.fn(),
-}));
-
 const {
   isLocalConfigMutation,
   isLocalConfigEdit,
@@ -50,7 +40,7 @@ function createRequest(method, path, running = false) {
 describe("local config mutation safety", () => {
   beforeEach(() => {
     getActiveServer.mockReset();
-    getActiveServer.mockResolvedValue({ isRemote: false });
+    getActiveServer.mockResolvedValue({});
   });
 
   it("recognizes file and template config mutations but not metadata routes", () => {
@@ -156,7 +146,7 @@ describe("local config mutation safety", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("allows stopped and remote restore/template-apply through requireStoppedForLocalConfigMutation", async () => {
+  it("allows stopped restore/template-apply through requireStoppedForLocalConfigMutation", async () => {
     const stoppedResponse = createResponse();
     const stoppedNext = vi.fn();
     await requireStoppedForLocalConfigMutation(
@@ -165,16 +155,6 @@ describe("local config mutation safety", () => {
       stoppedNext,
     );
     expect(stoppedNext).toHaveBeenCalledOnce();
-
-    getActiveServer.mockResolvedValue({ isRemote: true });
-    const remoteResponse = createResponse();
-    const remoteNext = vi.fn();
-    await requireStoppedForLocalConfigMutation(
-      createRequest("POST", "/restore/world.bak", true),
-      remoteResponse,
-      remoteNext,
-    );
-    expect(remoteNext).toHaveBeenCalledOnce();
   });
 
   describe("warnRunningForLocalConfigEdit (the nine edit routes)", () => {
@@ -257,31 +237,6 @@ describe("local config mutation safety", () => {
       await warnRunningForLocalConfigEdit(request, response, next);
 
       expect(next).toHaveBeenCalledOnce();
-      expect(request.configEditRestartWarning).toBe(true);
-    });
-
-    it("skips the warning check entirely for a remote server", async () => {
-      getActiveServer.mockResolvedValue({ isRemote: true });
-      const response = createResponse();
-      const next = vi.fn();
-      const request = createRequest("PUT", "/ini", true);
-
-      await warnRunningForLocalConfigEdit(request, response, next);
-
-      expect(next).toHaveBeenCalledOnce();
-      expect(request.configEditRestartWarning).toBeUndefined();
-    });
-
-    it("warns (does not treat as remote) when a configured local path is currently unreachable", async () => {
-      getActiveServer.mockResolvedValue({ isRemote: true, installPath: "/nonexistent/pz-server" });
-      const response = createResponse();
-      const next = vi.fn();
-      const request = createRequest("PUT", "/ini", true);
-
-      await warnRunningForLocalConfigEdit(request, response, next);
-
-      expect(next).toHaveBeenCalledOnce();
-      expect(response.status).not.toHaveBeenCalled();
       expect(request.configEditRestartWarning).toBe(true);
     });
   });

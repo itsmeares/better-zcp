@@ -65,7 +65,6 @@ describe("POST /add-missing-dep: WorkshopItems= sanitization", () => {
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
   });
 

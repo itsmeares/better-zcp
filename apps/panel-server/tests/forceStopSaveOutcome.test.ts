@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => ({ isRemote: false })),
+  getActiveServer: vi.fn(async () => ({})),
 }));
 
 vi.mock("../services/managedContainer.ts", () => ({

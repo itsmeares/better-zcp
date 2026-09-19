@@ -112,17 +112,6 @@ describe("isFirstBootMissingAdminPassword() -- the loud-failure guard", () => {
     }
   });
 
-  it("false: a remote server -- this class of crash is local-process-only, and a remote server is refused for a different reason earlier in the route", () => {
-    expect(
-      isFirstBootMissingAdminPassword({
-        serverName: "Remote",
-        zomboidDataPath: "/anything",
-        adminPassword: "",
-        isRemote: true,
-      }),
-    ).toBe(false);
-  });
-
   it("false: no active server, or a record missing serverName/zomboidDataPath -- nothing to check yet, not a reason to refuse", () => {
     expect(isFirstBootMissingAdminPassword(null)).toBe(false);
     expect(isFirstBootMissingAdminPassword({ adminPassword: "" })).toBe(false);

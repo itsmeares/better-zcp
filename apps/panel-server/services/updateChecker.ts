@@ -551,8 +551,8 @@ export class UpdateChecker {
       await getSetting("serverAutoUpdateWarningMinutes"),
     );
     const activeServer = await getActiveServer();
-    if (!activeServer?.installPath || activeServer.isRemote) {
-      log.warn("Auto-update skipped: the active server is remote or has no local install path");
+    if (!activeServer?.installPath) {
+      log.warn("Auto-update skipped: the active server has no install path");
       return;
     }
 

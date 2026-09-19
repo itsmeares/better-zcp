@@ -11,17 +11,11 @@ import {
 
 describe("resolveProvider", () => {
   it("defaults a local server to native", () => {
-    expect(resolveProvider({ isRemote: false })).toBe("native");
+    expect(resolveProvider({})).toBe("native");
   });
 
-  it("maps isRemote to remote-sftp", () => {
-    expect(resolveProvider({ isRemote: true })).toBe("remote-sftp");
-  });
-
-  it("honours an explicit provider field over isRemote", () => {
-    expect(resolveProvider({ isRemote: true, provider: "docker-local" })).toBe(
-      "docker-local",
-    );
+  it("honours an explicit provider field", () => {
+    expect(resolveProvider({ provider: "docker-local" })).toBe("docker-local");
   });
 
   it("infers docker-local from legacy container fields", () => {
@@ -43,12 +37,6 @@ describe("buildHostSignal", () => {
       label: "Process",
       detail: null,
     });
-  });
-
-  it("reports remote-sftp hosts as unknown — no way to verify without SFTP", () => {
-    const signal = buildHostSignal("remote-sftp", true);
-    expect(signal.status).toBe("unknown");
-    expect(signal.label).toBe("Host");
   });
 
   it("reports Docker container state from the managed-container lookup, ignoring the local scan", () => {
@@ -190,7 +178,7 @@ describe("buildSummary", () => {
 describe("composeServerStatus", () => {
   it("composes the full docker-container-running-but-rcon-down scenario", () => {
     const result = composeServerStatus({
-      server: { isRemote: false },
+      server: {},
       isRunning: true,
       rcon: { connected: false, host: "host.docker.internal", port: 27015 },
       bridge: { configured: true, running: false, modConnected: false },
@@ -213,7 +201,7 @@ describe("composeServerStatus", () => {
 
   it("composes a fully healthy native server", () => {
     const result = composeServerStatus({
-      server: { isRemote: false },
+      server: {},
       isRunning: true,
       rcon: { connected: true, host: "127.0.0.1", port: 27015 },
       bridge: { configured: true, running: true, modConnected: true },
@@ -227,7 +215,7 @@ describe("composeServerStatus", () => {
 
   it("composes a native server whose host state can't be verified because detection failed", () => {
     const result = composeServerStatus({
-      server: { isRemote: false },
+      server: {},
       isRunning: false,
       scanFailed: true,
       rcon: { connected: false },
@@ -236,19 +224,6 @@ describe("composeServerStatus", () => {
 
     expect(result.provider).toBe("native");
     expect(result.host.status).toBe("unknown");
-  });
-
-  it("composes a remote server whose host state can't be verified", () => {
-    const result = composeServerStatus({
-      server: { isRemote: true },
-      isRunning: false,
-      rcon: { connected: true, host: "1.2.3.4", port: 27015 },
-      bridge: { configured: true, running: true, modConnected: true },
-    });
-
-    expect(result.provider).toBe("remote-sftp");
-    expect(result.host.status).toBe("unknown");
-    expect(result.server.status).toBe("connected");
   });
 
   it("reports a mapped container as running from the Docker lookup, even though the local process scan found nothing", () => {

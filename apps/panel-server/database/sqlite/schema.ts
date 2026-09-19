@@ -21,7 +21,6 @@ export const servers = sqliteTable("servers", {
   serverPort: integer("server_port"),
   rconHost: text("rcon_host"),
   rconPort: integer("rcon_port"),
-  isRemote: integer("is_remote"),
   isActive: integer("is_active"),
   lifecycleProvider: text("lifecycle_provider"),
   data: text("data").notNull(),

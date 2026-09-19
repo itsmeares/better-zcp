@@ -86,7 +86,6 @@ describe("toggle/batch-toggle: disk-verified numeric mod IDs", () => {
       serverConfigPath: configPath,
       serverName: "TestServer",
       installPath,
-      isRemote: false,
     });
   });
 

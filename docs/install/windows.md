@@ -193,13 +193,8 @@ and Phase 5 turned on RCON, but nothing you did in either one told the panel
 about them. This phase connects the two.
 
 1. In the panel's left sidebar, click **My Servers**.
-2. Click **Add Existing Server** — not **Add Remote Server** or **Install
-   New Server**, which are for different situations (a PZ server on a
-   *different* machine — see [hosted.md](hosted.md) — or installing a brand
-   new PZ server through the panel's own wizard, neither of which is what
-   you just did in Phases 1-5). **Add Existing Server** opens already set to
-   **Local Server** mode, which is correct here since PZ runs on this same
-   PC.
+2. Click **Add Existing Server**, not **Install New Server**. The existing
+   server flow is correct here because PZ is already installed on this PC.
 3. You'll see two ways to fill in the rest of the form — pick whichever is
    easier for you, both end up in the same place:
    - **Auto Detect Servers** (the default view): paste the **Zomboid data

@@ -7,7 +7,6 @@ const log = createLogger("ConfigMutationGuard");
 interface ServerProfile {
   installPath?: string | null;
   zomboidDataPath?: string | null;
-  isRemote?: boolean;
 }
 
 interface ProcessDetails {
@@ -55,27 +54,25 @@ export async function requireStoppedForLocalConfigMutation(
 ): Promise<unknown> {
   try {
     const activeServer = (await getActiveServer()) as
-      | ServerProfile
-      | null
-      | undefined;
+      ServerProfile | null | undefined;
 
     const { pathsConfigured, pathsExistLocally } =
       resolveLocalPathReachability(activeServer);
     if (pathsConfigured && !pathsExistLocally) {
       return res.status(503).json({
         code: "SERVER_STATE_UNKNOWN",
-        error: "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
+        error:
+          "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
       });
     }
-    if (activeServer?.isRemote) return next();
 
     const serverManager = req.app?.get?.("serverManager") as
-      | ServerManager
-      | undefined;
+      ServerManager | undefined;
     if (typeof serverManager?.getServerProcessDetails !== "function") {
       return res.status(503).json({
         code: "SERVER_STATE_UNKNOWN",
-        error: "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
+        error:
+          "Can't verify whether the server is actually stopped — the process-detection scan itself failed, not the server. Check the panel's log for the error. If this keeps happening, something on this host (antivirus, a full disk, or a missing system tool) may be blocking detection.",
       });
     }
 
@@ -125,7 +122,6 @@ export async function warnRunningForLocalConfigEdit(
       req.configEditRestartWarning = true;
       return next();
     }
-    if (activeServer?.isRemote) return next();
 
     const serverManager = req.app?.get?.("serverManager") as
       | ServerManager

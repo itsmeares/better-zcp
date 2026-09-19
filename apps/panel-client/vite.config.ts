@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => {
     ],
     ssr: {
       noExternal: true,
-      external: ['ssh2-sftp-client', 'unzipper'],
+      external: ['unzipper'],
     },
     environments: {
       client: {
@@ -73,7 +73,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       rollupOptions: {
-        external: ['ssh2-sftp-client', 'ssh2', 'cpu-features'],
+        external: ['cpu-features'],
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined

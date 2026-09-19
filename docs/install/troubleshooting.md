@@ -54,7 +54,7 @@ network — the panel can't discover them for you.
    PanelBridge.
 
 If you're installing through Docker and the panel will also read or write
-PZ's own files (config editing, local backups, PanelBridge without SFTP),
+PZ's own files (config editing, local backups, and PanelBridge),
 also note the **numeric UID/GID that owns your PZ folders** (`id -u` /
 `id -g` on the host) — you'll need it for `PUID`/`PGID` in `.env`. See
 [Permission denied on mounted PZ folders](#permission-denied-on-mounted-pz-folders)
@@ -298,11 +298,6 @@ process-scan whichever server is currently active, so it refuses rather
 than assume an unchecked server is safely stopped. Switch to that server in
 the UI first, then apply the template.
 
-If the server in question is configured as a **remote server via SFTP**,
-its status will show as `Cannot verify without SFTP access` in the host
-badge — this is expected; the panel has no local process to scan for a
-remote host and never claims otherwise.
-
 ---
 
 ### Server process exited immediately after starting (code=1, signal=none) — startup failed
@@ -415,9 +410,7 @@ folder permissions to) an account that can read the path.
 **What to do:**
 1. Confirm `PanelBridge.lua` is actually installed in the server's
    `Install/media/lua/server/` folder (the panel does this for you when you
-   enable it from **Settings → PanelBridge**, unless you're on a remote
-   server without shared filesystem access — see the Indifferent Broccoli /
-   remote-SFTP guide for that path instead).
+   enable it from **Settings → PanelBridge**).
 2. Confirm `DoLuaChecksum=false` is set in the PZ server `.ini` — if it's
    still `true`, PZ will refuse to load the modded file.
 3. Fully restart the PZ server (not just save/reload) — the mod only loads
@@ -426,11 +419,6 @@ folder permissions to) an account that can read the path.
    "Bridge waiting," check the PZ server's own console/log for a Lua error
    from PanelBridge, and check the panel's log for whether it's still
    watching for the mod's status file at all.
-5. For a remote server without a shared filesystem, confirm **Settings →
-   PanelBridge → Remote connection** has a working SFTP connection
-   ("Verify and prepare SFTP" succeeds) and that **Start SFTP bridge** has
-   actually been clicked — the badge stays offline until that bridge is
-   running, even with valid credentials saved.
 
 ---
 

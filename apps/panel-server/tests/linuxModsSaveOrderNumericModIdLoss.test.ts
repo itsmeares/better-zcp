@@ -68,7 +68,6 @@ describe("mod load order preservation for numeric-shaped mod IDs", () => {
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
     getModPresets.mockReset();
   });

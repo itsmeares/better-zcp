@@ -58,7 +58,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("reports container running but RCON disconnected without collapsing to one flag", async () => {
-    getActiveServer.mockResolvedValue({ id: 1, isRemote: false });
+    getActiveServer.mockResolvedValue({ id: 1 });
     fakeBridge.bridgePath = "/data/panelbridge";
     const response = createResponse();
 
@@ -93,7 +93,6 @@ describe("GET /api/servers/active/status", () => {
     getActiveServer.mockResolvedValue({
       id: "docker-server",
       dockerContainerName: "pz-container",
-      isRemote: false,
     });
     resolveDockerHostSignal.mockResolvedValue({ running: true, scanFailed: false });
     const processScan = vi.fn(async () => ({ running: false, scanFailed: false }));
@@ -128,7 +127,6 @@ describe("GET /api/servers/active/status", () => {
     getActiveServer.mockResolvedValue({
       id: "docker-server",
       dockerContainerName: "missing-container",
-      isRemote: false,
     });
     resolveDockerHostSignal.mockResolvedValue({ running: false, scanFailed: true });
     const processScan = vi.fn(async () => ({ running: false, scanFailed: false }));
@@ -153,7 +151,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("reports the host as unknown, not stopped, when process detection itself failed", async () => {
-    getActiveServer.mockResolvedValue({ id: 1, isRemote: false });
+    getActiveServer.mockResolvedValue({ id: 1 });
     const response = createResponse();
 
     await getStatusHandler()(
@@ -176,7 +174,7 @@ describe("GET /api/servers/active/status", () => {
   });
 
   it("reports an active bridge only when running and mod-connected", async () => {
-    getActiveServer.mockResolvedValue({ id: 1, isRemote: false });
+    getActiveServer.mockResolvedValue({ id: 1 });
     fakeBridge.bridgePath = "/data/panelbridge";
     fakeBridge.isRunning = true;
     fakeBridge.isModConnected = () => true;
@@ -191,7 +189,7 @@ describe("GET /api/servers/active/status", () => {
 
 
   it("does not attempt a Docker lookup for a native server", async () => {
-    getActiveServer.mockResolvedValue({ id: 1, isRemote: false });
+    getActiveServer.mockResolvedValue({ id: 1 });
     const response = createResponse();
 
     await getStatusHandler()({ app: fakeApp() }, response);

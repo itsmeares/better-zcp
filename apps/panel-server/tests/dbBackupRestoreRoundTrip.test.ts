@@ -108,7 +108,7 @@ describe("db.json backup -> restore round trip: real code paths, not hand-crafte
     const freshMod = await import("../database/init.ts");
     const db = await freshMod.getDb();
 
-    expect(db.data._schemaVersion).toBe(3);
+    expect(db.data._schemaVersion).toBe(4);
 
     expect(db.data.settings.customOldSetting).toBe(
       "still-here-after-migration",

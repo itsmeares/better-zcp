@@ -334,7 +334,6 @@ describe("case 5 (DEAD): /resolve and /vehicles never leak local filesystem path
 
   it("/vehicles never includes the save path or server name -- only {id, x, y} per vehicle", async () => {
     mockGetActiveServer.mockResolvedValue({
-      isRemote: false,
       zomboidDataPath: "C:\\Users\\SomeOperator\\Zomboid",
       serverName: "servertest",
     });
@@ -362,7 +361,6 @@ describe("case 5 (DEAD): /resolve and /vehicles never leak local filesystem path
 
   it("/vehicles on a lookup failure falls back to an empty list, never surfacing the underlying error message (which would embed the path)", async () => {
     mockGetActiveServer.mockResolvedValue({
-      isRemote: false,
       zomboidDataPath: "C:\\Users\\SomeOperator\\Zomboid",
       serverName: "servertest",
     });

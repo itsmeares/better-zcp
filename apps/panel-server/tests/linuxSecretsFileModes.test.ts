@@ -10,22 +10,8 @@ const mockDataPaths = vi.hoisted(() => {
 });
 vi.mock("../utils/paths.ts", () => ({ getDataPaths: () => mockDataPaths }));
 
-vi.mock("ssh2-sftp-client", () => ({
-  default: vi.fn().mockImplementation(function () {
-    return {
-      connect: vi.fn().mockResolvedValue(undefined),
-      end: vi.fn().mockResolvedValue(undefined),
-      stat: vi.fn().mockResolvedValue({ size: 28, isDirectory: false }),
-      get: vi
-        .fn()
-        .mockResolvedValue(Buffer.from("RCONPassword=fake-remote-mirror-only\n")),
-    };
-  }),
-}));
-
 const { writeFileAtomic } = await import("../utils/fileWriteQueue.ts");
 const { loadOrCreateCerts, getCertPaths } = await import("../utils/certs.ts");
-const { pullRemoteConfigFiles } = await import("../services/remoteConfigFiles.ts");
 
 function mode(p) {
   return fs.statSync(p).mode & 0o777;
@@ -98,28 +84,6 @@ describe("certs.js -- a regenerated key is tightened regardless of its prior mod
       loadOrCreateCerts();
 
       expect(mode(keyPath)).toBe(0o600);
-    },
-  );
-});
-
-describe("pullRemoteConfigFiles -- the local mirror of a remote server's config is hardened", () => {
-  it.skipIf(isWindows)(
-    "mirror directory is 0700 and each pulled file is 0600, regardless of process umask",
-    async () => {
-      const config = {
-        host: "pz.example.net",
-        port: 22,
-        username: "panel",
-        password: "fake-sftp-password-for-test-only",
-        configPath: "/home/pz/Server",
-      };
-
-      const result = await pullRemoteConfigFiles(config, "servertest");
-
-      expect(mode(result.mirrorDir)).toBe(0o700);
-      const iniPath = path.join(result.mirrorDir, "servertest.ini");
-      expect(fs.existsSync(iniPath)).toBe(true);
-      expect(mode(iniPath)).toBe(0o600);
     },
   );
 });

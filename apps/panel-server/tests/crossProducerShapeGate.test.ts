@@ -1,9 +1,4 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-
 const getServers = vi.fn();
 const getActiveServer = vi.fn();
 const getServer = vi.fn();
@@ -86,13 +81,7 @@ const FAKE_SERVER_ROW = {
   useNoSteam: false,
   useDebug: false,
   useUpnp: true,
-  isRemote: true,
   isActive: true,
-};
-
-const SFTP_SETTINGS = {
-  panelBridgeSftpHost: "192.168.1.50",
-  panelBridgeSftpConfigPath: "/home/pz/Server",
 };
 
 beforeEach(() => {
@@ -102,7 +91,7 @@ beforeEach(() => {
   createServer.mockReset().mockResolvedValue(FAKE_SERVER_ROW);
   updateServer.mockReset().mockResolvedValue(FAKE_SERVER_ROW);
   setActiveServer.mockReset().mockResolvedValue(FAKE_SERVER_ROW);
-  getAllSettings.mockReset().mockResolvedValue(SFTP_SETTINGS);
+  getAllSettings.mockReset().mockResolvedValue({});
   setSetting.mockReset().mockResolvedValue(undefined);
 });
 
@@ -116,23 +105,14 @@ describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.ts
 
     expect(listKeys.length, "producer returned an empty object -- nothing to compare").toBeGreaterThan(0);
     expect(activeKeys).toEqual(listKeys);
-    expect(list.servers[0].remoteConfigConfigured).toBe(true);
-    expect(active.server.remoteConfigConfigured).toBe(true);
   });
 
   // eslint.config.js. If this test ever passed, every assertion above and
   it("the key-set comparison used above actually fails on a missing field (not a vacuous check)", () => {
-    const withField = { id: 1, name: "A", remoteConfigConfigured: true };
+    const withField = { id: 1, name: "A", installPath: "/srv/pz" };
     const withoutField = { id: 1, name: "A" };
     expect(Object.keys(withoutField).sort()).not.toEqual(Object.keys(withField).sort());
   });
-
-  const ROUTES_WITHOUT_REMOTE_CONFIG_FIELD = new Set([
-    "GET /:id",
-    "POST / (create)",
-    "PUT /:id (update)",
-    "POST /:id/activate",
-  ]);
 
   const OTHER_SERVER_PRODUCERS = [
     {
@@ -149,7 +129,7 @@ describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.ts
           app: fakeApp(),
           body: {
             name: "Test Server",
-            isRemote: true,
+            installPath: "/srv/pz",
             rconHost: "127.0.0.1",
             rconPort: 27015,
             rconPassword: "secret",
@@ -192,50 +172,9 @@ describe("cross-producer shape gate: Server (apps/panel-server/routes/servers.ts
         `${label} returns a field GET / doesn't -- investigate, this isn't a documented exception`,
       ).toEqual([]);
 
-      if (ROUTES_WITHOUT_REMOTE_CONFIG_FIELD.has(label)) {
-        expect(
-          missing,
-          `${label}'s missing-field set changed -- update the citation above or remove this exception`,
-        ).toEqual(["remoteConfigConfigured"]);
-      } else {
-        expect(missing).toEqual([]);
-      }
+      expect(missing).toEqual([]);
     },
   );
-});
-
-describe("remoteConfigConfigured reader-count guard (justifies the exception above)", () => {
-  const CLIENT_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../panel-client/src");
-  const API_TS = path.join(CLIENT_SRC, "lib", "api.ts");
-
-  function listSourceFiles(dir) {
-    const out = [];
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === "node_modules" || entry.name === "dist") continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        out.push(...listSourceFiles(full));
-      } else if (/\.(ts|tsx|js|jsx)$/.test(entry.name)) {
-        out.push(full);
-      }
-    }
-    return out;
-  }
-
-  it("has exactly one client-side reader of remoteConfigConfigured, and it's Layout.tsx", () => {
-    const files = listSourceFiles(CLIENT_SRC);
-    expect(files.length, "found zero source files under apps/panel-client/src -- the path resolution above is wrong, this check would otherwise pass vacuously").toBeGreaterThan(0);
-
-    const readers = files
-      .filter((f) => f !== API_TS)
-      .filter((f) => /remoteConfigConfigured/.test(fs.readFileSync(f, "utf8")))
-      .map((f) => path.relative(CLIENT_SRC, f).replace(/\\/g, "/"));
-
-    expect(
-      readers,
-      "the set of client-side readers of remoteConfigConfigured changed -- this is the exact premise the four-route exception above relies on. For each new file listed here: does it source its server data from GET /servers (safe, already carries the field), or from GET /servers/:id, POST /servers, PUT /servers/:id, or POST /servers/:id/activate (all four are missing the field today -- this new reader will silently see undefined)? If any of the latter, either fix the route to attach remoteConfigConfigured or fix the reader to source from GET / instead, then update this list and the exception above together.",
-    ).toEqual(["components/Layout.tsx"]);
-  });
 });
 
 describe("cross-producer shape gate: ServerBackupArchive (apps/panel-server/routes/backup.ts)", () => {
@@ -256,7 +195,7 @@ describe("cross-producer shape gate: ServerBackupArchive (apps/panel-server/rout
         skippedFiles: [],
       })),
     };
-    getActiveServer.mockResolvedValue({ isRemote: false });
+    getActiveServer.mockResolvedValue({});
     const app = fakeApp({ backupService });
 
     const list = await invokeJson(backupRouter, "/list", "get", { app });

@@ -14,13 +14,7 @@ import {
   sanitizeServerResponseList,
 } from "../utils/sanitize.ts";
 import { testRconConnection } from "../services/rcon.ts";
-import {
-  getServers,
-  getServer,
-  getActiveServer,
-  getAllSettings,
-} from "../database/init.ts";
-import { isRemoteConfigConfigured } from "../services/remoteConfigFiles.ts";
+import { getServers, getServer, getActiveServer } from "../database/init.ts";
 import {
   normalizeUserPath,
   inspectZomboidPath,
@@ -473,23 +467,11 @@ router.post("/detect", async (req, res) => {
   }
 });
 
-function computeRemoteConfigConfigured(
-  server: JsonRecord,
-  settings: JsonRecord,
-): boolean {
-  return server.isRemote ? isRemoteConfigConfigured(settings) : false;
-}
-
 router.get("/", async (req, res) => {
   try {
     const servers = (await getServers()) as JsonRecord[];
-    const settings = (await getAllSettings()) as JsonRecord;
-    const withRemoteConfig = servers.map((server: JsonRecord) => ({
-      ...server,
-      remoteConfigConfigured: computeRemoteConfigConfigured(server, settings),
-    }));
     res.json({
-      servers: sanitizeServerResponseList(withRemoteConfig),
+      servers: sanitizeServerResponseList(servers),
       lifecycleCapabilities: getLinuxLifecycleCapabilities(),
     });
   } catch (error: unknown) {
@@ -638,12 +620,8 @@ router.get("/active", async (req, res) => {
     if (!server) {
       return res.status(404).json({ error: "No active server configured" });
     }
-    const remoteConfigConfigured = computeRemoteConfigConfigured(
-      server,
-      await getAllSettings(),
-    );
     res.json({
-      server: sanitizeServerResponse({ ...server, remoteConfigConfigured }),
+      server: sanitizeServerResponse(server),
     });
   } catch (error: unknown) {
     log.error(`Failed to get active server: ${errorMessage(error)}`);
@@ -714,9 +692,7 @@ router.post("/", async (req, res) => {
       req.body && typeof req.body === "object" && !Array.isArray(req.body)
         ? req.body
         : {};
-    log.info(
-      `POST / — creating server: name=${config.name}, remote=${!!config.isRemote}`,
-    );
+    log.info(`POST / — creating server: name=${config.name}`);
 
     const allowIniImport = Boolean(
       config.importIniFrom && typeof config.importIniFrom === "object",

@@ -88,7 +88,6 @@ describe("mods.js ini-rewriting routes back up the live ini before overwriting i
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
   });
 
@@ -187,7 +186,6 @@ describe("mods.js ini writes: a failed backup warns but never blocks the edit", 
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
     copyFileSpy = vi
       .spyOn(fs.promises, "copyFile")

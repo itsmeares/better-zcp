@@ -128,7 +128,6 @@ beforeEach(() => {
   getActiveServer.mockReset().mockResolvedValue({
     id: "server-1",
     zomboidDataPath: dataRoot,
-    isRemote: false,
   });
   getServers.mockReset().mockResolvedValue([]);
   getSetting.mockReset().mockResolvedValue(null);
@@ -585,7 +584,6 @@ describe("delete-chunks/delete-region: stale scans and lifecycle races are refus
     getActiveServer.mockResolvedValue({
       id: "server-2",
       zomboidDataPath: dataRoot,
-      isRemote: false,
     });
 
     const res = await postAs("/delete-chunks", {

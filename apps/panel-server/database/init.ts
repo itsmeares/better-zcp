@@ -12,7 +12,6 @@ import {
   deleteServerSecret,
 } from "../utils/serverRconSecrets.ts";
 import { redactRconCommandSecrets } from "../utils/rconCommandRedaction.ts";
-import { readUiSecretFile, writeUiSecretFile } from "../utils/uiSecretFile.ts";
 import { isPidAlive } from "../utils/pidLiveness.ts";
 import { getPanelDatabase, setPanelDatabase } from "../utils/panelRuntime.ts";
 const log = createLogger("DB");
@@ -24,7 +23,6 @@ type ServerRecord = AnyRecord & {
   provider?: string | null;
   dockerContainerId?: unknown;
   dockerContainerName?: unknown;
-  isRemote?: boolean;
   serverName?: string;
   serverConfigPath?: string | null;
   zomboidDataPath?: string | null;
@@ -103,29 +101,6 @@ function createDatabase(adapter: DatabaseAdapter): Database {
   };
   return database;
 }
-
-export function rehydratePanelBridgeSftpPassword(
-  data: DatabaseData,
-  log: any,
-): DatabaseData {
-  if (!data.settings) data.settings = {};
-  if (!data.settings.panelBridgeSftpPassword) {
-    const fromFile = readUiSecretFile("panelBridgeSftpPassword", log);
-    if (fromFile) data.settings.panelBridgeSftpPassword = fromFile;
-  }
-  return data;
-}
-
-export function redactPanelBridgeSftpPasswordForWrite(
-  data: DatabaseData,
-): DatabaseData {
-  if (!data.settings?.panelBridgeSftpPassword) return data;
-  writeUiSecretFile("panelBridgeSftpPassword", data.settings.panelBridgeSftpPassword);
-  const { panelBridgeSftpPassword: _panelBridgeSftpPassword, ...restSettings } =
-    data.settings;
-  return { ...data, settings: restSettings };
-}
-
 
 const RETENTION = {
   command_history: 500,
@@ -207,8 +182,7 @@ const defaultData: DatabaseData = {
   _schemaVersion: 1,
 };
 
-
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 const MIGRATION_V2_TECHNICIAN_CAPABILITIES = [
   "backups.manage",
@@ -314,6 +288,16 @@ export function runMigrations(data: DatabaseData): DatabaseData {
     }
   }
 
+  if (version < 4) {
+    for (const server of data.servers || []) {
+      delete server.isRemote;
+      delete server.remoteConfigConfigured;
+    }
+    for (const key of Object.keys(data.settings || {})) {
+      if (key.startsWith("panelBridgeSftp")) delete data.settings[key];
+    }
+  }
+
   data._schemaVersion = CURRENT_SCHEMA_VERSION;
   log.info(`DB migrated to schema v${CURRENT_SCHEMA_VERSION}`);
   return data;
@@ -353,11 +337,7 @@ async function createSqliteAdapter(): Promise<DatabaseAdapter> {
   return {
     read: async () => (await store.read()) as DatabaseData | null,
     write: (data: DatabaseData) =>
-      store.write(
-        redactPanelBridgeSftpPasswordForWrite(
-          redactRconSecretsForWrite(data as any) as DatabaseData,
-        ),
-      ),
+      store.write(redactRconSecretsForWrite(data as any) as DatabaseData),
     close: () => store.close(),
   };
 }
@@ -412,9 +392,7 @@ export async function flushWrites(): Promise<void> {
 
       tmpPath = `${dbPath}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
       const data = JSON.stringify(
-        redactPanelBridgeSftpPasswordForWrite(
-          redactRconSecretsForWrite(db.data as any) as DatabaseData,
-        ),
+        redactRconSecretsForWrite(db.data as any) as DatabaseData,
         null,
         2,
       );
@@ -914,7 +892,6 @@ export async function getDb(): Promise<Database> {
     db.data = runMigrations(db.data);
     db.data = compactData(db.data);
     db.data = rehydrateRconSecrets(db.data, log) as DatabaseData;
-    db.data = rehydratePanelBridgeSftpPassword(db.data, log);
 
     _dirty = true;
     await flushWrites();
@@ -1585,28 +1562,19 @@ export function normalizeServerMemory(
   const zomboidDataPath =
     server.zomboidDataPath || process.env.PZ_SAVE_PATH || null;
 
-  const pathsConfigured = Boolean(installPath || zomboidDataPath);
-  const pathsExistLocally =
-    Boolean(installPath && fs.existsSync(installPath)) ||
-    Boolean(zomboidDataPath && fs.existsSync(zomboidDataPath));
-  const hasStoredIsRemote =
-    server.isRemote !== undefined && server.isRemote !== null;
-
-  return {
+  const normalized: AnyRecord = {
     ...server,
     installPath,
     zomboidDataPath,
-    isRemote: hasStoredIsRemote
-      ? server.isRemote
-      : pathsConfigured
-        ? !pathsExistLocally
-        : false,
     lifecycleProvider: ["systemd", "openrc"].includes(server.lifecycleProvider)
       ? server.lifecycleProvider
       : "direct",
     minMemory: normalizeMemoryGb(server.minMemory, 4),
     maxMemory: normalizeMemoryGb(server.maxMemory, 8),
   };
+  delete normalized.isRemote;
+  delete normalized.remoteConfigConfigured;
+  return normalized;
 }
 
 export async function getServers() {
@@ -1656,7 +1624,6 @@ export async function createServer(
     useNoSteam: serverConfig.useNoSteam || false,
     useDebug: serverConfig.useDebug || false,
     useUpnp: serverConfig.useUpnp !== false,
-    isRemote: serverConfig.isRemote || false,
     lifecycleProvider: "direct",
     startCommand: serverConfig.startCommand || "",
     adminPassword: serverConfig.adminPassword || "",

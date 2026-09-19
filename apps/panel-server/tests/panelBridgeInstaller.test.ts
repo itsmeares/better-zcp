@@ -30,10 +30,6 @@ describe('canAutoInstall', () => {
     expect(canAutoInstall(localServer())).toBe(true);
   });
 
-  it('is false for a remote/SFTP server', () => {
-    expect(canAutoInstall({ ...localServer(), isRemote: true })).toBe(false);
-  });
-
   it('is false when installPath is missing', () => {
     expect(canAutoInstall({ id: 's1', isRemote: false })).toBe(false);
   });
@@ -213,10 +209,6 @@ describe('autoInstallBridgeIfNeeded', () => {
     expect(() => autoInstallBridgeIfNeeded(localServer())).not.toThrow();
   });
 
-  it('is a no-op for a remote server', () => {
-    autoInstallBridgeIfNeeded({ ...localServer(), isRemote: true });
-    expect(fs.existsSync(path.join(tmpDir, 'media', 'lua', 'server', 'PanelBridge.lua'))).toBe(false);
-  });
 });
 
 describe('getBundledBridgeVersion / isBridgeVersionBehindBundled', () => {

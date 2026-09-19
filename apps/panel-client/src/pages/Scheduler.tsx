@@ -1319,7 +1319,6 @@ export default function Scheduler() {
                     <SelectItem key={server.id} value={String(server.id)}>
                       {server.name || server.serverName}
                       {server.isActive ? ' (Active)' : ''}
-                      {server.isRemote ? ' — Remote' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>

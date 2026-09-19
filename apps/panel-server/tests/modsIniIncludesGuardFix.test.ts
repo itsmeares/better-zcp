@@ -71,7 +71,6 @@ describe("POST /toggle-mod-id: the requested change lands even when a free-text 
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
 
     const res = await runRoute("/toggle-mod-id", "post", {
@@ -100,7 +99,6 @@ describe("POST /toggle-mod-id: the requested change lands even when a free-text 
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
 
     const res = await runRoute("/toggle-mod-id", "post", {

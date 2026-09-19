@@ -205,21 +205,6 @@ async function cleanupEmptyCellFiles(
   return { removed };
 }
 
-router.use(async (req, res, next) => {
-  try {
-    const activeServer = await getActiveServer();
-    if (activeServer?.isRemote) {
-      return res.status(400).json({
-          error:
-            "Map cleanup is not available for remote servers. The server filesystem is not accessible from this panel.",
-        });
-    }
-    next();
-  } catch (err: any) {
-    next(err);
-  }
-});
-
 async function getZomboidDataPath(): Promise<string | null> {
   const activeServer = await getActiveServer();
   if (activeServer?.zomboidDataPath) {

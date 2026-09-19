@@ -597,7 +597,7 @@ let persistedVehicleCache: PersistedVehicleCache = { key: null, expiresAt: 0, ve
 router.get("/vehicles", async (req, res) => {
   try {
     const activeServer = await getActiveServer();
-    if (!activeServer || activeServer.isRemote || !activeServer.zomboidDataPath) {
+    if (!activeServer || !activeServer.zomboidDataPath) {
       return res.json({ vehicles: [] });
     }
     const serverName = activeServer.serverName || activeServer.name;

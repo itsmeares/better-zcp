@@ -98,7 +98,6 @@ describe("mods.js: previously-PARTIAL error codes now carry params on the wire",
         id: "server-1",
         serverConfigPath: configPath,
         serverName: "TestServer",
-        isRemote: false,
       });
     });
 

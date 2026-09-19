@@ -190,19 +190,35 @@ describe("PUT /app-settings -- reconnectInterval validation (same missing-range-
 
 describe("PUT /app-settings -- feature-gated fields (FEATURE_GATED_FIELDS), table-driven", () => {
   const cases = [
-    ["panelBridgeSftpEnabled", "panelBridgeSftpPort", 0, /SFTP port must be a whole number/],
-    ["panelBridgeSftpEnabled", "panelBridgeSftpPollIntervalSeconds", 1, /SFTP sync interval/],
     ["httpsEnabled", "httpsPort", 0, /HTTPS port must be a whole number/],
     ["modAutoRestart", "modRestartDelay", -1, /Mod restart delay/],
-    ["serverAutoUpdate", "serverAutoUpdateWarningMinutes", 61, /Server auto-update warning/],
-    ["autoExportOnLogin", "autoExportMaxPerPlayer", 500, /Auto-export copies kept/],
-    ["autoReconnect", "reconnectInterval", 0, /reconnectInterval must be a whole number/],
+    [
+      "serverAutoUpdate",
+      "serverAutoUpdateWarningMinutes",
+      61,
+      /Server auto-update warning/,
+    ],
+    [
+      "autoExportOnLogin",
+      "autoExportMaxPerPlayer",
+      500,
+      /Auto-export copies kept/,
+    ],
+    [
+      "autoReconnect",
+      "reconnectInterval",
+      0,
+      /reconnectInterval must be a whole number/,
+    ],
   ];
 
   it.each(cases)(
     "skips validating %s's %s (garbage value %j) while the flag is off in this same save",
     async (flagKey, fieldKey, garbageValue) => {
-      const res = await putAppSettings({ [flagKey]: false, [fieldKey]: garbageValue });
+      const res = await putAppSettings({
+        [flagKey]: false,
+        [fieldKey]: garbageValue,
+      });
       expect(res.getStatusCode()).toBe(200);
       expect(res.getBody().success).toBe(true);
     },
@@ -343,7 +359,6 @@ describe("PUT /app-settings -- the other 8 boolean settings now reject a non-boo
     "httpsEnabled",
     "autoStartServer",
     "workshopCollectionAutoSync",
-    "panelBridgeSftpEnabled",
   ];
 
   for (const key of booleanKeys) {
@@ -401,54 +416,6 @@ describe("PUT /app-settings -- serverAutoUpdateWarningMinutes validation (bound 
 
   it("accepts a valid value", async () => {
     const res = await putAppSettings({ serverAutoUpdate: true, serverAutoUpdateWarningMinutes: 15 });
-    expect(res.getStatusCode()).toBe(200);
-    expect(res.getBody().success).toBe(true);
-  });
-});
-
-describe("PUT /app-settings -- SFTP numeric settings validation", () => {
-  it("rejects an explicit zero SFTP port while SFTP is enabled", async () => {
-    const res = await putAppSettings({ panelBridgeSftpEnabled: true, panelBridgeSftpPort: 0 });
-    expect(res.getStatusCode()).toBe(400);
-    expect(res.getBody().error).toMatch(/SFTP port must be a whole number/);
-  });
-
-  it("rejects a prefixed SFTP port instead of truncating it, while SFTP is enabled", async () => {
-    const res = await putAppSettings({ panelBridgeSftpEnabled: true, panelBridgeSftpPort: "22junk" });
-    expect(res.getStatusCode()).toBe(400);
-    expect(res.getBody().error).toMatch(/SFTP port must be a whole number/);
-  });
-
-  it("rejects an out-of-range SFTP polling interval while SFTP is enabled", async () => {
-    const res = await putAppSettings({ panelBridgeSftpEnabled: true, panelBridgeSftpPollIntervalSeconds: 1 });
-    expect(res.getStatusCode()).toBe(400);
-    expect(res.getBody().error).toMatch(/SFTP sync interval/);
-  });
-
-  it("accepts port 22 as a valid SFTP port when SFTP is enabled", async () => {
-    const res = await putAppSettings({ panelBridgeSftpEnabled: true, panelBridgeSftpPort: 22 });
-    expect(res.getStatusCode()).toBe(200);
-    expect(res.getBody().success).toBe(true);
-  });
-
-  it("GitHub #118: SFTP disabled with the default port 22 does not block saving an unrelated setting", async () => {
-    const res = await putAppSettings({
-      panelBridgeSftpEnabled: false,
-      panelBridgeSftpPort: "22",
-      panelBridgeAutoUpdate: false,
-    });
-    expect(res.getStatusCode()).toBe(200);
-    expect(res.getBody().success).toBe(true);
-  });
-
-  it("still validates the SFTP port when this save is what turns SFTP on, even though it was off in storage", async () => {
-    const res = await putAppSettings({ panelBridgeSftpEnabled: true, panelBridgeSftpPort: 0 });
-    expect(res.getStatusCode()).toBe(400);
-    expect(res.getBody().error).toMatch(/SFTP port must be a whole number/);
-  });
-
-  it("skips SFTP port validation when this save is what turns SFTP off, even with an out-of-range port present", async () => {
-    const res = await putAppSettings({ panelBridgeSftpEnabled: false, panelBridgeSftpPort: 0 });
     expect(res.getStatusCode()).toBe(200);
     expect(res.getBody().success).toBe(true);
   });

@@ -118,7 +118,6 @@ export default function Backups() {
   })
   const activeServer = activeServerData?.server ?? null
   const activeServerId = activeServer?.id ?? null
-  const activeServerRemote = Boolean(activeServer?.isRemote)
   const backups = backupsData?.backups ?? EMPTY_BACKUPS
   const historyQuery = useQuery({
     queryKey:
@@ -360,15 +359,6 @@ export default function Backups() {
       return
     }
     if (!file) return
-    if (activeServerRemote) {
-      toast({
-        title: 'Not available for remote servers',
-        description:
-          "Backup uploads write to the local filesystem and aren't supported for remote servers.",
-        variant: 'destructive',
-      })
-      return
-    }
     if (!file.name.toLowerCase().endsWith('.zip')) {
       toast({
         title: 'Invalid file',
@@ -704,13 +694,7 @@ export default function Backups() {
         icon={<Archive className="w-5 h-5 text-primary" />}
         actions={
           <>
-            <DisabledReason
-              reason={
-                activeServerRemote
-                  ? 'Backups are not available for remote servers'
-                  : null
-              }
-            >
+            <DisabledReason reason={null}>
               <Button
                 onClick={handleCreateBackup}
                 disabled={
@@ -718,7 +702,6 @@ export default function Backups() {
                   restoringBackup !== null ||
                   restoreInProgressElsewhere ||
                   !backupStatus?.savesExists ||
-                  activeServerRemote ||
                   serverChangedSinceLoad
                 }
                 className="gap-2"
@@ -741,13 +724,7 @@ export default function Backups() {
                 if (file) handleUploadFile(file)
               }}
             />
-            <DisabledReason
-              reason={
-                activeServerRemote
-                  ? 'Backups are not available for remote servers'
-                  : null
-              }
-            >
+            <DisabledReason reason={null}>
               <Button
                 variant="outline"
                 onClick={() => fileInputRef.current?.click()}
@@ -755,7 +732,6 @@ export default function Backups() {
                   uploadingBackup ||
                   restoringBackup !== null ||
                   restoreInProgressElsewhere ||
-                  activeServerRemote ||
                   serverChangedSinceLoad
                 }
                 className="gap-2"
@@ -812,18 +788,6 @@ export default function Backups() {
               <RefreshCw className="me-2 h-4 w-4" />
               {'Retry'}
             </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {activeServerRemote && (
-        <Alert className="border-warning/40 bg-warning/10">
-          <AlertTriangle className="h-4 w-4 text-warning" />
-          <AlertTitle>{'Backups disabled for remote servers'}</AlertTitle>
-          <AlertDescription>
-            {
-              "The active server is configured as remote, so the panel can't reach its filesystem. Create, upload, and restore are unavailable until you switch to a local server."
-            }
           </AlertDescription>
         </Alert>
       )}

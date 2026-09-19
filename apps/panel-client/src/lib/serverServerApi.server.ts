@@ -612,11 +612,7 @@ export const getMapVehicles = createServerRead(async () => {
   try {
     const { getActiveServer } = await database()
     const activeServer = await getActiveServer()
-    if (
-      !activeServer ||
-      activeServer.isRemote ||
-      !activeServer.zomboidDataPath
-    ) {
+    if (!activeServer || !activeServer.zomboidDataPath) {
       return { vehicles: [] }
     }
     const serverName = activeServer.serverName || activeServer.name

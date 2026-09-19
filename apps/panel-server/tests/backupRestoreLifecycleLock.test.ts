@@ -49,7 +49,6 @@ describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
     getActiveServer.mockResolvedValue({
       name: "TestServer",
       installPath: restoreInstallPath,
-      isRemote: false,
     });
     getActiveSteamOperations().set(normalizedRestoreInstallPath, {
       type: "update",
@@ -87,7 +86,7 @@ describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
   });
 
   it("holds the lock for the duration of the restore and releases it on success", async () => {
-    getActiveServer.mockResolvedValue({ name: "TestServer", isRemote: false });
+    getActiveServer.mockResolvedValue({ name: "TestServer" });
     const restoreGate = deferred();
     const backupService = {
       restoreBackup: vi.fn(() => restoreGate.promise),
@@ -119,18 +118,28 @@ describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
     await handlerPromise;
 
     expect(isLifecycleLocked()).toBe(false);
-    expect(response.json).toHaveBeenCalledWith({ success: true, message: "Restored" });
+    expect(response.json).toHaveBeenCalledWith({
+      success: true,
+      message: "Restored",
+    });
   });
 
   it("refuses with 409 when another lifecycle operation already holds the lock, without ever calling restoreBackup()", async () => {
-    getActiveServer.mockResolvedValue({ name: "TestServer", isRemote: false });
+    getActiveServer.mockResolvedValue({ name: "TestServer" });
     const backupService = { restoreBackup: vi.fn() };
     const serverManager = {
-      getServerProcessDetails: vi.fn(async () => ({ running: false, scanFailed: false })),
+      getServerProcessDetails: vi.fn(async () => ({
+        running: false,
+        scanFailed: false,
+      })),
     };
     const app = {
       get: (key) =>
-        key === "backupService" ? backupService : key === "serverManager" ? serverManager : {},
+        key === "backupService"
+          ? backupService
+          : key === "serverManager"
+            ? serverManager
+            : {},
     };
 
     const held = acquireLifecycleLock("start", "TestServer");
@@ -147,7 +156,7 @@ describe("POST /restore/:name takes the process-wide lifecycle lock", () => {
   });
 
   it("releases the lock even when restoreBackup() throws", async () => {
-    getActiveServer.mockResolvedValue({ name: "TestServer", isRemote: false });
+    getActiveServer.mockResolvedValue({ name: "TestServer" });
     const backupService = {
       restoreBackup: vi.fn(async () => {
         throw new Error("boom");

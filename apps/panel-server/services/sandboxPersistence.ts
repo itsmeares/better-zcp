@@ -1,20 +1,10 @@
 import fs from "fs";
 import path from "path";
 import { getActiveServer, getAllSettings } from "../database/init.ts";
-import { sanitizeError } from "../utils/sanitize.ts";
 import { withFileLock, writeFileAtomic } from "../utils/fileWriteQueue.ts";
 import { backupWarningFor, createBackup } from "../utils/configBackup.ts";
 import { escapeRegExp } from "../utils/regex.ts";
 import { createLogger } from "../utils/logger.ts";
-import {
-  SFTP_CONFIG_PATH_KEY,
-  acquireMirrorLock,
-  beginRemoteConfigSession,
-  getMirrorPath,
-  isRemoteConfigConfigured,
-  pushRemoteConfigFiles,
-  validateRemoteConfigTransport,
-} from "./remoteConfigFiles.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 
 const log = createLogger("SandboxPersistence");
@@ -25,12 +15,8 @@ export type ActiveServerContext = {
   activeServer: JsonRecord | null;
   serverConfigPath?: string;
   serverName?: string;
-  configurationError?: ServerNotConfiguredError | RemoteConfigNotConfiguredError;
+  configurationError?: ServerNotConfiguredError;
 };
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export class ServerNotConfiguredError extends Error {
   readonly code: string;
@@ -41,45 +27,12 @@ export class ServerNotConfiguredError extends Error {
   }
 }
 
-export class RemoteConfigNotConfiguredError extends Error {
-  readonly code: string;
-
-  constructor() {
-    super(
-      "This server is remote. Add its SFTP details and the remote Server folder under Settings > PanelBridge to edit its configuration from here.",
-    );
-    this.code = ErrorCode.REMOTE_CONFIG_NOT_CONFIGURED;
-  }
-}
-
-export async function resolveRemoteConfigTransport(): Promise<any> {
-  const settings = await getAllSettings();
-  if (!isRemoteConfigConfigured(settings)) return null;
-  return validateRemoteConfigTransport({
-    host: settings.panelBridgeSftpHost,
-    port: settings.panelBridgeSftpPort,
-    username: settings.panelBridgeSftpUsername,
-    password: settings.panelBridgeSftpPassword,
-    configPath: settings[SFTP_CONFIG_PATH_KEY],
-  });
-}
-
 export async function getServerConfigPath(
   activeServer?: JsonRecord | null,
-  serverName?: string,
+  _serverName?: string,
 ): Promise<string> {
   const resolvedActiveServer =
     activeServer === undefined ? await getActiveServer() : activeServer;
-
-  if (resolvedActiveServer?.isRemote) {
-    const transport = await resolveRemoteConfigTransport();
-    if (transport) {
-      return getMirrorPath(
-        transport,
-        serverName ?? (await getServerName(resolvedActiveServer)),
-      );
-    }
-  }
 
   if (resolvedActiveServer?.serverConfigPath) {
     return resolvedActiveServer.serverConfigPath;
@@ -95,10 +48,6 @@ export async function getServerConfigPath(
   }
   if (settings.zomboidDataPath) {
     return path.join(settings.zomboidDataPath, "Server");
-  }
-
-  if (resolvedActiveServer?.isRemote) {
-    throw new RemoteConfigNotConfiguredError();
   }
 
   throw new ServerNotConfiguredError();
@@ -130,18 +79,12 @@ export async function getServerName(
 export async function getActiveServerContext(): Promise<ActiveServerContext> {
   const activeServer = await getActiveServer();
   let serverConfigPath: string | undefined;
-  let configurationError:
-    | ServerNotConfiguredError
-    | RemoteConfigNotConfiguredError
-    | undefined;
+  let configurationError: ServerNotConfiguredError | undefined;
 
   try {
     serverConfigPath = await getServerConfigPath(activeServer);
   } catch (error: unknown) {
-    if (
-      error instanceof ServerNotConfiguredError ||
-      error instanceof RemoteConfigNotConfiguredError
-    ) {
+    if (error instanceof ServerNotConfiguredError) {
       configurationError = error;
     } else {
       throw error;
@@ -335,30 +278,6 @@ async function writeSandboxValues(
 export async function persistSandboxValues(values: JsonRecord): Promise<JsonRecord> {
   const entries = Object.entries(values || {});
   if (entries.length === 0) return { persisted: false, reason: "nothing to do" };
-
-  const activeServer = await getActiveServer();
-  if (activeServer?.isRemote) {
-    const transport = await resolveRemoteConfigTransport();
-    if (!transport) {
-      return { persisted: false, reason: "remote server filesystem" };
-    }
-    const serverName = await getServerName();
-    const release = await acquireMirrorLock();
-    try {
-      const session = await beginRemoteConfigSession(transport, serverName, {
-        fresh: true,
-      });
-      const result = await writeSandboxValues(entries, session.mirrorDir, serverName);
-      if (result.persisted) {
-        await pushRemoteConfigFiles(transport, serverName, session);
-      }
-      return result;
-    } catch (err: unknown) {
-      return { persisted: false, reason: sanitizeError(errorMessage(err)) };
-    } finally {
-      release();
-    }
-  }
 
   try {
     return await writeSandboxValues(

@@ -33,7 +33,7 @@ function buildServerManager(reloadThrows = false) {
 }
 
 beforeEach(() => {
-  getActiveServer.mockReset().mockResolvedValue({ isRemote: false });
+  getActiveServer.mockReset().mockResolvedValue({});
 });
 
 describe("config mutation guards reload the active server before trusting process state", () => {

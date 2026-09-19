@@ -1280,7 +1280,6 @@ export default function ServerConfig() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [activeServerRemote, setActiveServerRemote] = useState(false)
   const [activeServerName, setActiveServerName] = useState<string | null>(null)
   const [serverChangedSinceLoad, setServerChangedSinceLoad] = useState(false)
 
@@ -1324,8 +1323,6 @@ export default function ServerConfig() {
     const active = await serversApi
       .getResolvedActive()
       .catch(() => ({ server: null }))
-    const isRemote = !!active.server?.isRemote
-    setActiveServerRemote(isRemote)
     setActiveServerName(
       active.server?.name || active.server?.serverName || null,
     )
@@ -1359,17 +1356,16 @@ export default function ServerConfig() {
       setLoadError(null)
     } catch (error) {
       reportClientError('Failed to load config.', error)
-      const message = isRemote
-        ? 'Remote configuration is not available for this server.'
-        : getUserErrorMessage(error, 'Failed to load server config.')
+      const message = getUserErrorMessage(
+        error,
+        'Failed to load server config.',
+      )
       setLoadError(message)
-      if (!isRemote) {
-        toast({
-          title: 'Error',
-          description: message,
-          variant: 'destructive',
-        })
-      }
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
+      })
     } finally {
       setLoading(false)
     }
@@ -2629,46 +2625,27 @@ export default function ServerConfig() {
 
   return (
     <div className="space-y-4 page-transition pb-24">
-      {loadError &&
-        (activeServerRemote ? (
-          <Alert className="border-warning/40 bg-warning/10">
-            <AlertTriangle className="h-4 w-4 text-warning" />
-            <AlertTitle>
-              {'Configuration data could not be fully loaded'}
-            </AlertTitle>
-            <AlertDescription
-              className="min-w-0 break-words"
-              dir="auto"
-              title={loadError}
-            >
+      {loadError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>
+            {'Configuration data could not be fully loaded'}
+          </AlertTitle>
+          <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span className="min-w-0 break-words" dir="auto" title={loadError}>
               {loadError}
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>
-              {'Configuration data could not be fully loaded'}
-            </AlertTitle>
-            <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <span
-                className="min-w-0 break-words"
-                dir="auto"
-                title={loadError}
-              >
-                {loadError}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadData}
-                className="self-start"
-              >
-                <RefreshCw className="me-2 h-4 w-4" /> {'Retry'}
-              </Button>
-            </AlertDescription>
-          </Alert>
-        ))}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadData}
+              className="self-start"
+            >
+              <RefreshCw className="me-2 h-4 w-4" /> {'Retry'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {duplicateKeys.length > 0 && (
         <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -2855,7 +2832,7 @@ export default function ServerConfig() {
                 icon: Settings,
                 dirty: hasIniChanges,
                 count: changedIniCount,
-                missing: !activeServerRemote && !pathsInfo?.exists.ini,
+                missing: !pathsInfo?.exists.ini,
               },
               {
                 value: 'sandbox',
@@ -2863,7 +2840,7 @@ export default function ServerConfig() {
                 icon: FileText,
                 dirty: hasSandboxChanges,
                 count: changedSandboxCount,
-                missing: !activeServerRemote && !pathsInfo?.exists.sandbox,
+                missing: !pathsInfo?.exists.sandbox,
               },
               {
                 value: 'spawnpoints',

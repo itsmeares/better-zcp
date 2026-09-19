@@ -29,7 +29,6 @@ interface RconServiceLike {
 }
 
 interface ActiveServerLike {
-  isRemote?: boolean;
   provider?: string | null;
   dockerContainerId?: unknown;
   dockerContainerName?: unknown;
@@ -56,14 +55,6 @@ export async function resolveObservedServerRunning(
   dockerClient: DockerControl | null | undefined = null,
 ): Promise<boolean | null> {
   const activeServer = (await getActiveServer()) as ActiveServerLike | null;
-  if (activeServer?.isRemote) {
-    return isServerObservedRunning({
-      processRunning: false,
-      rconConnected: rconService?.connected,
-      bridgeConnected: panelBridge.isModConnected(),
-    });
-  }
-
   const provider = resolveProvider(activeServer);
   if (provider === "docker-local" || provider === "docker-managed") {
     const dockerSignal = await resolveDockerHostSignal(activeServer, dockerClient);

@@ -79,7 +79,6 @@ describe("POST /servers -- every field forwarded to createServer() must survive 
       useNoSteam: true,
       useDebug: true,
       useUpnp: false,
-      isRemote: false,
     };
 
     await getRouteHandler(router, "/", "post")({ body }, res);

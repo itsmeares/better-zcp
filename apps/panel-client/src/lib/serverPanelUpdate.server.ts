@@ -342,10 +342,7 @@ export const restartPanel = createServerFn({ method: 'POST' })
 
 export function classifyStartupProcessState(
   processState: AnyRecord | null | undefined,
-  isRemote = false,
 ) {
-  if (isRemote)
-    return { running: Boolean(processState?.running), unknown: false }
   if (
     !processState ||
     processState.scanFailed ||

@@ -92,7 +92,6 @@ beforeEach(() => {
   getActiveServer.mockReset().mockResolvedValue({
     id: "server-1",
     zomboidDataPath: dataRoot,
-    isRemote: false,
   });
   getServers.mockReset().mockResolvedValue([]);
   getSetting.mockReset().mockResolvedValue(null);

@@ -43,11 +43,12 @@ describe("redactRawLogText() -- known-secret-value exact match", () => {
   });
 
   it("redacts every known secret independently in the same line", () => {
-    const result = redactRawLogText(
-      "rcon=alpha session=beta sftp=gamma",
-      ["alpha", "beta", "gamma"],
-    );
-    expect(result).toBe("rcon=[REDACTED] session=[REDACTED] sftp=[REDACTED]");
+    const result = redactRawLogText("rcon=alpha session=beta token=gamma", [
+      "alpha",
+      "beta",
+      "gamma",
+    ]);
+    expect(result).toBe("rcon=[REDACTED] session=[REDACTED] token=[REDACTED]");
   });
 
   it("is a no-op when no known secrets are supplied", () => {

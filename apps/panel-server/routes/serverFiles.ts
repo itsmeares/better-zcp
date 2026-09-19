@@ -30,11 +30,6 @@ import { escapeRegExp } from "../utils/regex.ts";
 import { findDuplicateIniKeys } from "../utils/iniDuplicateKeys.ts";
 import { confineToRoots } from "../utils/browseRoots.ts";
 import {
-  acquireMirrorLock,
-  beginRemoteConfigSession,
-  pushRemoteConfigFiles,
-} from "../services/remoteConfigFiles.ts";
-import {
   requireStoppedForLocalConfigMutation,
   warnRunningForLocalConfigEdit,
 } from "../services/configMutationGuard.ts";
@@ -44,9 +39,7 @@ import {
   getServerConfigPath,
   getServerName,
   modifySandboxValue,
-  resolveRemoteConfigTransport,
   type ActiveServerContext,
-  RemoteConfigNotConfiguredError,
   ServerNotConfiguredError,
 } from "../services/sandboxPersistence.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
@@ -55,7 +48,6 @@ export {
   escapeLuaString,
   getServerConfigPath,
   getServerName,
-  RemoteConfigNotConfiguredError,
   ServerNotConfiguredError,
 } from "../services/sandboxPersistence.ts";
 
@@ -101,8 +93,6 @@ type ServerFilesRequest = Request & {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-const LOCAL_ONLY_PATHS = new Set(["/browse-files", "/image-preview"]);
-
 async function getRequestServerContext(
   req: ServerFilesRequest,
 ): Promise<ActiveServerContext> {
@@ -130,96 +120,19 @@ async function getRequestServerValues(req: ServerFilesRequest) {
 
 router.use(
   async (req: ServerFilesRequest, res: Response, next: NextFunction) => {
-  try {
-    const context = await getActiveServerContext();
-    if (context.configurationError) throw context.configurationError;
-    req.activeServerContext = context;
-  } catch (err: unknown) {
-    if (err instanceof ServerNotConfiguredError) {
+    try {
+      const context = await getActiveServerContext();
+      if (context.configurationError) throw context.configurationError;
+      req.activeServerContext = context;
+    } catch (err: unknown) {
+      if (err instanceof ServerNotConfiguredError) {
         return res
           .status(404)
           .json({ error: errorMessage(err), code: err.code });
-    }
-    if (err instanceof RemoteConfigNotConfiguredError) {
-        return res
-          .status(400)
-          .json({ error: errorMessage(err), code: err.code });
-    }
-    return next(err);
-  }
-  next();
-  },
-);
-
-router.use(
-  async (req: ServerFilesRequest, res: Response, next: NextFunction) => {
-  let activeServer: ActiveServerContext["activeServer"];
-  try {
-    ({ activeServer } = await getRequestServerContext(req));
-  } catch (err: unknown) {
-    return next(err);
-  }
-  if (!activeServer?.isRemote) return next();
-
-  if (LOCAL_ONLY_PATHS.has(req.path)) {
-    return res.status(400).json({
-      error:
-        "Browsing the server filesystem is not available for remote servers.",
-      code: ErrorCode.REMOTE_BROWSE_NOT_AVAILABLE,
-    });
-  }
-
-  let transport;
-  try {
-    transport = await resolveRemoteConfigTransport();
-  } catch (err: unknown) {
-    return res.status(400).json({ error: sanitizeError(errorMessage(err)) });
-  }
-  if (!transport) {
-    return res.status(400).json({
-      code: "REMOTE_CONFIG_NOT_CONFIGURED",
-      error:
-        "This server is remote. Add its SFTP details and the remote Server folder under Settings > PanelBridge to edit its configuration from here.",
-    });
-  }
-
-  const { serverName } = await getRequestServerValues(req);
-  const release = await acquireMirrorLock();
-  let session;
-  try {
-    session = await beginRemoteConfigSession(transport, serverName, {
-      fresh: req.method !== "GET",
-    });
-  } catch (err: unknown) {
-    release();
-    log.error(`Remote config pull failed: ${errorMessage(err)}`);
-    return res.status(502).json({
-      error: `Could not read the remote server config folder: ${sanitizeError(errorMessage(err))}`,
-    });
-  }
-
-  let settled = false;
-  const finish = () => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(watchdog);
-    void (async () => {
-      try {
-        if (req.method !== "GET" && res.statusCode < 400) {
-          await pushRemoteConfigFiles(transport, serverName, session);
-        }
-      } catch (err: unknown) {
-        log.error(`Remote config push failed: ${errorMessage(err)}`);
-      } finally {
-        release();
       }
-    })();
-  };
-  const watchdog = setTimeout(finish, 60000);
-  watchdog.unref?.();
-  res.on("finish", finish);
-  res.on("close", finish);
-  next();
+      return next(err);
+    }
+    next();
   },
 );
 

@@ -64,7 +64,6 @@ describe("whitelist management routes", () => {
       id: "server-1",
       serverName: "DoomerZ",
       zomboidDataPath: "/zomboid",
-      isRemote: false,
     });
     listWhitelistAccounts.mockResolvedValue({
       available: true,

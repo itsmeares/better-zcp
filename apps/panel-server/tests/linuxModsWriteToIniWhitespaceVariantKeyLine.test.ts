@@ -81,7 +81,6 @@ describe("POST /write-to-ini: existing key line with whitespace around '='", () 
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
   });
 
