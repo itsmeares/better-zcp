@@ -518,8 +518,7 @@ function rateLimited(
   const strict = STRICT_RATE_LIMIT_PATHS.some((prefix) =>
     pathname === prefix || pathname.startsWith(prefix),
   ) ||
-    (request.method === "DELETE" && /^\/api\/backup\/[^/]+$/.test(pathname)) ||
-    /^\/api\/templates\/[^/]+\/apply$/.test(pathname);
+    request.method === "DELETE" && /^\/api\/backup\/[^/]+$/.test(pathname);
   if (strict) {
     const result = hit("strict", 10, { error: "Rate limit exceeded for this operation." });
     if (result) return result;

@@ -41,8 +41,6 @@ type DatabaseData = {
   servers: Collection;
   player_notes: Collection;
   player_stats: Collection;
-  mod_presets: Collection;
-  user_templates: Collection;
   steamid_bans: Collection;
   performance_history: Collection;
   bridge_logs: Collection;
@@ -171,8 +169,6 @@ const defaultData: DatabaseData = {
   servers: [],
   player_notes: [],
   player_stats: [],
-  mod_presets: [],
-  user_templates: [],
   steamid_bans: [],
   performance_history: [],
   bridge_logs: [],
@@ -193,7 +189,6 @@ const MIGRATION_V2_TECHNICIAN_CAPABILITIES = [
   "server.world_events",
   "rcon.execute",
   "servers.manage",
-  "templates.manage",
   "bridge.setup",
   "bridge.diagnostics",
   "players.moderate",
@@ -226,7 +221,6 @@ const MIGRATION_V2_ADMIN_CAPABILITIES = [
   "rcon.execute",
   "servers.manage",
   "servers.discover",
-  "templates.manage",
   "bridge.setup",
   "bridge.diagnostics",
   "bridge.command",
@@ -949,8 +943,6 @@ function getDatabaseStatsSync() {
       servers: data.servers?.length ?? 0,
       player_notes: data.player_notes?.length ?? 0,
       player_stats: data.player_stats?.length ?? 0,
-      mod_presets: data.mod_presets?.length ?? 0,
-      user_templates: data.user_templates?.length ?? 0,
       performance_history: data.performance_history?.length ?? 0,
       bridge_logs: data.bridge_logs?.length ?? 0,
     },
@@ -1967,108 +1959,6 @@ export async function clearPerformanceHistory() {
   db.data.performance_history = [];
   scheduleWrite();
 }
-
-
-export async function getModPresets() {
-  const db = await getDb();
-  if (!db.data.mod_presets) db.data.mod_presets = [];
-  return db.data.mod_presets;
-}
-
-export async function createModPreset(
-  name: string,
-  description: string,
-  mods: any[],
-  workshopIds: any[],
-  maps: any[],
-) {
-  const db = await getDb();
-  if (!db.data.mod_presets) db.data.mod_presets = [];
-
-  const preset = {
-    id: generateId(),
-    name,
-    description: description || "",
-    mods: mods || [],
-    workshop_ids: workshopIds || [],
-    maps: maps || [],
-    created_at: new Date().toISOString(),
-  };
-
-  db.data.mod_presets.push(preset);
-  scheduleWrite();
-  return preset;
-}
-
-export async function updateModPreset(id: any, updates: AnyRecord) {
-  const db = await getDb();
-  if (!db.data.mod_presets) return null;
-
-  const index = db.data.mod_presets.findIndex((p) => p.id === id);
-  if (index === -1) return null;
-
-  db.data.mod_presets[index] = {
-    ...db.data.mod_presets[index],
-    ...updates,
-    updated_at: new Date().toISOString(),
-  };
-  scheduleWrite();
-  return db.data.mod_presets[index];
-}
-
-export async function deleteModPreset(id: any) {
-  const db = await getDb();
-  if (!db.data.mod_presets) return false;
-
-  const index = db.data.mod_presets.findIndex((p) => p.id === id);
-  if (index === -1) return false;
-
-  db.data.mod_presets.splice(index, 1);
-  scheduleWrite();
-  return true;
-}
-
-
-export async function getUserTemplates() {
-  const db = await getDb();
-  if (!db.data.user_templates) db.data.user_templates = [];
-  return db.data.user_templates;
-}
-
-export async function getUserTemplate(id: any) {
-  const db = await getDb();
-  if (!db.data.user_templates) db.data.user_templates = [];
-  return db.data.user_templates.find((t) => t.meta?.id === id) || null;
-}
-
-export async function saveUserTemplate(template: AnyRecord) {
-  const db = await getDb();
-  if (!db.data.user_templates) db.data.user_templates = [];
-
-  const index = db.data.user_templates.findIndex(
-    (t) => t.meta?.id === template.meta?.id,
-  );
-  if (index === -1) {
-    db.data.user_templates.push(template);
-  } else {
-    db.data.user_templates[index] = template;
-  }
-  scheduleWrite();
-  return template;
-}
-
-export async function deleteUserTemplate(id: any) {
-  const db = await getDb();
-  if (!db.data.user_templates) return false;
-
-  const index = db.data.user_templates.findIndex((t) => t.meta?.id === id);
-  if (index === -1) return false;
-
-  db.data.user_templates.splice(index, 1);
-  scheduleWrite();
-  return true;
-}
-
 
 export async function getSteamIdBans() {
   const db = await getDb();

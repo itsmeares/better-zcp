@@ -172,39 +172,3 @@ export const getBackupHistory = createResourceRead(async (data) => {
         : undefined
     return { records: await listBackupRecords({ serverId, limit }) }
 })
-
-export const getTemplates = createResourceRead(async () => {
-  const { listTemplates } =
-    await import('../../../panel-server/services/templateService.ts')
-  return { templates: await listTemplates() }
-})
-
-export const getTemplate = createResourceRead(async (data) => {
-  const id = String(data.id ?? '')
-  const { getTemplate } =
-    await import('../../../panel-server/services/templateService.ts')
-  const template = await getTemplate(id)
-  if (!template) {
-    throwResourceError(
-      Object.assign(new Error('Template not found'), {
-        code: 'SIM_TEMPLATE_NOT_FOUND',
-      }),
-      404,
-    )
-  }
-  return { template }
-})
-
-export const exportTemplate = createResourceRead(async (data) => {
-  const { exportTemplate } =
-    await import('../../../panel-server/services/templateService.ts')
-  const result = await exportTemplate(String(data.id ?? ''))
-  if (!result.success) throwResourceError(result, 404)
-  return result.template
-})
-
-export const getHiddenTemplates = createResourceRead(async () => {
-    const { listHiddenBuiltinTemplates } =
-      await import('../../../panel-server/services/templateService.ts')
-    return { templates: await listHiddenBuiltinTemplates() }
-})

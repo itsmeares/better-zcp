@@ -162,9 +162,6 @@ const mocks = vi.hoisted(() => {
       "setModRestartOptions",
       "getWorkshopStatus",
       "cancelPendingModRestart",
-      "getModPresets",
-      "updateModPreset",
-      "deleteModPreset",
       "addCollectionItem",
       "removeCollectionItem",
       "removeCollectionTracking",
@@ -184,8 +181,6 @@ const mocks = vi.hoisted(() => {
       "getServerSpawnRegions",
       "getServerRawFile",
       "getServerConfigBackups",
-      "getConfigTemplates",
-      "getConfigTemplate",
       "browseServerFiles",
       "saveServerIni",
       "saveServerSandbox",
@@ -196,10 +191,6 @@ const mocks = vi.hoisted(() => {
       "saveServerRawFile",
       "restoreServerConfigBackup",
       "saveServerAndReload",
-      "createServerConfigTemplate",
-      "applyServerConfigTemplate",
-      "updateServerConfigTemplate",
-      "deleteServerConfigTemplate",
     ].map((name) => [name, serverFunction(name)]),
   );
   const serverServer = Object.fromEntries(
@@ -443,8 +434,6 @@ const SERVER_FILE_ROUTES = [
   ["GET", "/api/server-files/spawnregions", "getServerSpawnRegions"],
   ["GET", "/api/server-files/raw/ini", "getServerRawFile"],
   ["GET", "/api/server-files/backups", "getServerConfigBackups"],
-  ["GET", "/api/server-files/templates", "getConfigTemplates"],
-  ["GET", "/api/server-files/templates/demo", "getConfigTemplate"],
   [
     "GET",
     "/api/server-files/browse-files?path=%2Ftmp&extensions=.png",
@@ -487,30 +476,6 @@ const SERVER_FILE_WRITE_ROUTES = [
     {},
   ],
   ["POST", "/api/server-files/save-and-reload", "saveServerAndReload", {}],
-  [
-    "POST",
-    "/api/server-files/templates",
-    "createServerConfigTemplate",
-    { name: "Demo" },
-  ],
-  [
-    "POST",
-    "/api/server-files/templates/demo/apply",
-    "applyServerConfigTemplate",
-    { applyIni: true },
-  ],
-  [
-    "PUT",
-    "/api/server-files/templates/demo",
-    "updateServerConfigTemplate",
-    { name: "Updated" },
-  ],
-  [
-    "DELETE",
-    "/api/server-files/templates/demo",
-    "deleteServerConfigTemplate",
-    {},
-  ],
 ];
 
 const LEGACY_SERVER_ROUTES = [
@@ -930,11 +895,9 @@ describe("Start compatibility server and player routes", () => {
       expect(response.status).toBe(200);
       const expectedData = path.includes("raw/ini")
         ? { type: "ini" }
-        : path.includes("templates/demo")
-          ? { id: "demo" }
-          : path.includes("browse-files")
-            ? { path: "/tmp", extensions: ".png" }
-            : {};
+        : path.includes("browse-files")
+          ? { path: "/tmp", extensions: ".png" }
+          : {};
       expect(await responseBody(response)).toEqual({
         handledBy: functionName,
         data: expectedData,
@@ -954,8 +917,6 @@ describe("Start compatibility server and player routes", () => {
         ? { filename: "demo.ini.2026.bak" }
         : path.includes("/raw/")
           ? { ...body, type: "ini" }
-        : path.includes("/templates/")
-          ? { id: "demo", ...body }
           : body;
       expect(await responseBody(response)).toEqual({
         handledBy: functionName,

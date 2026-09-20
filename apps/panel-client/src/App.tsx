@@ -85,13 +85,6 @@ const ROUTE_LOADERS: Record<string, RouteLoaderMeta> = {
     variant: 'list',
     metrics: ['workshop', 'mods', 'conflicts'],
   },
-  '/templates': {
-    title: 'Simulation Templates',
-    description: 'Loading rulesets, diff previews, and apply controls.',
-    eyebrow: '// CONFIG · TEMPLATES',
-    variant: 'list',
-    metrics: ['templates', 'diff', 'apply'],
-  },
   '/scheduler': {
     title: 'Scheduled Tasks',
     description: 'Preparing task rules, run history, and automation controls.',

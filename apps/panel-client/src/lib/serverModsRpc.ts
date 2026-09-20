@@ -162,33 +162,6 @@ export const cancelPendingModRestart = createServerFn({ method: 'POST' })
     ),
   )
 
-export const getModPresets = createServerFn({ method: 'GET' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.getModPresets, 'getModPresets', {
-      data,
-      context,
-    }),
-  )
-
-export const updateModPreset = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.updateModPreset, 'updateModPreset', {
-      data,
-      context,
-    }),
-  )
-
-export const deleteModPreset = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.deleteModPreset, 'deleteModPreset', {
-      data,
-      context,
-    }),
-  )
-
 export const addCollectionItem = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>

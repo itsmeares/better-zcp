@@ -43,11 +43,9 @@ describe("local config mutation safety", () => {
     getActiveServer.mockResolvedValue({});
   });
 
-  it("recognizes file and template config mutations but not metadata routes", () => {
+  it("recognizes file config mutations but not metadata routes", () => {
     expect(isLocalConfigMutation(createRequest("PUT", "/ini"))).toBe(true);
     expect(isLocalConfigMutation(createRequest("POST", "/restore/world.bak"))).toBe(true);
-    expect(isLocalConfigMutation(createRequest("POST", "/templates/demo/apply"))).toBe(true);
-    expect(isLocalConfigMutation(createRequest("POST", "/templates"))).toBe(false);
     expect(isLocalConfigMutation(createRequest("POST", "/save-and-reload"))).toBe(false);
   });
 
@@ -70,20 +68,14 @@ describe("local config mutation safety", () => {
     }
   });
 
-  it("classifies restore and template-apply as overwrites, not edits", () => {
+  it("classifies restore as an overwrite, not an edit", () => {
     const restore = createRequest("POST", "/restore/world.bak");
-    const apply = createRequest("POST", "/templates/demo/apply");
     expect(isLocalConfigOverwrite(restore)).toBe(true);
     expect(isLocalConfigEdit(restore)).toBe(false);
-    expect(isLocalConfigOverwrite(apply)).toBe(true);
-    expect(isLocalConfigEdit(apply)).toBe(false);
   });
 
-  it("still rejects restore and template-apply while the local server is running", async () => {
-    for (const [method, path] of [
-      ["POST", "/restore/world.bak"],
-      ["POST", "/templates/demo/apply"],
-    ]) {
+  it("still rejects restore while the local server is running", async () => {
+    for (const [method, path] of [["POST", "/restore/world.bak"]]) {
       const response = createResponse();
       const next = vi.fn();
 
@@ -102,11 +94,8 @@ describe("local config mutation safety", () => {
     }
   });
 
-  it("fails closed on a failed detection scan, not just a missing serverManager (restore/template-apply path)", async () => {
-    for (const [method, path] of [
-      ["POST", "/restore/world.bak"],
-      ["POST", "/templates/demo/apply"],
-    ]) {
+  it("fails closed on a failed detection scan, not just a missing serverManager (restore path)", async () => {
+    for (const [method, path] of [["POST", "/restore/world.bak"]]) {
       const response = createResponse();
       const next = vi.fn();
       const request = {
@@ -146,7 +135,7 @@ describe("local config mutation safety", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("allows stopped restore/template-apply through requireStoppedForLocalConfigMutation", async () => {
+  it("allows stopped restore through requireStoppedForLocalConfigMutation", async () => {
     const stoppedResponse = createResponse();
     const stoppedNext = vi.fn();
     await requireStoppedForLocalConfigMutation(

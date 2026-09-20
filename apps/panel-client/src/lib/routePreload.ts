@@ -13,7 +13,6 @@ const routeLoaders: Record<string, () => Promise<unknown>> = {
   '/events': () => import('../pages/Events'),
   '/world-map': () => import('../pages/WorldMap'),
   '/backups': () => import('../pages/Backups'),
-  '/templates': () => import('../pages/Templates'),
 }
 
 const routeAliases: Record<string, string> = {

@@ -21,29 +21,23 @@ import {
 } from "./serverAdmin";
 import {
   getBackupSnapshot,
-  exportTemplate,
   getBackupHistory,
   getBackupInfo,
   getBackups,
   getBackupStatus,
-  getHiddenTemplates,
   getPlayerActivity,
   getPlayerNote,
   getPlayerNotes,
   getPlayerStat,
   getPlayerStats,
-  getTemplate,
-  getTemplates,
 } from "./serverResourceReadsRpc";
 import {
   addCollectionItem,
   addIgnoredModPair,
   cancelPendingModRestart,
   clearAllIgnoredMods,
-  deleteModPreset,
   getIgnoredModPairs,
   getIgnoredMods,
-  getModPresets,
   getModsStatus,
   getServerMods,
   getTrackedMods,
@@ -59,19 +53,12 @@ import {
   trackMod,
   unignoreMod,
   untrackMod,
-  updateModPreset,
 } from "./serverModsRpc";
 import {
-  applyTemplate,
   createBackup as createBackupServer,
-  createTemplate,
   deleteBackup,
   deleteBackupsOlderThan,
-  deleteTemplate,
-  importTemplate,
-  previewTemplate,
   restoreBackup as restoreBackupServer,
-  unhideTemplate,
   updateBackupSettings,
 } from "./serverResourceActionsRpc";
 import {
@@ -1463,23 +1450,6 @@ export const modsApi = {
       message: string;
     }>,
 
-  getPresets: () => getModPresets(),
-  createPreset: (name: string, description?: string) =>
-    apiPost("/mods/presets", { name, description }),
-  updatePreset: (
-    id: number,
-    data: {
-      name?: string;
-      description?: string;
-      workshopIds?: string[];
-      modIds?: string[];
-    },
-  ) =>
-    serverCall(() => updateModPreset({ data: { id, ...data } })),
-  deletePreset: (id: number) =>
-    serverCall(() => deleteModPreset({ data: { id } })),
-  applyPreset: (id: number) => apiPost(`/mods/presets/${id}/apply`),
-
   saveModOrder: (modIds: string[]) => apiPost("/mods/save-order", { modIds }),
 
   getConflicts: (options?: RequestInit) =>
@@ -1954,24 +1924,6 @@ export interface BackupSnapshot {
   sandboxVars: Record<string, string | number | boolean>;
 }
 
-export interface ConfigTemplate {
-  id: string;
-  name: string;
-  description: string;
-  type: "ini" | "sandbox" | "both";
-  created: string;
-  modified: string;
-  hasIni: boolean;
-  hasSandbox: boolean;
-}
-
-export interface ConfigTemplateDetail extends ConfigTemplate {
-  ini?: Record<string, string>;
-  iniRaw?: string;
-  sandboxRaw?: string;
-  serverName?: string;
-}
-
 export const serverFilesApi = {
   getPaths: () =>
     apiGet("/server-files/paths") as Promise<{
@@ -2081,38 +2033,6 @@ export const serverFilesApi = {
   ): Promise<{ success: boolean; persisted: boolean }> =>
     apiPut("/server-files/sandbox-option", { name, value }),
 
-  getTemplates: () =>
-    apiGet("/server-files/templates") as Promise<{
-      templates: ConfigTemplate[];
-    }>,
-  getTemplate: (id: string) =>
-    apiGet(`/server-files/templates/${id}`) as Promise<ConfigTemplateDetail>,
-  saveAsTemplate: (data: {
-    name: string;
-    description?: string;
-    includeIni?: boolean;
-    includeSandbox?: boolean;
-  }) =>
-    apiPost("/server-files/templates", data) as Promise<{
-      success: boolean;
-      id: string;
-      name: string;
-      message: string;
-    }>,
-  applyTemplate: (
-    id: string,
-    options?: { applyIni?: boolean; applySandbox?: boolean },
-  ) =>
-    apiPost(`/server-files/templates/${id}/apply`, options || {}) as Promise<{
-      success: boolean;
-      applied: string[];
-      message: string;
-      backupWarnings?: string[];
-    }>,
-  updateTemplate: (id: string, data: { name?: string; description?: string }) =>
-    apiPut(`/server-files/templates/${id}`, data),
-  deleteTemplate: (id: string) => apiDelete(`/server-files/templates/${id}`),
-
   browseFiles: (browsePath?: string, extensions?: string[]) => {
     const params = new URLSearchParams();
     if (browsePath) params.set("path", browsePath);
@@ -2135,114 +2055,6 @@ export const serverFilesApi = {
     const blob = await response.blob();
     return URL.createObjectURL(blob);
   },
-};
-
-export interface SimTemplateMeta {
-  id: string;
-  name: string;
-  description: string;
-  tags: string[];
-  pzBuild: string;
-  createdAt?: string;
-}
-
-export interface SimTemplateModRef {
-  workshopId: string;
-  modId?: string;
-  name?: string;
-}
-
-export type SimTemplateValueMap = Record<string, string | number | boolean>;
-
-export interface SimTemplate {
-  schemaVersion: number;
-  meta: SimTemplateMeta;
-  sandboxVars: Record<string, SimTemplateValueMap>;
-  serverIni: SimTemplateValueMap;
-  iniExclusions: string[];
-  mods: SimTemplateModRef[];
-  map: { mapId: string };
-  difficulty: { level?: string };
-  isBuiltin?: boolean;
-}
-
-export interface SimTemplateDiff {
-  serverIni: Array<{ key: string; from: unknown; to: unknown }>;
-  sandboxVars: Array<{
-    section: string;
-    key: string;
-    from: unknown;
-    to: unknown;
-  }>;
-  summary: { iniChanges: number; sandboxChanges: number; totalChanges: number };
-}
-
-export interface SimTemplateApplyResult {
-  success: boolean;
-  ini: { appliedKeys: string[] } | null;
-  sandbox:
-    | { applied: Array<{ section: string; key: string }>; skipped: Array<{ section: string; key: string }> }
-    | { skipped: true; reason: string }
-    | null;
-  backups: string[];
-  error?: string;
-}
-
-export const templatesApi = {
-  list: () =>
-    getTemplates() as Promise<{ templates: SimTemplate[] }>,
-  get: (id: string) =>
-    getTemplate({ data: { id } }) as Promise<{
-      template: SimTemplate;
-    }>,
-  create: (input: Record<string, unknown>) =>
-    serverCall(() => createTemplate({ data: input })) as Promise<{
-      success: boolean;
-      template?: SimTemplate;
-      error?: string;
-    }>,
-  import: (template: unknown) =>
-    serverCall(() => importTemplate({ data: { template } })) as Promise<{
-      success: boolean;
-      template?: SimTemplate;
-      error?: string;
-    }>,
-  export: (id: string) =>
-    exportTemplate({ data: { id } }) as Promise<SimTemplate>,
-  downloadExport: async (id: string, filenameBase: string) => {
-    const template = await exportTemplate({ data: { id } });
-    const blob = new Blob([JSON.stringify(template, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${filenameBase || id}.pztemplate.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  },
-  preview: (id: string, serverId: string | number) =>
-    serverCall(() => previewTemplate({ data: { id, serverId } })) as Promise<{ success: boolean; diff?: SimTemplateDiff; error?: string }>,
-  apply: (
-    id: string,
-    serverId: string | number,
-    options?: { backup?: boolean; applyIni?: boolean; applySandbox?: boolean },
-  ) =>
-    serverCall(() => applyTemplate({ data: { id, serverId, options } })) as Promise<SimTemplateApplyResult>,
-  delete: (id: string) =>
-    serverCall(() => deleteTemplate({ data: { id } })) as Promise<{
-      success: boolean;
-      error?: string;
-    }>,
-  listHidden: () =>
-    getHiddenTemplates() as Promise<{ templates: SimTemplate[] }>,
-  unhide: (id: string) =>
-    serverCall(() => unhideTemplate({ data: { id } })) as Promise<{
-      success: boolean;
-      error?: string;
-    }>,
 };
 
 export interface BridgeCommandResult<T = Record<string, unknown>> {

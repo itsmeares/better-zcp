@@ -1496,78 +1496,6 @@ const routes: RouteSpec[] = [
 
   {
     method: 'GET',
-    pattern: '/api/templates/hidden',
-    source: 'resources',
-    functionName: 'getHiddenTemplates',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/templates/:id/export',
-    source: 'resources',
-    functionName: 'exportTemplate',
-    headers: (params) => ({
-      'Content-Disposition': `attachment; filename="${String(params.id).replace(
-        /["\\\r\n]/g,
-        '_',
-      )}.json"`,
-    }),
-  },
-  {
-    method: 'GET',
-    pattern: '/api/templates/:id',
-    source: 'resources',
-    functionName: 'getTemplate',
-    data: mergeBody,
-  },
-  {
-    method: 'GET',
-    pattern: '/api/templates',
-    source: 'resources',
-    functionName: 'getTemplates',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/templates/import',
-    source: 'resourceActions',
-    functionName: 'importTemplate',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/templates/:id/preview',
-    source: 'resourceActions',
-    functionName: 'previewTemplate',
-    data: mergeBody,
-  },
-  {
-    method: 'POST',
-    pattern: '/api/templates/:id/apply',
-    source: 'resourceActions',
-    functionName: 'applyTemplate',
-    data: mergeBody,
-  },
-  {
-    method: 'POST',
-    pattern: '/api/templates',
-    source: 'resourceActions',
-    functionName: 'createTemplate',
-  },
-  {
-    method: 'DELETE',
-    pattern: '/api/templates/:id',
-    source: 'resourceActions',
-    functionName: 'deleteTemplate',
-    data: mergeBody,
-  },
-  {
-    method: 'POST',
-    pattern: '/api/templates/:id/unhide',
-    source: 'resourceActions',
-    functionName: 'unhideTemplate',
-    data: mergeBody,
-  },
-
-  {
-    method: 'GET',
     pattern: '/api/system/storage-health',
     source: 'system',
     functionName: 'getStorageHealth',
@@ -1797,26 +1725,6 @@ const routes: RouteSpec[] = [
     functionName: 'cancelPendingModRestart',
   },
   {
-    method: 'GET',
-    pattern: '/api/mods/presets',
-    source: 'mods',
-    functionName: 'getModPresets',
-  },
-  {
-    method: 'PUT',
-    pattern: '/api/mods/presets/:id',
-    source: 'mods',
-    functionName: 'updateModPreset',
-    data: mergeBody,
-  },
-  {
-    method: 'DELETE',
-    pattern: '/api/mods/presets/:id',
-    source: 'mods',
-    functionName: 'deleteModPreset',
-    data: mergeBody,
-  },
-  {
     method: 'POST',
     pattern: '/api/mods/collection/items',
     source: 'mods',
@@ -1901,19 +1809,6 @@ const routes: RouteSpec[] = [
   },
   {
     method: 'GET',
-    pattern: '/api/server-files/templates',
-    source: 'fileReads',
-    functionName: 'getConfigTemplates',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/server-files/templates/:id',
-    source: 'fileReads',
-    functionName: 'getConfigTemplate',
-    data: mergeBody,
-  },
-  {
-    method: 'GET',
     pattern: '/api/server-files/browse-files',
     source: 'fileReads',
     functionName: 'browseServerFiles',
@@ -1975,34 +1870,6 @@ const routes: RouteSpec[] = [
     source: 'fileWrites',
     functionName: 'saveServerAndReload',
   },
-  {
-    method: 'POST',
-    pattern: '/api/server-files/templates',
-    source: 'fileWrites',
-    functionName: 'createServerConfigTemplate',
-  },
-  {
-    method: 'POST',
-    pattern: '/api/server-files/templates/:id/apply',
-    source: 'fileWrites',
-    functionName: 'applyServerConfigTemplate',
-    data: mergeBody,
-  },
-  {
-    method: 'PUT',
-    pattern: '/api/server-files/templates/:id',
-    source: 'fileWrites',
-    functionName: 'updateServerConfigTemplate',
-    data: mergeBody,
-  },
-  {
-    method: 'DELETE',
-    pattern: '/api/server-files/templates/:id',
-    source: 'fileWrites',
-    functionName: 'deleteServerConfigTemplate',
-    data: mergeBody,
-  },
-
   {
     method: 'GET',
     pattern: '/api/debug/ram',

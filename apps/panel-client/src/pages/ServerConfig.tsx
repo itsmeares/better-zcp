@@ -21,7 +21,6 @@ import {
   FormInput,
   Puzzle,
   Loader2,
-  CheckCircle,
   AlertCircle,
   History,
   ChevronDown,
@@ -39,7 +38,6 @@ import {
   Copy,
   Check,
   Filter,
-  Bookmark,
   FolderOpen,
   X,
   Undo2,
@@ -114,7 +112,6 @@ import {
   SpawnPointsByProfession,
   SpawnRegion,
   SandboxData,
-  ConfigTemplate,
 } from '@/lib/api'
 import { resolveServerRunning } from '@/lib/serverStatus'
 import { getBridgeVerifiedState } from '@/lib/bridgeVerify'
@@ -237,33 +234,6 @@ export function getUnpersistedSandboxKeys(
 ): string[] | null {
   const keys = data?.unpersistedKeys
   return Array.isArray(keys) && keys.length > 0 ? (keys as string[]) : null
-}
-
-export function getApplyTemplateBackupWarnings(
-  data: { backupWarnings?: unknown } | null | undefined,
-): string[] | null {
-  const warnings = data?.backupWarnings
-  return Array.isArray(warnings) && warnings.length > 0
-    ? (warnings as string[])
-    : null
-}
-
-export function getPartiallyAppliedFromApplyTemplateError(
-  error: unknown,
-): string[] | null {
-  if (
-    error instanceof ApiError &&
-    error.data &&
-    typeof error.data === 'object' &&
-    Array.isArray(
-      (error.data as { partiallyApplied?: unknown }).partiallyApplied,
-    )
-  ) {
-    const applied = (error.data as { partiallyApplied: string[] })
-      .partiallyApplied
-    return applied.length > 0 ? applied : null
-  }
-  return null
 }
 
 function AuthImage({
@@ -1131,15 +1101,6 @@ export default function ServerConfig() {
   const [backupFilter, setBackupFilter] = useState<
     'all' | 'ini' | 'sandbox' | 'spawnpoints' | 'spawnregions'
   >('all')
-
-  const [showTemplates, setShowTemplates] = useState(false)
-  const [templates, setTemplates] = useState<ConfigTemplate[]>([])
-  const [templateLoading, setTemplateLoading] = useState(false)
-  const [showSaveTemplate, setShowSaveTemplate] = useState(false)
-  const [newTemplateName, setNewTemplateName] = useState('')
-  const [newTemplateDesc, setNewTemplateDesc] = useState('')
-  const [saveTemplateIni, setSaveTemplateIni] = useState(true)
-  const [saveTemplateSandbox, setSaveTemplateSandbox] = useState(true)
 
   const [originalIniSettings, setOriginalIniSettings] = useState<
     Record<string, string>
@@ -2259,148 +2220,6 @@ export default function ServerConfig() {
     }
   }
 
-  const loadTemplates = async () => {
-    setTemplateLoading(true)
-    try {
-      const data = await serverFilesApi.getTemplates()
-      setTemplates(data.templates)
-      setShowTemplates(true)
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: getUserErrorMessage(
-          error,
-          'Failed to load saved configs.',
-        ),
-        variant: 'destructive',
-      })
-    } finally {
-      setTemplateLoading(false)
-    }
-  }
-
-  const handleSaveTemplate = async () => {
-    if (!newTemplateName.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Name is required',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    setTemplateLoading(true)
-    try {
-      const result = await serverFilesApi.saveAsTemplate({
-        name: newTemplateName.trim(),
-        description: newTemplateDesc.trim(),
-        includeIni: saveTemplateIni,
-        includeSandbox: saveTemplateSandbox,
-      })
-      toast({ title: 'Saved', description: result.message })
-      setShowSaveTemplate(false)
-      setNewTemplateName('')
-      setNewTemplateDesc('')
-      if (showTemplates) {
-        const data = await serverFilesApi.getTemplates()
-        setTemplates(data.templates)
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: getUserErrorMessage(error, 'Failed to save config.'),
-        variant: 'destructive',
-      })
-    } finally {
-      setTemplateLoading(false)
-    }
-  }
-
-  const handleApplyTemplate = async (template: ConfigTemplate) => {
-    const ok = await confirm({
-      title: 'Apply saved config "' + String(template.name) + '"?',
-      description: template.hasIni
-        ? `${"Replace your current server settings with this saved config? The panel backs up what's live first, so Restore can undo it if needed."}\n\n${"The RCON password isn't stored in saved configs, so applying this one will remove your server's RCON password — you'll need to re-enter it afterward."}`
-        : "Replace your current server settings with this saved config? The panel backs up what's live first, so Restore can undo it if needed.",
-      confirmLabel: 'Apply',
-    })
-    if (!ok) return
-
-    setTemplateLoading(true)
-    try {
-      const result = await serverFilesApi.applyTemplate(template.id)
-      toast({
-        title: 'Applied',
-        description: result.message,
-      })
-      const backupWarnings = getApplyTemplateBackupWarnings(result)
-      if (backupWarnings) {
-        toast({
-          title: 'Applied, but not backed up',
-          description: String(backupWarnings.join(' ')),
-          variant: 'destructive',
-        })
-      }
-      setShowTemplates(false)
-      loadData()
-    } catch (error) {
-      const partiallyApplied = getPartiallyAppliedFromApplyTemplateError(error)
-      if (partiallyApplied) {
-        toast({
-          title: 'Partially applied',
-          description:
-            String(partiallyApplied.join(', ')) +
-            ' settings were written to disk before this failed: ' +
-            String(
-              getUserErrorMessage(error, 'Failed to apply saved config.'),
-            ) +
-            ' The rest of the saved config was not applied.',
-          variant: 'destructive',
-        })
-        loadData()
-      } else {
-        toast({
-          title: 'Error',
-          description: getUserErrorMessage(
-            error,
-            'Failed to apply saved config.',
-          ),
-          variant: 'destructive',
-        })
-      }
-    } finally {
-      setTemplateLoading(false)
-    }
-  }
-
-  const handleDeleteTemplate = async (id: string, name: string) => {
-    const ok = await confirm({
-      title: 'Delete saved config?',
-      description:
-        'Delete saved config "' + String(name) + '"? This cannot be undone.',
-      confirmLabel: 'Delete',
-    })
-    if (!ok) return
-
-    try {
-      await serverFilesApi.deleteTemplate(id)
-      toast({
-        title: 'Deleted',
-        description: 'Saved config "' + String(name) + '" deleted',
-      })
-      setTemplates((prev) => prev.filter((tpl) => tpl.id !== id))
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: getUserErrorMessage(
-          error,
-          'Failed to delete saved config.',
-        ),
-        variant: 'destructive',
-      })
-    }
-  }
-
   const updateIniValue = useCallback((key: string, value: string) => {
     setIniSettings((prev) => ({ ...prev, [key]: value }))
   }, [])
@@ -2712,14 +2531,6 @@ export default function ServerConfig() {
                 {'Unsaved changes'}
               </Badge>
             )}
-            <Button
-              variant="command"
-              size="sm"
-              className="h-9 gap-1.5 text-xs font-medium"
-              onClick={loadTemplates}
-            >
-              <Bookmark className="h-3.5 w-3.5" /> {'Saved Configs'}
-            </Button>
             <Button
               variant="command"
               size="sm"
@@ -5531,279 +5342,6 @@ export default function ServerConfig() {
             </p>
             <Button variant="outline" onClick={() => setShowBackups(false)}>
               {'Close'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Bookmark className="w-5 h-5" />
-              <span className="flex items-center gap-1.5">
-                {'Saved Configs'}
-                <HelpTip label={'Saved Configs'}>
-                  {
-                    "Applying a saved config replaces ALL of your current settings — it doesn't merge with what's there now. The panel backs up what's live before applying, so Restore can undo it, but the server must be stopped first."
-                  }
-                </HelpTip>
-              </span>
-            </DialogTitle>
-            <DialogDescription>
-              {
-                'Save your current configuration, or load one you saved earlier.'
-              }
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex items-center justify-between border-b pb-3">
-            <span className="text-sm text-muted-foreground">
-              {Number(templates.length) === 1
-                ? String(templates.length) + ' config saved'
-                : String(templates.length) + ' configs saved'}
-            </span>
-            <Button onClick={() => setShowSaveTemplate(true)}>
-              <Plus className="w-4 h-4 me-2" />
-              {'Save Current Config'}
-            </Button>
-          </div>
-
-          <ScrollArea className="h-[400px]">
-            {templates.length === 0 ? (
-              <EmptyState
-                type="noData"
-                title={'No saved configs yet'}
-                description={
-                  "Click 'Save Current Config' to create your first one"
-                }
-                compact
-              />
-            ) : (
-              <div className="space-y-3">
-                {templates.map((template) => (
-                  <div
-                    key={template.id}
-                    className="rounded-lg border p-4 transition-colors hover:bg-muted/50"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h4
-                            className="font-medium break-words"
-                            dir="auto"
-                            title={template.name}
-                          >
-                            {template.name}
-                          </h4>
-                          <Badge variant="secondary" className="text-xs">
-                            {template.type === 'both'
-                              ? 'INI + Sandbox'
-                              : template.type.toUpperCase()}
-                          </Badge>
-                        </div>
-                        {template.description && (
-                          <p
-                            className="mt-1 break-words text-sm text-muted-foreground"
-                            dir="auto"
-                            title={template.description}
-                          >
-                            {template.description}
-                          </p>
-                        )}
-                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                          <span>
-                            {'Created: ' +
-                              String(
-                                new Date(template.created).toLocaleDateString(
-                                  'en',
-                                ),
-                              )}
-                          </span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1">
-                            {template.hasIni && (
-                              <CheckCircle className="w-3 h-3 text-primary" />
-                            )}
-                            {template.hasIni && 'INI'}
-                          </span>
-                          {template.hasIni && template.hasSandbox && (
-                            <span>•</span>
-                          )}
-                          <span className="flex items-center gap-1">
-                            {template.hasSandbox && (
-                              <CheckCircle className="w-3 h-3 text-primary" />
-                            )}
-                            {template.hasSandbox && 'Sandbox'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 sm:ms-4 sm:self-start">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                disabled={templateLoading}
-                                onClick={() => handleApplyTemplate(template)}
-                              >
-                                {templateLoading ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <>
-                                    <FolderOpen className="w-4 h-4 me-1" />
-                                    {'Apply'}
-                                  </>
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {'Load this config (creates backup first)'}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-11 w-11 text-destructive hover:text-destructive sm:h-9 sm:w-9"
-                                onClick={() =>
-                                  handleDeleteTemplate(
-                                    template.id,
-                                    template.name,
-                                  )
-                                }
-                                aria-label={
-                                  'Delete saved config ' + String(template.name)
-                                }
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {'Delete this saved config'}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowTemplates(false)}>
-              {'Close'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showSaveTemplate} onOpenChange={setShowSaveTemplate}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Save className="w-5 h-5" />
-              {'Save Current Config'}
-            </DialogTitle>
-            <DialogDescription>
-              {
-                'Save your current INI and/or Sandbox settings so you can load them again later.'
-              }
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="template-name">{'Name *'}</Label>
-              <Input
-                id="template-name"
-                placeholder={'e.g., PvE Casual, Hardcore Survival...'}
-                value={newTemplateName}
-                onChange={(e) =>
-                  setNewTemplateName(e.target.value.slice(0, 60))
-                }
-                maxLength={60}
-              />
-              <p className="text-xs text-muted-foreground">
-                {String(newTemplateName.length) + '/60 characters'}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="template-desc">{'Description (optional)'}</Label>
-              <Textarea
-                id="template-desc"
-                placeholder={'Describe what this is for...'}
-                value={newTemplateDesc}
-                onChange={(e) =>
-                  setNewTemplateDesc(e.target.value.slice(0, 240))
-                }
-                className="min-h-[80px] resize-y"
-                maxLength={240}
-              />
-              <p className="text-xs text-muted-foreground">
-                {String(newTemplateDesc.length) + '/240 characters'}
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <Label>{'Include'}</Label>
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium">{'Server Settings (INI)'}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {'Network, players, RCON, server behavior'}
-                  </p>
-                </div>
-                <Switch
-                  checked={saveTemplateIni}
-                  onCheckedChange={setSaveTemplateIni}
-                  aria-label={'Include server settings'}
-                />
-              </div>
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium">{'Sandbox Settings'}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {'World, zombies, loot, survival settings'}
-                  </p>
-                </div>
-                <Switch
-                  checked={saveTemplateSandbox}
-                  onCheckedChange={setSaveTemplateSandbox}
-                  aria-label={'Include sandbox settings'}
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowSaveTemplate(false)}
-            >
-              {'Cancel'}
-            </Button>
-            <Button
-              onClick={handleSaveTemplate}
-              disabled={
-                templateLoading ||
-                !newTemplateName.trim() ||
-                (!saveTemplateIni && !saveTemplateSandbox)
-              }
-            >
-              {templateLoading ? (
-                <Loader2 className="w-4 h-4 me-2 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4 me-2" />
-              )}
-              {'Save Config'}
             </Button>
           </DialogFooter>
         </DialogContent>
