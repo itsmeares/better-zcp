@@ -168,9 +168,4 @@ describe("GH#109 arithmetic confirmation: the reported 137%/138% zoom boundary i
     const percent = levelStepPercent(21, 0.002, 12);
     expect(percent).toBeCloseTo(138.11, 1);
   });
-
-  it("B41 (maxLevel 22, defaultScale 0.001): the same step lands at ~138% too", () => {
-    const percent = levelStepPercent(22, 0.001, 12);
-    expect(percent).toBeCloseTo(138.11, 1);
-  });
 });

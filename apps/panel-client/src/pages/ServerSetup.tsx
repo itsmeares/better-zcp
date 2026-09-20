@@ -213,7 +213,6 @@ export default function ServerSetup() {
     Array<{ name: string; description: string; buildId?: string | null }>
   >([
     { name: 'public', description: 'Stable release (Build 42)' },
-    { name: 'b41multiplayer', description: 'Build 41 Multiplayer' },
   ])
   const [loadingBranches, setLoadingBranches] = useState(false)
   const [useCustomDataPath, setUseCustomDataPath] = useState(false)

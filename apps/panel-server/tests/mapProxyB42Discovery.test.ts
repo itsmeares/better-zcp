@@ -83,7 +83,7 @@ describe("getB42Map() discovery: forcing success", () => {
 
   it("falls through to the reversed full-list walk when the default build has no rendered coverage yet, and picks the newest usable one -- proving the ordering fix", async () => {
     const buildList = [
-      { directory: "41.78.16", default: false },
+      { directory: "40.0.0", default: false },
       { directory: "42.19.0", default: false },
       { directory: "42.21.0", default: false },
     ];
@@ -143,7 +143,7 @@ describe("getB42Map() discovery: forcing failure", () => {
         return curlResult(404, "");
       }
       if (url.endsWith("/api/builds")) {
-        return curlResult(200, JSON.stringify([{ directory: "41.78.16" }]));
+        return curlResult(200, JSON.stringify([{ directory: "40.0.0" }]));
       }
       throw new Error(`unexpected curl URL: ${url}`);
     });

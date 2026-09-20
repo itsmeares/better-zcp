@@ -54,7 +54,7 @@ behavior depends on them, check the relevant paths:
 - a local server and a remote server reached through SFTP;
 - RCON, PanelBridge, and direct file access;
 - source runs, packaged Windows and Linux builds, and Docker;
-- Build 41 and Build 42;
+- Build 42;
 - one configured server and several configured servers.
 
 Do not test every path by default. Decide which ones the change can affect and

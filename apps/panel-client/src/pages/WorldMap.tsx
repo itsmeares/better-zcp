@@ -72,7 +72,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   panelBridgeApi,
-  updateApi,
   serversApi,
   mapApi,
   playersApi,
@@ -281,22 +280,6 @@ function b42ConfigFor(info: {
     cfg,
   )
   return cfg
-}
-
-const MAP_B41: MapConfig = {
-  tileUrl: '/api/map/b41tiles',
-  tileSize: 1024,
-  fullWidth: 2285184,
-  fullHeight: 990400,
-  maxLevel: 22, // ceil(log2(2285184)) = 22
-  renderedMaxLevel: conservativeRenderedMaxLevel(22),
-  isoX0: 1017856, // (5577 + 10327) * 64
-  isoY0: -152000, // (5577 - 10327) * 32
-  isoHalfSqr: 64, // 32 * multiply(2)
-  isoQuarterSqr: 32, // 16 * multiply(2)
-  defaultCenter: { x: 1100000, y: 400000 },
-  defaultScale: 0.001,
-  label: 'B41',
 }
 
 const MIN_SCALE = 0.0003
@@ -708,40 +691,28 @@ export default function WorldMap() {
     }
   }, [])
 
-  const detectServerVersion = useCallback(
+  const loadMapConfig = useCallback(
     async (cancelledRef: { current: boolean }) => {
       try {
-        const [statusRes, serverRes] = await Promise.allSettled([
-          updateApi.getStatus(),
+        const [mapRes, serverRes] = await Promise.allSettled([
+          mapApi.resolve(),
           serversApi.getResolvedActive(),
         ])
         if (cancelledRef.current) return
 
-        let isB41 = false
         if (serverRes.status === 'fulfilled') {
           setHasActiveServer(!!serverRes.value.server)
         } else {
           setHasActiveServer(false)
         }
-        if (statusRes.status === 'fulfilled' && statusRes.value.gameVersion) {
-          isB41 = statusRes.value.gameVersion.startsWith('41.')
-        }
-        if (!isB41 && serverRes.status === 'fulfilled') {
-          const branch = serverRes.value.server?.branch
-          if (branch && /b41/i.test(branch)) isB41 = true
-        }
-
-        const targetCfg = isB41 ? MAP_B41 : b42ConfigFor(await mapApi.resolve())
+        if (mapRes.status !== 'fulfilled') return
+        const targetCfg = b42ConfigFor(mapRes.value)
         if (cancelledRef.current) return
         const cur = mapCfgRef.current
         if (mapConfigsEqual(cur, targetCfg)) return
 
         setMapCfg(targetCfg)
         mapCfgRef.current = targetCfg
-        if (isB41) {
-          setFloor(0)
-          floorRef.current = 0
-        }
         tileCacheRef.current = {}
         tileFailRef.current = {}
         tileFailureCountRef.current = 0
@@ -765,11 +736,11 @@ export default function WorldMap() {
 
   useEffect(() => {
     const cancelledRef = { current: false }
-    detectServerVersion(cancelledRef)
+    loadMapConfig(cancelledRef)
     return () => {
       cancelledRef.current = true
     }
-  }, [detectServerVersion])
+  }, [loadMapConfig])
 
   useEffect(() => {
     if (!socket) return
@@ -781,14 +752,14 @@ export default function WorldMap() {
       setSelectedPlayer(null)
       setContextMenu(null)
       hasFittedRef.current = false
-      detectServerVersion(cancelledRef)
+      loadMapConfig(cancelledRef)
     }
     socket.on('activeServerChanged', handleActiveServerChanged)
     return () => {
       cancelledRef.current = true
       socket.off('activeServerChanged', handleActiveServerChanged)
     }
-  }, [socket, detectServerVersion])
+  }, [socket, loadMapConfig])
 
   useEffect(() => {
     if (hasActiveServer) return
@@ -838,7 +809,6 @@ export default function WorldMap() {
   const mapSourceRef = useRef<{
     root: string
     b42Dir: string
-    b41Path: string
   } | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -859,9 +829,6 @@ export default function WorldMap() {
     (level: number, col: number, row: number, floor: number, ext: string) => {
       const src = mapSourceRef.current
       if (!src) return null
-      if (mapCfgRef.current === MAP_B41) {
-        return `${src.root}/${src.b41Path}/${level}/${col}_${row}.${ext}`
-      }
       return `${src.root}/${src.b42Dir}/base/layer${floor}_files/${level}/${col}_${row}.${ext}`
     },
     [],
@@ -943,8 +910,7 @@ export default function WorldMap() {
       }
 
       const ext = 'jpg'
-      const isB41 = mapCfgRef.current === MAP_B41
-      const versionDir = !isB41 ? (mapSourceRef.current?.b42Dir ?? null) : null
+      const versionDir = mapSourceRef.current?.b42Dir ?? null
       const proxyUrl = `${mapCfgRef.current.tileUrl}/${level}/${col}_${row}.${ext}${buildTileQuery(f, versionDir)}`
 
       const loadViaProxy = () => {

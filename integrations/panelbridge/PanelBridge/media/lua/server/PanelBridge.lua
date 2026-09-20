@@ -268,17 +268,8 @@ function PanelBridge.detectVersion()
     local version = {
         build = "unknown",
         isB42 = false,
-        isB41 = false,
         features = {}
     }
-
-    local onlinePlayers = getOnlinePlayers and getOnlinePlayers()
-    local testPlayer = onlinePlayers and onlinePlayers:size() > 0 and onlinePlayers:get(0) or nil
-    if testPlayer then
-        if PanelBridge.invoke(testPlayer, "getTraits") then
-            version.isB41 = true
-        end
-    end
 
     pcall(function()
         if getCore and getCore() and getCore().getVersion then
@@ -286,14 +277,12 @@ function PanelBridge.detectVersion()
         end
     end)
 
-    if not version.isB42 and not version.isB41 and version.build ~= "unknown" then
+    if version.build ~= "unknown" then
         local major = version.build:match("^(%d+)%.")
         if major then
             local majorNum = tonumber(major)
             if majorNum and majorNum >= 42 then
                 version.isB42 = true
-            elseif majorNum and majorNum == 41 then
-                version.isB41 = true
             end
         end
     end
@@ -1357,14 +1346,7 @@ handlers.triggerBlizzard = function(args)
                 verified = triggered == true
             end
         end
-        if not used then
-            if PanelBridge.invoke(climate, "transmitTriggerBlizzard", duration) then
-                used = "transmitTriggerBlizzard"
-                verified = nil
-            else
-                error("No weather trigger method available")
-            end
-        end
+        if not used then error("No weather trigger method available") end
         PanelBridge.debug("Blizzard triggered", { method = used, verified = verified })
     end)
 
@@ -1393,14 +1375,7 @@ handlers.triggerTropicalStorm = function(args)
                 verified = triggered == true
             end
         end
-        if not used then
-            if PanelBridge.invoke(climate, "transmitTriggerTropical", duration) then
-                used = "transmitTriggerTropical"
-                verified = nil
-            else
-                error("No weather trigger method available")
-            end
-        end
+        if not used then error("No weather trigger method available") end
         PanelBridge.debug("Tropical storm triggered", { method = used, verified = verified })
     end)
 
@@ -1429,14 +1404,7 @@ handlers.triggerStorm = function(args)
                 verified = triggered == true
             end
         end
-        if not used then
-            if PanelBridge.invoke(climate, "transmitTriggerStorm", duration) then
-                used = "transmitTriggerStorm"
-                verified = nil
-            else
-                error("No weather trigger method available")
-            end
-        end
+        if not used then error("No weather trigger method available") end
         PanelBridge.debug("Storm triggered", { method = used, verified = verified })
     end)
 
@@ -1498,9 +1466,6 @@ handlers.generateWeather = function(args)
     local strength = args.strength or 0.5
     local frontType = args.frontType or 0
 
-    local javaFrontMap = { [0] = 0, [1] = -1, [2] = 1 }
-    local javaFrontType = javaFrontMap[frontType] or 0
-
     local used, verified
     local success, err = pcall(function()
         if frontType ~= 0 then
@@ -1510,14 +1475,7 @@ handlers.generateWeather = function(args)
                 verified = triggered == true
             end
         end
-        if not used then
-            if PanelBridge.invoke(climate, "transmitGenerateWeather", strength, javaFrontType) then
-                used = "transmitGenerateWeather"
-                verified = nil
-            else
-                error("No generate weather method available")
-            end
-        end
+        if not used then error("No generate weather method available") end
         PanelBridge.debug("Weather period generated", { method = used, verified = verified })
     end)
 
@@ -2708,12 +2666,7 @@ local function getPlayerTraits(player)
         end
     end
 
-    if not traitList then
-        traitList = PanelBridge.tryGet(player, "getTraits")
-        if traitList then method = "player:getTraits" end
-    end
-
-    if not traitList then return {}, "no trait method worked (tried: player:getCharacterTraits():getKnownTraits, desc:getTraitList, desc:getTraits, player:getTraits)" end
+    if not traitList then return {}, "no trait method worked (tried: player:getCharacterTraits():getKnownTraits, desc:getTraitList, desc:getTraits)" end
 
     local sizeOk, listSize = pcall(function() return traitList:size() end)
     if not sizeOk or type(listSize) ~= "number" then
@@ -5767,9 +5720,7 @@ handlers.vehicleSetFuel = function(args)
                 return
             end
         end
-        if not PanelBridge.invoke(vehicle, "setRemainingFuelPercentage", pct) then
-            error("No fuel setter available")
-        end
+        error("No fuel setter available")
     end)
     if not ok then return false, nil, "Failed to set fuel: " .. tostring(err) end
 
@@ -6424,7 +6375,6 @@ handlers.getVehicleCatalog = function(args)
     end
 
     local allVehicles = PanelBridge.tryGet(sm, "getAllVehicleScripts")
-        or PanelBridge.tryGet(sm, "getAllVehicles")
     if not allVehicles then
         return false, nil, "Failed to enumerate vehicles: API not available"
     end

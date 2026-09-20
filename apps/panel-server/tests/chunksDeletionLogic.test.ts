@@ -185,27 +185,7 @@ describe("delete-chunks: files that must survive (B42)", () => {
   });
 });
 
-describe("B42 vs B41 layout detection", () => {
-  it("delete-chunks on a B41 flat save deletes the flat file and never runs B42 cell-aux cleanup on it", async () => {
-    const flatChunk = path.join(savePath, "map", "0_0.bin");
-    writeFileDeep(flatChunk, "b41");
-
-    const spuriousAux = path.join(savePath, "chunkdata", "chunkdata_0_0.bin");
-    writeFileDeep(spuriousAux, "aux");
-
-    const res = await postAs("/delete-chunks", {
-      saveName: SAVE_NAME,
-      chunks: [{ file: "0_0.bin", x: 0, y: 0 }],
-    });
-
-    expect(res.getStatusCode()).toBe(200);
-    expect(res.getBody()).toEqual(
-      expect.objectContaining({ success: true, deleted: 1, cellFilesRemoved: 0 }),
-    );
-    expect(fs.existsSync(flatChunk)).toBe(false);
-    expect(fs.existsSync(spuriousAux), "B41 saves must never run B42 cell-aux cleanup").toBe(true);
-  });
-
+describe("Build 42 layout", () => {
   it("delete-region on a B42 save only deletes chunks inside the region (both directions of invert)", async () => {
     const inRegion = path.join(savePath, "map", "2", "2.bin");
     const outRegionSameDir = path.join(savePath, "map", "2", "8.bin");
@@ -254,25 +234,6 @@ describe("B42 vs B41 layout detection", () => {
     expect(fs.existsSync(outRegionOtherDir)).toBe(false);
   });
 
-  it("delete-region on a B41 flat save (files directly in map/, no subdirectories) uses the flat-file branch, not the B42 subdirectory scan", async () => {
-    const inRegion = path.join(savePath, "map", "3_3.bin");
-    const outRegion = path.join(savePath, "map", "20_20.bin");
-    writeFileDeep(inRegion, "a");
-    writeFileDeep(outRegion, "b");
-
-    const res = await postAs("/delete-region", {
-      saveName: SAVE_NAME,
-      minX: 0,
-      maxX: 5,
-      minY: 0,
-      maxY: 5,
-    });
-
-    expect(res.getStatusCode()).toBe(200);
-    expect(res.getBody()).toEqual(expect.objectContaining({ success: true, deleted: 1 }));
-    expect(fs.existsSync(inRegion)).toBe(false);
-    expect(fs.existsSync(outRegion)).toBe(true);
-  });
 });
 
 describe("partial failure: does the response report what actually happened?", () => {
@@ -341,28 +302,6 @@ describe("partial failure: does the response report what actually happened?", ()
     expect(body.success).toBe(true);
     expect(body.deleted).toBe(1);
     expect(body.errors).toBeUndefined();
-  });
-});
-
-describe("legacy flat-file regex: anchored to reject aux-family filenames", () => {
-  it("delete-region ignores an aux-family filename sitting in map/, even though it falls inside the requested region", async () => {
-    const realChunk = path.join(savePath, "map", "3_3.bin");
-    const auxLookalike = path.join(savePath, "map", "zpop_4_4.bin");
-    writeFileDeep(realChunk, "a");
-    writeFileDeep(auxLookalike, "b");
-
-    const res = await postAs("/delete-region", {
-      saveName: SAVE_NAME,
-      minX: 0,
-      maxX: 10,
-      minY: 0,
-      maxY: 10,
-    });
-
-    expect(res.getStatusCode()).toBe(200);
-    expect(res.getBody()).toEqual(expect.objectContaining({ success: true, deleted: 1 }));
-    expect(fs.existsSync(realChunk)).toBe(false);
-    expect(fs.existsSync(auxLookalike), "zpop_4_4.bin must survive -- it is not a chunk file").toBe(true);
   });
 });
 
@@ -784,8 +723,8 @@ describe("delete-region: chunkdata-only cells (gap a)", () => {
   });
 });
 
-describe("delete-region: B42 vs B41 classification for chunkdata coordinates (gap b)", () => {
-  it("converts chunkdata cell coords using the B42 divisor (32), not B41 (30), even when map/ has no numeric subdirectories yet", async () => {
+describe("delete-region: Build 42 chunkdata coordinates", () => {
+  it("uses the Build 42 cell divisor even when map/ has no numeric subdirectories yet", async () => {
     fs.mkdirSync(path.join(savePath, "map"), { recursive: true });
     writeFileDeep(path.join(savePath, "WorldDictionary.bin"), "indicator");
 
@@ -802,7 +741,7 @@ describe("delete-region: B42 vs B41 classification for chunkdata coordinates (ga
 
     expect(res.getStatusCode()).toBe(200);
     expect(res.getBody()).toEqual(expect.objectContaining({ success: true, deleted: 1 }));
-    expect(fs.existsSync(cell), "misclassifying this save as B41 would compute displayX=30, outside [31,40], and silently skip it").toBe(false);
+    expect(fs.existsSync(cell)).toBe(false);
   });
 });
 

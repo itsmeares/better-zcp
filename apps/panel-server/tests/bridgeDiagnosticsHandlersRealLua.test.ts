@@ -171,7 +171,7 @@ describe('bridge.diagnostics Lua handlers -- do something real if called (real L
     });
   });
 
-  it('getVehicleCatalog: builds a real catalog from a real vehicle script via the B42 method, and honestly fails when neither B42 nor B41 method exists (negative control)', () => {
+  it('getVehicleCatalog: builds a catalog through the Build 42 method and fails when it is unavailable', () => {
     const neitherMethod = loadPanelBridge(LUA_PATH, `
       ScriptManager = { instance = {} }
     `);

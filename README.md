@@ -169,7 +169,7 @@ Visual map selector for reclaiming disk space from an aging save. Delete individ
 
 ## Requirements
 
-**Don't have a Project Zomboid server yet?** You don't need one before you start — the Setup Wizard in Quick Start below installs a fresh Build 41 or Build 42 server for you, RCON included. The rest of this section applies either way; if you're pointing the panel at a server you already run, confirm these in its `.ini` first:
+**Don't have a Project Zomboid server yet?** You don't need one before you start — the Setup Wizard in Quick Start below installs a fresh Build 42 server for you, RCON included. The rest of this section applies either way; if you're pointing the panel at a server you already run, confirm these in its `.ini` first:
 
 - **RCON enabled**, and **network access** between the panel and the PZ server (same machine, same LAN, or a reachable IP):
   ```ini

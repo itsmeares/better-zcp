@@ -747,7 +747,6 @@ class AuthService {
 
         if (
           req.path.startsWith("/api/map/tiles/") ||
-          req.path.startsWith("/api/map/b41tiles/") ||
           req.path.startsWith("/api/map/toptiles/")
         ) {
           return next();

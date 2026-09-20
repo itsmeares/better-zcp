@@ -267,21 +267,6 @@ describe("case 4 (REAL): tile Cache-Control must not outlive the build-resolutio
     }
   });
 
-  it("/b41tiles: also capped, even though B41's directory is a fixed constant -- the freshness bound is uniform across all three tile routes since they share serveTile()", async () => {
-    const originalFetch = global.fetch;
-    global.fetch = mockFetchServingTiles();
-    try {
-      const { default: router } = await freshModule();
-      const handler = findRoute(router, "/b41tiles/:level/:tile", "get");
-      const res = makeRes();
-      await handler({ params: { level: "5", tile: "2_3.jpg" }, query: {} }, res);
-
-      expect(res.headers["X-Tile-Cache"]).toBe("miss");
-      expect(res.headers["Cache-Control"]).toBe("public, max-age=3600");
-    } finally {
-      global.fetch = originalFetch;
-    }
-  });
 });
 
 describe("case 4 follow-up (REAL): a versioned request (?v=<build>) gets a long-lived Cache-Control, matching the accurate cache key", () => {
@@ -393,21 +378,4 @@ describe("case 4 follow-up (REAL): a versioned request (?v=<build>) gets a long-
     }
   });
 
-  it("/b41tiles: NEVER switches to the long-lived value, even with ?v= supplied -- its directory is a hardcoded literal, not dynamically resolved, so there's nothing to accurately version against", async () => {
-    const originalFetch = global.fetch;
-    global.fetch = mockFetchServingTiles();
-    try {
-      const { default: router } = await freshModule();
-      const handler = findRoute(router, "/b41tiles/:level/:tile", "get");
-      const res = makeRes();
-      await handler(
-        { params: { level: "6", tile: "3_9.jpg" }, query: { v: "41.78.16" } },
-        res,
-      );
-
-      expect(res.headers["Cache-Control"]).toBe("public, max-age=3600");
-    } finally {
-      global.fetch = originalFetch;
-    }
-  });
 });

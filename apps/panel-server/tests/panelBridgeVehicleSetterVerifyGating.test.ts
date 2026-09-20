@@ -41,15 +41,6 @@ function FakeVehicle:getLightbarSirenModeObject()
 end
 function FakeVehicle:setTrunkLocked(v) if self.sticks then self.trunkLocked = v end end
 function FakeVehicle:isTrunkLocked() return self.trunkLocked end
--- setRemainingFuelPercentage does not exist anywhere in the real B42 vehicle
--- API (the Pass 2 jar audit) -- kept here only because
--- handlers.vehicleSetFuel still attempts it as a B41 fallback when the
--- GasTank path is unavailable; this stub models the (unrealistic) case where
--- it happens to work, same as it always implicitly did before that finding.
--- The real, working path is FakeGasTank below -- getRemainingFuelPercentage
--- reads FakeGasTank's actual state, not this field, so a test relying on
--- this fallback alone would fail to prove anything real.
-function FakeVehicle:setRemainingFuelPercentage(v) if self.sticks then self.fuelPct = v end end
 function FakeVehicle:getRemainingFuelPercentage() return (FakeGasTank.amount / FakeGasTank.capacity) * 100 end
 -- setBatteryCharge does not exist anywhere in the real B42 vehicle API
 -- (2026-08-30 jar audit) -- kept here only because handlers.vehicleSetBattery
@@ -64,7 +55,7 @@ function FakeVehicle:setBatteryCharge(v) if self.sticks then self.batteryCharge 
 -- only thing that can change it in this stub) still writes there.
 -- FakeGasTank models the real B42 fuel path (container capacity/content
 -- amount) so vehicleSetFuel's success case exercises the actual working
--- mechanism instead of the dead setRemainingFuelPercentage fallback.
+-- mechanism used by the handler.
 FakeGasTank = {
   capacity = 60,
   amount = ${fuelPct} / 100 * 60,
