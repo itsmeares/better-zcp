@@ -57,7 +57,6 @@ import {
 } from '@/components/ui/card'
 import { PageHeader } from '@/components/PageHeader'
 import { PageSkeleton } from '@/components/PageSkeleton'
-import { PasswordInput } from '@/components/PasswordInput'
 import { NumberInput } from '@/components/NumberInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -131,16 +130,6 @@ import {
 
 interface AppSettings {
   panelBridgeAutoUpdate: boolean
-  panelBridgeSftpEnabled: boolean
-  panelBridgeSftpHost: string
-  panelBridgeSftpPort: string
-  panelBridgeSftpUsername: string
-  panelBridgeSftpPassword: string
-  panelBridgeSftpBridgePath: string
-  panelBridgeSftpPollIntervalSeconds: string
-  panelBridgeSftpLogPath: string
-  panelBridgeSftpConfigPath: string
-
   autoStartServer: boolean
   autoExportOnLogin: boolean
   autoExportMaxPerPlayer: string
@@ -221,15 +210,6 @@ function formatBridgeAge(seconds: number): string {
   return `${d}d`
 }
 
-function getSftpStatusMessage(transport: {
-  lastError?: string | null
-  lastErrorGuidance?: string | null
-  lastErrorCode?: string | null
-}): string {
-  const detail = transport.lastError || ''
-  return `${detail} Fix: ${transport.lastErrorGuidance || ''}`.trim()
-}
-
 function ThemeSelect() {
   const { theme, setTheme } = useTheme()
   return (
@@ -250,15 +230,6 @@ export default function Settings() {
   const socket = useSocket()
   const [settings, setSettings] = useState<AppSettings>({
     panelBridgeAutoUpdate: true,
-    panelBridgeSftpEnabled: false,
-    panelBridgeSftpHost: '',
-    panelBridgeSftpPort: '22',
-    panelBridgeSftpUsername: '',
-    panelBridgeSftpPassword: '',
-    panelBridgeSftpBridgePath: '',
-    panelBridgeSftpPollIntervalSeconds: '3',
-    panelBridgeSftpLogPath: '',
-    panelBridgeSftpConfigPath: '',
     autoStartServer: false,
     autoExportOnLogin: false,
     autoExportMaxPerPlayer: '3',
@@ -357,7 +328,7 @@ export default function Settings() {
     consecutiveFailures?: number
     hasFileWatcher?: boolean
     transport?: {
-      type: 'local' | 'sftp'
+      type: 'local'
       running: boolean
       lastLatencyMs?: number | null
       lastError?: string | null
@@ -406,26 +377,6 @@ export default function Settings() {
   const [bridgeError, setBridgeError] = useState<string | null>(null)
   const [pinging, setPinging] = useState(false)
   const [manualBridgePath, setManualBridgePath] = useState('')
-  const [testingSftp, setTestingSftp] = useState(false)
-  const [remoteLogs, setRemoteLogs] = useState<
-    Array<{ name: string; size: number; modifiedAt: string | null }>
-  >([])
-  const [remoteLogContent, setRemoteLogContent] = useState<{
-    name: string
-    content: string
-    truncated: boolean
-    bytesReturned: number
-  } | null>(null)
-  const [loadingRemoteLogs, setLoadingRemoteLogs] = useState(false)
-  const [remoteLogError, setRemoteLogError] = useState<string | null>(null)
-  const [remoteConfigFiles, setRemoteConfigFiles] = useState<
-    Array<{ name: string; size: number; modifiedAt: string | null }>
-  >([])
-  const [loadingRemoteConfig, setLoadingRemoteConfig] = useState(false)
-  const [remoteConfigError, setRemoteConfigError] = useState<string | null>(
-    null,
-  )
-
   const [servers, setServers] = useState<ServerInstance[]>([])
   const [serversLoadError, setServersLoadError] = useState(false)
   const [selectedInstallServerId, setSelectedInstallServerId] =
@@ -506,9 +457,9 @@ export default function Settings() {
       label: 'PanelBridge',
       icon: Zap,
       group: 'Game server',
-      tip: 'Lua mod link, including remote servers over SFTP',
+      tip: 'Lua mod link for local server files',
       description:
-        'PanelBridge Lua mod link for weather, teleport, and item control. Supports remote servers over SFTP.',
+        'PanelBridge Lua mod link for weather, teleport, and item control.',
     },
     {
       id: 'mods',
@@ -1290,16 +1241,6 @@ export default function Settings() {
       return
     }
 
-    if (selectedInstallServer?.isRemote) {
-      toast({
-        title: 'Manual install required',
-        description:
-          "Remote servers cannot be written from this computer. Copy PanelBridge.lua to the server's Lua folder using SFTP or the hosting provider's file manager.",
-        variant: 'destructive',
-      })
-      return
-    }
-
     setInstallingMod(true)
     try {
       const result = await panelBridgeApi.installModAuto(
@@ -1700,155 +1641,6 @@ export default function Settings() {
     }
   }
 
-  const sftpConfig = () => ({
-    host: settings.panelBridgeSftpHost,
-    port: settings.panelBridgeSftpPort,
-    username: settings.panelBridgeSftpUsername,
-    password: settings.panelBridgeSftpPassword,
-    bridgePath: settings.panelBridgeSftpBridgePath,
-    pollIntervalSeconds: settings.panelBridgeSftpPollIntervalSeconds,
-  })
-
-  const handleListRemoteLogs = async () => {
-    setLoadingRemoteLogs(true)
-    setRemoteLogError(null)
-    try {
-      const result = await panelBridgeApi.listSftpLogs({
-        ...sftpConfig(),
-        logPath: settings.panelBridgeSftpLogPath,
-      })
-      setRemoteLogs(result.files || [])
-      if (!result.files?.length) {
-        setRemoteLogError('No .txt or .log files found in that folder.')
-      }
-    } catch (error) {
-      setRemoteLogs([])
-      setRemoteLogError(
-        getUserErrorMessage(error, 'Could not list remote logs.'),
-      )
-    } finally {
-      setLoadingRemoteLogs(false)
-    }
-  }
-
-  const handleCheckRemoteConfig = async () => {
-    setLoadingRemoteConfig(true)
-    setRemoteConfigError(null)
-    try {
-      const result = await panelBridgeApi.listSftpConfigFiles({
-        ...sftpConfig(),
-        configPath: settings.panelBridgeSftpConfigPath,
-      })
-      setRemoteConfigFiles(result.files || [])
-      if (!result.files?.length) {
-        setRemoteConfigError(
-          "No .ini or .lua files found in that folder. Check the path points at the server's Server folder.",
-        )
-      }
-    } catch (error) {
-      setRemoteConfigFiles([])
-      setRemoteConfigError(
-        getUserErrorMessage(error, 'Could not read the remote config folder.'),
-      )
-    } finally {
-      setLoadingRemoteConfig(false)
-    }
-  }
-
-  const handleTailRemoteLog = async (name: string) => {
-    setLoadingRemoteLogs(true)
-    setRemoteLogError(null)
-    try {
-      const result = await panelBridgeApi.tailSftpLog({
-        ...sftpConfig(),
-        logPath: settings.panelBridgeSftpLogPath,
-        name,
-      })
-      setRemoteLogContent({
-        name: result.name,
-        content: result.content,
-        truncated: result.truncated,
-        bytesReturned: result.bytesReturned,
-      })
-    } catch (error) {
-      setRemoteLogContent(null)
-      setRemoteLogError(
-        getUserErrorMessage(error, 'Could not read that log file.'),
-      )
-    } finally {
-      setLoadingRemoteLogs(false)
-    }
-  }
-
-  const handleTestSftp = async () => {
-    setTestingSftp(true)
-    try {
-      const result = await panelBridgeApi.testSftp(sftpConfig())
-      toast({
-        title: result.statusExists ? 'SFTP Bridge Ready' : 'SFTP Folders Ready',
-        description: `${result.nextStep} (${result.latencyMs} ms)`,
-        variant: 'success' as const,
-      })
-    } catch (error) {
-      toast({
-        title: 'SFTP Test Failed',
-        description: getUserErrorMessage(error, 'Could not connect to SFTP.'),
-        variant: 'destructive',
-      })
-    } finally {
-      setTestingSftp(false)
-    }
-  }
-
-  const handleConfigureSftp = async () => {
-    setBridgeLoading(true)
-    setBridgeError(null)
-    try {
-      await panelBridgeApi.configureSftp(sftpConfig())
-      updateSetting('panelBridgeSftpEnabled', true)
-      setOriginalSettings((previous) =>
-        previous
-          ? {
-              ...previous,
-              panelBridgeSftpEnabled: true,
-              panelBridgeSftpHost: settings.panelBridgeSftpHost,
-              panelBridgeSftpPort: settings.panelBridgeSftpPort,
-              panelBridgeSftpUsername: settings.panelBridgeSftpUsername,
-              panelBridgeSftpPassword: settings.panelBridgeSftpPassword,
-              panelBridgeSftpBridgePath: settings.panelBridgeSftpBridgePath,
-              panelBridgeSftpPollIntervalSeconds:
-                settings.panelBridgeSftpPollIntervalSeconds,
-            }
-          : previous,
-      )
-      toast({
-        title: 'SFTP Bridge Started',
-        description: 'PanelBridge is syncing through the local cache.',
-        variant: 'success' as const,
-      })
-      await fetchBridgeStatus()
-    } catch (error) {
-      if (originalSettings) {
-        setSettings((previous) => ({
-          ...previous,
-          panelBridgeSftpEnabled: originalSettings.panelBridgeSftpEnabled,
-          panelBridgeSftpHost: originalSettings.panelBridgeSftpHost,
-          panelBridgeSftpPort: originalSettings.panelBridgeSftpPort,
-          panelBridgeSftpUsername: originalSettings.panelBridgeSftpUsername,
-          panelBridgeSftpPassword: originalSettings.panelBridgeSftpPassword,
-          panelBridgeSftpBridgePath: originalSettings.panelBridgeSftpBridgePath,
-          panelBridgeSftpPollIntervalSeconds:
-            originalSettings.panelBridgeSftpPollIntervalSeconds,
-        }))
-      }
-      setBridgeError(
-        getUserErrorMessage(error, 'Could not start the SFTP bridge.'),
-      )
-    } finally {
-      setBridgeLoading(false)
-    }
-  }
-
   const handlePingMod = async () => {
     setPinging(true)
     try {
@@ -1893,8 +1685,6 @@ export default function Settings() {
         'reconnectInterval',
         'panelPort',
         'httpsPort',
-        'panelBridgeSftpPort',
-        'panelBridgeSftpPollIntervalSeconds',
       ].includes(key)
     ) {
       if (value !== '' && isNaN(parseInt(value))) {
@@ -1921,7 +1711,6 @@ export default function Settings() {
     servers.find((server) => String(server.id) === selectedInstallServerId) ||
     null
   const activeServer = servers.find((server) => server.isActive) || null
-  const isRemoteServer = Boolean(activeServer?.isRemote)
   const trimmedHttpsKeyPath = settings.httpsKeyPath.trim()
   const trimmedHttpsCertPath = settings.httpsCertPath.trim()
   const hasPartialHttpsCertPath =
@@ -3985,146 +3774,79 @@ export default function Settings() {
 
                 {!bridgeStatus?.isRunning && (
                   <div className="p-4 bg-muted rounded-xl space-y-3">
-                    {isRemoteServer ? (
-                      <>
-                        <p className="text-sm font-medium">
-                          {'Remote server setup'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {
-                            'This panel is running separately from your PZ server. Skip Auto Setup and the local bridge path above.'
-                          }
-                        </p>
-                        <ol className="space-y-1.5 text-sm text-muted-foreground list-decimal list-inside">
-                          <li>
-                            <>
-                              {'Copy '}
-                              <strong className="text-foreground">
-                                {'PanelBridge.lua'}
-                              </strong>
-                              {" into the remote server's Lua folder."}
-                            </>
-                          </li>
-                          <li>
-                            <>
-                              {'Set '}
-                              <strong className="text-foreground">
-                                {'DoLuaChecksum=false'}
-                              </strong>
-                              {' in the remote server INI.'}
-                            </>
-                          </li>
-                          <li>
-                            <>
-                              {'Enter the VPS path in '}
-                              <strong className="text-foreground">
-                                {'SFTP PanelBridge files'}
-                              </strong>
-                              {' below.'}
-                            </>
-                          </li>
-                          <li>
-                            <>
-                              {'Click '}
-                              <strong className="text-foreground">
-                                {'Verify and prepare SFTP'}
-                              </strong>
-                              {', then '}
-                              <strong className="text-foreground">
-                                {'Start SFTP bridge'}
-                              </strong>
-                              {'.'}
-                            </>
-                          </li>
-                          <li>{'Start or restart the PZ server.'}</li>
-                        </ol>
-                        <p className="text-xs text-muted-foreground">
-                          {
-                            'The SFTP bridge creates the remote bridge, inbox, and outbox folders automatically. The path must be on the VPS, not on this computer.'
-                          }
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm font-medium">{'Get Started'}</p>
-                        <ol className="space-y-1.5 text-sm text-muted-foreground list-decimal list-inside">
-                          <li>
-                            <>
-                              {'Install '}
-                              <strong className="text-foreground">
-                                {'PanelBridge.lua'}
-                              </strong>
-                              {' using the section below'}
-                            </>
-                          </li>
-                          <li>
-                            <>
-                              {'Set '}
-                              <strong className="text-foreground">
-                                {'DoLuaChecksum=false'}
-                              </strong>
-                              {' in your server INI'}
-                            </>
-                          </li>
-                          <li>
-                            <>
-                              {'Click '}
-                              <strong className="text-foreground">
-                                {'Auto Setup'}
-                              </strong>
-                              {' to start the bridge watcher'}
-                            </>
-                          </li>
-                          <li>{'Start or restart the PZ server'}</li>
-                        </ol>
+                    <p className="text-sm font-medium">{'Get Started'}</p>
+                    <ol className="space-y-1.5 text-sm text-muted-foreground list-decimal list-inside">
+                      <li>
+                        <>
+                          {'Install '}
+                          <strong className="text-foreground">
+                            {'PanelBridge.lua'}
+                          </strong>
+                          {' using the section below'}
+                        </>
+                      </li>
+                      <li>
+                        <>
+                          {'Set '}
+                          <strong className="text-foreground">
+                            {'DoLuaChecksum=false'}
+                          </strong>
+                          {' in your server INI'}
+                        </>
+                      </li>
+                      <li>
+                        <>
+                          {'Click '}
+                          <strong className="text-foreground">
+                            {'Auto Setup'}
+                          </strong>
+                          {' to start the bridge watcher'}
+                        </>
+                      </li>
+                      <li>{'Start or restart the PZ server'}</li>
+                    </ol>
+                    <Button
+                      onClick={() => handleAutoConfigure()}
+                      disabled={bridgeLoading}
+                      className="gap-2"
+                    >
+                      {bridgeLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Zap className="w-4 h-4" />
+                      )}
+                      {'Auto Setup'}
+                    </Button>
+
+                    <div className="border-t border-border/50 pt-3 mt-1 space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        {
+                          'Or set the bridge path manually (Linux / VPS / custom installs):'
+                        }
+                      </p>
+                      <div className="flex gap-2">
+                        <Input
+                          value={manualBridgePath}
+                          onChange={(e) => setManualBridgePath(e.target.value)}
+                          placeholder="/home/pzuser/Zomboid/Lua/panelbridge/MyServer"
+                          className="text-xs h-9"
+                        />
                         <Button
-                          onClick={() => handleAutoConfigure()}
-                          disabled={bridgeLoading}
-                          className="gap-2"
+                          onClick={handleManualConfigure}
+                          disabled={bridgeLoading || !manualBridgePath.trim()}
+                          variant="secondary"
+                          size="sm"
+                          className="shrink-0 gap-1.5"
                         >
                           {bridgeLoading ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           ) : (
-                            <Zap className="w-4 h-4" />
+                            <FolderOpen className="w-3.5 h-3.5" />
                           )}
-                          {'Auto Setup'}
+                          {'Connect'}
                         </Button>
-
-                        <div className="border-t border-border/50 pt-3 mt-1 space-y-2">
-                          <p className="text-xs text-muted-foreground">
-                            {
-                              'Or set the bridge path manually (Linux / VPS / custom installs):'
-                            }
-                          </p>
-                          <div className="flex gap-2">
-                            <Input
-                              value={manualBridgePath}
-                              onChange={(e) =>
-                                setManualBridgePath(e.target.value)
-                              }
-                              placeholder="/home/pzuser/Zomboid/Lua/panelbridge/MyServer"
-                              className="text-xs h-9"
-                            />
-                            <Button
-                              onClick={handleManualConfigure}
-                              disabled={
-                                bridgeLoading || !manualBridgePath.trim()
-                              }
-                              variant="secondary"
-                              size="sm"
-                              className="shrink-0 gap-1.5"
-                            >
-                              {bridgeLoading ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <FolderOpen className="w-3.5 h-3.5" />
-                              )}
-                              {'Connect'}
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -4139,30 +3861,11 @@ export default function Settings() {
                     </AlertTitle>
                     <AlertDescription className="space-y-2">
                       <p>
-                        {isRemoteServer &&
-                        bridgeStatus.transport?.type === 'sftp'
-                          ? 'SFTP is ready, but the panel has not received a status file from the remote PZ server yet.'
-                          : 'The panel is ready. Start the PZ server with PanelBridge.lua installed and DoLuaChecksum=false set.'}
+                        {
+                          'The panel is ready. Start the PZ server with PanelBridge.lua installed and DoLuaChecksum=false set.'
+                        }
                       </p>
-                      {isRemoteServer &&
-                      bridgeStatus.transport?.type === 'sftp' ? (
-                        <>
-                          <p className="text-xs text-muted-foreground break-words">
-                            {'Remote folder:'}{' '}
-                            <code className="rounded bg-background px-1 break-all">
-                              {settings.panelBridgeSftpBridgePath}
-                            </code>
-                          </p>
-                          {bridgeStatus?.bridgePath && (
-                            <p className="text-xs text-muted-foreground break-words">
-                              {'Local SFTP cache:'}{' '}
-                              <code className="rounded bg-background px-1 break-all">
-                                {bridgeStatus.bridgePath}
-                              </code>
-                            </p>
-                          )}
-                        </>
-                      ) : bridgeStatus?.bridgePath ? (
+                      {bridgeStatus?.bridgePath ? (
                         <p className="text-xs text-muted-foreground break-words">
                           {'Watching:'}{' '}
                           <code className="rounded bg-background px-1 break-all">
@@ -4374,10 +4077,10 @@ export default function Settings() {
 
                 <div className="border-t border-border/60 pt-5 space-y-4">
                   <div>
-                    <p className="text-sm font-medium">{'Remote connection'}</p>
+                    <p className="text-sm font-medium">{'Connections'}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {
-                        'PanelBridge and RCON are separate transports. Configure both for a remote server so every Events, Players, and bridge action has the path it needs.'
+                        'PanelBridge handles game integration while RCON handles console commands. Configure both for the active server.'
                       }
                     </p>
                   </div>
@@ -4422,395 +4125,6 @@ export default function Settings() {
                         {'Edit active server RCON connection'}
                       </RouterLink>
                     </div>
-
-                    <div
-                      id="sftp-panelbridge"
-                      className="rounded-md border border-border/60 p-4 space-y-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium">
-                            {'SFTP PanelBridge files'}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {isRemoteServer
-                              ? 'For this remote server, enter the VPS folder here. The panel syncs only bridge status, commands, and results.'
-                              : 'Syncs only the bridge status, command queue, and results folder. It does not read general server files.'}
-                          </p>
-                        </div>
-                        <Cloud className="h-4 w-4 shrink-0 text-primary" />
-                      </div>
-                      <div className="rounded border border-border/50 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
-                        <strong className="text-foreground">
-                          {'Setup order:'}
-                        </strong>{' '}
-                        <>
-                          {'enter the VPS folder, click '}
-                          <strong className="text-foreground">
-                            {'Verify and prepare SFTP'}
-                          </strong>
-                          {
-                            ' to verify access and create the bridge queue folders, then click '
-                          }
-                          <strong className="text-foreground">
-                            {'Start SFTP bridge'}
-                          </strong>
-                          {
-                            '. A missing status file means the PZ server has not written one yet.'
-                          }
-                        </>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <Label htmlFor="sftp-host">{'SFTP host'}</Label>
-                            <HelpTip label={'SFTP host'}>
-                              {
-                                "Only needed when the dedicated server runs on a different machine than this panel. The panel connects here over SFTP to read and write that machine's config files. Get these details from whoever manages that machine — if your server runs on this same computer, leave this whole section blank."
-                              }
-                            </HelpTip>
-                          </div>
-                          <Input
-                            id="sftp-host"
-                            value={settings.panelBridgeSftpHost}
-                            onChange={(event) =>
-                              updateSetting(
-                                'panelBridgeSftpHost',
-                                event.target.value,
-                              )
-                            }
-                            placeholder="pz.example.net"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="sftp-port">{'Port'}</Label>
-                          <Input
-                            id="sftp-port"
-                            inputMode="numeric"
-                            value={settings.panelBridgeSftpPort}
-                            onChange={(event) =>
-                              updateSetting(
-                                'panelBridgeSftpPort',
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="sftp-user">{'Username'}</Label>
-                          <Input
-                            id="sftp-user"
-                            autoComplete="username"
-                            value={settings.panelBridgeSftpUsername}
-                            onChange={(event) =>
-                              updateSetting(
-                                'panelBridgeSftpUsername',
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="sftp-password">{'Password'}</Label>
-                          <PasswordInput
-                            id="sftp-password"
-                            autoComplete="current-password"
-                            value={settings.panelBridgeSftpPassword}
-                            onChange={(value) =>
-                              updateSetting('panelBridgeSftpPassword', value)
-                            }
-                            placeholder={'Stored securely'}
-                            label={'SFTP password'}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="sftp-bridge-path">
-                          {'Remote bridge folder on the VPS'}
-                        </Label>
-                        <Input
-                          id="sftp-bridge-path"
-                          value={settings.panelBridgeSftpBridgePath}
-                          onChange={(event) =>
-                            updateSetting(
-                              'panelBridgeSftpBridgePath',
-                              event.target.value,
-                            )
-                          }
-                          placeholder="/home/pzuser/Zomboid/Lua/panelbridge/MyServer"
-                        />
-                        <p className="text-[11px] text-muted-foreground">
-                          {
-                            'Use the path as seen by this SFTP account. Do not enter a Windows path or a path from your local computer.'
-                          }
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-end gap-3">
-                        <div className="w-36 space-y-1.5">
-                          <Label htmlFor="sftp-poll">
-                            {'Sync interval (seconds)'}
-                          </Label>
-                          <Input
-                            id="sftp-poll"
-                            inputMode="numeric"
-                            value={settings.panelBridgeSftpPollIntervalSeconds}
-                            onChange={(event) =>
-                              updateSetting(
-                                'panelBridgeSftpPollIntervalSeconds',
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleTestSftp}
-                          disabled={testingSftp || bridgeLoading}
-                        >
-                          {testingSftp ? (
-                            <Loader2 className="me-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Link className="me-2 h-4 w-4" />
-                          )}
-                          {'Verify and prepare SFTP'}
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={handleConfigureSftp}
-                          disabled={bridgeLoading}
-                        >
-                          {bridgeLoading ? (
-                            <Loader2 className="me-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Cloud className="me-2 h-4 w-4" />
-                          )}
-                          {'Start SFTP bridge'}
-                        </Button>
-                      </div>
-                      {bridgeStatus?.transport?.type === 'sftp' && (
-                        <div className="space-y-1 text-xs text-muted-foreground">
-                          <p>
-                            SFTP{' '}
-                            {bridgeStatus.transport.running
-                              ? 'running'
-                              : 'stopped'}
-                            {bridgeStatus.transport.lastLatencyMs != null
-                              ? ', last sync ' +
-                                String(bridgeStatus.transport.lastLatencyMs) +
-                                ' ms'
-                              : ''}
-                          </p>
-                          {bridgeStatus.transport.lastError && (
-                            <p className="text-warning">
-                              {getSftpStatusMessage(bridgeStatus.transport)}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    <>
-                      <strong className="text-foreground">
-                        {'Server logs:'}
-                      </strong>
-                      {
-                        ' read-only. The panel lists the remote log folder and fetches the tail of a file on demand. Nothing is written to the remote host and whole files are never mirrored to disk.'
-                      }
-                    </>
-                  </p>
-
-                  <div className="rounded-md border border-border/60 p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium">
-                          {'Remote server config'}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          <>
-                            {'Absolute path to the '}
-                            <code>{'Server'}</code>
-                            {
-                              ' folder on the remote host. Setting this unlocks the Server Config page for a remote server: the panel mirrors '
-                            }
-                            <code>{'.ini'}</code>
-                            {' and '}
-                            <code>{'SandboxVars.lua'}</code>
-                            {' over SFTP, edits the copy, then writes it back.'}
-                          </>
-                        </p>
-                      </div>
-                      <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
-                    </div>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                      <div className="min-w-0 flex-1 space-y-1.5 sm:min-w-[18rem]">
-                        <Label htmlFor="sftp-config-path">
-                          {'Remote Server folder'}
-                        </Label>
-                        <Input
-                          id="sftp-config-path"
-                          value={settings.panelBridgeSftpConfigPath}
-                          onChange={(event) =>
-                            updateSetting(
-                              'panelBridgeSftpConfigPath',
-                              event.target.value,
-                            )
-                          }
-                          placeholder="/home/pz/Zomboid/Server"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleCheckRemoteConfig}
-                        disabled={
-                          loadingRemoteConfig ||
-                          !settings.panelBridgeSftpConfigPath.trim()
-                        }
-                      >
-                        {loadingRemoteConfig ? (
-                          <Loader2 className="me-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <FolderOpen className="me-2 h-4 w-4" />
-                        )}
-                        {'Check folder'}
-                      </Button>
-                    </div>
-
-                    {remoteConfigError && (
-                      <p className="text-xs text-destructive">
-                        {remoteConfigError}
-                      </p>
-                    )}
-
-                    {remoteConfigFiles.length > 0 && (
-                      <ul className="max-h-40 divide-y divide-border/40 overflow-auto rounded border border-border/50">
-                        {remoteConfigFiles.map((file) => (
-                          <li
-                            key={file.name}
-                            className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs"
-                          >
-                            <span className="font-mono">{file.name}</span>
-                            <span className="tabular-nums text-muted-foreground">
-                              {file.size} B
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  <div className="rounded-md border border-border/60 p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium">
-                          {'Remote server logs'}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          <>
-                            {'Absolute path to the Zomboid '}
-                            <code>{'Logs'}</code>
-                            {' folder on the remote host. Only '}
-                            <code>{'.txt'}</code>
-                            {' and '}
-                            <code>{'.log'}</code>
-                            {' files are listed.'}
-                          </>
-                        </p>
-                      </div>
-                      <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
-                    </div>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                      <div className="min-w-0 flex-1 space-y-1.5 sm:min-w-[18rem]">
-                        <Label htmlFor="sftp-log-path">
-                          {'Remote log folder'}
-                        </Label>
-                        <Input
-                          id="sftp-log-path"
-                          value={settings.panelBridgeSftpLogPath}
-                          onChange={(event) =>
-                            updateSetting(
-                              'panelBridgeSftpLogPath',
-                              event.target.value,
-                            )
-                          }
-                          placeholder="/home/pz/Zomboid/Logs"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleListRemoteLogs}
-                        disabled={
-                          loadingRemoteLogs ||
-                          !settings.panelBridgeSftpLogPath.trim()
-                        }
-                      >
-                        {loadingRemoteLogs ? (
-                          <Loader2 className="me-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <FolderOpen className="me-2 h-4 w-4" />
-                        )}
-                        {'List logs'}
-                      </Button>
-                    </div>
-
-                    {remoteLogError && (
-                      <p className="text-xs text-destructive">
-                        {remoteLogError}
-                      </p>
-                    )}
-
-                    {remoteLogs.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="max-h-48 overflow-auto rounded border border-border/50">
-                          <ul className="divide-y divide-border/40">
-                            {remoteLogs.map((file) => (
-                              <li
-                                key={file.name}
-                                className="flex items-center justify-between gap-3 px-3 py-2"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => handleTailRemoteLog(file.name)}
-                                  className="min-w-0 flex-1 truncate text-start text-xs font-mono text-primary hover:underline"
-                                >
-                                  {file.name}
-                                </button>
-                                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                                  {(file.size / 1024).toFixed(0)} KB
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          {'Select a file to load the last 256 KB.'}
-                        </p>
-                      </div>
-                    )}
-
-                    {remoteLogContent && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-medium">
-                            {remoteLogContent.name}
-                          </p>
-                          <span className="text-[11px] text-muted-foreground">
-                            {remoteLogContent.truncated ? 'tail of ' : ''}
-                            {(remoteLogContent.bytesReturned / 1024).toFixed(
-                              0,
-                            )}{' '}
-                            KB
-                          </span>
-                        </div>
-                        <pre className="max-h-72 overflow-auto rounded border border-border/50 bg-background/60 p-3 text-[11px] leading-relaxed font-mono whitespace-pre-wrap break-words">
-                          {remoteLogContent.content}
-                        </pre>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -4867,11 +4181,7 @@ export default function Settings() {
                     </Select>
                     <Button
                       onClick={handleInstallMod}
-                      disabled={
-                        installingMod ||
-                        !selectedInstallServerId ||
-                        selectedInstallServer?.isRemote
-                      }
+                      disabled={installingMod || !selectedInstallServerId}
                       className="gap-2"
                       variant="outline"
                     >
@@ -4883,13 +4193,6 @@ export default function Settings() {
                       {'Install Mod'}
                     </Button>
                   </div>
-                  {selectedInstallServer?.isRemote && (
-                    <p className="text-xs text-warning">
-                      {
-                        'Remote server: copy PanelBridge.lua to the remote Lua folder with SFTP or the provider file manager. Automatic local installation is unavailable.'
-                      }
-                    </p>
-                  )}
                   {selectedInstallTarget && (
                     <p className="text-xs text-muted-foreground break-all">
                       {'Destination:'}{' '}

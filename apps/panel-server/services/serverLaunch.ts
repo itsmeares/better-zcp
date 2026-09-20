@@ -20,7 +20,6 @@ export function isFirstBootMissingAdminPassword(
 ) {
   if (
     !activeServer ||
-    activeServer.isRemote ||
     !activeServer.serverName ||
     !activeServer.zomboidDataPath ||
     activeServer.adminPassword

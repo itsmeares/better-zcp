@@ -364,7 +364,6 @@ function demoServer() {
     maxMemory: 4096,
     useNoSteam: false,
     useDebug: false,
-    isRemote: false,
     isActive: true,
     createdAt: new Date().toISOString(),
   }

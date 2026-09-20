@@ -18,7 +18,6 @@ const bridgeMock = {
   configure: vi.fn((p) => p),
   start: vi.fn(),
   stop: vi.fn(),
-  stopSftp: vi.fn(async () => {}),
   isRunning: false,
 };
 

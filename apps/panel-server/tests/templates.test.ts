@@ -362,7 +362,6 @@ describe("previewTemplate / applyTemplate", () => {
       id: "server-1",
       serverName: "TestServer",
       serverConfigPath: dir,
-      isRemote: false,
     });
   });
 
@@ -492,7 +491,6 @@ describe("previewTemplate / applyTemplate", () => {
       id: "server-1",
       serverName: "../outside",
       serverConfigPath: dir,
-      isRemote: false,
     });
 
     const result = await templateService.applyTemplate(
@@ -516,22 +514,12 @@ describe("previewTemplate / applyTemplate", () => {
     });
   });
 
-  it("refuses to apply to a remote server", async () => {
-    getServer.mockResolvedValue({
-      id: "server-2",
-      serverName: "RemoteServer",
-      serverConfigPath: dir,
-      isRemote: true,
-    });
-
-    const result = await templateService.applyTemplate("first-week-friendly", "server-2");
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/remote/i);
-  });
-
   it("returns an error when the server doesn't exist", async () => {
     getServer.mockResolvedValue(null);
-    const result = await templateService.applyTemplate("first-week-friendly", "missing");
+    const result = await templateService.applyTemplate(
+      "first-week-friendly",
+      "missing",
+    );
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/not found/i);
   });

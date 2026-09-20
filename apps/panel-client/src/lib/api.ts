@@ -1678,8 +1678,6 @@ export interface ServerInstance {
   useNoSteam: boolean;
   useDebug: boolean;
   useUpnp?: boolean;
-  isRemote: boolean;
-  remoteConfigConfigured?: boolean;
   isActive: boolean;
   startCommand: string;
   lifecycleProvider?: "direct" | "systemd" | "openrc";
@@ -2264,7 +2262,7 @@ export const panelBridgeApi = {
       consecutiveFailures?: number;
       hasFileWatcher?: boolean;
       transport?: {
-        type: "local" | "sftp";
+        type: "local";
         running: boolean;
         lastSyncAt?: number | null;
         lastLatencyMs?: number | null;
@@ -2386,95 +2384,6 @@ export const panelBridgeApi = {
       bridgePath: string;
       error?: string;
     }>,
-
-  configureSftp: (config: {
-    host: string;
-    port: string;
-    username: string;
-    password: string;
-    bridgePath: string;
-    pollIntervalSeconds: string;
-  }) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "configureSftp", args: config },
-        })) as Promise<{
-    success: boolean;
-    bridgePath: string;
-    transport: { type: "sftp"; running: boolean; lastLatencyMs?: number | null };
-  }>,
-
-  listSftpLogs: (config: {
-    host?: string;
-    port?: string;
-    username?: string;
-    password?: string;
-    logPath?: string;
-  }) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "listSftpLogs", args: config },
-        })) as Promise<{
-    success: boolean;
-    logPath: string;
-    files: Array<{ name: string; size: number; modifiedAt: string | null }>;
-  }>,
-
-  listSftpConfigFiles: (config: {
-    host?: string;
-    port?: string;
-    username?: string;
-    password?: string;
-    configPath?: string;
-  }) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "listRemoteConfig", args: config },
-        })) as Promise<{
-    success: boolean;
-    configPath: string;
-    files: Array<{ name: string; size: number; modifiedAt: string | null }>;
-  }>,
-
-  tailSftpLog: (config: {
-    name: string;
-    maxBytes?: number;
-    host?: string;
-    port?: string;
-    username?: string;
-    password?: string;
-    logPath?: string;
-  }) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "tailSftpLog", args: config },
-        })) as Promise<{
-    success: boolean;
-    name: string;
-    size: number;
-    truncated: boolean;
-    bytesReturned: number;
-    content: string;
-  }>,
-
-  testSftp: (config: {
-    host: string;
-    port: string;
-    username: string;
-    password: string;
-    bridgePath: string;
-    pollIntervalSeconds: string;
-  }) =>
-    serverCall(() =>
-        sendPanelBridgeSetupCommand({
-          data: { action: "testSftp", args: config },
-        })) as Promise<{
-    success: boolean;
-    statusExists: boolean;
-    foldersReady: boolean;
-    latencyMs: number;
-    nextStep: string;
-  }>,
 
   start: () =>
     serverCall(() =>

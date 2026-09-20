@@ -3,7 +3,7 @@ import { mockGetRoleByName } from "./helpers/mockPermissionsDb.ts";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => ({ isRemote: false })),
+  getActiveServer: vi.fn(async () => ({})),
   getRoleByName: mockGetRoleByName,
 }));
 

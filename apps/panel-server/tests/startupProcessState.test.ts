@@ -13,10 +13,4 @@ describe("startup process-state classification", () => {
       classifyStartupProcessState({ running: false, scanFailed: false }),
     ).toEqual({ running: false, unknown: false });
   });
-
-  it("uses direct signals for remote servers without local process scanning", () => {
-    expect(
-      classifyStartupProcessState({ running: true, scanFailed: true }, true),
-    ).toEqual({ running: true, unknown: false });
-  });
 });

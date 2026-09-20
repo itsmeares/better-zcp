@@ -191,20 +191,22 @@ describe('PanelBridge pending commands', () => {
 
     expect(reject).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('Command timeout: teleportPlayer'),
+        message: expect.stringContaining("Command timeout: teleportPlayer"),
       }),
     );
-    expect(bridge.pendingCommands.has('stale-command')).toBe(false);
+    expect(bridge.pendingCommands.has("stale-command")).toBe(false);
   });
 });
 
-describe('PanelBridge queue recovery', () => {
-  it('resumes command numbering after a cleared SFTP cache', async () => {
-    const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'pz-bridge-test-'));
+describe("PanelBridge queue recovery", () => {
+  it("resumes command numbering from persisted queue state", async () => {
+    const temporaryDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "pz-bridge-test-"),
+    );
     try {
-      const { PanelBridge } = await import('../services/panelBridge.ts');
+      const { PanelBridge } = await import("../services/panelBridge.ts");
       fs.writeFileSync(
-        path.join(temporaryDirectory, 'queue-state-lua.json.txt'),
+        path.join(temporaryDirectory, "queue-state-lua.json.txt"),
         JSON.stringify({ lastCommandSeq: 42 }),
       );
       const bridge = new PanelBridge();

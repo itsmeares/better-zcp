@@ -102,15 +102,8 @@ export async function startServerAction(
   try {
     const activeServer = activeServerForLock;
     log.info(
-      `Server start requested (server=${activeServer?.name || "unknown"}, remote=${activeServer?.isRemote || false})`,
+      `Server start requested (server=${activeServer?.name || "unknown"})`,
     );
-    if (activeServer?.isRemote) {
-      throw lifecycleError(
-        "Cannot start a remote server. Remote servers are managed externally — use RCON to interact.",
-        400,
-        ErrorCode.SERVER_START_REMOTE_REFUSED,
-      );
-    }
     if (!activeServer) {
       throw lifecycleError("No active server configured", 404);
     }
@@ -372,14 +365,6 @@ export async function forceStopServerAction(
 
   try {
     log.info("Force kill requested");
-    if (activeServerForLock?.isRemote) {
-      throw lifecycleError(
-        "Cannot force-stop a remote server. The process is not managed by this panel.",
-        400,
-        ErrorCode.SERVER_FORCE_STOP_REMOTE_REFUSED,
-      );
-    }
-
     const saveOutcome = await attemptBoundedSaveBeforeForceStop(
       runtime.rconService,
     );
@@ -442,13 +427,6 @@ export async function restartServerAction(
 
   let lifecycleLockTransferred = false;
   try {
-    if (activeServerForLock?.isRemote) {
-      throw lifecycleError(
-        "Cannot restart a remote server. The process is not managed by this panel.",
-        400,
-        ErrorCode.SERVER_RESTART_REMOTE_REFUSED,
-      );
-    }
     if (runtime.scheduler?.restartInProgress) {
       const response = lifecycleInProgressResponse();
       throw lifecycleError(response.error, 409, response.code);

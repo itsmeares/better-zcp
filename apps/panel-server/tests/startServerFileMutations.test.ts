@@ -47,7 +47,7 @@ describe("Start server-file mutations", () => {
     getActiveServerContext.mockResolvedValue({
       serverConfigPath: configDir,
       serverName: "TestServer",
-      activeServer: { isRemote: false },
+      activeServer: {},
     });
     getRoleByName.mockResolvedValue({ capabilities: ["server.configure"] });
     getPanelRuntime.mockReturnValue({

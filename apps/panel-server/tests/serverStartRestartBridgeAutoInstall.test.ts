@@ -64,7 +64,7 @@ const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bridge-autoinstall-route-"));
   runManagedLifecycle.mockReset();
-  activeServer = { id: "s1", name: "Test Server", installPath: tmpDir, isRemote: false };
+  activeServer = { id: "s1", name: "Test Server", installPath: tmpDir };
 });
 
 afterEach(() => {

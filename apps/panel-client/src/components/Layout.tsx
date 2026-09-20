@@ -77,8 +77,6 @@ interface NavItem {
   to: string
   icon: typeof LayoutDashboard
   label: string
-  requiresLocal?: boolean
-  allowRemoteConfigMirror?: boolean
   disabled?: boolean
   badge?: string
 }
@@ -142,21 +140,16 @@ const navSections: NavSection[] = [
         to: '/server-config',
         icon: FileCog,
         label: 'Server Configuration',
-        requiresLocal: true,
-        allowRemoteConfigMirror: true,
       },
       {
         to: '/mods',
         icon: Package,
         label: 'Mod Manager',
-        requiresLocal: true,
       },
       {
         to: '/templates',
         icon: LayoutTemplate,
         label: 'Templates',
-        requiresLocal: true,
-        allowRemoteConfigMirror: true,
       },
     ],
   },
@@ -176,13 +169,11 @@ const navSections: NavSection[] = [
         to: '/backups',
         icon: Archive,
         label: 'World Backups',
-        requiresLocal: true,
       },
       {
         to: '/chunks',
         icon: Eraser,
         label: 'Map Cleanup',
-        requiresLocal: true,
       },
     ],
   },
@@ -395,10 +386,6 @@ export default function Layout({ children }: LayoutProps) {
   const servers = serversData?.servers ?? null
   const activeServer = servers?.find((server) => server.isActive) ?? null
 
-  const isBlockedByRemote = (item: NavItem) =>
-    !!item.requiresLocal &&
-    !!activeServer?.isRemote &&
-    !(item.allowRemoteConfigMirror && activeServer.remoteConfigConfigured)
   const provider = resolveClientProvider(activeServer)
   const serversConfirmedEmpty = servers !== null && servers.length === 0
   const isBlockedByNoServer = (section: NavSection) =>
@@ -926,15 +913,6 @@ export default function Layout({ children }: LayoutProps) {
                         {playerCountLabel}
                       </Badge>
                     )}
-                    {activeServer?.isRemote && (
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 px-1.5 py-0 text-[10px] uppercase tracking-wider text-muted-foreground/80"
-                        title={'Remote (RCON-only) server'}
-                      >
-                        {'RM'}
-                      </Badge>
-                    )}
                     <span className="sr-only">
                       {serverRunState === 'running' && 'Server is running'}
                       {serverRunState === 'stopped' && 'Server is stopped'}
@@ -975,15 +953,6 @@ export default function Layout({ children }: LayoutProps) {
                       <span className="truncate flex-1 font-medium">
                         {server.name}
                       </span>
-                      {server.isRemote && (
-                        <Badge
-                          variant="outline"
-                          className="px-1.5 py-0 text-[10px] uppercase tracking-wider text-muted-foreground/80"
-                          title={'Remote (RCON-only) server'}
-                        >
-                          {'Remote'}
-                        </Badge>
-                      )}
                       {server.isActive && (
                         <Badge
                           variant="secondary"
@@ -1076,13 +1045,10 @@ export default function Layout({ children }: LayoutProps) {
                     )}
                   >
                     {section.items.map((item) => {
-                      const isDisabledByRemote = isBlockedByRemote(item)
                       const isDisabledByNoServer = isBlockedByNoServer(section)
                       const disabledReason = isDisabledByNoServer
                         ? 'Add a server first — this page needs one to work with'
-                        : isDisabledByRemote
-                          ? 'Not available for remote (RCON-only) servers'
-                          : null
+                        : null
 
                       if (disabledReason || item.disabled) {
                         return (
@@ -1182,7 +1148,6 @@ export default function Layout({ children }: LayoutProps) {
                   </div>
                   <div className="space-y-0.5">
                     {section.items.map((item) => {
-                      const isDisabledByRemote = isBlockedByRemote(item)
                       const isDisabledByNoServer = isBlockedByNoServer(section)
 
                       if (isDisabledByNoServer) {
@@ -1218,34 +1183,6 @@ export default function Layout({ children }: LayoutProps) {
                               <span className="truncate text-muted-foreground/70">
                                 {item.label}
                               </span>
-                            </div>
-                          </DisabledNavTooltip>
-                        )
-                      }
-
-                      if (isDisabledByRemote) {
-                        return (
-                          <DisabledNavTooltip
-                            key={item.to}
-                            reason={
-                              'Not available for remote (RCON-only) servers'
-                            }
-                          >
-                            <div
-                              className="flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] opacity-55"
-                              aria-label={`${item.label} — ${'Not available for remote (RCON-only) servers'}`}
-                              aria-disabled="true"
-                            >
-                              <item.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground/50" />
-                              <span className="truncate text-muted-foreground/70 line-through decoration-muted-foreground/30">
-                                {item.label}
-                              </span>
-                              <Badge
-                                variant="outline"
-                                className="ms-auto px-1 py-0 text-[9px] uppercase tracking-wider"
-                              >
-                                {'Local'}
-                              </Badge>
                             </div>
                           </DisabledNavTooltip>
                         )

@@ -67,7 +67,7 @@ export function TemplatePreviewDialog({
       .catch(() => ({ server: null }))
     if (loadIdRef.current !== loadId) return
     setServer(active)
-    if (active && !active.isRemote) {
+    if (active) {
       serverApi
         .getStatus()
         .then((status) => {
@@ -79,7 +79,7 @@ export function TemplatePreviewDialog({
         })
     }
 
-    if (active && !active.isRemote) {
+    if (active) {
       try {
         const result = await templatesApi.preview(tpl.meta.id, active.id)
         if (loadIdRef.current !== loadId) return
@@ -150,14 +150,6 @@ export function TemplatePreviewDialog({
             <AlertTitle>{'No Active Server'}</AlertTitle>
             <AlertDescription>
               {'Set up a server before previewing or applying templates.'}
-            </AlertDescription>
-          </Alert>
-        ) : server.isRemote ? (
-          <Alert variant="warning">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>{'Remote Server'}</AlertTitle>
-            <AlertDescription>
-              {"Applying templates to remote servers isn't supported yet."}
             </AlertDescription>
           </Alert>
         ) : diffError ? (

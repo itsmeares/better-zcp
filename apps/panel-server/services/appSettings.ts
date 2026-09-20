@@ -15,8 +15,6 @@ const log = createLogger("AppSettings");
 
 const AUTO_EXPORT_MAX_PER_PLAYER_MIN = 1;
 const AUTO_EXPORT_MAX_PER_PLAYER_MAX = 50;
-const SFTP_POLL_INTERVAL_MIN = 2;
-const SFTP_POLL_INTERVAL_MAX = 10;
 const MOD_RESTART_DELAY_MIN = 0;
 const MOD_RESTART_DELAY_MAX = 30;
 const SERVER_AUTO_UPDATE_WARNING_MINUTES_MIN = 0;
@@ -27,8 +25,6 @@ const MOD_CHECK_INTERVAL_MINUTES_MAX = 120;
 const BIND_PORT_MIN = 1024;
 const BIND_PORT_MAX = 65535;
 const GAME_PORT_MAX = BIND_PORT_MAX - 1;
-const DESTINATION_PORT_MIN = 1;
-const DESTINATION_PORT_MAX = 65535;
 const MEMORY_GB_MIN = 1;
 const MIN_MEMORY_GB_MAX = 64;
 const MAX_MEMORY_GB_MAX = 128;
@@ -74,20 +70,9 @@ const VALID_SETTINGS_KEYS = [
   "steamSessionId",
   "steamLoginSecure",
   "lanIpAddress",
-  "panelBridgeSftpEnabled",
-  "panelBridgeSftpHost",
-  "panelBridgeSftpPort",
-  "panelBridgeSftpUsername",
-  "panelBridgeSftpPassword",
-  "panelBridgeSftpBridgePath",
-  "panelBridgeSftpPollIntervalSeconds",
-  "panelBridgeSftpLogPath",
-  "panelBridgeSftpConfigPath",
 ] as const;
 
 const FEATURE_GATED_FIELDS: Record<string, string> = {
-  panelBridgeSftpPort: "panelBridgeSftpEnabled",
-  panelBridgeSftpPollIntervalSeconds: "panelBridgeSftpEnabled",
   httpsCertPath: "httpsEnabled",
   httpsKeyPath: "httpsEnabled",
   httpsPort: "httpsEnabled",
@@ -116,7 +101,6 @@ const BOOLEAN_SETTINGS = new Set([
   "httpsEnabled",
   "autoStartServer",
   "workshopCollectionAutoSync",
-  "panelBridgeSftpEnabled",
 ]);
 
 type SettingEntry = [string, unknown];
@@ -439,18 +423,6 @@ export async function saveAppSettings(
     const integerFields: Array<[string, number, number, string]> = [
       ["rconPort", BIND_PORT_MIN, BIND_PORT_MAX, "RCON port"],
       ["serverPort", BIND_PORT_MIN, GAME_PORT_MAX, "Game port"],
-      [
-        "panelBridgeSftpPort",
-        DESTINATION_PORT_MIN,
-        DESTINATION_PORT_MAX,
-        "SFTP port",
-      ],
-      [
-        "panelBridgeSftpPollIntervalSeconds",
-        SFTP_POLL_INTERVAL_MIN,
-        SFTP_POLL_INTERVAL_MAX,
-        "SFTP sync interval (seconds)",
-      ],
       ["minMemory", MEMORY_GB_MIN, MIN_MEMORY_GB_MAX, "Minimum memory (GB)"],
       ["maxMemory", MEMORY_GB_MIN, MAX_MEMORY_GB_MAX, "Maximum memory (GB)"],
       [

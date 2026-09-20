@@ -66,7 +66,6 @@ describe("POST /add-all-resolved-deps: per-item results[]", () => {
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
       // No installPath -- keeps serverPath null so findModIdFromWorkshop()
       // never runs and fetchModIdFromWorkshop() is the only resolution path,
       // which the fetch stub below controls deterministically.

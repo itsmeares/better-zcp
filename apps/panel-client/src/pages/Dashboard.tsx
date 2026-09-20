@@ -1241,10 +1241,7 @@ export default function Dashboard() {
   })
 
   const verdict: Verdict = (() => {
-    if (
-      !hasServer ||
-      (status && !status.serverPathConfigured && !activeServer?.isRemote)
-    ) {
+    if (!hasServer || (status && !status.serverPathConfigured)) {
       return {
         level: 'warning',
         headline: 'No server configured',
@@ -1268,15 +1265,14 @@ export default function Dashboard() {
       return {
         level: hostUnknown ? 'warning' : 'critical',
         headline: hostUnknown ? 'Server status unknown' : 'Server stopped',
-        action:
-          hostUnknown || activeServer?.isRemote
-            ? undefined
-            : {
-                label: 'Start',
-                onClick: startServer,
-                busy: loading === 'Start server',
-                disabled: loading !== null,
-              },
+        action: hostUnknown
+          ? undefined
+          : {
+              label: 'Start',
+              onClick: startServer,
+              busy: loading === 'Start server',
+              disabled: loading !== null,
+            },
       }
     }
     if (!rconConnected) {
@@ -1348,11 +1344,7 @@ export default function Dashboard() {
         action: { label: 'Review mods', to: '/mods' },
       }
     }
-    if (
-      maintenance.schedulerLoaded &&
-      maintenance.backupCount === 0 &&
-      !activeServer?.isRemote
-    ) {
+    if (maintenance.schedulerLoaded && maintenance.backupCount === 0) {
       return {
         level: 'warning',
         headline: 'No backups',
@@ -1561,11 +1553,6 @@ export default function Dashboard() {
                 {worldMap}
               </span>
             )}
-            {activeServer?.isRemote && (
-              <span className="rounded-sm bg-muted/50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                {'remote'}
-              </span>
-            )}
           </div>
 
           <div className="order-3 -mx-4 -mb-3 flex w-[calc(100%+2rem)] flex-wrap items-center gap-1 border-t border-border/30 bg-background/20 px-3 py-1.5">
@@ -1663,22 +1650,11 @@ export default function Dashboard() {
           <div className="order-2 ms-auto flex flex-wrap justify-end gap-1">
             {!online ? (
               <DisabledReason
-                reason={
-                  !hasServer
-                    ? 'Add or select a server first'
-                    : activeServer?.isRemote
-                      ? 'Not available for remote (RCON-only) servers'
-                      : null
-                }
+                reason={!hasServer ? 'Add or select a server first' : null}
               >
                 <Button
                   onClick={startServer}
-                  disabled={
-                    !hasServer ||
-                    hostUnknown ||
-                    loading !== null ||
-                    activeServer?.isRemote
-                  }
+                  disabled={!hasServer || hostUnknown || loading !== null}
                   variant="ghost"
                   size="sm"
                   className="h-8 gap-1.5 rounded-md border border-emerald-500/30 px-2.5 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:border-border/50 disabled:text-muted-foreground"
@@ -1717,13 +1693,7 @@ export default function Dashboard() {
                   {'Stop'}
                 </Button>
 
-                <DisabledReason
-                  reason={
-                    activeServer?.isRemote
-                      ? 'Not available for remote (RCON-only) servers'
-                      : null
-                  }
-                >
+                <DisabledReason reason={null}>
                   <Button
                     onClick={() =>
                       setConfirmAction({
@@ -1740,17 +1710,11 @@ export default function Dashboard() {
                         variant: 'destructive',
                       })
                     }
-                    disabled={
-                      loading !== null || !online || activeServer?.isRemote
-                    }
+                    disabled={loading !== null || !online}
                     variant="ghost"
                     size="sm"
                     className="h-8 gap-1.5 rounded-md border border-red-500/30 px-2.5 text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 disabled:border-border/50 disabled:text-muted-foreground"
-                    title={
-                      activeServer?.isRemote
-                        ? undefined
-                        : 'Tries a quick save, then stops immediately either way'
-                    }
+                    title="Tries a quick save, then stops immediately either way"
                   >
                     {loading === 'Force stop server' ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1760,13 +1724,7 @@ export default function Dashboard() {
                     {'Force stop'}
                   </Button>
                 </DisabledReason>
-                <DisabledReason
-                  reason={
-                    activeServer?.isRemote
-                      ? 'Not available for remote (RCON-only) servers'
-                      : null
-                  }
-                >
+                <DisabledReason reason={null}>
                   <Button
                     onClick={() =>
                       setConfirmAction({
@@ -1778,9 +1736,7 @@ export default function Dashboard() {
                         variant: 'warning',
                       })
                     }
-                    disabled={
-                      loading !== null || !online || activeServer?.isRemote
-                    }
+                    disabled={loading !== null || !online}
                     variant="ghost"
                     size="sm"
                     className="h-8 gap-1.5 rounded-md border border-amber-500/30 px-2.5 text-xs text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 disabled:border-border/50 disabled:text-muted-foreground"
@@ -1820,9 +1776,7 @@ export default function Dashboard() {
                         .then(() => fetchMaintenance()),
                     )
                   }
-                  disabled={
-                    !hasServer || loading !== null || activeServer?.isRemote
-                  }
+                  disabled={!hasServer || loading !== null}
                 >
                   <Archive className="me-2 h-4 w-4" /> {'Create backup'}
                 </DropdownMenuItem>
@@ -1840,32 +1794,21 @@ export default function Dashboard() {
                     reason={
                       !hasServer
                         ? 'Add or select a server first'
-                        : !activeServer?.isRemote && !hostRunning
+                        : !hostRunning
                           ? 'Start the server first'
                           : null
                     }
                   >
                     <DropdownMenuItem
                       onClick={handleConnect}
-                      disabled={
-                        !hasServer ||
-                        loading !== null ||
-                        (!activeServer?.isRemote && !hostRunning)
-                      }
+                      disabled={!hasServer || loading !== null || !hostRunning}
                     >
                       <Wifi className="me-2 h-4 w-4" /> {'Connect RCON'}
                     </DropdownMenuItem>
                   </DisabledReason>
                 )}
                 <DropdownMenuSeparator />
-                <DisabledReason
-                  className="w-full"
-                  reason={
-                    activeServer?.isRemote
-                      ? 'Not available for remote (RCON-only) servers'
-                      : null
-                  }
-                >
+                <DisabledReason className="w-full" reason={null}>
                   <DropdownMenuItem
                     onClick={() => {
                       setConfirmAction({
@@ -1882,12 +1825,7 @@ export default function Dashboard() {
                         variant: 'destructive',
                       })
                     }}
-                    disabled={
-                      !hasServer ||
-                      !online ||
-                      loading !== null ||
-                      activeServer?.isRemote
-                    }
+                    disabled={!hasServer || !online || loading !== null}
                     className="text-destructive focus:text-destructive"
                   >
                     <Zap className="me-2 h-4 w-4" /> {'Restart now'}
@@ -1898,11 +1836,9 @@ export default function Dashboard() {
                   reason={
                     !hasServer
                       ? 'Add or select a server first'
-                      : activeServer?.isRemote
-                        ? 'Not available for remote (RCON-only) servers'
-                        : online
-                          ? 'Stop the server before wiping.'
-                          : null
+                      : online
+                        ? 'Stop the server before wiping.'
+                        : null
                   }
                 >
                   <DropdownMenuItem
@@ -1910,12 +1846,7 @@ export default function Dashboard() {
                       setWipePreview(null)
                       setWipeDialog(true)
                     }}
-                    disabled={
-                      !hasServer ||
-                      online ||
-                      loading !== null ||
-                      activeServer?.isRemote
-                    }
+                    disabled={!hasServer || online || loading !== null}
                     className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="me-2 h-4 w-4" /> {'Wipe server'}
@@ -2083,7 +2014,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {status && !status.serverPathConfigured && !activeServer?.isRemote && (
+      {status && !status.serverPathConfigured && (
         <Link
           to="/server-setup"
           className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-warning/40 bg-warning/[0.04] py-2 ps-3 pe-2 shadow-[inset_2px_0_0_hsl(var(--warning))] transition-colors hover:bg-warning/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
@@ -2174,15 +2105,6 @@ export default function Dashboard() {
             >
               <FolderOpen className="h-3.5 w-3.5" /> {'Add existing server'}
             </Link>
-            <Link
-              to="/servers"
-              className={cn(
-                buttonVariants({ variant: 'secondary', size: 'sm' }),
-                'h-8 gap-1.5 text-xs',
-              )}
-            >
-              <Globe className="h-3.5 w-3.5" /> {'Add remote server'}
-            </Link>
           </div>
         </section>
       )}
@@ -2222,7 +2144,7 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground/75">
                   {online
                     ? 'Listening for player joins, departures, deaths, and moderation events.'
-                    : status?.serverPathConfigured || activeServer?.isRemote
+                    : status?.serverPathConfigured
                       ? 'Start the server to begin tracking player activity.'
                       : 'Configure a server to start tracking activity.'}
                 </p>
@@ -2381,99 +2303,89 @@ export default function Dashboard() {
             </div>
           </section>
 
-          {!activeServer?.isRemote && (
-            <section>
-              <h3 className="px-1 pb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/75">
-                {'Maintenance'}
-              </h3>
-              <div className="space-y-1.5">
+          <section>
+            <h3 className="px-1 pb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/75">
+              {'Maintenance'}
+            </h3>
+            <div className="space-y-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 w-full justify-start gap-2 text-xs"
+                onClick={fetchStatus}
+                disabled={loading !== null}
+              >
+                <RefreshCw
+                  className={cn('h-3 w-3', loading ? 'animate-spin' : '')}
+                />
+                {'Refresh status'}
+                <span className="ms-auto font-mono text-[10px] text-muted-foreground/65">
+                  {lastUpdated
+                    ? lastUpdated.toLocaleTimeString('en', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '—'}
+                </span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 w-full justify-start gap-2 text-xs"
+                disabled={!hasServer || loading !== null}
+                onClick={() =>
+                  handleAction('Create backup', () =>
+                    backupApi
+                      .createBackup({ includeDb: true })
+                      .then(() => fetchMaintenance()),
+                  )
+                }
+              >
+                {loading === 'Create backup' ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Archive className="h-3 w-3" />
+                )}
+                {'Create backup'}
+              </Button>
+              <DisabledReason
+                className="w-full"
+                reason={online ? 'Stop the server before wiping' : null}
+              >
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 w-full justify-start gap-2 text-xs"
-                  onClick={fetchStatus}
-                  disabled={loading !== null}
-                >
-                  <RefreshCw
-                    className={cn('h-3 w-3', loading ? 'animate-spin' : '')}
-                  />
-                  {'Refresh status'}
-                  <span className="ms-auto font-mono text-[10px] text-muted-foreground/65">
-                    {lastUpdated
-                      ? lastUpdated.toLocaleTimeString('en', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : '—'}
-                  </span>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 w-full justify-start gap-2 text-xs"
-                  disabled={
-                    !hasServer || loading !== null || activeServer?.isRemote
-                  }
-                  onClick={() =>
-                    handleAction('Create backup', () =>
-                      backupApi
-                        .createBackup({ includeDb: true })
-                        .then(() => fetchMaintenance()),
-                    )
+                  className="h-7 w-full justify-start gap-2 text-xs text-destructive hover:text-destructive"
+                  disabled={!hasServer || online || loading !== null}
+                  onClick={() => {
+                    setWipePreview(null)
+                    setWipeDialog(true)
+                  }}
+                  title={
+                    online ? undefined : 'Delete map / players / world state'
                   }
                 >
-                  {loading === 'Create backup' ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Archive className="h-3 w-3" />
-                  )}
-                  {'Create backup'}
+                  <Trash2 className="h-3 w-3" />
+                  {'Wipe server'}
                 </Button>
-                <DisabledReason
-                  className="w-full"
-                  reason={online ? 'Stop the server before wiping' : null}
+              </DisabledReason>
+              <label className="mt-1 flex cursor-pointer items-center gap-2 border-t border-border/30 px-1 pt-2">
+                <Checkbox
+                  id="autoStartServer"
+                  checked={autoStartServer}
+                  onCheckedChange={(checked) =>
+                    handleAutoStartChange(checked === true)
+                  }
+                />
+                <Label
+                  htmlFor="autoStartServer"
+                  className="cursor-pointer text-[11px] text-muted-foreground"
                 >
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 w-full justify-start gap-2 text-xs text-destructive hover:text-destructive"
-                    disabled={
-                      !hasServer ||
-                      online ||
-                      loading !== null ||
-                      activeServer?.isRemote
-                    }
-                    onClick={() => {
-                      setWipePreview(null)
-                      setWipeDialog(true)
-                    }}
-                    title={
-                      online ? undefined : 'Delete map / players / world state'
-                    }
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    {'Wipe server'}
-                  </Button>
-                </DisabledReason>
-                <label className="mt-1 flex cursor-pointer items-center gap-2 border-t border-border/30 px-1 pt-2">
-                  <Checkbox
-                    id="autoStartServer"
-                    checked={autoStartServer}
-                    onCheckedChange={(checked) =>
-                      handleAutoStartChange(checked === true)
-                    }
-                  />
-                  <Label
-                    htmlFor="autoStartServer"
-                    className="cursor-pointer text-[11px] text-muted-foreground"
-                  >
-                    {'Auto-start on launch'}
-                  </Label>
-                </label>
-              </div>
-            </section>
-          )}
-
+                  {'Auto-start on launch'}
+                </Label>
+              </label>
+            </div>
+          </section>
           {bridgeStatus && !bridgeStatus.configured && (
             <section className="rounded-md border border-warning/25 bg-warning/[0.04] p-3">
               <p className="text-xs font-medium text-warning/85">

@@ -13,7 +13,6 @@ const VERSION_REGEX = /VERSION\s*=\s*"([^"]+)"/;
 interface PanelBridgeServer {
   serverPath?: string | null;
   installPath?: string | null;
-  isRemote?: boolean;
 }
 
 function errorMessage(error: unknown): string {
@@ -58,7 +57,7 @@ function isWritableDir(dirPath: string): boolean {
 }
 
 export function canAutoInstall(server?: PanelBridgeServer | null): boolean {
-  if (!server || server.isRemote) return false;
+  if (!server) return false;
   const installDir = resolveInstallDir(server);
   if (!installDir || !fs.existsSync(installDir) || !isWritableDir(installDir)) {
     return false;

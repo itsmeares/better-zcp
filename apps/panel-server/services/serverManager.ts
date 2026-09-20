@@ -1453,7 +1453,7 @@ export class ServerManager {
   async _isOnlyLocalServer() {
     try {
       const servers = await getServers();
-      return (servers || []).filter((entry: AnyRecord) => !entry.isRemote).length <= 1;
+      return (servers || []).length <= 1;
     } catch (error: any) {
       log.debug(`Could not count configured servers: ${error.message}`);
       return false;

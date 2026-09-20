@@ -190,15 +190,6 @@ router.post("/settings", async (req, res) => {
 router.post("/create", async (req, res) => {
   try {
     log.info("POST /create — creating manual backup");
-    const activeServer = await getActiveServer();
-    if (activeServer?.isRemote) {
-      return res.status(400).json({
-          error:
-            "Backups are not available for remote servers. The server filesystem is not accessible from this panel.",
-          code: ErrorCode.BACKUP_REMOTE_NOT_AVAILABLE,
-        });
-    }
-
     const backupService = req.app.get("backupService");
     const io = req.app.get("io");
 
@@ -291,14 +282,6 @@ router.post("/restore/:name", async (req, res) => {
   }
   try {
     const activeServer = activeServerForLock;
-    if (activeServer?.isRemote) {
-      return res.status(400).json({
-          error:
-            "Backup restore is not available for remote servers. The server filesystem is not accessible from this panel.",
-          code: ErrorCode.BACKUP_RESTORE_REMOTE_NOT_AVAILABLE,
-        });
-    }
-
     const backupService = req.app.get("backupService");
     const serverManager = req.app.get("serverManager");
 
@@ -398,14 +381,6 @@ const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024;
 router.post("/upload", async (req, res) => {
     let tmpPath: string | null = null;
     try {
-      const activeServer = await getActiveServer();
-      if (activeServer?.isRemote) {
-      return res.status(400).json({
-            error: "Backup upload is not available for remote servers.",
-            code: ErrorCode.BACKUP_UPLOAD_REMOTE_NOT_AVAILABLE,
-          });
-      }
-
       const contentType = String(req.headers["content-type"] || "")
         .split(";", 1)[0]
         .trim()

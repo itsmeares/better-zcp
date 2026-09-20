@@ -54,7 +54,6 @@ describe("GET /players/access-levels", () => {
       id: "server-1",
       serverName: "DoomerZ",
       zomboidDataPath: "/zomboid",
-      isRemote: false,
     });
     listServerRoleNames.mockResolvedValue({
       available: true,
@@ -76,7 +75,6 @@ describe("GET /players/access-levels", () => {
       id: "server-1",
       serverName: "NeverStartedServer",
       zomboidDataPath: "/zomboid",
-      isRemote: false,
     });
     listServerRoleNames.mockResolvedValue({
       available: false,
@@ -94,23 +92,6 @@ describe("GET /players/access-levels", () => {
       expect.arrayContaining(["admin", "moderator", "gm", "observer", "priority", "user", "none"]),
     );
   });
-
-  it("falls back to the static list for a remote server without calling the local db reader", async () => {
-    getActiveServer.mockResolvedValue({
-      id: "server-1",
-      serverName: "RemoteBox",
-      zomboidDataPath: "/zomboid",
-      isRemote: true,
-    });
-    const response = createResponse();
-
-    await getHandler("/access-levels", "get")({}, response);
-
-    expect(listServerRoleNames).not.toHaveBeenCalled();
-    const payload = response.json.mock.calls[0][0];
-    expect(payload.available).toBe(false);
-    expect(payload.levels).toContain("none");
-  });
 });
 
 describe("POST /players/access-level: validation gate matches what GET /access-levels just offered", () => {
@@ -124,7 +105,6 @@ describe("POST /players/access-level: validation gate matches what GET /access-l
       id: "server-1",
       serverName: "DoomerZ",
       zomboidDataPath: "/zomboid",
-      isRemote: false,
     });
     listServerRoleNames.mockResolvedValue({ available: true, roleNames: ["user", "admin", "vip"] });
     const setAccessLevel = vi.fn().mockResolvedValue({ success: true });
@@ -144,7 +124,6 @@ describe("POST /players/access-level: validation gate matches what GET /access-l
       id: "server-1",
       serverName: "DoomerZ",
       zomboidDataPath: "/zomboid",
-      isRemote: false,
     });
     listServerRoleNames.mockResolvedValue({ available: true, roleNames: ["user", "admin"] });
     const setAccessLevel = vi.fn();

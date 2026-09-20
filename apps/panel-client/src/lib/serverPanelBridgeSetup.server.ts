@@ -1,6 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
 import { protectedServerFunctionMiddleware } from './serverAuth.server'
-import type { SftpBridgeConfig } from '../../../panel-server/services/panelBridgeSftp.ts'
 
 type AnyRecord = Record<string, any>
 
@@ -21,19 +20,6 @@ type BridgePath = {
   exists: boolean
   priority: number
 }
-
-const SFTP_SETTING_KEYS = {
-  enabled: 'panelBridgeSftpEnabled',
-  host: 'panelBridgeSftpHost',
-  port: 'panelBridgeSftpPort',
-  username: 'panelBridgeSftpUsername',
-  password: 'panelBridgeSftpPassword',
-  bridgePath: 'panelBridgeSftpBridgePath',
-  pollIntervalSeconds: 'panelBridgeSftpPollIntervalSeconds',
-} as const
-
-const SFTP_LOG_PATH_KEY = 'panelBridgeSftpLogPath'
-const SFTP_CONFIG_PATH_KEY = 'panelBridgeSftpConfigPath'
 
 function record(data: unknown): AnyRecord {
   return data && typeof data === 'object' && !Array.isArray(data)
@@ -106,24 +92,6 @@ async function throwSanitized(
   )
 }
 
-async function throwSftpError(error: unknown): Promise<never> {
-  const [
-    { sanitizeError, sanitizeErrorParams },
-    { classifySftpErrorCode, formatSftpError },
-  ] = await Promise.all([
-    import('../../../panel-server/utils/sanitize.ts'),
-    import('../../../panel-server/services/panelBridgeSftp.ts'),
-  ])
-  throwSetupError(
-    Object.assign(new Error(sanitizeError(formatSftpError(error))), {
-      status: 400,
-      code: classifySftpErrorCode(error),
-      params: sanitizeErrorParams({ detail: errorMessage(error) }),
-    }),
-    400,
-  )
-}
-
 async function panelBridge(): Promise<AnyRecord> {
   const { getPanelRuntime } =
     await import('../../../panel-server/utils/panelRuntime.ts')
@@ -150,7 +118,6 @@ async function getStatus(): Promise<AnyRecord> {
   const status = bridge.getStatus() as AnyRecord
   let detectedPaths: AnyRecord | null = null
   let localInstall: AnyRecord | null = null
-  let remoteBridgeVersionCheck: AnyRecord | null = null
 
   try {
     const { getActiveServer } =
@@ -162,27 +129,11 @@ async function getStatus(): Promise<AnyRecord> {
         installPath: activeServer.installPath,
         zomboidDataPath: activeServer.zomboidDataPath,
       }
-      const {
-        canAutoInstall,
-        checkBridgeInstalled,
-        getBundledBridgeVersion,
-        isBridgeVersionBehindBundled,
-      } = await import('../../../panel-server/services/panelBridgeInstaller.ts')
-      if (activeServer.isRemote) {
-        const bundledVersion = getBundledBridgeVersion()
-        const liveVersion = status.version || null
-        remoteBridgeVersionCheck = {
-          bundledVersion,
-          liveVersion,
-          behind: liveVersion
-            ? isBridgeVersionBehindBundled(liveVersion)
-            : null,
-        }
-      } else {
-        localInstall = {
-          canAutoInstall: canAutoInstall(activeServer),
-          ...checkBridgeInstalled(activeServer),
-        }
+      const { canAutoInstall, checkBridgeInstalled } =
+        await import('../../../panel-server/services/panelBridgeInstaller.ts')
+      localInstall = {
+        canAutoInstall: canAutoInstall(activeServer),
+        ...checkBridgeInstalled(activeServer),
       }
     }
   } catch {
@@ -194,7 +145,6 @@ async function getStatus(): Promise<AnyRecord> {
     modConnected: bridge.isModConnected(),
     detectedPaths,
     localInstall,
-    remoteBridgeVersionCheck,
   }
 }
 
@@ -617,7 +567,6 @@ async function autoDetectBridge(
   }
   try {
     const bridge = await panelBridge()
-    await bridge.stopSftp()
     if (bridge.isRunning) bridge.stop()
     const bridgePath = bridge.autoDetect(serverName, zomboidUserFolder)
     bridge.start()
@@ -648,7 +597,6 @@ async function configureBridge(
   }
   try {
     const bridge = await panelBridge()
-    await bridge.stopSftp()
     if (bridge.isRunning) bridge.stop()
     const bridgePath = bridge.configure(zomboidSavePath)
     bridge.start()
@@ -692,7 +640,6 @@ async function configureDirectBridge(
   }
   try {
     const bridge = await panelBridge()
-    await bridge.stopSftp()
     if (bridge.isRunning) bridge.stop()
     const configuredPath = bridge.configure(resolved, true)
     bridge.start()
@@ -706,155 +653,6 @@ async function configureDirectBridge(
     }
   } catch (error) {
     return throwSanitized(error, 500)
-  }
-}
-
-async function resolveSftpConfig(
-  input: AnyRecord = {},
-): Promise<SftpBridgeConfig> {
-  const [{ getAllSettings }, { isMaskedSecret }, { validateSftpBridgeConfig }] =
-    await Promise.all([
-      import('../../../panel-server/database/init.ts'),
-      import('../../../panel-server/utils/sanitize.ts'),
-      import('../../../panel-server/services/panelBridgeSftp.ts'),
-    ])
-  const settings = (await getAllSettings()) as AnyRecord
-  const password =
-    input.password && !isMaskedSecret(input.password)
-      ? input.password
-      : settings[SFTP_SETTING_KEYS.password] || ''
-  return validateSftpBridgeConfig({
-    host: input.host ?? settings[SFTP_SETTING_KEYS.host],
-    port: input.port ?? settings[SFTP_SETTING_KEYS.port],
-    username: input.username ?? settings[SFTP_SETTING_KEYS.username],
-    password,
-    bridgePath: input.bridgePath ?? settings[SFTP_SETTING_KEYS.bridgePath],
-    pollIntervalSeconds:
-      input.pollIntervalSeconds ??
-      settings[SFTP_SETTING_KEYS.pollIntervalSeconds],
-  })
-}
-
-async function resolveSftpLogConfig(input: AnyRecord = {}): Promise<AnyRecord> {
-  const [{ getAllSettings }, { isMaskedSecret }] = await Promise.all([
-    import('../../../panel-server/database/init.ts'),
-    import('../../../panel-server/utils/sanitize.ts'),
-  ])
-  const settings = (await getAllSettings()) as AnyRecord
-  const password =
-    input.password && !isMaskedSecret(input.password)
-      ? input.password
-      : settings[SFTP_SETTING_KEYS.password] || ''
-  return {
-    host: input.host ?? settings[SFTP_SETTING_KEYS.host],
-    port: input.port ?? settings[SFTP_SETTING_KEYS.port],
-    username: input.username ?? settings[SFTP_SETTING_KEYS.username],
-    password,
-    logPath: input.logPath ?? settings[SFTP_LOG_PATH_KEY],
-  }
-}
-
-async function configureSftpBridge(args: AnyRecord): Promise<AnyRecord> {
-  try {
-    const config = await resolveSftpConfig(args)
-    const [{ getSftpCachePath }, bridge, { setSetting }] = await Promise.all([
-      import('../../../panel-server/services/panelBridgeSftp.ts'),
-      panelBridge(),
-      import('../../../panel-server/database/init.ts'),
-    ])
-    const cachePath = getSftpCachePath(
-      config.host,
-      config.port,
-      config.username,
-      config.bridgePath,
-    )
-    await bridge.configureSftp(config, cachePath)
-    for (const [field, key] of Object.entries(SFTP_SETTING_KEYS)) {
-      const value = field === 'enabled' ? true : (config as AnyRecord)[field]
-      if (value !== undefined) await setSetting(key, value)
-    }
-    return {
-      success: true,
-      bridgePath: cachePath,
-      transport: bridge.getStatus().transport,
-    }
-  } catch (error) {
-    return throwSftpError(error)
-  }
-}
-
-async function testSftpBridge(args: AnyRecord): Promise<AnyRecord> {
-  try {
-    const { testSftpBridge } =
-      await import('../../../panel-server/services/panelBridgeSftp.ts')
-    return await testSftpBridge(await resolveSftpConfig(args))
-  } catch (error) {
-    return throwSftpError(error)
-  }
-}
-
-async function listSftpLogsBridge(args: AnyRecord): Promise<AnyRecord> {
-  try {
-    const [{ listSftpLogs }, { setSetting }] = await Promise.all([
-      import('../../../panel-server/services/panelBridgeSftp.ts'),
-      import('../../../panel-server/database/init.ts'),
-    ])
-    const config = await resolveSftpLogConfig(args)
-    const result = await listSftpLogs(config)
-    if (args.logPath) await setSetting(SFTP_LOG_PATH_KEY, config.logPath)
-    return { success: true, ...result }
-  } catch (error) {
-    return throwSanitized(error, 400)
-  }
-}
-
-async function tailSftpLogBridge(args: AnyRecord): Promise<AnyRecord> {
-  try {
-    const { readSftpLogTail } =
-      await import('../../../panel-server/services/panelBridgeSftp.ts')
-    const config = await resolveSftpLogConfig(args)
-    const result = await readSftpLogTail(config, args.name, args.maxBytes)
-    return { success: true, ...result }
-  } catch (error) {
-    return throwSanitized(error, 400)
-  }
-}
-
-async function listRemoteConfigBridge(args: AnyRecord): Promise<AnyRecord> {
-  try {
-    const [
-      { getAllSettings, setSetting },
-      { isMaskedSecret },
-      {
-        listRemoteConfigFiles,
-        resetRemoteConfigSession,
-        validateRemoteConfigTransport,
-      },
-    ] = await Promise.all([
-      import('../../../panel-server/database/init.ts'),
-      import('../../../panel-server/utils/sanitize.ts'),
-      import('../../../panel-server/services/remoteConfigFiles.ts'),
-    ])
-    const settings = (await getAllSettings()) as AnyRecord
-    const password =
-      args.password && !isMaskedSecret(args.password)
-        ? args.password
-        : settings[SFTP_SETTING_KEYS.password] || ''
-    const config = validateRemoteConfigTransport({
-      host: args.host ?? settings[SFTP_SETTING_KEYS.host],
-      port: args.port ?? settings[SFTP_SETTING_KEYS.port],
-      username: args.username ?? settings[SFTP_SETTING_KEYS.username],
-      password,
-      configPath: args.configPath ?? settings[SFTP_CONFIG_PATH_KEY],
-    })
-    const result = await listRemoteConfigFiles(config)
-    if (args.configPath) {
-      await setSetting(SFTP_CONFIG_PATH_KEY, config.configPath)
-      resetRemoteConfigSession()
-    }
-    return { success: true, ...result }
-  } catch (error) {
-    return throwSanitized(error, 400)
   }
 }
 
@@ -1120,7 +918,6 @@ async function installModBridge(
       return process.platform === 'win32' ? resolved.toLowerCase() : resolved
     }
     for (const server of await getServers()) {
-      if (server?.isRemote) continue
       const installDir = resolveInstallDir(server)
       if (!installDir || !path.isAbsolute(installDir)) continue
       let canonicalInstallDir: string
@@ -1207,12 +1004,6 @@ async function installModAutomatically(
         400,
       )
     }
-    if (targetServer.isRemote) {
-      invalid(
-        "Automatic PanelBridge installation is unavailable for remote servers. Copy PanelBridge.lua to the remote server's Lua folder using SFTP or the hosting provider's file manager.",
-        errorCodes.PANELBRIDGE_INSTALL_REMOTE_NOT_AVAILABLE,
-      )
-    }
     if (!canAutoInstall(targetServer)) {
       invalid(
         'Automatic PanelBridge installation is unavailable. Configure an existing local server install folder with write permission, or use the manual install path.',
@@ -1268,16 +1059,6 @@ async function executeSetupAction(data: AnyRecord): Promise<unknown> {
       return configureBridge(args, ErrorCode)
     case 'configureDirect':
       return configureDirectBridge(args, ErrorCode)
-    case 'configureSftp':
-      return configureSftpBridge(args)
-    case 'testSftp':
-      return testSftpBridge(args)
-    case 'listSftpLogs':
-      return listSftpLogsBridge(args)
-    case 'tailSftpLog':
-      return tailSftpLogBridge(args)
-    case 'listRemoteConfig':
-      return listRemoteConfigBridge(args)
     case 'start': {
       try {
         const bridge = await panelBridge()
@@ -1290,7 +1071,6 @@ async function executeSetupAction(data: AnyRecord): Promise<unknown> {
     case 'stop': {
       try {
         const bridge = await panelBridge()
-        await bridge.stopSftp()
         bridge.stop()
         return { success: true, message: 'Bridge stopped' }
       } catch (error) {

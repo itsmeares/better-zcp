@@ -222,30 +222,20 @@ export const getNetworkInterfaces = createControlRead(async () => {
 })
 
 export const getManagedServers = createControlRead(async () => {
-  const { getServers, getAllSettings } =
-    await import('../../../panel-server/database/init.ts')
-  const { withRemoteConfigState } =
-    await import('../../../panel-server/utils/managedServerResponse.ts')
+  const { getServers } = await import('../../../panel-server/database/init.ts')
   const { sanitizeServerResponseList } =
     await import('../../../panel-server/utils/sanitize.ts')
   const { getLinuxLifecycleCapabilities } =
     await import('../../../panel-server/services/linuxServiceLifecycle.ts')
-  const settings = await getAllSettings()
   return {
-    servers: sanitizeServerResponseList(
-      (await getServers()).map((server: AnyRecord) =>
-        withRemoteConfigState(server, settings),
-      ),
-    ),
+    servers: sanitizeServerResponseList(await getServers()),
     lifecycleCapabilities: getLinuxLifecycleCapabilities(),
   }
 })
 
 export const getActiveManagedServer = createControlRead(async () => {
-  const { getActiveServer, getAllSettings } =
+  const { getActiveServer } =
     await import('../../../panel-server/database/init.ts')
-  const { withRemoteConfigState } =
-    await import('../../../panel-server/utils/managedServerResponse.ts')
   const { sanitizeServerResponse } =
     await import('../../../panel-server/utils/sanitize.ts')
   const server = await getActiveServer()
@@ -254,9 +244,8 @@ export const getActiveManagedServer = createControlRead(async () => {
       Object.assign(new Error('No active server configured'), { status: 404 }),
       404,
     )
-  const settings = await getAllSettings()
   return {
-    server: sanitizeServerResponse(withRemoteConfigState(server, settings)),
+    server: sanitizeServerResponse(server),
   }
 })
 
@@ -775,16 +764,6 @@ export const getWhitelist = createControlRead(async () => {
   const activeServer = await getActiveServer()
   if (!activeServer)
     invalid('No active server selected', 'PLAYERS_NO_ACTIVE_SERVER')
-  if (activeServer.isRemote) {
-    return {
-      success: true,
-      available: false,
-      accounts: [],
-      allowedSteamIds: [],
-      reason: 'Whitelist roster is not available for remote servers yet',
-      server: { id: activeServer.id, name: activeServer.serverName },
-    }
-  }
   return {
     success: true,
     ...(await listWhitelistAccounts(
@@ -886,7 +865,7 @@ export const setAccessLevel = createControlAction(async (runtime, data) => {
       await import('../../../panel-server/utils/whitelistDb.ts')
     const activeServer = await getActiveServer()
     let validLevels = ACCESS_LEVELS
-    if (activeServer && !activeServer.isRemote) {
+    if (activeServer) {
       const roleResult = await listServerRoleNames(
         activeServer.zomboidDataPath,
         activeServer.serverName,
@@ -1262,7 +1241,7 @@ export const getPlayerAccessLevels = createControlRead(async () => {
     const { listServerRoleNames } =
       await import('../../../panel-server/utils/whitelistDb.ts')
     const activeServer = await getActiveServer()
-    if (!activeServer || activeServer.isRemote)
+    if (!activeServer)
       return { levels: ACCESS_LEVELS, available: false }
     const result = await listServerRoleNames(
       activeServer.zomboidDataPath,
@@ -1888,19 +1867,6 @@ export const deleteScheduledTask = createControlAction(
 
 export const restartScheduledServer = createControlAction(
   async (runtime, data) => {
-    const { getActiveServer } =
-      await import('../../../panel-server/database/init.ts')
-    const activeServer = await getActiveServer()
-    if (activeServer?.isRemote)
-      throwControlError(
-        Object.assign(
-          new Error(
-            'Cannot restart a remote server. The process is not managed by this panel.',
-          ),
-          { status: 400, code: 'SCHEDULER_RESTART_REMOTE_NOT_SUPPORTED' },
-        ),
-        400,
-      )
     const { parseBoundedInteger } =
       await import('../../../panel-server/utils/queryNumbers.ts')
     const warningMinutes = Math.min(

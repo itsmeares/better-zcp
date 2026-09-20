@@ -54,10 +54,6 @@ export async function downloadBackup(data: AnyRecord): Promise<Response> {
 
 export async function uploadBackup(_data: AnyRecord, context: HandlerContext): Promise<AnyRecord> {
   const request = context.request
-  const activeServer = (await import('../../../panel-server/database/init.ts')).getActiveServer
-  if ((await activeServer())?.isRemote) {
-    fail('Backup upload is not available for remote servers.', 400, ErrorCode.BACKUP_UPLOAD_REMOTE_NOT_AVAILABLE)
-  }
   if (!request?.body || request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/zip') {
     fail('No file uploaded. Send the zip body with Content-Type: application/zip.', 400, ErrorCode.BACKUP_UPLOAD_NO_FILE)
   }

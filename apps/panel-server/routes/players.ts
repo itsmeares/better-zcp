@@ -269,7 +269,7 @@ router.post('/access-level', async (req, res) => {
 
     const activeServer = await getActiveServer();
     let validLevels = ACCESS_LEVELS;
-    if (activeServer && !activeServer.isRemote) {
+    if (activeServer) {
       const roleResult = await listServerRoleNames(activeServer.zomboidDataPath, activeServer.serverName);
       if (roleResult.available) {
         validLevels = [...roleResult.roleNames, 'none'];
@@ -627,7 +627,7 @@ router.get('/perks', (req, res) => {
 router.get('/access-levels', async (req, res) => {
   try {
     const activeServer = await getActiveServer();
-    if (!activeServer || activeServer.isRemote) {
+    if (!activeServer) {
       return res.json({ levels: ACCESS_LEVELS, available: false });
     }
 
@@ -820,17 +820,6 @@ router.get('/whitelist', async (req, res) => {
     if (!activeServer) {
       return res.status(404).json({ error: 'No active server selected', code: ErrorCode.PLAYERS_NO_ACTIVE_SERVER });
     }
-    if (activeServer.isRemote) {
-      return res.json({
-        success: true,
-        available: false,
-        accounts: [],
-        allowedSteamIds: [],
-        reason: 'Whitelist roster is not available for remote servers yet',
-        server: { id: activeServer.id, name: activeServer.serverName },
-      });
-    }
-
     const result = await listWhitelistAccounts(
       activeServer.zomboidDataPath,
       activeServer.serverName,

@@ -283,9 +283,7 @@ async function resolveServerFiles(): Promise<ResolvedServerFiles> {
   if (context.configurationError) {
     throwFileError(
       context.configurationError,
-      context.configurationError.code === 'REMOTE_CONFIG_NOT_CONFIGURED'
-        ? 400
-        : 404,
+      404,
       context.configurationError.code,
     )
   }
@@ -313,32 +311,7 @@ export async function withServerFiles<T>(
 ): Promise<T> {
   const { configPath, serverName, activeServer } = await resolveServerFiles()
 
-  if (!activeServer?.isRemote) {
-    return reader(configPath, serverName, activeServer)
-  }
-
-  const { resolveRemoteConfigTransport } =
-    await import('../../../panel-server/services/sandboxPersistence.ts')
-  const transport = await resolveRemoteConfigTransport()
-  const { RemoteConfigNotConfiguredError } =
-    await import('../../../panel-server/services/sandboxPersistence.ts')
-  if (!transport) throwFileError(new RemoteConfigNotConfiguredError(), 400)
-  const { acquireMirrorLock, beginRemoteConfigSession } =
-    await import('../../../panel-server/services/remoteConfigFiles.ts')
-  const release = await acquireMirrorLock()
-  try {
-    let session
-    try {
-      session = await beginRemoteConfigSession(transport, serverName, {
-        fresh: false,
-      })
-    } catch (error) {
-      throwFileError(error, 502)
-    }
-    return reader(session.mirrorDir, serverName, activeServer)
-  } finally {
-    release()
-  }
+  return reader(configPath, serverName, activeServer)
 }
 
 export async function withWritableServerFiles<T>(
@@ -349,39 +322,7 @@ export async function withWritableServerFiles<T>(
   ) => Promise<T>,
 ): Promise<T> {
   const { configPath, serverName, activeServer } = await resolveServerFiles()
-  if (!activeServer?.isRemote) {
-    return writer(configPath, serverName, activeServer)
-  }
-
-  const { resolveRemoteConfigTransport } =
-    await import('../../../panel-server/services/sandboxPersistence.ts')
-  const transport = await resolveRemoteConfigTransport()
-  const { RemoteConfigNotConfiguredError } =
-    await import('../../../panel-server/services/sandboxPersistence.ts')
-  if (!transport) throwFileError(new RemoteConfigNotConfiguredError(), 400)
-
-  const { acquireMirrorLock, beginRemoteConfigSession, pushRemoteConfigFiles } =
-    await import('../../../panel-server/services/remoteConfigFiles.ts')
-  const release = await acquireMirrorLock()
-  try {
-    let session
-    try {
-      session = await beginRemoteConfigSession(transport, serverName, {
-        fresh: true,
-      })
-    } catch (error) {
-      throwFileError(error, 502)
-    }
-    const result = await writer(session.mirrorDir, serverName, activeServer)
-    try {
-      await pushRemoteConfigFiles(transport, serverName, session)
-    } catch (error) {
-      throwFileError(error, 502)
-    }
-    return result
-  } finally {
-    release()
-  }
+  return writer(configPath, serverName, activeServer)
 }
 
 async function readConfigFile(
@@ -460,7 +401,6 @@ async function configEditRestartRequired(
   activeServer: AnyRecord | null,
 ): Promise<boolean> {
   if (!(await localPathsExist(activeServer))) return true
-  if (activeServer?.isRemote) return false
   const runtime = await panelRuntime()
   const serverManager = runtime.serverManager as AnyRecord | undefined
   if (
@@ -484,7 +424,6 @@ async function requireConfigServerStopped(
   if (!(await localPathsExist(activeServer))) {
     fileFailure(SERVER_STATE_UNKNOWN_MESSAGE, 503, 'SERVER_STATE_UNKNOWN')
   }
-  if (activeServer?.isRemote) return
 
   const runtime = await panelRuntime()
   const serverManager = runtime.serverManager as AnyRecord | undefined
@@ -1865,15 +1804,6 @@ async function getAllowedBrowseRoots(
 
 export const browseServerFiles = createFileRead(async (data) =>
   withServerFiles(async (configPath, _serverName, activeServer) => {
-    if (activeServer?.isRemote) {
-      throwFileError(
-        new Error(
-          'Browsing the server filesystem is not available for remote servers.',
-        ),
-        400,
-        'REMOTE_BROWSE_NOT_AVAILABLE',
-      )
-    }
     const { confineToRoots } =
       await import('../../../panel-server/utils/browseRoots.ts')
     const { existsSync } = await import('node:fs')

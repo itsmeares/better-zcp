@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 
 vi.mock("../database/init.ts", () => ({
-  getActiveServer: vi.fn(async () => ({ isRemote: false })),
+  getActiveServer: vi.fn(async () => ({})),
 }));
 
 const { default: router } = await import("../routes/backup.ts");

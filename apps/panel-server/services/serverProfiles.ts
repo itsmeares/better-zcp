@@ -64,7 +64,6 @@ const ALLOWED_SERVER_UPDATE_FIELDS = [
   "useNoSteam",
   "useDebug",
   "useUpnp",
-  "isRemote",
   "startCommand",
   "adminPassword",
 ] as const;
@@ -309,21 +308,19 @@ export async function createServerProfile(
     config.zomboidDataPath = process.env.PZ_SAVE_PATH || null;
   }
 
-  if (config.isRemote !== undefined && typeof config.isRemote !== "boolean") {
-    fail("isRemote must be a boolean");
-  }
-  const isRemote = config.isRemote === true;
-  const requiredFields = isRemote
-    ? ["name", "rconHost", "rconPort", "rconPassword"]
-    : ["name", "installPath", "rconHost", "rconPort", "rconPassword"];
+  const requiredFields = [
+    "name",
+    "installPath",
+    "rconHost",
+    "rconPort",
+    "rconPassword",
+  ];
   for (const field of requiredFields) {
     if (!config[field]) fail(`Missing required field: ${field}`);
   }
 
-  if (!isRemote) {
-    const pathCheck = validateInstallPathShape(config.installPath);
-    if (!pathCheck.valid) fail(pathCheck.error!);
-  }
+  const pathCheck = validateInstallPathShape(config.installPath);
+  if (!pathCheck.valid) fail(pathCheck.error!);
 
   if (typeof config.name !== "string" || config.name.length > 100) {
     fail("Server name must be under 100 characters");
@@ -398,7 +395,6 @@ export async function createServerProfile(
     useNoSteam: config.useNoSteam === true,
     useDebug: config.useDebug === true,
     useUpnp: config.useUpnp !== false,
-    isRemote,
   });
 
   log.info(`Created new server: ${server.name} (ID: ${server.id})`);
@@ -463,36 +459,30 @@ export async function updateServerProfile(
       updates.zomboidDataPath !== undefined &&
       updates.zomboidDataPath !== ""
     ) {
-      const effectiveIsRemote =
-        updates.isRemote !== undefined
-          ? updates.isRemote
-          : Boolean((await getServer(serverId))?.isRemote);
-      if (!effectiveIsRemote) {
-        const normalized = normalizeUserPath(updates.zomboidDataPath);
-        const resolved = normalized ? path.resolve(normalized) : null;
-        if (!resolved || !fs.existsSync(resolved)) {
-          fail(
-            `Zomboid data path does not exist: ${resolved || updates.zomboidDataPath}. Check for typos and verify the panel has read access to this folder.`,
-          );
-        }
-        let isDirectory = false;
-        try {
-          isDirectory = fs.statSync(resolved).isDirectory();
-        } catch {
-          isDirectory = false;
-        }
-        if (!isDirectory)
-          fail(`Zomboid data path is not a directory: ${resolved}`);
-        const verdict = inspectZomboidPath(resolved);
-        if (!verdict.ok) {
-          fail(
-            verdict.reason === "install-folder"
-              ? "This folder looks like a Project Zomboid server install, not a user data folder. Point at the Zomboid user data folder instead."
-              : "This doesn't look like a Project Zomboid data folder (no Saves/Multiplayer directory or save files found there).",
-          );
-        }
-        updates.zomboidDataPath = resolved;
+      const normalized = normalizeUserPath(updates.zomboidDataPath);
+      const resolved = normalized ? path.resolve(normalized) : null;
+      if (!resolved || !fs.existsSync(resolved)) {
+        fail(
+          `Zomboid data path does not exist: ${resolved || updates.zomboidDataPath}. Check for typos and verify the panel has read access to this folder.`,
+        );
       }
+      let isDirectory = false;
+      try {
+        isDirectory = fs.statSync(resolved).isDirectory();
+      } catch {
+        isDirectory = false;
+      }
+      if (!isDirectory)
+        fail(`Zomboid data path is not a directory: ${resolved}`);
+      const verdict = inspectZomboidPath(resolved);
+      if (!verdict.ok) {
+        fail(
+          verdict.reason === "install-folder"
+            ? "This folder looks like a Project Zomboid server install, not a user data folder. Point at the Zomboid user data folder instead."
+            : "This doesn't look like a Project Zomboid data folder (no Saves/Multiplayer directory or save files found there).",
+        );
+      }
+      updates.zomboidDataPath = resolved;
     }
 
     for (const key of ["rconPassword", "adminPassword"]) {
@@ -548,7 +538,7 @@ export async function updateServerProfile(
       updates.maxMemory = normalizeMemoryGb(updates.maxMemory, 8);
     }
 
-    for (const key of ["useNoSteam", "useDebug", "isRemote", "useUpnp"]) {
+    for (const key of ["useNoSteam", "useDebug", "useUpnp"]) {
       if (updates[key] !== undefined && typeof updates[key] !== "boolean") {
         fail(`${key} must be a boolean`);
       }
@@ -743,13 +733,9 @@ export async function getLifecycleTemplateForServer(
   }
   const server = await getServer(serverId);
   if (!server) fail("Server not found", 404);
-  if (
-    server.isRemote ||
-    server.dockerContainerName ||
-    server.dockerContainerId
-  ) {
+  if (server.dockerContainerName || server.dockerContainerId) {
     fail(
-      "Managed Linux services are available only for local, non-container server profiles",
+      "Managed Linux services are unavailable for container-managed server profiles",
       409,
     );
   }
@@ -801,13 +787,9 @@ export async function activateLifecycleProvider(
         message: `${providerName} lifecycle is already active`,
       };
     }
-    if (
-      server.isRemote ||
-      server.dockerContainerName ||
-      server.dockerContainerId
-    ) {
+    if (server.dockerContainerName || server.dockerContainerId) {
       fail(
-        "Remote and container-managed profiles must keep their existing lifecycle model",
+        "Container-managed profiles must keep their existing lifecycle model",
         409,
       );
     }
@@ -970,7 +952,6 @@ export async function createServerFromDiscovery(input: unknown) {
     rconPort: iniSettings.rconPort,
     rconPassword: iniSettings.rconPassword,
     serverPort: iniSettings.serverPort,
-    isRemote: false,
   });
   log.info(
     `Created server from discovered mount: ${server.name} (ID: ${server.id})`,

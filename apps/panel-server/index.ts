@@ -95,18 +95,13 @@ import authService, {
   onSessionRevoked,
   type SessionRevocationEvent,
 } from "./services/auth.ts";
-import {
-  createPanelRequestHandler,
-} from "./http/panelWeb.ts";
+import { createPanelRequestHandler } from "./http/panelWeb.ts";
 export {
   handlePanelUpdateDownload,
   handlePanelUpdateStatus,
 } from "./http/panelUpdateHandlers.ts";
 import { loadOrCreateCerts } from "./utils/certs.ts";
-import {
-  resolvePanelPort,
-} from "./utils/panelInfo.ts";
-import { getSftpCachePath } from "./services/panelBridgeSftp.ts";
+import { resolvePanelPort } from "./utils/panelInfo.ts";
 import {
   autoInstallBridgeIfNeeded,
   resolveInstallDir,
@@ -744,33 +739,6 @@ async function tryStartPanelBridge(trigger: string = "unknown"): Promise<boolean
     return true;
   }
 
-  const settings = await getAllSettings();
-  if (settings?.panelBridgeSftpEnabled) {
-    try {
-      const sftpConfig = {
-        host: settings.panelBridgeSftpHost,
-        port: settings.panelBridgeSftpPort,
-        username: settings.panelBridgeSftpUsername,
-        password: settings.panelBridgeSftpPassword,
-        bridgePath: settings.panelBridgeSftpBridgePath,
-        pollIntervalSeconds: settings.panelBridgeSftpPollIntervalSeconds,
-      };
-      await panelBridge.configureSftp(
-        sftpConfig,
-        getSftpCachePath(
-          sftpConfig.host,
-          sftpConfig.port,
-          sftpConfig.username,
-          sftpConfig.bridgePath,
-        ),
-      );
-      log.info(`Started SFTP transport (trigger: ${trigger})`);
-      return true;
-    } catch (error: any) {
-      log.warn(`Could not start configured SFTP transport: ${error.message}`);
-    }
-  }
-
   const result = await findPanelBridgePath();
 
   if (result.error) {
@@ -1007,9 +975,7 @@ function inspectPendingPanelUpdate(): PendingUpdateInspection {
 
 export function classifyStartupProcessState(
   processState: AnyRecord | null | undefined,
-  isRemote = false,
 ) {
-  if (isRemote) return { running: Boolean(processState?.running), unknown: false };
   if (
     !processState ||
     processState.scanFailed ||
@@ -1715,12 +1681,7 @@ async function start(): Promise<void> {
         const timeoutMs = 15000;
         const activeServer = await getActiveServer();
         const processState = (await Promise.race([
-          activeServer?.isRemote
-            ? Promise.resolve({
-                running: rconService.connected || panelBridge.isModConnected(),
-                scanFailed: false,
-              })
-            : serverManager.getServerProcessDetails(),
+          serverManager.getServerProcessDetails(),
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("Server check timeout")),
@@ -1728,10 +1689,7 @@ async function start(): Promise<void> {
             ),
           ),
         ])) as AnyRecord | null;
-        const startupState = classifyStartupProcessState(
-          processState,
-          Boolean(activeServer?.isRemote),
-        );
+        const startupState = classifyStartupProcessState(processState);
         const processStateUnknown = startupState.unknown;
         const isRunning = startupState.running;
 

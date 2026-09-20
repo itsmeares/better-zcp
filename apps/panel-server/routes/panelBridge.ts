@@ -8,17 +8,12 @@ import {
   getActiveServer,
   getServer,
   getServers,
-  getAllSettings,
   setSetting,
   getDb,
   commitNow,
   logBridgeCommand,
 } from "../database/init.ts";
-import {
-  sanitizeError,
-  sanitizeErrorParams,
-  isMaskedSecret,
-} from "../utils/sanitize.ts";
+import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
 import { getDataPaths } from "../utils/paths.ts";
 import { persistSandboxValues } from "../services/sandboxPersistence.ts";
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
@@ -36,21 +31,6 @@ import {
   resolveInstallDir,
 } from "../services/panelBridgeInstaller.ts";
 import { createLogger } from "../utils/logger.ts";
-import {
-  getSftpCachePath,
-  testSftpBridge,
-  formatSftpError,
-  classifySftpErrorCode,
-  validateSftpBridgeConfig,
-  listSftpLogs,
-  readSftpLogTail,
-} from "../services/panelBridgeSftp.ts";
-import {
-  SFTP_CONFIG_PATH_KEY,
-  listRemoteConfigFiles,
-  resetRemoteConfigSession,
-  validateRemoteConfigTransport,
-} from "../services/remoteConfigFiles.ts";
 import {
   ITEM_TYPE_REGEX,
   VALID_ACTIONS,
@@ -78,51 +58,6 @@ type BridgePath = {
   priority: number;
 };
 
-const SFTP_SETTING_KEYS = {
-  enabled: "panelBridgeSftpEnabled",
-  host: "panelBridgeSftpHost",
-  port: "panelBridgeSftpPort",
-  username: "panelBridgeSftpUsername",
-  password: "panelBridgeSftpPassword",
-  bridgePath: "panelBridgeSftpBridgePath",
-  pollIntervalSeconds: "panelBridgeSftpPollIntervalSeconds",
-};
-
-const SFTP_LOG_PATH_KEY = "panelBridgeSftpLogPath";
-
-async function resolveSftpConfig(input: AnyRecord = {}) {
-  const settings = (await getAllSettings()) as AnyRecord;
-  const password =
-    input.password && !isMaskedSecret(input.password)
-    ? input.password
-    : settings[SFTP_SETTING_KEYS.password] || "";
-  return validateSftpBridgeConfig({
-    host: input.host ?? settings[SFTP_SETTING_KEYS.host],
-    port: input.port ?? settings[SFTP_SETTING_KEYS.port],
-    username: input.username ?? settings[SFTP_SETTING_KEYS.username],
-    password,
-    bridgePath: input.bridgePath ?? settings[SFTP_SETTING_KEYS.bridgePath],
-    pollIntervalSeconds:
-      input.pollIntervalSeconds ??
-      settings[SFTP_SETTING_KEYS.pollIntervalSeconds],
-  });
-}
-
-async function resolveSftpLogConfig(input: AnyRecord = {}) {
-  const settings = (await getAllSettings()) as AnyRecord;
-  const password =
-    input.password && !isMaskedSecret(input.password)
-    ? input.password
-    : settings[SFTP_SETTING_KEYS.password] || "";
-  return {
-    host: input.host ?? settings[SFTP_SETTING_KEYS.host],
-    port: input.port ?? settings[SFTP_SETTING_KEYS.port],
-    username: input.username ?? settings[SFTP_SETTING_KEYS.username],
-    password,
-    logPath: input.logPath ?? settings[SFTP_LOG_PATH_KEY],
-  };
-}
-
 const BRIDGE_USERNAME_REGEX = /^(?=.*\S)[^\x00-\x1F\x7F"\\]{1,64}$/;
 
 const BLOCKED_BRIDGE_PATH_PREFIXES =
@@ -144,7 +79,6 @@ router.get("/status", async (req, res) => {
 
   let detectedPaths: AnyRecord | null = null;
   let localInstall: AnyRecord | null = null;
-  let remoteBridgeVersionCheck: AnyRecord | null = null;
   try {
     const activeServer = await getActiveServer();
     if (activeServer) {
@@ -155,22 +89,10 @@ router.get("/status", async (req, res) => {
         // Bridge path would be: zomboidDataPath/Saves/Multiplayer/{serverName}/panelbridge/
         // OR for dedicated servers: installPath/../Server_files/Saves/Multiplayer/{serverName}/panelbridge/
       };
-      if (activeServer.isRemote) {
-        const bundledVersion = getBundledBridgeVersion();
-        const liveVersion = status.version || null;
-        remoteBridgeVersionCheck = {
-          bundledVersion,
-          liveVersion,
-          behind: liveVersion
-            ? isBridgeVersionBehindBundled(liveVersion)
-            : null,
-        };
-      } else {
-        localInstall = {
-          canAutoInstall: canAutoInstall(activeServer),
-          ...checkBridgeInstalled(activeServer),
-        };
-      }
+      localInstall = {
+        canAutoInstall: canAutoInstall(activeServer),
+        ...checkBridgeInstalled(activeServer),
+      };
     }
   } catch (e: any) {
     // Ignore
@@ -181,7 +103,6 @@ router.get("/status", async (req, res) => {
     modConnected: bridge.isModConnected(),
     detectedPaths,
     localInstall,
-    remoteBridgeVersionCheck,
   });
 });
 
@@ -617,7 +538,6 @@ router.post("/auto-detect", async (req, res) => {
   }
 
   try {
-    await bridge.stopSftp();
     if (bridge.isRunning) {
       bridge.stop();
     }
@@ -651,7 +571,6 @@ router.post("/configure", async (req, res) => {
   }
 
   try {
-    await bridge.stopSftp();
     if (bridge.isRunning) {
       bridge.stop();
     }
@@ -696,7 +615,6 @@ router.post("/configure-direct", async (req, res) => {
   }
 
   try {
-    await bridge.stopSftp();
     if (bridge.isRunning) {
       bridge.stop();
     }
@@ -713,98 +631,6 @@ router.post("/configure-direct", async (req, res) => {
   }
 });
 
-router.post("/sftp/test", async (req, res) => {
-  try {
-    const config = await resolveSftpConfig(req.body);
-    const result = await testSftpBridge(config);
-    res.json(result);
-  } catch (error: any) {
-    res.status(400).json({
-      error: sanitizeError(formatSftpError(error)),
-      code: classifySftpErrorCode(error),
-      params: sanitizeErrorParams({ detail: error?.message || String(error) }),
-    });
-  }
-});
-
-router.post("/sftp/configure", async (req, res) => {
-  try {
-    const config = await resolveSftpConfig(req.body);
-    const cachePath = getSftpCachePath(
-      config.host,
-      config.port,
-      config.username,
-      config.bridgePath,
-    );
-    await bridge.configureSftp(config, cachePath);
-    for (const [field, key] of Object.entries(SFTP_SETTING_KEYS)) {
-      const value = field === "enabled" ? true : (config as AnyRecord)[field];
-      if (value !== undefined) await setSetting(key, value);
-    }
-    res.json({
-      success: true,
-      bridgePath: cachePath,
-      transport: bridge.getStatus().transport,
-    });
-  } catch (error: any) {
-    res.status(400).json({
-      error: sanitizeError(formatSftpError(error)),
-      code: classifySftpErrorCode(error),
-      params: sanitizeErrorParams({ detail: error?.message || String(error) }),
-    });
-  }
-});
-
-router.post("/sftp/logs/list", async (req, res) => {
-  try {
-    const config = await resolveSftpLogConfig(req.body);
-    const result = await listSftpLogs(config);
-    if (req.body?.logPath) await setSetting(SFTP_LOG_PATH_KEY, config.logPath);
-    res.json({ success: true, ...result });
-  } catch (error: any) {
-    res.status(400).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/sftp/logs/tail", async (req, res) => {
-  try {
-    const config = await resolveSftpLogConfig(req.body);
-    const result = await readSftpLogTail(
-      config,
-      req.body?.name,
-      req.body?.maxBytes,
-    );
-    res.json({ success: true, ...result });
-  } catch (error: any) {
-    res.status(400).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/sftp/config/list", async (req, res) => {
-  try {
-    const settings = await getAllSettings();
-    const password =
-      req.body?.password && !isMaskedSecret(req.body.password)
-        ? req.body.password
-        : settings[SFTP_SETTING_KEYS.password] || "";
-    const config = validateRemoteConfigTransport({
-      host: req.body?.host ?? settings[SFTP_SETTING_KEYS.host],
-      port: req.body?.port ?? settings[SFTP_SETTING_KEYS.port],
-      username: req.body?.username ?? settings[SFTP_SETTING_KEYS.username],
-      password,
-      configPath: req.body?.configPath ?? settings[SFTP_CONFIG_PATH_KEY],
-    });
-    const result = await listRemoteConfigFiles(config);
-    if (req.body?.configPath) {
-      await setSetting(SFTP_CONFIG_PATH_KEY, config.configPath);
-      resetRemoteConfigSession();
-    }
-    res.json({ success: true, ...result });
-  } catch (error: any) {
-    res.status(400).json({ error: sanitizeError(error.message) });
-  }
-});
-
 router.post("/start", (req, res) => {
   try {
     bridge.start();
@@ -814,9 +640,8 @@ router.post("/start", (req, res) => {
   }
 });
 
-router.post("/stop", async (req, res) => {
+router.post("/stop", (req, res) => {
   try {
-    await bridge.stopSftp();
     bridge.stop();
     res.json({ success: true, message: "Bridge stopped" });
   } catch (error: any) {
@@ -993,15 +818,6 @@ router.get("/ping", async (req, res) => {
 });
 
 router.post("/command", async (req, res) => {
-  const activeServer = await getActiveServer();
-  if (activeServer?.isRemote && !bridge.isSftpRunning() && !bridge.isRunning) {
-    return res.status(400).json({
-      error:
-        "PanelBridge requires a configured mapped drive or a running SFTP bridge transport for remote servers.",
-      code: ErrorCode.PANELBRIDGE_COMMAND_REMOTE_TRANSPORT_UNAVAILABLE,
-    });
-  }
-
   const { action, args } = req.body || {};
 
   if (!action) {
@@ -2034,14 +1850,6 @@ router.post("/install-mod-auto", async (req, res) => {
       }
     }
 
-    if (targetServer.isRemote) {
-      return res.status(400).json({
-        error:
-          "Automatic PanelBridge installation is unavailable for remote servers. Copy PanelBridge.lua to the remote server's Lua folder using SFTP or the hosting provider's file manager.",
-        code: ErrorCode.PANELBRIDGE_INSTALL_REMOTE_NOT_AVAILABLE,
-      });
-    }
-
     if (!canAutoInstall(targetServer)) {
       return res.status(400).json({
         error:
@@ -2116,7 +1924,6 @@ router.post("/install-mod", async (req, res) => {
     const normalizedResolvedTarget = normalizePath(resolvedTarget);
 
     for (const server of servers) {
-      if (server?.isRemote) continue;
       let installDir;
       try {
         installDir = resolveInstallDir(server);

@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(async () => ({
     id: "docker-server",
-    isRemote: false,
     dockerContainerName: "pz-container",
     // Deliberately no serverName/zomboidDataPath/rconPassword: keeps
     // refreshLaunchTargetBeforeStart()'s ensureRconConfigured() call a

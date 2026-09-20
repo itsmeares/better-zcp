@@ -80,7 +80,7 @@ describe("getDb() corruption recovery: falls through the whole backup ring", () 
     const db = await getDb();
 
     expect(db.data.servers).toEqual([]);
-    expect(db.data._schemaVersion).toBe(3);
+    expect(db.data._schemaVersion).toBe(4);
   });
 
   it("still falls back to defaultData when db.json is corrupt and no backup exists at all", async () => {

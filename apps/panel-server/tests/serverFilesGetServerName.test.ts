@@ -3,29 +3,16 @@ import path from "path";
 
 const getActiveServer = vi.fn();
 const getAllSettings = vi.fn();
-const isRemoteConfigConfigured = vi.fn();
-const validateRemoteConfigTransport = vi.fn();
 
 vi.mock("../database/init.ts", () => ({
   getActiveServer,
   getAllSettings,
 }));
 
-vi.mock("../services/remoteConfigFiles.ts", () => ({
-  SFTP_CONFIG_PATH_KEY: "panelBridgeSftpConfigPath",
-  acquireMirrorLock: vi.fn(),
-  beginRemoteConfigSession: vi.fn(),
-  getMirrorPath: (transport, serverName) => `/mirror/${serverName}`,
-  isRemoteConfigConfigured,
-  pushRemoteConfigFiles: vi.fn(),
-  validateRemoteConfigTransport,
-}));
-
 const {
   getServerName,
   getServerConfigPath,
   ServerNotConfiguredError,
-  RemoteConfigNotConfiguredError,
   parseIni,
   toIni,
 } = await import("../routes/serverFiles.ts");
@@ -70,8 +57,6 @@ describe("getServerConfigPath (no server configured must not invent one)", () =>
   beforeEach(() => {
     getActiveServer.mockReset();
     getAllSettings.mockReset();
-    isRemoteConfigConfigured.mockReset().mockReturnValue(false);
-    validateRemoteConfigTransport.mockReset();
   });
 
   it("throws ServerNotConfiguredError rather than defaulting to ~/Zomboid/Server when nothing is configured", async () => {
@@ -110,39 +95,6 @@ describe("getServerConfigPath (no server configured must not invent one)", () =>
     getAllSettings.mockResolvedValue({ zomboidDataPath: "/legacy/zomboid" });
     const result = await getServerConfigPath();
     expect(result).toBe(path.join("/legacy/zomboid", "Server"));
-  });
-});
-
-describe("getServerConfigPath (remote server, SFTP transport not configured)", () => {
-  beforeEach(() => {
-    getActiveServer.mockReset();
-    getAllSettings.mockReset();
-    getAllSettings.mockResolvedValue({});
-    isRemoteConfigConfigured.mockReset().mockReturnValue(false);
-    validateRemoteConfigTransport.mockReset();
-  });
-
-  it("throws RemoteConfigNotConfiguredError, not ServerNotConfiguredError, when the server is remote and no local/legacy path exists either", async () => {
-    getActiveServer.mockResolvedValue({ id: "1", serverName: "Ashenwood", isRemote: true });
-    await expect(getServerConfigPath()).rejects.toThrow(RemoteConfigNotConfiguredError);
-    await expect(getServerConfigPath()).rejects.not.toThrow(ServerNotConfiguredError);
-  });
-
-  it("still resolves the mirror path when the remote transport IS configured (unaffected by the fix)", async () => {
-    getActiveServer.mockResolvedValue({ id: "1", serverName: "Ashenwood", isRemote: true });
-    isRemoteConfigConfigured.mockReturnValue(true);
-    validateRemoteConfigTransport.mockReturnValue({ host: "pz.example.net" });
-    await expect(getServerConfigPath()).resolves.toBe("/mirror/Ashenwood");
-  });
-
-  it("still falls back to the active server's own serverConfigPath for a remote row that happens to have one (fallback chain unchanged, only the final error type changed)", async () => {
-    getActiveServer.mockResolvedValue({
-      id: "1",
-      serverName: "Ashenwood",
-      isRemote: true,
-      serverConfigPath: "/legacy-local/Server",
-    });
-    await expect(getServerConfigPath()).resolves.toBe("/legacy-local/Server");
   });
 });
 

@@ -31,7 +31,6 @@ describe("status watchdog -- Docker provider awareness", () => {
     getActiveServer.mockResolvedValue({
       id: "docker-server",
       dockerContainerName: "pz-container",
-      isRemote: false,
     });
     resolveDockerHostSignal.mockResolvedValue({ running: true, scanFailed: false });
 
@@ -49,7 +48,6 @@ describe("status watchdog -- Docker provider awareness", () => {
     getActiveServer.mockResolvedValue({
       id: "docker-server",
       dockerContainerName: "pz-container",
-      isRemote: false,
     });
     resolveDockerHostSignal.mockResolvedValue({ running: false, scanFailed: true });
 
@@ -57,7 +55,7 @@ describe("status watchdog -- Docker provider awareness", () => {
   });
 
   it("still uses the local process scan for a native server, not the Docker signal", async () => {
-    getActiveServer.mockResolvedValue({ id: "native-server", isRemote: false });
+    getActiveServer.mockResolvedValue({ id: "native-server" });
     ServerManager.prototype.getServerProcessDetails.mockResolvedValue({
       running: true,
       scanFailed: false,

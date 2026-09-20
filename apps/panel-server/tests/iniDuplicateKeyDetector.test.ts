@@ -101,7 +101,6 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
 
     const { default: router } = await import("../routes/serverFiles.ts");
@@ -132,7 +131,6 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
 
     const { default: router } = await import("../routes/mods.ts");
@@ -163,7 +161,6 @@ describe("GET /server-files/ini and GET /mods/validate-config surface a real dup
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
 
     const { default: router } = await import("../routes/mods.ts");

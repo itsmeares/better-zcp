@@ -491,7 +491,7 @@ describe("PUT /api/servers/:id", () => {
 
     beforeEach(() => {
       getServer.mockReset();
-      getServer.mockResolvedValue({ id: 1, isRemote: false });
+      getServer.mockResolvedValue({ id: 1 });
 
       const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-savepath-"));
       realDataDir = path.join(root, "RealZomboidData");
@@ -563,43 +563,6 @@ describe("PUT /api/servers/:id", () => {
       expect(updateServer).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ zomboidDataPath: path.resolve(realDataDir) }),
-      );
-    });
-
-    it("skips validation entirely for a remote server (isRemote:true in the SAME request) -- a local fs check would always incorrectly fail for a path that lives on a different host", async () => {
-      const response = createResponse();
-      const remotePath = "/mnt/remote/does/not/exist/locally";
-
-      await getUpdateHandler()(
-        {
-          params: { id: "1" },
-          body: { isRemote: true, zomboidDataPath: remotePath },
-        },
-        response,
-      );
-
-      expect(updateServer).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({
-          zomboidDataPath: remotePath,
-          isRemote: true,
-        }),
-      );
-    });
-
-    it("skips validation for an already-remote server even when isRemote isn't in THIS request", async () => {
-      getServer.mockResolvedValue({ id: 1, isRemote: true });
-      const response = createResponse();
-      const remotePath = "/mnt/remote/does/not/exist/locally";
-
-      await getUpdateHandler()(
-        { params: { id: "1" }, body: { zomboidDataPath: remotePath } },
-        response,
-      );
-
-      expect(updateServer).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ zomboidDataPath: remotePath }),
       );
     });
 
@@ -734,47 +697,6 @@ describe("GET /api/servers", () => {
     expect(payload.servers[0].rconPassword).not.toBe("secret-a");
     expect(payload.servers[0].adminPassword).not.toBe("admin-a");
     expect(payload.servers[1].rconPassword).not.toBe("secret-b");
-  });
-
-  it("marks a remote server as remoteConfigConfigured when SFTP-based remote config is set up", async () => {
-    getAllSettings.mockResolvedValue({
-      panelBridgeSftpHost: "192.168.1.50",
-      panelBridgeSftpConfigPath: "/home/pz/Server",
-    });
-    getServers.mockResolvedValue([{ id: 1, name: "Remote", isRemote: true }]);
-    const response = createResponse();
-    const layer = getLayer("/", "get");
-
-    await layer.route.stack[0].handle({}, response);
-
-    const payload = response.json.mock.calls[0][0];
-    expect(payload.servers[0].remoteConfigConfigured).toBe(true);
-  });
-
-  it("does NOT mark a remote server as remoteConfigConfigured when SFTP is not set up", async () => {
-    getServers.mockResolvedValue([{ id: 1, name: "Remote", isRemote: true }]);
-    const response = createResponse();
-    const layer = getLayer("/", "get");
-
-    await layer.route.stack[0].handle({}, response);
-
-    const payload = response.json.mock.calls[0][0];
-    expect(payload.servers[0].remoteConfigConfigured).toBe(false);
-  });
-
-  it("does NOT mark a local server as remoteConfigConfigured even when SFTP is set up (unused for local servers)", async () => {
-    getAllSettings.mockResolvedValue({
-      panelBridgeSftpHost: "192.168.1.50",
-      panelBridgeSftpConfigPath: "/home/pz/Server",
-    });
-    getServers.mockResolvedValue([{ id: 1, name: "Local", isRemote: false }]);
-    const response = createResponse();
-    const layer = getLayer("/", "get");
-
-    await layer.route.stack[0].handle({}, response);
-
-    const payload = response.json.mock.calls[0][0];
-    expect(payload.servers[0].remoteConfigConfigured).toBe(false);
   });
 });
 

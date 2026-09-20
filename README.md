@@ -187,18 +187,17 @@ The packaged binary includes its own runtime — no Node.js, Python, or Java ins
 ## Quick Start
 
 Choose where the **panel** runs. It can run beside the game server, in Docker,
-or on a separate computer. The panel needs RCON access to the game server;
-PanelBridge features additionally need its server files or SFTP access.
+or in a container with the game server's folders mounted. The panel needs
+RCON access and local access to the server files it manages.
 
-| Your setup | Use this guide |
-| --- | --- |
-| Windows PC or Windows server | [docs/install/windows.md](docs/install/windows.md) |
-| Linux PC, VPS, or home server | [docs/install/linux.md](docs/install/linux.md) |
-| macOS | [macOS](#macos) below |
-| Docker or Unraid | [docs/install/docker.md](docs/install/docker.md) |
-| Renting from a host (Indifferent Broccoli, etc.) | [docs/install/hosted.md](docs/install/hosted.md) |
+| Your setup                    | Use this guide                                     |
+| ----------------------------- | -------------------------------------------------- |
+| Windows PC or Windows server  | [docs/install/windows.md](docs/install/windows.md) |
+| Linux PC, VPS, or home server | [docs/install/linux.md](docs/install/linux.md)     |
+| macOS                         | [macOS](#macos) below                              |
+| Docker or Unraid              | [docs/install/docker.md](docs/install/docker.md)   |
 
-**Not sure which?** If you already rent a Project Zomboid server from a host, pick Hosted — you're not installing anything server-side. Otherwise pick the row that matches the computer the *panel* will run on; Docker needs the fewest manual steps if that machine has it.
+**Not sure which?** Pick the row that matches the computer the _panel_ will run on; Docker needs the fewest manual steps if that machine has it.
 
 Every path above ends the same way: a browser tab open to the panel's setup screen, where you create your admin account. Download the current package from [Releases](https://github.com/itsmeares/better-zcp/releases/latest). Something not working? [docs/install/troubleshooting.md](docs/install/troubleshooting.md) is organized by what's actually on your screen, not by which guide you followed.
 
@@ -284,11 +283,6 @@ the new panel and verified the server configuration.
 PanelBridge is a server-side Lua drop-in that enables features RCON can't reach — teleport, heal, weather control, character export/import, inventory editing, sound triggers.
 
 There is no client-side component. Players don't install anything. The panel copies `PanelBridge.lua` into your server's `Install/media/lua/server/` folder, then you set `DoLuaChecksum=false` in the server INI, restart the PZ server, and enable it in **Settings → PanelBridge**.
-
-For a remote server without a shared filesystem, use the **Remote server via
-SFTP** option in the same panel. It syncs the bridge command and result files
-through a local cache; it does not expose the server's full filesystem to the
-panel.
 
 ---
 

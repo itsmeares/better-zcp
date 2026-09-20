@@ -81,7 +81,6 @@ const localProfile = {
   name: "One",
   serverName: "servertest",
   installPath: "/opt/pz",
-  isRemote: false,
   lifecycleProvider: "direct",
 };
 

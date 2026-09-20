@@ -59,7 +59,6 @@ interface ServerProfile {
   serverConfigPath?: string | null;
   zomboidDataPath?: string | null;
   serverName?: string | null;
-  isRemote?: boolean;
 }
 
 interface ServerPaths {
@@ -438,14 +437,6 @@ export async function applyTemplate(
   if (!server) {
     return { success: false, error: "Server not found", code: ErrorCode.SIM_TEMPLATE_SERVER_NOT_FOUND };
   }
-  if (server.isRemote) {
-    return {
-      success: false,
-      error: "Applying templates to remote servers is not supported yet.",
-      code: ErrorCode.SIM_TEMPLATE_APPLY_REMOTE_UNSUPPORTED,
-    };
-  }
-
   const paths = resolveServerPaths(server);
   if (!paths) {
     return {

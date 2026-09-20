@@ -30,7 +30,6 @@ export interface BackupSnapshotServer {
   id?: string | number | null;
   serverName?: string;
   provider?: string | null;
-  isRemote?: boolean;
   serverConfigPath?: string | null;
   zomboidDataPath?: string | null;
 }
@@ -76,7 +75,7 @@ export function captureBackupSnapshot(
     server: {
       id: server?.id ?? null,
       name: serverName,
-      provider: server?.provider ?? (server?.isRemote ? "remote-sftp" : "native"),
+      provider: server?.provider ?? "native",
     },
     serverIni: iniContent ? readIniValues(iniContent, INI_KEYS) : {},
     sandboxVars: sandbox,

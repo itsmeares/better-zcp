@@ -79,7 +79,6 @@ describe("POST /write-to-ini: unresolved modId reporting", () => {
       id: "server-1",
       serverConfigPath: configPath,
       serverName: "TestServer",
-      isRemote: false,
     });
     originalFetch = global.fetch;
     global.fetch = vi.fn(async () => ({ ok: false, status: 503 }));

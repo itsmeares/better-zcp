@@ -12,7 +12,6 @@ interface ServerLike {
   provider?: string | null;
   dockerContainerId?: unknown;
   dockerContainerName?: unknown;
-  isRemote?: boolean;
 }
 
 interface DockerContainer {
@@ -50,7 +49,6 @@ const HOST_LABELS: Record<string, string> = {
   native: "Process",
   "docker-local": "Container",
   "docker-managed": "Container",
-  "remote-sftp": "Host",
 };
 
 export function resolveProvider(
@@ -60,7 +58,7 @@ export function resolveProvider(
   if (server?.dockerContainerId || server?.dockerContainerName) {
     return "docker-local";
   }
-  return server?.isRemote ? "remote-sftp" : "native";
+  return "native";
 }
 
 export function buildHostSignal(
@@ -90,13 +88,6 @@ export function buildHostSignal(
       status: dockerContainer.running ? "running" : "stopped",
       label: "Container",
       detail: null,
-    };
-  }
-  if (provider === "remote-sftp") {
-    return {
-      status: "unknown",
-      label: "Host",
-      detail: "Cannot verify without SFTP access",
     };
   }
   return { status: "not-applicable", label: HOST_LABELS[provider] || "Host", detail: null };

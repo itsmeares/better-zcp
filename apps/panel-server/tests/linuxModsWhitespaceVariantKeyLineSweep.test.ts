@@ -79,7 +79,6 @@ beforeEach(() => {
     id: "server-1",
     serverConfigPath: configPath,
     serverName: "TestServer",
-    isRemote: false,
   });
 });
 

@@ -676,15 +676,6 @@ export default function Mods() {
         })
         return
       }
-      if (server.isRemote) {
-        toast({
-          title: 'Remote server',
-          description:
-            'Workshop update detection requires the server files to be local to the panel.',
-          variant: 'destructive',
-        })
-        return
-      }
       const installPath = server?.installPath?.trim() || ''
       const lastSlash = Math.max(
         installPath.lastIndexOf('\\'),

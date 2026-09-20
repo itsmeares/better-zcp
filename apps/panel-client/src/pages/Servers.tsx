@@ -26,8 +26,6 @@ import {
   ShieldCheck,
   Info,
   Globe,
-  Monitor,
-  Wifi,
   HardDrive,
   Database,
   ArrowRight,
@@ -38,7 +36,6 @@ import {
   Square,
   Container,
   RotateCw,
-  Link,
 } from 'lucide-react'
 import {
   Card,
@@ -191,7 +188,6 @@ interface NewServerForm {
   maxMemory: number
   useNoSteam: boolean
   useDebug: boolean
-  isRemote: boolean
 }
 
 const defaultNewServer: NewServerForm = {
@@ -209,7 +205,6 @@ const defaultNewServer: NewServerForm = {
   maxMemory: 4,
   useNoSteam: false,
   useDebug: false,
-  isRemote: false,
 }
 
 function formatBytes(bytes: number) {
@@ -390,7 +385,6 @@ export default function Servers() {
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [newServer, setNewServer] = useState<NewServerForm>(defaultNewServer)
   const [addingServer, setAddingServer] = useState(false)
-  const [addMode, setAddMode] = useState<'local' | 'remote'>('local')
 
   const samePath = (a?: string | null, b?: string | null) =>
     !!a &&
@@ -399,8 +393,7 @@ export default function Servers() {
       b.replace(/[\\/]+$/, '').toLowerCase()
 
   const tandemConflicts = useMemo(() => {
-    if (addMode !== 'local') return []
-    const others = (servers || []).filter((s) => !s.isRemote)
+    const others = servers || []
     if (others.length === 0) return []
     const found: Array<{ label: string; detail: string }> = []
     for (const other of others) {
@@ -451,7 +444,6 @@ export default function Servers() {
     }
     return found
   }, [
-    addMode,
     servers,
     newServer.serverName,
     newServer.serverPort,
@@ -459,21 +451,6 @@ export default function Servers() {
     newServer.zomboidDataPath,
     newServer.installPath,
   ])
-
-  const editDuplicateRemoteConflict = useMemo(() => {
-    if (!editingServer || !editingServer.isRemote) return false
-    const normalizedName = (editingServer.name || '').trim().toLowerCase()
-    const normalizedHost = (editingServer.rconHost || '').trim().toLowerCase()
-    return (servers || []).some(
-      (s) =>
-        s.id !== editingServer.id &&
-        s.isRemote &&
-        (s.name || s.serverName || '').trim().toLowerCase() ===
-          normalizedName &&
-        (s.rconHost || '').trim().toLowerCase() === normalizedHost &&
-        s.rconPort === editingServer.rconPort,
-    )
-  }, [editingServer, servers])
 
   const [detecting, setDetecting] = useState(false)
   const [detectResult, setDetectResult] = useState<DetectResult | null>(null)
@@ -609,25 +586,6 @@ export default function Servers() {
       }
     },
     [fetchDockerState, servers, toast],
-  )
-
-  const handleConfigureRemoteBridge = useCallback(
-    async (server: ServerInstance) => {
-      try {
-        if (!server.isActive) {
-          await serversApi.activate(server.id)
-          await fetchServers()
-        }
-        void navigate({ to: '/settings', search: { tab: 'bridge' } })
-      } catch (error) {
-        toast({
-          title: 'Could not select remote server',
-          description: getUserErrorMessage(error, 'Server activation failed'),
-          variant: 'destructive',
-        })
-      }
-    },
-    [fetchServers, navigate, toast],
   )
 
   useEffect(() => {
@@ -1347,18 +1305,6 @@ export default function Servers() {
       return
     }
 
-    if (editDuplicateRemoteConflict) {
-      toast({
-        title: 'Error',
-        description:
-          'A remote server named "' +
-          String((editingServer.name || '').trim()) +
-          '" with this RCON host and port is already on the list.',
-        variant: 'destructive',
-      })
-      return
-    }
-
     setSavingEdit(true)
     try {
       const result = await serversApi.update(editingServer.id, editingServer)
@@ -1615,49 +1561,22 @@ export default function Servers() {
   }
 
   const handleAddExistingServer = async () => {
-    if (addMode === 'remote') {
-      if (!newServer.name.trim()) {
-        toast({
-          title: 'Error',
-          description: 'Server name is required',
-          variant: 'destructive',
-        })
-        return
-      }
-      if (!newServer.rconHost.trim()) {
-        toast({
-          title: 'Error',
-          description: 'RCON host is required',
-          variant: 'destructive',
-        })
-        return
-      }
-      if (!newServer.rconPassword.trim()) {
-        toast({
-          title: 'Error',
-          description: 'RCON password is required',
-          variant: 'destructive',
-        })
-        return
-      }
-    } else {
-      if (!selectedServerConfig) {
-        toast({
-          title: 'Error',
-          description: 'Please detect a server first',
-          variant: 'destructive',
-        })
-        return
-      }
-      if (!newServer.rconPassword.trim() && !importIniFrom) {
-        toast({
-          title: 'Error',
-          description:
-            'RCON password is required. Configure it in your server INI file first.',
-          variant: 'destructive',
-        })
-        return
-      }
+    if (!selectedServerConfig) {
+      toast({
+        title: 'Error',
+        description: 'Please detect a server first',
+        variant: 'destructive',
+      })
+      return
+    }
+    if (!newServer.rconPassword.trim() && !importIniFrom) {
+      toast({
+        title: 'Error',
+        description:
+          'RCON password is required. Configure it in your server INI file first.',
+        variant: 'destructive',
+      })
+      return
     }
 
     if (!isValidPort(newServer.rconPort)) {
@@ -1688,34 +1607,9 @@ export default function Servers() {
       return
     }
 
-    if (addMode === 'remote') {
-      const normalizedName = newServer.name.trim().toLowerCase()
-      const normalizedHost = newServer.rconHost.trim().toLowerCase()
-      const isDuplicate = (servers || []).some(
-        (s) =>
-          s.isRemote &&
-          (s.name || s.serverName || '').trim().toLowerCase() ===
-            normalizedName &&
-          (s.rconHost || '').trim().toLowerCase() === normalizedHost &&
-          s.rconPort === newServer.rconPort,
-      )
-      if (isDuplicate) {
-        toast({
-          title: 'Error',
-          description:
-            'A remote server named "' +
-            String(newServer.name.trim()) +
-            '" with this RCON host and port is already on the list.',
-          variant: 'destructive',
-        })
-        return
-      }
-    }
-
     setAddingServer(true)
     try {
-      const useIniImport =
-        addMode === 'local' && !!importIniFrom && !newServer.rconPassword.trim()
+      const useIniImport = !!importIniFrom && !newServer.rconPassword.trim()
 
       const createResult = await serversApi.create({
         name: newServer.name || newServer.serverName,
@@ -1734,7 +1628,6 @@ export default function Servers() {
         maxMemory: newServer.maxMemory,
         useNoSteam: newServer.useNoSteam,
         useDebug: newServer.useDebug,
-        isRemote: addMode === 'remote',
       } as Partial<ServerInstance> & {
         importIniFrom?: { dataPath: string; serverName: string }
       })
@@ -1775,7 +1668,6 @@ export default function Servers() {
     setAutoScanResult(null)
     setAutoScanPath('')
     setShowAutoScan(false)
-    setAddMode('local')
   }
 
   if (loading) {
@@ -1813,22 +1705,7 @@ export default function Servers() {
               )}
             </Button>
 
-            <Button
-              variant="outline"
-              onClick={() => {
-                setAddMode('remote')
-                setShowAddDialog(true)
-              }}
-            >
-              <Globe className="w-4 h-4 me-2" /> {'Add Remote Server'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setAddMode('local')
-                setShowAddDialog(true)
-              }}
-            >
+            <Button variant="outline" onClick={() => setShowAddDialog(true)}>
               <FolderOpen className="w-4 h-4 me-2" /> {'Add Existing Server'}
             </Button>
             <Button
@@ -1907,10 +1784,7 @@ export default function Servers() {
                   <Button
                     variant="outline"
                     className="onboarding-cta mt-4 w-full"
-                    onClick={() => {
-                      setAddMode('local')
-                      setShowAddDialog(true)
-                    }}
+                    onClick={() => setShowAddDialog(true)}
                   >
                     <FolderOpen className="me-2 h-4 w-4" />
                     {'Add Existing Server'}
@@ -1935,31 +1809,6 @@ export default function Servers() {
                   >
                     <Download className="me-2 h-4 w-4" />
                     {'Install New Server'}
-                  </Button>
-                </div>
-
-                <div className="mission-step-card rounded-2xl border border-border/60 bg-background/40 p-5">
-                  <div className="mission-step-icon mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                    <Globe className="h-5 w-5" />
-                  </div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {'Connect a remote server'}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {
-                      'Use this for servers running on another machine through RCON.'
-                    }
-                  </p>
-                  <Button
-                    variant="secondary"
-                    className="onboarding-cta mt-4 w-full"
-                    onClick={() => {
-                      setAddMode('remote')
-                      setShowAddDialog(true)
-                    }}
-                  >
-                    <Globe className="me-2 h-4 w-4" />
-                    {'Add Remote Server'}
                   </Button>
                 </div>
               </div>
@@ -2049,9 +1898,7 @@ export default function Servers() {
                           }
                           const provider = resolveClientProvider(server)
                           let host
-                          if (server.isRemote) {
-                            host = { status: 'unknown', label: 'Host' }
-                          } else if (provider === 'docker-local') {
+                          if (provider === 'docker-local') {
                             const container = dockerContainers.find(
                               (item) =>
                                 item.name === server.dockerContainerName ||
@@ -2111,11 +1958,6 @@ export default function Servers() {
                             />
                           )
                         })()}
-                        {server.isRemote && (
-                          <Badge variant="outline" className="text-xs">
-                            <Globe className="w-3 h-3 me-1" /> {'Remote'}
-                          </Badge>
-                        )}
                         {hasUpdate && (
                           <Badge variant="warning" className="text-xs">
                             <RefreshCw className="w-3 h-3 me-1" />{' '}
@@ -2156,27 +1998,19 @@ export default function Servers() {
                             <Power className="w-4 h-4 me-2" /> {'Set Active'}
                           </DropdownMenuItem>
                         )}
-                        {!server.isRemote && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() =>
-                                openSteamOperation(server, 'update')
-                              }
-                            >
-                              <RefreshCw className="w-4 h-4 me-2" />{' '}
-                              {'Update Server'}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() =>
-                                openSteamOperation(server, 'verify')
-                              }
-                            >
-                              <ShieldCheck className="w-4 h-4 me-2" />{' '}
-                              {'Verify Files'}
-                            </DropdownMenuItem>
-                          </>
-                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => openSteamOperation(server, 'update')}
+                        >
+                          <RefreshCw className="w-4 h-4 me-2" />{' '}
+                          {'Update Server'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => openSteamOperation(server, 'verify')}
+                        >
+                          <ShieldCheck className="w-4 h-4 me-2" />{' '}
+                          {'Verify Files'}
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => setDeleteServer(server)}
@@ -2191,43 +2025,42 @@ export default function Servers() {
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  {!server.isRemote &&
-                    (server.installPath || server.zomboidDataPath) && (
-                      <div className="rounded-md border border-border/40 bg-muted/15 divide-y divide-border/30">
-                        {server.installPath && (
-                          <div className="flex items-start gap-2.5 px-3 py-2">
-                            <HardDrive className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                {'Install Path'}
-                              </p>
-                              <p
-                                className="font-mono text-xs text-foreground/85 truncate mt-0.5"
-                                title={server.installPath}
-                              >
-                                {server.installPath}
-                              </p>
-                            </div>
+                  {(server.installPath || server.zomboidDataPath) && (
+                    <div className="rounded-md border border-border/40 bg-muted/15 divide-y divide-border/30">
+                      {server.installPath && (
+                        <div className="flex items-start gap-2.5 px-3 py-2">
+                          <HardDrive className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              {'Install Path'}
+                            </p>
+                            <p
+                              className="font-mono text-xs text-foreground/85 truncate mt-0.5"
+                              title={server.installPath}
+                            >
+                              {server.installPath}
+                            </p>
                           </div>
-                        )}
-                        {server.zomboidDataPath && (
-                          <div className="flex items-start gap-2.5 px-3 py-2">
-                            <Database className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                {'Data Path'}
-                              </p>
-                              <p
-                                className="font-mono text-xs text-foreground/85 truncate mt-0.5"
-                                title={server.zomboidDataPath}
-                              >
-                                {server.zomboidDataPath}
-                              </p>
-                            </div>
+                        </div>
+                      )}
+                      {server.zomboidDataPath && (
+                        <div className="flex items-start gap-2.5 px-3 py-2">
+                          <Database className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              {'Data Path'}
+                            </p>
+                            <p
+                              className="font-mono text-xs text-foreground/85 truncate mt-0.5"
+                              title={server.zomboidDataPath}
+                            >
+                              {server.zomboidDataPath}
+                            </p>
                           </div>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {(() => {
                     const container = server.dockerContainerName
@@ -2378,9 +2211,7 @@ export default function Servers() {
                     )
                   })()}
 
-                  <div
-                    className={`grid ${server.isRemote ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'} gap-2`}
-                  >
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <div className="flex items-center gap-2.5 rounded-md border border-border/50 bg-muted/20 px-2.5 py-2">
                       <div
                         className="grid place-items-center w-7 h-7 rounded-md border border-primary/25 bg-primary/[0.06] text-primary shrink-0"
@@ -2413,24 +2244,22 @@ export default function Servers() {
                         </p>
                       </div>
                     </div>
-                    {!server.isRemote && (
-                      <div className="flex items-center gap-2.5 rounded-md border border-border/50 bg-muted/20 px-2.5 py-2">
-                        <div
-                          className="grid place-items-center w-7 h-7 rounded-md border border-border/55 bg-muted/40 text-muted-foreground shrink-0"
-                          aria-hidden="true"
-                        >
-                          <Cpu className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                            {'Memory'}
-                          </p>
-                          <p className="font-mono text-xs text-foreground/90 tabular-nums">
-                            {server.minMemory}–{server.maxMemory} GB
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-2.5 rounded-md border border-border/50 bg-muted/20 px-2.5 py-2">
+                      <div
+                        className="grid place-items-center w-7 h-7 rounded-md border border-border/55 bg-muted/40 text-muted-foreground shrink-0"
+                        aria-hidden="true"
+                      >
+                        <Cpu className="w-3.5 h-3.5" />
                       </div>
-                    )}
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          {'Memory'}
+                        </p>
+                        <p className="font-mono text-xs text-foreground/90 tabular-nums">
+                          {server.minMemory}–{server.maxMemory} GB
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   {server.isActive && (updateInfo || gameVersion) && (
@@ -2511,7 +2340,7 @@ export default function Servers() {
                             item.name === server.dockerContainerName ||
                             item.id === server.dockerContainerName,
                         )
-                      if (server.isRemote || hasManagedContainer) return null
+                      if (hasManagedContainer) return null
                       if (isRunning === null) {
                         return (
                           <DisabledReason reason={'Unavailable'}>
@@ -2575,28 +2404,6 @@ export default function Servers() {
                         </Button>
                       )
                     })()}
-                    {server.isRemote && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleConfigureRemoteBridge(server)}
-
-                          title={
-                            'Configure the SFTP bridge for this remote server'
-                          }
-                        >
-                          <Link className="w-4 h-4 me-1.5" />{' '}
-                          {'Configure SFTP Bridge'}
-                        </Button>
-
-                        <HelpTip label={'Configure SFTP Bridge'}>
-                          {
-                            "If this isn't already your active server, clicking this switches your active server to it before opening SFTP setup in Settings."
-                          }
-                        </HelpTip>
-                      </div>
-                    )}
                     {hasUpdate && (
                       <Button
                         size="sm"
@@ -2650,19 +2457,15 @@ export default function Servers() {
       >
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {addMode === 'remote'
-                ? 'Add Remote Server'
-                : 'Add Existing Server'}
-            </DialogTitle>
+            <DialogTitle>{'Add Existing Server'}</DialogTitle>
             <DialogDescription>
-              {addMode === 'remote'
-                ? 'Connect to a PZ server on another machine via RCON. Only RCON-based features will be available.'
-                : 'Scan a folder to auto-detect server paths, or enter them manually'}
+              {
+                'Scan a folder to auto-detect server paths, or enter them manually'
+              }
             </DialogDescription>
           </DialogHeader>
 
-          {addMode === 'local' && !!servers?.some((s) => !s.isRemote) && (
+          {!!servers?.length && (
             <div className="space-y-1.5 rounded-md border border-border/60 p-3">
               <p className="text-xs font-medium">
                 {'Running a second server alongside the first'}
@@ -2697,589 +2500,431 @@ export default function Servers() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => {
-                setAddMode('local')
-                setNewServer(defaultNewServer)
-                setDetectResult(null)
-                setDetectError(null)
-                setSelectedServerConfig('')
-                setImportIniFrom(null)
-              }}
-              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-[background-color,border-color,color] ${
-                addMode === 'local'
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-muted-foreground/30'
-              }`}
-            >
-              <Monitor
-                className={`w-5 h-5 ${addMode === 'local' ? 'text-primary' : 'text-muted-foreground'}`}
-              />
-              <div className="text-start">
-                <p className="text-sm font-medium">{'Local Server'}</p>
-                <p className="text-xs text-muted-foreground">
-                  {'Same machine as panel'}
-                </p>
-              </div>
-            </button>
-            <button
-              onClick={() => {
-                setAddMode('remote')
-                setNewServer({
-                  ...defaultNewServer,
-                  isRemote: true,
-                  rconHost: '',
-                })
-                setDetectResult(null)
-                setDetectError(null)
-                setSelectedServerConfig('')
-                setImportIniFrom(null)
-              }}
-              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-[background-color,border-color,color] ${
-                addMode === 'remote'
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-muted-foreground/30'
-              }`}
-            >
-              <Globe
-                className={`w-5 h-5 ${addMode === 'remote' ? 'text-primary' : 'text-muted-foreground'}`}
-              />
-              <div className="text-start">
-                <p className="text-sm font-medium">{'Remote Server'}</p>
-                <p className="text-xs text-muted-foreground">
-                  {'RCON only — another machine'}
-                </p>
-              </div>
-            </button>
-          </div>
-
-          {addMode === 'remote' && (
-            <Alert className="border-primary/20 bg-primary/5">
-              <Wifi className="h-4 w-4 text-primary" />
-              <AlertTitle>{'RCON-Only Connection'}</AlertTitle>
-              <AlertDescription>
-                {
-                  "Features like config editing, mod management, backups, server start/stop, and file operations will be unavailable. You can still use the console, manage players, send chat messages, and run scheduled commands over RCON. Weather and world events need the PanelBridge mod's file-based connection, which isn't available until you configure the SFTP bridge — look for \"Configure SFTP Bridge\" on this server's card after you add it."
-                }
-              </AlertDescription>
-            </Alert>
-          )}
-
           <div className="space-y-4 py-2">
-            {addMode === 'remote' ? (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>{'Server Display Name *'}</Label>
-                  <Input
-                    value={newServer.name}
-                    onChange={(e) =>
-                      setNewServer({ ...newServer, name: e.target.value })
-                    }
-                    placeholder={'My Remote PZ Server'}
-                    maxLength={64}
-                  />
+            <>
+              <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-sm">
+                      {'Auto Detect Servers'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {'Scan a folder to find all PZ servers automatically'}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAutoScan(!showAutoScan)}
+                  >
+                    {showAutoScan ? 'Manual Entry' : 'Auto Scan'}
+                  </Button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {showAutoScan && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex gap-2">
+                      <Input
+                        value={autoScanPath}
+                        onChange={(e) => setAutoScanPath(e.target.value)}
+                        placeholder={'Path to scan for PZ servers'}
+                        className="font-mono text-sm flex-1"
+                      />
+
+                      <Button
+                        onClick={handleAutoScan}
+                        disabled={autoScanning || !autoScanPath.trim()}
+                      >
+                        {autoScanning ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Search className="w-4 h-4 me-1" /> {'Scan'}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {autoScanResult &&
+                      autoScanResult.detectedConfigs.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            {Number(autoScanResult.detectedConfigs.length) === 1
+                              ? 'Found ' +
+                                String(autoScanResult.detectedConfigs.length) +
+                                ' server. Click to select:'
+                              : 'Found ' +
+                                String(autoScanResult.detectedConfigs.length) +
+                                ' servers. Click to select:'}
+                          </p>
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {autoScanResult.detectedConfigs.map(
+                              (config, idx) => (
+                                <button
+                                  type="button"
+                                  key={config.serverName || idx}
+                                  className="w-full text-start p-3 rounded border bg-background hover:bg-accent cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                                  onClick={() =>
+                                    handleSelectScannedConfig(
+                                      config,
+                                      autoScanResult.installPaths[0],
+                                    )
+                                  }
+                                  aria-label={
+                                    'Use detected server ' +
+                                    String(
+                                      config.publicName || config.serverName,
+                                    )
+                                  }
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium">
+                                      {config.publicName || config.serverName}
+                                    </span>
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-xs font-mono"
+                                    >
+                                      {config.serverName}.ini
+                                    </Badge>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mt-1 font-mono truncate">
+                                    {'📁 Data: ' + String(config.dataPath)}
+                                  </div>
+                                  {config.matchedBatFile ? (
+                                    <div className="mt-1 text-xs font-mono text-primary truncate">
+                                      {'✓ Matched: ' +
+                                        String(config.matchedBatFile)}
+                                    </div>
+                                  ) : autoScanResult.installPaths.length > 0 ? (
+                                    <div className="mt-1 text-xs text-warning">
+                                      {
+                                        '⚠ No matching startup script - will use default install path'
+                                      }
+                                    </div>
+                                  ) : (
+                                    <div className="mt-1 text-xs text-warning">
+                                      {
+                                        '⚠ No install path found - enter manually below'
+                                      }
+                                    </div>
+                                  )}
+                                </button>
+                              ),
+                            )}
+                          </div>
+
+                          <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                            {autoScanResult.installPaths.length > 0 && (
+                              <p>
+                                {'📁 Install paths found: ' +
+                                  String(autoScanResult.installPaths.length)}
+                              </p>
+                            )}
+                            {autoScanResult.customBatFiles &&
+                              autoScanResult.customBatFiles.length > 0 && (
+                                <p>
+                                  {'🎯 Custom startup scripts: ' +
+                                    String(
+                                      autoScanResult.customBatFiles
+                                        .map((b) => b.fileName)
+                                        .join(', '),
+                                    )}
+                                </p>
+                              )}
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                )}
+              </div>
+
+              {!showAutoScan && (
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>{'Server machine (RCON host) *'}</Label>
-                    <Input
-                      value={newServer.rconHost}
-                      onChange={(e) =>
-                        setNewServer({ ...newServer, rconHost: e.target.value })
-                      }
-                      placeholder={'192.168.1.100 or myserver.com'}
-                      className="font-mono text-sm"
-                    />
+                    <Label>{'Server Data Path *'}</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={newServer.zomboidDataPath}
+                        onChange={(e) => {
+                          setNewServer({
+                            ...newServer,
+                            zomboidDataPath: e.target.value,
+                          })
+                          setDetectResult(null)
+                          setDetectError(null)
+                          setImportIniFrom(null)
+                        }}
+                        placeholder={'Path to Zomboid data folder'}
+                        className="font-mono text-sm flex-1"
+                        maxLength={260}
+                      />
+
+                      <Button
+                        variant="secondary"
+                        onClick={handleDetectServer}
+                        disabled={
+                          detecting || !newServer.zomboidDataPath.trim()
+                        }
+                      >
+                        {detecting ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Search className="w-4 h-4 me-1" /> {'Detect'}
+                          </>
+                        )}
+                      </Button>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {
-                        'Address of the machine running PZ. Use 127.0.0.1 only when the panel and server share this machine.'
+                        'The folder containing Server/, Saves/, Logs/ subfolders'
                       }
                     </p>
                   </div>
+
                   <div className="space-y-2">
-                    <Label>{'RCON Port *'}</Label>
-                    <NumberInput
-                      value={newServer.rconPort}
-                      onChange={(rconPort) =>
-                        setNewServer({ ...newServer, rconPort })
+                    <Label>{'Server Install Path (Optional)'}</Label>
+                    <Input
+                      value={newServer.installPath}
+                      onChange={(e) =>
+                        setNewServer({
+                          ...newServer,
+                          installPath: e.target.value,
+                        })
                       }
+                      placeholder={
+                        runtimeInfo?.family === 'windows'
+                          ? 'Path to the PZ server folder containing StartServer64.bat'
+                          : runtimeInfo?.family === 'posix'
+                            ? 'Path to the PZ server folder containing start-server.sh'
+                            : 'Path to the Project Zomboid server folder'
+                      }
+                      className="font-mono text-sm"
+                      maxLength={260}
                     />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>{'RCON Password *'}</Label>
-                  <PasswordInput
-                    value={newServer.rconPassword}
-                    onChange={(value) =>
-                      setNewServer({ ...newServer, rconPassword: value })
-                    }
-                    placeholder={
-                      "Enter the RCON password set in the server's INI file"
-                    }
-                    label={'RCON password'}
-                  />
-                  <RconTestConnection
-                    host={newServer.rconHost}
-                    port={newServer.rconPort}
-                    password={newServer.rconPassword}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>{'Game Port (optional)'}</Label>
-                  <NumberInput
-                    min={1}
-                    max={65534}
-                    value={newServer.serverPort}
-                    onChange={(serverPort) =>
-                      setNewServer({ ...newServer, serverPort })
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {'The PZ game port — used for display purposes only'}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-sm">
-                        {'Auto Detect Servers'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {'Scan a folder to find all PZ servers automatically'}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowAutoScan(!showAutoScan)}
-                    >
-                      {showAutoScan ? 'Manual Entry' : 'Auto Scan'}
-                    </Button>
-                  </div>
-
-                  {showAutoScan && (
-                    <div className="space-y-3 pt-2">
-                      <div className="flex gap-2">
-                        <Input
-                          value={autoScanPath}
-                          onChange={(e) => setAutoScanPath(e.target.value)}
-                          placeholder={'Path to scan for PZ servers'}
-                          className="font-mono text-sm flex-1"
-                        />
-
-                        <Button
-                          onClick={handleAutoScan}
-                          disabled={autoScanning || !autoScanPath.trim()}
-                        >
-                          {autoScanning ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Search className="w-4 h-4 me-1" /> {'Scan'}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-
-                      {autoScanResult &&
-                        autoScanResult.detectedConfigs.length > 0 && (
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">
-                              {Number(autoScanResult.detectedConfigs.length) ===
-                              1
-                                ? 'Found ' +
-                                  String(
-                                    autoScanResult.detectedConfigs.length,
-                                  ) +
-                                  ' server. Click to select:'
-                                : 'Found ' +
-                                  String(
-                                    autoScanResult.detectedConfigs.length,
-                                  ) +
-                                  ' servers. Click to select:'}
-                            </p>
-                            <div className="space-y-2 max-h-64 overflow-y-auto">
-                              {autoScanResult.detectedConfigs.map(
-                                (config, idx) => (
-                                  <button
-                                    type="button"
-                                    key={config.serverName || idx}
-                                    className="w-full text-start p-3 rounded border bg-background hover:bg-accent cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                                    onClick={() =>
-                                      handleSelectScannedConfig(
-                                        config,
-                                        autoScanResult.installPaths[0],
-                                      )
-                                    }
-                                    aria-label={
-                                      'Use detected server ' +
-                                      String(
-                                        config.publicName || config.serverName,
-                                      )
-                                    }
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-medium">
-                                        {config.publicName || config.serverName}
-                                      </span>
-                                      <Badge
-                                        variant="secondary"
-                                        className="text-xs font-mono"
-                                      >
-                                        {config.serverName}.ini
-                                      </Badge>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mt-1 font-mono truncate">
-                                      {'📁 Data: ' + String(config.dataPath)}
-                                    </div>
-                                    {config.matchedBatFile ? (
-                                      <div className="mt-1 text-xs font-mono text-primary truncate">
-                                        {'✓ Matched: ' +
-                                          String(config.matchedBatFile)}
-                                      </div>
-                                    ) : autoScanResult.installPaths.length >
-                                      0 ? (
-                                      <div className="mt-1 text-xs text-warning">
-                                        {
-                                          '⚠ No matching startup script - will use default install path'
-                                        }
-                                      </div>
-                                    ) : (
-                                      <div className="mt-1 text-xs text-warning">
-                                        {
-                                          '⚠ No install path found - enter manually below'
-                                        }
-                                      </div>
-                                    )}
-                                  </button>
-                                ),
-                              )}
-                            </div>
-
-                            <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
-                              {autoScanResult.installPaths.length > 0 && (
-                                <p>
-                                  {'📁 Install paths found: ' +
-                                    String(autoScanResult.installPaths.length)}
-                                </p>
-                              )}
-                              {autoScanResult.customBatFiles &&
-                                autoScanResult.customBatFiles.length > 0 && (
-                                  <p>
-                                    {'🎯 Custom startup scripts: ' +
-                                      String(
-                                        autoScanResult.customBatFiles
-                                          .map((b) => b.fileName)
-                                          .join(', '),
-                                      )}
-                                  </p>
-                                )}
-                            </div>
-                          </div>
-                        )}
-                    </div>
-                  )}
-                </div>
-
-                {!showAutoScan && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>{'Server Data Path *'}</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          value={newServer.zomboidDataPath}
-                          onChange={(e) => {
-                            setNewServer({
-                              ...newServer,
-                              zomboidDataPath: e.target.value,
-                            })
-                            setDetectResult(null)
-                            setDetectError(null)
-                            setImportIniFrom(null)
-                          }}
-                          placeholder={'Path to Zomboid data folder'}
-                          className="font-mono text-sm flex-1"
-                          maxLength={260}
-                        />
-
-                        <Button
-                          variant="secondary"
-                          onClick={handleDetectServer}
-                          disabled={
-                            detecting || !newServer.zomboidDataPath.trim()
-                          }
-                        >
-                          {detecting ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Search className="w-4 h-4 me-1" /> {'Detect'}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {
-                          'The folder containing Server/, Saves/, Logs/ subfolders'
-                        }
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>{'Server Install Path (Optional)'}</Label>
-                      <Input
-                        value={newServer.installPath}
-                        onChange={(e) =>
-                          setNewServer({
-                            ...newServer,
-                            installPath: e.target.value,
-                          })
-                        }
-                        placeholder={
-                          runtimeInfo?.family === 'windows'
-                            ? 'Path to the PZ server folder containing StartServer64.bat'
-                            : runtimeInfo?.family === 'posix'
-                              ? 'Path to the PZ server folder containing start-server.sh'
-                              : 'Path to the Project Zomboid server folder'
-                        }
-                        className="font-mono text-sm"
-                        maxLength={260}
-                      />
-                      {isCustomLauncherPath(newServer.installPath) && (
-                        <Alert className="border-warning/40 bg-warning/10">
-                          <AlertCircle className="h-4 w-4 text-warning" />
-                          <AlertTitle className="text-warning">
-                            {'Custom launcher mode'}
-                          </AlertTitle>
-                          <AlertDescription>
-                            {
-                              'This path points at a script, not a folder — the panel will launch it as-is and will never regenerate or edit it. Settings that are normally written into a launch script for you (memory, admin password, the data path, the server name) will not reach the server unless you put them in this script yourself.'
-                            }
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {detectError && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive">
-                    <AlertCircle className="w-4 h-4" />
-                    <span className="text-sm">{detectError}</span>
-                  </div>
-                )}
-
-                {detectResult && (
-                  <div className="space-y-4">
-                    {detectResult.detectedServers.length === 0 ? (
+                    {isCustomLauncherPath(newServer.installPath) && (
                       <Alert className="border-warning/40 bg-warning/10">
                         <AlertCircle className="h-4 w-4 text-warning" />
                         <AlertTitle className="text-warning">
-                          {'No server configs found'}
+                          {'Custom launcher mode'}
                         </AlertTitle>
                         <AlertDescription>
-                          {'Run the server once to create the INI file.'}
+                          {
+                            'This path points at a script, not a folder — the panel will launch it as-is and will never regenerate or edit it. Settings that are normally written into a launch script for you (memory, admin password, the data path, the server name) will not reach the server unless you put them in this script yourself.'
+                          }
                         </AlertDescription>
                       </Alert>
-                    ) : (
-                      <>
-                        {detectResult.detectedServers.length > 1 && (
-                          <div className="space-y-2">
-                            <Label>{'Select Server Configuration'}</Label>
-                            <Select
-                              value={selectedServerConfig}
-                              onValueChange={(val) => {
-                                const config =
-                                  detectResult.detectedServers.find(
-                                    (s) => s.serverName === val,
-                                  )
-                                if (config) handleSelectServerConfig(config)
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue
-                                  placeholder={'Choose a server...'}
-                                />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {detectResult.detectedServers.map((s) => (
-                                  <SelectItem
-                                    key={s.serverName}
-                                    value={s.serverName}
-                                  >
-                                    {s.publicName || s.serverName} (
-                                    {s.serverName}.ini)
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-
-                        {selectedServerConfig && (
-                          <div className="space-y-3 rounded-lg border bg-muted/50 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-primary">
-                              <CheckCircle className="w-4 h-4" />
-                              <span className="font-medium">
-                                {'Server detected successfully!'}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">
-                                  {'Server Name:'}
-                                </span>
-                                <p className="font-medium">{newServer.name}</p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">
-                                  {'Config File:'}
-                                </span>
-                                <p className="font-mono">
-                                  {newServer.serverName}.ini
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">
-                                  {'Game Port:'}
-                                </span>
-                                <p className="font-mono">
-                                  {newServer.serverPort}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">
-                                  {'RCON Port:'}
-                                </span>
-                                <p className="font-mono">
-                                  {newServer.rconPort}
-                                </p>
-                              </div>
-                            </div>
-
-                            {tandemConflicts.length > 0 && (
-                              <div className="space-y-1.5 rounded-md border border-destructive/50 bg-destructive/5 p-3">
-                                <p className="text-xs font-medium text-destructive">
-                                  {
-                                    'Clashes with a server already added — both cannot run at once'
-                                  }
-                                </p>
-                                <ul className="space-y-1">
-                                  {tandemConflicts.map(
-                                    (
-                                      c: { label: string; detail: string },
-                                      i: number,
-                                    ) => (
-                                      <li
-                                        key={`${c.label}-${i}`}
-                                        className="grid grid-cols-[minmax(6rem,auto)_1fr] gap-2 text-xs"
-                                      >
-                                        <span className="text-muted-foreground">
-                                          {c.label}
-                                        </span>
-                                        <span>{c.detail}</span>
-                                      </li>
-                                    ),
-                                  )}
-                                </ul>
-                              </div>
-                            )}
-
-                            <div className="space-y-2 mt-2">
-                              <Label>{'RCON Password *'}</Label>
-                              <PasswordInput
-                                placeholder={
-                                  importIniFrom
-                                    ? 'Leave blank to import automatically'
-                                    : 'Enter RCON password'
-                                }
-                                value={newServer.rconPassword}
-                                className="bg-background"
-                                onChange={(value) => {
-                                  setNewServer({
-                                    ...newServer,
-                                    rconPassword: value,
-                                  })
-                                  setImportIniFrom(null)
-                                }}
-                                label={'RCON password'}
-                              />
-                              {!newServer.rconPassword && importIniFrom ? (
-                                <p className="flex items-center gap-1 text-xs text-primary">
-                                  <CheckCircle className="w-3 h-3" />{' '}
-                                  {'Imported automatically from ' +
-                                    String(newServer.serverName) +
-                                    '.ini — leave blank to use it, or type a new one to override.'}
-                                </p>
-                              ) : !newServer.rconPassword ? (
-                                <p className="text-xs text-warning">
-                                  <>
-                                    {
-                                      'Required for server control. You can also set '
-                                    }
-                                    {'RCONPassword=yourpassword'}
-                                    {' in your '}
-                                    {newServer.serverName}
-                                    {'.ini file.'}
-                                  </>
-                                </p>
-                              ) : (
-                                <p className="flex items-center gap-1 text-xs text-primary">
-                                  <CheckCircle className="w-3 h-3" />{' '}
-                                  {'Password set'}
-                                </p>
-                              )}
-                              <RconTestConnection
-                                host={newServer.rconHost || '127.0.0.1'}
-                                port={newServer.rconPort}
-                                password={newServer.rconPassword}
-                              />
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                              <div className="space-y-2">
-                                <Label>{'Min Memory (GB)'}</Label>
-                                <NumberInput
-                                  min={1}
-                                  max={64}
-                                  value={newServer.minMemory}
-                                  className="bg-background"
-                                  clamp={(n) => Math.max(1, n)}
-                                  onChange={(minMemory) =>
-                                    setNewServer({ ...newServer, minMemory })
-                                  }
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>{'Max Memory (GB)'}</Label>
-                                <NumberInput
-                                  min={1}
-                                  max={64}
-                                  value={newServer.maxMemory}
-                                  className="bg-background"
-                                  clamp={(n) => Math.max(1, n)}
-                                  onChange={(maxMemory) =>
-                                    setNewServer({ ...newServer, maxMemory })
-                                  }
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </>
                     )}
                   </div>
-                )}
-              </>
-            )}
+                </div>
+              )}
+
+              {detectError && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">{detectError}</span>
+                </div>
+              )}
+
+              {detectResult && (
+                <div className="space-y-4">
+                  {detectResult.detectedServers.length === 0 ? (
+                    <Alert className="border-warning/40 bg-warning/10">
+                      <AlertCircle className="h-4 w-4 text-warning" />
+                      <AlertTitle className="text-warning">
+                        {'No server configs found'}
+                      </AlertTitle>
+                      <AlertDescription>
+                        {'Run the server once to create the INI file.'}
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <>
+                      {detectResult.detectedServers.length > 1 && (
+                        <div className="space-y-2">
+                          <Label>{'Select Server Configuration'}</Label>
+                          <Select
+                            value={selectedServerConfig}
+                            onValueChange={(val) => {
+                              const config = detectResult.detectedServers.find(
+                                (s) => s.serverName === val,
+                              )
+                              if (config) handleSelectServerConfig(config)
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={'Choose a server...'} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {detectResult.detectedServers.map((s) => (
+                                <SelectItem
+                                  key={s.serverName}
+                                  value={s.serverName}
+                                >
+                                  {s.publicName || s.serverName} ({s.serverName}
+                                  .ini)
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {selectedServerConfig && (
+                        <div className="space-y-3 rounded-lg border bg-muted/50 p-4">
+                          <div className="mb-3 flex items-center gap-2 text-primary">
+                            <CheckCircle className="w-4 h-4" />
+                            <span className="font-medium">
+                              {'Server detected successfully!'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">
+                                {'Server Name:'}
+                              </span>
+                              <p className="font-medium">{newServer.name}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">
+                                {'Config File:'}
+                              </span>
+                              <p className="font-mono">
+                                {newServer.serverName}.ini
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">
+                                {'Game Port:'}
+                              </span>
+                              <p className="font-mono">
+                                {newServer.serverPort}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">
+                                {'RCON Port:'}
+                              </span>
+                              <p className="font-mono">{newServer.rconPort}</p>
+                            </div>
+                          </div>
+
+                          {tandemConflicts.length > 0 && (
+                            <div className="space-y-1.5 rounded-md border border-destructive/50 bg-destructive/5 p-3">
+                              <p className="text-xs font-medium text-destructive">
+                                {
+                                  'Clashes with a server already added — both cannot run at once'
+                                }
+                              </p>
+                              <ul className="space-y-1">
+                                {tandemConflicts.map(
+                                  (
+                                    c: { label: string; detail: string },
+                                    i: number,
+                                  ) => (
+                                    <li
+                                      key={`${c.label}-${i}`}
+                                      className="grid grid-cols-[minmax(6rem,auto)_1fr] gap-2 text-xs"
+                                    >
+                                      <span className="text-muted-foreground">
+                                        {c.label}
+                                      </span>
+                                      <span>{c.detail}</span>
+                                    </li>
+                                  ),
+                                )}
+                              </ul>
+                            </div>
+                          )}
+
+                          <div className="space-y-2 mt-2">
+                            <Label>{'RCON Password *'}</Label>
+                            <PasswordInput
+                              placeholder={
+                                importIniFrom
+                                  ? 'Leave blank to import automatically'
+                                  : 'Enter RCON password'
+                              }
+                              value={newServer.rconPassword}
+                              className="bg-background"
+                              onChange={(value) => {
+                                setNewServer({
+                                  ...newServer,
+                                  rconPassword: value,
+                                })
+                                setImportIniFrom(null)
+                              }}
+                              label={'RCON password'}
+                            />
+                            {!newServer.rconPassword && importIniFrom ? (
+                              <p className="flex items-center gap-1 text-xs text-primary">
+                                <CheckCircle className="w-3 h-3" />{' '}
+                                {'Imported automatically from ' +
+                                  String(newServer.serverName) +
+                                  '.ini — leave blank to use it, or type a new one to override.'}
+                              </p>
+                            ) : !newServer.rconPassword ? (
+                              <p className="text-xs text-warning">
+                                <>
+                                  {
+                                    'Required for server control. You can also set '
+                                  }
+                                  {'RCONPassword=yourpassword'}
+                                  {' in your '}
+                                  {newServer.serverName}
+                                  {'.ini file.'}
+                                </>
+                              </p>
+                            ) : (
+                              <p className="flex items-center gap-1 text-xs text-primary">
+                                <CheckCircle className="w-3 h-3" />{' '}
+                                {'Password set'}
+                              </p>
+                            )}
+                            <RconTestConnection
+                              host={newServer.rconHost || '127.0.0.1'}
+                              port={newServer.rconPort}
+                              password={newServer.rconPassword}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                            <div className="space-y-2">
+                              <Label>{'Min Memory (GB)'}</Label>
+                              <NumberInput
+                                min={1}
+                                max={64}
+                                value={newServer.minMemory}
+                                className="bg-background"
+                                clamp={(n) => Math.max(1, n)}
+                                onChange={(minMemory) =>
+                                  setNewServer({ ...newServer, minMemory })
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>{'Max Memory (GB)'}</Label>
+                              <NumberInput
+                                min={1}
+                                max={64}
+                                value={newServer.maxMemory}
+                                className="bg-background"
+                                clamp={(n) => Math.max(1, n)}
+                                onChange={(maxMemory) =>
+                                  setNewServer({ ...newServer, maxMemory })
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </>
           </div>
 
           <DialogFooter>
@@ -3291,12 +2936,8 @@ export default function Servers() {
               onClick={handleAddExistingServer}
               disabled={
                 addingServer ||
-                (addMode === 'local'
-                  ? !selectedServerConfig ||
-                    (!newServer.rconPassword && !importIniFrom)
-                  : !newServer.name ||
-                    !newServer.rconHost ||
-                    !newServer.rconPassword)
+                !selectedServerConfig ||
+                (!newServer.rconPassword && !importIniFrom)
               }
             >
               {addingServer ? (
@@ -3328,16 +2969,6 @@ export default function Servers() {
 
           {editingServer && (
             <div className="space-y-4">
-              {editingServer.isRemote && (
-                <Alert className="border-primary/20 bg-primary/5">
-                  <Globe className="h-4 w-4 text-primary" />
-                  <AlertTitle>{'Remote Server'}</AlertTitle>
-                  <AlertDescription>
-                    {'RCON-only management is available for this server.'}
-                  </AlertDescription>
-                </Alert>
-              )}
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{'Display Name'}</Label>
@@ -3350,16 +2981,7 @@ export default function Servers() {
                       })
                     }
                     maxLength={100}
-                    aria-invalid={editDuplicateRemoteConflict}
-                    className={
-                      editDuplicateRemoteConflict ? 'border-destructive/70' : ''
-                    }
                   />
-                  {editDuplicateRemoteConflict && (
-                    <p className="text-xs text-destructive">
-                      {"Matches another remote server's name, host, and port."}
-                    </p>
-                  )}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
@@ -3402,215 +3024,211 @@ export default function Servers() {
                 </div>
               </div>
 
-              {!editingServer.isRemote && (
-                <>
-                  <div className="space-y-2">
-                    <Label>{'Install Path'}</Label>
-                    <Input
-                      value={editingServer.installPath}
-                      onChange={(e) =>
-                        setEditingServer({
-                          ...editingServer,
-                          installPath: e.target.value,
-                        })
+              <>
+                <div className="space-y-2">
+                  <Label>{'Install Path'}</Label>
+                  <Input
+                    value={editingServer.installPath}
+                    onChange={(e) =>
+                      setEditingServer({
+                        ...editingServer,
+                        installPath: e.target.value,
+                      })
+                    }
+                    className="font-mono text-sm"
+                  />
+                  {isCustomLauncherPath(editingServer.installPath) && (
+                    <Alert className="border-warning/40 bg-warning/10">
+                      <AlertCircle className="h-4 w-4 text-warning" />
+                      <AlertTitle className="text-warning">
+                        {'Custom launcher mode'}
+                      </AlertTitle>
+                      <AlertDescription>
+                        {
+                          'This path points at a script, not a folder — the panel will launch it as-is and will never regenerate or edit it. Settings that are normally written into a launch script for you (memory, admin password, the data path, the server name) will not reach the server unless you put them in this script yourself.'
+                        }
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Label>{'Zomboid Data Path'}</Label>
+                    <HelpTip label={'Zomboid Data Path'}>
+                      {
+                        "The folder holding your server's actual save data and config (Saves/, Server/, Logs/). Changing this doesn't move any files — it just tells the panel to look somewhere else. Point it at the wrong folder and actions like wiping saves or taking backups will act on the wrong data, or find nothing at all."
                       }
-                      className="font-mono text-sm"
-                    />
-                    {isCustomLauncherPath(editingServer.installPath) && (
+                    </HelpTip>
+                  </div>
+                  <Input
+                    value={editingServer.zomboidDataPath || ''}
+                    onChange={(e) =>
+                      setEditingServer({
+                        ...editingServer,
+                        zomboidDataPath: e.target.value,
+                      })
+                    }
+                    className="font-mono text-sm"
+                    placeholder={'Leave empty for default'}
+                  />
+                </div>
+
+                {managedLifecycleSupported &&
+                  !editingServer.dockerContainerName &&
+                  !editingServer.dockerContainerId && (
+                    <div className="space-y-3 rounded-md border border-border/60 p-3">
+                      <div className="space-y-1">
+                        <Label>{'Lifecycle Provider'}</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {
+                            'Direct starts the game server as a panel child process. systemd and OpenRC keep it in an independent operating-system service.'
+                          }
+                        </p>
+                      </div>
+                      <Select
+                        value={editingServer.lifecycleProvider || 'direct'}
+                        onValueChange={(
+                          value: 'direct' | 'systemd' | 'openrc',
+                        ) =>
+                          setEditingServer({
+                            ...editingServer,
+                            lifecycleProvider: value,
+                          })
+                        }
+                        disabled={lifecyclePending}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="direct">
+                            {'Direct (default)'}
+                          </SelectItem>
+                          <SelectItem value="systemd">systemd</SelectItem>
+                          <SelectItem value="openrc">OpenRC</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Alert className="border-warning/40 bg-warning/10">
                         <AlertCircle className="h-4 w-4 text-warning" />
-                        <AlertTitle className="text-warning">
-                          {'Custom launcher mode'}
-                        </AlertTitle>
                         <AlertDescription>
                           {
-                            'This path points at a script, not a folder — the panel will launch it as-is and will never regenerate or edit it. Settings that are normally written into a launch script for you (memory, admin password, the data path, the server name) will not reach the server unless you put them in this script yourself.'
+                            'Managed services are opt-in. Download and install the generated service file first, stop every existing instance, then activate it. The panel never installs files in /etc or runs sudo.'
                           }
                         </AlertDescription>
                       </Alert>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5">
-                      <Label>{'Zomboid Data Path'}</Label>
-                      <HelpTip label={'Zomboid Data Path'}>
-                        {
-                          "The folder holding your server's actual save data and config (Saves/, Server/, Logs/). Changing this doesn't move any files — it just tells the panel to look somewhere else. Point it at the wrong folder and actions like wiping saves or taking backups will act on the wrong data, or find nothing at all."
-                        }
-                      </HelpTip>
-                    </div>
-                    <Input
-                      value={editingServer.zomboidDataPath || ''}
-                      onChange={(e) =>
-                        setEditingServer({
-                          ...editingServer,
-                          zomboidDataPath: e.target.value,
-                        })
-                      }
-                      className="font-mono text-sm"
-                      placeholder={'Leave empty for default'}
-                    />
-                  </div>
-
-                  {managedLifecycleSupported &&
-                    !editingServer.dockerContainerName &&
-                    !editingServer.dockerContainerId && (
-                      <div className="space-y-3 rounded-md border border-border/60 p-3">
-                        <div className="space-y-1">
-                          <Label>{'Lifecycle Provider'}</Label>
-                          <p className="text-xs text-muted-foreground">
-                            {
-                              'Direct starts the game server as a panel child process. systemd and OpenRC keep it in an independent operating-system service.'
+                      <div className="flex flex-wrap gap-2">
+                        {(editingServer.lifecycleProvider || 'direct') !==
+                          'direct' && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={lifecyclePending}
+                            onClick={() =>
+                              handleDownloadLifecycleTemplate(editingServer)
                             }
-                          </p>
-                        </div>
-                        <Select
-                          value={editingServer.lifecycleProvider || 'direct'}
-                          onValueChange={(
-                            value: 'direct' | 'systemd' | 'openrc',
-                          ) =>
-                            setEditingServer({
-                              ...editingServer,
-                              lifecycleProvider: value,
-                            })
-                          }
-                          disabled={lifecyclePending}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="direct">
-                              {'Direct (default)'}
-                            </SelectItem>
-                            <SelectItem value="systemd">systemd</SelectItem>
-                            <SelectItem value="openrc">OpenRC</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Alert className="border-warning/40 bg-warning/10">
-                          <AlertCircle className="h-4 w-4 text-warning" />
-                          <AlertDescription>
-                            {
-                              'Managed services are opt-in. Download and install the generated service file first, stop every existing instance, then activate it. The panel never installs files in /etc or runs sudo.'
+                          >
+                            {lifecyclePending ? (
+                              <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="me-2 h-4 w-4" />
+                            )}
+                            {'Download Service File'}
+                          </Button>
+                        )}
+                        {(editingServer.lifecycleProvider || 'direct') !==
+                          (servers?.find(
+                            (server) => server.id === editingServer.id,
+                          )?.lifecycleProvider || 'direct') && (
+                          <Button
+                            type="button"
+                            variant="warning"
+                            size="sm"
+                            disabled={lifecyclePending}
+                            onClick={() =>
+                              handleActivateLifecycleProvider(editingServer)
                             }
-                          </AlertDescription>
-                        </Alert>
-                        <div className="flex flex-wrap gap-2">
-                          {(editingServer.lifecycleProvider || 'direct') !==
-                            'direct' && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={lifecyclePending}
-                              onClick={() =>
-                                handleDownloadLifecycleTemplate(editingServer)
-                              }
-                            >
-                              {lifecyclePending ? (
-                                <Loader2 className="me-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <Download className="me-2 h-4 w-4" />
-                              )}
-                              {'Download Service File'}
-                            </Button>
-                          )}
-                          {(editingServer.lifecycleProvider || 'direct') !==
-                            (servers?.find(
-                              (server) => server.id === editingServer.id,
-                            )?.lifecycleProvider || 'direct') && (
-                            <Button
-                              type="button"
-                              variant="warning"
-                              size="sm"
-                              disabled={lifecyclePending}
-                              onClick={() =>
-                                handleActivateLifecycleProvider(editingServer)
-                              }
-                            >
-                              {lifecyclePending && (
-                                <Loader2 className="me-2 h-4 w-4 animate-spin" />
-                              )}
-                              {'Activate Provider'}
-                            </Button>
-                          )}
-                        </div>
+                          >
+                            {lifecyclePending && (
+                              <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                            )}
+                            {'Activate Provider'}
+                          </Button>
+                        )}
                       </div>
-                    )}
-
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-1.5">
-                      {'Custom Start Command'}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-[280px]">
-                          <p className="text-xs">
-                            {
-                              'Override the default startup script with a custom command. Supports arguments. Leave empty and the panel will regenerate the default bat/sh startup script from these settings every time the server starts — this OVERWRITES that file, including any manual edits, though a changed file is backed up first.'
-                            }
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </Label>
-                    <Input
-                      value={editingServer.startCommand || ''}
-                      onChange={(e) =>
-                        setEditingServer({
-                          ...editingServer,
-                          startCommand: e.target.value,
-                        })
-                      }
-                      className="font-mono text-sm"
-                      placeholder={
-                        runtimeInfo?.family === 'windows'
-                          ? 'e.g. StartServer64.bat -servername MyServer'
-                          : runtimeInfo?.family === 'posix'
-                            ? 'e.g. ./start-server.sh -servername MyServer'
-                            : 'Command used to start this server'
-                      }
-                      maxLength={1024}
-                    />
-                    {editingServer.startCommand &&
-                      /[&|;<>`${}()!\[\]]/.test(editingServer.startCommand) && (
-                        <p className="text-xs text-destructive">
-                          {'Command contains disallowed shell characters'}
-                        </p>
-                      )}
-                  </div>
-                  <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
-                    <Checkbox
-                      id={`edit-use-no-steam-${editingServer.id}`}
-                      checked={!!editingServer.useNoSteam}
-                      onCheckedChange={(checked) =>
-                        setEditingServer({
-                          ...editingServer,
-                          useNoSteam: checked === true,
-                        })
-                      }
-                    />
-                    <div className="space-y-1">
-                      <Label htmlFor={`edit-use-no-steam-${editingServer.id}`}>
-                        {'Launch without Steam'}
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        {
-                          'Use the non-Steam dedicated-server mode on the next start.'
-                        }
-                      </p>
                     </div>
+                  )}
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    {'Custom Start Command'}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[280px]">
+                        <p className="text-xs">
+                          {
+                            'Override the default startup script with a custom command. Supports arguments. Leave empty and the panel will regenerate the default bat/sh startup script from these settings every time the server starts — this OVERWRITES that file, including any manual edits, though a changed file is backed up first.'
+                          }
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </Label>
+                  <Input
+                    value={editingServer.startCommand || ''}
+                    onChange={(e) =>
+                      setEditingServer({
+                        ...editingServer,
+                        startCommand: e.target.value,
+                      })
+                    }
+                    className="font-mono text-sm"
+                    placeholder={
+                      runtimeInfo?.family === 'windows'
+                        ? 'e.g. StartServer64.bat -servername MyServer'
+                        : runtimeInfo?.family === 'posix'
+                          ? 'e.g. ./start-server.sh -servername MyServer'
+                          : 'Command used to start this server'
+                    }
+                    maxLength={1024}
+                  />
+                  {editingServer.startCommand &&
+                    /[&|;<>`${}()!\[\]]/.test(editingServer.startCommand) && (
+                      <p className="text-xs text-destructive">
+                        {'Command contains disallowed shell characters'}
+                      </p>
+                    )}
+                </div>
+                <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+                  <Checkbox
+                    id={`edit-use-no-steam-${editingServer.id}`}
+                    checked={!!editingServer.useNoSteam}
+                    onCheckedChange={(checked) =>
+                      setEditingServer({
+                        ...editingServer,
+                        useNoSteam: checked === true,
+                      })
+                    }
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor={`edit-use-no-steam-${editingServer.id}`}>
+                      {'Launch without Steam'}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {
+                        'Use the non-Steam dedicated-server mode on the next start.'
+                      }
+                    </p>
                   </div>
-                </>
-              )}
+                </div>
+              </>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5">
-                    {editingServer.isRemote
-                      ? 'Server machine (RCON host)'
-                      : 'RCON host'}
+                    {'RCON host'}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
@@ -3632,28 +3250,12 @@ export default function Servers() {
                         rconHost: e.target.value,
                       })
                     }
-                    placeholder={
-                      editingServer.isRemote
-                        ? '192.168.1.100 or server.example.com'
-                        : '127.0.0.1'
-                    }
-                    aria-invalid={editDuplicateRemoteConflict}
-                    className={
-                      editDuplicateRemoteConflict ? 'border-destructive/70' : ''
-                    }
+                    placeholder="127.0.0.1"
                   />
-                  <p
-                    className={
-                      editDuplicateRemoteConflict
-                        ? 'text-xs text-destructive'
-                        : 'text-xs text-muted-foreground'
+                  <p className="text-xs text-muted-foreground">
+                    {
+                      'Use 127.0.0.1 when the panel and server share this machine.'
                     }
-                  >
-                    {editDuplicateRemoteConflict
-                      ? "Matches another remote server's name, host, and port."
-                      : editingServer.isRemote
-                        ? 'Address of the machine running PZ. Use 127.0.0.1 only when the panel and server share this machine.'
-                        : 'Use 127.0.0.1 when the panel and server share this machine.'}
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -3694,45 +3296,37 @@ export default function Servers() {
                     password={editingServer.rconPassword}
                   />
                 </div>
-                {!editingServer.isRemote && (
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-1.5">
-                      {'Admin Password'}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-[240px]">
-                          <p className="text-xs">
-                            {
-                              'Server admin password passed as -adminpassword launch argument. Takes effect on next server start.'
-                            }
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </Label>
-                    <PasswordInput
-                      value={editingServer.adminPassword || ''}
-                      onChange={(value) =>
-                        setEditingServer({
-                          ...editingServer,
-                          adminPassword: value,
-                        })
-                      }
-                      placeholder={'Set admin password'}
-                      label={'admin password'}
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    {'Admin Password'}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[240px]">
+                        <p className="text-xs">
+                          {
+                            'Server admin password passed as -adminpassword launch argument. Takes effect on next server start.'
+                          }
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </Label>
+                  <PasswordInput
+                    value={editingServer.adminPassword || ''}
+                    onChange={(value) =>
+                      setEditingServer({
+                        ...editingServer,
+                        adminPassword: value,
+                      })
+                    }
+                    placeholder={'Set admin password'}
+                    label={'admin password'}
+                  />
+                </div>
               </div>
 
-              <div
-                className={
-                  editingServer.isRemote
-                    ? 'grid grid-cols-1 gap-4'
-                    : 'grid grid-cols-1 sm:grid-cols-3 gap-4'
-                }
-              >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
                   <Label>{'Game Port'}</Label>
                   <NumberInput
@@ -3744,34 +3338,32 @@ export default function Servers() {
                     }
                   />
                 </div>
-                {!editingServer.isRemote && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>{'Min Memory (GB)'}</Label>
-                      <NumberInput
-                        min={1}
-                        max={64}
-                        value={editingServer.minMemory}
-                        clamp={(n) => Math.max(1, n)}
-                        onChange={(minMemory) =>
-                          setEditingServer({ ...editingServer, minMemory })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{'Max Memory (GB)'}</Label>
-                      <NumberInput
-                        min={1}
-                        max={64}
-                        value={editingServer.maxMemory}
-                        clamp={(n) => Math.max(1, n)}
-                        onChange={(maxMemory) =>
-                          setEditingServer({ ...editingServer, maxMemory })
-                        }
-                      />
-                    </div>
-                  </>
-                )}
+                <>
+                  <div className="space-y-2">
+                    <Label>{'Min Memory (GB)'}</Label>
+                    <NumberInput
+                      min={1}
+                      max={64}
+                      value={editingServer.minMemory}
+                      clamp={(n) => Math.max(1, n)}
+                      onChange={(minMemory) =>
+                        setEditingServer({ ...editingServer, minMemory })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{'Max Memory (GB)'}</Label>
+                    <NumberInput
+                      min={1}
+                      max={64}
+                      value={editingServer.maxMemory}
+                      clamp={(n) => Math.max(1, n)}
+                      onChange={(maxMemory) =>
+                        setEditingServer({ ...editingServer, maxMemory })
+                      }
+                    />
+                  </div>
+                </>
               </div>
             </div>
           )}

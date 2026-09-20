@@ -16,7 +16,6 @@ describe("SENSITIVE_FIELD_RE / maskSensitiveObject", () => {
       steamApiKey: "steam-key-abcd",
       steamSessionId: "session-id-abcd",
       steamLoginSecure: "login-secure-abcd",
-      panelBridgeSftpPassword: "sftp-pass-abcd",
       alertWebhookUrl: "webhook-abcd",
       darkMode: true,
       serverName: "MyServer",
@@ -31,7 +30,6 @@ describe("SENSITIVE_FIELD_RE / maskSensitiveObject", () => {
       "steamApiKey",
       "steamSessionId",
       "steamLoginSecure",
-      "panelBridgeSftpPassword",
       "alertWebhookUrl",
     ]) {
       expect(masked[key]).toMatch(/^••••••••/);

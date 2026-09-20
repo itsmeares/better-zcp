@@ -298,37 +298,19 @@ describe("config mutation guard", () => {
     }
   });
 
-  it("lets a remote server's config mutation through without probing local process state", async () => {
-    const dbModule = await import("../database/init.ts");
-    const getActiveServerSpy = vi
-      .spyOn(dbModule, "getActiveServer")
-      .mockResolvedValue({ isRemote: true });
-
-    try {
-      const next = vi.fn();
-      const appGet = vi.fn();
-      const req = { app: { get: appGet } };
-      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
-
-      await requireStoppedForLocalConfigMutation(req, res, next);
-
-      expect(next).toHaveBeenCalledTimes(1);
-      expect(res.status).not.toHaveBeenCalled();
-      expect(appGet).not.toHaveBeenCalled();
-    } finally {
-      getActiveServerSpy.mockRestore();
-    }
-  });
-
   it("treats a configured-but-unreachable local path as unverifiable, not as remote", async () => {
-    const missingPath = path.join(os.tmpdir(), "zcp-guard-test-missing-path-does-not-exist");
+    const missingPath = path.join(
+      os.tmpdir(),
+      "zcp-guard-test-missing-path-does-not-exist",
+    );
     expect(fs.existsSync(missingPath)).toBe(false);
 
     const dbModule = await import("../database/init.ts");
-    const getActiveServerSpy = vi.spyOn(dbModule, "getActiveServer").mockResolvedValue({
-      installPath: missingPath,
-      isRemote: true, // what normalizeServerMemory would actually compute here
-    });
+    const getActiveServerSpy = vi
+      .spyOn(dbModule, "getActiveServer")
+      .mockResolvedValue({
+        installPath: missingPath,
+      });
 
     try {
       const next = vi.fn();
@@ -793,71 +775,5 @@ describe("backup restore guards against a running server", () => {
 
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/could not confirm/i);
-  });
-});
-
-describe("Remote server config over SFTP", () => {
-  const load = () => import("../services/remoteConfigFiles.ts");
-
-  it("refuses a remote folder that is relative or escapes upward", async () => {
-    const { validateRemoteConfigTransport } = await load();
-    const base = { host: "h", port: 22, username: "u", password: "p" };
-    expect(() =>
-      validateRemoteConfigTransport({ ...base, configPath: "Zomboid/Server" }),
-    ).toThrow(/absolute POSIX path/);
-    expect(() =>
-      validateRemoteConfigTransport({ ...base, configPath: "/srv/../etc" }),
-    ).toThrow(/absolute POSIX path/);
-    expect(() =>
-      validateRemoteConfigTransport({ ...base, configPath: "" }),
-    ).toThrow(/config folder is required/);
-    expect(
-      validateRemoteConfigTransport({ ...base, configPath: "/srv/pz/Server/" })
-        .configPath,
-    ).toBe("/srv/pz/Server");
-  });
-
-  it("only ever names the four config files the editor touches", async () => {
-    const { mirroredFileNames } = await load();
-    expect(mirroredFileNames("DoomerZ")).toEqual([
-      "DoomerZ.ini",
-      "DoomerZ_SandboxVars.lua",
-      "DoomerZ_spawnpoints.lua",
-      "DoomerZ_spawnregions.lua",
-    ]);
-    expect(() => mirroredFileNames("../../etc/passwd")).toThrow();
-    expect(() => mirroredFileNames("")).toThrow();
-  });
-
-  it("treats the mirror as configured only when host and folder are both set", async () => {
-    const { isRemoteConfigConfigured } = await load();
-    expect(isRemoteConfigConfigured({})).toBe(false);
-    expect(isRemoteConfigConfigured({ panelBridgeSftpHost: "h" })).toBe(false);
-    expect(
-      isRemoteConfigConfigured({ panelBridgeSftpConfigPath: "/srv" }),
-    ).toBe(false);
-    expect(
-      isRemoteConfigConfigured({
-        panelBridgeSftpHost: "h",
-        panelBridgeSftpConfigPath: "/srv",
-      }),
-    ).toBe(true);
-  });
-
-  it("serializes overlapping requests so one pull cannot clobber another edit", async () => {
-    const { acquireMirrorLock } = await load();
-    const order = [];
-    const first = acquireMirrorLock().then(async (release) => {
-      order.push("a-start");
-      await new Promise((r) => setTimeout(r, 20));
-      order.push("a-end");
-      release();
-    });
-    const second = acquireMirrorLock().then((release) => {
-      order.push("b-start");
-      release();
-    });
-    await Promise.all([first, second]);
-    expect(order).toEqual(["a-start", "a-end", "b-start"]);
   });
 });

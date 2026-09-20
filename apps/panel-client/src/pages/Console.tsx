@@ -372,7 +372,6 @@ export default function Console() {
   const hasActiveServer = !!activeServer
   const hasServerLogSource =
     !!activeServer &&
-    !activeServer.isRemote &&
     Boolean(activeServer.zomboidDataPath || activeServer.installPath)
   const hasRconConfig =
     !!activeServer &&
@@ -382,17 +381,11 @@ export default function Console() {
       activeServer.rconPassword,
     )
   const serverLogUnavailable = !hasServerLogSource
-    ? activeServer?.isRemote
-      ? {
-          title: 'Server log unavailable for remote servers',
-          description:
-            'Remote servers expose RCON only. Use the RCON tab for live commands.',
-        }
-      : {
-          title: 'Server log path not configured',
-          description:
-            'Set the server install path or Zomboid data path in My Servers first.',
-        }
+    ? {
+        title: 'Server log path not configured',
+        description:
+          'Set the server install path or Zomboid data path in My Servers first.',
+      }
     : null
 
   useEffect(() => {

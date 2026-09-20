@@ -371,23 +371,6 @@ export const deleteBackupsOlderThan = createResourceAction(async (data) => {
 })
 
 export const createBackup = createResourceAction(async (data) => {
-    const { getActiveServer } =
-      await import('../../../panel-server/database/init.ts')
-    const { ErrorCode } =
-      await import('../../../panel-server/utils/errorCodes.ts')
-    const activeServer = await getActiveServer()
-    if (activeServer?.isRemote) {
-      throwResourceError(
-        Object.assign(
-          new Error(
-            'Backups are not available for remote servers. The server filesystem is not accessible from this panel.',
-          ),
-          { code: ErrorCode.BACKUP_REMOTE_NOT_AVAILABLE },
-        ),
-        400,
-      )
-    }
-
     const runtime = await panelRuntime()
     const result = await runtime.backupService.createBackup({
       includeDb: data.includeDb === true,
@@ -429,18 +412,6 @@ export const restoreBackup = createResourceAction(async (data) => {
     }
 
     try {
-      if (activeServerForLock?.isRemote) {
-        throwResourceError(
-          Object.assign(
-            new Error(
-              'Backup restore is not available for remote servers. The server filesystem is not accessible from this panel.',
-            ),
-            { code: ErrorCode.BACKUP_RESTORE_REMOTE_NOT_AVAILABLE },
-          ),
-          400,
-        )
-      }
-
       if (activeServerForLock?.installPath) {
         const normalizedRestoreTargetPath = pathModule
           .normalize(activeServerForLock.installPath)
