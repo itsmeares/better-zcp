@@ -101,46 +101,16 @@ export async function copyChunkBackup(
   }
 }
 
-function cellDivisorFor(isB42: boolean): number {
-  return isB42 ? 32 : 30;
-}
-function tilesPerChunkFor(isB42: boolean): number {
-  return isB42 ? 8 : 10;
-}
-
-function detectSaveIsB42Sync(savePath: string): boolean {
-  try {
-    const mapPath = path.join(savePath, "map");
-    if (fs.existsSync(mapPath)) {
-      const entries = fs.readdirSync(mapPath, { withFileTypes: true });
-      if (entries.some((e) => e.isDirectory() && /^\d+$/.test(e.name)))
-        return true;
-    }
-  } catch {
-    /* ignore */
-  }
-  const b42Indicators = [
-    "WorldDictionary.bin",
-    "global_mod_data.bin",
-    "entity_data.bin",
-  ];
-  return b42Indicators.some((f) => {
-    try {
-      return fs.existsSync(path.join(savePath, f));
-    } catch {
-      return false;
-    }
-  });
-}
+const CELL_DIVISOR = 32;
+const TILES_PER_CHUNK = 8;
 
 async function cleanupEmptyCellFiles(
   savePath: string,
   touchedCells: Set<string>,
-  isB42: boolean,
   backupPath: string | null = null,
 ): Promise<{ removed: string[] }> {
-  if (!isB42 || touchedCells.size === 0) return { removed: [] };
-  const divisor = cellDivisorFor(true);
+  if (touchedCells.size === 0) return { removed: [] };
+  const divisor = CELL_DIVISOR;
   const mapPath = path.join(savePath, "map");
   const removed = [];
 
@@ -532,22 +502,9 @@ router.get("/saves", async (req, res) => {
         const mapPath = path.join(savePath, "map");
         const mapScan = await getMapFolderScan(mapPath);
 
-        let chunkCount = mapScan.isB42Structure
+        const chunkCount = mapScan.isB42Structure
           ? mapScan.totalBinFiles + mapScan.totalNonBinFiles
           : 0;
-        if (chunkCount === 0) {
-          const B41_CHUNK_REGEX = /^map_\d+_\d+\.bin$/i;
-          try {
-            const rootEntries = await fs.promises.readdir(savePath);
-            chunkCount = rootEntries.filter((f) =>
-              B41_CHUNK_REGEX.test(f),
-            ).length;
-          } catch (e: any) {
-            log.debug(
-              `B41 chunk count fallback failed for ${savePath}: ${e.message}`,
-            );
-          }
-        }
 
         let size = 0;
         try {
@@ -782,14 +739,8 @@ router.get("/chunks/:saveName", async (req, res) => {
     let totalChunks = 0;
 
     const mapScan = await getMapFolderScan(mapPath, emitProgress);
-    const mapExists = mapScan.mapExists;
-    const mapContents = mapScan.mapContents || [];
-    const flatBinFiles = mapContents.filter(
-      (f: any) => f.isFile() && f.name.endsWith(".bin"),
-    );
-
     log.info(
-      `[ChunkCleaner] map/ ${mapExists ? "exists" : "missing"}: ${mapContents.length} entries, ${mapScan.isB42Structure ? "B42 structure" : "no B42 dirs"}, ${flatBinFiles.length} flat .bin files (B41)`,
+      `[ChunkCleaner] Build 42 map scan found ${mapScan.rawChunks?.length ?? 0} chunks`,
     );
 
     const rememberChunkCoord = (x: number, y: number): boolean => {
@@ -804,53 +755,9 @@ router.get("/chunks/:saveName", async (req, res) => {
       return true;
     };
 
-    if (mapScan.isB42Structure) {
-      for (const c of mapScan.rawChunks) {
-        if (!rememberChunkCoord(c.x, c.y)) continue;
-        chunks.push(c);
-      }
-    } else {
-      const files = mapContents
-        .filter((f: any) => f.isFile() && f.name.endsWith(".bin"))
-        .map((f: any) => f.name);
-
-      const chunkEntries: AnyRecord[] = [];
-      for (const file of files) {
-        const match = file.match(
-          /^(?:map_|chunkdata_|chunk_)?(\d+)_(\d+)(?:_\d+)?\.bin$/i,
-        );
-        if (match) {
-          const x = parseInt(match[1], 10);
-          const y = parseInt(match[2], 10);
-          if (!rememberChunkCoord(x, y)) continue;
-
-          chunkEntries.push({ file, x, y });
-        }
-      }
-
-      const legacyResults = await Promise.all(
-        chunkEntries.map(async ({ file, x, y }) => {
-          try {
-            const stats = await fs.promises.stat(path.join(mapPath, file));
-            return {
-              file,
-              x,
-              y,
-              size: stats.size,
-              modified: stats.mtime,
-            };
-          } catch (e: any) {
-            log.debug(`Stat failed for legacy chunk ${file}: ${e.message}`);
-            return null;
-          }
-        }),
-      );
-
-      for (const res of legacyResults) {
-        if (res) {
-          chunks.push(res);
-        }
-      }
+    for (const c of mapScan.rawChunks || []) {
+      if (!rememberChunkCoord(c.x, c.y)) continue;
+      chunks.push(c);
     }
 
     let isB42 = mapScan.isB42Structure;
@@ -872,63 +779,6 @@ router.get("/chunks/:saveName", async (req, res) => {
       }
     }
 
-    if (!isB42 && totalChunks === 0) {
-      const B41_CHUNK_REGEX = /^map_(\d+)_(\d+)\.bin$/i;
-      const rootEntries = await fs.promises.readdir(savePath, {
-        withFileTypes: true,
-      });
-      const rootBinFiles = rootEntries.filter(
-        (f) => f.isFile() && B41_CHUNK_REGEX.test(f.name),
-      );
-
-      if (rootBinFiles.length > 0) {
-        log.info(
-          `[ChunkCleaner] Found ${rootBinFiles.length} B41 chunk files in save root`,
-        );
-
-        const chunkEntries = [];
-        for (const entry of rootBinFiles) {
-          const match = entry.name.match(B41_CHUNK_REGEX);
-          if (!match) continue;
-
-          const x = parseInt(match[1], 10);
-          const y = parseInt(match[2], 10);
-          if (!rememberChunkCoord(x, y)) continue;
-
-          chunkEntries.push({ entry, x, y });
-        }
-
-        const rootResults = await Promise.all(
-          chunkEntries.map(async ({ entry, x, y }) => {
-            try {
-              const stats = await fs.promises.stat(
-                path.join(savePath, entry.name),
-              );
-              return {
-                file: entry.name,
-                x,
-                y,
-                size: stats.size,
-                modified: stats.mtime,
-                source: "saveroot",
-              };
-            } catch (e: any) {
-              log.debug(
-                `Stat failed for B41 root chunk ${entry.name}: ${e.message}`,
-              );
-              return null;
-            }
-          }),
-        );
-
-        for (const res of rootResults) {
-          if (res) {
-            chunks.push(res);
-          }
-        }
-      }
-    }
-
     const seenChunkDataCoords = new Set();
     {
       const chunkDataPath = path.join(savePath, "chunkdata");
@@ -943,8 +793,8 @@ router.get("/chunks/:saveName", async (req, res) => {
             const rawX = parseInt(match[1], 10);
             const rawY = parseInt(match[2], 10);
 
-            const displayX = isB42 ? rawX * 32 : rawX * 30;
-            const displayY = isB42 ? rawY * 32 : rawY * 30;
+            const displayX = rawX * CELL_DIVISOR;
+            const displayY = rawY * CELL_DIVISOR;
 
             const cdKey = `${displayX},${displayY}`;
             if (seenChunkDataCoords.has(cdKey)) continue;
@@ -1172,9 +1022,8 @@ router.post("/delete-chunks", async (req, res) => {
       });
     }
 
-    const isB42 = detectSaveIsB42Sync(savePath);
-    const cellDivisor = cellDivisorFor(isB42);
-    const tilesPerChunk = tilesPerChunkFor(isB42);
+    const cellDivisor = CELL_DIVISOR;
+    const tilesPerChunk = TILES_PER_CHUNK;
 
     for (const chunk of chunks) {
       if (chunk.source === "chunkdata" && chunk.cellX == null) {
@@ -1200,16 +1049,9 @@ router.post("/delete-chunks", async (req, res) => {
       await Promise.all(
         chunks.map(async (chunk) => {
           try {
-            const srcTag =
-              chunk.source === "saveroot"
-                ? "saveroot"
-                : chunk.source === "chunkdata"
-                  ? "chunkdata"
-                  : "map";
+            const srcTag = chunk.source === "chunkdata" ? "chunkdata" : "map";
             const mapFile =
-              chunk.source === "saveroot"
-                ? path.join(savePath, chunk.file)
-                : path.join(savePath, "map", chunk.file);
+              path.join(savePath, "map", chunk.file);
             try {
               const backupName = `${srcTag}_${chunk.file.replace(/[/\\]/g, "_")}`;
               await copyChunkBackup(
@@ -1271,9 +1113,7 @@ router.post("/delete-chunks", async (req, res) => {
             }
           } else {
             const mapFile =
-              chunk.source === "saveroot"
-                ? path.join(savePath, chunk.file)
-                : path.join(savePath, "map", chunk.file);
+              path.join(savePath, "map", chunk.file);
             try {
               await fs.promises.unlink(mapFile);
               wasDeleted = true;
@@ -1310,7 +1150,6 @@ router.post("/delete-chunks", async (req, res) => {
     const cellCleanup = await cleanupEmptyCellFiles(
       savePath,
       touchedCells,
-      isB42,
       backupPath,
     );
 
@@ -1546,14 +1385,11 @@ router.post("/delete-region", async (req, res) => {
 
     const mapExists = fs.existsSync(mapPath);
 
-    const regionIsB42 = detectSaveIsB42Sync(savePath);
-
     const chunksToDelete: AnyRecord[] = [];
-    let mapContents: fs.Dirent[] = [];
     let xDirs: fs.Dirent[] = [];
 
     if (mapExists) {
-      mapContents = await fs.promises.readdir(mapPath, { withFileTypes: true });
+      const mapContents = await fs.promises.readdir(mapPath, { withFileTypes: true });
       xDirs = mapContents.filter(
         (d) => d.isDirectory() && /^\d+$/.test(d.name),
       );
@@ -1590,57 +1426,6 @@ router.post("/delete-region", async (req, res) => {
           }
         }),
       );
-    } else {
-      const files = mapContents
-        .filter((f) => f.isFile() && f.name.endsWith(".bin"))
-        .map((f) => f.name);
-
-      for (const file of files) {
-        const match = file.match(
-          /^(?:map_|chunkdata_|chunk_)?(\d+)_(\d+)(?:_\d+)?\.bin$/i,
-        );
-        if (match) {
-          const x = parseInt(match[1], 10);
-          const y = parseInt(match[2], 10);
-
-          const inRegion = x >= minX && x <= maxX && y >= minY && y <= maxY;
-          const shouldDelete = invert ? !inRegion : inRegion;
-
-          if (shouldDelete) {
-            chunksToDelete.push({ file, x, y });
-          }
-        }
-      }
-
-      if (chunksToDelete.length === 0) {
-        const B41_CHUNK_REGEX = /^map_(\d+)_(\d+)\.bin$/i;
-        const rootEntries = await fs.promises.readdir(savePath, {
-          withFileTypes: true,
-        });
-        const rootBinFiles = rootEntries.filter(
-          (f) => f.isFile() && B41_CHUNK_REGEX.test(f.name),
-        );
-
-        for (const entry of rootBinFiles) {
-          const match = entry.name.match(B41_CHUNK_REGEX);
-          if (match) {
-            const x = parseInt(match[1], 10);
-            const y = parseInt(match[2], 10);
-
-            const inRegion = x >= minX && x <= maxX && y >= minY && y <= maxY;
-            const shouldDelete = invert ? !inRegion : inRegion;
-
-            if (shouldDelete) {
-              chunksToDelete.push({
-                file: entry.name,
-                x,
-                y,
-                source: "saveroot",
-              });
-            }
-          }
-        }
-      }
     }
 
     {
@@ -1655,8 +1440,8 @@ router.post("/delete-region", async (req, res) => {
 
           const rawX = parseInt(match[1], 10);
           const rawY = parseInt(match[2], 10);
-          const displayX = regionIsB42 ? rawX * 32 : rawX * 30;
-          const displayY = regionIsB42 ? rawY * 32 : rawY * 30;
+          const displayX = rawX * CELL_DIVISOR;
+          const displayY = rawY * CELL_DIVISOR;
 
           const inRegion =
             displayX >= minX &&
@@ -1706,18 +1491,11 @@ router.post("/delete-region", async (req, res) => {
 
       await Promise.all(
         chunksToDelete.map(async (chunk) => {
-          const srcTag =
-            chunk.source === "saveroot"
-              ? "saveroot"
-              : chunk.source === "chunkdata"
-                ? "chunkdata"
-                : "map";
+          const srcTag = chunk.source === "chunkdata" ? "chunkdata" : "map";
           const srcFile =
-            chunk.source === "saveroot"
-              ? path.join(savePath, chunk.file)
-              : chunk.source === "chunkdata"
-                ? path.join(savePath, "chunkdata", chunk.file)
-                : path.join(mapPath, chunk.file);
+            chunk.source === "chunkdata"
+              ? path.join(savePath, "chunkdata", chunk.file)
+              : path.join(mapPath, chunk.file);
           try {
             const backupName = `${srcTag}_${chunk.file.replace(/[/\\]/g, "_")}`;
             await copyChunkBackup(srcFile, path.join(backupPath!, backupName));
@@ -1749,17 +1527,15 @@ router.post("/delete-region", async (req, res) => {
     let deleted = 0;
     const errors: string[] = [];
     const touchedCells = new Set<string>();
-    const regionCellDiv = cellDivisorFor(regionIsB42);
+    const regionCellDiv = CELL_DIVISOR;
 
     await Promise.all(
       chunksToDelete.map(async (chunk) => {
         try {
           const chunkFile =
-            chunk.source === "saveroot"
-              ? path.join(savePath, chunk.file)
-              : chunk.source === "chunkdata"
-                ? path.join(savePath, "chunkdata", chunk.file)
-                : path.join(mapPath, chunk.file);
+            chunk.source === "chunkdata"
+              ? path.join(savePath, "chunkdata", chunk.file)
+              : path.join(mapPath, chunk.file);
           await fs.promises.unlink(chunkFile);
           deleted++;
           touchedCells.add(
@@ -1777,7 +1553,6 @@ router.post("/delete-region", async (req, res) => {
     const cellCleanup = await cleanupEmptyCellFiles(
       savePath,
       touchedCells,
-      regionIsB42,
       backupPath,
     );
 
@@ -1799,7 +1574,7 @@ router.post("/delete-region", async (req, res) => {
 
     let vehiclesResult: AnyRecord = { deleted: 0, skipped: true };
     if (deleteVehicles && deleted > 0) {
-      const tilesPerChunk = tilesPerChunkFor(regionIsB42);
+      const tilesPerChunk = TILES_PER_CHUNK;
       const dbBackup =
         createBackup && typeof backupPath === "string"
           ? path.join(backupPath, "vehicles.db.bak")
@@ -2005,36 +1780,6 @@ router.get("/stats/:saveName", async (req, res) => {
           size,
           sizeFormatted: formatBytes(size),
         };
-      }
-    }
-
-    if (!stats.folders.map || stats.folders.map.fileCount === 0) {
-      const B41_CHUNK_REGEX = /^map_\d+_\d+\.bin$/i;
-      try {
-        const rootEntries = await fs.promises.readdir(savePath, {
-          withFileTypes: true,
-        });
-        const rootChunks = rootEntries.filter(
-          (f) => f.isFile() && B41_CHUNK_REGEX.test(f.name),
-        );
-        if (rootChunks.length > 0) {
-          let rootChunkSize = 0;
-          for (const f of rootChunks) {
-            try {
-              const s = await fs.promises.stat(path.join(savePath, f.name));
-              rootChunkSize += s.size;
-            } catch (e: any) {
-              log.debug(`Stat failed for root chunk ${f.name}: ${e.message}`);
-            }
-          }
-          stats.folders["map (root)"] = {
-            fileCount: rootChunks.length,
-            size: rootChunkSize,
-            sizeFormatted: formatBytes(rootChunkSize),
-          };
-        }
-      } catch (e: any) {
-        log.debug(`B41 root chunk scan failed: ${e.message}`);
       }
     }
 
@@ -2347,18 +2092,9 @@ router.get("/browse", async (req, res) => {
     const isSavesMultiplayer =
       basename === "Multiplayer" && parentBase === "Saves";
 
-    const B41_ROOT_REGEX = /^map_\d+_\d+\.bin$/i;
-    const hasMapFolders = directories.some((d) => {
-      const childPath = path.join(resolved, d);
-      if (fs.existsSync(path.join(childPath, "map"))) return true;
-      try {
-        const childFiles = fs.readdirSync(childPath);
-        return childFiles.some((f) => B41_ROOT_REGEX.test(f));
-      } catch (e: any) {
-        log.debug(`B41 check failed for ${d}: ${e.message}`);
-        return false;
-      }
-    });
+    const hasMapFolders = directories.some((d) =>
+      fs.existsSync(path.join(resolved, d, "map")),
+    );
 
     res.json({
       currentPath: resolved,

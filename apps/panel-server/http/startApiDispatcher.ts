@@ -405,7 +405,6 @@ async function authenticateStartRequest(
   if (PUBLIC_API_PATHS.has(pathname) ||
     pathname.startsWith("/api/map/tiles/") ||
     pathname.startsWith("/api/map/toptiles/") ||
-    pathname.startsWith("/api/map/b41tiles/") ||
     pathname.startsWith("/api/mods/thumbnail/") ||
     pathname === "/api/debug/client-errors") {
     return null;

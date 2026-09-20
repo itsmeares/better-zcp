@@ -3370,7 +3370,6 @@ export const mapApi = {
   resolve: (): Promise<{
     root: string;
     b42Dir: string;
-    b41Path: string;
     tileSize: number;
     width: number;
     height: number;

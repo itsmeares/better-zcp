@@ -233,7 +233,7 @@ interface WorldMapDiagnostics {
   summary: DiagSummary
   checks: DiagCheck[]
   durationMs: number
-  tileSources: { b42: TileProbe | null; b41: TileProbe | null }
+  tileSources: { b42: TileProbe | null }
   bridge: {
     configured: boolean
     isRunning: boolean
@@ -249,10 +249,10 @@ interface WorldMapDiagnostics {
     activeSaveName: string | null
     activeSavePath: string | null
     saveCount: number
-    build: 'b41' | 'b42' | 'unknown'
+    build: 'b42' | 'unknown'
   }
   activeServer: { id: string; name: string; serverName: string } | null
-  proxy: { b42: string; b41: string }
+  proxy: { b42: string }
 }
 
 type TimeFormat = 'relative' | 'time' | 'datetime'
@@ -835,12 +835,10 @@ export default function Debug() {
   const [worldMapHideOk, setWorldMapHideOk] = useState(false)
   const [worldMapTileErrors, setWorldMapTileErrors] = useState<{
     b42: boolean
-    b41: boolean
-  }>({ b42: false, b41: false })
+  }>({ b42: false })
   const [worldMapTileMeta, setWorldMapTileMeta] = useState<{
     b42: { w: number; h: number } | null
-    b41: { w: number; h: number } | null
-  }>({ b42: null, b41: null })
+  }>({ b42: null })
   const [worldMapError, setWorldMapError] = useState<string | null>(null)
   const [worldMapNowTick, setWorldMapNowTick] = useState(() => Date.now())
   type ProbeResult = {
@@ -1305,8 +1303,8 @@ export default function Debug() {
 
   const fetchWorldMapDiag = useCallback(async () => {
     setRefreshingWorldMap(true)
-    setWorldMapTileErrors({ b42: false, b41: false })
-    setWorldMapTileMeta({ b42: null, b41: null })
+    setWorldMapTileErrors({ b42: false })
+    setWorldMapTileMeta({ b42: null })
     setWorldMapTilePreviewKey((k) => k + 1)
     setWorldMapError(null)
     try {
@@ -3160,7 +3158,7 @@ export default function Debug() {
                 )
                 lines.push('')
                 lines.push('Tile sources:')
-                for (const k of ['b42', 'b41'] as const) {
+                for (const k of ['b42'] as const) {
                   const p = wm.tileSources?.[k]
                   lines.push(
                     `  ${k.toUpperCase()}: ${p ? (p.reachable ? `OK (${p.latencyMs}ms HTTP ${p.statusCode})` : `FAIL (${p.error || 'HTTP ' + p.statusCode})`) : '—'}`,
@@ -3395,12 +3393,9 @@ export default function Debug() {
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                          {(['b42', 'b41'] as const).map((kind) => {
+                          {(['b42'] as const).map((kind) => {
                             const probe = wm?.tileSources?.[kind]
-                            const label =
-                              kind === 'b42'
-                                ? 'B42 tile source'
-                                : 'B41 tile source'
+                            const label = 'Build 42 tile source'
                             return (
                               <div
                                 key={kind}
@@ -3415,9 +3410,7 @@ export default function Debug() {
                                         <AlertCircle
                                           className={cn(
                                             'w-4 h-4 shrink-0',
-                                            kind === 'b42'
-                                              ? 'text-destructive'
-                                              : 'text-warning',
+                                            'text-destructive',
                                           )}
                                         />
                                       )
@@ -3482,9 +3475,8 @@ export default function Debug() {
                                 onClick={() => {
                                   setWorldMapTileErrors({
                                     b42: false,
-                                    b41: false,
                                   })
-                                  setWorldMapTileMeta({ b42: null, b41: null })
+                                  setWorldMapTileMeta({ b42: null })
                                   setWorldMapTilePreviewKey((k) => k + 1)
                                 }}
                               >
@@ -3494,7 +3486,7 @@ export default function Debug() {
                             </div>
                             {(() => {
                               const tiles: Array<{
-                                key: 'b42' | 'b41'
+                                key: 'b42'
                                 label: string
                                 src: string
                                 errTone: string
@@ -3504,12 +3496,6 @@ export default function Debug() {
                                   label: 'B42 floor 0 / 0_0',
                                   src: `/api/map/tiles/0/0_0.jpg?floor=0&t=${worldMapTilePreviewKey}`,
                                   errTone: 'destructive',
-                                },
-                                {
-                                  key: 'b41',
-                                  label: 'B41 / 0_0',
-                                  src: `/api/map/b41tiles/0/0_0.jpg?t=${worldMapTilePreviewKey}`,
-                                  errTone: 'warning',
                                 },
                               ]
                               return (
@@ -4218,7 +4204,7 @@ export default function Debug() {
                           </CardTitle>
                           <CardDescription>
                             {
-                              'Detects B41 vs B42 layout so the map picks the correct tile source and projection.'
+                              'Checks whether the active save uses the Build 42 map layout.'
                             }
                           </CardDescription>
                         </CardHeader>
@@ -4238,8 +4224,6 @@ export default function Debug() {
                                   className={cn(
                                     wm.save.build === 'b42' &&
                                       'bg-primary/15 text-primary border-primary/30',
-                                    wm.save.build === 'b41' &&
-                                      'bg-blue-500/15 text-blue-400 border-blue-500/30',
                                   )}
                                 >
                                   {wm.save.build.toUpperCase()}
@@ -6573,7 +6557,6 @@ export default function Debug() {
                           detectedVersion?: {
                             build?: string
                             isB42?: boolean
-                            isB41?: boolean
                           }
                         }
                         const uptimeSec = Math.max(
@@ -6643,9 +6626,7 @@ export default function Debug() {
                                   {' · '}
                                   {stats.detectedVersion.isB42
                                     ? 'B42'
-                                    : stats.detectedVersion.isB41
-                                      ? 'B41'
-                                      : 'N/A'}
+                                    : 'N/A'}
                                 </div>
                                 <div className="text-[11px] text-muted-foreground mt-1">
                                   {

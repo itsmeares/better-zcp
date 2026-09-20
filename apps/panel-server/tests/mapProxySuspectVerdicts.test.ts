@@ -162,17 +162,6 @@ describe("case 1 (DEAD): path traversal / containment on tile params", () => {
     },
   );
 
-  it.each(TRAVERSAL_TILE_PAYLOADS)(
-    "/b41tiles rejects tile=%j with 400",
-    async (payload) => {
-      const { default: router } = await freshModule();
-      const handler = findRoute(router, "/b41tiles/:level/:tile", "get");
-      const res = makeRes();
-      await handler({ params: { level: "5", tile: payload }, query: {} }, res);
-      expect(res.statusCode).toBe(400);
-    },
-  );
-
   const TRAVERSAL_LEVEL_PAYLOADS = ["../../etc", "5;rm -rf", "-1", "999", "5.5", "0x5"];
   it.each(TRAVERSAL_LEVEL_PAYLOADS)(
     "/tiles rejects level=%j with 400",
@@ -214,33 +203,8 @@ describe("case 1 (DEAD): path traversal / containment on tile params", () => {
   });
 });
 
-describe("case 2 (DEAD as a defect): B41/B42 floor asymmetry is intentional and matches the client", () => {
-  it("/b41tiles ignores a floor query entirely rather than erroring or misrouting -- confirms the asymmetry is a deliberate omission, not a crash", async () => {
-    const originalFetch = global.fetch;
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      arrayBuffer: async () => new TextEncoder().encode("bytes").buffer,
-    }));
-    try {
-      const { default: router } = await freshModule();
-      const handler = findRoute(router, "/b41tiles/:level/:tile", "get");
-      const res = makeRes();
-      await handler(
-        { params: { level: "5", tile: "5_5.jpg" }, query: { floor: "3" } },
-        res,
-      );
-      expect(res.statusCode).toBe(200);
-      const fetchedUrl = String(global.fetch.mock.calls[0][0]);
-      expect(fetchedUrl).toBe(
-        "https://tiles.pzmap.org/41.78.16/base/layer0_files/5/5_5.jpg",
-      );
-    } finally {
-      global.fetch = originalFetch;
-    }
-  });
-
-  it("/tiles (B42) DOES honour a floor query, the capability /b41tiles deliberately lacks", async () => {
+describe("Build 42 floor selection", () => {
+  it("/tiles honours the floor query", async () => {
     mockCurlForB42_20_0();
     const originalFetch = global.fetch;
     global.fetch = vi.fn(async (url, init) => {
@@ -270,11 +234,16 @@ describe("case 2 (DEAD as a defect): B41/B42 floor asymmetry is intentional and 
 
 describe("case 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, and is distinguished from a real upstream failure", () => {
   it("upstream 404 (sparse/edge tile) passes through as 404 with X-Tile-Cache: miss, never 500", async () => {
+    mockCurlForB42_20_0();
     const originalFetch = global.fetch;
-    global.fetch = vi.fn(async () => ({ ok: false, status: 404 }));
+    global.fetch = vi.fn(async (_url, init) =>
+      init?.method === "HEAD"
+        ? { ok: true, status: 200 }
+        : { ok: false, status: 404 },
+    );
     try {
       const { default: router } = await freshModule();
-      const handler = findRoute(router, "/b41tiles/:level/:tile", "get");
+      const handler = findRoute(router, "/tiles/:level/:tile", "get");
       const res = makeRes();
       await handler({ params: { level: "20", tile: "999_999.jpg" }, query: {} }, res);
       expect(res.statusCode).toBe(404);
@@ -285,11 +254,12 @@ describe("case 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, and
   });
 
   it("a genuine upstream 5xx is mapped to 502 (never passed through as-is, never a bare 500)", async () => {
+    mockCurlForB42_20_0();
     const originalFetch = global.fetch;
     global.fetch = vi.fn(async () => ({ ok: false, status: 503 }));
     try {
       const { default: router } = await freshModule();
-      const handler = findRoute(router, "/b41tiles/:level/:tile", "get");
+      const handler = findRoute(router, "/tiles/:level/:tile", "get");
       const res = makeRes();
       await handler({ params: { level: "9", tile: "9_1.jpg" }, query: {} }, res);
       expect(res.statusCode).toBe(502);
@@ -299,11 +269,16 @@ describe("case 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, and
   });
 
   it("a 404 never calls log.error/log.warn (would flood the log for the normal, sparse-map case)", async () => {
+    mockCurlForB42_20_0();
     const originalFetch = global.fetch;
-    global.fetch = vi.fn(async () => ({ ok: false, status: 404 }));
+    global.fetch = vi.fn(async (_url, init) =>
+      init?.method === "HEAD"
+        ? { ok: true, status: 200 }
+        : { ok: false, status: 404 },
+    );
     try {
       const { default: router } = await freshModule();
-      const handler = findRoute(router, "/b41tiles/:level/:tile", "get");
+      const handler = findRoute(router, "/tiles/:level/:tile", "get");
       const res = makeRes();
       await handler({ params: { level: "9", tile: "9_2.jpg" }, query: {} }, res);
       expect(res.statusCode).toBe(404);

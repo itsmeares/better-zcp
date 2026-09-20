@@ -137,9 +137,6 @@ interface ChunkSafehouse {
 const MIN_SCALE = 0.1
 const MAX_SCALE = 60
 const MIN_FIT_SCALE = 2
-const MAP_TILE_SIZE = 100
-const MAP_TILES_CDN = 'https://grabofus.github.io/zomboid-chunk-cleaner/assets'
-
 const B42_DZI_CDN = '/api/map/toptiles'
 const B42_DZI_FULL_W = 19968
 const B42_DZI_FULL_H = 16128
@@ -151,7 +148,6 @@ const PZ_LANDMARKS: {
   name: string
   x: number
   y: number
-  b42Only?: boolean
 }[] = [
   { name: 'Muldraugh', x: 1063, y: 980 },
   { name: 'West Point', x: 1190, y: 690 },
@@ -160,12 +156,12 @@ const PZ_LANDMARKS: {
   { name: 'Louisville', x: 1270, y: 170 },
   { name: 'March Ridge', x: 1010, y: 1270 },
   { name: 'Valley Station', x: 1320, y: 530 },
-  { name: 'Ekron', x: 55, y: 975, b42Only: true },
-  { name: 'Brandenburg', x: 210, y: 608, b42Only: true },
-  { name: 'Irvington', x: 250, y: 1425, b42Only: true },
-  { name: 'Echo Creek', x: 352, y: 1093, b42Only: true },
-  { name: 'Fallas Lake', x: 728, y: 835, b42Only: true },
-  { name: 'Louisville Airport', x: 1544, y: 294, b42Only: true },
+  { name: 'Ekron', x: 55, y: 975 },
+  { name: 'Brandenburg', x: 210, y: 608 },
+  { name: 'Irvington', x: 250, y: 1425 },
+  { name: 'Echo Creek', x: 352, y: 1093 },
+  { name: 'Fallas Lake', x: 728, y: 835 },
+  { name: 'Louisville Airport', x: 1544, y: 294 },
 ]
 
 function formatSize(bytes: number): string {
@@ -379,16 +375,11 @@ export default function ChunkCleaner() {
   const drawRequestRef = useRef(0)
 
   const [showMap, setShowMap] = useState(true)
-  const tileCacheRef = useRef<Record<string, HTMLImageElement | null>>({})
-  const tileLoadCountRef = useRef(0)
 
   const [showCustomPath, setShowCustomPath] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
 
   const loadIdRef = useRef(0)
-
-  const [isB42Save, setIsB42Save] = useState(false)
-  const isB42Ref = useRef(false)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [createBackup, setCreateBackup] = useState(true)
@@ -634,11 +625,6 @@ export default function ChunkCleaner() {
       const rawChunks: ChunkInfo[] = Array.isArray(chunksResult.chunks)
         ? chunksResult.chunks
         : []
-      const isB42 =
-        chunksResult.isB42 === true ||
-        (rawChunks.length > 0 && rawChunks[0].file?.includes('/'))
-      isB42Ref.current = isB42
-      setIsB42Save(isB42)
       setChunks(rawChunks)
       setBounds(chunksResult.bounds ?? null)
       setStats(statsResult)
@@ -710,7 +696,7 @@ export default function ChunkCleaner() {
               ? vData.vehicles
               : []
         ) as Record<string, unknown>[]
-        const tilesPerChunk = isB42Ref.current ? 8 : 10
+        const tilesPerChunk = 8
         setChunkVehicles(
           vList
             .filter(
@@ -746,7 +732,7 @@ export default function ChunkCleaner() {
               ? sData.safehouses
               : []
         ) as Record<string, unknown>[]
-        const tilesPerChunk = isB42Ref.current ? 8 : 10
+        const tilesPerChunk = 8
         setChunkSafehouses(
           sList
             .filter(
@@ -857,33 +843,6 @@ export default function ChunkCleaner() {
   }, [hasCanvas])
 
   const MAX_TILE_CACHE = 512
-  const loadMapTile = useCallback((tileX: number, tileY: number) => {
-    const key = `${tileX}_${tileY}`
-    if (key in tileCacheRef.current) return
-    const keys = Object.keys(tileCacheRef.current)
-    if (keys.length >= MAX_TILE_CACHE) {
-      const toRemove = keys.slice(0, keys.length - MAX_TILE_CACHE + 64)
-      for (const k of toRemove) delete tileCacheRef.current[k]
-    }
-    tileCacheRef.current[key] = null
-    const img = new window.Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      tileCacheRef.current[key] = img
-      tileLoadCountRef.current++
-      if (drawRequestRef.current === 0) {
-        drawRequestRef.current = requestAnimationFrame(() => {
-          drawRequestRef.current = 0
-          drawCanvasRef.current()
-        })
-      }
-    }
-    img.onerror = () => {
-      /* tile missing, keep null */
-    }
-    img.src = `${MAP_TILES_CDN}/map_${tileX}_${tileY}.png`
-  }, [])
-
   const dziCacheRef = useRef<Record<string, HTMLImageElement | null | false>>(
     {},
   )
@@ -983,119 +942,71 @@ export default function ChunkCleaner() {
         ctx.save()
         ctx.globalAlpha = 0.6
 
-        if (isB42Save) {
-          const idealLevel =
-            B42_DZI_MAX_LEVEL -
-            Math.log2(B42_CHUNK_TO_DZI_PX / Math.max(scale, 0.01))
-          const level = Math.max(
-            0,
-            Math.min(B42_DZI_MAX_LEVEL, Math.round(idealLevel)),
-          )
-          const levelScale = Math.pow(2, B42_DZI_MAX_LEVEL - level)
+        const idealLevel =
+          B42_DZI_MAX_LEVEL -
+          Math.log2(B42_CHUNK_TO_DZI_PX / Math.max(scale, 0.01))
+        const level = Math.max(
+          0,
+          Math.min(B42_DZI_MAX_LEVEL, Math.round(idealLevel)),
+        )
+        const levelScale = Math.pow(2, B42_DZI_MAX_LEVEL - level)
 
-          const levelW = Math.ceil(B42_DZI_FULL_W / levelScale)
-          const levelH = Math.ceil(B42_DZI_FULL_H / levelScale)
-          const numCols = Math.ceil(levelW / B42_DZI_TILE_PX)
-          const numRows = Math.ceil(levelH / B42_DZI_TILE_PX)
+        const levelW = Math.ceil(B42_DZI_FULL_W / levelScale)
+        const levelH = Math.ceil(B42_DZI_FULL_H / levelScale)
+        const numCols = Math.ceil(levelW / B42_DZI_TILE_PX)
+        const numRows = Math.ceil(levelH / B42_DZI_TILE_PX)
 
-          const pixMinX = (visMinX * B42_CHUNK_TO_DZI_PX) / levelScale
-          const pixMinY = (visMinY * B42_CHUNK_TO_DZI_PX) / levelScale
-          const pixMaxX = (visMaxX * B42_CHUNK_TO_DZI_PX) / levelScale
-          const pixMaxY = (visMaxY * B42_CHUNK_TO_DZI_PX) / levelScale
+        const pixMinX = (visMinX * B42_CHUNK_TO_DZI_PX) / levelScale
+        const pixMinY = (visMinY * B42_CHUNK_TO_DZI_PX) / levelScale
+        const pixMaxX = (visMaxX * B42_CHUNK_TO_DZI_PX) / levelScale
+        const pixMaxY = (visMaxY * B42_CHUNK_TO_DZI_PX) / levelScale
 
-          const colMin = Math.max(0, Math.floor(pixMinX / B42_DZI_TILE_PX))
-          const colMax = Math.min(
-            numCols - 1,
-            Math.floor(pixMaxX / B42_DZI_TILE_PX),
-          )
-          const rowMin = Math.max(0, Math.floor(pixMinY / B42_DZI_TILE_PX))
-          const rowMax = Math.min(
-            numRows - 1,
-            Math.floor(pixMaxY / B42_DZI_TILE_PX),
-          )
+        const colMin = Math.max(0, Math.floor(pixMinX / B42_DZI_TILE_PX))
+        const colMax = Math.min(
+          numCols - 1,
+          Math.floor(pixMaxX / B42_DZI_TILE_PX),
+        )
+        const rowMin = Math.max(0, Math.floor(pixMinY / B42_DZI_TILE_PX))
+        const rowMax = Math.min(
+          numRows - 1,
+          Math.floor(pixMaxY / B42_DZI_TILE_PX),
+        )
 
-          const chunkPerDziPx = levelScale / B42_CHUNK_TO_DZI_PX
+        const chunkPerDziPx = levelScale / B42_CHUNK_TO_DZI_PX
 
-          for (let row = rowMin; row <= rowMax; row++) {
-            for (let col = colMin; col <= colMax; col++) {
-              loadDziTile(level, col, row)
-              const img = dziCacheRef.current[`dzi_${level}_${col}_${row}`]
-              if (img || img === false) {
-                const tileChunkX = col * B42_DZI_TILE_PX * chunkPerDziPx
-                const tileChunkY = row * B42_DZI_TILE_PX * chunkPerDziPx
-                const actualTileW = Math.min(
-                  B42_DZI_TILE_PX,
-                  levelW - col * B42_DZI_TILE_PX,
-                )
-                const actualTileH = Math.min(
-                  B42_DZI_TILE_PX,
-                  levelH - row * B42_DZI_TILE_PX,
-                )
-                const chunkW = actualTileW * chunkPerDziPx
-                const chunkH = actualTileH * chunkPerDziPx
+        for (let row = rowMin; row <= rowMax; row++) {
+          for (let col = colMin; col <= colMax; col++) {
+            loadDziTile(level, col, row)
+            const img = dziCacheRef.current[`dzi_${level}_${col}_${row}`]
+            if (img || img === false) {
+              const tileChunkX = col * B42_DZI_TILE_PX * chunkPerDziPx
+              const tileChunkY = row * B42_DZI_TILE_PX * chunkPerDziPx
+              const actualTileW = Math.min(
+                B42_DZI_TILE_PX,
+                levelW - col * B42_DZI_TILE_PX,
+              )
+              const actualTileH = Math.min(
+                B42_DZI_TILE_PX,
+                levelH - row * B42_DZI_TILE_PX,
+              )
+              const chunkW = actualTileW * chunkPerDziPx
+              const chunkH = actualTileH * chunkPerDziPx
 
-                const sx = tileChunkX * scale + offset.x
-                const sy = tileChunkY * scale + offset.y
-                const sw = chunkW * scale
-                const sh = chunkH * scale
-                if (img) {
-                  ctx.drawImage(img, sx, sy, sw, sh)
-                } else {
-                  ctx.fillStyle = hsl(mutedFgVar, 0.08)
-                  ctx.fillRect(sx, sy, sw, sh)
-                }
-              }
-            }
-          }
-        } else {
-          const minTX = Math.floor(visMinX / MAP_TILE_SIZE)
-          const maxTX = Math.floor(visMaxX / MAP_TILE_SIZE)
-          const minTY = Math.floor(visMinY / MAP_TILE_SIZE)
-          const maxTY = Math.floor(visMaxY / MAP_TILE_SIZE)
-
-          for (let ty = minTY; ty <= maxTY; ty++) {
-            for (let tx = minTX; tx <= maxTX; tx++) {
-              loadMapTile(tx, ty)
-              const img = tileCacheRef.current[`${tx}_${ty}`]
+              const sx = tileChunkX * scale + offset.x
+              const sy = tileChunkY * scale + offset.y
+              const sw = chunkW * scale
+              const sh = chunkH * scale
               if (img) {
-                const sx = tx * MAP_TILE_SIZE * scale + offset.x
-                const sy = ty * MAP_TILE_SIZE * scale + offset.y
-                const sw = MAP_TILE_SIZE * scale
-                ctx.drawImage(img, sx, sy, sw, sw)
+                ctx.drawImage(img, sx, sy, sw, sh)
+              } else {
+                ctx.fillStyle = hsl(mutedFgVar, 0.08)
+                ctx.fillRect(sx, sy, sw, sh)
               }
             }
           }
         }
 
         ctx.restore()
-      }
-
-      if (showMap && !isB42Save && scale > 1) {
-        const tileGridMinX = Math.floor(visMinX / MAP_TILE_SIZE) * MAP_TILE_SIZE
-        const tileGridMaxX = Math.ceil(visMaxX / MAP_TILE_SIZE) * MAP_TILE_SIZE
-        const tileGridMinY = Math.floor(visMinY / MAP_TILE_SIZE) * MAP_TILE_SIZE
-        const tileGridMaxY = Math.ceil(visMaxY / MAP_TILE_SIZE) * MAP_TILE_SIZE
-
-        ctx.strokeStyle = hsl(primaryVar, 0.25)
-        ctx.lineWidth = 1
-        for (let x = tileGridMinX; x <= tileGridMaxX; x += MAP_TILE_SIZE) {
-          const sx = Math.floor(x * scale + offset.x) + 0.5
-          if (sx >= 0 && sx <= W) {
-            ctx.beginPath()
-            ctx.moveTo(sx, 0)
-            ctx.lineTo(sx, H)
-            ctx.stroke()
-          }
-        }
-        for (let y = tileGridMinY; y <= tileGridMaxY; y += MAP_TILE_SIZE) {
-          const sy = Math.floor(y * scale + offset.y) + 0.5
-          if (sy >= 0 && sy <= H) {
-            ctx.beginPath()
-            ctx.moveTo(0, sy)
-            ctx.lineTo(W, sy)
-            ctx.stroke()
-          }
-        }
       }
 
       {
@@ -1106,9 +1017,8 @@ export default function ChunkCleaner() {
         ctx.textBaseline = 'middle'
 
         for (const lm of PZ_LANDMARKS) {
-          if (lm.b42Only && !isB42Save) continue
-          const lx = isB42Save ? lm.x * 1.25 : lm.x
-          const ly = isB42Save ? lm.y * 1.25 : lm.y
+          const lx = lm.x * 1.25
+          const ly = lm.y * 1.25
           const sx = lx * scale + offset.x
           const sy = ly * scale + offset.y
           if (sx < -100 || sx > W + 100 || sy < -50 || sy > H + 50) continue
@@ -1423,7 +1333,7 @@ export default function ChunkCleaner() {
         const hoverChunk = chunkMap[hkey]
         const hoverSel = selectedChunks.has(hkey)
 
-        const chunksPerCell = isB42Save ? 32 : 30
+        const chunksPerCell = 32
         const cellX = Math.floor(hx / chunksPerCell)
         const cellY = Math.floor(hy / chunksPerCell)
         let label =
@@ -1456,7 +1366,7 @@ export default function ChunkCleaner() {
 
       ctx.textAlign = 'left'
       ctx.textBaseline = 'top'
-      const chunksPerCell = isB42Save ? 32 : 30
+      const chunksPerCell = 32
       const cellMinX = Math.floor(bounds.minX / chunksPerCell)
       const cellMinY = Math.floor(bounds.minY / chunksPerCell)
       const cellMaxX = Math.floor(bounds.maxX / chunksPerCell)
@@ -1487,7 +1397,7 @@ export default function ChunkCleaner() {
       ctx.fillText(boundsLabel, 12, 9)
 
       if (showMap) {
-        const mapLabel = isB42Save ? 'Map: B42' : 'Map: B41'
+        const mapLabel = 'Map: Build 42'
         const mm = ctx.measureText(mapLabel)
         ctx.fillStyle = hsl(bgVar || '0 0% 0%', 0.7)
         ctx.fillRect(6, 26, mm.width + 12, 18)
@@ -1508,9 +1418,7 @@ export default function ChunkCleaner() {
     selectionEnd,
     canvasSize,
     showMap,
-    loadMapTile,
     loadDziTile,
-    isB42Save,
     showVehicles,
     showSafehouses,
     chunkVehicles,
@@ -1849,7 +1757,7 @@ export default function ChunkCleaner() {
         }))
 
       if (deleteVehicles) {
-        const tilesPerChunk = isB42Ref.current ? 8 : 10
+        const tilesPerChunk = 8
         const rects = decomposeIntoRectangles(selectedChunks)
         if (rects.length > MAX_VEHICLE_REMOVAL_RECTS) {
           toast({

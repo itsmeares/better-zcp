@@ -7,10 +7,9 @@ import {
 
 
 describe("isUncompressedBinaryProxyPath", () => {
-  it("excludes all four <img>-tag-loaded binary proxy prefixes", () => {
+  it("excludes all <img>-tag-loaded binary proxy prefixes", () => {
     expect(isUncompressedBinaryProxyPath({ path: "/api/map/tiles/12/3_4.jpg" })).toBe(true);
     expect(isUncompressedBinaryProxyPath({ path: "/api/map/toptiles/12/3_4.jpg" })).toBe(true);
-    expect(isUncompressedBinaryProxyPath({ path: "/api/map/b41tiles/12/3_4.jpg" })).toBe(true);
     expect(isUncompressedBinaryProxyPath({ path: "/api/mods/thumbnail/1234567890" })).toBe(true);
   });
 
@@ -29,7 +28,6 @@ describe("isUncompressedBinaryProxyPath", () => {
     expect(UNCOMPRESSED_BINARY_PROXY_PREFIXES).toEqual([
       "/api/map/tiles/",
       "/api/map/toptiles/",
-      "/api/map/b41tiles/",
       "/api/mods/thumbnail/",
     ]);
   });

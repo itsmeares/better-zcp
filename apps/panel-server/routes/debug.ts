@@ -4685,9 +4685,6 @@ async function detectSaveBuild(savePath: string) {
     const entries = await safeReaddir(mapDir);
     if (entries && entries.some((e) => /^\d+$/.test(e))) return "b42";
   }
-  const rootEntries = await safeReaddir(savePath);
-  if (rootEntries && rootEntries.some((e) => /^map_\d+_\d+\.bin$/.test(e)))
-    return "b41";
   return "unknown";
 }
 
@@ -4748,7 +4745,6 @@ router.get("/worldmap", async (req, res) => {
     }
 
     let b42Probe = null;
-    let b41Probe = null;
     let b42TopProbe = null;
     let b42Dir = null;
     let b42TopFormat = null;
@@ -4785,12 +4781,9 @@ router.get("/worldmap", async (req, res) => {
         );
       }
 
-      [b42Probe, b41Probe, b42TopProbe] = await Promise.all([
+      [b42Probe, b42TopProbe] = await Promise.all([
         probeTile(
           `${PZ_TILES_ROOT}/${b42Dir || "42.19.0"}/base/layer0_files/0/0_0.jpg`,
-        ),
-        probeTile(
-          `${PZ_TILES_ROOT}/41.78.16/base/layer0_files/0/0_0.jpg`,
         ),
         b42Dir && b42TopFormat
           ? probeTile(
@@ -4825,33 +4818,6 @@ router.get("/worldmap", async (req, res) => {
               category: "worldmap",
               hint: "Check the panel host's outbound HTTPS access. The /api/map/tiles proxy fetches tiles server-side.",
               params: { detail: b42Probe.error || `HTTP ${b42Probe.statusCode}` },
-            },
-          ),
-        );
-      }
-
-      if (b41Probe.reachable) {
-        checks.push(
-          diagOk(
-            "worldmap.tiles.b41",
-            "B41 tile CDN reachable",
-            `tiles.pzmap.org responded in ${b41Probe.latencyMs} ms (HTTP ${b41Probe.statusCode}).`,
-            {
-              category: "worldmap",
-              params: { latencyMs: b41Probe.latencyMs, statusCode: b41Probe.statusCode },
-            },
-          ),
-        );
-      } else {
-        checks.push(
-          diagWarn(
-            "worldmap.tiles.b41",
-            "B41 tile CDN unreachable",
-            `Could not reach tiles.pzmap.org (${b41Probe.error || `HTTP ${b41Probe.statusCode}`}). B41 fallback tiles will not load.`,
-            {
-              category: "worldmap",
-              hint: "Only relevant if you run a B41 server. Outbound HTTPS to tiles.pzmap.org is required.",
-              params: { detail: b41Probe.error || `HTTP ${b41Probe.statusCode}` },
             },
           ),
         );
@@ -5063,25 +5029,12 @@ router.get("/worldmap", async (req, res) => {
               },
             ),
           );
-        } else if (saveBuild === "b41") {
-          checks.push(
-            diagOk(
-              "worldmap.save.build",
-              "B41 save detected",
-              `${saveCount} save(s); using ${saveName} (map_X_Y.bin layout). Map will switch to B41 tile source.`,
-              {
-                category: "worldmap",
-                variant: "b41",
-                params: { saveCount, saveName },
-              },
-            ),
-          );
         } else {
           checks.push(
             diagWarn(
               "worldmap.save.build",
               "Save build not detected",
-              `Found ${saveCount} save folder(s) but couldn\'t identify B41 vs B42 layout. Map will default to B42 origin and player coords may render off-screen on a B41 save.`,
+              `Found ${saveCount} save folder(s) but could not identify the Build 42 map layout.`,
               {
                 category: "worldmap",
                 hint: "Start the server once to materialise chunk files.",
@@ -5096,7 +5049,7 @@ router.get("/worldmap", async (req, res) => {
         diagWarn(
           "worldmap.save.dataPath",
           "No Zomboid data path set",
-          "Cannot locate save folders. Map auto-detection of B41/B42 will be skipped.",
+          "Cannot locate save folders. Build 42 map layout detection will be skipped.",
           { category: "worldmap", hint: "Servers → Edit → Zomboid Data Path" },
         ),
       );
@@ -5120,7 +5073,6 @@ router.get("/worldmap", async (req, res) => {
       durationMs: Date.now() - t0,
       tileSources: {
         b42: b42Probe,
-        b41: b41Probe,
       },
       bridge: bridgeStatus
         ? {
@@ -5150,7 +5102,6 @@ router.get("/worldmap", async (req, res) => {
         : null,
       proxy: {
         b42: "/api/map/tiles/:level/:tile?floor=N",
-        b41: "/api/map/b41tiles/:level/:tile",
       },
     });
   } catch (error: any) {

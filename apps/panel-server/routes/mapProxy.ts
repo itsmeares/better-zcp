@@ -579,7 +579,6 @@ router.get("/resolve", async (req, res) => {
   res.json({
     root: PZ_TILES_ROOT,
     b42Dir: map.directory,
-    b41Path: "41.78.16/base/layer0_files",
     tileSize: map.tileSize,
     width: map.width,
     height: map.height,
@@ -668,22 +667,6 @@ router.get("/toptiles/:level/:tile", async (req, res) => {
     ? TILE_BROWSER_CACHE_CONTROL_VERSIONED
     : TILE_BROWSER_CACHE_CONTROL;
   await serveTile(req, res, url, TOP_CONTENT_TYPES[format], relPath, cacheControl);
-});
-
-router.get("/b41tiles/:level/:tile", async (req, res) => {
-  const level = parseBoundedInteger(req.params.level, null, 0, 22);
-  const tile = req.params.tile;
-
-  if (level === null) {
-    return res.status(400).json({ error: "Invalid level" });
-  }
-  if (!/^\d+_\d+\.jpg$/.test(tile)) {
-    return res.status(400).json({ error: "Invalid tile" });
-  }
-
-  const url = `${PZ_TILES_ROOT}/41.78.16/base/layer0_files/${level}/${tile}`;
-  const relPath = path.join("b41", String(level), tile);
-  await serveTile(req, res, url, "image/jpeg", relPath, TILE_BROWSER_CACHE_CONTROL);
 });
 
 export default router;
