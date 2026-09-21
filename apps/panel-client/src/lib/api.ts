@@ -781,8 +781,6 @@ export const serverApi = {
   checkSteamCmd: (path: string) =>
     apiGet(`/server/steamcmd/check?path=${encodeURIComponent(path)}`),
 
-  browseFolder: (initialPath?: string, description?: string) =>
-    apiPost("/server/browse-folder", { initialPath, description }),
   listDirectory: (dirPath?: string) =>
     apiPost("/server/list-directory", { dirPath }) as Promise<{
       entries: Array<{
@@ -1968,28 +1966,6 @@ export const serverFilesApi = {
   ): Promise<{ success: boolean; persisted: boolean }> =>
     apiPut("/server-files/sandbox-option", { name, value }),
 
-  browseFiles: (browsePath?: string, extensions?: string[]) => {
-    const params = new URLSearchParams();
-    if (browsePath) params.set("path", browsePath);
-    if (extensions?.length) params.set("extensions", extensions.join(","));
-    return apiGet(`/server-files/browse-files?${params}`) as Promise<{
-      currentPath: string;
-      parent: string | null;
-      directories: string[];
-      files: { name: string; ext: string }[];
-    }>;
-  },
-  fetchImagePreview: async (filePath: string): Promise<string> => {
-    const response = await apiFetch(
-      `/server-files/image-preview?path=${encodeURIComponent(filePath)}`,
-    );
-    if (!response.ok)
-      throw new ApiError("Failed to load image preview", {
-        status: response.status,
-      });
-    const blob = await response.blob();
-    return URL.createObjectURL(blob);
-  },
 };
 
 export interface BridgeCommandResult<T = Record<string, unknown>> {

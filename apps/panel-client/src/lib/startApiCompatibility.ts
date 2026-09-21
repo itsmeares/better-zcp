@@ -1739,13 +1739,6 @@ const routes: RouteSpec[] = [
   },
   {
     method: 'GET',
-    pattern: '/api/server-files/image-preview',
-    source: 'http',
-    functionName: 'previewServerImage',
-    data: queryData('path'),
-  },
-  {
-    method: 'GET',
     pattern: '/api/server-files/ini',
     source: 'fileReads',
     functionName: 'getServerIni',
@@ -1786,13 +1779,6 @@ const routes: RouteSpec[] = [
     pattern: '/api/server-files/backups',
     source: 'fileReads',
     functionName: 'getServerConfigBackups',
-  },
-  {
-    method: 'GET',
-    pattern: '/api/server-files/browse-files',
-    source: 'fileReads',
-    functionName: 'browseServerFiles',
-    data: queryData('path', 'extensions'),
   },
   {
     method: 'PUT',

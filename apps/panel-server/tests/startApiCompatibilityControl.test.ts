@@ -178,7 +178,6 @@ const mocks = vi.hoisted(() => {
       "getServerSpawnRegions",
       "getServerRawFile",
       "getServerConfigBackups",
-      "browseServerFiles",
       "saveServerIni",
       "saveServerSandbox",
       "saveSandboxOption",
@@ -431,11 +430,6 @@ const SERVER_FILE_ROUTES = [
   ["GET", "/api/server-files/spawnregions", "getServerSpawnRegions"],
   ["GET", "/api/server-files/raw/ini", "getServerRawFile"],
   ["GET", "/api/server-files/backups", "getServerConfigBackups"],
-  [
-    "GET",
-    "/api/server-files/browse-files?path=%2Ftmp&extensions=.png",
-    "browseServerFiles",
-  ],
 ];
 
 const SERVER_FILE_WRITE_ROUTES = [
@@ -892,9 +886,7 @@ describe("Start compatibility server and player routes", () => {
       expect(response.status).toBe(200);
       const expectedData = path.includes("raw/ini")
         ? { type: "ini" }
-        : path.includes("browse-files")
-          ? { path: "/tmp", extensions: ".png" }
-          : {};
+        : {};
       expect(await responseBody(response)).toEqual({
         handledBy: functionName,
         data: expectedData,
