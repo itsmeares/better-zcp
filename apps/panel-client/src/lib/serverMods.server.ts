@@ -201,8 +201,6 @@ export const trackMod = createModAction(async (data) => {
   const id = workshopId(data)
   const { removeIgnoredMod } =
     await import('../../../panel-server/database/init.ts')
-  const { syncSingleChange: autoSyncCollection } =
-    await import('../../../panel-server/services/workshopCollectionSync.ts')
   const runtime = await panelRuntime()
   if (!runtime.modChecker)
     throw Object.assign(new Error('Mod checker not initialized'), {
@@ -210,7 +208,6 @@ export const trackMod = createModAction(async (data) => {
     })
   await removeIgnoredMod(id)
   const result = await runtime.modChecker.addModToTrack(id)
-  autoSyncCollection('add', id).catch(() => {})
   return result
 })
 
@@ -221,13 +218,10 @@ export const untrackMod = createModAction(async (data) => {
     getTrackedMods: readTrackedMods,
     removeTrackedMod,
   } = await import('../../../panel-server/database/init.ts')
-  const { syncSingleChange: autoSyncCollection } =
-    await import('../../../panel-server/services/workshopCollectionSync.ts')
   const tracked = await readTrackedMods()
   const mod = tracked.find((entry) => entry.workshop_id === id)
   await removeTrackedMod(id)
   await addIgnoredMod(id, mod?.name || null)
-  autoSyncCollection('remove', id).catch(() => {})
   return {
     success: true,
     message: 'Mod removed from tracking and added to ignore list',
@@ -458,40 +452,6 @@ export const cancelPendingModRestart = createModAction(async () => {
   return { success: true, message: 'Pending restart cancelled' }
 })
 
-export const addCollectionItem = createModAction(async (data) => {
-  const { getSetting } = await import('../../../panel-server/database/init.ts')
-  const collectionId = await getSetting('workshopCollectionId')
-  if (!collectionId)
-    invalid('Collection ID not configured', 'MODS_COLLECTION_ID_NOT_CONFIGURED')
-  const id = workshopId(data)
-  const { addItemToCollection } =
-    await import('../../../panel-server/services/workshopCollectionSync.ts')
-  const result = await addItemToCollection(collectionId, id)
-  if (!result.ok)
-    throw Object.assign(
-      new Error(result.error || 'Steam rejected the change'),
-      { status: 502 },
-    )
-  return { ok: true, workshopId: id, action: 'add' as const }
-})
-
-export const removeCollectionItem = createModAction(async (data) => {
-  const { getSetting } = await import('../../../panel-server/database/init.ts')
-  const collectionId = await getSetting('workshopCollectionId')
-  if (!collectionId)
-    invalid('Collection ID not configured', 'MODS_COLLECTION_ID_NOT_CONFIGURED')
-  const id = workshopId(data)
-  const { removeItemFromCollection } =
-    await import('../../../panel-server/services/workshopCollectionSync.ts')
-  const result = await removeItemFromCollection(collectionId, id)
-  if (!result.ok)
-    throw Object.assign(
-      new Error(result.error || 'Steam rejected the change'),
-      { status: 502 },
-    )
-  return { ok: true, workshopId: id, action: 'remove' as const }
-})
-
 export const removeCollectionTracking = createModAction(async (data) => {
   const id = workshopId(data)
   const { removeTrackedMod } =
@@ -505,32 +465,4 @@ export const removeCollectionTracking = createModAction(async (data) => {
       ? 'Mod is no longer tracked; Steam collection and server configuration were unchanged'
       : 'Mod was not tracked',
   }
-})
-
-export const saveCollectionCookies = createModAction(async (data) => {
-  const sessionid =
-    typeof data.sessionid === 'string' ? data.sessionid.trim() : ''
-  const loginSecure =
-    typeof data.steamLoginSecure === 'string'
-      ? data.steamLoginSecure.trim()
-      : ''
-  if (!sessionid || !loginSecure)
-    invalid(
-      'Both sessionid and steamLoginSecure are required',
-      'MODS_COOKIE_VALUES_REQUIRED',
-    )
-  if (/[\r\n\0;]/.test(sessionid) || /[\r\n\0;]/.test(loginSecure))
-    invalid(
-      'Cookie values contain forbidden control characters',
-      'MODS_COOKIE_VALUES_CONTROL_CHARS',
-    )
-  if (sessionid.length > 4096 || loginSecure.length > 4096)
-    invalid(
-      'Cookie values are unexpectedly long',
-      'MODS_COOKIE_VALUES_TOO_LONG',
-    )
-  const { setSteamSessionCredentials } =
-    await import('../../../panel-server/services/workshopCollectionSync.ts')
-  await setSteamSessionCredentials(sessionid, loginSecure)
-  return { ok: true, message: 'Cookies saved' }
 })

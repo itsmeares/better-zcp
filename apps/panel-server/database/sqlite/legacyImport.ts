@@ -30,8 +30,6 @@ const EXPECTED_TOP_LEVEL_KEYS = new Set([
 const SECRET_SETTING_FILES = {
   jwtSecret: "jwt.secret",
   rconPassword: "rconPassword.secret",
-  steamSessionId: "steamSessionId.secret",
-  steamLoginSecure: "steamLoginSecure.secret",
 };
 
 const SECRET_SETTINGS_REQUIRING_MANUAL_REENTRY = new Set(["steamApiKey"]);

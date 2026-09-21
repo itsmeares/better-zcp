@@ -1,16 +1,9 @@
 
 import { createLogger } from '../utils/logger.ts';
 import { getSetting } from '../database/init.ts';
-import {
-  getSteamSessionCredentials,
-  setSteamSessionCredentials,
-} from './steamSessionCredentials.ts';
-
-export { getSteamSessionCredentials, setSteamSessionCredentials };
 
 const log = createLogger('WorkshopCollectionSync');
 
-const STEAM_COMMUNITY = 'https://steamcommunity.com';
 const STEAM_API = 'https://api.steampowered.com';
 const USER_AGENT = 'ZomboidControlPanel/1.0 (+collection-sync)';
 const FETCH_TIMEOUT_MS = 15000;
@@ -39,21 +32,9 @@ interface PublishedFilesResponse {
   response?: { publishedfiledetails?: PublishedFileDetail[] };
 }
 
-interface SharedfilesResponse {
-  success?: string | number | boolean;
-  fileType?: string | number;
-}
-
-interface SteamAuth {
-  sessionId: string;
-  cookie: string;
-}
-
 type CollectionResult =
   | { ok: true; items: string[]; title: string | null }
   | { ok: false; items: string[]; error: string };
-
-type ActionResult = { ok: true } | { ok: false; error: string };
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -156,130 +137,6 @@ export async function fetchPublishedFileTitles(
   return out;
 }
 
-async function buildAuthCookies(): Promise<SteamAuth | null> {
-  const { sessionId, loginSecure } = await getSteamSessionCredentials();
-  if (typeof sessionId !== 'string' || sessionId.trim().length < 8) return null;
-  if (typeof loginSecure !== 'string' || loginSecure.trim().length < 16) return null;
-  const sid = sessionId.trim();
-  const tok = loginSecure.trim();
-  if (/[\r\n\0;]/.test(sid) || /[\r\n\0;]/.test(tok)) {
-    log.warn('Refusing to build cookie header: control character in stored value');
-    return null;
-  }
-  return {
-    sessionId: sid,
-    cookie: `sessionid=${sid}; steamLoginSecure=${tok}`,
-  };
-}
-
-const STEAM_ERESULT_NAMES: Record<number, string> = {
-  2: 'generic failure',
-  8: 'invalid parameter',
-  11: 'invalid state',
-  15: 'access denied',
-  16: 'timed out',
-  42: 'not found',
-};
-const WORKSHOP_FILE_TYPE_COLLECTION = 2;
-
-function describeSharedfilesFailure(
-  action: 'addchild' | 'removechild',
-  json: SharedfilesResponse,
-): string {
-  const verb = action === 'addchild' ? 'add' : 'remove';
-  if (Number(json?.fileType) === WORKSHOP_FILE_TYPE_COLLECTION) {
-    return `Steam rejected this: that Workshop item is itself a collection, not a mod. A collection can't be nested inside another collection this way.`;
-  }
-  const name = STEAM_ERESULT_NAMES[Number(json?.success)];
-  if (name) {
-    return `Steam rejected the ${verb} (${name}) — the item may not exist, may have been removed by its author, or you may not have permission to edit this collection.`;
-  }
-  return `Steam rejected the ${verb} (unrecognized response).`;
-}
-
-async function postSharedfilesAction(
-  action: 'addchild' | 'removechild',
-  collectionId: string,
-  childId: string,
-): Promise<ActionResult> {
-  const auth = await buildAuthCookies();
-  if (!auth) {
-    return { ok: false, error: 'Steam session cookies not configured' };
-  }
-  if (!isValidWorkshopId(collectionId) || !isValidWorkshopId(childId)) {
-    return { ok: false, error: 'Invalid Workshop ID' };
-  }
-  if (action === 'addchild') {
-    const childCollection = await getCollectionContents(childId);
-    if (childCollection.ok) {
-      return {
-        ok: false,
-        error: 'Steam rejected this item: the selected Workshop item is a collection, not a mod.',
-      };
-    }
-  }
-  const body = new URLSearchParams();
-  body.set('id', collectionId);
-  body.set('childid', childId);
-  body.set('sessionid', auth.sessionId);
-
-  try {
-    const res = await fetchWithTimeout(`${STEAM_COMMUNITY}/sharedfiles/${action}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': USER_AGENT,
-        'Cookie': auth.cookie,
-        'Referer': `${STEAM_COMMUNITY}/sharedfiles/filedetails/?id=${collectionId}`,
-        'Origin': STEAM_COMMUNITY,
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      body: body.toString(),
-      redirect: 'manual',
-    });
-
-    if (res.status === 302 || res.status === 401 || res.status === 403) {
-      return { ok: false, error: 'Steam session expired — paste fresh cookies' };
-    }
-    if (!res.ok) {
-      return { ok: false, error: `Steam HTTP ${res.status}` };
-    }
-    const text = await res.text();
-    try {
-      const json = JSON.parse(text) as SharedfilesResponse;
-      if (json && (json.success === 1 || json.success === true)) {
-        return { ok: true };
-      }
-      log.warn(
-        `[WorkshopCollectionSync] ${action} ${childId} → ${collectionId}: ` +
-          `Steam returned non-success (success=${json?.success}, body=${text.slice(0, 200)})`,
-      );
-      return { ok: false, error: describeSharedfilesFailure(action, json) };
-    } catch {
-      if (text.includes(childId)) {
-        return { ok: true };
-      }
-      return { ok: false, error: 'Steam returned unexpected response' };
-    }
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) || 'Network error' };
-  }
-}
-
-export function addItemToCollection(
-  collectionId: string,
-  childId: string,
-): Promise<ActionResult> {
-  return postSharedfilesAction('addchild', collectionId, childId);
-}
-
-export function removeItemFromCollection(
-  collectionId: string,
-  childId: string,
-): Promise<ActionResult> {
-  return postSharedfilesAction('removechild', collectionId, childId);
-}
-
 export async function computeDiff(
   trackedWorkshopIds: Array<string | number>,
 ) {
@@ -303,32 +160,4 @@ export async function computeDiff(
     toRemove: [],
     collectionOnly,
   };
-}
-
-export async function syncSingleChange(
-  action: 'add' | 'remove',
-  workshopId: string | number,
-) {
-  try {
-    if (!isValidWorkshopId(String(workshopId))) return { skipped: true, reason: 'invalid id' };
-    const enabled = await getSetting('workshopCollectionAutoSync');
-    if (!enabled) return { skipped: true, reason: 'auto-sync disabled' };
-    const collectionId = await getSetting('workshopCollectionId');
-    if (!isValidWorkshopId(collectionId)) return { skipped: true, reason: 'no collection id' };
-    const auth = await buildAuthCookies();
-    if (!auth) return { skipped: true, reason: 'no credentials' };
-
-    const fn = action === 'add' ? addItemToCollection : removeItemFromCollection;
-    const result = await fn(collectionId, String(workshopId));
-    if (result.ok) {
-      log.info(`Auto-sync ${action} ${workshopId} \u2192 collection ${collectionId} OK`);
-    } else {
-      log.warn(`Auto-sync ${action} ${workshopId} \u2192 collection ${collectionId} failed: ${result.error}`);
-    }
-    return result;
-  } catch (err) {
-    const message = errorMessage(err);
-    log.error(`Auto-sync ${action} ${workshopId} crashed: ${message}`);
-    return { ok: false, error: message };
-  }
 }

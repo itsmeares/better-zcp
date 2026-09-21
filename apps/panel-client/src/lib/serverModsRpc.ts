@@ -162,40 +162,12 @@ export const cancelPendingModRestart = createServerFn({ method: 'POST' })
     ),
   )
 
-export const addCollectionItem = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.addCollectionItem, 'addCollectionItem', {
-      data,
-      context,
-    }),
-  )
-
-export const removeCollectionItem = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.removeCollectionItem, 'removeCollectionItem', {
-      data,
-      context,
-    }),
-  )
-
 export const removeCollectionTracking = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>
     invoke(
       serverImplementation.removeCollectionTracking,
       'removeCollectionTracking',
-      { data, context },
-    ),
-  )
-
-export const saveCollectionCookies = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(
-      serverImplementation.saveCollectionCookies,
-      'saveCollectionCookies',
       { data, context },
     ),
   )

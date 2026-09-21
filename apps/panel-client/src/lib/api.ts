@@ -32,7 +32,6 @@ import {
   getPlayerStats,
 } from "./serverResourceReadsRpc";
 import {
-  addCollectionItem,
   addIgnoredModPair,
   cancelPendingModRestart,
   clearAllIgnoredMods,
@@ -42,10 +41,8 @@ import {
   getServerMods,
   getTrackedMods,
   getWorkshopStatus,
-  removeCollectionItem,
   removeCollectionTracking,
   removeIgnoredModPair,
-  saveCollectionCookies,
   setModAutoRestart,
   setModRestartOptions,
   startModChecker,
@@ -1321,24 +1318,8 @@ export const modsApi = {
         inServer: boolean;
       }>;
       collectionId: string | null;
-      autoSync: boolean;
-      hasCredentials: boolean;
-      tokenExpiry: number | null;
-      tokenExpired: boolean;
       trackedCount: number;
       serverConfigRead?: boolean;
-    }>,
-  collectionAddItem: (workshopId: string) =>
-    serverCall(() => addCollectionItem({ data: { workshopId } })) as Promise<{
-      ok: true;
-      workshopId: string;
-      action: "add";
-    }>,
-  collectionRemoveItem: (workshopId: string) =>
-    serverCall(() => removeCollectionItem({ data: { workshopId } })) as Promise<{
-      ok: true;
-      workshopId: string;
-      action: "remove";
     }>,
   collectionUntrack: (workshopId: string) =>
     serverCall(() => removeCollectionTracking({ data: { workshopId } })) as Promise<{
@@ -1352,56 +1333,10 @@ export const modsApi = {
       success: boolean;
       workshopId: string;
       name: string | null;
-      collection: { attempted: boolean; ok: boolean; error: string | null };
       deletedFromDisk: boolean;
       modIdsStripped: number;
       mapFoldersStripped: number;
     }>,
-  collectionSync: () =>
-    apiPost("/mods/collection/sync", {}) as Promise<{
-      success: boolean;
-      collectionId: string;
-      added: string[];
-      removed: string[];
-      errors: Array<{ action: "add" | "remove"; id: string; error: string }>;
-      message: string;
-    }>,
-  collectionTest: () =>
-    apiPost("/mods/collection/test", {}) as Promise<{
-      success: boolean;
-      collectionId: string;
-      title: string | null;
-      itemCount: number;
-      message: string;
-    }>,
-  collectionBrowsers: () =>
-    apiGet("/mods/collection/browsers") as Promise<{
-      supported: boolean;
-      platform: string;
-      browsers: Array<{
-        id: string;
-        label: string;
-        family: string;
-        detected: boolean;
-      }>;
-    }>,
-  collectionExtractCookies: (browser: string) =>
-    apiPost("/mods/collection/extract-cookies", { browser }) as Promise<{
-      ok: boolean;
-      browser: string;
-      saved?: boolean;
-      sessionid?: string | null;
-      steamLoginSecure?: string | null;
-      missing?: string[];
-      notes?: string[];
-      error?: string | null;
-    }>,
-  collectionSaveCookies: (sessionid: string, steamLoginSecure: string) =>
-    serverCall(() => saveCollectionCookies({ data: { sessionid, steamLoginSecure } })) as Promise<{
-      ok: boolean;
-      message: string;
-    }>,
-
   syncModIds: () => apiPost("/mods/sync-mod-ids"),
 
   discoverModIds: (

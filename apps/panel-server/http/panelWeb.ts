@@ -174,7 +174,6 @@ const STRICT_RATE_LIMIT_PATHS = [
   "/api/panel/update-download",
   "/api/panel/update-preflight",
   "/api/panel/restart",
-  "/api/mods/collection/extract-cookies",
 ];
 
 type NativeRateBucket = { count: number; resetAt: number };
@@ -521,10 +520,6 @@ function rateLimited(
     request.method === "DELETE" && /^\/api\/backup\/[^/]+$/.test(pathname);
   if (strict) {
     const result = hit("strict", 10, { error: "Rate limit exceeded for this operation." });
-    if (result) return result;
-  }
-  if (pathname.startsWith("/api/mods/collection/items")) {
-    const result = hit("collection", 60, { error: "Too many collection changes. Please wait a minute and try again." });
     if (result) return result;
   }
   if (pathname === "/api/rcon/execute") {

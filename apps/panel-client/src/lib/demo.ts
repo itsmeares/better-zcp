@@ -272,10 +272,6 @@ function demoCollectionDiff() {
       { workshopId: '3000000002', name: 'Legacy Vehicle Pack', status: 'to-remove', inTracked: false, inCollection: true },
     ],
     collectionId: '3001234567',
-    autoSync: true,
-    hasCredentials: true,
-    tokenExpiry: Math.floor(Date.now() / 1000) + 3600,
-    tokenExpired: false,
     trackedCount: demoTrackedMods.length,
   }
 }
@@ -682,50 +678,6 @@ export function installDemoFetchShim(): void {
     }
     if (path === '/api/mods/collection/diff') {
       return jsonResponse(demoCollectionDiff())
-    }
-    if (path === '/api/mods/collection/test' && method === 'POST') {
-      return jsonResponse({
-        success: true,
-        collectionId: '3001234567',
-        title: 'DoomerZ Demo Collection',
-        itemCount: 4,
-        message: 'Demo mode: collection credentials look ready.',
-      })
-    }
-    if (path === '/api/mods/collection/sync' && method === 'POST') {
-      return jsonResponse({
-        success: true,
-        collectionId: '3001234567',
-        added: ['2849247394', '3000000003'],
-        removed: ['3000000002'],
-        errors: [],
-        message: 'Demo mode: collection would be brought back in sync.',
-      })
-    }
-    if (path === '/api/mods/collection/browsers') {
-      return jsonResponse({
-        supported: true,
-        platform: 'demo',
-        browsers: [
-          { id: 'firefox', label: 'Firefox', family: 'firefox', detected: true },
-          { id: 'chrome', label: 'Chrome', family: 'chromium', detected: false },
-        ],
-      })
-    }
-    if (path === '/api/mods/collection/extract-cookies' && method === 'POST') {
-      return jsonResponse({
-        ok: true,
-        browser: 'firefox',
-        saved: true,
-        notes: ['Demo mode does not read browser cookies.'],
-      })
-    }
-    if (path === '/api/mods/collection/items' && method === 'POST') {
-      const body = await readJsonBody(init)
-      return jsonResponse({ ok: true, workshopId: body.workshopId || 'demo', action: 'add' })
-    }
-    if (path.startsWith('/api/mods/collection/items/') && method === 'DELETE') {
-      return jsonResponse({ ok: true, workshopId: path.split('/').pop(), action: 'remove' })
     }
     if (path === '/api/mods/resolve-missing-deps' && method === 'POST') {
       return jsonResponse({

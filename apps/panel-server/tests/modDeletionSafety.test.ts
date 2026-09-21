@@ -34,15 +34,8 @@ vi.mock("../database/init.ts", () => ({
 vi.mock("../services/steamApiKey.ts", () => ({ getSteamApiKey: vi.fn() }));
 vi.mock("../services/workshopCollectionSync.ts", () => ({
   getCollectionContents: vi.fn(),
-  addItemToCollection: vi.fn(),
-  removeItemFromCollection: vi.fn(),
   computeDiff: vi.fn(),
-  syncSingleChange: vi.fn(),
   fetchPublishedFileTitles: vi.fn(),
-}));
-vi.mock("../utils/browserCookies.ts", () => ({
-  listAvailableBrowsers: vi.fn(),
-  extractSteamCookies: vi.fn(),
 }));
 
 const { default: router, getIniLockCount, withIniLock } = await import("../routes/mods.ts");

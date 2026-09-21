@@ -10,9 +10,6 @@ let tmpDir = initDir;
 
 vi.mock("../database/init.ts", () => ({
   getSetting: async (key) => settings.get(key) ?? null,
-  setSetting: async (key, value) => {
-    settings.set(key, value);
-  },
 }));
 
 vi.mock("../utils/paths.ts", () => ({
@@ -30,8 +27,6 @@ vi.mock("../utils/logger.ts", () => ({
 
 const {
   getCollectionContents,
-  addItemToCollection,
-  setSteamSessionCredentials,
 } = await import("../services/workshopCollectionSync.ts");
 
 describe("workshopCollectionSync — sub-collection children", () => {
@@ -74,52 +69,6 @@ describe("workshopCollectionSync — sub-collection children", () => {
     expect(result.ok).toBe(true);
     expect(result.items.sort()).toEqual(["111", "333"]);
     expect(result.items).not.toContain("222");
-  });
-});
-
-describe("addItemToCollection — user-facing error text", () => {
-  let originalFetch;
-
-  beforeEach(() => {
-    settings.clear();
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-collectionsync-err-"));
-    setSteamSessionCredentials("valid-session-id", "valid-login-secure-token-1234");
-    originalFetch = global.fetch;
-  });
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    vi.restoreAllMocks();
-  });
-
-  it("never leaks the raw protocol body for a fileType:2 (sub-collection) rejection", async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ success: 8, html: "", fileType: 2 }),
-    }));
-
-    const result = await addItemToCollection("111111111", "222222222");
-
-    expect(result.ok).toBe(false);
-    expect(result.error).not.toMatch(/success=8/);
-    expect(result.error).not.toMatch(/"fileType":2/);
-    expect(result.error.toLowerCase()).toContain("collection");
-  });
-
-  it("gives a human EResult explanation for a plain invalid-parameter rejection (no fileType)", async () => {
-    global.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ success: 8, html: "" }),
-    }));
-
-    const result = await addItemToCollection("111111111", "444444444");
-
-    expect(result.ok).toBe(false);
-    expect(result.error).not.toMatch(/success=8/);
-    expect(result.error.toLowerCase()).toMatch(/invalid parameter|rejected/);
   });
 });
 
