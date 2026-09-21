@@ -3,14 +3,13 @@ export interface IniSetting {
   key: string
   label: string
   description: string
-  type: 'boolean' | 'number' | 'string' | 'select' | 'multiline' | 'filepath'
+  type: 'boolean' | 'number' | 'string' | 'select' | 'multiline'
   options?: { value: string; label: string }[]
   min?: number
   max?: number
   default?: string | number | boolean
   defaultComparable?: boolean
   category: string
-  fileExtensions?: string[]
 }
 
 export function formatRawConfigValue(value: unknown): string {
