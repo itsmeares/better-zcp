@@ -434,7 +434,6 @@ export default function Mods() {
 
   const [collectionStatus, setCollectionStatus] = useState<{
     configured: boolean
-    autoSync: boolean
     inSync: boolean
     drift: number
     title: string | null
@@ -442,14 +441,12 @@ export default function Mods() {
     loading: boolean
   }>({
     configured: false,
-    autoSync: false,
     inSync: false,
     drift: 0,
     title: null,
     error: null,
     loading: false,
   })
-  const [collectionSyncing, setCollectionSyncing] = useState(false)
   useEffect(() => {
     return () => {
       closingIntentionallyRef.current = true
@@ -911,7 +908,6 @@ export default function Mods() {
       collectionEverConfiguredRef.current = !!r.collectionId
       setCollectionStatus({
         configured: !!r.collectionId,
-        autoSync: !!r.autoSync,
         inSync: r.ok && r.toAdd.length === 0 && r.toRemove.length === 0,
         drift: r.ok ? r.toAdd.length + r.toRemove.length : 0,
         title: r.title || null,
@@ -945,28 +941,6 @@ export default function Mods() {
       document.removeEventListener('visibilitychange', onFocus)
     }
   }, [])
-
-  const handleCollectionSyncNow = useCallback(async () => {
-    if (collectionSyncing) return
-    setCollectionSyncing(true)
-    try {
-      const r = await modsApi.collectionSync()
-      toast({
-        title: r.success ? 'Collection synced' : 'Partial sync',
-        description: r.message,
-        variant: r.success ? 'default' : 'destructive',
-      })
-      fetchCollectionStatus()
-    } catch (err: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Sync Failed',
-        description: getUserErrorMessage(err, 'Unknown error'),
-      })
-    } finally {
-      setCollectionSyncing(false)
-    }
-  }, [collectionSyncing, fetchCollectionStatus, toast])
 
   const socket = useSocket()
   useEffect(() => {
@@ -4191,11 +4165,6 @@ export default function Mods() {
                             >
                               <Check className="w-3.5 h-3.5" />
                               {'Collection in sync'}
-                              {collectionStatus.autoSync && (
-                                <span className="text-[10px] opacity-70">
-                                  {'· auto'}
-                                </span>
-                              )}
                             </button>
                           ) : collectionStatus.drift > 0 ? (
                             <div className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 ps-2.5 pe-1 py-0.5 text-xs font-medium text-warning">
@@ -4203,23 +4172,6 @@ export default function Mods() {
                               <span>
                                 {String(collectionStatus.drift) + ' drift'}
                               </span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={handleCollectionSyncNow}
-                                disabled={collectionSyncing}
-                                className="h-6 px-2 ms-1 text-xs hover:bg-warning/20"
-                                // eslint-disable-next-line local/no-dead-disabled-title -- pure hint describing what the button does ("Sync tracked mods → Steam Workshop collection"), not why it's disabled; unconditional, no permission text to lose. Triaged 2026-08-27.
-                                title={
-                                  'Sync tracked mods → Steam Workshop collection'
-                                }
-                              >
-                                {collectionSyncing ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  'Sync'
-                                )}
-                              </Button>
                             </div>
                           ) : collectionStatus.loading ? (
                             <span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">

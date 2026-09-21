@@ -34,18 +34,9 @@ import {
 } from "../utils/sanitize.ts";
 import {
   getCollectionContents,
-  addItemToCollection,
-  removeItemFromCollection,
   computeDiff as computeCollectionDiff,
-  syncSingleChange as autoSyncCollection,
   fetchPublishedFileTitles,
-  getSteamSessionCredentials,
-  setSteamSessionCredentials,
 } from "../services/workshopCollectionSync.ts";
-import {
-  listAvailableBrowsers,
-  extractSteamCookies,
-} from "../utils/browserCookies.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { withFileLock } from "../utils/fileWriteQueue.ts";
 import { writeIniWithBackup, backupWarningFor } from "../utils/configBackup.ts";
@@ -398,7 +389,6 @@ router.post("/track", async (req, res) => {
     await removeIgnoredMod(workshopIdStr);
 
     const result = await modChecker.addModToTrack(workshopIdStr);
-    autoSyncCollection("add", workshopIdStr).catch(() => {});
     res.json(result);
   } catch (error: any) {
     log.error(`Failed to add mod to track: ${error.message}`);
@@ -422,7 +412,6 @@ router.delete("/track/:workshopId", async (req, res) => {
 
     await removeTrackedMod(workshopId);
     await addIgnoredMod(workshopId, mod?.name || null);
-    autoSyncCollection("remove", workshopId).catch(() => {});
     res.json({
       success: true,
       message: "Mod removed from tracking and added to ignore list",
@@ -1033,46 +1022,10 @@ router.get("/collection/diff", async (req, res) => {
       });
     }
 
-    const { sessionId: sidVal, loginSecure: lsVal } =
-      await getSteamSessionCredentials();
-    const looksMasked = (v: any) =>
-      typeof v === "string" && (v.startsWith("••••••••") || /^[•*]+$/.test(v));
-    const hasCredentials =
-      typeof sidVal === "string" &&
-      sidVal.trim().length >= 8 &&
-      !looksMasked(sidVal) &&
-      typeof lsVal === "string" &&
-      lsVal.trim().length >= 16 &&
-      !looksMasked(lsVal);
-
-    let tokenExpiry = null;
-    let tokenExpired = false;
-    if (hasCredentials && lsVal) {
-      try {
-        const decoded = decodeURIComponent(lsVal.trim());
-        const jwtPart = decoded.split("||")[1];
-        if (jwtPart) {
-          const payload = JSON.parse(
-            Buffer.from(jwtPart.split(".")[1], "base64").toString(),
-          );
-          if (payload.exp) {
-            tokenExpiry = payload.exp * 1000;
-            tokenExpired = Date.now() > tokenExpiry;
-          }
-        }
-      } catch {
-        /* non-JWT format or decode failure — ignore */
-      }
-    }
-
     res.json({
       ...diff,
       items,
       collectionId: (await getSetting("workshopCollectionId")) || null,
-      autoSync: !!(await getSetting("workshopCollectionAutoSync")),
-      hasCredentials,
-      tokenExpiry,
-      tokenExpired,
       trackedCount: ids.length,
       serverConfigRead,
     });
@@ -1082,62 +1035,6 @@ router.get("/collection/diff", async (req, res) => {
   }
 });
 
-
-router.post("/collection/items", async (req, res) => {
-  try {
-    const collectionId = await getSetting("workshopCollectionId");
-    if (!collectionId) {
-      return res.status(400).json({
-        error: "Collection ID not configured",
-        code: ErrorCode.MODS_COLLECTION_ID_NOT_CONFIGURED,
-      });
-    }
-    const workshopId = String(req.body?.workshopId || "").trim();
-    if (!/^\d{1,15}$/.test(workshopId)) {
-      return res.status(400).json({
-        error: "Invalid workshop ID",
-        code: ErrorCode.MODS_INVALID_WORKSHOP_ID_LOWER,
-      });
-    }
-    const r = await addItemToCollection(collectionId, workshopId);
-    if (!r.ok)
-      return res
-        .status(502)
-        .json({ error: r.error || "Steam rejected the change" });
-    res.json({ ok: true, workshopId, action: "add" });
-  } catch (error: any) {
-    log.error(`Collection add failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.delete("/collection/items/:workshopId", async (req, res) => {
-  try {
-    const collectionId = await getSetting("workshopCollectionId");
-    if (!collectionId) {
-      return res.status(400).json({
-        error: "Collection ID not configured",
-        code: ErrorCode.MODS_COLLECTION_ID_NOT_CONFIGURED,
-      });
-    }
-    const workshopId = String(req.params.workshopId || "").trim();
-    if (!/^\d{1,15}$/.test(workshopId)) {
-      return res.status(400).json({
-        error: "Invalid workshop ID",
-        code: ErrorCode.MODS_INVALID_WORKSHOP_ID_LOWER,
-      });
-    }
-    const r = await removeItemFromCollection(collectionId, workshopId);
-    if (!r.ok)
-      return res
-        .status(502)
-        .json({ error: r.error || "Steam rejected the change" });
-    res.json({ ok: true, workshopId, action: "remove" });
-  } catch (error: any) {
-    log.error(`Collection remove failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
 
 router.delete("/collection/tracking/:workshopId", async (req, res) => {
   try {
@@ -1159,195 +1056,6 @@ router.delete("/collection/tracking/:workshopId", async (req, res) => {
     });
   } catch (error: any) {
     log.error(`Collection tracking removal failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/collection/sync", async (req, res) => {
-  try {
-    const collectionId = await getSetting("workshopCollectionId");
-    if (!collectionId) {
-      return res.status(400).json({
-        error: "Collection ID not configured",
-        code: ErrorCode.MODS_COLLECTION_ID_NOT_CONFIGURED,
-      });
-    }
-    const tracked = await getTrackedMods();
-    const trackedIds = tracked.map((m) => String(m.workshop_id));
-    const diff = await computeCollectionDiff(trackedIds);
-    if (!diff.ok) {
-      return res
-        .status(502)
-        .json({ error: diff.error || "Could not read collection" });
-    }
-
-    const added: string[] = [];
-    const errors: AnyRecord[] = [];
-    let staleSession = false;
-
-    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-    const STALE_RE = /session expired|HTTP 302|HTTP 401|HTTP 403/i;
-
-    for (const id of diff.toAdd) {
-      const r = await addItemToCollection(collectionId, id);
-      if (r.ok) added.push(id);
-      else {
-        errors.push({ action: "add", id, error: r.error });
-        if (r.error && STALE_RE.test(r.error)) {
-          staleSession = true;
-          break;
-        }
-      }
-      await sleep(300);
-    }
-    const failedTitles = await fetchPublishedFileTitles(errors.map(({ id }) => id));
-    const detailedErrors = errors.map((entry) => ({
-      ...entry,
-      title: failedTitles.get(entry.id) || null,
-    }));
-    res.json({
-      success: detailedErrors.length === 0,
-      collectionId,
-      added,
-      removed: [],
-      errors: detailedErrors,
-      staleSession,
-      message:
-        detailedErrors.length === 0
-          ? `Synced \u2014 added ${added.length}`
-          : staleSession
-            ? "Steam session expired \u2014 paste fresh cookies and try again"
-            : `Steam rejected ${detailedErrors.length} item${detailedErrors.length !== 1 ? "s" : ""}`,
-    });
-  } catch (error: any) {
-    log.error(`Collection sync failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/collection/test", async (req, res) => {
-  try {
-    const collectionId = await getSetting("workshopCollectionId");
-    if (!collectionId)
-      return res.status(400).json({
-        error: "Collection ID not configured",
-        code: ErrorCode.MODS_COLLECTION_ID_NOT_CONFIGURED,
-      });
-    const { sessionId, loginSecure } = await getSteamSessionCredentials();
-    if (!sessionId || !loginSecure)
-      return res
-        .status(400)
-        .json({
-          error: "Steam session cookies not configured",
-          code: ErrorCode.MODS_STEAM_SESSION_COOKIES_NOT_CONFIGURED,
-        });
-
-    const contents = await getCollectionContents(collectionId);
-    if (!contents.ok)
-      return res
-        .status(502)
-        .json({ error: contents.error || "Could not read collection" });
-
-    res.json({
-      success: true,
-      collectionId,
-      title: contents.title,
-      itemCount: contents.items.length,
-      writeVerified: false,
-      message: contents.title
-        ? `Collection "${contents.title}" found (${contents.items.length} items). Write access is verified on first sync.`
-        : `Collection found (${contents.items.length} items). Write access is verified on first sync.`,
-    });
-  } catch (error: any) {
-    log.error(`Collection test failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-
-router.get("/collection/browsers", async (req, res) => {
-  try {
-    const info = listAvailableBrowsers();
-    res.json(info);
-  } catch (error: any) {
-    log.error(`List browsers failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/collection/extract-cookies", async (req, res) => {
-  try {
-    const browser = String(req.body?.browser || "")
-      .toLowerCase()
-      .trim();
-    const allowed = ["firefox", "chrome", "edge", "brave"];
-    if (!allowed.includes(browser)) {
-      return res.status(400).json({
-        error: "Invalid browser. Must be one of: " + allowed.join(", "),
-        code: ErrorCode.MODS_INVALID_BROWSER,
-        params: sanitizeErrorParams({ browsers: allowed.join(", ") }),
-      });
-    }
-    const result = await extractSteamCookies(browser);
-    if (!result.ok) {
-      return res.status(200).json(result);
-    }
-    await setSteamSessionCredentials(result.sessionid, result.steamLoginSecure);
-    res.json({
-      ok: true,
-      browser: result.browser,
-      saved: true,
-      notes: result.notes,
-    });
-  } catch (error: any) {
-    log.error(`Extract cookies failed: ${error.message}`);
-    res.status(500).json({ error: sanitizeError(error.message) });
-  }
-});
-
-router.post("/collection/save-cookies", async (req, res) => {
-  try {
-    const sessionid =
-      typeof req.body?.sessionid === "string" ? req.body.sessionid.trim() : "";
-    const loginSecure =
-      typeof req.body?.steamLoginSecure === "string"
-        ? req.body.steamLoginSecure.trim()
-        : "";
-
-    if (!sessionid || !loginSecure) {
-      return res
-        .status(400)
-        .json({
-          error: "Both sessionid and steamLoginSecure are required",
-          code: ErrorCode.MODS_COOKIE_VALUES_REQUIRED,
-        });
-    }
-    const HAS_CONTROL = /[\r\n\0;]/;
-    if (HAS_CONTROL.test(sessionid) || HAS_CONTROL.test(loginSecure)) {
-      return res
-        .status(400)
-        .json({
-          error: "Cookie values contain forbidden control characters",
-          code: ErrorCode.MODS_COOKIE_VALUES_CONTROL_CHARS,
-        });
-    }
-    if (sessionid.length > 4096 || loginSecure.length > 4096) {
-      return res
-        .status(400)
-        .json({
-          error: "Cookie values are unexpectedly long",
-          code: ErrorCode.MODS_COOKIE_VALUES_TOO_LONG,
-        });
-    }
-
-    await setSteamSessionCredentials(sessionid, loginSecure);
-
-    log.info(
-      `Steam cookies updated via manual entry (user: ${(req.user as AnyRecord)?.username || "unknown"})`,
-    );
-    res.json({ ok: true, message: "Cookies saved" });
-  } catch (error: any) {
-    log.error(`Saving Steam cookies failed: ${error.message}`);
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
@@ -3238,19 +2946,6 @@ router.post("/batch-remove", async (req, res) => {
       );
     }
 
-    if (iniEditApplied && validIds.length > 0) {
-      (async () => {
-        for (const wsId of validIds) {
-          try {
-            await autoSyncCollection("remove", wsId);
-          } catch {
-            /* logged inside */
-          }
-          await new Promise((r) => setTimeout(r, 250));
-        }
-      })().catch(() => {});
-    }
-
     res.json({
       success: iniEditApplied,
       total: validIds.length,
@@ -4869,8 +4564,6 @@ router.post("/add-mod-advanced", async (req, res) => {
     } catch (e: any) {
       // Ignore if already tracked
     }
-
-    autoSyncCollection("add", String(workshopId)).catch(() => {});
 
     log.info(
       `Added mod ${workshopId} with ${lockResult.addedModIds.length} mod IDs: ${lockResult.addedModIds.join(", ")}`,
@@ -7240,23 +6933,6 @@ router.post("/purge", async (req, res) => {
     }
     if (!name && req.body?.name) name = String(req.body.name).slice(0, 200);
 
-    const collection: {
-      attempted: boolean;
-      ok: boolean;
-      error: string | null;
-    } = { attempted: false, ok: false, error: null };
-    const collectionId = await getSetting("workshopCollectionId");
-    if (collectionId) {
-      collection.attempted = true;
-      try {
-        const r = await removeItemFromCollection(collectionId, wsId);
-        collection.ok = !!r.ok;
-        if (!r.ok) collection.error = r.error || "Steam rejected the change";
-      } catch (e: any) {
-        collection.error = e.message;
-      }
-    }
-
     const {
       removedPath,
       modIdsToStrip,
@@ -7273,7 +6949,6 @@ router.post("/purge", async (req, res) => {
         error:
           "Server config file was not found or not accessible — the mod was not removed from the server.",
         code: ErrorCode.MODS_PURGE_INI_NOT_ACCESSIBLE,
-        collection,
         deletedFromDisk: !!removedPath,
       });
     }
@@ -7290,18 +6965,17 @@ router.post("/purge", async (req, res) => {
     }
 
     log.info(
-      `Purged ${wsId} (${name || "unknown name"}): collection=${
-        collection.attempted ? (collection.ok ? "removed" : "failed") : "skipped"
-      }, disk=${removedPath || "not found"}, mod IDs stripped=${
-        modIdsToStrip.length
-      }, map folders stripped=${mapFoldersToStrip.length}`,
+      `Purged ${wsId} (${name || "unknown name"}): disk=${
+        removedPath || "not found"
+      }, mod IDs stripped=${modIdsToStrip.length}, map folders stripped=${
+        mapFoldersToStrip.length
+      }`,
     );
 
     res.json({
       success: true,
       workshopId: wsId,
       name,
-      collection,
       deletedFromDisk: !!removedPath,
       modIdsStripped: modIdsToStrip.length,
       mapFoldersStripped: mapFoldersToStrip.length,

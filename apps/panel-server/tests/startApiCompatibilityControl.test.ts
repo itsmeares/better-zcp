@@ -162,10 +162,7 @@ const mocks = vi.hoisted(() => {
       "setModRestartOptions",
       "getWorkshopStatus",
       "cancelPendingModRestart",
-      "addCollectionItem",
-      "removeCollectionItem",
       "removeCollectionTracking",
-      "saveCollectionCookies",
     ].map((name) => [name, serverFunction(name)]),
   );
   const system = {

@@ -51,17 +51,6 @@ async function runRoute(routePath, method, req) {
 }
 
 describe("mods.js: previously-PARTIAL error codes now carry params on the wire", () => {
-  it("MODS_INVALID_BROWSER sends { browsers } listing the allowed set", async () => {
-    const res = await runRoute("/collection/extract-cookies", "post", {
-      body: { browser: "netscape-navigator" },
-    });
-    expect(res.getStatusCode()).toBe(400);
-    expect(res.getBody()).toMatchObject({
-      code: "MODS_INVALID_BROWSER",
-      params: { browsers: "firefox, chrome, edge, brave" },
-    });
-  });
-
   it("MODS_INVALID_WORKSHOP_ID_TEMPLATE (write-to-ini) sends the offending, truncated { workshopId }", async () => {
     const overlong = "1".repeat(30);
     const res = await runRoute("/write-to-ini", "post", {

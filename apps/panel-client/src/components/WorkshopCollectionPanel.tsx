@@ -7,7 +7,6 @@ import {
   Check,
   CheckCircle2,
   ExternalLink,
-  KeyRound,
   Library,
   Loader2,
   Minus,
@@ -39,15 +38,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,7 +49,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/components/ui/use-toast'
 import { useConfirm } from '@/contexts/ConfirmContext'
-import { DisabledReason } from '@/components/DisabledReason'
 import { modsApi } from '@/lib/api'
 import { getUserErrorMessage } from '@/lib/errorMessage'
 import { cn, copyText } from '@/lib/utils'
@@ -76,8 +66,6 @@ type FilterKey =
   | 'collection'
   | 'server'
 type RowAction =
-  | 'add'
-  | 'remove'
   | 'track'
   | 'untrack'
   | 'add-server'
@@ -93,31 +81,6 @@ function formatAgo(date: Date | null, locale?: string): string {
   return date.toLocaleTimeString(locale)
 }
 
-function parseSteamCookieBlob(raw: string): {
-  sessionid?: string
-  steamLoginSecure?: string
-  error?: string
-} {
-  const text = raw.replace(/\r/g, '')
-  const sessionMatch = text.match(
-    /(?:^|[;\s'"])sessionid\s*[=:\t]\s*([A-Za-z0-9_%-]+)/i,
-  )
-  const loginMatch = text.match(
-    /(?:^|[;\s'"])steamLoginSecure\s*[=:\t]\s*([A-Za-z0-9_%|+/=.-]+)/i,
-  )
-  if (!sessionMatch || !loginMatch) {
-    return { error: 'Paste both sessionid and steamLoginSecure.' }
-  }
-  try {
-    return {
-      sessionid: decodeURIComponent(sessionMatch[1]),
-      steamLoginSecure: decodeURIComponent(loginMatch[1]),
-    }
-  } catch {
-    return { sessionid: sessionMatch[1], steamLoginSecure: loginMatch[1] }
-  }
-}
-
 export function WorkshopCollectionPanel() {
   const { toast } = useToast()
   const confirm = useConfirm()
@@ -127,11 +90,6 @@ export function WorkshopCollectionPanel() {
   const [diffCheckedAt, setDiffCheckedAt] = useState<Date | null>(null)
   const [bulkBusy, setBulkBusy] = useState<RowAction | null>(null)
   const [purgeTarget, setPurgeTarget] = useState<DiffItem | null>(null)
-  const [cookieDialogOpen, setCookieDialogOpen] = useState(false)
-  const [cookiePaste, setCookiePaste] = useState('')
-  const [cookieSaving, setCookieSaving] = useState(false)
-  const [cookieError, setCookieError] = useState<string | null>(null)
-
   const [filter, setFilter] = useState<FilterKey>('missing')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -161,9 +119,6 @@ export function WorkshopCollectionPanel() {
   }, [refresh])
 
   const collectionId = diff?.collectionId || ''
-  const credsConfigured = !!diff?.hasCredentials
-  const tokenExpired = !!diff?.tokenExpired
-  const autoSync = !!diff?.autoSync
   const items: DiffItem[] = useMemo(
     () => (diff?.ok && diff.items ? diff.items : []),
     [diff],
@@ -255,50 +210,10 @@ export function WorkshopCollectionPanel() {
   }
   const clearSelection = () => setSelected(new Set())
 
-  const saveCookies = async () => {
-    const parsed = parseSteamCookieBlob(cookiePaste)
-    if (!parsed.sessionid || !parsed.steamLoginSecure) {
-      setCookieError(parsed.error || 'Paste both Steam cookies.')
-      return
-    }
-    setCookieSaving(true)
-    setCookieError(null)
-    try {
-      await modsApi.collectionSaveCookies(
-        parsed.sessionid,
-        parsed.steamLoginSecure,
-      )
-      setCookiePaste('')
-      setCookieDialogOpen(false)
-      toast({ title: 'Steam cookies saved' })
-      await refresh()
-    } catch (err: any) {
-      setCookieError(getUserErrorMessage(err, 'Could not save Steam cookies.'))
-    } finally {
-      setCookieSaving(false)
-    }
-  }
-
   const runRowAction = async (workshopId: string, action: RowAction) => {
     setRowBusy((prev) => ({ ...prev, [workshopId]: action }))
     try {
-      if (action === 'add') {
-        if (!credsConfigured)
-          throw new Error('Add Steam cookies in Settings first.')
-        if (tokenExpired)
-          throw new Error(
-            'Steam session expired — paste fresh cookies in Settings.',
-          )
-        await modsApi.collectionAddItem(workshopId)
-      } else if (action === 'remove') {
-        if (!credsConfigured)
-          throw new Error('Add Steam cookies in Settings first.')
-        if (tokenExpired)
-          throw new Error(
-            'Steam session expired — paste fresh cookies in Settings.',
-          )
-        await modsApi.collectionRemoveItem(workshopId)
-      } else if (action === 'track') {
+      if (action === 'track') {
         await modsApi.trackMod(workshopId)
       } else if (action === 'untrack') {
         await modsApi.collectionUntrack(workshopId)
@@ -316,21 +231,12 @@ export function WorkshopCollectionPanel() {
         await modsApi.batchRemove([workshopId])
         toast({
           title: 'Removed from server configuration',
-          description: autoSync
-            ? 'It will also be removed from Steam collection.'
-            : 'Steam collection was left unchanged because auto-sync is off.',
+          description: 'Steam collection was left unchanged.',
         })
       } else if (action === 'purge') {
         const item = items.find((it) => it.workshopId === workshopId)
         const r = await modsApi.purgeMod(workshopId, item?.name)
         const done = [
-          r.collection.attempted
-            ? r.collection.ok
-              ? 'removed from the collection'
-              : 'collection not updated (' +
-                String(r.collection.error || 'Steam rejected the change') +
-                ')'
-            : null,
           'removed from the server config',
           r.deletedFromDisk ? 'deleted from disk' : 'no files on disk',
           'untracked and ignored',
@@ -361,8 +267,6 @@ export function WorkshopCollectionPanel() {
     if (bulkBusy) return
     const targets = filtered.filter((it) => {
       if (!selected.has(it.workshopId)) return false
-      if (action === 'add') return !it.inCollection
-      if (action === 'remove') return it.inCollection
       if (action === 'track') return !it.inTracked
       if (action === 'untrack') return it.inTracked
       if (action === 'remove-server') return it.inServer
@@ -375,30 +279,13 @@ export function WorkshopCollectionPanel() {
       })
       return
     }
-    if ((action === 'add' || action === 'remove') && !credsConfigured) {
-      toast({
-        variant: 'destructive',
-        title: 'Steam cookies required',
-        description: 'Open Settings → Workshop Collection Sync to add them.',
-      })
-      return
-    }
-    if ((action === 'add' || action === 'remove') && tokenExpired) {
-      toast({
-        variant: 'destructive',
-        title: 'Steam session expired',
-        description:
-          'Your Steam cookies have expired. Paste fresh ones in Settings → Workshop Collection Sync.',
-      })
-      return
-    }
     if (action === 'untrack') {
       const ok = await confirm({
         title: 'Untrack ' + String(targets.length) + ' mods?',
         description:
-          "This stops the panel watching the mod for updates, adds it to your ignore list so auto-sync won't re-add it, and removes it from your Steam Workshop collection.",
+          'This stops the panel watching the mod and adds it to your ignore list. The Steam collection is left unchanged.',
         variant: 'warning',
-        confirmLabel: 'Untrack & remove from Steam',
+        confirmLabel: 'Untrack locally',
       })
       if (!ok) return
     }
@@ -418,17 +305,12 @@ export function WorkshopCollectionPanel() {
         await modsApi.batchRemove(targets.map((item) => item.workshopId))
         toast({
           title: 'Removed from server configuration',
-          description: autoSync
-            ? Number(targets.length) === 1
-              ? String(targets.length) +
-                ' mod removed; Steam collection will follow.'
-              : String(targets.length) +
-                ' mods removed; Steam collection will follow.'
-            : Number(targets.length) === 1
-              ? String(targets.length) +
-                ' mod removed. Steam collection was left unchanged because auto-sync is off.'
-              : String(targets.length) +
-                ' mods removed. Steam collection was left unchanged because auto-sync is off.',
+            description:
+              Number(targets.length) === 1
+                ? String(targets.length) +
+                  ' mod removed. Steam collection was left unchanged.'
+                : String(targets.length) +
+                  ' mods removed. Steam collection was left unchanged.',
         })
       } catch (err: any) {
         toast({
@@ -453,10 +335,7 @@ export function WorkshopCollectionPanel() {
     for (const it of targets) {
       setRowBusy((prev) => ({ ...prev, [it.workshopId]: action }))
       try {
-        if (action === 'add') await modsApi.collectionAddItem(it.workshopId)
-        else if (action === 'remove')
-          await modsApi.collectionRemoveItem(it.workshopId)
-        else if (action === 'track') await modsApi.trackMod(it.workshopId)
+        if (action === 'track') await modsApi.trackMod(it.workshopId)
         else if (action === 'untrack')
           await modsApi.collectionUntrack(it.workshopId)
         ok++
@@ -521,7 +400,7 @@ export function WorkshopCollectionPanel() {
             {'Workshop Collection'}
           </CardTitle>
           <CardDescription>
-            {'Mirror your tracked mods into a Steam Workshop collection.'}
+            {'Compare a public Steam Workshop collection with this server.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -535,7 +414,7 @@ export function WorkshopCollectionPanel() {
               </h3>
               <p className="text-xs text-muted-foreground">
                 {
-                  'Add your Steam Workshop collection ID and paste your Steam session cookies, then come back here to manage the sync.'
+                  'Add a public Steam Workshop collection ID to compare its mods with this server.'
                 }
               </p>
             </div>
@@ -589,59 +468,13 @@ export function WorkshopCollectionPanel() {
               <span className="font-mono">{collectionId || '—'}</span>
               <span className="text-muted-foreground/60">·</span>
               <span>
-                {'Auto-sync'}{' '}
-                <strong
-                  className={
-                    autoSync ? 'text-success' : 'text-muted-foreground'
-                  }
-                >
-                  {autoSync ? 'on' : 'off'}
-                </strong>
-              </span>
-              <span className="text-muted-foreground/60">·</span>
-              <span>
                 {'Refreshed ' + String(formatAgo(diffCheckedAt, 'en'))}
               </span>
-              {!credsConfigured && (
-                <>
-                  <span className="text-muted-foreground/60">·</span>
-                  <span className="inline-flex items-center gap-1 text-warning">
-                    <AlertTriangle className="w-3 h-3" />
-                    {'No Steam cookies — read-only'}
-                  </span>
-                </>
-              )}
-              {credsConfigured && tokenExpired && (
-                <>
-                  <span className="text-muted-foreground/60">·</span>
-                  <span className="inline-flex items-center gap-1 text-destructive">
-                    <AlertTriangle className="w-3 h-3" />
-                    {'Steam session expired — paste fresh cookies in'}{' '}
-                    <Link
-                      to="/settings"
-                      className="underline underline-offset-2"
-                    >
-                      {'Settings'}
-                    </Link>
-                  </span>
-                </>
-              )}
+              <span className="text-muted-foreground/60">·</span>
+              <span>{'Public read-only collection'}</span>
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setCookieError(null)
-                setCookieDialogOpen(true)
-              }}
-              className="h-8 w-8 text-muted-foreground"
-              title={'Paste Steam cookies'}
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span className="sr-only">{'Paste Steam cookies'}</span>
-            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -673,42 +506,6 @@ export function WorkshopCollectionPanel() {
           </div>
         </div>
       </CardHeader>
-
-      <Dialog open={cookieDialogOpen} onOpenChange={setCookieDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{'Steam cookies'}</DialogTitle>
-          </DialogHeader>
-          <Textarea
-            value={cookiePaste}
-            onChange={(event) => setCookiePaste(event.target.value)}
-            placeholder={'sessionid=...; steamLoginSecure=...'}
-            className="min-h-28 font-mono text-xs"
-            autoFocus
-          />
-          {cookieError && (
-            <p className="text-xs text-destructive">{cookieError}</p>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setCookieDialogOpen(false)}
-              disabled={cookieSaving}
-            >
-              {'Cancel'}
-            </Button>
-            <Button
-              onClick={saveCookies}
-              disabled={cookieSaving || !cookiePaste.trim()}
-            >
-              {cookieSaving && (
-                <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
-              )}
-              {'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <CardContent className="space-y-4">
         {diffError && (
@@ -893,35 +690,6 @@ export function WorkshopCollectionPanel() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-[11px] text-success hover:text-success hover:bg-success/10"
-              onClick={() => runBulk('add')}
-              disabled={!!bulkBusy || !credsConfigured || tokenExpired}
-            >
-              {bulkBusy === 'add' ? (
-                <Loader2 className="w-3 h-3 me-1 animate-spin" />
-              ) : (
-                <Plus className="w-3 h-3 me-1" />
-              )}
-              {'Add to collection'}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => runBulk('remove')}
-              disabled={!!bulkBusy || !credsConfigured || tokenExpired}
-            >
-              {bulkBusy === 'remove' ? (
-                <Loader2 className="w-3 h-3 me-1 animate-spin" />
-              ) : (
-                <Minus className="w-3 h-3 me-1" />
-              )}
-              {'Remove from collection'}
-            </Button>
-            <span className="text-muted-foreground/40">|</span>
-            <Button
-              size="sm"
-              variant="ghost"
               className="h-7 px-2 text-[11px]"
               onClick={() => runBulk('track')}
               disabled={!!bulkBusy || !canBulkTrack}
@@ -954,9 +722,7 @@ export function WorkshopCollectionPanel() {
               onClick={() => runBulk('remove-server')}
               disabled={!!bulkBusy || !canBulkRemoveServer}
               // eslint-disable-next-line local/no-dead-disabled-title -- hint describing the button's purpose/use-case ("after they were removed from Steam"), not an instruction tied to canBulkRemoveServer or bulkBusy -- doesn't tell the user what to do to enable it. Read as pure hint, not a disabled-reason. Triaged 2026-08-27.
-              title={
-                'Remove selected mods from the server after they were removed from Steam'
-              }
+              title={'Remove selected mods from the server configuration'}
             >
               {bulkBusy === 'remove-server' ? (
                 <Loader2 className="w-3 h-3 me-1 animate-spin" />
@@ -1038,8 +804,6 @@ export function WorkshopCollectionPanel() {
                       selected={selected.has(it.workshopId)}
                       onToggleSelect={() => toggleOne(it.workshopId)}
                       busy={rowBusy[it.workshopId] || null}
-                      credsConfigured={credsConfigured}
-                      tokenExpired={tokenExpired}
                       onAction={(action) => {
                         if (action === 'purge') {
                           setPurgeTarget(it)
@@ -1049,9 +813,9 @@ export function WorkshopCollectionPanel() {
                           confirm({
                             title: 'Untrack this mod?',
                             description:
-                              "This stops the panel watching the mod for updates, adds it to your ignore list so auto-sync won't re-add it, and removes it from your Steam Workshop collection.",
+                              'This stops the panel watching the mod and adds it to your ignore list. The Steam collection is left unchanged.',
                             variant: 'warning',
-                            confirmLabel: 'Untrack & remove from Steam',
+                            confirmLabel: 'Untrack locally',
                           }).then((ok) => {
                             if (ok) runRowAction(it.workshopId, action)
                           })
@@ -1104,9 +868,8 @@ export function WorkshopCollectionPanel() {
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-2">
-                  <p>{'This removes the mod from all four places at once:'}</p>
+                  <p>{'This removes the mod from the server and panel data:'}</p>
                   <ul className="list-disc ps-5 space-y-0.5">
-                    <li>{'the Steam collection'}</li>
                     <li>
                       <>
                         {'the server config ('}
@@ -1198,16 +961,12 @@ function Row({
   selected,
   onToggleSelect,
   busy,
-  credsConfigured,
-  tokenExpired,
   onAction,
 }: {
   item: DiffItem
   selected: boolean
   onToggleSelect: () => void
   busy: RowAction | null
-  credsConfigured: boolean
-  tokenExpired: boolean
   onAction: (action: RowAction) => void
 }) {
   const { toast } = useToast()
@@ -1333,83 +1092,6 @@ function Row({
               <span className="ms-1 hidden sm:inline">{'Add to server'}</span>
             </Button>
           )}
-          {item.inCollection ? (
-            <DisabledReason
-              reason={
-                tokenExpired
-                  ? 'Steam session expired'
-                  : !credsConfigured
-                    ? 'Need Steam cookies'
-                    : null
-              }
-            >
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={() => onAction('remove')}
-                disabled={!!busy || !credsConfigured || tokenExpired}
-                // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27 (REAL bug: title alone was never visible on a disabled native button -- Chromium shows no tooltip -- despite the ternary correctly selecting "Steam session expired"/"Need Steam cookies"; the aria-label carried the same text but that's an accessible-only channel, not a visual one). The disabled-reason now lives in the DisabledReason wrapper above; this title carries only the enabled-state action label.
-                title={
-                  tokenExpired || !credsConfigured
-                    ? undefined
-                    : 'Remove from Steam collection'
-                }
-                aria-label={
-                  tokenExpired
-                    ? 'Steam session expired'
-                    : !credsConfigured
-                      ? 'Need Steam cookies'
-                      : undefined
-                }
-              >
-                {busy === 'remove' ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Minus className="w-3 h-3" />
-                )}
-                <span className="ms-1 hidden sm:inline">{'Remove'}</span>
-              </Button>
-            </DisabledReason>
-          ) : (
-            <DisabledReason
-              reason={
-                tokenExpired
-                  ? 'Steam session expired'
-                  : !credsConfigured
-                    ? 'Need Steam cookies'
-                    : null
-              }
-            >
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-[11px] text-success hover:text-success hover:bg-success/10"
-                onClick={() => onAction('add')}
-                disabled={!!busy || !credsConfigured || tokenExpired}
-                // eslint-disable-next-line local/no-dead-disabled-title -- split 2026-08-27, same real bug and fix as the remove-from-collection button above.
-                title={
-                  tokenExpired || !credsConfigured
-                    ? undefined
-                    : 'Add to Steam collection'
-                }
-                aria-label={
-                  tokenExpired
-                    ? 'Steam session expired'
-                    : !credsConfigured
-                      ? 'Need Steam cookies'
-                      : undefined
-                }
-              >
-                {busy === 'add' ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Plus className="w-3 h-3" />
-                )}
-                <span className="ms-1 hidden sm:inline">{'Add'}</span>
-              </Button>
-            </DisabledReason>
-          )}
           {item.inTracked ? (
             <Button
               size="sm"
@@ -1418,7 +1100,7 @@ function Row({
               onClick={() => onAction('untrack')}
               disabled={!!busy}
               // eslint-disable-next-line local/no-dead-disabled-title -- pure hint, disables only transiently while an action is in flight (the spinner is the self-evident why). Triaged 2026-08-27.
-              title={'Untrack and remove from your Steam collection'}
+              title={'Untrack locally; leave the Steam collection unchanged'}
             >
               {busy === 'untrack' ? (
                 <Loader2 className="w-3 h-3 animate-spin" />

@@ -1725,32 +1725,12 @@ const routes: RouteSpec[] = [
     functionName: 'cancelPendingModRestart',
   },
   {
-    method: 'POST',
-    pattern: '/api/mods/collection/items',
-    source: 'mods',
-    functionName: 'addCollectionItem',
-  },
-  {
-    method: 'DELETE',
-    pattern: '/api/mods/collection/items/:workshopId',
-    source: 'mods',
-    functionName: 'removeCollectionItem',
-    data: mergeBody,
-  },
-  {
     method: 'DELETE',
     pattern: '/api/mods/collection/tracking/:workshopId',
     source: 'mods',
     functionName: 'removeCollectionTracking',
     data: mergeBody,
   },
-  {
-    method: 'POST',
-    pattern: '/api/mods/collection/save-cookies',
-    source: 'mods',
-    functionName: 'saveCollectionCookies',
-  },
-
   {
     method: 'GET',
     pattern: '/api/server-files/paths',

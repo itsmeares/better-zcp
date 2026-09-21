@@ -350,7 +350,7 @@ describe("PUT /app-settings -- autoExportMaxPerPlayer validation (low priority, 
   });
 });
 
-describe("PUT /app-settings -- the other 8 boolean settings now reject a non-boolean value", () => {
+describe("PUT /app-settings -- the other 6 boolean settings now reject a non-boolean value", () => {
   const booleanKeys = [
     "modAutoRestart",
     "serverAutoUpdate",
@@ -358,7 +358,6 @@ describe("PUT /app-settings -- the other 8 boolean settings now reject a non-boo
     "autoReconnect",
     "httpsEnabled",
     "autoStartServer",
-    "workshopCollectionAutoSync",
   ];
 
   for (const key of booleanKeys) {

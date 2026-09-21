@@ -8,7 +8,6 @@ import {
 } from "../utils/sanitize.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { parseBoundedInteger } from "../utils/queryNumbers.ts";
-import { setSteamSessionCredentials } from "./steamSessionCredentials.ts";
 import { createLogger } from "../utils/logger.ts";
 
 const log = createLogger("AppSettings");
@@ -66,9 +65,6 @@ const VALID_SETTINGS_KEYS = [
   "autoExportMaxPerPlayer",
   "enablePublicIpLookup",
   "workshopCollectionId",
-  "workshopCollectionAutoSync",
-  "steamSessionId",
-  "steamLoginSecure",
   "lanIpAddress",
 ] as const;
 
@@ -100,7 +96,6 @@ const BOOLEAN_SETTINGS = new Set([
   "autoReconnect",
   "httpsEnabled",
   "autoStartServer",
-  "workshopCollectionAutoSync",
 ]);
 
 type SettingEntry = [string, unknown];
@@ -470,25 +465,8 @@ export async function saveAppSettings(
     return true;
   });
 
-  const steamSessionIdEntry = filtered.find(
-    ([key]) => key === "steamSessionId",
-  );
-  const steamLoginSecureEntry = filtered.find(
-    ([key]) => key === "steamLoginSecure",
-  );
-  if (steamSessionIdEntry || steamLoginSecureEntry) {
-    await setSteamSessionCredentials(
-      steamSessionIdEntry?.[1] as string | null | undefined,
-      steamLoginSecureEntry?.[1] as string | null | undefined,
-    );
-  }
-
   for (const [key, value] of filtered) {
-    if (
-      key === "modCheckInterval" ||
-      key === "steamSessionId" ||
-      key === "steamLoginSecure"
-    )
+    if (key === "modCheckInterval")
       continue;
     await setSetting(key, value);
   }
