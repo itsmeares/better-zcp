@@ -62,10 +62,6 @@ function makeSyntheticV1Db() {
       { username: "Deacon", note: "Trusted builder, has base at West Point" },
     ],
     player_stats: [{ username: "Deacon", kills: 42, deaths: 3 }],
-    mod_presets: [
-      { name: "Survival Pack", mods: ["2874186681"], workshop_ids: ["2874186681"] },
-    ],
-    user_templates: [],
     steamid_bans: [],
     performance_history: [
       { timestamp: "2026-08-20T12:00:00.000Z", cpu: 12.5, ramMb: 2048 },
@@ -144,7 +140,6 @@ describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cl
     expect(after.server_events).toEqual(before.server_events);
     expect(after.player_notes).toEqual(before.player_notes);
     expect(after.player_stats).toEqual(before.player_stats);
-    expect(after.mod_presets).toEqual(before.mod_presets);
     expect(after.performance_history).toEqual(before.performance_history);
     expect(after.active_server_id).toBe(before.active_server_id);
 

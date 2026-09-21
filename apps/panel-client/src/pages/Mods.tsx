@@ -93,7 +93,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Tooltip,
@@ -196,11 +195,10 @@ type ModsView =
   | 'add'
   | 'collection'
   | 'conflicts'
-  | 'presets'
   | 'tools'
   | 'deactivated'
 
-const CONFIG_VIEWS: ModsView[] = ['active', 'order', 'add', 'presets', 'tools']
+const CONFIG_VIEWS: ModsView[] = ['active', 'order', 'add', 'tools']
 
 function getModsNav(): Array<{
   group: string
@@ -247,7 +245,6 @@ function getModsNav(): Array<{
           label: 'Conflicts',
           hint: 'Clashes and missing dependencies',
         },
-        { id: 'presets', label: 'Presets', hint: 'Save and restore mod sets' },
         {
           id: 'tools',
           label: 'Tools',
@@ -387,7 +384,7 @@ export default function Mods() {
   const [deferredModManagerSearch, setDeferredModManagerSearch] = useState('')
   const modSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [configSubTab, setConfigSubTab] = useState<
-    'active' | 'order' | 'add' | 'presets' | 'tools'
+    'active' | 'order' | 'add' | 'tools'
   >('active')
   const [lastSavedMod, setLastSavedMod] = useState<string | null>(null)
   const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -478,32 +475,7 @@ export default function Mods() {
   )
   const lastAutoDiscoverIdRef = useRef<string | null>(null)
 
-  interface ModPreset {
-    id: number
-    name: string
-    description: string
-    workshop_ids: string[]
-    mods: string[]
-    created_at: string
-    updated_at: string
-  }
-  const [presets, setPresets] = useState<ModPreset[]>([])
-  const [presetsLoading, setPresetsLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
-  const [savePresetOpen, setSavePresetOpen] = useState(false)
-  const [presetName, setPresetName] = useState('')
-  const [presetDescription, setPresetDescription] = useState('')
-  const [savingPreset, setSavingPreset] = useState(false)
-  const [applyingPreset, setApplyingPreset] = useState<number | null>(null)
-  const [confirmApplyPreset, setConfirmApplyPreset] = useState<{
-    id: number
-    name: string
-    modCount: number
-  } | null>(null)
-  const [confirmDeletePreset, setConfirmDeletePreset] = useState<{
-    id: number
-    name: string
-  } | null>(null)
 
   interface ModConflict {
     type: 'duplicate' | 'missing_modid' | 'outdated_dependency'
@@ -996,19 +968,6 @@ export default function Mods() {
     }
   }, [collectionSyncing, fetchCollectionStatus, toast])
 
-  const fetchPresets = useCallback(async () => {
-    setPresetsLoading(true)
-    try {
-      const data = await modsApi.getPresets()
-      setPresets(data.presets || [])
-    } catch (error) {
-      reportClientError('Failed to fetch presets.', error)
-      setFetchError('Failed to load presets')
-    } finally {
-      setPresetsLoading(false)
-    }
-  }, [])
-
   const socket = useSocket()
   useEffect(() => {
     if (!socket) return
@@ -1036,11 +995,7 @@ export default function Mods() {
   useEffect(() => {
     let mounted = true
     const initializeData = async () => {
-      await Promise.allSettled([
-        fetchData(),
-        fetchPresets(),
-        fetchCollectionStatus(),
-      ])
+      await Promise.allSettled([fetchData(), fetchCollectionStatus()])
       if (!mounted) return
       try {
         const cached = await modsApi.getCachedConflicts()
@@ -1067,71 +1022,7 @@ export default function Mods() {
     return () => {
       mounted = false
     }
-  }, [fetchData, fetchPresets, fetchCollectionStatus])
-
-  const handleSavePreset = async () => {
-    if (!presetName.trim()) return
-    setSavingPreset(true)
-    try {
-      await modsApi.createPreset(presetName.trim(), presetDescription.trim())
-      toast({
-        title: 'Preset Saved',
-        description: 'Mod preset "' + String(presetName) + '" has been saved',
-        variant: 'success' as const,
-      })
-      setSavePresetOpen(false)
-      setPresetName('')
-      setPresetDescription('')
-      fetchPresets()
-    } catch (error) {
-      toast({
-        title: 'Preset Save Failed',
-        description: getUserErrorMessage(error, 'Failed to save preset'),
-        variant: 'destructive',
-      })
-    } finally {
-      setSavingPreset(false)
-    }
-  }
-
-  const handleApplyPreset = async (id: number, _name: string) => {
-    setApplyingPreset(id)
-    try {
-      const result = await modsApi.applyPreset(id)
-      toast({
-        title: 'Preset Applied',
-        description: result.message,
-        variant: 'success' as const,
-      })
-    } catch (error) {
-      toast({
-        title: 'Preset Apply Failed',
-        description: getUserErrorMessage(error, 'Failed to apply preset'),
-        variant: 'destructive',
-      })
-    } finally {
-      setApplyingPreset(null)
-      fetchData()
-    }
-  }
-
-  const handleDeletePreset = async (id: number, name: string) => {
-    try {
-      await modsApi.deletePreset(id)
-      toast({
-        title: 'Preset Deleted',
-        description: 'Preset "' + String(name) + '" has been deleted',
-        variant: 'success' as const,
-      })
-      fetchPresets()
-    } catch (error) {
-      toast({
-        title: 'Preset Delete Failed',
-        description: getUserErrorMessage(error, 'Failed to delete preset'),
-        variant: 'destructive',
-      })
-    }
-  }
+  }, [fetchData, fetchCollectionStatus])
 
   const filteredMods = useMemo(() => {
     let result = [...mods]
@@ -3342,11 +3233,7 @@ export default function Mods() {
                               if (CONFIG_VIEWS.includes(item.id)) {
                                 setConfigSubTab(
                                   item.id as
-                                    | 'active'
-                                    | 'order'
-                                    | 'add'
-                                    | 'presets'
-                                    | 'tools',
+                                    'active' | 'order' | 'add' | 'tools',
                                 )
                               }
                               if (
@@ -7577,282 +7464,6 @@ export default function Mods() {
                                 </p>
                               </div>
                             )}
-                          </div>
-                        )}
-
-                        {configSubTab === 'presets' && (
-                          <div className="space-y-4 sub-tab-enter">
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs text-muted-foreground">
-                                {'Save and restore mod configurations.'}
-                              </p>
-
-                              <Dialog
-                                open={savePresetOpen}
-                                onOpenChange={setSavePresetOpen}
-                              >
-                                <DialogTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    disabled={!iniConfig?.configured}
-                                  >
-                                    <Save className="w-4 h-4 me-2" />
-                                    {'Save Current'}
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>
-                                      {'Save Mod Preset'}
-                                    </DialogTitle>
-                                    <DialogDescription>
-                                      {
-                                        'Save the current mod configuration as a preset for easy switching later.'
-                                      }
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  <div className="space-y-4">
-                                    <div className="space-y-2">
-                                      <Label htmlFor="presetName">
-                                        {'Preset Name'}
-                                      </Label>
-                                      <Input
-                                        id="presetName"
-                                        value={presetName}
-                                        onChange={(e) =>
-                                          setPresetName(e.target.value)
-                                        }
-                                        placeholder={
-                                          'e.g., Vanilla+ Light, Hardcore, RP Server'
-                                        }
-                                        maxLength={100}
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label htmlFor="presetDesc">
-                                        {'Description (optional)'}
-                                      </Label>
-                                      <Input
-                                        id="presetDesc"
-                                        value={presetDescription}
-                                        onChange={(e) =>
-                                          setPresetDescription(e.target.value)
-                                        }
-                                        placeholder={
-                                          'Brief description of this preset...'
-                                        }
-                                        maxLength={500}
-                                      />
-                                    </div>
-                                    {iniConfig?.configured && (
-                                      <div className="rounded-lg border border-border/70 bg-secondary p-3 text-sm text-muted-foreground">
-                                        {'This will save ' +
-                                          String(
-                                            iniConfig.workshopIds?.length || 0,
-                                          ) +
-                                          ' workshop items and ' +
-                                          String(
-                                            iniConfig.modIds?.length || 0,
-                                          ) +
-                                          ' mod IDs.'}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <DialogFooter className="flex-col sm:flex-row gap-2">
-                                    <Button
-                                      variant="outline"
-                                      onClick={() => setSavePresetOpen(false)}
-                                      className="w-full sm:w-auto"
-                                    >
-                                      {'Cancel'}
-                                    </Button>
-                                    <Button
-                                      onClick={handleSavePreset}
-                                      disabled={
-                                        savingPreset || !presetName.trim()
-                                      }
-                                      className="w-full sm:w-auto"
-                                    >
-                                      {savingPreset && (
-                                        <Loader2 className="w-4 h-4 me-2 animate-spin" />
-                                      )}
-                                      {'Save Preset'}
-                                    </Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                            </div>
-
-                            {presetsLoading ? (
-                              <div className="flex items-center justify-center py-8">
-                                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                              </div>
-                            ) : presets.length === 0 ? (
-                              <div className="text-center py-8 text-muted-foreground">
-                                <FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                                <p className="text-sm">
-                                  {'No presets saved yet'}
-                                </p>
-                                <p className="text-xs">
-                                  {
-                                    'Save your current mod configuration to create a preset'
-                                  }
-                                </p>
-                              </div>
-                            ) : (
-                              <div className="space-y-2">
-                                {presets.map((preset) => (
-                                  <div
-                                    key={preset.id}
-                                    className="flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/50 p-3 transition-colors hover:bg-accent/20 sm:flex-row sm:items-center sm:justify-between"
-                                  >
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-medium truncate">
-                                        {preset.name}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground truncate">
-                                        {String(
-                                          preset.workshop_ids?.length || 0,
-                                        ) + ' mods'}{' '}
-                                        &bull;{' '}
-                                        {preset.description || 'No description'}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {'Saved ' +
-                                          String(
-                                            new Date(
-                                              preset.created_at,
-                                            ).toLocaleDateString('en'),
-                                          )}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 self-start sm:self-auto">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          setConfirmApplyPreset({
-                                            id: preset.id,
-                                            name: preset.name,
-                                            modCount:
-                                              preset.workshop_ids?.length || 0,
-                                          })
-                                        }
-                                        disabled={applyingPreset === preset.id}
-                                      >
-                                        {applyingPreset === preset.id ? (
-                                          <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                          <Download className="w-4 h-4" />
-                                        )}
-                                        <span className="ms-1.5">{'Load'}</span>
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() =>
-                                          setConfirmDeletePreset({
-                                            id: preset.id,
-                                            name: preset.name,
-                                          })
-                                        }
-                                        className="text-destructive hover:text-destructive"
-                                        aria-label={
-                                          'Delete preset "' +
-                                          String(preset.name) +
-                                          '"'
-                                        }
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            <AlertDialog
-                              open={!!confirmApplyPreset}
-                              onOpenChange={(open) => {
-                                if (!open) setConfirmApplyPreset(null)
-                              }}
-                            >
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    {'Apply preset "' +
-                                      String(confirmApplyPreset?.name) +
-                                      '"?'}
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    {'This will replace your current mod configuration with ' +
-                                      String(
-                                        confirmApplyPreset?.modCount || 0,
-                                      ) +
-                                      ' mods from this preset. Your existing Mods= and WorkshopItems= lines will be overwritten.'}
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>
-                                    {'Cancel'}
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => {
-                                      if (confirmApplyPreset) {
-                                        handleApplyPreset(
-                                          confirmApplyPreset.id,
-                                          confirmApplyPreset.name,
-                                        )
-                                        setConfirmApplyPreset(null)
-                                      }
-                                    }}
-                                  >
-                                    {'Apply Preset'}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-
-                            <AlertDialog
-                              open={!!confirmDeletePreset}
-                              onOpenChange={(open) => {
-                                if (!open) setConfirmDeletePreset(null)
-                              }}
-                            >
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    {'Delete preset "' +
-                                      String(confirmDeletePreset?.name) +
-                                      '"?'}
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    {
-                                      'This preset will be permanently deleted. This action cannot be undone.'
-                                    }
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>
-                                    {'Cancel'}
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    onClick={() => {
-                                      if (confirmDeletePreset) {
-                                        handleDeletePreset(
-                                          confirmDeletePreset.id,
-                                          confirmDeletePreset.name,
-                                        )
-                                        setConfirmDeletePreset(null)
-                                      }
-                                    }}
-                                  >
-                                    {'Delete Preset'}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
                           </div>
                         )}
 

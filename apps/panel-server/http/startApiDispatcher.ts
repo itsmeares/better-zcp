@@ -55,7 +55,6 @@ const routeModules: RouteModule[] = [
   { base: "/api/discovery", load: loadRouteModule("../routes/discovery.ts") },
   { base: "/api/scheduler", load: loadRouteModule("../routes/scheduler.ts") },
   { base: "/api/system", load: loadRouteModule("../routes/system.ts") },
-  { base: "/api/templates", load: loadRouteModule("../routes/templates.ts") },
   { base: "/api/panel-bridge", load: loadRouteModule("../routes/panelBridge.ts") },
   { base: "/api/server-status", load: loadRouteModule("../routes/serverStatus.ts") },
 ];

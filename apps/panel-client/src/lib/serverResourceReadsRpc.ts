@@ -108,36 +108,3 @@ export const getBackupHistory = createServerFn({ method: 'GET' })
       context,
     }),
   )
-
-export const getTemplates = createServerFn({ method: 'GET' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.getTemplates, 'getTemplates', {
-      data,
-      context,
-    }),
-  )
-
-export const getTemplate = createServerFn({ method: 'GET' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.getTemplate, 'getTemplate', { data, context }),
-  )
-
-export const exportTemplate = createServerFn({ method: 'GET' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.exportTemplate, 'exportTemplate', {
-      data,
-      context,
-    }),
-  )
-
-export const getHiddenTemplates = createServerFn({ method: 'GET' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.getHiddenTemplates, 'getHiddenTemplates', {
-      data,
-      context,
-    }),
-  )

@@ -7,10 +7,9 @@ import path from "path";
 vi.mock("../database/init.ts", () => ({
   getActiveServer: vi.fn(),
   getSetting: vi.fn(async () => null),
-  getModPresets: vi.fn(),
 }));
 
-const { getActiveServer, getModPresets } = await import("../database/init.ts");
+const { getActiveServer } = await import("../database/init.ts");
 const { default: router } = await import("../routes/mods.ts");
 
 function createResponse() {
@@ -69,7 +68,6 @@ describe("mod load order preservation for numeric-shaped mod IDs", () => {
       serverConfigPath: configPath,
       serverName: "TestServer",
     });
-    getModPresets.mockReset();
   });
 
   afterEach(() => {
@@ -88,29 +86,5 @@ describe("mod load order preservation for numeric-shaped mod IDs", () => {
     const ids = modsLine.split(";").filter(Boolean);
 
     expect(ids).toEqual(["BetaMod", "3519629457", "AlphaMod"]);
-  });
-
-  it("POST /presets/:id/apply preserves a numeric mod ID from the preset instead of silently dropping it", async () => {
-    getModPresets.mockResolvedValue([
-      {
-        id: "preset-1",
-        name: "Test Preset",
-        workshop_ids: ["1111111111", "3519629457"],
-        mods: ["AlphaMod", "3519629457"],
-      },
-    ]);
-
-    const res = await runRoute("/presets/:id/apply", "post", {
-      params: { id: "preset-1" },
-      body: {},
-    });
-
-    expect(res.getStatusCode()).toBe(200);
-
-    const content = fs.readFileSync(iniPath, "utf-8");
-    const modsLine = content.match(/^Mods=(.*)$/m)?.[1] || "";
-    const ids = modsLine.split(";").filter(Boolean);
-
-    expect(ids).toEqual(["AlphaMod", "3519629457"]);
   });
 });

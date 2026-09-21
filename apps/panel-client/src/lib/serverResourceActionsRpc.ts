@@ -17,60 +17,6 @@ function invoke(
   return invokeServerFunction(serverFunction, name, options)
 }
 
-export const createTemplate = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.createTemplate, 'createTemplate', {
-      data,
-      context,
-    }),
-  )
-
-export const importTemplate = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.importTemplate, 'importTemplate', {
-      data,
-      context,
-    }),
-  )
-
-export const previewTemplate = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.previewTemplate, 'previewTemplate', {
-      data,
-      context,
-    }),
-  )
-
-export const applyTemplate = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.applyTemplate, 'applyTemplate', {
-      data,
-      context,
-    }),
-  )
-
-export const deleteTemplate = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.deleteTemplate, 'deleteTemplate', {
-      data,
-      context,
-    }),
-  )
-
-export const unhideTemplate = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(serverImplementation.unhideTemplate, 'unhideTemplate', {
-      data,
-      context,
-    }),
-  )
-
 export const updateBackupSettings = createServerFn({ method: 'POST' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>

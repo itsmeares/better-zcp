@@ -23,7 +23,6 @@ import { Route as ServerConfigRouteImport } from './routes/server-config'
 import { Route as ServerSetupRouteImport } from './routes/server-setup'
 import { Route as ServersRouteImport } from './routes/servers'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as WorldMapRouteImport } from './routes/world-map'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
@@ -101,11 +100,6 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TemplatesRoute = TemplatesRouteImport.update({
-  id: '/templates',
-  path: '/templates',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const WorldMapRoute = WorldMapRouteImport.update({
   id: '/world-map',
   path: '/world-map',
@@ -152,7 +146,6 @@ export interface FileRoutesByFullPath {
   '/server-setup': typeof ServerSetupRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
-  '/templates': typeof TemplatesRoute
   '/world-map': typeof WorldMapRoute
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
@@ -175,7 +168,6 @@ export interface FileRoutesByTo {
   '/server-setup': typeof ServerSetupRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
-  '/templates': typeof TemplatesRoute
   '/world-map': typeof WorldMapRoute
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
@@ -199,7 +191,6 @@ export interface FileRoutesById {
   '/server-setup': typeof ServerSetupRoute
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
-  '/templates': typeof TemplatesRoute
   '/world-map': typeof WorldMapRoute
   '/api/$': typeof ApiSplatRoute
   '/api/health': typeof ApiHealthRoute
@@ -224,7 +215,6 @@ export interface FileRouteTypes {
     | '/server-setup'
     | '/servers'
     | '/settings'
-    | '/templates'
     | '/world-map'
     | '/api/$'
     | '/api/health'
@@ -247,7 +237,6 @@ export interface FileRouteTypes {
     | '/server-setup'
     | '/servers'
     | '/settings'
-    | '/templates'
     | '/world-map'
     | '/api/$'
     | '/api/health'
@@ -270,7 +259,6 @@ export interface FileRouteTypes {
     | '/server-setup'
     | '/servers'
     | '/settings'
-    | '/templates'
     | '/world-map'
     | '/api/$'
     | '/api/health'
@@ -294,7 +282,6 @@ export interface RootRouteChildren {
   ServerSetupRoute: typeof ServerSetupRoute
   ServersRoute: typeof ServersRoute
   SettingsRoute: typeof SettingsRoute
-  TemplatesRoute: typeof TemplatesRoute
   WorldMapRoute: typeof WorldMapRoute
   ApiSplatRoute: typeof ApiSplatRoute
   ApiHealthRoute: typeof ApiHealthRoute
@@ -403,13 +390,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/templates': {
-      id: '/templates'
-      path: '/templates'
-      fullPath: '/templates'
-      preLoaderRoute: typeof TemplatesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/world-map': {
       id: '/world-map'
       path: '/world-map'
@@ -470,7 +450,6 @@ const rootRouteChildren: RootRouteChildren = {
   ServerSetupRoute: ServerSetupRoute,
   ServersRoute: ServersRoute,
   SettingsRoute: SettingsRoute,
-  TemplatesRoute: TemplatesRoute,
   WorldMapRoute: WorldMapRoute,
   ApiSplatRoute: ApiSplatRoute,
   ApiHealthRoute: ApiHealthRoute,

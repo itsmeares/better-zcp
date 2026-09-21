@@ -3,8 +3,6 @@ import { QueryClient } from '@tanstack/react-query'
 export const queryClient = new QueryClient()
 
 export const panelQueryKeys = {
-  templates: ['templates'] as const,
-  hiddenTemplates: ['templates', 'hidden'] as const,
   servers: ['servers', 'list'] as const,
   activeServer: ['servers', 'resolved-active'] as const,
   serverStatus: ['server', 'status'] as const,

@@ -18,8 +18,6 @@ const EXPECTED_TOP_LEVEL_KEYS = new Set([
   "servers",
   "player_notes",
   "player_stats",
-  "mod_presets",
-  "user_templates",
   "steamid_bans",
   "performance_history",
   "bridge_logs",
