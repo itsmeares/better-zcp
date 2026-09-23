@@ -72,26 +72,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      rollupOptions: {
-        external: ['cpu-features'],
-        output: {
-          manualChunks(id) {
-            if (!id.includes('node_modules')) return undefined
-
-            const packagePath = id.replaceAll('\\', '/').split('/node_modules/').pop() || ''
-            const packageName = packagePath.startsWith('@')
-              ? packagePath.split('/').slice(0, 2).join('/')
-              : packagePath.split('/')[0]
-
-            if (packageName === 'recharts' || packageName.startsWith('d3-') || packageName.startsWith('victory-')) return 'charts'
-            if (packageName === 'socket.io-client' || packageName === 'engine.io') return 'socket'
-            if (packageName.startsWith('@radix-ui/')) return 'radix-vendor'
-            if (packageName === 'lucide-react') return 'icons'
-
-            return 'vendor'
-          },
-        },
-      },
+      rollupOptions: { external: ['cpu-features'] },
     },
     resolve: {
       dedupe: ['react', 'react-dom'],

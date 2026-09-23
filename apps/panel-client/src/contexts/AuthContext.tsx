@@ -12,9 +12,9 @@ import {
   getAccessToken,
   setAccessToken,
 } from '../lib/authToken'
-import { ApiError } from '../lib/api'
+import { ApiError } from '../lib/ApiError'
 import { getUserErrorMessage } from '../lib/errorMessage'
-import { getAuthStatusWithFallback, getCurrentUser } from '../lib/serverAuth'
+import { isDemoMode } from '../lib/demo'
 
 interface User {
   id: string
@@ -105,7 +105,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = useCallback(async () => {
     try {
-      const status = await getAuthStatusWithFallback()
+      const status = isDemoMode()
+        ? { needsSetup: false, authEnabled: false }
+        : await fetch('/api/auth/status').then(async (response) => {
+            if (!response.ok) throw new Error(`Auth status returned ${response.status}`)
+            return response.json() as Promise<{ needsSetup: boolean; authEnabled: boolean }>
+          })
+      if (typeof status.needsSetup !== 'boolean' || typeof status.authEnabled !== 'boolean') {
+        throw new Error('Auth status response was invalid')
+      }
 
       if (status.needsSetup) {
         setState((prev) => ({
@@ -130,7 +138,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = getToken()
       if (token) {
         try {
-          const data = await getCurrentUser()
+          const response = await fetch('/api/auth/me', {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!response.ok) throw new Error(`Current user returned ${response.status}`)
+          const data = await response.json() as { user: User }
           setState({
             user: data.user,
             isAuthenticated: true,

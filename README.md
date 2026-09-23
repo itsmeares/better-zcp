@@ -273,21 +273,23 @@ There is no client-side component. Players don't install anything. The panel cop
 
 ## Remote Access
 
-If you're running the panel on the same machine as your browser, skip this section.
-
-To access the panel from another machine, allow the origin before first launch:
+Local and LAN addresses work without a CORS setting. For a public DNS name or
+reverse proxy, set the exact browser origin before first launch, including a
+non-default port if used:
 
 ```bash
-CORS_ORIGINS=http://YOUR-IP:3001 ./start.sh
+CORS_ORIGINS=https://panel.example.com ./start.sh
 ```
 
-After login, save it permanently in **Settings → Remote Access** so the env var isn't required next time.
+For Docker Compose, put `CORS_ORIGINS=https://panel.example.com` in the `.env`
+file beside the compose file. After login, you can also save origins in
+**Settings → Remote Access**.
 
 For VPS or public-internet deployment, put the panel behind a reverse proxy (nginx or Caddy) with HTTPS, and set `HTTPS=true` so the panel emits HSTS headers. Don't expose port 3001 directly to the internet.
 
 ### nginx reverse proxy
 
-The panel uses a live socket.io connection for status updates, chat, and the world map's activity overlay — nginx does not forward WebSocket upgrade requests by default, so without the `Upgrade`/`Connection` headers below the panel will load but the connection indicator will show disconnected and any live-updating panel (world map included) will silently stop working, while everything else keeps working normally. This is the single most common reverse-proxy misconfiguration reported against the panel.
+The panel uses a live socket.io connection for status updates and the world map's activity overlay — nginx does not forward WebSocket upgrade requests by default, so without the `Upgrade`/`Connection` headers below the panel will load but the connection indicator will show disconnected and live updates will stop working.
 
 Recommended pattern: terminate TLS at nginx, run the panel itself over plain HTTP behind it (no need to also configure certificates inside the panel).
 
@@ -320,7 +322,7 @@ server {
 Then set these before first launch (see [linux.md Phase 10](docs/install/linux.md) for the systemd equivalent):
 
 ```bash
-TRUST_PROXY=1 HTTPS=true ./start.sh
+TRUST_PROXY=1 HTTPS=true CORS_ORIGINS=https://your-domain.example.com ./start.sh
 ```
 
 `TRUST_PROXY=1` tells the panel to trust the `X-Forwarded-*` headers above for one proxy hop (IP-based rate limiting and login all key off this) — only set it if the panel is genuinely reachable exclusively through your proxy, never if port 3001 is also exposed directly. `HTTPS=true` makes the panel emit HSTS and treat the connection as secure for cookies even though it's speaking plain HTTP to nginx.
@@ -330,12 +332,10 @@ TRUST_PROXY=1 HTTPS=true ./start.sh
 
 ## Security
 
-- JWT authentication on all API routes.
-- Capability-based roles: three built-in roles plus custom ones, each granting only the specific actions it needs — a moderator account doesn't get server-wipe just because an admin's does.
+- One local administrator account with JWT authentication on protected API routes.
 - Rate limiting on login, RCON, and destructive operations.
 - RCON parameter sanitization to prevent command injection.
 - CORS configurable per deployment (LAN auto-allows private IPs, VPS requires explicit origins).
-- Recovery codes are single-use, enforced even against two redemption attempts racing each other.
 - Password reset via secure token file or `--reset-password` CLI flag.
 
 ---

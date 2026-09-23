@@ -554,7 +554,9 @@ export function createPanelRequestHandler(
     const nativeRequest = prepareNativeRequest(request, security);
     setSecurityHeaders(response, options);
     if (!setCorsHeaders(response, request, security)) {
-      sendNativeJson(response, 403, { error: "Origin blocked by panel CORS policy." });
+      sendNativeJson(response, 403, {
+        error: "Origin blocked by panel CORS policy. Set CORS_ORIGINS to the exact browser origin (scheme, host, port) and restart the panel.",
+      });
       return;
     }
     if (request.method === "OPTIONS") {

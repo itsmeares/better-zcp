@@ -11,7 +11,7 @@ import {
   setResponseHeader,
   setResponseStatus,
 } from '@tanstack/react-start/server'
-import { authClientMiddleware } from './authToken'
+import { authClientMiddleware } from './authClientMiddleware'
 
 export type AuthStatus = {
   needsSetup: boolean

@@ -5,7 +5,7 @@ import {
   rawErrorMessageIntentional,
   getUserErrorMessage,
 } from '../lib/errorMessage'
-import { ApiError } from '../lib/api'
+import { ApiError } from '../lib/ApiError'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'

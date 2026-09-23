@@ -2,7 +2,8 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { createRootRoute, HeadContent, Scripts } from '@tanstack/react-router'
 import { BuildCompatibilityGate } from '../components/BuildCompatibilityGate'
 import { PageSkeleton } from '../components/PageSkeleton'
-import App, { NotFoundRoute } from '../App'
+import AppShell from '../AppShell'
+import { NotFoundRoute } from '../components/NotFoundRoute'
 import { queryClient } from '../lib/queryClient'
 import '../index.css'
 
@@ -69,7 +70,7 @@ function StartDocument() {
       <body>
         <QueryClientProvider client={queryClient}>
           <BuildCompatibilityGate>
-            <App />
+            <AppShell />
           </BuildCompatibilityGate>
         </QueryClientProvider>
         <Scripts />

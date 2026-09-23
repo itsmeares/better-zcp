@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPanelRequestHandler } from "../http/panelWeb.ts";
 import type { TrustProxySetting } from "../utils/trustProxy.ts";
+import { parseOriginList } from "../utils/corsOrigins.ts";
 
 const logger = { debug() {}, warn() {}, error() {} };
 const temporaryRoots: string[] = [];
@@ -32,9 +33,10 @@ function writeStartBundle(clientDistPath: string, source: string): void {
   fs.writeFileSync(path.join(clientRoot, "dist-start-server", "server.js"), source);
 }
 
-async function startServer(clientDistPath: string, trustProxy?: TrustProxySetting) {
+async function startServer(clientDistPath: string, trustProxy?: TrustProxySetting, configuredOrigins = "http://allowed.test") {
+  const allowedOrigins = new Set(parseOriginList(configuredOrigins));
   const handler = createPanelRequestHandler(makeOptions(clientDistPath), {
-    isAllowedOrigin: (origin) => origin === "http://allowed.test",
+    isAllowedOrigin: (origin) => typeof origin === "string" && allowedOrigins.has(origin),
     trustProxy,
   });
   const server = createServer((request, response) => {
@@ -106,6 +108,38 @@ describe("native panel HTTP host", () => {
 
       expect(response.status).toBe(503);
       expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("serves first-run and reload requests from an exact remote DNS origin", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "zcp-native-dns-"));
+    temporaryRoots.push(root);
+    const clientDistPath = path.join(root, "client", "dist");
+    fs.mkdirSync(clientDistPath, { recursive: true });
+    fs.writeFileSync(path.join(clientDistPath, "index.html"), "<!doctype html><title>Panel</title>");
+    writeStartBundle(clientDistPath, `export default { fetch: async () => Response.json({ ok: true }) };`);
+    const origin = "https://panel.example.test:8443";
+    const { server, baseUrl } = await startServer(clientDistPath, undefined, origin);
+
+    try {
+      for (const [method, route] of [
+        ["GET", "/api/auth/status"],
+        ["POST", "/api/auth/setup"],
+        ["POST", "/api/auth/login"],
+        ["POST", "/api/auth/refresh"],
+        ["GET", "/api/auth/me"],
+        ["GET", "/api/health"],
+      ]) {
+        const response = await fetch(baseUrl + route, { method, headers: { origin } });
+        expect(response.status).toBe(200);
+        expect(response.headers.get("access-control-allow-origin")).toBe(origin);
+      }
+      const blocked = await fetch(baseUrl + "/api/auth/status", {
+        headers: { origin: "https://panel.example.test" },
+      });
+      expect(blocked.status).toBe(403);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
@@ -271,6 +305,17 @@ describe("native panel HTTP host", () => {
         headers: { origin: "http://blocked.test" },
       });
       expect(blocked.status).toBe(403);
+      expect((await blocked.json()).error).toContain("CORS_ORIGINS");
+
+      for (const origin of ["http://allowed.test:3001", "http://other.test"]) {
+        const response = await fetch(`${baseUrl}/api/health`, { headers: { origin } });
+        expect(response.status).toBe(403);
+        expect(response.headers.get("access-control-allow-origin")).toBeNull();
+      }
+
+      const withoutOrigin = await fetch(`${baseUrl}/`);
+      expect(withoutOrigin.status).toBe(200);
+      expect(withoutOrigin.headers.get("access-control-allow-origin")).toBeNull();
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
