@@ -52,15 +52,15 @@ export type RouterLayer = {
   name?: string;
 };
 
-export type StartApiRouter = RequestHandler & {
+export type ApiRouter = RequestHandler & {
   stack: RouterLayer[];
-  get(path: string, ...handlers: RequestHandler[]): StartApiRouter;
-  post(path: string, ...handlers: RequestHandler[]): StartApiRouter;
-  put(path: string, ...handlers: RequestHandler[]): StartApiRouter;
-  patch(path: string, ...handlers: RequestHandler[]): StartApiRouter;
-  delete(path: string, ...handlers: RequestHandler[]): StartApiRouter;
-  all(path: string, ...handlers: RequestHandler[]): StartApiRouter;
-  use(...args: Array<string | RequestHandler>): StartApiRouter;
+  get(path: string, ...handlers: RequestHandler[]): ApiRouter;
+  post(path: string, ...handlers: RequestHandler[]): ApiRouter;
+  put(path: string, ...handlers: RequestHandler[]): ApiRouter;
+  patch(path: string, ...handlers: RequestHandler[]): ApiRouter;
+  delete(path: string, ...handlers: RequestHandler[]): ApiRouter;
+  all(path: string, ...handlers: RequestHandler[]): ApiRouter;
+  use(...args: Array<string | RequestHandler>): ApiRouter;
 };
 
 function requestPath(request: Request): string {
@@ -132,7 +132,7 @@ async function runHandlers(
   await dispatch();
 }
 
-function createRouter(): StartApiRouter {
+function createRouter(): ApiRouter {
   const stack: RouterLayer[] = [];
   const router = (async (
     request: Request,
@@ -191,13 +191,13 @@ function createRouter(): StartApiRouter {
     } catch (dispatchError) {
       await outerNext(dispatchError);
     }
-  }) as unknown as StartApiRouter;
+  }) as unknown as ApiRouter;
 
   const addRoute = (
     method: string,
     path: string,
     handlers: RequestHandler[],
-  ): StartApiRouter => {
+  ): ApiRouter => {
     stack.push({
       handle: handlers[0] || (async (_request, _response, next) => next()),
       route: {
@@ -213,7 +213,7 @@ function createRouter(): StartApiRouter {
 
   for (const method of ["get", "post", "put", "patch", "delete", "all"] as const) {
     router[method] = ((path: string, ...handlers: RequestHandler[]) =>
-      addRoute(method, path, handlers)) as StartApiRouter[typeof method];
+      addRoute(method, path, handlers)) as ApiRouter[typeof method];
   }
 
   router.use = ((...args: Array<string | RequestHandler>) => {
@@ -225,7 +225,7 @@ function createRouter(): StartApiRouter {
       stack.push(layer);
     }
     return router;
-  }) as StartApiRouter["use"];
+  }) as ApiRouter["use"];
 
   router.stack = stack;
   return router;

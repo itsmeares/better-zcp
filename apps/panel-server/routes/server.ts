@@ -1,4 +1,4 @@
-import { Router } from "../http/startApiRouter.ts";
+import { Router } from "../http/apiRouter.ts";
 import { spawn, exec } from "child_process";
 import { promisify } from "util";
 import https from "https";

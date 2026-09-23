@@ -1,4 +1,4 @@
-import { Router } from "../http/startApiRouter.ts";
+import { Router } from "../http/apiRouter.ts";
 import { randomUUID } from "node:crypto";
 import path from "path";
 import fs from "fs";

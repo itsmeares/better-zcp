@@ -1,4 +1,4 @@
-import { Router } from "../http/startApiRouter.ts";
+import { Router } from "../http/apiRouter.ts";
 import fs from "fs";
 import path from "path";
 import os from "os";

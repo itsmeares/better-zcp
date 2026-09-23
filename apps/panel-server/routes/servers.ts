@@ -3,7 +3,7 @@ import {
   type NextFunction,
   type Request,
   type Response,
-} from "../http/startApiRouter.ts";
+} from "../http/apiRouter.ts";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";
@@ -15,6 +15,8 @@ import {
 } from "../utils/sanitize.ts";
 import { testRconConnection } from "../services/rcon.ts";
 import { getServers, getServer, getActiveServer } from "../database/init.ts";
+import { handleActiveServerStatus } from "./serverStatus.ts";
+import { handleCreateFromDiscovery, handleDiscoverMounts } from "./discovery.ts";
 import {
   normalizeUserPath,
   inspectZomboidPath,
@@ -629,6 +631,9 @@ router.get("/active", async (req, res) => {
   }
 });
 
+router.get("/active/status", handleActiveServerStatus);
+router.get("/discover-mounts", handleDiscoverMounts);
+
 router.get("/:id", async (req, res) => {
   try {
     const id = req.params.id;
@@ -709,6 +714,8 @@ router.post("/", async (req, res) => {
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
 });
+
+router.post("/create-from-discovery", handleCreateFromDiscovery);
 
 router.put("/:id", async (req, res) => {
   try {

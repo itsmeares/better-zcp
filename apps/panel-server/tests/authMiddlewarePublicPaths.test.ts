@@ -126,6 +126,18 @@ describe("authService.middleware() — /api/auth/* is no longer a blanket exempt
       user: { userId: "u1", username: "admin" },
     });
   });
+
+  it("grants a freshly created administrator the persisted role on authenticated requests", async () => {
+    db.data.users = [];
+    const created = await authService.createAdmin("newadmin", "test-password");
+    expect(db.data.users[0]).toMatchObject({ id: created.id, role: "admin", roleId: "role-admin" });
+
+    const token = authService.generateAccessToken(db.data.users[0]);
+    await expect(authService.authenticateApiRequest(`Bearer ${token}`)).resolves.toMatchObject({
+      ok: true,
+      user: { userId: created.id, role: "admin" },
+    });
+  });
 });
 
 describe("/me and /change-password authenticate their own bearer token", () => {

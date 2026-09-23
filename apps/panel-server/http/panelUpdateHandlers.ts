@@ -1,8 +1,16 @@
+import fs from "node:fs";
+import { spawn } from "node:child_process";
+import path from "node:path";
 import { logServerEvent } from "../database/init.ts";
+import { getDatabaseFilePath, setSetting, flushWrites } from "../database/init.ts";
 import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { sanitizeError, sanitizeErrorParams } from "../utils/sanitize.ts";
-import type { Request, Response } from "./startApiRouter.ts";
+import { getDataPaths } from "../utils/paths.ts";
+import { isLinuxPanelSupervisor } from "../utils/restartSupervisor.ts";
+import { createUpdateDataBackup } from "../services/panelUpdateChecker.ts";
+import { applyUpdateBundle, recoverInterruptedUpdateBundle } from "../services/updateBundle.ts";
+import type { Request, Response } from "./apiRouter.ts";
 
 type AnyRecord = Record<string, any>;
 
@@ -30,6 +38,39 @@ export async function handlePanelUpdateStatus(
         .json({ error: "Panel update checker not available" });
     }
     response.json(checker.getStatus());
+  } catch (error: any) {
+    response.status(500).json({ error: sanitizeError(error.message) });
+  }
+}
+
+export async function handlePanelUpdateCheck(request: Request, response: Response): Promise<void> {
+  try {
+    const checker = appValue(request, "panelUpdateChecker");
+    if (!checker) throw new Error("Panel update checker not available");
+    response.json(await checker.checkForUpdate());
+  } catch (error: any) {
+    response.status(500).json({ error: sanitizeError(error.message) });
+  }
+}
+
+export async function handlePanelUpdatePreflight(request: Request, response: Response): Promise<void> {
+  try {
+    const checker = appValue(request, "panelUpdateChecker");
+    if (!checker) throw new Error("Panel update checker not available");
+    response.json(await checker.preflight());
+  } catch (error: any) {
+    response.status(500).json({ error: sanitizeError(error.message) });
+  }
+}
+
+export function handlePanelUpdateApplyLog(request: Request, response: Response): void {
+  try {
+    const checker = appValue(request, "panelUpdateChecker");
+    if (!checker) throw new Error("Panel update checker not available");
+    response.json({
+      log: checker.readMostRecentApplyLog(),
+      logPath: path.join(getDataPaths().logsDir, "panel-update-last.log"),
+    });
   } catch (error: any) {
     response.status(500).json({ error: sanitizeError(error.message) });
   }
@@ -116,4 +157,112 @@ export async function handlePanelUpdateDownload(
   } catch (error: any) {
     response.status(500).json({ error: sanitizeError(error.message) });
   }
+}
+
+async function savePreUpdateDataBackup(version: string): Promise<void> {
+  try {
+    const dataBackupPath = createUpdateDataBackup(
+      { ...getDataPaths(), dbPath: getDatabaseFilePath() },
+      version,
+    );
+    if (dataBackupPath) {
+      await setSetting("preUpdateDataBackupPath", dataBackupPath);
+      await flushWrites();
+    }
+  } catch {
+    // Keep the existing best-effort snapshot behavior for panel updates.
+  }
+}
+
+export async function handlePanelRestart(request: Request, response: Response): Promise<void> {
+  const checker = appValue(request, "panelUpdateChecker");
+  if (!checker) {
+    response.status(500).json({ error: "Panel update checker not available" });
+    return;
+  }
+
+  const staged = checker.getStagedUpdate?.() || null;
+  const isPackaged = typeof process.pkg !== "undefined";
+  const isWindows = process.platform === "win32";
+
+  if (isPackaged && isWindows && staged) {
+    if (!checker.isSupervisorAvailable?.()) {
+      response.status(409).json({ error: "This update requires the packaged Start.bat supervisor. Stop the panel and launch Start.bat, then apply again." });
+      return;
+    }
+    if (checker.isApplying) {
+      response.status(409).json({ error: "An update apply is already in progress.", code: ErrorCode.APPLY_IN_PROGRESS_LEGACY });
+      return;
+    }
+    checker.isApplying = true;
+    try {
+      await savePreUpdateDataBackup(staged.version);
+      if (staged.version) {
+        await setSetting("pendingPanelUpdate", staged.version);
+        await flushWrites();
+      }
+      checker.writeSupervisorMarker(staged);
+      setTimeout(() => process.exit(75), 500);
+      response.json({
+        success: true,
+        message: "Stopping panel for supervisor to apply update...",
+        applyingUpdate: true,
+        supervisor: true,
+      });
+    } catch (error: any) {
+      checker.isApplying = false;
+      response.status(500).json({ error: sanitizeError(error.message) });
+    }
+    return;
+  }
+
+  let linuxRespawnPath: string | null = null;
+  if (isPackaged && !isWindows && staged) {
+    if (checker.isApplying) {
+      response.status(409).json({ error: "An update apply is already in progress.", code: ErrorCode.APPLY_IN_PROGRESS_LEGACY });
+      return;
+    }
+    checker.isApplying = true;
+    try {
+      await savePreUpdateDataBackup(staged.version);
+      if (staged.version) {
+        await setSetting("pendingPanelUpdate", staged.version);
+        await flushWrites();
+      }
+      const appliedBundle = applyUpdateBundle(staged.journalPath);
+      const targetPath = appliedBundle.paths.binary;
+      await fs.promises.chmod(targetPath, 0o755).catch(() => {});
+      try {
+        await fs.promises.access(targetPath, fs.constants.X_OK);
+      } catch (error: any) {
+        recoverInterruptedUpdateBundle(staged.journalPath, "binary_not_executable");
+        throw new Error(`Applied update is not executable: ${error.message}`);
+      }
+      linuxRespawnPath = targetPath;
+    } catch (error: any) {
+      checker.isApplying = false;
+      response.status(500).json({ error: sanitizeError(error.message) });
+      return;
+    }
+  }
+
+  setTimeout(async () => {
+    await flushWrites().catch(() => {});
+    const linuxSupervisor = isLinuxPanelSupervisor();
+    const orchestrated = isPackaged && Boolean(
+      process.env.INVOCATION_ID ||
+      process.env.NOTIFY_SOCKET ||
+      fs.existsSync("/.dockerenv") ||
+      fs.existsSync("/run/.containerenv"),
+    );
+    if (isPackaged && !orchestrated && !linuxSupervisor) {
+      spawn(linuxRespawnPath || process.execPath, [], {
+        detached: true,
+        stdio: "ignore",
+      }).unref();
+    }
+    process.exit(linuxSupervisor ? 75 : orchestrated ? 1 : 0);
+  }, 1000);
+
+  response.json({ success: true, message: "Panel is restarting..." });
 }

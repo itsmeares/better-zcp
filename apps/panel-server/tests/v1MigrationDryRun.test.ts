@@ -90,7 +90,7 @@ function makeSyntheticV1Db() {
 describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cleanly with no data loss", () => {
   it("a db with NO _schemaVersion at all migrates cleanly to the current schema version", () => {
     const data = runMigrations(makeSyntheticV1Db());
-    expect(data._schemaVersion).toBe(4);
+    expect(data._schemaVersion).toBe(5);
   });
 
   it("every migration is genuinely idempotent: running it a second time is a no-op", () => {
@@ -100,7 +100,7 @@ describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cl
     const replayed = { ...once, _schemaVersion: 1 };
     const twice = runMigrations(replayed);
 
-    expect(twice._schemaVersion).toBe(4);
+    expect(twice._schemaVersion).toBe(5);
     expect(twice.roles.map((r) => r.id).sort()).toEqual(
       once.roles.map((r) => r.id).sort(),
     );
@@ -124,6 +124,21 @@ describe("v1.2.0 release dry-run: a realistic, fully-populated V1 db migrates cl
     expect(migrated.servers[0].isRemote).toBeUndefined();
     expect(migrated.servers[0].remoteConfigConfigured).toBeUndefined();
     expect(migrated.settings.panelBridgeSftpHost).toBeUndefined();
+  });
+
+  it("promotes a role-less legacy administrator without promoting an explicitly assigned non-admin", () => {
+    const data = makeSyntheticV1Db();
+    data._schemaVersion = 4;
+    data.users = [
+      { id: "legacy-admin", username: "original" },
+      { id: "technician", username: "tech", role: "technician" },
+    ];
+
+    const migrated = runMigrations(data);
+    expect(migrated.users[0]).toMatchObject({ role: "admin", roleId: "role-admin" });
+    expect(migrated.users[1].role).toBe("technician");
+    expect(migrated.users[1].roleId).toBeUndefined();
+    expect(runMigrations(migrated)).toBe(migrated);
   });
 
   it("no data is lost: every non-migration-owned collection survives with its actual contents intact, not merely present as a key", () => {

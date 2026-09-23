@@ -7,7 +7,7 @@ import { getPanelRuntime } from "../utils/panelRuntime.ts";
 import authService from "../services/auth.ts";
 import { ErrorCode } from "../utils/errorCodes.ts";
 import { sanitizeError } from "../utils/sanitize.ts";
-import type { StartApiRouter, Request, Response } from "./startApiRouter.ts";
+import type { ApiRouter, Request, Response } from "./apiRouter.ts";
 
 const REGISTERED_ERROR_CODES = new Set<string>(Object.values(ErrorCode));
 
@@ -17,50 +17,37 @@ export function isRegisteredErrorCode(value: unknown): value is string {
 
 type RouteModule = {
   base: string;
-  load: () => Promise<StartApiRouter>;
+  load: () => Promise<ApiRouter>;
 };
 
-type RouteModuleLoader = () => Promise<unknown>;
-
-const routeFiles = (
-  import.meta as ImportMeta & {
-    glob: (pattern: string) => Record<string, RouteModuleLoader>;
-  }
-).glob("../routes/*.ts");
-
-function loadRouteModule(path: string): () => Promise<StartApiRouter> {
-  const load = routeFiles[path];
-  return async () => {
-    const module = await load?.();
-    const router = (module as { default?: StartApiRouter } | undefined)?.default;
-    if (!router) throw new Error(`Start API route module is unavailable: ${path}`);
-    return router;
-  };
+function loadRouteModule(
+  load: () => Promise<{ default: ApiRouter }>,
+): () => Promise<ApiRouter> {
+  return async () => (await load()).default;
 }
 
 const routeModules: RouteModule[] = [
-  { base: "/api/auth", load: loadRouteModule("../routes/auth.ts") },
-  { base: "/api/rcon", load: loadRouteModule("../routes/rcon.ts") },
-  { base: "/api/server", load: loadRouteModule("../routes/server.ts") },
-  { base: "/api/servers", load: loadRouteModule("../routes/servers.ts") },
-  { base: "/api/players", load: loadRouteModule("../routes/players.ts") },
-  { base: "/api/mods", load: loadRouteModule("../routes/mods.ts") },
-  { base: "/api/server-files", load: loadRouteModule("../routes/serverFiles.ts") },
-  { base: "/api/debug", load: loadRouteModule("../routes/debug.ts") },
-  { base: "/api/backup", load: loadRouteModule("../routes/backup.ts") },
-  { base: "/api/map", load: loadRouteModule("../routes/mapProxy.ts") },
-  { base: "/api/config", load: loadRouteModule("../routes/config.ts") },
-  { base: "/api/docker", load: loadRouteModule("../routes/docker.ts") },
-  { base: "/api/discovery", load: loadRouteModule("../routes/discovery.ts") },
-  { base: "/api/scheduler", load: loadRouteModule("../routes/scheduler.ts") },
-  { base: "/api/system", load: loadRouteModule("../routes/system.ts") },
-  { base: "/api/panel-bridge", load: loadRouteModule("../routes/panelBridge.ts") },
-  { base: "/api/server-status", load: loadRouteModule("../routes/serverStatus.ts") },
+  { base: "/api/auth", load: loadRouteModule(() => import("../routes/auth.ts")) },
+  { base: "/api/rcon", load: loadRouteModule(() => import("../routes/rcon.ts")) },
+  { base: "/api/server", load: loadRouteModule(() => import("../routes/server.ts")) },
+  { base: "/api/servers", load: loadRouteModule(() => import("../routes/servers.ts")) },
+  { base: "/api/players", load: loadRouteModule(() => import("../routes/players.ts")) },
+  { base: "/api/mods", load: loadRouteModule(() => import("../routes/mods.ts")) },
+  { base: "/api/server-files", load: loadRouteModule(() => import("../routes/serverFiles.ts")) },
+  { base: "/api/debug", load: loadRouteModule(() => import("../routes/debug.ts")) },
+  { base: "/api/backup", load: loadRouteModule(() => import("../routes/backup.ts")) },
+  { base: "/api/map", load: loadRouteModule(() => import("../routes/mapProxy.ts")) },
+  { base: "/api/config", load: loadRouteModule(() => import("../routes/config.ts")) },
+  { base: "/api/docker", load: loadRouteModule(() => import("../routes/docker.ts")) },
+  { base: "/api/scheduler", load: loadRouteModule(() => import("../routes/scheduler.ts")) },
+  { base: "/api/system", load: loadRouteModule(() => import("../routes/system.ts")) },
+  { base: "/api/panel-bridge", load: loadRouteModule(() => import("../routes/panelBridge.ts")) },
+  { base: "/api", load: loadRouteModule(() => import("../routes/core.ts")) },
 ];
 
-export function registerStartApiModule(
+export function registerApiModule(
   base: string,
-  load: () => Promise<StartApiRouter>,
+  load: () => Promise<ApiRouter>,
 ): void {
   routeModules.push({ base, load });
 }
@@ -75,6 +62,7 @@ const PUBLIC_API_PATHS = new Set([
   "/api/auth/reset-token/local",
   "/api/auth/reset-password",
   "/api/health",
+  "/api/panel-info",
 ]);
 
 function parseCookies(header: string | undefined): Record<string, string> {
@@ -337,7 +325,7 @@ function queryObject(url: URL): Record<string, string | string[]> {
   return result;
 }
 
-async function createStartRequest(
+async function createApiRequest(
   request: globalThis.Request,
   url: URL,
   base: string,
@@ -365,8 +353,8 @@ async function createStartRequest(
       return {};
     }
   })();
-  const startRequest = source as unknown as Request;
-  Object.assign(startRequest, {
+  const apiRequest = source as unknown as Request;
+  Object.assign(apiRequest, {
     method: request.method.toUpperCase(),
     url: pathname + url.search,
     originalUrl: url.pathname + url.search,
@@ -391,12 +379,12 @@ async function createStartRequest(
     },
   });
   if (incomingRequest?.on) {
-    (startRequest as any).on = incomingRequest.on.bind(incomingRequest);
+    (apiRequest as any).on = incomingRequest.on.bind(incomingRequest);
   }
-  return startRequest;
+  return apiRequest;
 }
 
-async function authenticateStartRequest(
+async function authenticateApiRequest(
   request: globalThis.Request,
   pathname: string,
 ): Promise<{ user: any } | globalThis.Response | null> {
@@ -463,7 +451,7 @@ async function readBodyWithLimit(
   }
 }
 
-export async function handleStartApiRequest(
+export async function handleApiRequest(
   request: globalThis.Request,
   incomingRequest?: IncomingMessage,
 ): Promise<globalThis.Response | null> {
@@ -472,7 +460,7 @@ export async function handleStartApiRequest(
   const module = routeModules.find(({ base }) => pathname === base || pathname.startsWith(base + "/"));
   if (!module) return null;
 
-  const authentication = await authenticateStartRequest(request, pathname);
+  const authentication = await authenticateApiRequest(request, pathname);
   if (authentication instanceof globalThis.Response) return authentication;
 
   const responseAdapter = createResponseAdapter();
@@ -493,7 +481,7 @@ export async function handleStartApiRequest(
       }
       bodyText = limitedBody;
     }
-    const startRequest = await createStartRequest(
+    const apiRequest = await createApiRequest(
       request,
       url,
       module.base,
@@ -501,14 +489,14 @@ export async function handleStartApiRequest(
     );
     if (bodyText !== undefined) {
       try {
-        startRequest.body = bodyText.trim() ? JSON.parse(bodyText) : undefined;
+        apiRequest.body = bodyText.trim() ? JSON.parse(bodyText) : undefined;
       } catch {
         return globalThis.Response.json({ error: "Invalid JSON body" }, { status: 400 });
       }
     }
-    if (authentication && "user" in authentication) startRequest.user = authentication.user;
+    if (authentication && "user" in authentication) apiRequest.user = authentication.user;
     const router = await module.load();
-    void Promise.resolve(router(startRequest, responseAdapter.response, (error) => {
+    void Promise.resolve(router(apiRequest, responseAdapter.response, (error) => {
       if (error) responseAdapter.fail(error);
       else if (!responseAdapter.isCommitted()) {
         responseAdapter.response.status(404).json({ error: "API endpoint not found" });

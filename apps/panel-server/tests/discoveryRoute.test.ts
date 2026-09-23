@@ -21,7 +21,7 @@ vi.mock("../services/mountDiscovery.ts", () => ({
   readServerIniSettings,
 }));
 
-const { default: router } = await import("../routes/discovery.ts");
+const { handleCreateFromDiscovery, handleDiscoverMounts } = await import("../routes/discovery.ts");
 
 function createResponse() {
   const response = { status: vi.fn(), json: vi.fn() };
@@ -30,39 +30,14 @@ function createResponse() {
 }
 
 async function runCreate(body, user = { role: "admin" }) {
-  const layer = router.stack.find(
-    (entry) =>
-      entry.route?.path === "/create-from-discovery" &&
-      entry.route.methods.post,
-  );
-  const handlers = layer.route.stack.map((entry) => entry.handle);
   const response = createResponse();
-  let index = -1;
-  const request = { body, user };
-  const next = async (error) => {
-    if (error) throw error;
-    index += 1;
-    if (index < handlers.length) await handlers[index](request, response, next);
-  };
-  await next();
+  await handleCreateFromDiscovery({ body, user } as any, response as any);
   return response;
 }
 
 async function runDiscover(user = { role: "admin" }) {
-  const layer = router.stack.find(
-    (entry) =>
-      entry.route?.path === "/discover-mounts" && entry.route.methods.get,
-  );
-  const handlers = layer.route.stack.map((entry) => entry.handle);
   const response = createResponse();
-  let index = -1;
-  const request = { user };
-  const next = async (error) => {
-    if (error) throw error;
-    index += 1;
-    if (index < handlers.length) await handlers[index](request, response, next);
-  };
-  await next();
+  await handleDiscoverMounts({ user } as any, response as any);
   return response;
 }
 

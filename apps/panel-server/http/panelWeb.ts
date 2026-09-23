@@ -17,6 +17,8 @@ import {
   toTanStackStartRequest,
   type TanStackStartHandler,
 } from "../utils/tanstackStartServer.ts";
+import { handleApiRequest } from "./apiDispatcher.ts";
+import { buildPanelHealthPayload } from "../utils/panelHealth.ts";
 import {
   clientDistMatchesMetadata,
   readClientDistMetadata,
@@ -567,7 +569,7 @@ export function createPanelRequestHandler(
 
     const requestUrl = new URL(request.url || "/", nativeRequest.protocol + "://localhost");
     const pathname = requestUrl.pathname;
-    const isApiRequest = pathname.startsWith("/api");
+    const isApiRequest = pathname === "/api" || pathname.startsWith("/api/");
     if (isApiRequest) {
       const limit = rateLimited(request, response, pathname, rateBuckets);
       if (limit) {
@@ -583,6 +585,36 @@ export function createPanelRequestHandler(
       return;
     }
 
+    if (pathname === "/api/health") {
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        sendNativeJson(response, 405, { error: "Method not allowed" });
+        return;
+      }
+      const payload = Buffer.from(JSON.stringify(buildPanelHealthPayload(options.buildMetadata)));
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      response.setHeader("Content-Length", String(payload.length));
+      response.setHeader("Cache-Control", "no-store");
+      response.statusCode = 200;
+      response.end(request.method === "HEAD" ? undefined : payload);
+      return;
+    }
+
+    if (isApiRequest) {
+      try {
+        const apiResponse = await handleApiRequest(toTanStackStartRequest(nativeRequest), nativeRequest);
+        await sendNativeResponse(
+          apiResponse || globalThis.Response.json({ error: "API endpoint not found" }, { status: 404 }),
+          request,
+          response,
+        );
+      } catch (error) {
+        options.logger.error("API request failed: " + (error instanceof Error ? error.message : String(error)));
+        if (!response.headersSent) sendNativeJson(response, 500, { error: "Internal server error" });
+        else response.destroy(error instanceof Error ? error : undefined);
+      }
+      return;
+    }
+
     if (
       !isApiRequest &&
       !pathname.startsWith("/_serverFn/") &&
@@ -593,33 +625,25 @@ export function createPanelRequestHandler(
       return;
     }
 
-    const handler = await getHandler();
-    if (pathname.startsWith("/_serverFn/") || isApiRequest || (request.method === "GET" || request.method === "HEAD")) {
+    if (pathname.startsWith("/_serverFn/")) {
+      const handler = await getHandler();
       if (!handler) {
-        if (pathname.startsWith("/_serverFn/") || isApiRequest) {
-          sendNativeJson(response, 503, {
-            error: "TanStack Start server bundle unavailable",
-          });
-          return;
-        }
+        sendNativeJson(response, 503, { error: "TanStack Start server bundle unavailable" });
+        return;
       } else {
         try {
           let startResponse = await handler.fetch(toTanStackStartRequest(nativeRequest));
           const startIsHtml = responseHasHtml(startResponse);
-          if (!isApiRequest && startIsHtml) {
+          if (startIsHtml) {
             startResponse = await addHtmlCsp(startResponse, options);
           }
           startResponse.headers.delete("x-tanstack-start-handled");
-          if (isApiRequest || pathname.startsWith("/_serverFn/") || startResponse.status !== 404 || startIsHtml) {
-            await sendNativeResponse(startResponse, request, response);
-            return;
-          }
+          await sendNativeResponse(startResponse, request, response);
+          return;
         } catch (error) {
           options.logger.warn("TanStack Start request failed: " + (error instanceof Error ? error.message : String(error)));
-          if (pathname.startsWith("/_serverFn/") || isApiRequest) {
-            sendNativeJson(response, 503, { error: "TanStack Start request unavailable" });
-            return;
-          }
+          sendNativeJson(response, 503, { error: "TanStack Start request unavailable" });
+          return;
         }
       }
     }

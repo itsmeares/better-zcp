@@ -219,6 +219,22 @@ async function runAuthSmoke(baseUrl, setupToken) {
     if (!rememberedLogin.ok()) {
       throw new Error(`Packaged auth smoke persistent login failed: ${rememberedLogin.status()}`);
     }
+    const { accessToken } = await rememberedLogin.json();
+    for (const pathname of ['/api/system/runtime', '/api/servers', '/api/panel/update-status']) {
+      const response = await context.request.get(apiUrl(pathname), {
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok()) {
+        throw new Error(`Packaged API smoke failed for ${pathname}: ${response.status()}`);
+      }
+      await response.json();
+    }
+    const activeStatus = await context.request.get(apiUrl('/api/servers/active/status'), {
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    if (activeStatus.status() !== 404) {
+      throw new Error(`Packaged active-server status expected 404 before a server is configured: ${activeStatus.status()}`);
+    }
     if (!(await getRefreshCookie(context, baseUrl))) {
       throw new Error('Packaged auth smoke did not receive a persistent login cookie');
     }

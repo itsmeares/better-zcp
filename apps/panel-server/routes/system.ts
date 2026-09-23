@@ -1,4 +1,4 @@
-import { Router, type Request } from "../http/startApiRouter.ts";
+import { Router, type Request } from "../http/apiRouter.ts";
 import { getCircuitBreakerStatus } from "../database/init.ts";
 import { createLogger } from "../utils/logger.ts";
 import { sanitizeError } from "../utils/sanitize.ts";

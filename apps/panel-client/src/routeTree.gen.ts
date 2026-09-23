@@ -22,11 +22,6 @@ import { Route as ServerSetupRouteImport } from './routes/server-setup'
 import { Route as ServersRouteImport } from './routes/servers'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as WorldMapRouteImport } from './routes/world-map'
-import { Route as ApiSplatRouteImport } from './routes/api/$'
-import { Route as ApiHealthRouteImport } from './routes/api/health'
-import { Route as ApiPanelInfoRouteImport } from './routes/api/panel-info'
-import { Route as ApiSystemDiskSpaceRouteImport } from './routes/api/system/disk-space'
-import { Route as ApiSystemRuntimeRouteImport } from './routes/api/system/runtime'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -93,31 +88,6 @@ const WorldMapRoute = WorldMapRouteImport.update({
   path: '/world-map',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiSplatRoute = ApiSplatRouteImport.update({
-  id: '/api/$',
-  path: '/api/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiHealthRoute = ApiHealthRouteImport.update({
-  id: '/api/health',
-  path: '/api/health',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPanelInfoRoute = ApiPanelInfoRouteImport.update({
-  id: '/api/panel-info',
-  path: '/api/panel-info',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiSystemDiskSpaceRoute = ApiSystemDiskSpaceRouteImport.update({
-  id: '/api/system/disk-space',
-  path: '/api/system/disk-space',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiSystemRuntimeRoute = ApiSystemRuntimeRouteImport.update({
-  id: '/api/system/runtime',
-  path: '/api/system/runtime',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -133,11 +103,6 @@ export interface FileRoutesByFullPath {
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
   '/world-map': typeof WorldMapRoute
-  '/api/$': typeof ApiSplatRoute
-  '/api/health': typeof ApiHealthRoute
-  '/api/panel-info': typeof ApiPanelInfoRoute
-  '/api/system/disk-space': typeof ApiSystemDiskSpaceRoute
-  '/api/system/runtime': typeof ApiSystemRuntimeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -153,11 +118,6 @@ export interface FileRoutesByTo {
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
   '/world-map': typeof WorldMapRoute
-  '/api/$': typeof ApiSplatRoute
-  '/api/health': typeof ApiHealthRoute
-  '/api/panel-info': typeof ApiPanelInfoRoute
-  '/api/system/disk-space': typeof ApiSystemDiskSpaceRoute
-  '/api/system/runtime': typeof ApiSystemRuntimeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -174,11 +134,6 @@ export interface FileRoutesById {
   '/servers': typeof ServersRoute
   '/settings': typeof SettingsRoute
   '/world-map': typeof WorldMapRoute
-  '/api/$': typeof ApiSplatRoute
-  '/api/health': typeof ApiHealthRoute
-  '/api/panel-info': typeof ApiPanelInfoRoute
-  '/api/system/disk-space': typeof ApiSystemDiskSpaceRoute
-  '/api/system/runtime': typeof ApiSystemRuntimeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -196,11 +151,6 @@ export interface FileRouteTypes {
     | '/servers'
     | '/settings'
     | '/world-map'
-    | '/api/$'
-    | '/api/health'
-    | '/api/panel-info'
-    | '/api/system/disk-space'
-    | '/api/system/runtime'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -216,11 +166,6 @@ export interface FileRouteTypes {
     | '/servers'
     | '/settings'
     | '/world-map'
-    | '/api/$'
-    | '/api/health'
-    | '/api/panel-info'
-    | '/api/system/disk-space'
-    | '/api/system/runtime'
   id:
     | '__root__'
     | '/'
@@ -236,11 +181,6 @@ export interface FileRouteTypes {
     | '/servers'
     | '/settings'
     | '/world-map'
-    | '/api/$'
-    | '/api/health'
-    | '/api/panel-info'
-    | '/api/system/disk-space'
-    | '/api/system/runtime'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -257,11 +197,6 @@ export interface RootRouteChildren {
   ServersRoute: typeof ServersRoute
   SettingsRoute: typeof SettingsRoute
   WorldMapRoute: typeof WorldMapRoute
-  ApiSplatRoute: typeof ApiSplatRoute
-  ApiHealthRoute: typeof ApiHealthRoute
-  ApiPanelInfoRoute: typeof ApiPanelInfoRoute
-  ApiSystemDiskSpaceRoute: typeof ApiSystemDiskSpaceRoute
-  ApiSystemRuntimeRoute: typeof ApiSystemRuntimeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -357,41 +292,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorldMapRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/$': {
-      id: '/api/$'
-      path: '/api/$'
-      fullPath: '/api/$'
-      preLoaderRoute: typeof ApiSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/health': {
-      id: '/api/health'
-      path: '/api/health'
-      fullPath: '/api/health'
-      preLoaderRoute: typeof ApiHealthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/panel-info': {
-      id: '/api/panel-info'
-      path: '/api/panel-info'
-      fullPath: '/api/panel-info'
-      preLoaderRoute: typeof ApiPanelInfoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/system/disk-space': {
-      id: '/api/system/disk-space'
-      path: '/api/system/disk-space'
-      fullPath: '/api/system/disk-space'
-      preLoaderRoute: typeof ApiSystemDiskSpaceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/system/runtime': {
-      id: '/api/system/runtime'
-      path: '/api/system/runtime'
-      fullPath: '/api/system/runtime'
-      preLoaderRoute: typeof ApiSystemRuntimeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -409,11 +309,6 @@ const rootRouteChildren: RootRouteChildren = {
   ServersRoute: ServersRoute,
   SettingsRoute: SettingsRoute,
   WorldMapRoute: WorldMapRoute,
-  ApiSplatRoute: ApiSplatRoute,
-  ApiHealthRoute: ApiHealthRoute,
-  ApiPanelInfoRoute: ApiPanelInfoRoute,
-  ApiSystemDiskSpaceRoute: ApiSystemDiskSpaceRoute,
-  ApiSystemRuntimeRoute: ApiSystemRuntimeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

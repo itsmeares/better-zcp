@@ -3,7 +3,7 @@ import {
   type NextFunction,
   type Request,
   type Response,
-} from "../http/startApiRouter.ts";
+} from "../http/apiRouter.ts";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "../utils/logger.ts";

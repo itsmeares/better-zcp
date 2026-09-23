@@ -189,7 +189,7 @@ const defaultData: DatabaseData = {
   _schemaVersion: 1,
 };
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 const MIGRATION_V2_TECHNICIAN_CAPABILITIES = [
   "backups.manage",
@@ -300,6 +300,19 @@ export function runMigrations(data: DatabaseData): DatabaseData {
     }
     for (const key of Object.keys(data.settings || {})) {
       if (key.startsWith("panelBridgeSftp")) delete data.settings[key];
+    }
+  }
+
+  if (version < 5) {
+    const users = data.users || [];
+    const legacyAdmin = users[0];
+    if (legacyAdmin && !users.some((user) => user.role === "admin") &&
+      !legacyAdmin.role && (!legacyAdmin.roleId || legacyAdmin.roleId === "role-admin")) {
+      legacyAdmin.role = "admin";
+    }
+    for (const user of users) {
+      if (user.role === "admin" && !user.roleId) user.roleId = "role-admin";
+      if (user.roleId === "role-admin" && !user.role) user.role = "admin";
     }
   }
 

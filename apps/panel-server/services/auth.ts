@@ -7,7 +7,7 @@ import type {
   Request,
   RequestHandler,
   Response,
-} from "../http/startApiRouter.ts";
+} from "../http/apiRouter.ts";
 import { createLogger } from "../utils/logger.ts";
 import { getSetting, setSetting, getDb, commitNow } from "../database/init.ts";
 import {
@@ -44,6 +44,7 @@ export type AuthenticatedUser = {
   userId: string | null;
   username: string | null;
   tokenGen: number | null;
+  role?: string;
   authDisabled?: boolean;
 };
 
@@ -250,6 +251,7 @@ class AuthService {
         userId: user.id,
         username: user.username,
         tokenGen: currentGen,
+        role: user.role,
       };
     } catch (error) {
       return null;
@@ -419,6 +421,8 @@ class AuthService {
         id: crypto.randomUUID(),
         username,
         password: hashedPassword,
+        role: "admin",
+        roleId: "role-admin",
         createdAt: new Date().toISOString(),
         lastLogin: null,
       };

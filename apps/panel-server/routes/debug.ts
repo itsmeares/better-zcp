@@ -1,5 +1,5 @@
 import { parseClampedInteger } from "../utils/queryNumbers.ts";
-import { Router } from "../http/startApiRouter.ts";
+import { Router } from "../http/apiRouter.ts";
 import os from "os";
 import v8 from "v8";
 import fs from "fs";
