@@ -12,11 +12,7 @@ import {
   appendCspScriptNonce,
   computeInlineScriptCspHashesFromHtml,
 } from "../utils/cspScriptHash.ts";
-import {
-  loadTanStackStartHandler,
-  toTanStackStartRequest,
-  type TanStackStartHandler,
-} from "../utils/tanstackStartServer.ts";
+import { toWebRequest } from "../utils/webRequest.ts";
 import { handleApiRequest } from "./apiDispatcher.ts";
 import { buildPanelHealthPayload } from "../utils/panelHealth.ts";
 import {
@@ -59,36 +55,12 @@ function isRegisteredErrorCode(value: unknown): value is string {
 export type PanelWebOptions = {
   isPackaged: boolean;
   clientDistPath: string;
-  externalClientDistPath: string;
   embeddedClientDistPath: string | null;
   buildMetadata: BuildMetadata;
   logger: PanelWebLogger;
   httpsDetected?: boolean;
   inlineScriptCspSources?: () => string;
 };
-
-function createTanStackStartHandlerLoader(
-  options: PanelWebOptions,
-): () => Promise<TanStackStartHandler | null> {
-  const serverPath = options.isPackaged
-    ? path.join(options.externalClientDistPath, ".start-server", "server.js")
-    : path.join(options.clientDistPath, "../dist-start-server/server.js");
-  let handlerPromise: Promise<TanStackStartHandler | null> | undefined;
-
-  return async () => {
-    if (!fs.existsSync(serverPath)) return null;
-    handlerPromise ??= loadTanStackStartHandler(serverPath).catch(
-      (error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        options.logger.warn(
-          `TanStack Start server bundle could not be loaded (${message}); using the static client shell`,
-        );
-        return null;
-      },
-    );
-    return handlerPromise;
-  };
-}
 
 function buildLegacyClientRecoveryPage(
   options: PanelWebOptions,
@@ -476,10 +448,10 @@ async function sendStaticFile(
     if (filePath.endsWith(".html")) {
       response.removeHeader("Content-Length");
       const html = await file.readFile("utf8");
-      const startResponse = await addHtmlCsp(new globalThis.Response(html, {
+      const htmlResponse = await addHtmlCsp(new globalThis.Response(html, {
         headers: { "content-type": "text/html; charset=utf-8" },
       }), options);
-      await sendNativeResponse(startResponse, request, response);
+      await sendNativeResponse(htmlResponse, request, response);
     } else if (request.method === "HEAD") {
       response.end();
     } else {
@@ -541,7 +513,6 @@ export function createPanelRequestHandler(
   options: PanelWebOptions,
   security: NativeSecurityOptions = {},
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
-  const getHandler = createTanStackStartHandlerLoader(options);
   const rateBuckets = new Map<string, NativeRateBucket>();
   const legacyClientMetadata =
     options.isPackaged && !options.embeddedClientDistPath
@@ -601,7 +572,7 @@ export function createPanelRequestHandler(
 
     if (isApiRequest) {
       try {
-        const apiResponse = await handleApiRequest(toTanStackStartRequest(nativeRequest), nativeRequest);
+        const apiResponse = await handleApiRequest(toWebRequest(nativeRequest), nativeRequest);
         await sendNativeResponse(
           apiResponse || globalThis.Response.json({ error: "API endpoint not found" }, { status: 404 }),
           request,
@@ -617,7 +588,6 @@ export function createPanelRequestHandler(
 
     if (
       !isApiRequest &&
-      !pathname.startsWith("/_serverFn/") &&
       (request.method === "GET" || request.method === "HEAD") &&
       isStaticAssetPath(pathname) &&
       await sendStaticFile(request, response, options.clientDistPath, pathname, options)
@@ -626,26 +596,8 @@ export function createPanelRequestHandler(
     }
 
     if (pathname.startsWith("/_serverFn/")) {
-      const handler = await getHandler();
-      if (!handler) {
-        sendNativeJson(response, 503, { error: "TanStack Start server bundle unavailable" });
-        return;
-      } else {
-        try {
-          let startResponse = await handler.fetch(toTanStackStartRequest(nativeRequest));
-          const startIsHtml = responseHasHtml(startResponse);
-          if (startIsHtml) {
-            startResponse = await addHtmlCsp(startResponse, options);
-          }
-          startResponse.headers.delete("x-tanstack-start-handled");
-          await sendNativeResponse(startResponse, request, response);
-          return;
-        } catch (error) {
-          options.logger.warn("TanStack Start request failed: " + (error instanceof Error ? error.message : String(error)));
-          sendNativeJson(response, 503, { error: "TanStack Start request unavailable" });
-          return;
-        }
-      }
+      sendNativeJson(response, 404, { error: "Page not found" });
+      return;
     }
 
     if (await sendStaticFile(request, response, options.clientDistPath, pathname, options)) return;

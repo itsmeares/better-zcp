@@ -804,7 +804,6 @@ const clientDistPath = cspClientDistPath;
 const panelWebOptions = {
   isPackaged,
   clientDistPath,
-  externalClientDistPath,
   embeddedClientDistPath,
   buildMetadata: _buildMetadata,
   logger: log,

@@ -899,24 +899,11 @@ async function main() {
   }
 
   const clientDistPath = "./apps/panel-client/dist";
-  const startServerDistPath = "./apps/panel-client/dist-start-server";
   const embeddedClientDistB64 = createEmbeddedClientBundle(clientDistPath, {
     panelVersion,
     buildSha,
     apiContractVersion,
   });
-  if (!fs.existsSync(path.join(startServerDistPath, "server.js"))) {
-    throw new Error(
-      `TanStack Start server build is missing: ${path.join(startServerDistPath, "server.js")}`,
-    );
-  }
-  const packagedStartServerPath = path.join(clientDistPath, ".start-server");
-  fs.rmSync(packagedStartServerPath, { recursive: true, force: true });
-  fs.cpSync(startServerDistPath, packagedStartServerPath, { recursive: true });
-  fs.writeFileSync(
-    path.join(packagedStartServerPath, "package.json"),
-    '{"type":"module"}\n',
-  );
   const clientDistFileHashes = getClientDistFileHashes(clientDistPath);
   console.log(
     `Embedded client bundle prepared (${embeddedClientDistB64.length} base64 chars)`,

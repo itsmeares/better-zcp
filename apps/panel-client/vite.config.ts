@@ -1,5 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
-import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { readFileSync } from 'fs'
@@ -39,10 +39,7 @@ export default defineConfig(({ mode }) => {
       __PANEL_API_CONTRACT_VERSION__: JSON.stringify(apiContractVersion),
     },
     plugins: [
-      tanstackStart({
-        spa: { enabled: true },
-        prerender: { enabled: false },
-      }),
+      tanstackRouter({ target: 'react', autoCodeSplitting: true }),
       react(),
       {
         name: 'panel-build-info',
@@ -59,20 +56,8 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
-    ssr: {
-      noExternal: true,
-      external: ['unzipper'],
-    },
-    environments: {
-      client: {
-        build: { outDir: 'dist' },
-      },
-      ssr: {
-        build: { outDir: 'dist-start-server' },
-      },
-    },
     build: {
-      rollupOptions: { external: ['cpu-features'] },
+      outDir: 'dist',
     },
     resolve: {
       dedupe: ['react', 'react-dom'],

@@ -9,7 +9,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/copy-start-shell.mjs && node scripts/check-auth-bundle.mjs",
+    "build": "tsc -b && vite build && node scripts/check-auth-bundle.mjs",
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "test": "vitest run",
@@ -49,7 +49,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
-    "@tanstack/react-start": "1.168.50",
+    "@tanstack/router-plugin": "1.168.36",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^22.20.1",
