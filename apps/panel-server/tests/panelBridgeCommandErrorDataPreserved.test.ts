@@ -59,7 +59,7 @@ describe("PanelBridge route catches preserve error.data (the soft-failure diagno
 
       const res = createResponse();
       await getHandler("/command", "post")(
-        { user: { role: "admin" }, body: { action: "runEventSequence", args: {} } },
+        { user: { role: "admin" }, body: { action: "teleportPlayer", args: {} } },
         res,
         () => {},
       );
@@ -96,7 +96,7 @@ describe("PanelBridge route catches preserve error.data (the soft-failure diagno
 
       const res = createResponse();
       await getHandler("/command", "post")(
-        { user: { role: "admin" }, body: { action: "runEventSequence", args: {} } },
+        { user: { role: "admin" }, body: { action: "teleportPlayer", args: {} } },
         res,
         () => {},
       );

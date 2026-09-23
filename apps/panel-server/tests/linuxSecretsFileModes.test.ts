@@ -11,7 +11,6 @@ const mockDataPaths = vi.hoisted(() => {
 vi.mock("../utils/paths.ts", () => ({ getDataPaths: () => mockDataPaths }));
 
 const { writeFileAtomic } = await import("../utils/fileWriteQueue.ts");
-const { loadOrCreateCerts, getCertPaths } = await import("../utils/certs.ts");
 
 function mode(p) {
   return fs.statSync(p).mode & 0o777;
@@ -66,24 +65,6 @@ describe("writeFileAtomic -- preserve-or-tighten mode across a rewrite", () => {
 
       expect(mode(target)).toBe(0o600);
       fs.rmSync(root, { recursive: true, force: true });
-    },
-  );
-});
-
-describe("certs.js -- a regenerated key is tightened regardless of its prior mode", () => {
-  it.skipIf(isWindows)(
-    "CERT_DIR is 0700 and server.key stays 0600 even after a loose-mode-then-regenerate sequence",
-    () => {
-      loadOrCreateCerts();
-      const { keyPath, certPath, certDir } = getCertPaths();
-      expect(mode(certDir)).toBe(0o700);
-      expect(mode(keyPath)).toBe(0o600);
-
-      fs.chmodSync(keyPath, 0o644);
-      fs.unlinkSync(certPath);
-      loadOrCreateCerts();
-
-      expect(mode(keyPath)).toBe(0o600);
     },
   );
 });

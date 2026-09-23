@@ -67,20 +67,16 @@ import {
   addAllToWhitelist,
   addAllowedSteamId,
   addPlayerItem,
-  addPlayerVehicle,
-  addPlayerVehicleAt,
   addPlayerXp,
   addRconUser,
   activateManagedLifecycleProvider,
   activateManagedServer,
   addToWhitelist,
-  alarm,
   banPlayer,
   banSteamId,
   createScheduledTask,
   clearSchedulerHistory,
   connectRcon,
-  createHorde,
   createManagedServer,
   createServerFromDiscovery,
   deleteScheduledTask,
@@ -97,7 +93,6 @@ import {
   getPlayerAccessLevels,
   getPlayerPerks,
   getPlayers,
-  getPlayerVehicles,
   getRconCommands,
   getRconHistory,
   getRconStatus,
@@ -111,8 +106,6 @@ import {
   reloadLua,
   removeAllowedSteamId,
   removeFromWhitelist,
-  removeZombies,
-  releaseSafehouse,
   restartServer,
   restartScheduledServer,
   runScheduledTask,
@@ -128,18 +121,10 @@ import {
   setServerStats,
   setVoiceBan,
   startServer,
-  startRain,
-  startStorm,
   stopServer,
-  stopRain,
-  stopWeather,
   forceStopServer,
   teleportPlayer,
   testRconConnection,
-  triggerChopper,
-  triggerGunshot,
-  triggerLightning,
-  triggerThunder,
   updateScheduledTask,
   updateManagedServer,
   unbanPlayer,
@@ -159,7 +144,6 @@ import {
 import {
   getPanelBridgeCatalog,
   scanPanelBridgeCatalog,
-  sendPanelBridgeEndangerCommand,
 } from "./serverPanelBridgeEffectsRpc";
 import { sendPanelBridgeDiagnosticsCommand } from "./serverPanelBridgeDiagnosticsRpc";
 import {
@@ -639,83 +623,6 @@ export interface SteamBranch {
   timeUpdated?: string | null;
 }
 
-export interface PerkData {
-  level: number;
-  xp: number;
-}
-
-export interface CharacterStats {
-  hunger?: number;
-  thirst?: number;
-  fatigue?: number;
-  stress?: number;
-  boredom?: number;
-  endurance?: number;
-  health?: number;
-  panic?: number;
-  unhappyness?: number;
-}
-
-export interface CharacterInventoryItem {
-  fullType: string;
-  count?: number;
-  condition?: number;
-  uses?: number;
-  delta?: number;
-  contents?: CharacterInventoryItem[];
-}
-
-export interface CharacterExportData {
-  username: string;
-  exportTime?: number;
-  perks: Record<string, PerkData>;
-  stats?: CharacterStats;
-  recipes: string[];
-  traits?: string[];
-  inventory?: CharacterInventoryItem[];
-  wornItems?: Array<{ location: string; fullType: string; condition?: number }>;
-  bagInventory?: Record<string, CharacterInventoryItem[]>;
-  health?: {
-    overall: number;
-    infection?: number;
-    bodyParts?: Array<{
-      type: string;
-      health: number;
-      isBleeding: boolean;
-      isBandaged: boolean;
-      hasScratch: boolean;
-      hasBite: boolean;
-      isBurnt: boolean;
-      isCut: boolean;
-    }>;
-  };
-}
-
-export interface CharacterExportResponse {
-  success: boolean;
-  data: CharacterExportData;
-  error?: string;
-}
-
-export interface CharacterImportData {
-  perks?: Record<string, PerkData>;
-  stats?: CharacterStats;
-  recipes?: string[];
-  inventory?: CharacterInventoryItem[];
-}
-
-export interface CharacterImportResponse {
-  success: boolean;
-  data: {
-    message: string;
-    restored: {
-      perks: number;
-      items: number;
-    };
-  };
-  error?: string;
-}
-
 export const serverApi = {
   getStatus: (_options?: { retries?: number }) =>
     serverCall(() => getGameServerStatus()),
@@ -793,25 +700,6 @@ export const serverApi = {
       parentPath: string | null;
     }>,
 
-  startRain: (intensity?: number) =>
-    serverCall(() => startRain({ data: { intensity } })),
-  stopRain: () => serverCall(() => stopRain()),
-  startStorm: (duration?: number) =>
-    serverCall(() => startStorm({ data: { duration } })),
-  stopWeather: () => serverCall(() => stopWeather()),
-
-  triggerChopper: () => serverCall(() => triggerChopper()),
-  triggerGunshot: () => serverCall(() => triggerGunshot()),
-  triggerLightning: (username?: string) =>
-    serverCall(() => triggerLightning({ data: { username } })),
-  triggerThunder: (username?: string) =>
-    serverCall(() => triggerThunder({ data: { username } })),
-  createHorde: (count: number, username?: string) =>
-    serverCall(() => createHorde({ data: { count, username } })),
-
-  alarm: () => serverCall(() => alarm()),
-  removeZombies: () => serverCall(() => removeZombies()),
-
   reloadLua: (filename: string) =>
     serverCall(() => reloadLua({ data: { filename } })),
 
@@ -820,8 +708,6 @@ export const serverApi = {
 
   setStats: (mode: string, period?: number) =>
     serverCall(() => setServerStats({ data: { mode, period } })),
-
-  releaseSafehouse: () => serverCall(() => releaseSafehouse()),
 
   getConsoleLog: (lines?: number) =>
     apiGet(`/server/console-log${lines ? `?lines=${lines}` : ""}`),
@@ -897,17 +783,12 @@ export const playersApi = {
     serverCall(() => addPlayerItem({ data: { username, item, count } })),
   addXp: (username: string, perk: string, amount: number) =>
     serverCall(() => addPlayerXp({ data: { username, perk, amount } })),
-  addVehicle: (vehicle: string, username?: string) =>
-    serverCall(() => addPlayerVehicle({ data: { vehicle, username } })),
-  addVehicleAt: (vehicle: string, x: number, y: number, z = 0) =>
-    serverCall(() => addPlayerVehicleAt({ data: { vehicle, x, y, z } })),
   setGodMode: (username: string | null, enabled: boolean) =>
     serverCall(() => setGodMode({ data: { username, enabled } })),
   setInvisible: (username: string | null, enabled: boolean) =>
     serverCall(() => setInvisible({ data: { username, enabled } })),
   setNoclip: (username: string | null, enabled: boolean) =>
     serverCall(() => setNoclip({ data: { username, enabled } })),
-  getVehicles: () => serverCall(() => getPlayerVehicles()),
   getPerks: () => serverCall(() => getPlayerPerks()),
   getAccessLevels: () => serverCall(() => getPlayerAccessLevels()),
   banSteamId: (steamId: string, reason?: string) =>
@@ -930,18 +811,6 @@ export const playersApi = {
     apiDelete(`/players/notes/${encodeURIComponent(playerName)}`),
   getStats: () => getPlayerStats(),
   getStat: (playerName: string) => getPlayerStat({ data: { playerName } }),
-  getExports: (username?: string) =>
-    apiGet(
-      `/players/exports${username ? `?username=${encodeURIComponent(username)}` : ""}`,
-    ),
-  getExport: (username: string, filename: string) =>
-    apiGet(
-      `/players/exports/${encodeURIComponent(username)}/${encodeURIComponent(filename)}`,
-    ),
-  deleteExport: (username: string, filename: string) =>
-    apiDelete(
-      `/players/exports/${encodeURIComponent(username)}/${encodeURIComponent(filename)}`,
-    ),
 };
 
 export interface RconTestResult {
@@ -1396,96 +1265,6 @@ export const modsApi = {
         })
       | null
     >("/mods/conflicts/cached"),
-};
-
-export const chunksApi = {
-  getSaves: (customPath?: string) =>
-    apiGet(
-      `/chunks/saves${customPath ? `?customPath=${encodeURIComponent(customPath)}` : ""}`,
-      { timeout: 60000 },
-    ),
-  getChunks: (saveName: string, customPath?: string, scanId?: string) => {
-    const params = new URLSearchParams();
-    if (customPath) params.set("customPath", customPath);
-    if (scanId) params.set("scanId", scanId);
-    const qs = params.toString();
-    return apiGet<Record<string, any> & { resolvedServerId?: string | number | null }>(
-      `/chunks/chunks/${encodeURIComponent(saveName)}${qs ? `?${qs}` : ""}`,
-      { timeout: 600000 },
-    );
-  },
-  getStats: (saveName: string, customPath?: string) =>
-    apiGet(
-      `/chunks/stats/${encodeURIComponent(saveName)}${customPath ? `?customPath=${encodeURIComponent(customPath)}` : ""}`,
-      { timeout: 60000 },
-    ),
-  deleteChunks: (
-    saveName: string,
-    chunks: Array<{
-      file: string;
-      x: number;
-      y: number;
-      source?: string;
-      cellX?: number;
-      cellY?: number;
-    }>,
-    createBackup: boolean = true,
-    customPath?: string,
-    deleteVehicles: boolean = false,
-    force: boolean = false,
-    expectedServerId: string | number | null = null,
-  ) =>
-    apiPost("/chunks/delete-chunks", {
-      saveName,
-      chunks,
-      createBackup,
-      customPath,
-      deleteVehicles,
-      force,
-      expectedServerId,
-    }),
-  deleteRegion: (
-    saveName: string,
-    minX: number,
-    maxX: number,
-    minY: number,
-    maxY: number,
-    createBackup: boolean = true,
-    invert: boolean = false,
-    customPath?: string,
-    deleteVehicles: boolean = false,
-    force: boolean = false,
-    expectedServerId: string | number | null = null,
-  ) =>
-    apiPost("/chunks/delete-region", {
-      saveName,
-      minX,
-      maxX,
-      minY,
-      maxY,
-      createBackup,
-      invert,
-      customPath,
-      deleteVehicles,
-      force,
-      expectedServerId,
-    }),
-  browse: (browsePath?: string) =>
-    apiGet(
-      `/chunks/browse${browsePath ? `?path=${encodeURIComponent(browsePath)}` : ""}`,
-    ),
-  suggestedPaths: () =>
-    apiGet<{
-      candidates: Array<{ path: string; exists: boolean; hasSaves: boolean }>;
-      platform: string;
-    }>("/chunks/suggested-paths"),
-  savePath: (p: string) =>
-    apiPost<{
-      ok: boolean;
-      target: "server" | "setting";
-      serverId?: string;
-      path: string;
-    }>("/chunks/save-path", { path: p }),
 };
 
 export const configApi = {
@@ -2156,148 +1935,8 @@ export const panelBridgeApi = {
   ) =>
     serverCall(() => sendPanelBridgeCommand({ data: { action, args } })),
 
-  triggerHelicopterEvent: () =>
-    serverCall(() =>
-        sendPanelBridgeCommand({
-          data: { action: "triggerHelicopterEvent", args: {} },
-        })),
-  stopHelicopterEvent: () =>
-    serverCall(() =>
-        sendPanelBridgeCommand({
-          data: { action: "stopHelicopterEvent", args: {} },
-        })),
-
-  getWeather: () =>
-    serverCall(() => sendPanelBridgeWorldCommand({ data: { action: "getWeather" } })) as Promise<{
-      success: boolean;
-      data: {
-        temperature: number;
-        humidity: number;
-        windSpeed: number;
-        windAngle: number;
-        fogIntensity: number;
-        cloudIntensity: number;
-        precipitationIntensity: number;
-        isRaining: boolean;
-        isSnowing: boolean;
-        isThunderStorming: boolean;
-        dayLight: number;
-        nightStrength: number;
-        desaturation: number;
-        viewDistance: number;
-        ambient: number;
-      };
-    }>,
-
   getServerInfo: () =>
     serverCall(() => getPanelBridgeServerInfo()),
-
-  triggerBlizzard: (duration?: number) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "triggerBlizzard", args: { duration } },
-        })),
-  triggerTropicalStorm: (duration?: number) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "triggerTropicalStorm", args: { duration } },
-        })),
-  triggerStorm: (duration?: number) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "triggerStorm", args: { duration } },
-        })),
-  stopWeather: () =>
-    serverCall(() => sendPanelBridgeWorldCommand({ data: { action: "stopWeather" } })),
-  setSnow: (enabled: boolean) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "setSnow", args: { enabled } },
-        })),
-  generateWeather: (strength?: number, frontType?: number) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "generateWeather", args: { strength, frontType } },
-        })),
-
-  startRain: (intensity?: number) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "startRain", args: { intensity } },
-        })),
-  stopRain: () =>
-    serverCall(() => sendPanelBridgeWorldCommand({ data: { action: "stopRain" } })),
-  triggerLightning: (
-    x?: number,
-    y?: number,
-    strike?: boolean,
-    light?: boolean,
-    rumble?: boolean,
-  ) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: {
-            action: "triggerLightning",
-            args: { x, y, strike, light, rumble },
-          },
-        })),
-
-  getClimateFloats: () =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({ data: { action: "getClimateFloats" } })) as Promise<{
-      success: boolean;
-      data: {
-        floats: Array<{
-          id: number;
-          name: string;
-          actualName: string;
-          value: number;
-          min: number;
-          max: number;
-          isAdminEnabled: boolean;
-        }>;
-      };
-  }>,
-  setClimateFloat: (floatId: number, value: number, enable?: boolean) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: {
-            action: "setClimateFloat",
-            args: { floatId, value, enable },
-          },
-        })),
-  resetClimateOverrides: () =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "resetClimateOverrides" },
-        })),
-
-  getGameTime: () =>
-    serverCall(() => sendPanelBridgeWorldCommand({ data: { action: "getGameTime" } })) as Promise<{
-      success: boolean;
-      data: {
-        year: number;
-        month: number;
-        day: number;
-        hour: number;
-        minute: number;
-        dayOfWeek: number;
-        worldAgeHours: number;
-        moonPhase: number;
-        nightsSurvived: number;
-        multiplier?: number;
-      };
-    }>,
-  setGameTime: (options: {
-    hour?: number;
-    day?: number;
-    month?: number;
-    year?: number;
-  }) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "setGameTime", args: options },
-        })),
 
   getWorldStats: () =>
     serverCall(() =>
@@ -2306,12 +1945,6 @@ export const panelBridgeApi = {
       data: { serverName: string; map: string; zombiesInCell: number };
     }>,
 
-  getZombieCount: () =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({ data: { action: "getZombieCount" } })) as Promise<{
-      success: boolean;
-      data: { zombieCount: number; note: string };
-    }>,
   saveWorld: () =>
     serverCall(() => savePanelBridgeWorld()),
 
@@ -2474,102 +2107,6 @@ export const panelBridgeApi = {
     apiPost("/panel-bridge/install-mod", { serverLuaPath }),
 
 
-  playWorldSound: (
-    x: number,
-    y: number,
-    z?: number,
-    radius?: number,
-    volume?: number,
-  ) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: {
-            action: "playWorldSound",
-            args: {
-              x,
-              y,
-              z: z ?? 0,
-              radius: radius ?? 50,
-              volume: volume ?? 100,
-            },
-          },
-        })),
-
-  playSoundNearPlayer: (username: string, radius?: number, volume?: number) =>
-    serverCall(() =>
-        sendPanelBridgeEndangerCommand({
-          data: {
-            action: "playSoundNearPlayer",
-            args: {
-              username,
-              radius: radius ?? 50,
-              volume: volume ?? 100,
-            },
-          },
-        })),
-
-  triggerGunshotBridge: (options: {
-    x?: number;
-    y?: number;
-    z?: number;
-    username?: string;
-  }) =>
-    serverCall(() =>
-        sendPanelBridgeEndangerCommand({
-          data: { action: "triggerGunshot", args: options },
-        })),
-
-  triggerAlarmBridge: (options: {
-    x?: number;
-    y?: number;
-    z?: number;
-    username?: string;
-  }) =>
-    serverCall(() =>
-        sendPanelBridgeEndangerCommand({
-          data: { action: "triggerAlarmSound", args: options },
-        })),
-
-  createNoise: (options: {
-    x?: number;
-    y?: number;
-    z?: number;
-    radius?: number;
-    volume?: number;
-    username?: string;
-  }) =>
-    serverCall(() =>
-        sendPanelBridgeEndangerCommand({
-          data: { action: "createNoise", args: options },
-        })),
-
-
-  triggerAirdrop: (options: {
-    x: number;
-    y: number;
-    preset?: "military" | "medical" | "food" | "building" | "weapons" | "tools";
-    items?: Array<{ itemType: string; count?: number }>;
-    announce?: boolean;
-    attractZombies?: boolean;
-    soundRadius?: number;
-  }) => {
-    if (!Number.isFinite(options.x) || !Number.isFinite(options.y)) {
-      return Promise.reject(new Error("Invalid coordinates"));
-    }
-    return serverCall(() =>
-        sendPanelBridgeCommand({
-          data: {
-            action: "airdrop",
-            args: {
-              ...options,
-              x: Math.round(options.x),
-              y: Math.round(options.y),
-            },
-          },
-        }));
-  },
-
-
   getUtilitiesStatus: () =>
     serverCall(() =>
         sendPanelBridgeWorldCommand({
@@ -2608,49 +2145,6 @@ export const panelBridgeApi = {
         })) as Promise<UtilitiesChangeResult>,
 
 
-  exportCharacter: (username: string): Promise<CharacterExportResponse> =>
-    apiPost("/panel-bridge/character/export", { username }),
-
-  importCharacter: (
-    username: string,
-    data: CharacterImportData,
-  ): Promise<CharacterImportResponse> =>
-    apiPost("/panel-bridge/character/import", { username, data }),
-
-
-  spawnHordeNear: (username: string, count: number) =>
-    serverCall(() =>
-        sendPanelBridgeEndangerCommand({
-          data: {
-            action: "spawnHordeNearPlayer",
-            args: { username, count },
-          },
-        })),
-
-  spawnHordeBehind: (username: string, count: number) =>
-    serverCall(() =>
-        sendPanelBridgeEndangerCommand({
-          data: {
-            action: "spawnHordeBehindPlayer",
-            args: { username, count },
-          },
-        })),
-
-  clearAllZombies: () =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: { action: "clearAllZombies" },
-        })),
-  clearZombiesNearPlayer: (username: string, radius?: number) =>
-    serverCall(() =>
-        sendPanelBridgeWorldCommand({
-          data: {
-            action: "clearZombiesNearPlayer",
-            args: { username, radius },
-          },
-        })),
-
-
   getCatalogItems: () =>
     serverCall(() => getPanelBridgeCatalog({ data: { kind: "items" } })) as Promise<{
       items: Array<{
@@ -2658,18 +2152,6 @@ export const panelBridgeApi = {
         name: string;
         category: string;
         weight: number;
-      }>;
-      count: number;
-      scannedAt: string | null;
-    }>,
-
-  getCatalogVehicles: () =>
-    serverCall(() => getPanelBridgeCatalog({ data: { kind: "vehicles" } })) as Promise<{
-      vehicles: Array<{
-        id: string;
-        name: string;
-        mass: number;
-        seats: number;
       }>;
       count: number;
       scannedAt: string | null;
@@ -2687,17 +2169,6 @@ export const panelBridgeApi = {
       scannedAt: string;
     }>,
 
-  scanCatalogVehicles: () =>
-    serverCall(() => scanPanelBridgeCatalog({ data: { kind: "vehicles" } })) as Promise<{
-      vehicles: Array<{
-        id: string;
-        name: string;
-        mass: number;
-        seats: number;
-      }>;
-      count: number;
-      scannedAt: string;
-    }>,
 };
 
 export interface BackupSettings {
@@ -3103,8 +2574,6 @@ export const mapApi = {
     sqr?: number;
     scale?: number;
   }> => apiGet("/map/resolve"),
-  vehicles: (): Promise<{ vehicles: Array<{ id: number; x: number; y: number }> }> =>
-    apiGet("/map/vehicles"),
 };
 
 export const panelUpdateApi = {

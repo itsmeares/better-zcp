@@ -181,39 +181,6 @@ describe("players routes: activity log only written on RCON/bridge success", () 
     });
   });
 
-  describe("POST /add-vehicle", () => {
-    it("logs the action when RCON succeeds", async () => {
-      const rconService = {
-        addVehicle: vi.fn(async () => ({ success: true, response: "ok" })),
-      };
-      const response = createResponse();
-
-      await getRouteHandler("post", "/add-vehicle")(
-        createRequest({ username: "Bob", vehicle: "Base.CarNormal" }, rconService),
-        response,
-      );
-
-      expect(logPlayerAction).toHaveBeenCalledWith("Bob", "add_vehicle", "Base.CarNormal");
-    });
-
-    it("does NOT log the action when RCON reports failure", async () => {
-      const rconService = {
-        addVehicle: vi.fn(async () => ({
-          success: false,
-          error: "Server is not running",
-        })),
-      };
-      const response = createResponse();
-
-      await getRouteHandler("post", "/add-vehicle")(
-        createRequest({ username: "Bob", vehicle: "Base.CarNormal" }, rconService),
-        response,
-      );
-
-      expect(logPlayerAction).not.toHaveBeenCalled();
-    });
-  });
-
   describe("POST /godmode", () => {
     it("logs the action when the underlying command succeeds", async () => {
       const rconService = {

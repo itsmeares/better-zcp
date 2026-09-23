@@ -1434,88 +1434,6 @@ export class RconService extends EventEmitter {
     );
   }
 
-  async addVehicle(vehicle: unknown, username: unknown = null) {
-    const safeVehicle = this.sanitizeQuotedArg(vehicle, "Vehicle ID", 128);
-    if (username) {
-      return this.execute(
-        `addvehicle "${safeVehicle}" "${this.sanitizeQuotedArg(username, "Username", 64)}"`,
-      );
-    }
-    return this.execute(`addvehicle "${safeVehicle}"`);
-  }
-
-  async addVehicleAt(vehicle: unknown, x: unknown, y: unknown, z: unknown = 0) {
-    const safeVehicle = this.sanitizeQuotedArg(vehicle, "Vehicle ID", 128);
-    const coordinates = [x, y, z].map(Number);
-    if (!coordinates.every(Number.isFinite)) {
-      throw new Error("Coordinates must be valid numbers");
-    }
-    return this.execute(
-      `addvehicle "${safeVehicle}" "${coordinates.map(Math.floor).join(",")}"`,
-    );
-  }
-
-  async startRain(intensity: unknown = null) {
-    if (intensity !== null && intensity !== undefined) {
-      const n = Number(intensity);
-      if (!Number.isFinite(n) || n < 0 || n > 1)
-        throw new Error("intensity must be 0-1");
-      return this.execute(`startrain ${n}`);
-    }
-    return this.execute("startrain");
-  }
-
-  async stopRain() {
-    return this.execute("stoprain");
-  }
-
-  async startStorm(duration: unknown = null) {
-    const n = duration === null || duration === undefined ? 2.0 : Number(duration);
-    if (!Number.isFinite(n) || n < 0 || n > 168)
-      throw new Error("duration must be 0-168");
-    return this.execute(`startstorm ${n}`);
-  }
-
-  async stopWeather() {
-    return this.execute("stopweather");
-  }
-
-  async triggerChopper() {
-    return this.execute("chopper");
-  }
-
-  async triggerGunshot() {
-    return this.execute("gunshot");
-  }
-
-  async triggerLightning(username: unknown = null) {
-    if (username) {
-      return this.execute(
-        `lightning "${this.sanitizeQuotedArg(username, "Username", 64)}"`,
-      );
-    }
-    return this.execute("lightning");
-  }
-
-  async triggerThunder(username: unknown = null) {
-    if (username) {
-      return this.execute(
-        `thunder "${this.sanitizeQuotedArg(username, "Username", 64)}"`,
-      );
-    }
-    return this.execute("thunder");
-  }
-
-  async createHorde(count: unknown, username: unknown = null) {
-    const n = Math.min(Math.max(Math.floor(Number(count)) || 50, 1), 500);
-    if (username) {
-      return this.execute(
-        `createhorde ${n} "${this.sanitizeQuotedArg(username, "Username", 64)}"`,
-      );
-    }
-    return this.execute(`createhorde ${n}`);
-  }
-
   async setGodMode(username: unknown, enabled: boolean) {
     const value = enabled ? "-true" : "-false";
     if (username) {
@@ -1612,10 +1530,6 @@ export class RconService extends EventEmitter {
     );
   }
 
-  async alarm() {
-    return this.execute("alarm");
-  }
-
   async reloadLua(filename: unknown) {
     return this.execute(`reloadlua "${this.sanitize(filename)}"`);
   }
@@ -1640,16 +1554,6 @@ export class RconService extends EventEmitter {
     return this.execute(`stats "${safeMode}"`, {
       retryOnConnectionError: true,
     });
-  }
-
-  async removeZombies() {
-    return this.execute("removezombies");
-  }
-
-  async releaseSafehouse() {
-    throw new Error(
-      "Releasing a safehouse can only be done from in-game -- Project Zomboid's server refuses this over RCON, even from an admin console.",
-    );
   }
 
   async healthCheck() {

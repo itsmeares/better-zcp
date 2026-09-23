@@ -364,21 +364,9 @@ const CONTROL_ROUTES = [
   ["POST", "/api/server/restart", "restartServer"],
   ["POST", "/api/server/save", "saveGameWorld"],
   ["POST", "/api/server/message", "sendServerMessage"],
-  ["POST", "/api/server/weather/start-rain", "startRain"],
-  ["POST", "/api/server/weather/stop-rain", "stopRain"],
-  ["POST", "/api/server/weather/start-storm", "startStorm"],
-  ["POST", "/api/server/weather/stop", "stopWeather"],
-  ["POST", "/api/server/events/chopper", "triggerChopper"],
-  ["POST", "/api/server/events/gunshot", "triggerGunshot"],
-  ["POST", "/api/server/events/lightning", "triggerLightning"],
-  ["POST", "/api/server/events/thunder", "triggerThunder"],
-  ["POST", "/api/server/events/horde", "createHorde"],
   ["POST", "/api/server/reloadlua", "reloadLua"],
   ["POST", "/api/server/log", "setLogLevel"],
   ["POST", "/api/server/stats", "setServerStats"],
-  ["POST", "/api/server/alarm", "alarm"],
-  ["POST", "/api/server/removezombies", "removeZombies"],
-  ["POST", "/api/server/releasesafehouse", "releaseSafehouse"],
   ["GET", "/api/players", "getPlayers"],
   ["POST", "/api/players/kick", "kickPlayer"],
   ["POST", "/api/players/ban", "banPlayer"],
@@ -388,12 +376,9 @@ const CONTROL_ROUTES = [
   ["POST", "/api/players/teleport", "teleportPlayer"],
   ["POST", "/api/players/add-item", "addPlayerItem"],
   ["POST", "/api/players/add-xp", "addPlayerXp"],
-  ["POST", "/api/players/add-vehicle", "addPlayerVehicle"],
-  ["POST", "/api/players/add-vehicle-at", "addPlayerVehicleAt"],
   ["POST", "/api/players/godmode", "setGodMode"],
   ["POST", "/api/players/invisible", "setInvisible"],
   ["POST", "/api/players/noclip", "setNoclip"],
-  ["GET", "/api/players/vehicles", "getPlayerVehicles"],
   ["GET", "/api/players/perks", "getPlayerPerks"],
   ["GET", "/api/players/access-levels", "getPlayerAccessLevels"],
   ["POST", "/api/players/access-level", "setAccessLevel"],
@@ -414,9 +399,6 @@ const RESOURCE_ROUTES = [
   ["GET", "/api/players/notes/Alice", "getPlayerNote"],
   ["POST", "/api/players/notes", "upsertPlayerNote"],
   ["DELETE", "/api/players/notes/Alice", "deletePlayerNote"],
-  ["GET", "/api/players/exports", "getPlayerExports"],
-  ["GET", "/api/players/exports/Alice/save.json", "getPlayerExport"],
-  ["DELETE", "/api/players/exports/Alice/save.json", "deletePlayerExport"],
   ["GET", "/api/players/stats", "getPlayerStats"],
   ["GET", "/api/players/stats/Alice", "getPlayerStat"],
 ];
@@ -541,7 +523,6 @@ const LEGACY_SERVER_ROUTES = [
     { minutes: 30 },
     { minutes: 30 },
   ],
-  ["GET", "/api/map/vehicles", "getMapVehicles", undefined, {}],
 ];
 
 const PUBLIC_AUTH_ROUTES = [
@@ -594,46 +575,7 @@ const PANEL_BRIDGE_ROUTES = [
   ["POST", "/api/panel-bridge/refresh", "sendPanelBridgeSetupCommand"],
   ["GET", "/api/panel-bridge/ping", "pingPanelBridge"],
   ["POST", "/api/panel-bridge/command", "sendPanelBridgeCommand"],
-  ["GET", "/api/panel-bridge/weather", "sendPanelBridgeWorldCommand"],
   ["GET", "/api/panel-bridge/server-info", "getPanelBridgeServerInfo"],
-  ["POST", "/api/panel-bridge/weather/blizzard", "sendPanelBridgeWorldCommand"],
-  [
-    "POST",
-    "/api/panel-bridge/weather/tropical-storm",
-    "sendPanelBridgeWorldCommand",
-  ],
-  ["POST", "/api/panel-bridge/weather/storm", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/weather/stop", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/weather/generate", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/weather/snow", "sendPanelBridgeWorldCommand"],
-  [
-    "POST",
-    "/api/panel-bridge/weather/rain/start",
-    "sendPanelBridgeWorldCommand",
-  ],
-  [
-    "POST",
-    "/api/panel-bridge/weather/rain/stop",
-    "sendPanelBridgeWorldCommand",
-  ],
-  [
-    "POST",
-    "/api/panel-bridge/weather/lightning",
-    "sendPanelBridgeWorldCommand",
-  ],
-  ["GET", "/api/panel-bridge/climate/floats", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/climate/float", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/climate/reset", "sendPanelBridgeWorldCommand"],
-  [
-    "POST",
-    "/api/panel-bridge/climate/temperature",
-    "sendPanelBridgeWorldCommand",
-  ],
-  ["POST", "/api/panel-bridge/climate/wind", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/climate/fog", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/climate/clouds", "sendPanelBridgeWorldCommand"],
-  ["GET", "/api/panel-bridge/time", "sendPanelBridgeWorldCommand"],
-  ["POST", "/api/panel-bridge/time", "sendPanelBridgeWorldCommand"],
   ["GET", "/api/panel-bridge/world/stats", "sendPanelBridgeWorldCommand"],
   ["POST", "/api/panel-bridge/world/save", "savePanelBridgeWorld"],
   ["GET", "/api/panel-bridge/players", "sendPanelBridgePlayerCommand"],
@@ -650,15 +592,6 @@ const PANEL_BRIDGE_ROUTES = [
   ["POST", "/api/panel-bridge/install-local", "sendPanelBridgeSetupCommand"],
   ["POST", "/api/panel-bridge/install-mod-auto", "sendPanelBridgeSetupCommand"],
   ["POST", "/api/panel-bridge/install-mod", "sendPanelBridgeSetupCommand"],
-  ["POST", "/api/panel-bridge/sound/world", "sendPanelBridgeWorldCommand"],
-  [
-    "POST",
-    "/api/panel-bridge/sound/near-player",
-    "sendPanelBridgeEndangerCommand",
-  ],
-  ["POST", "/api/panel-bridge/sound/gunshot", "sendPanelBridgeEndangerCommand"],
-  ["POST", "/api/panel-bridge/sound/alarm", "sendPanelBridgeEndangerCommand"],
-  ["POST", "/api/panel-bridge/sound/noise", "sendPanelBridgeEndangerCommand"],
   ["GET", "/api/panel-bridge/utilities/status", "sendPanelBridgeWorldCommand"],
   [
     "POST",
@@ -669,16 +602,6 @@ const PANEL_BRIDGE_ROUTES = [
     "POST",
     "/api/panel-bridge/utilities/shutoff",
     "sendPanelBridgeWorldCommand",
-  ],
-  [
-    "POST",
-    "/api/panel-bridge/character/export",
-    "sendPanelBridgePlayerCommand",
-  ],
-  [
-    "POST",
-    "/api/panel-bridge/character/import",
-    "sendPanelBridgePlayerCommand",
   ],
   [
     "POST",
@@ -705,44 +628,6 @@ const PANEL_BRIDGE_ROUTES = [
     "/api/panel-bridge/players/Alice/invisible",
     "sendPanelBridgePlayerCommand",
   ],
-  ["GET", "/api/panel-bridge/zombies/count", "sendPanelBridgeWorldCommand"],
-  [
-    "POST",
-    "/api/panel-bridge/zombies/clear-near-player",
-    "sendPanelBridgeWorldCommand",
-  ],
-  [
-    "POST",
-    "/api/panel-bridge/zombies/clear-all",
-    "sendPanelBridgeWorldCommand",
-  ],
-  [
-    "POST",
-    "/api/panel-bridge/zombies/spawn-near",
-    "sendPanelBridgeEndangerCommand",
-  ],
-  [
-    "POST",
-    "/api/panel-bridge/zombies/spawn-behind",
-    "sendPanelBridgeEndangerCommand",
-  ],
-  [
-    "POST",
-    "/api/panel-bridge/visual/view-distance",
-    "sendPanelBridgeWorldCommand",
-  ],
-  ["POST", "/api/panel-bridge/visual/daylight", "sendPanelBridgeWorldCommand"],
-  [
-    "POST",
-    "/api/panel-bridge/visual/night-strength",
-    "sendPanelBridgeWorldCommand",
-  ],
-  [
-    "POST",
-    "/api/panel-bridge/visual/desaturation",
-    "sendPanelBridgeWorldCommand",
-  ],
-  ["POST", "/api/panel-bridge/visual/ambient", "sendPanelBridgeWorldCommand"],
   ["GET", "/api/panel-bridge/debug/log", "sendPanelBridgeDiagnosticsCommand"],
   ["GET", "/api/panel-bridge/debug/stats", "sendPanelBridgeDiagnosticsCommand"],
   ["POST", "/api/panel-bridge/debug/mode", "sendPanelBridgeDiagnosticsCommand"],
@@ -758,9 +643,7 @@ const PANEL_BRIDGE_ROUTES = [
     "sendPanelBridgeDiagnosticsCommand",
   ],
   ["GET", "/api/panel-bridge/catalog/items", "getPanelBridgeCatalog"],
-  ["GET", "/api/panel-bridge/catalog/vehicles", "getPanelBridgeCatalog"],
   ["POST", "/api/panel-bridge/catalog/scan-items", "scanPanelBridgeCatalog"],
-  ["POST", "/api/panel-bridge/catalog/scan-vehicles", "scanPanelBridgeCatalog"],
   [
     "POST",
     "/api/panel-bridge/catalog/debug-item-script",
@@ -816,6 +699,21 @@ async function responseBody(response: Response): Promise<unknown> {
 }
 
 describe("Start compatibility server and player routes", () => {
+  it.each([
+    ["GET", "/api/map/vehicles"],
+    ["GET", "/api/players/exports"],
+    ["POST", "/api/players/add-vehicle"],
+    ["POST", "/api/server/weather/start-rain"],
+    ["POST", "/api/panel-bridge/character/export"],
+    ["POST", "/api/panel-bridge/zombies/spawn-near"],
+    ["POST", "/api/panel-bridge/catalog/scan-vehicles"],
+  ])("no longer dispatches removed %s %s", async (method, path) => {
+    const response = await handleStartApiCompatibilityRequest(
+      makeRequest(method, path, method === "GET" ? undefined : {}),
+    );
+    expect(response.status).toBe(404);
+  });
+
   it("executes callable TanStack server functions through __executeServer", async () => {
     const response = await handleStartApiCompatibilityRequest(
       makeRequest("GET", "/api/panel/update-status"),
@@ -967,7 +865,7 @@ describe("Start compatibility server and player routes", () => {
     },
   );
 
-  it("keeps PanelBridge command and action payloads separate", async () => {
+  it("passes generic PanelBridge command payloads unchanged", async () => {
     const command = await handleStartApiCompatibilityRequest(
       makeRequest("POST", "/api/panel-bridge/command", {
         action: "getStats",
@@ -979,15 +877,7 @@ describe("Start compatibility server and player routes", () => {
       data: { action: "getStats", args: { limit: 10 } },
     });
 
-    const world = await handleStartApiCompatibilityRequest(
-      makeRequest("POST", "/api/panel-bridge/weather/storm", {
-        duration: 2,
-      }),
-    );
-    expect(await responseBody(world)).toEqual({
-      handledBy: "sendPanelBridgeWorldCommand",
-      data: { action: "triggerStorm", args: { duration: 2 } },
-    });
+
   });
 
   it("keeps the legacy PanelBridge ping and command catalog authenticated", async () => {

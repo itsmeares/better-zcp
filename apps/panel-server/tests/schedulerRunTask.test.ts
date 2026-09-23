@@ -92,12 +92,12 @@ describe("Scheduler.runTaskNow command dispatch", () => {
 
     await scheduler.runTaskNow({
       id: 4,
-      name: "Storm",
-      command: "bridge:triggerStorm",
+      name: "World save",
+      command: "bridge:saveWorld",
     });
 
     expect(scheduler.executeBridgeAction).toHaveBeenCalledWith(
-      "bridge:triggerStorm",
+      "bridge:saveWorld",
     );
   });
 
@@ -174,6 +174,17 @@ describe("POST /api/scheduler/tasks/:id/run", () => {
 
     expect(runTaskNow).not.toHaveBeenCalled();
     expect(response.status).toHaveBeenCalledWith(404);
+  });
+
+  it("does not manually run a saved weather task", async () => {
+    getScheduledTasks.mockResolvedValue([{ id: 7, name: "Old weather", command: "bridge:triggerStorm" }]);
+    const app = { get: vi.fn().mockReturnValue({ runTaskNow }) };
+    const response = createResponse();
+
+    await getRunNowHandler()({ app, params: { id: "7" } }, response);
+
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(runTaskNow).not.toHaveBeenCalled();
   });
 
   it("rejects a task ID with a numeric prefix instead of truncating it", async () => {

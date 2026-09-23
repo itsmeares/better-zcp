@@ -136,13 +136,6 @@ export const deletePlayerNote = createResourceAction(async (data) => {
     return { success }
 })
 
-export const deletePlayerExport = createResourceAction(async (data) => {
-    const { deletePlayerExport: removePlayerExport } =
-      await import('../../../panel-server/services/playerExports.ts')
-    removePlayerExport(String(data.username ?? ''), String(data.filename ?? ''))
-    return { success: true }
-})
-
 function parseBackupBoolean(value: unknown): boolean | undefined {
   if (typeof value === 'boolean') return value
   if (value === 1 || value === '1' || value === 'true') return true

@@ -22,16 +22,6 @@ function invoke(
   return invokeServerFunction(serverFunction, name, options)
 }
 
-export const sendPanelBridgeEndangerCommand = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => record(data))
-  .handler(({ data, context }) =>
-    invoke(
-      serverImplementation.sendPanelBridgeEndangerCommand,
-      'sendPanelBridgeEndangerCommand',
-      { data, context },
-    ),
-  )
-
 export const getPanelBridgeCatalog = createServerFn({ method: 'GET' })
   .validator((data: unknown) => record(data))
   .handler(({ data, context }) =>

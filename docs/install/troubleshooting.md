@@ -49,8 +49,8 @@ network — the panel can't discover them for you.
    below before you're surprised by it.
 
 5. **`DoLuaChecksum=false`** in the PZ server `.ini` — only if you want
-   PanelBridge (teleport, heal, god mode, weather control, and the other
-   RCON-can't-reach features). Skip this if you don't plan to use
+   PanelBridge (teleport, heal, god mode, and other
+   player actions that RCON cannot reach). Skip this if you don't plan to use
    PanelBridge.
 
 If you're installing through Docker and the panel will also read or write
@@ -87,14 +87,12 @@ one instead of binding somewhere you didn't expect — that's the case above.
 Stop that process, or change `PORT` (bare-metal) / the left-hand side of the
 port mapping in `docker-compose.yml` (Docker) to a free port, then restart.
 
-The same message and the same fix apply to `HTTPS port ... is already in
-use` if you've enabled `HTTPS=true`.
 
 ---
 
 ### Panel opens a new browser tab every time it starts or restarts
 
-**What you see:** every time the panel (the Windows/macOS/Linux `.exe`
+**What you see:** every time the panel (the Windows/Linux executable
 install, not Docker) starts up, it opens a new tab pointed at the panel's
 login page — including on a restart, so if something is restarting the panel
 repeatedly you end up with a pile of tabs to close by hand.

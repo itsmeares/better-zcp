@@ -27,7 +27,6 @@ import {
 import { parseAutoUpdateWarningMinutes } from "../services/updateChecker.ts";
 import { BackupService } from "../services/backupService.ts";
 import authService from "../services/auth.ts";
-import { parsePlayerExportFile } from "../routes/players.ts";
 import { requireStoppedForLocalConfigMutation } from "../services/configMutationGuard.ts";
 
 describe("extractWorkshopModId", () => {
@@ -248,30 +247,6 @@ describe("logout and export trust boundaries", () => {
     getDbSpy.mockRestore();
   });
 
-  it("rejects oversized or non-object export payloads before parsing JSON", () => {
-    const temporaryDirectory = fs.mkdtempSync(
-      path.join(os.tmpdir(), "zcp-export-"),
-    );
-
-    try {
-      const largeTempPath = path.join(temporaryDirectory, "too-large.json");
-      fs.writeFileSync(
-        largeTempPath,
-        JSON.stringify({ payload: "x".repeat(6 * 1024 * 1024) }),
-      );
-
-      expect(() => parsePlayerExportFile(largeTempPath)).toThrow(/too large/i);
-
-      const invalidTempPath = path.join(temporaryDirectory, "invalid.json");
-      fs.writeFileSync(invalidTempPath, "not-json");
-
-      expect(() => parsePlayerExportFile(invalidTempPath)).toThrow(
-        /invalid json/i,
-      );
-    } finally {
-      fs.rmSync(temporaryDirectory, { recursive: true, force: true });
-    }
-  });
 });
 
 describe("config mutation guard", () => {

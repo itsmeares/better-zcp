@@ -1,19 +1,7 @@
 {
-  "note": "Every ABSENT finding scripts/check-engine-signatures.mjs currently reports against main, keyed by class+method (not line number: an edit that only shifts lines shouldn't need a baseline update; a NEW call site elsewhere to an already-baselined pair is intentionally absorbed too -- the checker prints this baseline's own coverage every run so that absorption stays visible instead of silent). Reviewed and classified 2026-08-30 by reading each call site in context, not from the finding alone. Two categories, and they mean different things -- see each entry's own `category`:\n\n  harmless-dead-code: the check is RIGHT -- the method genuinely does not exist -- and the code already knows it (a documented guarded probe, or a branch whose earlier sibling already succeeds). PanelBridge.lua does not need to change for these.\n\n  tool-limitation: the check is WRONG. This checker only resolves a receiver's STATICALLY DECLARED type, never the real runtime concrete type -- so a call through an interface-typed accessor (e.g. SandboxOptions.getOptionByName(), declared to return the SandboxOption interface) is checked against the interface, not whatever concrete subtype is actually handed back at runtime. Do not treat entries in this category as debt to clean up; the call site already works.\n\nAdding a NEW method here should be rare and deliberate -- it means 'I looked at this specific finding and decided the code, not the checker, is correct as-is', not 'suppress this to turn the gate green'. A finding that is a real, previously-unknown bug (e.g. player.setLx/setLy/setLz below -- undocumented before this checker existed) still belongs in the harmless-dead-code category once someone has actually confirmed it's inert, exactly like the rest of this file; it does NOT get fixed here, since scripts/ is not where PanelBridge.lua gets edited.",
+  "note": "Reviewed Build 42 method findings that remain in the retained PanelBridge handlers. Entries are keyed by class and method; guarded absent calls and static-type false positives are documented individually.",
   "keyedBy": "class+method",
   "entries": [
-    {
-      "class": "zombie.characters.SurvivorDesc",
-      "method": "getTraitList",
-      "category": "harmless-dead-code",
-      "reason": "Build 42 trait API probe in PanelBridge.lua's guarded retrieval chain (getCharacterTraits -> desc:getTraitList -> desc:getTraits). Absent on this build; called through PanelBridge.tryGet, which tolerates absence by design."
-    },
-    {
-      "class": "zombie.characters.SurvivorDesc",
-      "method": "getTraits",
-      "category": "harmless-dead-code",
-      "reason": "Alternative Build 42 trait API probe in the same guarded retrieval chain as SurvivorDesc.getTraitList above. Absent on this build; tolerated via tryGet."
-    },
     {
       "class": "zombie.characters.IsoPlayer",
       "method": "setNetworkTeleportEnabled",
@@ -37,12 +25,6 @@
       "method": "setLz",
       "category": "harmless-dead-code",
       "reason": "Same finding as IsoPlayer.setLx above (lz is a private IsoMovingObject field with no public setter). Guarded, always a no-op, harmless."
-    },
-    {
-      "class": "zombie.iso.IsoCell",
-      "method": "removeVehicle",
-      "category": "harmless-dead-code",
-      "reason": "Dead fallback in a multi-tier vehicle-removal chain (permanentlyRemove -> removeFromWorld -> vehicle:removeVehicle -> cell:removeVehicle -> error). BaseVehicle's own permanentlyRemove()/removeFromWorld(), tried first in the same chain, both genuinely exist (verified via javap) and succeed before this branch is ever reached."
     },
     {
       "class": "zombie.SandboxOptions$SandboxOption",

@@ -2549,7 +2549,7 @@ const RCON_REJECTION_REASON_HINTS = [
   },
   {
     match: /can only be run from in-game/i,
-    hint: "Only works typed in-game, never over RCON. Expected for releasing a safehouse until PanelBridge supports it — not a misconfiguration.",
+    hint: "Only works typed in-game, never over RCON. This command is only available in game, not through RCON.",
   },
 ];
 
@@ -3227,7 +3227,7 @@ router.get("/diagnostics", async (req, res) => {
               diagWarn(
                 "server.bridgeMod",
                 "PanelBridge mod not detected",
-                "Couldn't find PanelBridge.lua under the server. Advanced features (teleport, weather, character export) will be unavailable.",
+                "Couldn't find PanelBridge.lua under the server. Advanced player actions (teleport and heal) will be unavailable.",
                 {
                   category: "server",
                   hint: "Copy pz-mod/PanelBridge into the server's media/lua/server folder",
@@ -4289,10 +4289,10 @@ router.get("/diagnostics", async (req, res) => {
               diagWarn(
                 "storage.saveSize",
                 "Save folder very large",
-                `${summary}. Backups, restores, and chunk cleanups will be slow.`,
+                `${summary}. Backups and restores will be slow.`,
                 {
                   category: "storage",
-                  hint: "Run the Chunk Cleaner to trim unloaded cells, or archive old saves.",
+                  hint: "Archive old saves or increase the storage available for backups.",
                   meta,
                   params: sizeParams,
                 },
@@ -4641,9 +4641,6 @@ router.get("/diagnostics", async (req, res) => {
 const TILE_PROBE_TIMEOUT_MS = 5000;
 const WORLDMAP_HANDLERS = [
   "getServerInfo",
-  "getVehiclesDetailed",
-  "getSafehouses",
-  "triggerAirdrop",
 ];
 
 async function probeTile(url: string) {
@@ -4735,7 +4732,7 @@ router.get("/worldmap", async (req, res) => {
         diagWarn(
           "worldmap.activeServer",
           "No active server",
-          "No server is currently active in the panel. The map will load tiles but cannot show players, vehicles, or safehouses.",
+          "No server is currently active in the panel. The map will load tiles but cannot show players.",
           {
             category: "worldmap",
             hint: "Servers → select one and click “Set active”.",
@@ -4845,7 +4842,7 @@ router.get("/worldmap", async (req, res) => {
           diagFail(
             "worldmap.tiles.b42Top",
             "B42 top-down tiles unavailable",
-            `Build ${b42Dir} did not serve a .${b42TopFormat} top-down tile (${b42TopProbe.error || `HTTP ${b42TopProbe.statusCode}`}). The Map Cleanup page will show chunks with no base map.`,
+            `Build ${b42Dir} did not serve a .${b42TopFormat} top-down tile (${b42TopProbe.error || `HTTP ${b42TopProbe.statusCode}`}). The World Map may show missing base tiles.`,
             {
               category: "worldmap",
               hint: "Upstream may have republished this build in a different image format. Re-run diagnostics after a few minutes; the panel re-reads the format from base_top/layer0.dzi every 24h or on restart.",
@@ -5603,58 +5600,6 @@ router.get("/activity", async (req, res) => {
     res.status(500).json({ error: sanitizeError(error.message) });
   }
 });
-
-router.post(
-  "/fix-writability",
-  async (req, res) => {
-    try {
-      const { target } = req.body || {};
-      if (target !== "db") {
-        return res.status(400).json({
-          error: "Unknown or unsupported writability target",
-          code: ErrorCode.WRITABILITY_TARGET_UNSUPPORTED,
-        });
-      }
-
-      const targetPath = getDatabaseFilePath();
-      if (!(await safePathExists(targetPath))) {
-        return res.status(404).json({
-          error: "Database file does not exist",
-          code: ErrorCode.WRITABILITY_TARGET_MISSING,
-        });
-      }
-
-      try {
-        await fs.promises.chmod(targetPath, 0o600);
-      } catch (chmodError: any) {
-        return res.status(400).json({
-          success: false,
-          error: `Could not change file permissions: ${chmodError.message}`,
-          code: ErrorCode.WRITABILITY_CHMOD_FAILED,
-        });
-      }
-
-      if (!(await safePathWritable(targetPath))) {
-        return res.status(400).json({
-          success: false,
-          error:
-            "The file is still not writable after clearing the read-only attribute -- this looks like an ownership or ACL issue, which this automated fix can't resolve.",
-          code: ErrorCode.WRITABILITY_STILL_BLOCKED,
-        });
-      }
-
-      log.info(`Cleared read-only attribute on ${targetPath}`);
-      res.json({
-        success: true,
-        message: "Database file is writable again.",
-        path: targetPath,
-      });
-    } catch (error: any) {
-      log.error(`Failed to fix writability: ${error.message}`);
-      res.status(500).json({ error: sanitizeError(error.message) });
-    }
-  },
-);
 
 export default router;
 export { getDiskFree };

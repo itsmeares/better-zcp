@@ -2,7 +2,7 @@ import { createFileRoute, useLocation, useNavigate } from '@tanstack/react-route
 import { useEffect } from 'react'
 import { NotFoundRoute } from '../App'
 
-function NavigateTo({ to, tab }: { to: '/' | '/chunks' | '/settings' | '/server-config'; tab?: string }) {
+function NavigateTo({ to, tab }: { to: '/' | '/settings' | '/server-config'; tab?: string }) {
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -20,7 +20,6 @@ function LegacyRoute() {
   const { pathname } = useLocation()
 
   if (pathname === '/dashboard') return <NavigateTo to="/" />
-  if (pathname === '/chunk-cleaner') return <NavigateTo to="/chunks" />
   if (pathname === '/roles') return <NavigateTo to="/settings" tab="roles" />
   if (pathname === '/users') return <NavigateTo to="/settings" tab="users" />
   if (pathname === '/sso') return <NavigateTo to="/settings" tab="sso" />

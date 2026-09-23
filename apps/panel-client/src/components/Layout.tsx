@@ -13,7 +13,6 @@ import {
   Download,
   Bug,
   Map,
-  Eraser,
   Layers,
   ChevronDown,
   FileCog,
@@ -117,11 +116,6 @@ const navSections: NavSection[] = [
     requiresServer: true,
     items: [
       {
-        to: '/events',
-        icon: Zap,
-        label: 'Events & Weather',
-      },
-      {
         to: '/world-map',
         icon: Map,
         label: 'World Map',
@@ -163,11 +157,6 @@ const navSections: NavSection[] = [
         to: '/backups',
         icon: Archive,
         label: 'World Backups',
-      },
-      {
-        to: '/chunks',
-        icon: Eraser,
-        label: 'Map Cleanup',
       },
     ],
   },

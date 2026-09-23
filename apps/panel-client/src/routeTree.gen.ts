@@ -12,10 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as BackupsRouteImport } from './routes/backups'
-import { Route as ChunksRouteImport } from './routes/chunks'
 import { Route as ConsoleRouteImport } from './routes/console'
 import { Route as DebugRouteImport } from './routes/debug'
-import { Route as EventsRouteImport } from './routes/events'
 import { Route as ModsRouteImport } from './routes/mods'
 import { Route as PlayersRouteImport } from './routes/players'
 import { Route as SchedulerRouteImport } from './routes/scheduler'
@@ -45,11 +43,6 @@ const BackupsRoute = BackupsRouteImport.update({
   path: '/backups',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ChunksRoute = ChunksRouteImport.update({
-  id: '/chunks',
-  path: '/chunks',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ConsoleRoute = ConsoleRouteImport.update({
   id: '/console',
   path: '/console',
@@ -58,11 +51,6 @@ const ConsoleRoute = ConsoleRouteImport.update({
 const DebugRoute = DebugRouteImport.update({
   id: '/debug',
   path: '/debug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EventsRoute = EventsRouteImport.update({
-  id: '/events',
-  path: '/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ModsRoute = ModsRouteImport.update({
@@ -135,10 +123,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/backups': typeof BackupsRoute
-  '/chunks': typeof ChunksRoute
   '/console': typeof ConsoleRoute
   '/debug': typeof DebugRoute
-  '/events': typeof EventsRoute
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
   '/scheduler': typeof SchedulerRoute
@@ -157,10 +143,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/backups': typeof BackupsRoute
-  '/chunks': typeof ChunksRoute
   '/console': typeof ConsoleRoute
   '/debug': typeof DebugRoute
-  '/events': typeof EventsRoute
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
   '/scheduler': typeof SchedulerRoute
@@ -180,10 +164,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/backups': typeof BackupsRoute
-  '/chunks': typeof ChunksRoute
   '/console': typeof ConsoleRoute
   '/debug': typeof DebugRoute
-  '/events': typeof EventsRoute
   '/mods': typeof ModsRoute
   '/players': typeof PlayersRoute
   '/scheduler': typeof SchedulerRoute
@@ -204,10 +186,8 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/backups'
-    | '/chunks'
     | '/console'
     | '/debug'
-    | '/events'
     | '/mods'
     | '/players'
     | '/scheduler'
@@ -226,10 +206,8 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/backups'
-    | '/chunks'
     | '/console'
     | '/debug'
-    | '/events'
     | '/mods'
     | '/players'
     | '/scheduler'
@@ -248,10 +226,8 @@ export interface FileRouteTypes {
     | '/'
     | '/$'
     | '/backups'
-    | '/chunks'
     | '/console'
     | '/debug'
-    | '/events'
     | '/mods'
     | '/players'
     | '/scheduler'
@@ -271,10 +247,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   BackupsRoute: typeof BackupsRoute
-  ChunksRoute: typeof ChunksRoute
   ConsoleRoute: typeof ConsoleRoute
   DebugRoute: typeof DebugRoute
-  EventsRoute: typeof EventsRoute
   ModsRoute: typeof ModsRoute
   PlayersRoute: typeof PlayersRoute
   SchedulerRoute: typeof SchedulerRoute
@@ -313,13 +287,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BackupsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/chunks': {
-      id: '/chunks'
-      path: '/chunks'
-      fullPath: '/chunks'
-      preLoaderRoute: typeof ChunksRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/console': {
       id: '/console'
       path: '/console'
@@ -332,13 +299,6 @@ declare module '@tanstack/react-router' {
       path: '/debug'
       fullPath: '/debug'
       preLoaderRoute: typeof DebugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/events': {
-      id: '/events'
-      path: '/events'
-      fullPath: '/events'
-      preLoaderRoute: typeof EventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mods': {
@@ -439,10 +399,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   BackupsRoute: BackupsRoute,
-  ChunksRoute: ChunksRoute,
   ConsoleRoute: ConsoleRoute,
   DebugRoute: DebugRoute,
-  EventsRoute: EventsRoute,
   ModsRoute: ModsRoute,
   PlayersRoute: PlayersRoute,
   SchedulerRoute: SchedulerRoute,

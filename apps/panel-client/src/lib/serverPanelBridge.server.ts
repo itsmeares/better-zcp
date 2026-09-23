@@ -1,13 +1,10 @@
 import { createServerFn } from '@tanstack/react-start'
 import { protectedServerFunctionMiddleware } from './serverAuth.server'
 import {
-  ITEM_TYPE_REGEX,
   VALID_ACTIONS,
-  VEHICLE_SCRIPT_REGEX,
 } from '../../../panel-server/services/panelBridgePolicy.ts'
 import {
   PANEL_BRIDGE_COMMANDS,
-  PANEL_BRIDGE_CLIMATE_FLOAT_IDS,
 } from '../../../panel-server/services/panelBridgeCommands.ts'
 
 type AnyRecord = Record<string, any>
@@ -66,20 +63,11 @@ async function panelRuntime(): Promise<AnyRecord> {
   return getPanelRuntime()
 }
 
-const VALID_PRESETS = [
-  'military',
-  'medical',
-  'food',
-  'building',
-  'weapons',
-  'tools',
-]
-
 async function executePanelBridgeCommand(data: AnyRecord): Promise<any> {
   const [
     { logBridgeCommand },
     { ErrorCode },
-    { sanitizeError, sanitizeErrorParams },
+    { sanitizeError },
   ] = await Promise.all([
     import('../../../panel-server/database/init.ts'),
     import('../../../panel-server/utils/errorCodes.ts'),
@@ -100,134 +88,11 @@ async function executePanelBridgeCommand(data: AnyRecord): Promise<any> {
     invalid('args must be an object', ErrorCode.PANELBRIDGE_ARGS_MUST_BE_OBJECT)
   }
 
-  if (action === 'spawnVehicleAt') {
-    const vehicle = args?.vehicle ?? args?.scriptName
-    const x = Number(args?.x)
-    const y = Number(args?.y)
-    const z = Number(args?.z ?? 0)
-    if (typeof vehicle !== 'string' || !VEHICLE_SCRIPT_REGEX.test(vehicle)) {
-      invalid(
-        'Invalid vehicle script name',
-        ErrorCode.PANELBRIDGE_INVALID_VEHICLE_SCRIPT_NAME,
-      )
-    }
-    if (
-      !Number.isFinite(x) ||
-      !Number.isFinite(y) ||
-      !Number.isFinite(z) ||
-      x < 0 ||
-      x > 24000 ||
-      y < 0 ||
-      y > 24000 ||
-      z < 0 ||
-      z > 8 ||
-      (x === 0 && y === 0)
-    ) {
-      invalid(
-        'Invalid coordinates (x/y: 0-24000, z: 0-8)',
-        ErrorCode.PANELBRIDGE_SPAWN_VEHICLE_INVALID_COORDS,
-      )
-    }
-
-    try {
-      const result = await runtime.rconService.addVehicleAt(vehicle, x, y, z)
-      void logBridgeCommand(action, args, result, result.success, 0).catch(
-        () => {},
-      )
-      return {
-        ...result,
-        data: result.success
-          ? {
-              message: 'Vehicle spawn requested',
-              scriptName: vehicle,
-              x: Math.floor(x),
-              y: Math.floor(y),
-              z: Math.floor(z),
-            }
-          : undefined,
-      }
-    } catch (error) {
-      const message = sanitizeError(
-        (error as AnyRecord)?.message || 'Vehicle spawn failed',
-      )
-      void logBridgeCommand(action, args, { error: message }, false, 0).catch(
-        () => {},
-      )
-      return { success: false, error: message }
-    }
-  }
-
   if (!bridge.bridgePath) {
     invalid('Bridge not configured', ErrorCode.BRIDGE_NOT_CONFIGURED)
   }
   if (!bridge.isRunning) {
     invalid('Bridge not running. Start it first.', ErrorCode.BRIDGE_NOT_RUNNING)
-  }
-
-  if (action === 'airdrop' && args) {
-    const x = Number(args.x)
-    const y = Number(args.y)
-    if (
-      !Number.isFinite(x) ||
-      !Number.isFinite(y) ||
-      x < 0 ||
-      x > 24000 ||
-      y < 0 ||
-      y > 24000
-    ) {
-      invalid(
-        'Invalid airdrop coordinates (valid: 0-24000)',
-        ErrorCode.PANELBRIDGE_AIRDROP_INVALID_COORDS,
-      )
-    }
-    if (
-      args.preset &&
-      (typeof args.preset !== 'string' || !VALID_PRESETS.includes(args.preset))
-    ) {
-      invalid(
-        `Invalid preset. Valid: ${VALID_PRESETS.join(', ')}`,
-        ErrorCode.PANELBRIDGE_AIRDROP_INVALID_PRESET,
-        sanitizeErrorParams({ presets: VALID_PRESETS.join(', ') }),
-      )
-    }
-    if (args.items && (!Array.isArray(args.items) || args.items.length > 50)) {
-      invalid(
-        'items must be an array with at most 50 entries',
-        ErrorCode.PANELBRIDGE_AIRDROP_ITEMS_ARRAY_INVALID,
-      )
-    }
-    if (Array.isArray(args.items)) {
-      for (const entry of args.items) {
-        if (!entry || typeof entry !== 'object') {
-          invalid(
-            'Each item must be an object with itemType',
-            ErrorCode.PANELBRIDGE_AIRDROP_ITEM_INVALID,
-          )
-        }
-        if (
-          typeof entry.itemType !== 'string' ||
-          !ITEM_TYPE_REGEX.test(entry.itemType)
-        ) {
-          const itemType = String(entry.itemType).slice(0, 60)
-          invalid(
-            `Invalid item type format: ${itemType}`,
-            ErrorCode.PANELBRIDGE_AIRDROP_ITEM_TYPE_INVALID,
-            sanitizeErrorParams({ itemType }),
-          )
-        }
-        if (
-          entry.count !== undefined &&
-          (typeof entry.count !== 'number' ||
-            entry.count < 1 ||
-            entry.count > 20)
-        ) {
-          invalid(
-            'Item count must be 1-20',
-            ErrorCode.PANELBRIDGE_AIRDROP_ITEM_COUNT_INVALID,
-          )
-        }
-      }
-    }
   }
 
   const commandArgs = args || {}
@@ -284,7 +149,6 @@ async function executePanelBridgeCommand(data: AnyRecord): Promise<any> {
 async function getPanelBridgeCommandsImplementation(): Promise<AnyRecord> {
   return {
     commands: PANEL_BRIDGE_COMMANDS,
-    climateFloatIds: PANEL_BRIDGE_CLIMATE_FLOAT_IDS,
   }
 }
 

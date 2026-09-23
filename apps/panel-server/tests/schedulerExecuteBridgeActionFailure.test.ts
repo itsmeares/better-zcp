@@ -22,15 +22,27 @@ describe("Scheduler.executeBridgeAction() against the real panelBridge.sendComma
     vi.restoreAllMocks();
   });
 
+  it("keeps a saved weather task without scheduling or dispatching it", async () => {
+    const sendCommand = vi.spyOn(panelBridge, "sendCommand");
+    const scheduler = makeScheduler();
+    expect(scheduler.scheduleTask({
+      id: 9, name: "Old weather task", command: "bridge:triggerStorm",
+      cron_expression: "0 * * * *", enabled: 1, server_id: null,
+    })).toBe(false);
+    await expect(scheduler.executeBridgeAction("bridge:triggerStorm"))
+      .rejects.toThrow("not allowed in scheduled tasks");
+    expect(sendCommand).not.toHaveBeenCalled();
+  });
+
   it("resolves with the real success shape sendCommand actually produces ({success: true, data})", async () => {
     const sendCommand = vi
       .spyOn(panelBridge, "sendCommand")
       .mockResolvedValue({ success: true, data: { ok: true } });
 
     const scheduler = makeScheduler();
-    const result = await scheduler.executeBridgeAction("bridge:triggerStorm");
+    const result = await scheduler.executeBridgeAction("bridge:saveWorld");
 
-    expect(sendCommand).toHaveBeenCalledWith("triggerStorm", {});
+    expect(sendCommand).toHaveBeenCalledWith("saveWorld", {});
     expect(result).toEqual({ success: true, data: { ok: true } });
   });
 
@@ -42,7 +54,7 @@ describe("Scheduler.executeBridgeAction() against the real panelBridge.sendComma
     const scheduler = makeScheduler();
 
     await expect(
-      scheduler.executeBridgeAction("bridge:triggerStorm"),
+      scheduler.executeBridgeAction("bridge:saveWorld"),
     ).rejects.toThrow("Mod is not responding");
   });
 });

@@ -16,16 +16,11 @@ import {
   removeSteamIdBan,
   getActiveServer,
 } from '../database/init.ts';
-import { VEHICLES, PERKS, PERK_CATALOG, ACCESS_LEVELS } from '../utils/commands.ts';
+import { PERKS, PERK_CATALOG, ACCESS_LEVELS } from '../utils/commands.ts';
 import { sanitizeError } from '../utils/sanitize.ts';
 import bridge from '../services/panelBridge.ts';
 import { listWhitelistAccounts, listServerRoleNames } from '../utils/whitelistDb.ts';
 import { ErrorCode } from '../utils/errorCodes.ts';
-import {
-  deletePlayerExport,
-  getPlayerExport,
-  listPlayerExports,
-} from '../services/playerExports.ts';
 
 const router = Router();
 
@@ -67,7 +62,6 @@ function recordSteamIdBan(
   ) => Promise<unknown>)(steamId, reason);
 }
 
-export { parsePlayerExportFile } from '../services/playerExports.ts';
 
 const USERNAME_REGEX = /^[^\x00-\x1F\x7F"\\]{1,64}$/;
 const SAFE_TEXT_REGEX = /^[a-zA-Z0-9\s.,!?'":;()@#&+=%_\-\u00C0-\u024F]{0,256}$/;
@@ -478,63 +472,6 @@ router.post('/add-xp', async (req, res) => {
   }
 });
 
-router.post('/add-vehicle', async (req, res) => {
-  try {
-    const rconService = req.app.get('rconService');
-    const { vehicle, username } = req.body || {};
-
-    if (!vehicle) {
-      return res.status(400).json({ error: 'Vehicle is required', code: ErrorCode.PLAYERS_VEHICLE_REQUIRED });
-    }
-
-    if (!/^[A-Za-z0-9_]+\.[A-Za-z0-9_]+$/.test(vehicle)) {
-      return res.status(400).json({ error: 'Invalid vehicle ID format', code: ErrorCode.PLAYERS_INVALID_VEHICLE_ID });
-    }
-
-    if (username && !isValidUsername(username)) {
-      return res.status(400).json({ error: 'Invalid username format', code: ErrorCode.PLAYERS_INVALID_USERNAME });
-    }
-
-    const result = await rconService.addVehicle(vehicle, username);
-    log.info(`POST /add-vehicle: ${vehicle} for ${username || 'self'}`);
-    if (username && result?.success) {
-      await recordPlayerAction(username, 'add_vehicle', vehicle);
-    }
-
-    res.json(result);
-  } catch (error: unknown) {
-    log.error(`Failed to spawn vehicle: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.post('/add-vehicle-at', async (req, res) => {
-  try {
-    const rconService = req.app.get('rconService');
-    const { vehicle, x, y, z = 0 } = req.body || {};
-
-    if (!vehicle || !/^[A-Za-z0-9_]+\.[A-Za-z0-9_]+$/.test(vehicle)) {
-      return res.status(400).json({ error: 'Invalid vehicle ID format', code: ErrorCode.PLAYERS_INVALID_VEHICLE_ID });
-    }
-
-    if (
-      !isValidNumber(x, 0, 24000) ||
-      !isValidNumber(y, 0, 24000) ||
-      !isValidNumber(z, 0, 8)
-    ) {
-      return res.status(400).json({ error: 'Invalid map coordinates', code: ErrorCode.PLAYERS_INVALID_MAP_COORDINATES });
-    }
-    const coordinates = [Number(x), Number(y), Number(z)];
-
-    const result = await rconService.addVehicleAt(vehicle, ...coordinates);
-    log.info(`POST /add-vehicle-at: ${vehicle} at ${coordinates.map(Math.floor).join(',')}`);
-    res.json(result);
-  } catch (error: unknown) {
-    log.error(`Failed to spawn vehicle at coordinate: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
 router.post('/godmode', async (req, res) => {
   try {
     const { username, enabled } = req.body || {};
@@ -614,10 +551,6 @@ router.post('/noclip', async (req, res) => {
     log.error(`Failed to set noclip: ${errorMessage(error)}`);
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });
   }
-});
-
-router.get('/vehicles', (req, res) => {
-  res.json({ vehicles: VEHICLES });
 });
 
 router.get('/perks', (req, res) => {
@@ -925,43 +858,6 @@ router.get('/stats/:playerName', async (req, res) => {
   } catch (error: unknown) {
     log.error(`Failed to get player stat: ${errorMessage(error)}`);
     res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.get('/exports', async (req, res) => {
-  try {
-    const username = typeof req.query.username === 'string' ? req.query.username : undefined;
-    res.json({ exports: listPlayerExports(username) });
-  } catch (error: unknown) {
-    log.error(`Failed to list exports: ${errorMessage(error)}`);
-    res.status(500).json({ error: sanitizeError(errorMessage(error)) });
-  }
-});
-
-router.get('/exports/:username/:filename', async (req, res) => {
-  try {
-    res.json(getPlayerExport(String(req.params.username), String(req.params.filename)));
-  } catch (error: unknown) {
-    log.error(`Failed to get export: ${errorMessage(error)}`);
-    const details = error as { code?: unknown; status?: unknown };
-    res.status(typeof details.status === 'number' ? details.status : 500).json({
-      error: sanitizeError(errorMessage(error)),
-      ...(typeof details.code === 'string' ? { code: details.code } : {}),
-    });
-  }
-});
-
-router.delete('/exports/:username/:filename', async (req, res) => {
-  try {
-    deletePlayerExport(String(req.params.username), String(req.params.filename));
-    res.json({ success: true });
-  } catch (error: unknown) {
-    log.error(`Failed to delete export: ${errorMessage(error)}`);
-    const details = error as { code?: unknown; status?: unknown };
-    res.status(typeof details.status === 'number' ? details.status : 500).json({
-      error: sanitizeError(errorMessage(error)),
-      ...(typeof details.code === 'string' ? { code: details.code } : {}),
-    });
   }
 });
 

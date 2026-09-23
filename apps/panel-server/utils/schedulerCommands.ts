@@ -1,14 +1,4 @@
 const SCHEDULABLE_BRIDGE_ACTIONS = new Set([
-  "triggerBlizzard",
-  "triggerTropicalStorm",
-  "triggerStorm",
-  "stopWeather",
-  "startRain",
-  "stopRain",
-  "setSnow",
-  "triggerLightning",
-  "triggerGunshot",
-  "triggerAlarmSound",
   "restoreUtilities",
   "shutOffUtilities",
   "saveWorld",
@@ -32,4 +22,9 @@ export function parseBridgeActionName(rawCommand: string): string {
 
 export function isSchedulableBridgeAction(action: string): boolean {
   return SCHEDULABLE_BRIDGE_ACTIONS.has(action);
+}
+
+export function isSchedulableCommand(command: string): boolean {
+  return classifyScheduledCommand(command) !== "bridge" ||
+    isSchedulableBridgeAction(parseBridgeActionName(command));
 }

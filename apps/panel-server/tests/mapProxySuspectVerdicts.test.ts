@@ -11,11 +11,6 @@ vi.mock("../database/init.ts", () => ({
   getActiveServer: (...args) => mockGetActiveServer(...args),
 }));
 
-const mockListPersistedVehicles = vi.fn();
-vi.mock("../utils/vehiclesDb.ts", () => ({
-  listPersistedVehicles: (...args) => mockListPersistedVehicles(...args),
-}));
-
 const mockLogError = vi.fn();
 const mockLogWarn = vi.fn();
 const mockLogInfo = vi.fn();
@@ -115,7 +110,6 @@ async function freshModule() {
 beforeEach(() => {
   mockExecFile.mockReset();
   mockGetActiveServer.mockReset();
-  mockListPersistedVehicles.mockReset();
   mockLogError.mockReset();
   mockLogWarn.mockReset();
   mockLogInfo.mockReset();
@@ -290,7 +284,7 @@ describe("case 3 (DEAD): a genuinely missing tile is a quiet 404, not a 500, and
   });
 });
 
-describe("case 5 (DEAD): /resolve and /vehicles never leak local filesystem paths or save names", () => {
+describe("case 5: /resolve never leaks local filesystem paths or save names", () => {
   it("/resolve's body contains no local path (no drive letter, no /home, no /data segment)", async () => {
     mockCurlForB42_20_0();
     const originalFetch = global.fetch;
@@ -307,45 +301,7 @@ describe("case 5 (DEAD): /resolve and /vehicles never leak local filesystem path
     }
   });
 
-  it("/vehicles never includes the save path or server name -- only {id, x, y} per vehicle", async () => {
-    mockGetActiveServer.mockResolvedValue({
-      zomboidDataPath: "C:\\Users\\SomeOperator\\Zomboid",
-      serverName: "servertest",
-    });
-    mockListPersistedVehicles.mockResolvedValue([
-      { id: 1, x: 100, y: 200 },
-      { id: 2, x: 300, y: 400 },
-    ]);
-    const { default: router } = await freshModule();
-    const handler = findRoute(router, "/vehicles", "get");
-    const res = makeRes();
-    await handler({}, res);
-    expect(res.jsonBody).toEqual({
-      vehicles: [
-        { id: 1, x: 100, y: 200 },
-        { id: 2, x: 300, y: 400 },
-      ],
-    });
-    const serialized = JSON.stringify(res.jsonBody);
-    expect(serialized).not.toMatch(/SomeOperator|Zomboid|servertest|Saves|Multiplayer/i);
-    expect(mockListPersistedVehicles).toHaveBeenCalledTimes(1);
-    const calledWith = mockListPersistedVehicles.mock.calls[0][0];
-    expect(calledWith).toContain("SomeOperator");
-    expect(calledWith).toContain("servertest");
-  });
 
-  it("/vehicles on a lookup failure falls back to an empty list, never surfacing the underlying error message (which would embed the path)", async () => {
-    mockGetActiveServer.mockResolvedValue({
-      zomboidDataPath: "C:\\Users\\SomeOperator\\Zomboid",
-      serverName: "servertest",
-    });
-    mockListPersistedVehicles.mockRejectedValue(
-      new Error("ENOENT: C:\\Users\\SomeOperator\\Zomboid\\Saves\\Multiplayer\\servertest\\vehicles.db"),
-    );
-    const { default: router } = await freshModule();
-    const handler = findRoute(router, "/vehicles", "get");
-    const res = makeRes();
-    await handler({}, res);
-    expect(res.jsonBody).toEqual({ vehicles: [] });
-  });
+
+
 });

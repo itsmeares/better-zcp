@@ -68,7 +68,7 @@ for (const s of unresolved) {
   skipReasonCounts.set(s.skipReason, (skipReasonCounts.get(s.skipReason) || 0) + 1);
 }
 
-const MIN_CALL_SITES = 200;
+const MIN_CALL_SITES = 120;
 if (callSites.length < MIN_CALL_SITES) {
   console.error(
     `ERROR: found only ${callSites.length} engine call site(s) in ${path.relative(ROOT, LUA_PATH)} ` +

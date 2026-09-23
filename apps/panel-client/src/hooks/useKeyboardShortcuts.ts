@@ -15,7 +15,6 @@ function buildNavShortcuts(): ShortcutDef[] {
     { key: '1', label: 'Dashboard', path: '/', group },
     { key: '2', label: 'Console', path: '/console', group },
     { key: '3', label: 'Players', path: '/players', group },
-    { key: '4', label: 'Events', path: '/events', group },
     { key: '5', label: 'Mods', path: '/mods', group },
     { key: '6', label: 'Backups', path: '/backups', group },
     { key: '7', label: 'Server Config', path: '/server-config', group },
